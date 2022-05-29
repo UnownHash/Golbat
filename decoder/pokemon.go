@@ -1,7 +1,8 @@
-package forts
+package decoder
 
 import (
 	"database/sql"
+	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
@@ -301,17 +302,67 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	if oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 
-		pokemon.Cp = null.NewInt(0, false)
-		pokemon.Move1 = null.NewInt(0, false)
-		pokemon.Move2 = null.NewInt(0, false)
-		pokemon.Size = null.NewFloat(0, false)
-		pokemon.Weight = null.NewFloat(0, false)
-		pokemon.AtkIv = null.NewInt(0, false)
-		pokemon.DefIv = null.NewInt(0, false)
-		pokemon.StaIv = null.NewInt(0, false)
+		pokemon.clearEncounterDetails()
 	}
 }
 
+func (pokemon *Pokemon) clearEncounterDetails() {
+	pokemon.Cp = null.NewInt(0, false)
+	pokemon.Move1 = null.NewInt(0, false)
+	pokemon.Move2 = null.NewInt(0, false)
+	pokemon.Size = null.NewFloat(0, false)
+	pokemon.Weight = null.NewFloat(0, false)
+	pokemon.AtkIv = null.NewInt(0, false)
+	pokemon.DefIv = null.NewInt(0, false)
+	pokemon.StaIv = null.NewInt(0, false)
+}
+
+func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
+	pokemon.IsEvent = 0
+	pokemon.Id = strconv.FormatUint(nearbyPokemon.EncounterId, 10)
+
+	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
+
+	pokemon.PokemonId = int16(nearbyPokemon.PokedexNumber)
+	pokemon.Weather = null.IntFrom(int64(nearbyPokemon.PokemonDisplay.WeatherBoostedCondition))
+	pokemon.Gender = null.IntFrom(int64(nearbyPokemon.PokemonDisplay.Gender))
+	pokemon.Form = null.IntFrom(int64(nearbyPokemon.PokemonDisplay.Form))
+	pokemon.Costume = null.IntFrom(int64(nearbyPokemon.PokemonDisplay.Costume))
+
+	if oldWeather == pokemon.Weather && oldPokemonId == pokemon.PokemonId {
+		// No change of pokemon, do not downgrade to nearby
+		return
+	}
+	pokemon.Username = null.StringFrom(username)
+
+	pokestopId := nearbyPokemon.FortId
+
+	if pokestopId == "" {
+		// Cell Pokemon
+
+		s2cell := s2.CellFromCellID(s2.CellID(cellId))
+		pokemon.Lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
+		pokemon.Lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
+
+		pokemon.SeenType = null.StringFrom(SeenType_Cell)
+	} else {
+		pokestop, _ := getPokestop(db, pokestopId)
+		if pokestop == nil {
+			// Unrecognised pokestop
+			return
+		}
+		pokemon.PokestopId = null.StringFrom(pokestopId)
+		pokemon.Lat = pokestop.Lat
+		pokemon.Lon = pokestop.Lon
+		pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
+	}
+
+	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.clearEncounterDetails()
+}
+
+var SeenType_Cell = "nearby_cell"
+var SeenType_NearbyStop = "nearby_stop"
 var SeenType_Wild string = "wild"
 var SeenType_Encounter string = "encounter"
 

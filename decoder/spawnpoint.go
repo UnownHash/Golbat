@@ -1,4 +1,4 @@
-package forts
+package decoder
 
 import (
 	"database/sql"

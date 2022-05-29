@@ -10,7 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 
-	"golbat/forts"
+	"golbat/decoder"
 	"golbat/webhooks"
 	"net/http"
 	"time"
@@ -90,9 +90,9 @@ func decodeFortDetails(sDec []byte) {
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		forts.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
+		decoder.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
 	case pogo.FortType_GYM:
-		forts.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
+		decoder.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
 	}
 }
 
@@ -103,7 +103,7 @@ func decodeGetGymInfo(sDec []byte) {
 		return
 	}
 
-	forts.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
+	decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
 }
 
 func decodeEncounter(sDec []byte) {
@@ -113,7 +113,7 @@ func decodeEncounter(sDec []byte) {
 		return
 	}
 
-	forts.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
+	decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
 }
 
 func decodeGMO(sDec []byte) {
@@ -125,25 +125,25 @@ func decodeGMO(sDec []byte) {
 		log.Fatalln("Failed to parse", err)
 	}
 
-	var newForts []forts.RawFortData
-	var newWildPokemon []forts.RawWildPokemonData
-	var newNearbyPokemon []forts.RawNearbyPokemonData
+	var newForts []decoder.RawFortData
+	var newWildPokemon []decoder.RawWildPokemonData
+	var newNearbyPokemon []decoder.RawNearbyPokemonData
 
 	for _, mapCell := range decodedGmo.MapCell {
 		timestampMs := uint64(mapCell.AsOfTimeMs)
 		for _, fort := range mapCell.Fort {
-			newForts = append(newForts, forts.RawFortData{Cell: mapCell.S2CellId, Data: fort})
+			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort})
 		}
 		for _, mon := range mapCell.WildPokemon {
-			newWildPokemon = append(newWildPokemon, forts.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
+			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
 		}
 		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, forts.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon})
+			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon})
 		}
 	}
 
-	forts.UpdateFortBatch(db, newForts)
-	forts.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon)
+	decoder.UpdateFortBatch(db, newForts)
+	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon)
 
 	elapsed := time.Since(start)
 

@@ -1,4 +1,4 @@
-package forts
+package decoder
 
 import (
 	"github.com/google/go-cmp/cmp"
@@ -117,6 +117,18 @@ func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearb
 	}
 
 	for _, nearby := range nearbyPokemonList {
-		_ = nearby
+		pokemon, err := getPokemonRecord(db, strconv.FormatUint(nearby.Data.EncounterId, 10))
+		if err != nil {
+			log.Printf("getPokemonRecord: %s", err)
+			continue
+		}
+
+		if pokemon == nil {
+			pokemon = &Pokemon{}
+		}
+
+		pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), "Account")
+		savePokemonRecord(db, pokemon)
+
 	}
 }
