@@ -62,19 +62,22 @@ func main() {
 	log.Fatal(http.ListenAndServe(addr, router)) // addr is in form :9001
 }
 
-func decode(method int, sDec []byte) {
+func decode(method int, protoData *ProtoData) {
 	switch pogo.Method(method) {
 	case pogo.Method_METHOD_FORT_DETAILS:
-		decodeFortDetails(sDec)
+		decodeFortDetails(protoData.Data)
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		decodeGMO(sDec)
+		decodeGMO(protoData.Data)
 	case pogo.Method_METHOD_GYM_GET_INFO:
-		decodeGetGymInfo(sDec)
+		decodeGetGymInfo(protoData.Data)
 	case pogo.Method_METHOD_ENCOUNTER:
-		decodeEncounter(sDec)
+		decodeEncounter(protoData.Data)
 	case pogo.Method_METHOD_GET_PLAYER:
 		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
+		break
+	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
+		// ignore
 		break
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
@@ -150,6 +153,20 @@ func decodeGMO(sDec []byte) {
 	log.Debugf("GMO processing took %s %d cells containing %d forts %d mon %d nearby", elapsed, len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
 
+type ProtoData struct {
+	Data    []byte
+	HaveAr  *bool
+	Account string
+	Level   int
+	Uuid    string
+}
+
+type InboundRawData struct {
+	Base64Data string
+	Method     int
+	HaveAr     *bool
+}
+
 func Raw(w http.ResponseWriter, r *http.Request) {
 
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
@@ -157,24 +174,103 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	if err := r.Body.Close(); err != nil {
-		panic(err)
+		log.Errorf("Raw: Error during HTTP receive %s", err)
+		return
 	}
-	var raw []map[string]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		w.WriteHeader(422) // unprocessable entity
-		if err := json.NewEncoder(w).Encode(err); err != nil {
-			panic(err)
+
+	decodeError := false
+	uuid := ""
+	account := ""
+	level := 30
+	var globalHaveAr *bool
+	var protoData []InboundRawData
+
+	pogodroidHeader := r.Header.Get("origin")
+	if pogodroidHeader != "" {
+		var raw []map[string]interface{}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			decodeError = true
+		} else {
+			for _, entry := range raw {
+				protoData = append(protoData, InboundRawData{
+					Base64Data: entry["payload"].(string),
+					Method:     int(entry["type"].(float64)),
+					HaveAr: func() *bool {
+						if v := entry["have_ar"]; v != nil {
+							res := v.(bool)
+							return &res
+						}
+						return nil
+					}(),
+				})
+			}
+		}
+		uuid = pogodroidHeader
+		account = "Pogodroid"
+	} else {
+		var raw map[string]interface{}
+		if err := json.Unmarshal(body, &raw); err != nil {
+			decodeError = true
+		} else {
+			if v := raw["have_ar"]; v != nil {
+				rf := v.(float64)
+				res := false
+				if rf > 0 {
+					res = true
+				}
+				globalHaveAr = &res
+			}
+			if v := raw["uuid"]; v != nil {
+				uuid = v.(string)
+			}
+			if v := raw["username"]; v != nil {
+				account = v.(string)
+			}
+			if v := raw["trainerlvl"]; v != nil { // Other MITM might use
+				level = int(v.(float64))
+			}
+			contents := raw["contents"].([]interface{}) // Other MITM
+			for _, v := range contents {
+				entry := v.(map[string]interface{})
+				protoData = append(protoData, InboundRawData{
+					Base64Data: entry["payload"].(string),
+					Method:     int(entry["type"].(float64)),
+					HaveAr: func() *bool {
+						if v := entry["have_ar"]; v != nil {
+							res := v.(bool)
+							return &res
+						}
+						return nil
+					}(),
+				})
+			}
 		}
 	}
 
-	for _, entry := range raw {
-		method := int(entry["type"].(float64))
-		payload := entry["payload"].(string)
+	if decodeError == true {
+		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		return
+	}
 
-		sDec, _ := b64.StdEncoding.DecodeString(payload)
+	for _, entry := range protoData {
+		method := entry.Method
+		payload := entry.Base64Data
 
-		go decode(method, sDec)
+		haveAr := globalHaveAr
+		if entry.HaveAr != nil {
+			haveAr = entry.HaveAr
+		}
+
+		protoData := ProtoData{
+			Account: account,
+			Level:   level,
+			HaveAr:  haveAr,
+			Uuid:    uuid,
+		}
+		protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
+
+		go decode(method, &protoData)
 	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
