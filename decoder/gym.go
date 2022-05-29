@@ -129,7 +129,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	gym.GuardingPokemonId = null.IntFrom(int64(fortData.GuardPokemonId))
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
 	gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
-	//	gym.LastModifiedTimestamp = null.IntFrom(fortData.LastModifiedMs / 1000)
+	gym.LastModifiedTimestamp = null.IntFrom(fortData.LastModifiedMs / 1000)
 	gym.ExRaidEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
 
 	if fortData.ImageUrl != "" {
@@ -359,7 +359,7 @@ func saveGymRecord(db *sqlx.DB, gym *Gym) {
 	log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
 		res, err := db.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp) "+
-			"VALUES (:id,:lat,:lon,:name,:url,:last_modified_timestamp,:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp)", gym)
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp)", gym)
 
 		if err != nil {
 			log.Printf("insert gym: %s", err)
