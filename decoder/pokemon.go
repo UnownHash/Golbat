@@ -496,6 +496,9 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 }
 
 func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) {
+	if encounter.Pokemon == nil {
+		return
+	}
 	pokemon, err := getPokemonRecord(db, strconv.FormatUint(encounter.Pokemon.EncounterId, 10))
 	if err != nil {
 		log.Printf("Finding pokemon: %s", err)
