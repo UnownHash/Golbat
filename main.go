@@ -30,11 +30,12 @@ func main() {
 
 	// Capture connection properties.
 	cfg := mysql.Config{
-		User:   config.Config.Database.User,     //"root",     //os.Getenv("DBUSER"),
-		Passwd: config.Config.Database.Password, //"transmit", //os.Getenv("DBPASS"),
-		Net:    "tcp",
-		Addr:   config.Config.Database.Addr,
-		DBName: config.Config.Database.Db,
+		User:                 config.Config.Database.User,     //"root",     //os.Getenv("DBUSER"),
+		Passwd:               config.Config.Database.Password, //"transmit", //os.Getenv("DBPASS"),
+		Net:                  "tcp",
+		Addr:                 config.Config.Database.Addr,
+		DBName:               config.Config.Database.Db,
+		AllowNativePasswords: true,
 	}
 
 	// Get a database handle.
