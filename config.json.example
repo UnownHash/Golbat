@@ -1,0 +1,10 @@
+{
+    "port": 9001,
+    "webhooks": ["http://localhost:4202"],
+    "database": {
+        "user": "",
+        "password": "",
+        "address": "127.0.0.1:3306",
+        "db": "golbat"
+    }
+}
