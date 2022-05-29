@@ -10,7 +10,7 @@ compatibility
 `go 1.18`
 
 You may have problems installing this, let me know.
-I used ubuntu 22 (jimmy) and could do `sudo apt install golang-go` but earlier
+I used ubuntu 22 (jammy) and could do `sudo apt install golang-go` but earlier
 versions of ubuntu have an older package
 
 # Instructions
