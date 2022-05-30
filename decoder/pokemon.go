@@ -262,9 +262,9 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 			"shiny":                   new.Shiny,
 			"username":                new.Username,
 			"display_pokemon_id":      new.DisplayPokemonId,
-			"pvp":                     []string{},
 			"is_event":                new.IsEvent,
 			"seen_type":               new.SeenType,
+			//"pvp":                     []string{},
 		}
 
 		webhooks.AddMessage(webhooks.Pokemon, pokemonHook)

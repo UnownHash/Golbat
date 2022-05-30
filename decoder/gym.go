@@ -121,6 +121,30 @@ func getGymRecord(db *sqlx.DB, fortId string) (*Gym, error) {
 	return &gym, nil
 }
 
+func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int) {
+	now := time.Now().Unix()
+	powerUpLevelExpirationMs := int64(fortData.PowerUpLevelExpirationMs) / 1000
+	powerUpPoints := int64(fortData.PowerUpProgressPoints)
+	powerUpLevel := null.IntFrom(0)
+	powerUpEndTimestamp := null.NewInt(0, false)
+	if powerUpPoints < 50 {
+		powerUpLevel = null.IntFrom(0)
+	} else if powerUpPoints < 100 && powerUpLevelExpirationMs > now {
+		powerUpLevel = null.IntFrom(1)
+		powerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
+	} else if powerUpPoints < 150 && powerUpLevelExpirationMs > now {
+		powerUpLevel = null.IntFrom(2)
+		powerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
+	} else if powerUpLevelExpirationMs > now {
+		powerUpLevel = null.IntFrom(3)
+		powerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
+	} else {
+		powerUpLevel = null.IntFrom(0)
+	}
+
+	return powerUpLevel, powerUpEndTimestamp
+}
+
 func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
 	gym.Id = fortData.FortId
 	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
@@ -139,23 +163,8 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	gym.ArScanEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
 	gym.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
 
-	now := time.Now().Unix()
-	powerUpLevelExpirationMs := int64(fortData.PowerUpLevelExpirationMs) / 1000
-	powerUpPoints := int64(fortData.PowerUpProgressPoints)
-	if powerUpPoints < 50 {
-		gym.PowerUpLevel = null.IntFrom(0)
-	} else if powerUpPoints < 100 && powerUpLevelExpirationMs > now {
-		gym.PowerUpLevel = null.IntFrom(1)
-		gym.PowerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
-	} else if powerUpPoints < 150 && powerUpLevelExpirationMs > now {
-		gym.PowerUpLevel = null.IntFrom(2)
-		gym.PowerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
-	} else if powerUpLevelExpirationMs > now {
-		gym.PowerUpLevel = null.IntFrom(3)
-		gym.PowerUpEndTimestamp = null.IntFrom(powerUpLevelExpirationMs)
-	} else {
-		gym.PowerUpLevel = null.IntFrom(0)
-	}
+	gym.PowerUpLevel, gym.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
+
 	if fortData.PartnerId == "" {
 		gym.PartnerId = null.NewString("", false)
 	} else {

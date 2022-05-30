@@ -73,6 +73,8 @@ func decode(method int, protoData *ProtoData) {
 		decodeGetGymInfo(protoData.Data)
 	case pogo.Method_METHOD_ENCOUNTER:
 		decodeEncounter(protoData.Data)
+	case pogo.Method_METHOD_FORT_SEARCH:
+		decodeQuest(protoData.Data, protoData.HaveAr)
 	case pogo.Method_METHOD_GET_PLAYER:
 		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
@@ -83,6 +85,22 @@ func decode(method int, protoData *ProtoData) {
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
+}
+
+func decodeQuest(sDec []byte, haveAr *bool) {
+	if haveAr == nil {
+		log.Infoln("Cannot determine AR quest - ignoring")
+		// We should either assume AR quest, or trace inventory like RDM probably
+		return
+	}
+	decodedQuest := &pogo.FortSearchOutProto{}
+	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return
+	}
+
+	decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
+
 }
 
 func decodeFortDetails(sDec []byte) {
