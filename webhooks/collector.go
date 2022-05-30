@@ -25,6 +25,9 @@ var webhookCollections map[string]*WebhookList
 var GymDetails = "gym_details"
 var Raid = "raid"
 var Pokemon = "pokemon"
+var Quest = "quest"
+var Pokestop = "pokestop"
+var Invasion = "invasion"
 
 var collectionAccess sync.Mutex
 
@@ -38,6 +41,9 @@ func SetMaps() {
 	webhookCollections[GymDetails] = &WebhookList{}
 	webhookCollections[Raid] = &WebhookList{}
 	webhookCollections[Pokemon] = &WebhookList{}
+	webhookCollections[Quest] = &WebhookList{}
+	webhookCollections[Pokestop] = &WebhookList{}
+	webhookCollections[Invasion] = &WebhookList{}
 }
 
 func AddMessage(webhookType string, message interface{}) {
@@ -62,6 +68,9 @@ func collectHooks() []WebhookQueue {
 	totalCollection = append(totalCollection, currentCollection[GymDetails].Messages...)
 	totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
 	totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
+	totalCollection = append(totalCollection, currentCollection[Quest].Messages...)
+	totalCollection = append(totalCollection, currentCollection[Invasion].Messages...)
+	totalCollection = append(totalCollection, currentCollection[Pokestop].Messages...)
 
 	var destinations []WebhookQueue
 

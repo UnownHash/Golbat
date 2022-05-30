@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -358,6 +359,7 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 	}
 
 	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.setUnknownTimestamp()
 	pokemon.clearEncounterDetails()
 }
 
@@ -406,14 +408,18 @@ func (pokemon *Pokemon) updateSpawnpointInfo(db *sqlx.DB, wildPokemon *pogo.Wild
 				DespawnSec: null.NewInt(0, false),
 			}
 			spawnpointUpdate(db, &spawnpoint)
-			now := time.Now().Unix()
-			if !pokemon.ExpireTimestamp.Valid {
-				pokemon.ExpireTimestamp = null.IntFrom(now + 20*60) // should be configurable, add on 20min
-			} else {
-				if pokemon.ExpireTimestamp.Int64 < now {
-					pokemon.ExpireTimestamp = null.IntFrom(now + 10*60) // should be configurable, add on 10min
-				}
-			}
+			pokemon.setUnknownTimestamp()
+		}
+	}
+}
+
+func (pokemon *Pokemon) setUnknownTimestamp() {
+	now := time.Now().Unix()
+	if !pokemon.ExpireTimestamp.Valid {
+		pokemon.ExpireTimestamp = null.IntFrom(now + 20*60) // should be configurable, add on 20min
+	} else {
+		if pokemon.ExpireTimestamp.Int64 < now {
+			pokemon.ExpireTimestamp = null.IntFrom(now + 10*60) // should be configurable, add on 10min
 		}
 	}
 }
@@ -495,14 +501,14 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter) // should be const
 }
 
-func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) {
+func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) string {
 	if encounter.Pokemon == nil {
-		return
+		return "No encounter"
 	}
 	pokemon, err := getPokemonRecord(db, strconv.FormatUint(encounter.Pokemon.EncounterId, 10))
 	if err != nil {
 		log.Printf("Finding pokemon: %s", err)
-		return
+		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
 	if pokemon == nil {
@@ -510,4 +516,6 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	}
 	pokemon.updatePokemonFromEncounterProto(db, encounter)
 	savePokemonRecord(db, pokemon)
+
+	return fmt.Sprintf("Pokemon %d %d", pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }

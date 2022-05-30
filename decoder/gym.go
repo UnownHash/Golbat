@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
@@ -282,7 +283,7 @@ type GymDetailsWebhook struct {
 	//"ar_scan_eligible": arScanEligible ?? 0
 }
 
-func createWebhooks(oldGym *Gym, gym *Gym) {
+func createGymWebhooks(oldGym *Gym, gym *Gym) {
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
@@ -421,10 +422,10 @@ func saveGymRecord(db *sqlx.DB, gym *Gym) {
 	}
 
 	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
-	createWebhooks(oldGym, gym)
+	createGymWebhooks(oldGym, gym)
 }
 
-func UpdateGymRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) {
+func UpdateGymRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) string {
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
 		panic(err)
@@ -435,9 +436,11 @@ func UpdateGymRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsO
 	}
 	gym.updateGymFromFortProto(fort)
 	saveGymRecord(db, gym)
+
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGymInfoProto(db *sqlx.DB, gymInfo *pogo.GymGetInfoOutProto) {
+func UpdateGymRecordWithGymInfoProto(db *sqlx.DB, gymInfo *pogo.GymGetInfoOutProto) string {
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		panic(err)
@@ -448,4 +451,5 @@ func UpdateGymRecordWithGymInfoProto(db *sqlx.DB, gymInfo *pogo.GymGetInfoOutPro
 	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 	saveGymRecord(db, gym)
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }

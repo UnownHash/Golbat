@@ -3,12 +3,14 @@ package decoder
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"golbat/util"
+	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
 	"strings"
 	"time"
@@ -360,6 +362,8 @@ func updatePokestopFromQuestProto(stop *Pokestop, questProto *pogo.FortSearchOut
 				infoData["form_id"] = int(info.PokemonDisplay.Form)
 				infoData["gender_id"] = int(info.PokemonDisplay.Gender)
 				infoData["shiny"] = info.PokemonDisplay.Shiny
+			} else {
+
 			}
 		case pogo.QuestRewardProto_POKECOIN:
 			infoData["amount"] = rewardData.GetPokecoin()
@@ -418,6 +422,103 @@ func updatePokestopFromFortProto(stop *Pokestop, fortData *pogo.FortDetailsOutPr
 	stop.Name = null.StringFrom(fortData.Name)
 
 	return stop
+}
+
+func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
+
+	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
+		questHook := map[string]interface{}{
+			"pokestop_id": stop.Id,
+			"latitude":    stop.Lat,
+			"longitude":   stop.Lon,
+			"type":        stop.AlternativeQuestType,
+			"target":      stop.AlternativeQuestTarget,
+			"template":    stop.AlternativeQuestTemplate,
+			"title":       stop.AlternativeQuestTarget,
+			"conditions": func() []map[string]interface{} {
+				var r []map[string]interface{}
+				_ = json.Unmarshal([]byte(stop.AlternativeQuestConditions.ValueOrZero()), &r)
+				return r
+			}(),
+			"rewards": func() []map[string]interface{} {
+				var r []map[string]interface{}
+				_ = json.Unmarshal([]byte(stop.AlternativeQuestRewards.ValueOrZero()), &r)
+				return r
+			}(),
+			"updated": stop.Updated,
+			"pokestop_name": func() string {
+				if stop.Name.Valid {
+					return stop.Name.String
+				} else {
+					return "Unknown"
+				}
+			}(),
+			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
+			"pokestop_url":     stop.Url.Valid,
+			"with_ar":          false,
+		}
+		webhooks.AddMessage(webhooks.Quest, questHook)
+	}
+
+	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
+		questHook := map[string]interface{}{
+			"pokestop_id": stop.Id,
+			"latitude":    stop.Lat,
+			"longitude":   stop.Lon,
+			"type":        stop.QuestType,
+			"target":      stop.QuestTarget,
+			"template":    stop.QuestTemplate,
+			"title":       stop.QuestTarget,
+			"conditions": func() []map[string]interface{} {
+				var r []map[string]interface{}
+				_ = json.Unmarshal([]byte(stop.QuestConditions.ValueOrZero()), &r)
+				return r
+			}(),
+			"rewards": func() []map[string]interface{} {
+				var r []map[string]interface{}
+				_ = json.Unmarshal([]byte(stop.QuestRewards.ValueOrZero()), &r)
+				return r
+			}(),
+			"updated": stop.Updated,
+			"pokestop_name": func() string {
+				if stop.Name.Valid {
+					return stop.Name.String
+				} else {
+					return "Unknown"
+				}
+			}(),
+			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
+			"pokestop_url":     stop.Url.Valid,
+			"with_ar":          true,
+		}
+		webhooks.AddMessage(webhooks.Quest, questHook)
+	}
+	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
+		pokestopHook := map[string]interface{}{
+			"pokestop_id": stop.Id,
+			"latitude":    stop.Lat,
+			"longitude":   stop.Lon,
+			"name": func() string {
+				if stop.Name.Valid {
+					return stop.Name.String
+				} else {
+					return "Unknown"
+				}
+			}(),
+			"url":                    stop.Url.ValueOrZero(),
+			"lure_expiration":        stop.LureExpireTimestamp.ValueOrZero(),
+			"last_modified":          stop.LastModifiedTimestamp.ValueOrZero(),
+			"enabled":                stop.Enabled.ValueOrZero(),
+			"lure_id":                stop.LureId,
+			"ar_scan_eligible":       stop.ArScanEligible.ValueOrZero(),
+			"power_up_level":         stop.PowerUpLevel.ValueOrZero(),
+			"power_up_points":        stop.PowerUpPoints.ValueOrZero(),
+			"power_up_end_timestamp": stop.PowerUpPoints.ValueOrZero(),
+			"updated":                stop.Updated,
+		}
+
+		webhooks.AddMessage(webhooks.Pokestop, pokestopHook)
+	}
 }
 
 func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
@@ -489,14 +590,14 @@ func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
 		_, _ = res, err
 	}
 	pokestopCache.Set(pokestop.Id, *pokestop, ttlcache.DefaultTTL)
-
+	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) {
+func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) string {
 	pokestop, err := getPokestop(db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
-		return
+		return fmt.Sprintf("Error %s", err)
 	}
 
 	if pokestop == nil {
@@ -504,13 +605,18 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDet
 	}
 	updatePokestopFromFortProto(pokestop, fort)
 	updatePokestop(db, pokestop)
+	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
-func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr bool) {
+func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr bool) string {
+	if quest.ChallengeQuest == nil {
+		return "No quest"
+	}
+
 	pokestop, err := getPokestop(db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
-		return
+		return fmt.Sprintf("error %s", err)
 	}
 
 	if pokestop == nil {
@@ -518,4 +624,5 @@ func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr
 	}
 	updatePokestopFromQuestProto(pokestop, quest, haveAr)
 	updatePokestop(db, pokestop)
+	return fmt.Sprintf("%s", quest.FortId)
 }

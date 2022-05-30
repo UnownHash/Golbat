@@ -64,17 +64,26 @@ func main() {
 }
 
 func decode(method int, protoData *ProtoData) {
+	processed := false
+	start := time.Now()
+	result := ""
+
 	switch pogo.Method(method) {
 	case pogo.Method_METHOD_FORT_DETAILS:
-		decodeFortDetails(protoData.Data)
+		result = decodeFortDetails(protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		decodeGMO(protoData.Data)
+		result = decodeGMO(protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
-		decodeGetGymInfo(protoData.Data)
+		result = decodeGetGymInfo(protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
-		decodeEncounter(protoData.Data)
+		result = decodeEncounter(protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
-		decodeQuest(protoData.Data, protoData.HaveAr)
+		result = decodeQuest(protoData.Data, protoData.HaveAr)
+		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
@@ -85,62 +94,68 @@ func decode(method int, protoData *ProtoData) {
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
+
+	if processed == true {
+
+		elapsed := time.Since(start)
+
+		log.Debugf("%s - %s - %s", pogo.Method(method), elapsed, result)
+	}
 }
 
-func decodeQuest(sDec []byte, haveAr *bool) {
+func decodeQuest(sDec []byte, haveAr *bool) string {
 	if haveAr == nil {
 		log.Infoln("Cannot determine AR quest - ignoring")
 		// We should either assume AR quest, or trace inventory like RDM probably
-		return
+		return "No AR quest info"
 	}
 	decodedQuest := &pogo.FortSearchOutProto{}
 	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
 		log.Fatalln("Failed to parse", err)
-		return
+		return "Parse failure"
 	}
 
-	decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
+	return decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
 
 }
 
-func decodeFortDetails(sDec []byte) {
+func decodeFortDetails(sDec []byte) string {
 	decodedFort := &pogo.FortDetailsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
 		log.Fatalln("Failed to parse", err)
-		return
+		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		decoder.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
 	case pogo.FortType_GYM:
-		decoder.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
 	}
+	return "Unknown fort type"
 }
 
-func decodeGetGymInfo(sDec []byte) {
+func decodeGetGymInfo(sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
-		return
+		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
+	return decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
 }
 
-func decodeEncounter(sDec []byte) {
+func decodeEncounter(sDec []byte) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
-		return
+		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
 }
 
-func decodeGMO(sDec []byte) {
-	start := time.Now()
-
+func decodeGMO(sDec []byte) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(sDec, decodedGmo); err != nil {
@@ -167,9 +182,7 @@ func decodeGMO(sDec []byte) {
 	decoder.UpdateFortBatch(db, newForts)
 	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon)
 
-	elapsed := time.Since(start)
-
-	log.Debugf("GMO processing took %s %d cells containing %d forts %d mon %d nearby", elapsed, len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
+	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
 
 type ProtoData struct {
