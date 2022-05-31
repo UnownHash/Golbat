@@ -157,7 +157,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			pokemon)
 
 		if err != nil {
-			log.Printf("insert pokemon: %s", err)
+			log.Errorf("insert pokemon: %s", err)
 			return
 		}
 
@@ -200,7 +200,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			"WHERE id = :id", pokemon,
 		)
 		if err != nil {
-			log.Printf("Update pokemon %s", err)
+			log.Errorf("Update pokemon %s", err)
 			return
 		}
 		_, _ = res, err

@@ -546,10 +546,14 @@ func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
 				":alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,"+
 				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
 				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
-				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP()",
+				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP() )",
 			pokestop)
 
-		_, _ = res, err
+		if err != nil {
+			log.Errorf("insert pokestop: %s", err)
+			return
+		}
+		_ = res
 	} else {
 		res, err := db.NamedExec(
 			"UPDATE pokestop SET "+
@@ -587,7 +591,11 @@ func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
 				" WHERE id = :id",
 			pokestop,
 		)
-		_, _ = res, err
+		if err != nil {
+			log.Errorf("update pokestop: %s", err)
+			return
+		}
+		_ = res
 	}
 	pokestopCache.Set(pokestop.Id, *pokestop, ttlcache.DefaultTTL)
 	createPokestopWebhooks(oldPokestop, pokestop)

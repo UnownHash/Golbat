@@ -78,7 +78,7 @@ func spawnpointUpdate(db *sqlx.DB, spawnpoint *Spawnpoint) {
 		"despawn_sec=VALUES(despawn_sec)", spawnpoint)
 
 	if err != nil {
-		log.Printf("Error updating spawnpoint %s", err)
+		log.Errorf("Error updating spawnpoint %s", err)
 		return
 	}
 
