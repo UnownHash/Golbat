@@ -167,7 +167,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			pokemon)
 
 		if err != nil {
-			log.Errorf("insert pokemon: %s", err)
+			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
 			return
 		}
 
@@ -210,7 +210,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			"WHERE id = :id", pokemon,
 		)
 		if err != nil {
-			log.Errorf("Update pokemon %s", err)
+			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 			return
 		}
 		_, _ = res, err
@@ -311,6 +311,10 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	pokemon.CellId = null.IntFrom(cellId)
 
 	if oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
+		if oldWeather.Valid && oldPokemonId != 0 {
+			log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to wild id %d weather %d",
+				pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
+		}
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 
 		pokemon.clearEncounterDetails()
@@ -344,6 +348,11 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 		// No change of pokemon, do not downgrade to nearby
 		return
 	}
+	if oldWeather.Valid && oldPokemonId != 0 {
+		log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
+			pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
+	}
+
 	pokemon.Username = null.StringFrom(username)
 
 	pokestopId := nearbyPokemon.FortId
