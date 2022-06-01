@@ -521,12 +521,15 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 }
 
 func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) string {
+
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
-	pokemon, err := getPokemonRecord(db, strconv.FormatUint(encounter.Pokemon.EncounterId, 10))
+
+	encounterId := strconv.FormatUint(encounter.Pokemon.EncounterId, 10)
+	pokemon, err := getPokemonRecord(db, encounterId)
 	if err != nil {
-		log.Printf("Finding pokemon: %s", err)
+		log.Errorf("Error pokemon [%s]: %s", err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
@@ -536,5 +539,5 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	pokemon.updatePokemonFromEncounterProto(db, encounter)
 	savePokemonRecord(db, pokemon)
 
-	return fmt.Sprintf("%d Pokemon %d CP%d", encounter.Pokemon.EncounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
