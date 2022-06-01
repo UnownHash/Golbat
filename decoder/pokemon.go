@@ -331,7 +331,6 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	} else if pokemon.SeenType.ValueOrZero() != SeenType_Encounter {
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 	}
-
 }
 
 func (pokemon *Pokemon) clearEncounterDetails() {
@@ -516,20 +515,9 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 		pokemon.Level = null.IntFrom(level)
 
 		if oldCp != pokemon.Cp || oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
-			//pokemon.isDitto = Pokemon.isDittoDisguised(
-			//	id: self.id,
-			//	pokemonId: pokemonId,
-			//	level: level,
-			//	weather: weather,
-			//	atkIv: atkIv,
-			//	defIv: defIv,
-			//	staIv: staIv
-			//)
-			//if self.isDitto {
-			//	self.setDittoAttributes(displayPokemonId: pokemonId,
-			//		weather: weather, level: level)
-			//}
-			//setPVP()
+			if int(pokemon.PokemonId) != Ditto && pokemon.isDittoDisguised() {
+				pokemon.setDittoAttributes()
+			}
 		}
 	}
 
@@ -542,6 +530,56 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 	//pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs)
 
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter) // should be const
+}
+
+func (pokemon *Pokemon) setDittoAttributes() {
+	var moveTransformFast int64 = 242
+	var moveStruggle int64 = 133
+	pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+	pokemon.PokemonId = int16(Ditto)
+	pokemon.Form = null.IntFrom(0)
+	pokemon.Move1 = null.IntFrom(moveTransformFast)
+	pokemon.Move2 = null.IntFrom(moveStruggle)
+	pokemon.Gender = null.IntFrom(3)
+	pokemon.Costume = null.IntFrom(0)
+	pokemon.Size = null.NewFloat(0, false)
+	pokemon.Weight = null.NewFloat(0, false)
+}
+
+var Ditto = 132
+var weatherBoostMinLevel = 6
+var weatherBoostMinIvStat = 4
+
+func (pokemon *Pokemon) isDittoDisguised() bool {
+	if int(pokemon.PokemonId) == Ditto {
+		return true
+	}
+	level := int(pokemon.Level.ValueOrZero())
+	atkIv := int(pokemon.AtkIv.ValueOrZero())
+	defIv := int(pokemon.DefIv.ValueOrZero())
+	staIv := int(pokemon.StaIv.ValueOrZero())
+
+	isUnderLevelBoosted := level > 0 && level < weatherBoostMinLevel
+	isUnderIvStatBoosted := level > 0 &&
+		(atkIv < weatherBoostMinIvStat ||
+			defIv < weatherBoostMinIvStat ||
+			staIv < weatherBoostMinIvStat)
+
+	isWeatherBoosted := pokemon.Weather.ValueOrZero() > 0
+	isOverLevel := level > 30
+
+	if isWeatherBoosted {
+		if isUnderLevelBoosted || isUnderIvStatBoosted {
+			log.Debugf("[POKEMON] Pokemon [%s] Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+			return true
+		}
+	} else {
+		if isOverLevel {
+			log.Debugf("[POKEMON] Pokemon [%s] Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+			return true
+		}
+	}
+	return false
 }
 
 func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) string {
