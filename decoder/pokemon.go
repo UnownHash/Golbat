@@ -498,9 +498,9 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 
 	spawnId, _ := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	pokemon.SpawnId = null.IntFrom(spawnId)
-	timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
-
-	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs)
+	//timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
+	//
+	//pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs)
 
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter) // should be const
 }
