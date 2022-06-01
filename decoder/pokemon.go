@@ -358,15 +358,26 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 		// No change of pokemon, do not downgrade to nearby
 		return
 	}
-	if oldWeather.Valid && oldPokemonId != 0 {
-		log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
-			pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
-	}
 
 	pokemon.Username = null.StringFrom(username)
 
-	pokestopId := nearbyPokemon.FortId
+	if oldWeather.Valid && oldPokemonId != 0 {
+		log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
+			pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
 
+		if pokemon.SeenType.ValueOrZero() == SeenType_Wild {
+			return
+		}
+
+		if pokemon.SeenType.ValueOrZero() == SeenType_Encounter {
+			// clear encounter details and finish making changes - lat, lon is preserved
+			pokemon.SeenType = null.StringFrom(SeenType_Wild)
+			pokemon.clearEncounterDetails()
+			return
+		}
+	}
+
+	pokestopId := nearbyPokemon.FortId
 	if pokestopId == "" {
 		// Cell Pokemon
 
