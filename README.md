@@ -18,3 +18,7 @@ versions of ubuntu have an older package
 1. copy `config.json.example` to `config.json`
 2. `go run .`
 
+# Configuration of data source
+
+The data source should be configured to send to Golbat's URL which will be `http://ip:port/raw`
+
