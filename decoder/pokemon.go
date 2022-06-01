@@ -144,6 +144,10 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 		return
 	}
 
+	if pokemon.FirstSeenTimestamp == 0 {
+		pokemon.FirstSeenTimestamp = time.Now().Unix()
+	}
+
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
 		res, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
@@ -347,7 +351,7 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
 	} else {
-		pokestop, _ := getPokestop(db, pokestopId)
+		pokestop, _ := getPokestopRecord(db, pokestopId)
 		if pokestop == nil {
 			// Unrecognised pokestop
 			return
@@ -517,5 +521,5 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	pokemon.updatePokemonFromEncounterProto(db, encounter)
 	savePokemonRecord(db, pokemon)
 
-	return fmt.Sprintf("Pokemon %d %d", pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+	return fmt.Sprintf("%d Pokemon %d CP%d", encounter.Pokemon.EncounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }

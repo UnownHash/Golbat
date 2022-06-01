@@ -31,6 +31,7 @@ var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
+var incidentCache *ttlcache.Cache[string, Incident]
 
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
@@ -53,6 +54,11 @@ func init() {
 	)
 	go pokemonCache.Start()
 
+	incidentCache = ttlcache.New[string, Incident](
+		ttlcache.WithTTL[string, Incident](60 * time.Minute),
+	)
+	go incidentCache.Start()
+
 }
 
 var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
@@ -72,21 +78,45 @@ func UpdateFortBatch(db *sqlx.DB, p []RawFortData) {
 		fortId := fort.Data.FortId
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT {
 
-			pokestop, err := getPokestop(db, fortId) // should check error
+			pokestop, err := getPokestopRecord(db, fortId) // should check error
 			if err != nil {
-				panic(err)
+				log.Errorf("getPokestopRecord: %s", err)
+				continue
 			}
 
 			if pokestop == nil {
 				pokestop = &Pokestop{}
 			}
-			updatePokestopFromFort(pokestop, fort.Data, fort.Cell)
-			updatePokestop(db, pokestop)
+			pokestop.updatePokestopFromFort(fort.Data, fort.Cell)
+			savePokestopRecord(db, pokestop)
+
+			incidents := fort.Data.PokestopDisplays
+			if incidents == nil && fort.Data.PokestopDisplay != nil {
+				incidents = []*pogo.PokestopIncidentDisplayProto{fort.Data.PokestopDisplay}
+			}
+
+			if incidents != nil {
+				for _, incidentProto := range incidents {
+					incident, err := getIncidentRecord(db, incidentProto.IncidentId)
+					if err != nil {
+						log.Errorf("getIncident: %s", err)
+						continue
+					}
+					if incident == nil {
+						incident = &Incident{
+							PokestopId: fortId,
+						}
+					}
+					incident.updateFromPokestopIncidentDisplay(incidentProto)
+					saveIncidentRecord(db, incident)
+				}
+			}
 		}
+
 		if fort.Data.FortType == pogo.FortType_GYM {
 			gym, err := getGymRecord(db, fortId)
 			if err != nil {
-				log.Printf("getGymRecord: %s", err)
+				log.Errorf("getGymRecord: %s", err)
 				continue
 			}
 

@@ -91,7 +91,7 @@ type Pokestop struct {
 
 }
 
-func getPokestop(db *sqlx.DB, fortId string) (*Pokestop, error) {
+func getPokestopRecord(db *sqlx.DB, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
@@ -126,7 +126,7 @@ func hasChanges(old *Pokestop, new *Pokestop) bool {
 
 var LureTime int64 = 1800
 
-func updatePokestopFromFort(stop *Pokestop, fortData *pogo.PokemonFortProto, cellId uint64) *Pokestop {
+func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Pokestop {
 	stop.Id = fortData.FortId
 	stop.Lat = fortData.Latitude
 	stop.Lon = fortData.Longitude
@@ -165,7 +165,7 @@ func updatePokestopFromFort(stop *Pokestop, fortData *pogo.PokemonFortProto, cel
 	return stop
 }
 
-func updatePokestopFromQuestProto(stop *Pokestop, questProto *pogo.FortSearchOutProto, haveAr bool) {
+func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) {
 
 	if questProto.ChallengeQuest == nil {
 		log.Debugf("Received blank quest")
@@ -408,11 +408,10 @@ func updatePokestopFromQuestProto(stop *Pokestop, questProto *pogo.FortSearchOut
 		stop.QuestConditions = null.StringFrom(string(questConditions))
 		stop.QuestRewards = null.StringFrom(string(questRewards))
 		stop.QuestTimestamp = null.IntFrom(questTimestamp)
-
 	}
 }
 
-func updatePokestopFromFortProto(stop *Pokestop, fortData *pogo.FortDetailsOutProto) *Pokestop {
+func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDetailsOutProto) *Pokestop {
 	stop.Id = fortData.Id
 	stop.Lat = fortData.Latitude
 	stop.Lon = fortData.Longitude
@@ -521,8 +520,8 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 }
 
-func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
-	oldPokestop, _ := getPokestop(db, pokestop.Id)
+func savePokestopRecord(db *sqlx.DB, pokestop *Pokestop) {
+	oldPokestop, _ := getPokestopRecord(db, pokestop.Id)
 
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
 		return
@@ -602,7 +601,7 @@ func updatePokestop(db *sqlx.DB, pokestop *Pokestop) {
 }
 
 func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) string {
-	pokestop, err := getPokestop(db, fort.Id) // should check error
+	pokestop, err := getPokestopRecord(db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -611,8 +610,8 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDet
 	if pokestop == nil {
 		pokestop = &Pokestop{}
 	}
-	updatePokestopFromFortProto(pokestop, fort)
-	updatePokestop(db, pokestop)
+	pokestop.updatePokestopFromFortDetailsProto(fort)
+	savePokestopRecord(db, pokestop)
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
@@ -621,7 +620,7 @@ func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr
 		return "No quest"
 	}
 
-	pokestop, err := getPokestop(db, quest.FortId)
+	pokestop, err := getPokestopRecord(db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -630,7 +629,7 @@ func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr
 	if pokestop == nil {
 		pokestop = &Pokestop{}
 	}
-	updatePokestopFromQuestProto(pokestop, quest, haveAr)
-	updatePokestop(db, pokestop)
+	pokestop.updatePokestopFromQuestProto(quest, haveAr)
+	savePokestopRecord(db, pokestop)
 	return fmt.Sprintf("%s", quest.FortId)
 }
