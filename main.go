@@ -101,10 +101,9 @@ func decode(method int, protoData *ProtoData) {
 	}
 
 	if processed == true {
-
 		elapsed := time.Since(start)
 
-		log.Debugf("%s - %s - %s", pogo.Method(method), elapsed, result)
+		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
 	}
 }
 
