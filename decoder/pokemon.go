@@ -154,6 +154,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 		pokemon.Changed = now
 	}
 
+	log.Debugf("Updating pokemon [%s]", pokemon.Id)
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
 		res, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
