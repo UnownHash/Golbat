@@ -329,7 +329,7 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 		pokemon.clearEncounterDetails()
 	}
 
-	if pokemon.SeenType != SeenType_Encounter {
+	if pokemon.SeenType.ValueOrZero() != SeenType_Encounter {
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 	}
 
