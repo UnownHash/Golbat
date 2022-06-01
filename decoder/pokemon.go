@@ -154,7 +154,13 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 		pokemon.Changed = now
 	}
 
-	log.Debugf("Updating pokemon [%s]", pokemon.Id)
+	var oldSeenType string
+	if oldPokemon == nil {
+		oldSeenType = "n/a"
+	} else {
+		oldSeenType = oldPokemon.SeenType.ValueOrZero()
+	}
+	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
 		res, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
@@ -214,6 +220,9 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 			return
 		}
+		rows, rowsErr := res.RowsAffected()
+		log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
+
 		_, _ = res, err
 	}
 
