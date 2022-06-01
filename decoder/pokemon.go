@@ -144,8 +144,14 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 		return
 	}
 
+	now := time.Now().Unix()
 	if pokemon.FirstSeenTimestamp == 0 {
-		pokemon.FirstSeenTimestamp = time.Now().Unix()
+		pokemon.FirstSeenTimestamp = now
+	}
+
+	pokemon.Updated = null.IntFrom(now)
+	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
+		pokemon.Changed = now
 	}
 
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
