@@ -46,6 +46,10 @@ func main() {
 		return
 	}
 
+	db.SetMaxOpenConns(50)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxIdleTime(time.Minute)
+
 	pingErr := db.Ping()
 	if pingErr != nil {
 		log.Fatal(pingErr)
@@ -56,6 +60,7 @@ func main() {
 	log.SetLevel(log.DebugLevel)
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
+	StartStatsLogger(db)
 
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/raw", Raw)
