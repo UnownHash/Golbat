@@ -6,5 +6,6 @@
         "password": "",
         "address": "127.0.0.1:3306",
         "db": "golbat"
-    }
+    },
+    "archive": false
 }

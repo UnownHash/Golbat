@@ -17,3 +17,18 @@ func StartStatsLogger(db *sqlx.DB) {
 		}
 	}()
 }
+
+func StartDatabaseArchiver(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+
+			db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
+			elapsed := time.Since(start)
+			log.Infof("DB - Archive of pokemon table took %s", elapsed)
+
+		}
+	}()
+}

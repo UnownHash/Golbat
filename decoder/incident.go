@@ -70,6 +70,8 @@ func saveIncidentRecord(db *sqlx.DB, incident *Incident) {
 
 	incident.Updated = time.Now().Unix()
 
+	//log.Println(cmp.Diff(oldIncident, incident))
+
 	if oldIncident == nil {
 		res, err := db.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated) "+
 			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated)", incident)

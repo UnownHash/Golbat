@@ -62,6 +62,10 @@ func main() {
 	webhooks.StartSender()
 	StartStatsLogger(db)
 
+	if config.Config.Archive == true {
+		StartDatabaseArchiver(db)
+	}
+
 	router := mux.NewRouter().StrictSlash(true)
 	router.HandleFunc("/raw", Raw)
 	addr := fmt.Sprintf(":%d", config.Config.Port)

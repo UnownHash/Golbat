@@ -4,6 +4,7 @@ type configDefinition struct {
 	Port     int      `json:"port"`
 	Webhooks []string `json:"webhooks"`
 	Database database `json:"database"`
+	Archive  bool     `json:"archive"`
 }
 
 type database struct {
