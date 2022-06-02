@@ -25,9 +25,14 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 			<-ticker.C
 			start := time.Now()
 
-			db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
+			result, err := db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
 			elapsed := time.Since(start)
-			log.Infof("DB - Archive of pokemon table took %s", elapsed)
+
+			if err != nil {
+				log.Errorf("DB - Archive of pokemon table error %s", err)
+			}
+			rows, _ := result.RowsAffected()
+			log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
 
 		}
 	}()
