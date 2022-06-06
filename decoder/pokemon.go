@@ -315,7 +315,7 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 
 	// Not sure I like the idea about an object updater loading another object
 
-	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs)
+	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs, true)
 
 	pokemon.SpawnId = null.IntFrom(spawnId)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -405,26 +405,36 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 	pokemon.clearEncounterDetails()
 }
 
-var SeenType_Cell = "nearby_cell"
-var SeenType_NearbyStop = "nearby_stop"
-var SeenType_Wild string = "wild"
-var SeenType_Encounter string = "encounter"
+var SeenType_Cell = "nearby_cell"           // Pokemon was seen in a cell (without accurate location)
+var SeenType_NearbyStop = "nearby_stop"     // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+var SeenType_Wild string = "wild"           // Pokemon was seen in the wild, accurate location but with no IV details
+var SeenType_Encounter string = "encounter" // Pokestop has been encountered giving exact details of current IV
 
-func (pokemon *Pokemon) updateSpawnpointInfo(db *sqlx.DB, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64) {
+// updateSpawnpointInfo sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
+// information held.
+// db - the database connection to be used
+// wildPokemon - the Pogo Proto to be decoded
+// spawnId - the spawn id the Pokemon was seen at
+// timestampMs - the timestamp to be used for calculations
+// timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
+// a new exact spawnpoint record
+func (pokemon *Pokemon) updateSpawnpointInfo(db *sqlx.DB, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
 	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
 		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
 		pokemon.ExpireTimestamp = null.IntFrom(expireTimeStamp)
 		pokemon.ExpireTimestampVerified = true
 
-		date := time.Unix(expireTimeStamp, 0)
-		secondOfHour := date.Second() + date.Minute()*60
-		spawnpoint := Spawnpoint{
-			Id:         spawnId,
-			Lat:        pokemon.Lat,
-			Lon:        pokemon.Lon,
-			DespawnSec: null.IntFrom(int64(secondOfHour)),
+		if timestampAccurate {
+			date := time.Unix(expireTimeStamp, 0)
+			secondOfHour := date.Second() + date.Minute()*60
+			spawnpoint := Spawnpoint{
+				Id:         spawnId,
+				Lat:        pokemon.Lat,
+				Lon:        pokemon.Lon,
+				DespawnSec: null.IntFrom(int64(secondOfHour)),
+			}
+			spawnpointUpdate(db, &spawnpoint)
 		}
-		spawnpointUpdate(db, &spawnpoint)
 	} else {
 		pokemon.ExpireTimestampVerified = false
 
@@ -525,9 +535,9 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 
 	spawnId, _ := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	pokemon.SpawnId = null.IntFrom(spawnId)
-	//timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
-	//
-	//pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs)
+	timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
+
+	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs, false)
 
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter) // should be const
 }
