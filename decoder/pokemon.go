@@ -405,10 +405,10 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 	pokemon.clearEncounterDetails()
 }
 
-var SeenType_Cell = "nearby_cell"           // Pokemon was seen in a cell (without accurate location)
-var SeenType_NearbyStop = "nearby_stop"     // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-var SeenType_Wild string = "wild"           // Pokemon was seen in the wild, accurate location but with no IV details
-var SeenType_Encounter string = "encounter" // Pokestop has been encountered giving exact details of current IV
+var SeenType_Cell = "nearby_cell"       // Pokemon was seen in a cell (without accurate location)
+var SeenType_NearbyStop = "nearby_stop" // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+var SeenType_Wild = "wild"              // Pokemon was seen in the wild, accurate location but with no IV details
+var SeenType_Encounter = "encounter"    // Pokestop has been encountered giving exact details of current IV
 
 // updateSpawnpointInfo sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
@@ -601,7 +601,7 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	encounterId := strconv.FormatUint(encounter.Pokemon.EncounterId, 10)
 	pokemon, err := getPokemonRecord(db, encounterId)
 	if err != nil {
-		log.Errorf("Error pokemon [%s]: %s", err)
+		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
