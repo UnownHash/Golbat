@@ -253,17 +253,22 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 			decodeError = true
 		} else {
 			if v := raw["have_ar"]; v != nil {
-				rf := v.(bool)
-				globalHaveAr = &rf
+				res, ok := v.(bool)
+				if ok {
+					globalHaveAr = &res
+				}
 			}
 			if v := raw["uuid"]; v != nil {
-				uuid = v.(string)
+				uuid, _ = v.(string)
 			}
 			if v := raw["username"]; v != nil {
-				account = v.(string)
+				account, _ = v.(string)
 			}
 			if v := raw["trainerlvl"]; v != nil { // Other MITM might use
-				level = int(v.(float64))
+				lvl, ok := v.(float64)
+				if ok {
+					level = int(lvl)
+				}
 			}
 			contents := raw["contents"].([]interface{}) // Other MITM
 			for _, v := range contents {
@@ -273,8 +278,10 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 					Method:     int(entry["type"].(float64)),
 					HaveAr: func() *bool {
 						if v := entry["have_ar"]; v != nil {
-							res := v.(bool)
-							return &res
+							res, ok := v.(bool)
+							if ok {
+								return &res
+							}
 						}
 						return nil
 					}(),
