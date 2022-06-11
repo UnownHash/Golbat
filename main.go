@@ -254,11 +254,7 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 		} else {
 			if v := raw["have_ar"]; v != nil {
 				rf := v.(bool)
-				res := false
-				if rf {
-					res = true
-				}
-				globalHaveAr = &res
+				globalHaveAr = &rf
 			}
 			if v := raw["uuid"]; v != nil {
 				uuid = v.(string)
