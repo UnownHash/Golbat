@@ -253,9 +253,9 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 			decodeError = true
 		} else {
 			if v := raw["have_ar"]; v != nil {
-				rf := v.(float64)
+				rf := v.(bool)
 				res := false
-				if rf > 0 {
+				if rf {
 					res = true
 				}
 				globalHaveAr = &res
