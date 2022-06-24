@@ -9,16 +9,27 @@ compatibility
 
 `go 1.18`
 
-You may have problems installing this, let me know.
-I used ubuntu 22 (jammy) and could do `sudo apt install golang-go` but earlier
-versions of ubuntu have an older package
+On Ubuntu 22 (jammy), installing using apt 
+`sudo apt install golang-go` should install the right version.
+
+To get Go 1.18 on earlier versions of Ubuntu, I followed 
+[this](https://nextgentips.com/2021/12/23/how-to-install-go-1-18-on-ubuntu-20-04/) 
+guide. Instead of the download link given there, you can use 
+`https://go.dev/dl/go1.18.3.linux-amd64.tar.gz`, 
+which is the latest version as of writing this.
 
 # Instructions
 
 1. copy `config.json.example` to `config.json`
 2. `go run .`
 
+## Run in pm2
+
+1. `go build golbat`
+2. `pm2 start golbat`
+
 # Configuration of data source
 
-The data source should be configured to send to Golbat's URL which will be `http://ip:port/raw`
+The data source should be configured to send to Golbat's 
+URL which will be `http://ip:port/raw`
 
