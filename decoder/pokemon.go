@@ -176,6 +176,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 
 		if err != nil {
 			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+			log.Errorf("Full structure: %+v", pokemon)
 			return
 		}
 
@@ -219,6 +220,7 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 		)
 		if err != nil {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
+			log.Errorf("Full structure: %+v", pokemon)
 			return
 		}
 		rows, rowsErr := res.RowsAffected()
