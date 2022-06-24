@@ -8,6 +8,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -294,9 +295,13 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 
 func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
-	pokemon.Id = strconv.FormatUint(wildPokemon.EncounterId, 10)
-
+	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
+
+	if pokemon.Id == "" || pokemon.SeenType.ValueOrZero() == SeenType_Cell || pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop {
+		updateStats(db, encounterId, stats_seenWild)
+	}
+	pokemon.Id = encounterId
 
 	pokemon.PokemonId = int16(wildPokemon.Pokemon.PokemonId)
 	pokemon.Lat = wildPokemon.Latitude
@@ -320,7 +325,7 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	pokemon.SpawnId = null.IntFrom(spawnId)
 	pokemon.CellId = null.IntFrom(cellId)
 
-	if oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
+	if oldPokemonId != 0 && (oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather) {
 		if oldWeather.Valid && oldPokemonId != 0 {
 			log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to wild id %d weather %d",
 				pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
@@ -328,6 +333,8 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 
 		pokemon.clearEncounterDetails()
+		updateStats(db, encounterId, stats_statsReset)
+
 	} else if pokemon.SeenType.ValueOrZero() != SeenType_Encounter {
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 	}
@@ -346,7 +353,18 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 
 func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
-	pokemon.Id = strconv.FormatUint(nearbyPokemon.EncounterId, 10)
+	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
+	pokestopId := nearbyPokemon.FortId
+
+	if pokemon.Id == "" {
+		if pokestopId == "" {
+			updateStats(db, encounterId, stats_seenCell)
+		} else {
+			updateStats(db, encounterId, stats_seenStop)
+		}
+	}
+
+	pokemon.Id = encounterId
 
 	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
 
@@ -374,12 +392,14 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 		if pokemon.SeenType.ValueOrZero() == SeenType_Encounter {
 			// clear encounter details and finish making changes - lat, lon is preserved
 			pokemon.SeenType = null.StringFrom(SeenType_Wild)
+
+			updateStats(db, encounterId, stats_statsReset)
 			pokemon.clearEncounterDetails()
+
 			return
 		}
 	}
 
-	pokestopId := nearbyPokemon.FortId
 	if pokestopId == "" {
 		// Cell Pokemon
 
@@ -539,7 +559,8 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 
 	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs, false)
 
-	pokemon.SeenType = null.StringFrom(SeenType_Encounter) // should be const
+	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+	updateStats(db, pokemon.Id, stats_encounter)
 }
 
 func (pokemon *Pokemon) setDittoAttributes() {
@@ -612,4 +633,41 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	savePokemonRecord(db, pokemon)
 
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+}
+
+const stats_seenWild string = "seen_wild"
+const stats_seenStop string = "seen_stop"
+const stats_seenCell string = "seen_cell"
+const stats_statsReset string = "stats_reset"
+const stats_encounter string = "encounter"
+
+func updateStats(db *sqlx.DB, id string, event string) {
+	if config.Config.Stats == false {
+		return
+	}
+
+	var sqlCommand string
+
+	if event == stats_encounter {
+		sqlCommand = "INSERT INTO pokemon_stats (id, first_encounter, last_encounter) " +
+			"VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()) " +
+			"ON DUPLICATE KEY UPDATE " +
+			"first_encounter = COALESCE(first_encounter, VALUES(first_encounter))," +
+			"last_encounter = VALUES(last_encounter) "
+	} else {
+		sqlCommand = fmt.Sprintf("INSERT INTO pokemon_stats (id, %[1]s)"+
+			"VALUES (?, UNIX_TIMESTAMP())"+
+			"ON DUPLICATE KEY UPDATE "+
+			"%[1]s=COALESCE(%[1]s, VALUES(%[1]s))", event)
+	}
+
+	log.Debugf("Updating pokemon stats: [%s] %s", id, event)
+
+	_, err := db.Exec(sqlCommand, id)
+
+	if err != nil {
+		log.Errorf("update pokemon stats: [%s] %s", id, err)
+		return
+	}
+
 }

@@ -225,6 +225,10 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 	var globalHaveAr *bool
 	var protoData []InboundRawData
 
+	// Objective is to normalise incoming proto data. Unfortunately each provider seems
+	// to be just different enough that this ends up being a little bit more of a mess
+	// than I would like
+
 	pogodroidHeader := r.Header.Get("origin")
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
