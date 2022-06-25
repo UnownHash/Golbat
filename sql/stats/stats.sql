@@ -64,8 +64,8 @@ begin
     delete pokemon from pokemon
             join old on pokemon.id = old.id;
 
-    delete pokemon_timing from pokemon_stats
-        join old on pokemon_stats.id = old.id;
+    delete pokemon_timing from pokemon_timing
+        join old on pokemon_timing.id = old.id;
 
     drop temporary table old;
 end;
