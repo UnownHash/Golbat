@@ -651,24 +651,24 @@ func updateStats(db *sqlx.DB, id string, event string) {
 	var sqlCommand string
 
 	if event == stats_encounter {
-		sqlCommand = "INSERT INTO pokemon_stats (id, first_encounter, last_encounter) " +
+		sqlCommand = "INSERT INTO pokemon_timing (id, first_encounter, last_encounter) " +
 			"VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()) " +
 			"ON DUPLICATE KEY UPDATE " +
 			"first_encounter = COALESCE(first_encounter, VALUES(first_encounter))," +
 			"last_encounter = VALUES(last_encounter) "
 	} else {
-		sqlCommand = fmt.Sprintf("INSERT INTO pokemon_stats (id, %[1]s)"+
+		sqlCommand = fmt.Sprintf("INSERT INTO pokemon_timing (id, %[1]s)"+
 			"VALUES (?, UNIX_TIMESTAMP())"+
 			"ON DUPLICATE KEY UPDATE "+
 			"%[1]s=COALESCE(%[1]s, VALUES(%[1]s))", event)
 	}
 
-	log.Debugf("Updating pokemon stats: [%s] %s", id, event)
+	log.Debugf("Updating pokemon timing: [%s] %s", id, event)
 
 	_, err := db.Exec(sqlCommand, id)
 
 	if err != nil {
-		log.Errorf("update pokemon stats: [%s] %s", id, err)
+		log.Errorf("update pokemon timing: [%s] %s", id, err)
 		return
 	}
 
