@@ -342,6 +342,53 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	}
 }
 
+func (pokemon *Pokemon) updateFromMap(db *sqlx.DB, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
+
+	if pokemon.Id != "" {
+		// Do not ever overwrite lure details based on seeing it again in the GMO
+		return
+	}
+
+	pokemon.IsEvent = 0
+
+	encounterId := strconv.FormatUint(mapPokemon.EncounterId, 10)
+	pokemon.Id = encounterId
+	updateStats(db, encounterId, stats_seenLure)
+
+	spawnpointId := mapPokemon.SpawnpointId
+
+	pokestop, _ := getPokestopRecord(db, spawnpointId)
+	if pokestop == nil {
+		// Unrecognised pokestop
+		return
+	}
+	pokemon.PokestopId = null.StringFrom(pokestop.Id)
+	pokemon.Lat = pokestop.Lat
+	pokemon.Lon = pokestop.Lon
+	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // may have been encounter... this needs fixing
+
+	if mapPokemon.PokemonDisplay != nil {
+		pokemon.Gender = null.IntFrom(int64(mapPokemon.PokemonDisplay.Gender))
+		pokemon.Form = null.IntFrom(int64(mapPokemon.PokemonDisplay.Form))
+		pokemon.Costume = null.IntFrom(int64(mapPokemon.PokemonDisplay.Costume))
+		pokemon.Weather = null.IntFrom(int64(mapPokemon.PokemonDisplay.WeatherBoostedCondition))
+		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
+		// shiny = mapPokemon.pokemonDisplay.shiny
+	}
+	if !pokemon.Username.Valid {
+		pokemon.Username = null.StringFrom(username)
+	}
+
+	if mapPokemon.ExpirationTimeMs > 0 {
+		pokemon.ExpireTimestamp = null.IntFrom(mapPokemon.ExpirationTimeMs / 1000)
+		pokemon.ExpireTimestampVerified = true
+	} else {
+		pokemon.ExpireTimestampVerified = false
+	}
+
+	pokemon.CellId = null.IntFrom(cellId)
+}
+
 func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Cp = null.NewInt(0, false)
 	pokemon.Move1 = null.NewInt(0, false)
@@ -427,10 +474,12 @@ func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.Nearby
 	pokemon.clearEncounterDetails()
 }
 
-var SeenType_Cell = "nearby_cell"       // Pokemon was seen in a cell (without accurate location)
-var SeenType_NearbyStop = "nearby_stop" // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-var SeenType_Wild = "wild"              // Pokemon was seen in the wild, accurate location but with no IV details
-var SeenType_Encounter = "encounter"    // Pokestop has been encountered giving exact details of current IV
+const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
+const SeenType_NearbyStop string = "nearby_stop"       // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+const SeenType_Wild string = "wild"                    // Pokemon was seen in the wild, accurate location but with no IV details
+const SeenType_Encounter string = "encounter"          // Pokemon has been encountered giving exact details of current IV
+const SeenType_LureWild string = "lure_wild"           // Pokemon was seen at a lure
+const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encountered at a lure
 
 // updateSpawnpointInfo sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
@@ -565,6 +614,64 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 	updateStats(db, pokemon.Id, stats_encounter)
 }
 
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db *sqlx.DB, encounterData *pogo.DiskEncounterOutProto) {
+	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
+
+	pokemon.IsEvent = 0
+
+	//pokemon.Id = strconv.FormatUint(encounterData.EncounterId, 10)
+	pokemon.PokemonId = int16(encounterData.Pokemon.PokemonId)
+	pokemon.Cp = null.IntFrom(int64(encounterData.Pokemon.Cp))
+	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Move1))
+	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Move2))
+	pokemon.Size = null.FloatFrom(float64(encounterData.Pokemon.HeightM))
+	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.WeightKg))
+	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.IndividualAttack))
+	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.IndividualDefense))
+	pokemon.StaIv = null.IntFrom(int64(encounterData.Pokemon.IndividualStamina))
+	pokemon.Costume = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Costume))
+	pokemon.Form = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Form))
+	pokemon.Gender = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Gender))
+	pokemon.Weather = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.WeatherBoostedCondition))
+
+	if encounterData.Pokemon.PokemonDisplay.Shiny {
+		pokemon.Shiny = null.BoolFrom(true)
+		pokemon.Username = null.StringFrom("AccountShiny")
+	} else {
+		if !pokemon.Shiny.Valid {
+			pokemon.Shiny = null.BoolFrom(false)
+		}
+		if !pokemon.Username.Valid {
+			pokemon.Username = null.StringFrom("Account")
+		}
+	}
+
+	if encounterData.CaptureProbability != nil {
+		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
+		pokemon.Capture2 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
+		pokemon.Capture3 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
+
+		cpMultiplier := float64(encounterData.Pokemon.CpMultiplier)
+		var level int64
+		if cpMultiplier < 0.734 {
+			level = int64(math.Round(58.35178527*cpMultiplier*cpMultiplier -
+				2.838007664*cpMultiplier + 0.8539209906))
+		} else {
+			level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
+		}
+		pokemon.Level = null.IntFrom(level)
+
+		if oldCp != pokemon.Cp || oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
+			if int(pokemon.PokemonId) != Ditto && pokemon.isDittoDisguised() {
+				pokemon.setDittoAttributes()
+			}
+		}
+	}
+
+	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
+	updateStats(db, pokemon.Id, stats_lureEncounter)
+}
+
 func (pokemon *Pokemon) setDittoAttributes() {
 	var moveTransformFast int64 = 242
 	var moveStruggle int64 = 133
@@ -637,11 +744,36 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
+func UpdatePokemonRecordWithDiskEncounterProto(db *sqlx.DB, encounter *pogo.DiskEncounterOutProto) string {
+	if encounter.Pokemon == nil {
+		return "No encounter"
+	}
+
+	encounterId := fmt.Sprintf("%d", encounter.Pokemon.PokemonDisplay.DisplayId)
+	pokemon, err := getPokemonRecord(db, encounterId)
+	if err != nil {
+		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
+		return fmt.Sprintf("Error finding pokemon %s", err)
+	}
+
+	if pokemon == nil {
+		// No pokemon found
+		diskEncounterCache.Set(encounter.Pokemon.PokemonDisplay.DisplayId, encounter, ttlcache.DefaultTTL)
+		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")
+	}
+	pokemon.updatePokemonFromDiskEncounterProto(db, encounter)
+	savePokemonRecord(db, pokemon)
+
+	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+}
+
 const stats_seenWild string = "seen_wild"
 const stats_seenStop string = "seen_stop"
 const stats_seenCell string = "seen_cell"
 const stats_statsReset string = "stats_reset"
 const stats_encounter string = "encounter"
+const stats_seenLure string = "seen_lure"
+const stats_lureEncounter string = "lure_encounter"
 
 func updateStats(db *sqlx.DB, id string, event string) {
 	if config.Config.Stats == false {

@@ -27,11 +27,18 @@ type RawNearbyPokemonData struct {
 	Data *pogo.NearbyPokemonProto
 }
 
+type RawMapPokemonData struct {
+	Cell uint64
+	Data *pogo.MapPokemonProto
+}
+
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
+
+var diskEncounterCache *ttlcache.Cache[int64, *pogo.DiskEncounterOutProto]
 
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
@@ -59,6 +66,11 @@ func init() {
 	)
 	go incidentCache.Start()
 
+	diskEncounterCache = ttlcache.New[int64, *pogo.DiskEncounterOutProto](
+		ttlcache.WithTTL[int64, *pogo.DiskEncounterOutProto](10*time.Minute),
+		ttlcache.WithDisableTouchOnHit[int64, *pogo.DiskEncounterOutProto](),
+	)
+	go diskEncounterCache.Start()
 }
 
 var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
@@ -130,7 +142,7 @@ func UpdateFortBatch(db *sqlx.DB, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData) {
+func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
 	for _, wild := range wildPokemonList {
 		pokemon, err := getPokemonRecord(db, strconv.FormatUint(wild.Data.EncounterId, 10))
 		if err != nil {
@@ -159,6 +171,28 @@ func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearb
 
 		pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), "Account")
 		savePokemonRecord(db, pokemon)
+	}
 
+	for _, mapPokemon := range mapPokemonList {
+		pokemon, err := getPokemonRecord(db, strconv.FormatUint(mapPokemon.Data.EncounterId, 10))
+		if err != nil {
+			log.Printf("getPokemonRecord: %s", err)
+			continue
+		}
+
+		if pokemon == nil {
+			pokemon = &Pokemon{}
+		}
+
+		pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), "Account")
+
+		storedDiskEncounter := diskEncounterCache.Get(int64(mapPokemon.Data.EncounterId))
+		if storedDiskEncounter != nil {
+			diskEncounter := storedDiskEncounter.Value()
+			diskEncounterCache.Delete(int64(mapPokemon.Data.EncounterId))
+			pokemon.updatePokemonFromDiskEncounterProto(db, diskEncounter)
+			log.Infof("Processed stored disk encounter")
+		}
+		savePokemonRecord(db, pokemon)
 	}
 }

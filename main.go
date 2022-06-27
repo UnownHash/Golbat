@@ -90,6 +90,9 @@ func decode(method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_ENCOUNTER:
 		result = decodeEncounter(protoData.Data)
 		processed = true
+	case pogo.Method_METHOD_DISK_ENCOUNTER:
+		result = decodeDiskEncounter(protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
 		result = decodeQuest(protoData.Data, protoData.HaveAr)
 		processed = true
@@ -163,6 +166,16 @@ func decodeEncounter(sDec []byte) string {
 	return decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
 }
 
+func decodeDiskEncounter(sDec []byte) string {
+	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
+	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(db, decodedEncounterInfo)
+}
+
 func decodeGMO(sDec []byte) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
@@ -173,11 +186,16 @@ func decodeGMO(sDec []byte) string {
 	var newForts []decoder.RawFortData
 	var newWildPokemon []decoder.RawWildPokemonData
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
+	var newMapPokemon []decoder.RawMapPokemonData
 
 	for _, mapCell := range decodedGmo.MapCell {
 		timestampMs := uint64(mapCell.AsOfTimeMs)
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort})
+
+			if fort.ActivePokemon != nil {
+				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
+			}
 		}
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
@@ -188,7 +206,7 @@ func decodeGMO(sDec []byte) string {
 	}
 
 	decoder.UpdateFortBatch(db, newForts)
-	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon)
+	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon, newMapPokemon)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
