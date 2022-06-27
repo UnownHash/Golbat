@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
@@ -20,6 +21,9 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 	"golbat/pogo"
+
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 var db *sqlx.DB
@@ -38,9 +42,25 @@ func main() {
 		AllowNativePasswords: true,
 	}
 
+	dbConnectionString := cfg.FormatDSN()
+	driver := "mysql"
+
+	m, err := migrate.New(
+		"file://sql",
+		driver+"://"+dbConnectionString+"&multiStatements=true")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	err = m.Up()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
 	// Get a database handle.
-	var err error
-	db, err = sqlx.Open("mysql", cfg.FormatDSN())
+
+	db, err = sqlx.Open(driver, dbConnectionString)
 	if err != nil {
 		log.Fatal(err)
 		return
