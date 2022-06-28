@@ -53,7 +53,7 @@ func main() {
 		return
 	}
 	err = m.Up()
-	if err != nil {
+	if err != nil && err != migrate.ErrNoChange {
 		log.Fatal(err)
 		return
 	}
