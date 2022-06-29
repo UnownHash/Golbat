@@ -749,7 +749,8 @@ func UpdatePokemonRecordWithDiskEncounterProto(db *sqlx.DB, encounter *pogo.Disk
 		return "No encounter"
 	}
 
-	encounterId := fmt.Sprintf("%d", encounter.Pokemon.PokemonDisplay.DisplayId)
+	encounterId := strconv.FormatUint(uint64(encounter.Pokemon.PokemonDisplay.DisplayId), 10)
+
 	pokemon, err := getPokemonRecord(db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
@@ -758,7 +759,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(db *sqlx.DB, encounter *pogo.Disk
 
 	if pokemon == nil {
 		// No pokemon found
-		diskEncounterCache.Set(encounter.Pokemon.PokemonDisplay.DisplayId, encounter, ttlcache.DefaultTTL)
+		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(db, encounter)

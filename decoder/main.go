@@ -38,7 +38,7 @@ var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 
-var diskEncounterCache *ttlcache.Cache[int64, *pogo.DiskEncounterOutProto]
+var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
 
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
@@ -66,9 +66,9 @@ func init() {
 	)
 	go incidentCache.Start()
 
-	diskEncounterCache = ttlcache.New[int64, *pogo.DiskEncounterOutProto](
-		ttlcache.WithTTL[int64, *pogo.DiskEncounterOutProto](10*time.Minute),
-		ttlcache.WithDisableTouchOnHit[int64, *pogo.DiskEncounterOutProto](),
+	diskEncounterCache = ttlcache.New[string, *pogo.DiskEncounterOutProto](
+		ttlcache.WithTTL[string, *pogo.DiskEncounterOutProto](10*time.Minute),
+		ttlcache.WithDisableTouchOnHit[string, *pogo.DiskEncounterOutProto](),
 	)
 	go diskEncounterCache.Start()
 }
@@ -186,10 +186,11 @@ func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearb
 
 		pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), "Account")
 
-		storedDiskEncounter := diskEncounterCache.Get(int64(mapPokemon.Data.EncounterId))
+		diskEncounterId := strconv.FormatUint(mapPokemon.Data.EncounterId, 10)
+		storedDiskEncounter := diskEncounterCache.Get(diskEncounterId)
 		if storedDiskEncounter != nil {
 			diskEncounter := storedDiskEncounter.Value()
-			diskEncounterCache.Delete(int64(mapPokemon.Data.EncounterId))
+			diskEncounterCache.Delete(diskEncounterId)
 			pokemon.updatePokemonFromDiskEncounterProto(db, diskEncounter)
 			log.Infof("Processed stored disk encounter")
 		}
