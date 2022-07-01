@@ -399,6 +399,7 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.AtkIv = null.NewInt(0, false)
 	pokemon.DefIv = null.NewInt(0, false)
 	pokemon.StaIv = null.NewInt(0, false)
+	pokemon.Shiny = null.NewBool(false, false)
 }
 
 func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
