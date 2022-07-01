@@ -570,17 +570,8 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 	pokemon.Lat = encounterData.Pokemon.Latitude
 	pokemon.Lon = encounterData.Pokemon.Longitude
 
-	if encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny {
-		pokemon.Shiny = null.BoolFrom(true)
-		pokemon.Username = null.StringFrom("AccountShiny")
-	} else {
-		if !pokemon.Shiny.Valid {
-			pokemon.Shiny = null.BoolFrom(false)
-		}
-		if !pokemon.Username.Valid {
-			pokemon.Username = null.StringFrom("Account")
-		}
-	}
+	pokemon.Shiny = null.BoolFrom(encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny)
+	pokemon.Username = null.StringFrom("Account")
 
 	if encounterData.CaptureProbability != nil {
 		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
