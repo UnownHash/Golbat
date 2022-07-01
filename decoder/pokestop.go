@@ -150,7 +150,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 				stop.LureId = lureId
 			} else {
 				now := time.Now().Unix()
-				if now > lureEnd {
+				if now > (lureEnd + 30) { // wait some time after lure end before a restart in case of timing issue
 					// If a lure needs to be restarted
 					stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				}
