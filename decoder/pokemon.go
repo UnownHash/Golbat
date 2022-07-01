@@ -363,6 +363,7 @@ func (pokemon *Pokemon) updateFromMap(db *sqlx.DB, mapPokemon *pogo.MapPokemonPr
 		return
 	}
 	pokemon.PokestopId = null.StringFrom(pokestop.Id)
+	pokemon.PokemonId = int16(mapPokemon.PokedexTypeId)
 	pokemon.Lat = pokestop.Lat
 	pokemon.Lon = pokestop.Lon
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // may have been encounter... this needs fixing
