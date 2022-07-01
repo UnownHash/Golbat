@@ -421,6 +421,15 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	}
 	stop.Name = null.StringFrom(fortData.Name)
 
+	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
+		// DeployingPlayerCodename contains the name of the player if we want that
+		lureId := int16(fortData.Modifier[0].ModifierType)
+		lureExpiry := int64(fortData.Modifier[0].ExpirationTimeMs / 1000)
+
+		stop.LureId = lureId
+		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
+	}
+
 	return stop
 }
 
