@@ -54,7 +54,7 @@ begin
                                  costume, cell_id, expire_timestamp, expire_timestamp_verified, display_pokemon_id,
                                  seen_type, shiny, seen_wild, seen_stop, seen_cell, seen_lure,
                                  first_encounter, stats_reset, last_encounter, lure_encounter)
-        select pokemon.id, POINT(lon,lat) as location, pokemon_id, cp, atk_iv, def_iv, sta_iv, form, level, weather,
+        select pokemon.id, POINT(lat,lon) as location, pokemon_id, cp, atk_iv, def_iv, sta_iv, form, level, weather,
                costume, cell_id, expire_timestamp, expire_timestamp_verified, display_pokemon_id,
                seen_type, shiny, seen_wild, seen_stop, seen_cell, seen_lure,
                first_encounter, stats_reset, last_encounter, lure_encounter
