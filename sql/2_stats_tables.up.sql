@@ -28,6 +28,9 @@ CREATE TABLE `pokemon_history` (
     PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+ALTER TABLE `pokemon_history` ADD SPATIAL INDEX `location` (`location`);
+ALTER TABLE `pokemon_history` ADD INDEX `first_encounter` (`first_encounter`);
+ALTER TABLE `pokemon_history` ADD INDEX `seen_wild` (`seen_wild`);
 
 CREATE TABLE `pokemon_timing` (
                                   `id` varchar(25) NOT NULL,
@@ -41,8 +44,6 @@ CREATE TABLE `pokemon_timing` (
                                   `lure_encounter` int unsigned DEFAULT NULL,
                                   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
 
 create procedure createStatsAndArchive()
 begin
