@@ -57,7 +57,8 @@ func init() {
 	go spawnpointCache.Start()
 
 	pokemonCache = ttlcache.New[string, Pokemon](
-		ttlcache.WithTTL[string, Pokemon](60 * time.Minute),
+		ttlcache.WithTTL[string, Pokemon](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[string, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonCache.Start()
 
