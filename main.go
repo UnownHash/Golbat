@@ -146,6 +146,12 @@ func decodeQuest(sDec []byte, haveAr *bool) string {
 		return "Parse failure"
 	}
 
+	if decodedQuest.Result != pogo.FortSearchOutProto_SUCCESS {
+		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.Result,
+			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.Result)])
+		return res
+	}
+
 	return decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
 
 }
@@ -173,6 +179,11 @@ func decodeGetGymInfo(sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
+	if decodedGymInfo.Result != pogo.GymGetInfoOutProto_SUCCESS {
+		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.Result,
+			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
+		return res
+	}
 	return decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
 }
 
@@ -183,6 +194,11 @@ func decodeEncounter(sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
+	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
+		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
+			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
+		return res
+	}
 	return decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
 }
 
@@ -193,6 +209,12 @@ func decodeDiskEncounter(sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
+	if decodedEncounterInfo.Result != pogo.DiskEncounterOutProto_SUCCESS {
+		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Result,
+			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.Result)])
+		return res
+	}
+
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(db, decodedEncounterInfo)
 }
 
@@ -201,6 +223,12 @@ func decodeGMO(sDec []byte) string {
 
 	if err := proto.Unmarshal(sDec, decodedGmo); err != nil {
 		log.Fatalln("Failed to parse", err)
+	}
+
+	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
+		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.Status,
+			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.Status)])
+		return res
 	}
 
 	var newForts []decoder.RawFortData
