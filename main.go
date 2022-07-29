@@ -18,6 +18,7 @@ import (
 
 	b64 "encoding/base64"
 	"github.com/gin-gonic/gin"
+	"github.com/toorop/gin-logrus"
 
 	"github.com/go-sql-driver/mysql"
 	"golbat/pogo"
@@ -87,7 +88,7 @@ func main() {
 	}
 
 	r := gin.Default()
-	r.Use(gin.Logger())
+	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
 
