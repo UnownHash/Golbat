@@ -17,7 +17,7 @@ import (
 	"time"
 
 	b64 "encoding/base64"
-	"github.com/gorilla/mux"
+	"github.com/gin-gonic/gin"
 
 	"github.com/go-sql-driver/mysql"
 	"golbat/pogo"
@@ -86,10 +86,19 @@ func main() {
 		StartDatabaseArchiver(db)
 	}
 
-	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/raw", Raw)
+	r := gin.Default()
+	r.Use(gin.Logger())
+	r.POST("/raw", Raw)
+	r.POST("/api/clearQuests", ClearQuests)
+
+	//router := mux.NewRouter().StrictSlash(true)
+	//router.HandleFunc("/raw", Raw)
 	addr := fmt.Sprintf(":%d", config.Config.Port)
-	log.Fatal(http.ListenAndServe(addr, router)) // addr is in form :9001
+	//log.Fatal(http.ListenAndServe(addr, router)) // addr is in form :9001
+	err = r.Run(addr)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func decode(method int, protoData *ProtoData) {
@@ -273,7 +282,9 @@ type InboundRawData struct {
 	HaveAr     *bool
 }
 
-func Raw(w http.ResponseWriter, r *http.Request) {
+func Raw(c *gin.Context) {
+	var w http.ResponseWriter = c.Writer
+	var r *http.Request = c.Request
 
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
@@ -390,4 +401,10 @@ func Raw(w http.ResponseWriter, r *http.Request) {
 	//if err := json.NewEncoder(w).Encode(t); err != nil {
 	//	panic(err)
 	//}
+}
+
+func ClearQuests(c *gin.Context) {
+	c.JSON(http.StatusAccepted, map[string]interface{}{
+		"status": "ok",
+	})
 }
