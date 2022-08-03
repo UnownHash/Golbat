@@ -78,7 +78,9 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
-	log.SetLevel(log.DebugLevel)
+	if config.Config.DebugLog == true {
+		log.SetLevel(log.DebugLevel)
+	}
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
 	StartStatsLogger(db)
@@ -87,7 +89,7 @@ func main() {
 		StartDatabaseArchiver(db)
 	}
 
-	r := gin.Default()
+	r := gin.New()
 	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)

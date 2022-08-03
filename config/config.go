@@ -6,6 +6,7 @@ type configDefinition struct {
 	Database database `json:"database"`
 	Archive  bool     `json:"archive"`
 	Stats    bool     `json:"stats"`
+	DebugLog bool     `json:"debug"`
 }
 
 type database struct {
