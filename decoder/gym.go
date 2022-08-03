@@ -153,7 +153,11 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	gym.Enabled = null.IntFrom(util.BoolToInt[int64](fortData.Enabled))
 	gym.GuardingPokemonId = null.IntFrom(int64(fortData.GuardPokemonId))
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
-	gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
+	if fortData.GymDisplay != nil {
+		gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
+	} else {
+		gym.AvailableSlots = null.IntFrom(6) // this may be an incorrect assumption
+	}
 	gym.LastModifiedTimestamp = null.IntFrom(fortData.LastModifiedMs / 1000)
 	gym.ExRaidEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
 
@@ -179,9 +183,13 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if fortData.Team == 0 { // check!!
 		gym.TotalCp = null.IntFrom(0)
 	} else {
-		totalCp := int64(fortData.GymDisplay.TotalGymCp)
-		if gym.TotalCp.Int64-totalCp > 100 || totalCp-gym.TotalCp.Int64 > 100 {
-			gym.TotalCp = null.IntFrom(int64(fortData.GymDisplay.TotalGymCp))
+		if fortData.GymDisplay != nil {
+			totalCp := int64(fortData.GymDisplay.TotalGymCp)
+			if gym.TotalCp.Int64-totalCp > 100 || totalCp-gym.TotalCp.Int64 > 100 {
+				gym.TotalCp = null.IntFrom(int64(fortData.GymDisplay.TotalGymCp))
+			}
+		} else {
+			gym.TotalCp = null.IntFrom(0)
 		}
 	}
 
