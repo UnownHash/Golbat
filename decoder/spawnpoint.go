@@ -3,7 +3,6 @@ package decoder
 import (
 	"database/sql"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 	"time"
@@ -31,7 +30,7 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
-func getSpawnpointRecord(db *sqlx.DB, spawnpointId int64) (*Spawnpoint, error) {
+func getSpawnpointRecord(db DbDetails, spawnpointId int64) (*Spawnpoint, error) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint != nil {
 		spawnpoint := inMemorySpawnpoint.Value()
@@ -39,7 +38,7 @@ func getSpawnpointRecord(db *sqlx.DB, spawnpointId int64) (*Spawnpoint, error) {
 	}
 	spawnpoint := Spawnpoint{}
 
-	err := db.Get(&spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
+	err := db.GeneralDb.Get(&spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -54,12 +53,12 @@ func getSpawnpointRecord(db *sqlx.DB, spawnpointId int64) (*Spawnpoint, error) {
 }
 
 func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	return (old.Lat != new.Lat ||
+	return old.Lat != new.Lat ||
 		old.Lon != new.Lon ||
-		old.DespawnSec != new.DespawnSec)
+		old.DespawnSec != new.DespawnSec
 }
 
-func spawnpointUpdate(db *sqlx.DB, spawnpoint *Spawnpoint) {
+func spawnpointUpdate(db DbDetails, spawnpoint *Spawnpoint) {
 	oldSpawnpoint, _ := getSpawnpointRecord(db, spawnpoint.Id)
 
 	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
@@ -68,7 +67,7 @@ func spawnpointUpdate(db *sqlx.DB, spawnpoint *Spawnpoint) {
 
 	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
 
-	_, err := db.NamedExec("INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
+	_, err := db.GeneralDb.NamedExec("INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), :despawn_sec)"+
 		"ON DUPLICATE KEY UPDATE "+
 		"lat=VALUES(lat),"+
@@ -82,11 +81,11 @@ func spawnpointUpdate(db *sqlx.DB, spawnpoint *Spawnpoint) {
 		return
 	}
 
-	spawnpoint.LastSeen = int64(time.Now().Unix()) // ensure future updates are set correctly
+	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
-func spawnpointSeen(db *sqlx.DB, spawnpointId int64) {
+func spawnpointSeen(db DbDetails, spawnpointId int64) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint == nil {
 		// This should never happen, since all routes here have previously created a spawnpoint in the cache
@@ -99,11 +98,11 @@ func spawnpointSeen(db *sqlx.DB, spawnpointId int64) {
 	if now-spawnpoint.LastSeen > 900 {
 		spawnpoint.LastSeen = now
 
-		_, err := db.Exec("UPDATE spawnpoint "+
+		_, err := db.GeneralDb.Exec("UPDATE spawnpoint "+
 			"SET last_seen=? "+
 			"WHERE id = ? ", now, spawnpointId)
 		if err != nil {
-			log.Printf("Error updating spawnpoint last seen", err)
+			log.Printf("Error updating spawnpoint last seen %s", err)
 			return
 		}
 		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)

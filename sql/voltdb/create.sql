@@ -36,3 +36,4 @@ CREATE TABLE pokemon (
                          PRIMARY KEY (id)
 ) ;
 
+create index IX_encounter_id on pokemon (id);

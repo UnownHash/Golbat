@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"golbat/webhooks"
@@ -31,7 +30,7 @@ type Incident struct {
 //->   `character` smallint unsigned NOT NULL,
 //->   `updated` int unsigned NOT NULL,
 
-func getIncidentRecord(db *sqlx.DB, incidentId string) (*Incident, error) {
+func getIncidentRecord(db DbDetails, incidentId string) (*Incident, error) {
 	inMemoryIncident := incidentCache.Get(incidentId)
 	if inMemoryIncident != nil {
 		incident := inMemoryIncident.Value()
@@ -39,7 +38,7 @@ func getIncidentRecord(db *sqlx.DB, incidentId string) (*Incident, error) {
 	}
 
 	incident := Incident{}
-	err := db.Get(&incident,
+	err := db.GeneralDb.Get(&incident,
 		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated "+
 			"FROM incident "+
 			"WHERE incident.id = ? ", incidentId)
@@ -59,7 +58,7 @@ func hasChangesIncident(old *Incident, new *Incident) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func saveIncidentRecord(db *sqlx.DB, incident *Incident) {
+func saveIncidentRecord(db DbDetails, incident *Incident) {
 	oldIncident, _ := getIncidentRecord(db, incident.Id)
 
 	if oldIncident != nil && !hasChangesIncident(oldIncident, incident) {
@@ -73,7 +72,7 @@ func saveIncidentRecord(db *sqlx.DB, incident *Incident) {
 	//log.Println(cmp.Diff(oldIncident, incident))
 
 	if oldIncident == nil {
-		res, err := db.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated) "+
+		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated) "+
 			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated)", incident)
 
 		if err != nil {
@@ -83,7 +82,7 @@ func saveIncidentRecord(db *sqlx.DB, incident *Incident) {
 
 		_, _ = res, err
 	} else {
-		res, err := db.NamedExec("UPDATE incident SET "+
+		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
 			"start = :start, "+
 			"expiration = :expiration, "+
 			"display_type = :display_type, "+
@@ -102,7 +101,7 @@ func saveIncidentRecord(db *sqlx.DB, incident *Incident) {
 	createIncidentWebhooks(db, oldIncident, incident)
 }
 
-func createIncidentWebhooks(db *sqlx.DB, oldIncident *Incident, incident *Incident) {
+func createIncidentWebhooks(db DbDetails, oldIncident *Incident, incident *Incident) {
 	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
 		stop, _ := getPokestopRecord(db, incident.PokestopId)
 		if stop == nil {

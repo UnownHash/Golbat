@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"golbat/util"
@@ -91,14 +90,14 @@ type Pokestop struct {
 
 }
 
-func getPokestopRecord(db *sqlx.DB, fortId string) (*Pokestop, error) {
+func getPokestopRecord(db DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
 		return &pokestop, nil
 	}
 	pokestop := Pokestop{}
-	err := db.Get(&pokestop,
+	err := db.GeneralDb.Get(&pokestop,
 		"SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,"+
 			"pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,"+
 			"quest_rewards, quest_template, quest_title,"+
@@ -530,7 +529,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 }
 
-func savePokestopRecord(db *sqlx.DB, pokestop *Pokestop) {
+func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(db, pokestop.Id)
 
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
@@ -540,7 +539,7 @@ func savePokestopRecord(db *sqlx.DB, pokestop *Pokestop) {
 	log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
 	if oldPokestop == nil {
-		res, err := db.NamedExec(
+		res, err := db.GeneralDb.NamedExec(
 			"INSERT INTO pokestop ("+
 				"id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,"+
 				"quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,"+
@@ -564,7 +563,7 @@ func savePokestopRecord(db *sqlx.DB, pokestop *Pokestop) {
 		}
 		_ = res
 	} else {
-		res, err := db.NamedExec(
+		res, err := db.GeneralDb.NamedExec(
 			"UPDATE pokestop SET "+
 				"lat = :lat,"+
 				"lon = :lon,"+
@@ -610,7 +609,7 @@ func savePokestopRecord(db *sqlx.DB, pokestop *Pokestop) {
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) string {
+func UpdatePokestopRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
 	pokestop, err := getPokestopRecord(db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
@@ -625,7 +624,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDet
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
-func UpdatePokestopWithQuest(db *sqlx.DB, quest *pogo.FortSearchOutProto, haveAr bool) string {
+func UpdatePokestopWithQuest(db DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
 		return "No quest"
 	}

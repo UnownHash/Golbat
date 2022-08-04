@@ -23,11 +23,14 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"golbat/pogo"
 
+	_ "github.com/VoltDB/voltdb-client-go/voltdbclient"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 var db *sqlx.DB
+var voltDb *sqlx.DB
+var dbDetails decoder.DbDetails
 
 func main() {
 
@@ -77,6 +80,23 @@ func main() {
 		return
 	}
 	log.Infoln("Connected to database")
+
+	voltDb, err = sqlx.Open("voltdb", "dragonite:21212")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	pingErr = voltDb.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+		return
+	}
+
+	dbDetails = decoder.DbDetails{
+		PokemonDb: voltDb,
+		GeneralDb: db,
+	}
 
 	if config.Config.DebugLog == true {
 		log.SetLevel(log.DebugLevel)
@@ -164,7 +184,7 @@ func decodeQuest(sDec []byte, haveAr *bool) string {
 		return res
 	}
 
-	return decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
+	return decoder.UpdatePokestopWithQuest(dbDetails, decodedQuest, *haveAr)
 
 }
 
@@ -177,9 +197,9 @@ func decodeFortDetails(sDec []byte) string {
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	case pogo.FortType_GYM:
-		return decoder.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdateGymRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	}
 	return "Unknown fort type"
 }
@@ -196,7 +216,7 @@ func decodeGetGymInfo(sDec []byte) string {
 			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
 		return res
 	}
-	return decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
+	return decoder.UpdateGymRecordWithGymInfoProto(dbDetails, decodedGymInfo)
 }
 
 func decodeEncounter(sDec []byte) string {
@@ -211,7 +231,7 @@ func decodeEncounter(sDec []byte) string {
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
-	return decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithEncounterProto(dbDetails, decodedEncounterInfo)
 }
 
 func decodeDiskEncounter(sDec []byte) string {
@@ -227,7 +247,7 @@ func decodeDiskEncounter(sDec []byte) string {
 		return res
 	}
 
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(db, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(dbDetails, decodedEncounterInfo)
 }
 
 func decodeGMO(sDec []byte) string {
@@ -265,8 +285,8 @@ func decodeGMO(sDec []byte) string {
 		}
 	}
 
-	decoder.UpdateFortBatch(db, newForts)
-	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon, newMapPokemon)
+	decoder.UpdateFortBatch(dbDetails, newForts)
+	decoder.UpdatePokemonBatch(dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }

@@ -3,7 +3,6 @@ package decoder
 import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"math"
@@ -79,7 +78,7 @@ var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	return delta < 0.000001
 })
 
-func UpdateFortBatch(db *sqlx.DB, p []RawFortData) {
+func UpdateFortBatch(db DbDetails, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)
 	// 2. Fetch current stops from database
@@ -143,7 +142,7 @@ func UpdateFortBatch(db *sqlx.DB, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db *sqlx.DB, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
+func UpdatePokemonBatch(db DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
 	for _, wild := range wildPokemonList {
 		pokemon, err := getPokemonRecord(db, strconv.FormatUint(wild.Data.EncounterId, 10))
 		if err != nil {
