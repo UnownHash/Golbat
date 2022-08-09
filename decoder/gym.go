@@ -159,7 +159,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		gym.AvailableSlots = null.IntFrom(6) // this may be an incorrect assumption
 	}
 	gym.LastModifiedTimestamp = null.IntFrom(fortData.LastModifiedMs / 1000)
-	gym.ExRaidEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
+	gym.ExRaidEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsExRaidEligible))
 
 	if fortData.ImageUrl != "" {
 		gym.Url = null.StringFrom(fortData.ImageUrl)
