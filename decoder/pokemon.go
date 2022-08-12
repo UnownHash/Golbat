@@ -114,7 +114,7 @@ func getPokemonRecord(db DbDetails, encounterId string) (*Pokemon, error) {
 	//}
 	pokemon := Pokemon{}
 
-	row := db.PokemonDb.QueryRow("@AdHoc", "SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
+	row := db.PokemonDb.QueryRow("SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
 		"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
 		"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 		"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
@@ -194,12 +194,12 @@ func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
 			return
 		}
 
-		var params []interface{}
-		params = make([]interface{}, 0)
-		params = append(params, named)
-		params = append(params, i...)
+		//var params []interface{}
+		//params = make([]interface{}, 0)
+		//params = append(params, named)
+		//params = append(params, i...)
 
-		res, erre := db.PokemonDb.Exec("@AdHoc", params...)
+		res, erre := db.PokemonDb.Exec(named, i...)
 		_, _ = erre, res
 		//err4 := row.Scan()
 		_, _ = named, i //, row, err3, err4, res
@@ -259,12 +259,12 @@ func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
 			"is_event = :is_event "+
 			"WHERE id = :id", pokemon,
 		)
-		var params []interface{}
-		params = make([]interface{}, 0)
-		params = append(params, named)
-		params = append(params, i...)
+		//var params []interface{}
+		//params = make([]interface{}, 0)
+		//params = append(params, named)
+		//params = append(params, i...)
 
-		_, err := db.PokemonDb.Exec("@AdHoc", params...)
+		_, err := db.PokemonDb.Exec(named, i...)
 
 		if err != nil {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)

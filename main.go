@@ -26,6 +26,7 @@ import (
 	_ "github.com/VoltDB/voltdb-client-go/voltdbclient"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sqlx.DB
@@ -81,17 +82,28 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
-	voltDb, err = sqlx.Open("voltdb", "dragonite:21212")
+	voltDb, err = sqlx.Open("sqlite3", ":memory:")
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
+
+	voltDb.SetMaxOpenConns(1)
 
 	pingErr = voltDb.Ping()
 	if pingErr != nil {
 		log.Fatal(pingErr)
 		return
 	}
+
+	// Create database
+	content, fileErr := ioutil.ReadFile("sql/voltdb/create.sql")
+
+	if fileErr != nil {
+		log.Fatal(err)
+	}
+
+	voltDb.MustExec(string(content))
 
 	dbDetails = decoder.DbDetails{
 		PokemonDb: voltDb,
