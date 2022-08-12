@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	"io/ioutil"
+	"strings"
 
 	"golbat/decoder"
 	"golbat/webhooks"
@@ -125,6 +127,7 @@ func main() {
 	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
+	r.POST("/api/queryPokemon", QueryPokemon)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
@@ -442,4 +445,116 @@ func ClearQuests(c *gin.Context) {
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
 	})
+}
+
+type pokemonQuery struct {
+	Query string `json:"query"`
+}
+
+func QueryPokemon(c *gin.Context) {
+	var query pokemonQuery
+	if err := c.BindJSON(&query); err != nil {
+		return
+	}
+
+	// This is bad
+
+	rows, err := voltDb.Query(query.Query)
+	if err != nil {
+		return
+	}
+
+	z, err2 := toJson(rows)
+	c.Data(http.StatusAccepted, "application/json", z)
+	_, _ = err, err2
+}
+
+func toJson(rows *sql.Rows) ([]byte, error) {
+	columnTypes, err := rows.ColumnTypes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	count := len(columnTypes)
+	finalRows := []interface{}{}
+
+	for rows.Next() {
+
+		scanArgs := make([]interface{}, count)
+
+		for i, v := range columnTypes {
+			var dbType string
+			dbType = v.DatabaseTypeName()
+			if idx := strings.IndexByte(dbType, '('); idx >= 0 {
+				dbType = dbType[:idx]
+			}
+
+			switch dbType {
+			case "varchar", "text", "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
+				scanArgs[i] = new(sql.NullString)
+				break
+			case "BOOL":
+				scanArgs[i] = new(sql.NullBool)
+				break
+			//case "smallint":
+			//	scanArgs[i] = new(sql.NullInt16)
+			//	break
+			//case "INT":
+			//	scanArgs[i] = new(sql.NullInt32)
+			//	break
+			//case "INT4":
+			//	scanArgs[i] = new(sql.NullInt64)
+			//	break
+			//case "float":
+			//	scanArgs[i] = new(sql.NullFloat64)
+			//	break
+			default:
+				scanArgs[i] = new(sql.NullString)
+			}
+		}
+
+		err := rows.Scan(scanArgs...)
+
+		if err != nil {
+			return nil, err
+		}
+
+		masterData := map[string]interface{}{}
+
+		for i, v := range columnTypes {
+
+			if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
+				masterData[v.Name()] = z.Bool
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullString); ok {
+				masterData[v.Name()] = z.String
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
+				masterData[v.Name()] = z.Int64
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
+				masterData[v.Name()] = z.Float64
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
+				masterData[v.Name()] = z.Int32
+				continue
+			}
+
+			masterData[v.Name()] = scanArgs[i]
+		}
+
+		finalRows = append(finalRows, masterData)
+	}
+
+	z, err := json.Marshal(finalRows)
+	return z, err
 }
