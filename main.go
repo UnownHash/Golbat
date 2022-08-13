@@ -119,9 +119,9 @@ func main() {
 	webhooks.StartSender()
 	StartStatsLogger(db)
 
-	if config.Config.Archive == true {
-		StartDatabaseArchiver(db)
-	}
+	//if config.Config.Archive == true {
+	StartDatabaseArchiver(db)
+	//}
 
 	r := gin.New()
 	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
@@ -445,10 +445,6 @@ func ClearQuests(c *gin.Context) {
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
 	})
-}
-
-type pokemonQuery struct {
-	Query string `json:"query"`
 }
 
 func QueryPokemon(c *gin.Context) {
