@@ -452,14 +452,19 @@ type pokemonQuery struct {
 }
 
 func QueryPokemon(c *gin.Context) {
-	var query pokemonQuery
-	if err := c.BindJSON(&query); err != nil {
+
+	data, err := c.GetRawData()
+	if err != nil {
 		return
 	}
+	query := string(data)
+	//if err := c.BindJSON(&query); err != nil {
+	//	return
+	//}
 
 	// This is bad
 
-	rows, err := voltDb.Query(query.Query)
+	rows, err := voltDb.Query(query)
 	if err != nil {
 		return
 	}

@@ -22,6 +22,8 @@ CREATE TABLE pokemon (
                          costume smallint  ,
                          first_seen_timestamp int  NOT NULL,
                          changed int   DEFAULT 0 NOT NULL,
+                         `iv` float GENERATED ALWAYS AS (((((`atk_iv` + `def_iv`) + `sta_iv`) * 100) / 45)),
+
                          cell_id bigint  ,
                          expire_timestamp_verified TINYINT NOT NULL,
                          display_pokemon_id smallint  ,
@@ -37,3 +39,4 @@ CREATE TABLE pokemon (
 ) ;
 
 create index IX_encounter_id on pokemon (id);
+create index `ix_coords` on pokemon (`lat`,`lon`);
