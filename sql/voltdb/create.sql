@@ -40,3 +40,4 @@ CREATE TABLE pokemon (
 
 create index IX_encounter_id on pokemon (id);
 create index `ix_coords` on pokemon (`lat`,`lon`);
+create index `ix_expire_timestamp` on pokemon (`expire_timestamp`);
