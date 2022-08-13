@@ -2,9 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
-	"golbat/config"
 	"time"
 )
 
@@ -30,11 +30,12 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
-			if config.Config.Stats {
-				result, err = db.Exec("call createStatsAndArchive();")
-			} else {
-				result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
-			}
+			unix := time.Now().Unix()
+
+			result, err = db.Exec(
+				fmt.Sprintf("DELETE FROM pokemon WHERE expire_timestamp < %d;",
+					unix-5*60))
+
 			elapsed := time.Since(start)
 
 			if err != nil {
