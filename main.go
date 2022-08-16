@@ -291,10 +291,11 @@ func Raw(c *gin.Context) {
 
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
-		panic(err)
+		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
+		return
 	}
 	if err := r.Body.Close(); err != nil {
-		log.Errorf("Raw: Error during HTTP receive %s", err)
+		log.Errorf("Raw: Error (2) during HTTP receive %s", err)
 		return
 	}
 
