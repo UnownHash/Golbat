@@ -14,12 +14,36 @@
 *	or implied. See the License for the specific language governing
 *	permissions and limitations under the License.
 *
-* Version: Base compatible 0.237.x.
+* Version: Base compatible 0.243.x.
 *
 */
 
 syntax = "proto3";
 package POGOProtos.Rpc;
+
+enum ASPermissionStatusTelemetryIds {
+	AS_PERMISSION_STATUS_TELEMETRY_IDS_UNKNOWN = 0;
+	AS_PERMISSION_STATUS_TELEMETRY_IDS_REQUESTED = 1;
+	AS_PERMISSION_STATUS_TELEMETRY_IDS_GRANTED_IN_USE = 2;
+	AS_PERMISSION_STATUS_TELEMETRY_IDS_GRANTED_ALWAYS = 3;
+	AS_PERMISSION_STATUS_TELEMETRY_IDS_DENIED = 4;
+}
+
+enum ASPermissionTelemetryIds {
+	AS_PERMISSION_TELEMETRY_IDS_UNSET_PERMISSION = 0;
+	AS_PERMISSION_TELEMETRY_IDS_LOCATION = 1;
+	AS_PERMISSION_TELEMETRY_IDS_BACKGROUND_LOCATION = 2;
+	AS_PERMISSION_TELEMETRY_IDS_ACTIVITY = 3;
+	AS_PERMISSION_TELEMETRY_IDS_PRECISE_LOCATION = 4;
+	AS_PERMISSION_TELEMETRY_IDS_FITNESS_PERMISSION = 5;
+}
+
+enum ASServiceTelemetryIds {
+	AS_SERVICE_TELEMETRY_IDS_UNSET_SERVICE = 0;
+	AS_SERVICE_TELEMETRY_IDS_FITNESS = 1;
+	AS_SERVICE_TELEMETRY_IDS_AWARENESS = 2;
+	AS_SERVICE_TELEMETRY_IDS_BREADCRUMB = 3;
+}
 
 enum AdFeedbackComplaintReason {
 	AD_FEEDBACK_COMPLAINT_REASON_INVALID = 0;
@@ -49,6 +73,15 @@ enum AdResponseStatus {
 	WASABI_AD_FOUND = 0;
 	NO_CAMPAIGNS_FOUND = 1;
 	USER_NOT_ELIGIBLE = 2;
+}
+
+enum AdType {
+	AD_TYPE_UNKNOWN = 0;
+	AD_TYPE_SPONSORED_GIFT = 1;
+	AD_TYPE_SPONSORED_BALLOON = 2;
+	AD_TYPE_SPONSORED_BALLOON_WASABI = 3;
+	AD_TYPE_SPONSORED_BALLOON_GOOGLE_MANAGED_AD = 4;
+	AD_TYPE_SPONSORED_BALLOON_AR_AD = 5;
 }
 
 enum AssetTelemetryIds {
@@ -253,6 +286,24 @@ enum CombatPlayerFinishState {
 	COMBAT_PLAYER_FINISH_STATE_DRAW = 2;
 }
 
+enum CombatRefactorToggleProto {
+	BASELINE = 0;
+	FAST_MOVE_ALWAYS_LEAK = 1;
+	MINIGAME_FAST_MOVE_CLEAR = 2;
+	SWAP_FAST_MOVE_CLEAR = 3;
+	DOWNSTREAM_REDUNDANCY = 4;
+	DEFENSIVE_ACK_CHECK = 5;
+	SERVER_FLY_IN_FLY_OUT = 6;
+	CLIENT_REOBSERVER_COMBAT_STATE = 7;
+	FAST_MOVE_FLY_IN_CLIP = 8;
+	CLIENT_FAST_MOVE_FLY_IN_CLIP_FALL_BACK = 9;
+	COMBAT_REWARDS_INVOKE = 10;
+	CLIENT_SWAP_WIDGET_DISMISS = 11;
+	CLIENT_COMBAT_NULL_RPC_GUARD = 12;
+	SWAP_DELAY_TY_GREIL = 13;
+	FAST_MOVE_FAINT_DEFERRAL = 14;
+}
+
 enum CombatRewardStatus {
 	COMBAT_REWARD_STATUS_UNSET_REWARD_STATUS = 0;
 	COMBAT_REWARD_STATUS_REWARDS_GRANTED = 1;
@@ -309,10 +360,8 @@ enum EncounterType {
 	ENCOUNTER_TYPE_POWER_UP_POKESTOP = 14;
 }
 
-enum FastMoveLeakBaselineProto {
-	BASELINE = 0;
-	FAST_MOVE_ALWAYS_LEAK = 1;
-	MINIGAME_FAST_MOVE_CLEAR = 2;
+enum EventTypeStatus {
+	EVENT_UNSET = 0;
 }
 
 enum FeatureKind {
@@ -407,6 +456,16 @@ enum FeatureKind {
 	FEATURE_KIND_PLATFORM = 88;
 	FEATURE_KIND_STATION = 89;
 	FEATURE_KIND_SUBWAY = 90;
+	FEATURE_KIND_AGRICULTURAL = 91;
+	FEATURE_KIND_EDUCATION = 92;
+	FEATURE_KIND_GOVERNMENT = 93;
+	FEATURE_KIND_HEALTHCARE = 94;
+	FEATURE_KIND_LANDMARK = 95;
+	FEATURE_KIND_RELIGIOUS = 96;
+	FEATURE_KIND_SERVICES = 97;
+	FEATURE_KIND_SPORTS = 98;
+	FEATURE_KIND_TRANSPORTATION = 99;
+	FEATURE_KIND_UNUSED = 100;
 	FEATURE_KIND_ANY = 2000;
 }
 
@@ -464,6 +523,7 @@ enum GenericClickTelemetryIds {
 	GENERIC_CLICK_TELEMETRY_IDS_SPEED_WARNING_SHOW = 1;
 	GENERIC_CLICK_TELEMETRY_IDS_SPEED_WARNING_PASSENGER = 2;
 	GENERIC_CLICK_TELEMETRY_IDS_CACHE_RESET_CLICKED = 3;
+	GENERIC_CLICK_TELEMETRY_IDS_REFUND_PAGE_OPENED = 4;
 }
 
 enum GymBadgeType {
@@ -612,6 +672,7 @@ enum HoloBadgeType {
 	BADGE_RAID_BATTLE_STAT = 76;
 	BADGE_TOTAL_ROUTE_PLAY = 77;
 	BADGE_UNIQUE_ROUTE_PLAY = 78;
+	BADGE_POKEDEX_ENTRIES_GEN8A = 79;
 	BADGE_DYNAMIC_MIN = 1000;
 	BADGE_MINI_COLLECTION = 1002;
 	BADGE_EVENT_MIN = 2000;
@@ -883,6 +944,58 @@ enum HoloBadgeType {
 	BADGE_SAFARIZONE_2022_SEVILLE_DAY_03_EARLYACCESS = 5293;
 	DEPRECATED_1 = 5300;
 	DEPRECATED_2 = 5301;
+	BADGE_GOFEST_2022_BERLIN_TEST_GENERAL = 5302;
+	BADGE_GOFEST_2022_BERLIN_TEST_EARLYACCESS = 5303;
+	BADGE_GOFEST_2022_BERLIN_DAY_01_GENERAL = 5304;
+	BADGE_GOFEST_2022_BERLIN_DAY_01_EARLYACCESS = 5305;
+	BADGE_GOFEST_2022_BERLIN_DAY_02_GENERAL = 5306;
+	BADGE_GOFEST_2022_BERLIN_DAY_02_EARLYACCESS = 5307;
+	BADGE_GOFEST_2022_BERLIN_DAY_03_GENERAL = 5308;
+	BADGE_GOFEST_2022_BERLIN_DAY_03_EARLYACCESS = 5309;
+	BADGE_GOFEST_2022_SEATTLE_TEST_PARK_MORNING = 5310;
+	BADGE_GOFEST_2022_SEATTLE_TEST_PARK_AFTERNOON = 5311;
+	BADGE_GOFEST_2022_SEATTLE_TEST_CITY_MORNING = 5312;
+	BADGE_GOFEST_2022_SEATTLE_TEST_CITY_AFTERNOON = 5313;
+	BADGE_GOFEST_2022_SEATTLE_DAY_01_PARK_MORNING = 5314;
+	BADGE_GOFEST_2022_SEATTLE_DAY_01_PARK_AFTERNOON = 5315;
+	BADGE_GOFEST_2022_SEATTLE_DAY_01_CITY_MORNING = 5316;
+	BADGE_GOFEST_2022_SEATTLE_DAY_01_CITY_AFTERNOON = 5317;
+	BADGE_GOFEST_2022_SEATTLE_DAY_02_PARK_MORNING = 5318;
+	BADGE_GOFEST_2022_SEATTLE_DAY_02_PARK_AFTERNOON = 5319;
+	BADGE_GOFEST_2022_SEATTLE_DAY_02_CITY_MORNING = 5320;
+	BADGE_GOFEST_2022_SEATTLE_DAY_02_CITY_AFTERNOON = 5321;
+	BADGE_GOFEST_2022_SEATTLE_DAY_03_PARK_MORNING = 5322;
+	BADGE_GOFEST_2022_SEATTLE_DAY_03_PARK_AFTERNOON = 5323;
+	BADGE_GOFEST_2022_SEATTLE_DAY_03_CITY_MORNING = 5324;
+	BADGE_GOFEST_2022_SEATTLE_DAY_03_CITY_AFTERNOON = 5325;
+	BADGE_GOFEST_2022_SAPPORO_TEST_PARK_MORNING = 5326;
+	BADGE_GOFEST_2022_SAPPORO_TEST_PARK_AFTERNOON = 5327;
+	BADGE_GOFEST_2022_SAPPORO_TEST_CITY_MORNING = 5328;
+	BADGE_GOFEST_2022_SAPPORO_TEST_CITY_AFTERNOON = 5329;
+	BADGE_GOFEST_2022_SAPPORO_DAY_01_PARK_MORNING = 5330;
+	BADGE_GOFEST_2022_SAPPORO_DAY_01_PARK_AFTERNOON = 5331;
+	BADGE_GOFEST_2022_SAPPORO_DAY_01_CITY_MORNING = 5332;
+	BADGE_GOFEST_2022_SAPPORO_DAY_01_CITY_AFTERNOON = 5333;
+	BADGE_GOFEST_2022_SAPPORO_DAY_02_PARK_MORNING = 5334;
+	BADGE_GOFEST_2022_SAPPORO_DAY_02_PARK_AFTERNOON = 5335;
+	BADGE_GOFEST_2022_SAPPORO_DAY_02_CITY_MORNING = 5336;
+	BADGE_GOFEST_2022_SAPPORO_DAY_02_CITY_AFTERNOON = 5337;
+	BADGE_GOFEST_2022_SAPPORO_DAY_03_PARK_MORNING = 5338;
+	BADGE_GOFEST_2022_SAPPORO_DAY_03_PARK_AFTERNOON = 5339;
+	BADGE_GOFEST_2022_SAPPORO_DAY_03_CITY_MORNING = 5340;
+	BADGE_GOFEST_2022_SAPPORO_DAY_03_CITY_AFTERNOON = 5341;
+	BADGE_GOFEST_2022_BERLIN_ADDON_HATCH_TEST = 5342;
+	BADGE_GOFEST_2022_BERLIN_ADDON_HATCH = 5343;
+	BADGE_GOFEST_2022_BERLIN_ADDON_RAID_TEST = 5344;
+	BADGE_GOFEST_2022_BERLIN_ADDON_RAID = 5345;
+	BADGE_GOFEST_2022_SEATTLE_ADDON_HATCH_TEST = 5346;
+	BADGE_GOFEST_2022_SEATTLE_ADDON_HATCH = 5347;
+	BADGE_GOFEST_2022_SEATTLE_ADDON_RAID_TEST = 5348;
+	BADGE_GOFEST_2022_SEATTLE_ADDON_RAID = 5349;
+	BADGE_GOFEST_2022_SAPPORO_ADDON_HATCH_TEST = 5350;
+	BADGE_GOFEST_2022_SAPPORO_ADDON_HATCH = 5351;
+	BADGE_GOFEST_2022_SAPPORO_ADDON_RAID_TEST = 5352;
+	BADGE_GOFEST_2022_SAPPORO_ADDON_RAID = 5353;
 }
 
 enum HoloIapItemCategory {
@@ -987,6 +1100,7 @@ enum HoloPokemonClass {
 	POKEMON_CLASS_NORMAL = 0;
 	POKEMON_CLASS_LEGENDARY = 1;
 	POKEMON_CLASS_MYTHIC = 2;
+	POKEMON_CLASS_ULTRA_BEAST = 3;
 }
 
 enum HoloPokemonEggType {
@@ -1466,6 +1580,7 @@ enum HoloPokemonFamilyId {
 	FAMILY_GLASTRIER = 896;
 	FAMILY_SPECTRIER = 897;
 	FAMILY_CALYREX = 898;
+	FAMILY_ENAMORUS = 905;
 }
 
 enum HoloPokemonId {
@@ -2368,6 +2483,13 @@ enum HoloPokemonId {
 	GLASTRIER = 896;
 	SPECTRIER = 897;
 	CALYREX = 898;
+	WYRDEER = 899;
+	KLEAVOR = 900;
+	URSALUNA = 901;
+	BASCULEGION = 902;
+	SNEASLER = 903;
+	OVERQWIL = 904;
+	ENAMORUS = 905;
 }
 
 enum HoloPokemonMove {
@@ -2679,6 +2801,10 @@ enum HoloPokemonMove {
 	BRUTAL_SWING = 367;
 	ROLLOUT_FAST = 368;
 	SEED_FLARE = 369;
+	OBSTRUCT = 370;
+	SHADOW_FORCE = 371;
+	METEOR_BEAM = 372;
+	WATER_SHURIKEN_FAST = 373;
 }
 
 enum HoloPokemonMovementType {
@@ -2802,6 +2928,7 @@ enum Item {
 	ITEM_ULTRA_BALL = 3;
 	ITEM_MASTER_BALL = 4;
 	ITEM_PREMIER_BALL = 5;
+	ITEM_BEAST_BALL = 6;
 	ITEM_POTION = 101;
 	ITEM_SUPER_POTION = 102;
 	ITEM_HYPER_POTION = 103;
@@ -2814,6 +2941,7 @@ enum Item {
 	ITEM_INCENSE_COOL = 403;
 	ITEM_INCENSE_FLORAL = 404;
 	ITEM_INCENSE_BELUGA_BOX = 405;
+	ITEM_INCENSE_DAILY_ADVENTURE = 406;
 	ITEM_TROY_DISK = 501;
 	ITEM_TROY_DISK_GLACIAL = 502;
 	ITEM_TROY_DISK_MOSSY = 503;
@@ -2869,6 +2997,7 @@ enum Item {
 	ITEM_GLOBAL_EVENT_TICKET_TO_GIFT = 1603;
 	ITEM_EVENT_TICKET_PINK_TO_GIFT = 1604;
 	ITEM_EVENT_TICKET_GRAY_TO_GIFT = 1605;
+	ITEM_BATTLE_PASS_TICKET = 1606;
 }
 
 enum ItemUseTelemetryIds {
@@ -3139,6 +3268,7 @@ enum Method {
 	METHOD_LIST_ROUTE_BADGES = 1409;
 	METHOD_CANCEL_ROUTE = 1410;
 	METHOD_LIST_ROUTE_STAMPS = 1411;
+	METHOD_RATE_ROUTE = 1412;
 	METHOD_CREATE_BUDDY_MUTLIPLAYER_SESSION = 1456;
 	METHOD_JOIN_BUDDY_MULTIPLAYER_SESSION = 1457;
 	METHOD_LEAVE_BUDDY_MULTIPLAYER_SESSION = 1458;
@@ -3174,6 +3304,7 @@ enum Method {
 	METHOD_COMPLETE_MILESTONE = 1806;
 	METHOD_GET_GEOFENCED_AD = 1820;
 	METHOD_POWER_UP_POKESTOP_ENCOUNTER = 1900;
+	METHOD_DELETE_POSTCARDS = 1909;
 	METHOD_CREATE_POSTCARD = 1910;
 	METHOD_UPDATE_POSTCARD = 1911;
 	METHOD_DELETE_POSTCARD = 1912;
@@ -3184,6 +3315,8 @@ enum Method {
 	METHOD_COMBAT_SYNC_SERVER_OFFSET = 1917;
 	METHOD_CHECK_GIFTING_ELIGIBILITY = 2000;
 	METHOD_REDEEM_TICKET_GIFT_FOR_FRIEND = 2001;
+	METHOD_GET_INCENSE_RECAP = 2002;
+	METHOD_ACKNOWLEDGE_INCENSE_RECAP = 2003;
 }
 
 enum NewsPageTelemetryIds {
@@ -3277,6 +3410,11 @@ enum PermissionFlowStepTelemetryIds {
 	PERMISSION_FLOW_STEP_TELEMETRY_IDS_FITNESS_PERMISSION = 2;
 	PERMISSION_FLOW_STEP_TELEMETRY_IDS_LOCATION_PERMISSION = 3;
 	PERMISSION_FLOW_STEP_TELEMETRY_IDS_ACTIVITY_PERMISSIONS = 4;
+}
+
+enum PermissionStatus {
+	PERMISSION_STATUS_granted = 0;
+	PERMISSION_STATUS_denied = 1;
 }
 
 enum PermissionType {
@@ -3524,6 +3662,7 @@ enum RaidLevel {
 	RAID_LEVEL_5 = 5;
 	RAID_LEVEL_MEGA = 6;
 	RAID_LEVEL_MEGA_5 = 7;
+	RAID_LEVEL_ULTRA_BEAST = 8;
 }
 
 enum RaidLocationRequirement {
@@ -3866,6 +4005,7 @@ enum TutorialCompletion {
 	LUCKY_FRIEND_TUTORIAL = 71;
 	LUCKY_TRADE_TUTORIAL = 72;
 	MEGA_LEVELS_TUTORIAL = 73;
+	SPONSORED_WEB_AR_TUTORIAL = 74;
 }
 
 enum TweenAction {
@@ -3951,6 +4091,19 @@ message ARPlusEncounterValuesProto {
 	bool pokemon_frightened = 3;
 }
 
+message ASPermissionFlowTelemetry {
+	bool initial_prompt = 1;
+	repeated ASServiceTelemetryIds service_telemetry = 2;
+	ASPermissionTelemetryIds permission_telemetry = 3;
+	ASPermissionStatusTelemetryIds permission_status_telemetry = 4;
+	bool success = 5;
+}
+
+message AcceptCombatChallengeDataProto {
+	int32 ob_int32 = 1;
+	repeated int32 ob_list_int32 = 2;
+}
+
 message AcceptCombatChallengeOutProto {
 	enum Result {
 		UNSET = 0;
@@ -3975,6 +4128,13 @@ message AcceptCombatChallengeProto {
 	repeated fixed64 attacking_pokemon_id = 6;
 }
 
+message AcceptCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	AcceptCombatChallengeOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
+}
+
 message AcceptFriendInviteOutProto {
 	enum Result {
 		UNSET = 0;
@@ -3994,6 +4154,10 @@ message AcceptFriendInviteOutProto {
 message AcceptFriendInviteProto {
 	string player_id = 1;
 	string nia_account_id = 2;
+}
+
+message AccountDeletionInitiatedTelemetry {
+	string account_deletion_status = 1;
 }
 
 message AccountSettingsProto {
@@ -4045,6 +4209,7 @@ message ActionLogEntry {
 		VsSeekerWinRewardsLogEntry vs_seeker_win_rewards = 23;
 		BuddyConsumablesLogEntry buddy_consumables = 24;
 		CompleteReferralMilestoneLogEntry complete_referral_milestone = 25;
+		DailyAdventureIncenseLogEntry daily_adventure_incense = 26;
 	}
 
 	int64 timestamp_ms = 1;
@@ -4121,6 +4286,10 @@ message AdRequestDeviceInfo {
 	OperatingSystem operating_system = 1;
 	string device_model = 2;
 	string carrier = 3;
+	string operating_system_version = 4;
+	int32 system_memory_size_mb = 5;
+	int32 graphics_memory_size_mb = 6;
+	bool camera_permission_granted = 7;
 }
 
 message AdTargetingInfoProto {
@@ -4158,6 +4327,7 @@ message AddLoginActionOutProto {
 		UNSET = 0;
 		AUTH_FAILURE = 1;
 		LOGIN_TAKEN = 2;
+		ERROR_UNKNOWN = 3;
 	}
 
 	bool success = 1;
@@ -4210,6 +4380,43 @@ message AddressBookImportTelemetry {
 message AddressablePokemonSettings {
 	int32 ob_addressable_int = 1;
 	repeated HoloPokemonId pokemon_id = 2;
+}
+
+message AdvancedPerformanceTelemetry {
+	enum PerformanceLevels {
+		UNSET = 0;
+		LOW = 1;
+		MEDIUM = 2;
+		HIGH = 3;
+	}
+
+	enum PerformancePresetLevels {
+		UNSET_PRESET = 0;
+		LOW_PRESET = 1;
+		MEDIUM_PRESET = 2;
+		HIGH_PRESET = 3;
+		MAX_PRESET = 4;
+		CUSTOM_PRESET = 5;
+	}
+
+	PerformancePresetLevels performance_preset_level = 1;
+	bool native_refresh_rate_fps = 2;
+	bool special_framerate = 3;
+	bool improved_sky = 4;
+	bool dynamic_gyms = 5;
+	bool normal_map_drawing_distance = 6;
+	bool normal_fog_distance = 7;
+	PerformanceLevels buildings_on_map = 8;
+	bool friends_icons_in_list = 9;
+	PerformanceLevels avatars_render_texture_size_high = 10;
+	bool avatars_render_texture_size_low = 11;
+	bool ar_prompt = 12;
+	PerformanceLevels render_level = 13;
+	PerformanceLevels texture_quality = 14;
+	PerformanceLevels download_image_ram_cache = 15;
+	bool map_details = 16;
+	bool avatar_details = 17;
+	PerformanceLevels render_and_texture = 18;
 }
 
 message AdventureSyncProgress {
@@ -4846,6 +5053,7 @@ message AllTypesAndMessagesResponsesProto {
 		GetAvailableSkusAndBalancesProto get_available_skus_and_balances_proto_5020 = 5020;
 		RedeemGoogleReceiptProto redeem_googlereceipt_proto_5021 = 5021;
 		RedeemAppleReceiptProto redeem_applereceipt_proto_5022 = 5022;
+		FitnessUpdateProto fitness_update_proto_5024 = 5024;
 		GetFitnessReportProto get_fitness_report_proto_5025 = 5025;
 		ClientTelemetrySettingsRequestProto client_telemetry_settings_request_proto_5026 = 5026;
 		SetInGameCurrencyExchangeRateProto set_in_game_currency_exchange_rate_proto_5032 = 5032;
@@ -4916,12 +5124,14 @@ message AllTypesAndMessagesResponsesProto {
 		GenerateGmapSignedUrlProto generategmap_signed_url_proto_620300 = 620300;
 		GetGmapSettingsProto getgmap_settings_proto_620301 = 620301;
 		PoiVideoSubmissionMetadataProto poi_video_submission_metadataproto_620400 = 620400;
+		GetGrapeshotUploadUrlProto getgrapeshot_upload_url_proto_620401 = 620401;
 		AsyncFileUploadCompleteProto async_file_upload_complete_proto_620402 = 620402;
 		GetARMappingSettingsProto get_a_r_mapping_settings_proto_620403 = 620403;
 		GetImagesForPoiProto get_images_for_poi_proto_620500 = 620500;
 		SubmitPlayerImageVoteForPoiProto submit_player_image_vote_for_poi_proto_620501 = 620501;
 		GetImageGallerySettingsProto get_imagegallery_settings_proto_620502 = 620502;
 		GetPoisInRadiusProto get_pois_in_radius_proto_620601 = 620601;
+		FitnessUpdateProto fitness_update_proto_640000 = 640000;
 		GetFitnessReportProto get_fitness_report_proto_640001 = 640001;
 		GetAdventureSyncSettingsRequestProto get_adventure_sync_settings_request_proto_640002 = 640002;
 		UpdateAdventureSyncSettingsRequestProto update_adventure_sync_settings_request_proto_640003 = 640003;
@@ -5163,6 +5373,7 @@ message AllTypesAndMessagesResponsesProto {
 		GetAvailableSkusAndBalancesOutProto get_available_skus_and_balances_out_proto_5020 = 5020;
 		RedeemGoogleReceiptOutProto redeem_googlereceipt_out_proto_5021 = 5021;
 		RedeemAppleReceiptOutProto redeem_applereceipt_out_proto_5022 = 5022;
+		FitnessUpdateOutProto fitness_update_out_proto_5024 = 5024;
 		GetFitnessReportOutProto get_fitness_report_out_proto_5025 = 5025;
 		SetInGameCurrencyExchangeRateOutProto set_in_game_currency_exchange_rate_out_proto_5032 = 5032;
 		GeofenceUpdateOutProto geofence_update_out_proto_5033 = 5033;
@@ -5221,12 +5432,14 @@ message AllTypesAndMessagesResponsesProto {
 		GetPlayerSubmissionValidationSettingsOutProto get_player_submission_validation_settings_out_proto_620003 = 620003;
 		GenerateGmapSignedUrlOutProto generategmap_signed_url_out_proto_620300 = 620300;
 		GetGmapSettingsOutProto getgmap_settings_out_proto_620301 = 620301;
+		GetGrapeshotUploadUrlOutProto getgrapeshot_upload_url_out_proto_620401 = 620401;
 		AsyncFileUploadCompleteOutProto async_file_upload_complete_out_proto_620402 = 620402;
 		GetARMappingSettingsOutProto get_a_r_mapping_settings_out_proto_620403 = 620403;
 		GetImagesForPoiOutProto get_images_for_poi_out_proto_620500 = 620500;
 		SubmitPlayerImageVoteForPoiOutProto submit_player_image_vote_for_poi_out_proto_620501 = 620501;
 		GetImageGallerySettingsOutProto get_imagegallery_settings_out_proto_620502 = 620502;
 		GetPoisInRadiusOutProto get_pois_in_radius_out_proto_620601 = 620601;
+		FitnessUpdateOutProto fitness_update_out_proto_640000 = 640000;
 		GetFitnessReportOutProto get_fitness_report_out_proto_640001 = 640001;
 		GetAdventureSyncSettingsResponseProto get_adventure_sync_settings_response_proto_640002 = 640002;
 		UpdateAdventureSyncSettingsResponseProto update_adventure_sync_settings_response_proto_640003 = 640003;
@@ -5288,6 +5501,7 @@ message ApnToken {
 
 message AppleToken {
 	string id_token = 1;
+	bytes session_token = 2;
 }
 
 message AppliedItemProto {
@@ -5323,10 +5537,11 @@ message ApprovedCommonTelemetryProto {
 		PoiCategorySelectedTelemetry poi_categorization_selected_telemetry = 11;
 		PoiCategoryRemovedTelemetry poi_categorization_removed_telemetry = 12;
 		WayfarerOnboardingFlowTelemetry wayfarer_onboarding_flow_telemetry = 13;
+		ASPermissionFlowTelemetry as_permission_flow_telemetry = 14;
 	}
 
-	ServerRecordMetadata server_data = 14;
-	ClientTelemetryCommonFilterProto common_filters = 15;
+	ServerRecordMetadata server_data = 15;
+	ClientTelemetryCommonFilterProto common_filters = 16;
 }
 
 message ArMappingSessionTelemetryProto {
@@ -5704,6 +5919,7 @@ message AttackRaidDataProto {
 	repeated AttackRaidDataLogDetails ob_details = 1;
 	AttackRaidDataLogDetails ob_detail = 2;
 	uint32 ob_attack_raid_data_uint32 = 3;
+	int32 ob_attack_raid_data_int32 = 4;
 }
 
 message AttackRaidResponseDataProto {
@@ -5713,6 +5929,25 @@ message AttackRaidResponseDataProto {
 	repeated AttackRaidDataLogDetails ob_details = 4;
 	uint32 ob_attack_raid_data_uint32_2 = 5;
 	uint32 ob_attack_raid_data_uint32_3 = 6;
+	int32 ob_attack_raid_data_int32 = 7;
+	uint32 ob_attack_raid_data_uint32_4 = 8;
+}
+
+message AuthenticateAppleSignInRequestProto {
+	bytes apple_id_token = 1;
+	bytes auth_code = 2;
+}
+
+message AuthenticateAppleSignInResponseProto {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		INVALID_AUTH = 2;
+		SERVER_ERROR = 3;
+	}
+
+	Status status = 1;
+	bytes nia_apple_auth_token = 2;
 }
 
 message AvailableSkuProto {
@@ -5868,6 +6103,13 @@ message AwardedGymBadge {
 }
 
 message AwardedRouteBadge {
+	enum RouteBadgeType {
+		ROUTE_BADGE_UNSET = 0;
+		ROUTE_BADGE_BRONZE = 1;
+		ROUTE_BADGE_SILVER = 2;
+		ROUTE_BADGE_GOLD = 3;
+	}
+
 	message RouteBadgeWaypoint {
 		string fort_name = 1;
 		string image_url = 2;
@@ -5885,6 +6127,12 @@ message AwardedRouteBadge {
 	string route_image_url = 9;
 	int64 route_duration_seconds = 10;
 	repeated RouteBadgeWaypoint last_played_waypoints = 11;
+	int64 ob_int64_1 = 12;
+	GameplayWeatherProto.WeatherCondition weather_condition = 13;
+	RouteBadgeType route_badge_type = 14;
+	double ob_lat = 15;
+	double ob_lng = 16;
+	int64 ob_int64_2 = 17;
 }
 
 message AwardedRouteStamp {
@@ -5892,9 +6140,14 @@ message AwardedRouteStamp {
 	int64 acquire_time_ms = 2;
 	string route_id = 3;
 	string fort_id = 4;
+	string stamp_id = 5 [deprecated = true];
 }
 
 message BackgroundModeClientSettingsProto {
+	message ProximitySettingsProto {
+		int64 maximum_contact_age_ms = 4;
+	}
+
 	int64 maximum_sample_age_ms = 1;
 	bool accept_manual_fitness_samples = 2;
 	double minimum_location_accuracy_meters = 3;
@@ -5909,6 +6162,7 @@ message BackgroundModeClientSettingsProto {
 	int32 min_persistent_reporting_interval_s = 12;
 	bool enable_progress_request = 13;
 	bool enable_foreground_notification = 14;
+	ProximitySettingsProto proximity_settings = 15;
 }
 
 message BackgroundModeGlobalSettingsProto {
@@ -6352,6 +6606,7 @@ message BreadcrumbRecordProto {
 	int64 timestamp_ms = 1;
 	double latitude_deg = 2;
 	double longitude_deg = 3;
+	bool app_is_foregrounded = 4;
 }
 
 message BuddyActivityCategorySettings {
@@ -6617,6 +6872,7 @@ message BuddyObservedData {
 	string attractive_poi_id = 12;
 	int64 attractive_poi_expiration_time_ms = 13;
 	int32 num_days_spent_with_buddy = 14;
+	reserved 2, 4, 5;
 }
 
 message BuddyPettingOutProto {
@@ -6654,6 +6910,7 @@ message BuddyPokemonProto {
 	DailyCounterProto daily_buddy_swaps = 4;
 	int64 last_km_awarded_ms = 5;
 	bool best_buddies_backfilled = 6;
+	int64 last_set_timestamp_ms = 7;
 }
 
 message BuddyStats {
@@ -6692,6 +6949,7 @@ message BuddyStatsShownHearts {
 
 	float buddy_affection_km_in_progress = 1;
 	map<int32, BuddyShownHeartsList> buddy_shown_hearts_per_category = 2;
+	reserved 3;
 }
 
 message BuddySwapSettings {
@@ -6705,6 +6963,7 @@ message BuddyWalkSettings {
 
 message BuildingMetadata {
 	int32 height_meters = 1;
+	bool is_underground = 2;
 }
 
 message CameraSettingsProto {
@@ -6726,6 +6985,10 @@ message CameraSettingsProto {
 	repeated float vert_ctr_ratio = 16;
 }
 
+message CancelCombatChallengeDataProto {
+	int32 ob_int32 = 1;
+}
+
 message CancelCombatChallengeOutProto {
 	enum Result {
 		UNSET = 0;
@@ -6745,6 +7008,12 @@ message CancelCombatChallengeProto {
 	string challenge_id = 1;
 }
 
+message CancelCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	CancelCombatChallengeOutProto.Result result = 3;
+}
+
 message CancelFriendInviteOutProto {
 	enum Result {
 		UNSET = 0;
@@ -6762,6 +7031,10 @@ message CancelFriendInviteProto {
 	string nia_account_id = 2;
 }
 
+message CancelMatchmakingDataProto {
+	int32 ob_int32 = 1;
+}
+
 message CancelMatchmakingOutProto {
 	enum Result {
 		UNSET = 0;
@@ -6776,6 +7049,12 @@ message CancelMatchmakingOutProto {
 
 message CancelMatchmakingProto {
 	string queue_id = 1;
+}
+
+message CancelMatchmakingResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	CancelMatchmakingOutProto.Result result = 3;
 }
 
 message CancelRouteOutProto {
@@ -6865,6 +7144,7 @@ message CatchPokemonOutProto {
 	HoloPokemonId display_pokedex_id = 6;
 	int32 throws_remaining = 7;
 	PokemonDisplayProto pokemon_display = 8;
+	PokemonDisplayProto ob_pokemon_display = 9;
 }
 
 message CatchPokemonProto {
@@ -6890,6 +7170,11 @@ message CatchPokemonTelemetry {
 	int32 hit_grade = 4;
 	bool curve_ball = 5;
 	double miss_percent = 6;
+}
+
+message ChallengeIdMismatchDataProto {
+	string ob_string = 1;
+	ObCombatMismatchData.MismatchState.Type type = 2;
 }
 
 message ChangeArTelemetry {
@@ -7173,6 +7458,7 @@ message ClientMapCellProto {
 	repeated MapPokemonProto catchable_pokemon = 10;
 	repeated NearbyPokemonProto nearby_pokemon = 11;
 	string route_list_hash = 15;
+	repeated ObClientMapCellProto ob_client_map_cell = 16;
 }
 
 message ClientPerformanceSettingsProto {
@@ -7329,6 +7615,22 @@ message ClientTelemetryRecordProto {
 }
 
 message ClientTelemetrySettingsRequestProto {
+}
+
+message ClientToggleSettingsTelemetry {
+	enum ToggleEvent {
+		UNDEFINED = 0;
+		OFF = 1;
+		ON = 2;
+	}
+
+	enum ToggleSettingId {
+		UNSET = 0;
+		REMEMBER_LAST_POKEBALL = 1;
+	}
+
+	ToggleSettingId toggle_id = 1;
+	ToggleEvent toggle_event = 2;
 }
 
 message ClientVersionProto {
@@ -7500,6 +7802,15 @@ message CombatDefensiveInputChallengeSettings {
 	float full_rotations_for_max_score = 1;
 }
 
+message CombatEndDataProto {
+	enum EndType {
+		NO_END = 0;
+		COMBAT_STATE_EXIT = 1;
+	}
+
+	EndType end_type = 1;
+}
+
 message CombatFriendRequestOutProto {
 	enum Result {
 		UNSET = 0;
@@ -7558,6 +7869,11 @@ message CombatHubEntranceTelemetry {
 	CombatHubEntranceTelemetryIds combat_hub_telemetry_id = 1;
 }
 
+message CombatIdMismatchDataProto {
+	string ob_string = 1;
+	ObCombatMismatchData.MismatchState.Type type = 2;
+}
+
 message CombatLeagueProto {
 	enum ConditionType {
 		UNSET = 0;
@@ -7593,8 +7909,8 @@ message CombatLeagueProto {
 			WithPokemonCpLimitProto with_pokemon_cp_limit = 2;
 			WithPokemonTypeProto with_pokemon_type = 3;
 			WithPokemonCategoryProto with_pokemon_category = 4;
-			PokemonWhitelist pokemon_white_list = 5;
-			PokemonBanlist pokemon_ban_list = 6;
+			PokemonWhitelist pokemon_whitelist = 5;
+			PokemonBanlist pokemon_banlist = 6;
 			PokemonCaughtTimestamp pokemon_caught_timestamp = 7;
 			PokemonLevelRange pokemon_level_range = 8;
 		}
@@ -7624,8 +7940,8 @@ message CombatLeagueProto {
 			WithPokemonCpLimitProto with_pokemon_cp_limit = 4;
 			WithPokemonTypeProto with_pokemon_type = 5;
 			WithPokemonCategoryProto with_pokemon_category = 6;
-			PokemonWhitelist pokemon_white_list = 7;
-			PokemonBanlist pokemon_ban_list = 8;
+			PokemonWhitelist pokemon_whitelist = 7;
+			PokemonBanlist pokemon_banlist = 8;
 			PokemonCaughtTimestamp pokemon_caught_timestamp = 9;
 			PokemonLevelRange pokemon_level_range = 10;
 		}
@@ -7647,7 +7963,7 @@ message CombatLeagueProto {
 	LeagueType league_type = 11;
 	string border_color_hex = 12;
 	bool allow_temp_evos = 13;
-	repeated FastMoveLeakBaselineProto fast_move_leak_baseline = 14;
+	repeated CombatRefactorToggleProto combat_refactor_toggle = 14;
 }
 
 message CombatLeagueSettingsProto {
@@ -7673,6 +7989,7 @@ message CombatLogProto {
 	CombatSeasonResult current_season_results = 2;
 	repeated VsSeekerBattleResult current_vs_seeker_set_results = 4;
 	CombatSeasonResult previous_season_results = 5;
+	reserved 3;
 }
 
 message CombatMinigameTelemetry {
@@ -7832,6 +8149,59 @@ message CombatProto {
 	int64 quick_swap_cooldown_duration_ms = 13;
 	int64 state_change_delay_until_turn = 14;
 	ObCombatField ob_field = 15;
+	int32 ob_int32_1 = 16;
+	bool ob_bool = 17;
+	int32 ob_int32_2 = 18;
+}
+
+message CombatPubSubDataProto {
+	enum Type {
+		NO_TYPE = 0;
+		END_NPC_COMBAT = 1;
+		END_INVASION_COMBAT = 2;
+		COMBAT_NOTIFY = 3;
+		END_PVP_COMBAT = 4;
+		VS_SEEKER_MATCH_STARTED = 5;
+		COMBAT_CHARGE_ATTACK_ANIMATION_ACTIVE_CHANGE = 6;
+		COMBAT_UPDATE_ACTION_UI = 7;
+		COMBAT_EXIT_COMBAT_STATE = 8;
+		COMBAT_SUPER_EFFECTIVE_CHARGED_ATTACKS_UPDATE = 9;
+		COMBAT_STATE_ENTERED = 10;
+		COMBAT_STATE_DONE = 11;
+		COMBAT_STATE_EXITED = 12;
+		COMBAT_INITIALIZE_PRESENTATION_DIRECTOR = 13;
+		COMBAT_SHOW_UI = 14;
+		COMBAT_HIDE_UI = 15;
+		COMBAT_SHOW_MESSAGE = 16;
+		COMBAT_SHOW_TOAST = 17;
+		COMBAT_SHOW_TUTORIAL = 18;
+		COMBAT_UPDATE_IS_SHOWING_CHARGE_ANIM = 19;
+		COMBAT_PLAY_MINI_GAME = 20;
+		COMBAT_CONTINUE_AFTER_MINI_GAME = 21;
+		COMBAT_SHOW_SPECIAL_ATTACK = 22;
+		COMBAT_SPECIAL_MOVE_STATE_ENDED = 23;
+		COMBAT_CLEAN_UP_SPECIAL_MOVE_STATE = 24;
+		COMBAT_HANDLE_SPECIAL_MOVE_CAMERA_ZOOM = 25;
+		COMBAT_SHIELD_USED = 26;
+		COMBAT_DEFENDER_FLINCH = 27;
+		COMBAT_OPPONENT_REACT = 28;
+		COMBAT_FOCUS_ON_POKEMON = 29;
+		COMBAT_PLAY_START_FADE_TRANSITION = 30;
+		COMBAT_PLAY_END_FADE_TRANSITION = 31;
+		COMBAT_COUNTDOWN_STARTED = 32;
+		COMBAT_PLAY_BACK_BUTTON_SFX = 33;
+		COMBAT_SETUP_COMBAT_STAGE_SUBSCRIPTIONS = 34;
+		COMBAT_OPPONENT_RETRIEVE_POKEMON = 35;
+		COMBAT_HIDE_NAMEPLATE = 36;
+		COMBAT_DISPLAY_PHYSICAL_SHIELD = 37;
+		COMBAT_UPDATE_TIMER = 38;
+		COMBAT_STOP_CHARGE_ATTACK_EFFECTS = 39;
+		COMBAT_DEFENSIVE_MINI_GAME_DECIDED = 40;
+		COMBAT_DEFENSIVE_MINI_GAME_SERVER_RESPONSE = 41;
+		COMBAT_PAUSE_NOTIFY_COMBAT_POKEMON = 42;
+	}
+
+	Type type = 1;
 }
 
 message CombatQuestUpdateProto {
@@ -7896,11 +8266,18 @@ message CombatSettingsProto {
 	float shadow_pokemon_attack_bonus_multiplier = 30;
 	float shadow_pokemon_defense_bonus_multiplier = 31;
 	float purified_pokemon_attack_multiplier_vs_shadow = 32;
-	repeated FastMoveLeakBaselineProto fast_move_leak_baseline = 35;
+	repeated CombatRefactorToggleProto combat_refactor_toggle = 35;
 	bool ob_bool = 36;
+	int32 ob_int32_1 = 37; //todo: not in apk, need look better (maybe bool but i leave as int for look if > 1)
 	ObCombatSettings ob_combat_settings = 38;
 	ObCombatSettings1 ob_combat_settings_1 = 39;
-	int32 ob_int32 = 40;
+	int32 ob_int32_2 = 40;
+}
+
+message CombatSpecialMovePlayerDataProto {
+	ObCombatSpecialmovePlayerData player = 1;
+	ObCombatSpecialmovePlayerData ob_data = 2;
+	string ob_string = 3;
 }
 
 message CombatStatStageSettingsProto {
@@ -7908,6 +8285,27 @@ message CombatStatStageSettingsProto {
 	int32 maximum_stat_stage = 2;
 	repeated float attack_buff_multiplier = 3;
 	repeated float defense_buff_multiplier = 4;
+}
+
+message CombatSyncServerDataProto {
+	int32 ob_int32 = 1;
+}
+
+message CombatSyncServerResponseDataProto {
+	int32 ob_int32 = 1;
+	CombatSyncServerResponseStateDataProto.Result result = 2;
+	uint32 ob_uint32 = 3;
+}
+
+message CombatSyncServerResponseStateDataProto {
+	enum Result {
+		UNSET = 0;
+		SUCCESS = 1;
+		FAILURE = 2;
+	}
+
+	int64 ob_int64 = 1;
+	Result result = 2;
 }
 
 message CombatTypeProto {
@@ -8276,6 +8674,10 @@ message CreateBuddyMultiplayerSessionOutProto {
 message CreateBuddyMultiplayerSessionProto {
 }
 
+message CreateCombatChallengeDataProto {
+	int32 ob_int32 = 1;
+}
+
 message CreateCombatChallengeOutProto {
 	enum Result {
 		UNSET = 0;
@@ -8291,6 +8693,12 @@ message CreateCombatChallengeOutProto {
 
 message CreateCombatChallengeProto {
 	string challenge_id = 1;
+}
+
+message CreateCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	CreateCombatChallengeOutProto.Result result = 3;
 }
 
 message CreatePokemonTagOutProto {
@@ -8335,6 +8743,47 @@ message CreatePostcardProto {
 	repeated string sticker_id = 3;
 }
 
+message CreateSharedLoginTokenRequest {
+	string device_id = 1;
+}
+
+message CreateSharedLoginTokenResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+	}
+
+	message TokenMetaData {
+		string email = 1;
+		int64 expiration_timestamp_ms = 2;
+	}
+
+	Status status = 1;
+	bytes shared_login_token = 2;
+	TokenMetaData token_meta_data = 3;
+}
+
+message CrmProxyRequestProto {
+	uint32 action = 1;
+	bytes payload = 2;
+}
+
+message CrmProxyResponseProto {
+	enum Status {
+		UNSET = 0;
+		OK = 1;
+		ERROR_UNKNOWN = 2;
+		ERROR_PERMISSION_DENIED = 3;
+		ERROR_UNAVAILABLE = 4;
+		ERROR_UNAUTHENTICATED = 5;
+	}
+
+	Status status = 1;
+	string error_message = 2;
+	bytes payload = 3;
+}
+
 message CrossGameSocialGlobalSettingsProto {
 	int32 online_status_min_level = 1;
 	int32 niantic_profile_min_level = 2;
@@ -8367,6 +8816,31 @@ message CurrentNewsProto {
 	repeated NewsArticleProto news_articles = 1;
 	string news_strings_url = 2;
 	int64 last_updated_timestamp = 3;
+}
+
+message DailyAdventureIncenseLogEntry {
+	uint64 day_bucket = 1;
+}
+
+message DailyAdventureIncenseSettingsProto {
+	bool enabled = 1;
+	int32 pokeball_threshold_to_reward_loot = 2;
+	LootProto rewards = 3;
+	string daily_adventure_incense_reset_time = 4;
+	bool ob_bool_2 = 5;
+	int32 ob_int32 = 6;
+}
+
+message DailyAdventureIncenseTelemetry {
+	enum Status {
+		UNSET = 0;
+		VIEW_RECAP = 1;
+		CLICK_SHARE_FROM_RECAP = 2;
+		CLICK_SHARE_FROM_PHOTO_COLLECTION = 3;
+	}
+
+	Status status = 1;
+	bool ob_bool = 2;
 }
 
 message DailyBonusProto {
@@ -8437,6 +8911,24 @@ message DamagePropertyProto {
 	bool weather_boosted = 2;
 }
 
+message DataAccessRequest {
+	string email = 1;
+	string language_short_code = 2;
+}
+
+message DataAccessResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_INVALIDEMAIL = 2;
+		ERROR_INVALIDLANGUAGE = 3;
+		ERROR_UNKNOWN = 4;
+	}
+
+	Status status = 1;
+	string error_message = 2;
+}
+
 message DaysWithARowQuestProto {
 	int32 last_window = 1;
 }
@@ -8444,6 +8936,10 @@ message DaysWithARowQuestProto {
 message DebugInfoProto {
 	double latitude = 1;
 	double longitude = 2;
+}
+
+message DeclineCombatChallengeDataProto {
+	int32 ob_int32 = 1;
 }
 
 message DeclineCombatChallengeOutProto {
@@ -8461,6 +8957,12 @@ message DeclineCombatChallengeOutProto {
 
 message DeclineCombatChallengeProto {
 	string challenge_id = 1;
+}
+
+message DeclineCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	DeclineCombatChallengeOutProto.Result result = 3;
 }
 
 message DeclineExRaidPassLogEntry {
@@ -8570,6 +9072,50 @@ message DeepLinkingTelemetry {
 	LinkSource link_source = 2;
 }
 
+message DeleteAccountEmailOnFileRequest {
+	string language_short_code = 1;
+}
+
+message DeleteAccountEmailOnFileResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_EMAIL_NOT_ON_FILE = 2;
+		ERROR_INVALID_LANGUAGE = 3;
+		ERROR_APP_NOT_SUPPORTED = 4;
+		ERROR_INVALID_PLAYER = 5;
+		ERROR_DUPLICATE_REQUEST = 6;
+		ERROR_HELPSHIFT_ERROR = 7;
+		ERROR_UNKNOWN = 8;
+	}
+
+	Status status = 1;
+	string error_message = 2;
+	string confirmation_email = 3;
+}
+
+message DeleteAccountRequest {
+	string email = 1;
+	string language_short_code = 2;
+	bool is_dry_run = 3;
+}
+
+message DeleteAccountResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_INVALIDEMAIL = 2;
+		ERROR_INVALIDLANGUAGE = 3;
+		ERROR_UNKNOWN = 4;
+		ERROR_APP_NOT_SUPPORTED = 5;
+		ERROR_INVALID_PLAYER = 6;
+		ERROR_DUPLICATE_REQUEST = 7;
+	}
+
+	Status status = 1;
+	string error_message = 2;
+}
+
 message DeleteGiftFromInventoryOutProto {
 	enum Result {
 		UNSET = 0;
@@ -8634,6 +9180,23 @@ message DeletePostcardOutProto {
 
 message DeletePostcardProto {
 	string postcard_id = 1;
+}
+
+message DeletePostcardsOutProto {
+	enum Result {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_POSTCARD_DOES_NOT_EXIST = 2;
+		ERROR_POSTCARD_FAVORITED = 3;
+		ERROR_NOT_ENABLED = 4;
+	}
+
+	Result result = 1;
+	repeated PostcardDisplayProto postcards = 2;
+}
+
+message DeletePostcardsProto {
+	repeated string postcard_ids = 1;
 }
 
 message DeployPokemonTelemetry {
@@ -8809,6 +9372,17 @@ message Distribution {
 	repeated int64 bucket_counts = 6;
 }
 
+message DownloadAllAssetsTelemetry {
+	enum DownloadAllAssetsEventId {
+		UNSET = 0;
+		DOWNLOAD_STARTED = 1;
+		DOWNLOAD_PAUSED = 2;
+		DOWNLOAD_COMPLETED = 3;
+	}
+
+	DownloadAllAssetsEventId download_all_assets_event_id = 1;
+}
+
 message DownloadGmTemplatesRequestProto {
 	int64 basis_batch_id = 1;
 	int64 batch_id = 2;
@@ -8910,6 +9484,8 @@ message Downstream {
 			OK = 1;
 			UNKNOWN = 2;
 			TOPIC_LIMITED = 3;
+			MAXIMUM_TOPIC_ID_LENGTH_EXCEEDED = 4;
+			TOPIC_ID_INVALID = 5;
 		}
 
 		Status status = 1;
@@ -8947,10 +9523,12 @@ message EditPokemonTagOutProto {
 	}
 
 	repeated Result edit_result = 2;
+	reserved 1;
 }
 
 message EditPokemonTagProto {
 	repeated PokemonTagProto tag_to_edit = 2;
+	reserved 1;
 }
 
 message EggCreateDetail {
@@ -9363,6 +9941,9 @@ message EventSectionProto {
 			EVENT = 28;
 			MYSTERY_BOX = 29;
 			TRADE_BALL = 30;
+			CANDY_XL = 31;
+			HEART = 32;
+			TIMER = 33;
 		}
 
 		string text = 1;
@@ -9417,6 +9998,23 @@ message EvolutionBranchProto {
 	int32 purification_evolution_candy_cost = 19;
 }
 
+message EvolutionChainDataProto {
+	string pokedex_header = 1;
+	repeated EvolutionChainEntryProto evolution_chain_entry = 2;
+}
+
+message EvolutionChainDisplaySettingsProto {
+	HoloPokemonId pokemon = 1;
+	repeated EvolutionChainDataProto chain = 2;
+}
+
+message EvolutionChainEntryProto {
+	HoloPokemonId pokemon = 1;
+	HoloTemporaryEvolutionId mega_evolution = 2;
+	PokemonDisplayProto.Form form = 3;
+	PokemonDisplayProto.Gender gender = 4;
+}
+
 message EvolutionQuestInfoProto {
 	string quest_requirement_template_id = 1;
 	string description = 2 [deprecated = true];
@@ -9466,7 +10064,7 @@ message EvolvePokemonTelemetry {
 
 message ExRaidSettingsProto {
 	FriendshipLevelMilestone minimum_ex_raid_share_level = 1;
-	int32 ob_ex_raid_setting = 2;
+	int32 ob_ex_raid_setting = 2; //todo: not in apk, need look better (maybe bool but i leave as int for look if > 1)
 }
 
 message ExceptionCaugthDataProto {
@@ -9476,6 +10074,16 @@ message ExceptionCaugthDataProto {
 
 	int32 ob_exception_int32 = 1;
 	ExceptionType ob_exception = 2;
+}
+
+message ExceptionCaugthDataV2Proto {
+	enum ExceptionType {
+		NO_EXCEPTION = 0;
+		COMBAT_PUB_SUB = 1;
+	}
+
+	int32 ob_int32 = 1;
+	ExceptionType type = 2;
 }
 
 message ExclusiveRaidCancellationProto {
@@ -9574,6 +10182,28 @@ message FetchAllNewsOutProto {
 }
 
 message FetchAllNewsProto {
+}
+
+message FetchNewsfeedRequest {
+	string page_token = 1;
+	string player_id = 2;
+	int32 number_of_posts = 3;
+	string app_id = 4;
+	repeated NewsfeedPost.NewsfeedChannel newsfeed_channel = 5;
+	string language_version = 6;
+}
+
+message FetchNewsfeedResponse {
+	enum Result {
+		UNSET = 0;
+		SUCCESS = 1;
+		INTERNAL_ERROR = 2;
+		FAILED = 3;
+	}
+
+	Result result = 1;
+	repeated NewsfeedPostRecord post_record = 2;
+	string next_page_token = 3;
 }
 
 message FitnessMetricsProto {
@@ -9959,6 +10589,13 @@ message FortSponsor {
 	Sponsor sponsor = 1;
 }
 
+message FortUpdateLatencyTelemetry {
+	int32 latency_ms = 1;
+	int32 fort_type = 2;
+	float distance = 3;
+	string context = 4;
+}
+
 message FrameRate {
 	MetricData sampled_frame_rate = 1;
 }
@@ -10045,12 +10682,31 @@ message GM11SettingsProto {
 	float ob_float = 5;
 }
 
-message GM12SettingsProto {
-	repeated string ob_list_string = 1;
+message GM15SettingsProto {
+	bool ob_bool_1 = 1;
+	bool ob_bool_2 = 2;
 }
 
-message GM13SettingsProto {
+message GM17SettingsProto {
+	message ObGM17Message {
+		repeated HoloItemCategory ob_item_category = 1;
+		string ob_string = 2;
+		int32 ob_int32 = 3;
+	}
+
 	bool ob_bool = 1;
+	repeated ObGM17Message ob_gm_17 = 2;
+}
+
+message GM18SettingsProto {
+	message GM18Message {
+		string ob_string = 1;
+		int32 ob_int32 = 2;
+		bool ob_bool = 3;
+	}
+
+	bool ob_bool = 1;
+	repeated GM18Message ob_gm_18_message = 2;
 }
 
 message GM1SettingsProto {
@@ -10083,6 +10739,7 @@ message GM5SettingsProto {
 	repeated int32 ob_int32_2 = 3;
 	repeated int32 ob_int32_3 = 4;
 	repeated int32 ob_int32_4 = 5;
+	bool ob_bool = 6;
 }
 
 message GM6SettingsProto {
@@ -10267,10 +10924,17 @@ message GameMasterClientTemplateProto {
 	GM9SettingsProto ob_gm_9_settings = 139;
 	ImpressionTrackingSettingsProto impression_tracking_setting = 140;
 	GM11SettingsProto ob_gm_11_settings = 141;
+	EvolutionChainDisplaySettingsProto evolution_chain_display_settings = 142;
 	GM7SettingsProto ob_gm_7_settings = 143;
-	GM12SettingsProto ob_gm_12_settings = 144;
-	GM13SettingsProto ob_gm_13_settings = 145;
+	PopupControlSettingsProto popup_control_settings = 145;
 	TicketGiftingSettingsProto ticket_gifting_settings = 146;
+	LanguageSelectorSettingsProto language_selector_settings = 147;
+	GiftingSettingsProto gifting_settings = 148;
+	GM15SettingsProto ob_gm_15_settings = 149;
+	PhotoSettingsProto photo_settings = 150;
+	DailyAdventureIncenseSettingsProto daily_adventure_incense_settings = 151;
+	GM17SettingsProto ob_gm_17_settings = 152;
+	GM18SettingsProto ob_gm_18_settings = 153;
 }
 
 message GameMasterLocalProto {
@@ -10292,8 +10956,31 @@ message GameplayWeatherProto {
 	WeatherCondition gameplay_condition = 1;
 }
 
+message GarProxyRequestProto {
+	uint32 action = 1;
+	bytes payload = 2;
+}
+
+message GarProxyResponseProto {
+	enum Status {
+		OK = 0;
+		ERROR_UNKNOWN = 2;
+		ERROR_PERMISSION_DENIED = 7;
+		ERROR_UNAVAILABLE = 14;
+		ERROR_UNAUTHENTICATED = 16;
+	}
+
+	Status status = 1;
+	string error_message = 2;
+	bytes payload = 3;
+}
+
 message GcmToken {
 	string registration_id = 1;
+}
+
+message GenerateCombatChallengeIdDataProto {
+	int32 ob_int32 = 1;
 }
 
 message GenerateCombatChallengeIdOutProto {
@@ -10310,6 +10997,12 @@ message GenerateCombatChallengeIdOutProto {
 
 message GenerateCombatChallengeIdProto {
 	string ob_string = 1;
+}
+
+message GenerateCombatChallengeIdResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	GenerateCombatChallengeIdOutProto.Result result = 3;
 }
 
 message GenerateGmapSignedUrlOutProto {
@@ -10581,6 +11274,22 @@ message GetClientFeatureFlagsResponse {
 	SocialClientGlobalSettings global_settings = 2;
 }
 
+message GetClientSettingsRequest {
+	string country_code = 1;
+}
+
+message GetClientSettingsResponse {
+	message PhoneNumberSettings {
+		repeated PhoneNumberCountryProto country = 1;
+	}
+
+	PhoneNumberSettings phone_number_settings = 1;
+}
+
+message GetCombatChallengeDataProto {
+	int32 ob_int32 = 1;
+}
+
 message GetCombatChallengeOutProto {
 	enum Result {
 		UNSET = 0;
@@ -10594,6 +11303,17 @@ message GetCombatChallengeOutProto {
 
 message GetCombatChallengeProto {
 	string challenge_id = 1;
+}
+
+message GetCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	GetCombatChallengeOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
+}
+
+message GetCombatPlayerProfileDataProto {
+	int32 ob_int32 = 1;
 }
 
 message GetCombatPlayerProfileOutProto {
@@ -10610,6 +11330,12 @@ message GetCombatPlayerProfileOutProto {
 
 message GetCombatPlayerProfileProto {
 	string player_id = 1;
+}
+
+message GetCombatPlayerProfileResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	GetCombatPlayerProfileOutProto.Result result = 3;
 }
 
 message GetCombatResultsOutProto {
@@ -10778,11 +11504,14 @@ message GetFriendDetailsOutProto {
 
 message GetFriendDetailsProto {
 	repeated string player_id = 1;
+	repeated string nia_account_id = 2;
+	bool include_online_status = 3;
 }
 
 message GetFriendDetailsRequest {
 	repeated string friend_id = 1;
 	SocialClientFeatures.CrossGameSocialClientSettingsProto.FeatureType feature = 2;
+	repeated string friend_nia_account_id = 3;
 }
 
 message GetFriendDetailsResponse {
@@ -10927,6 +11656,7 @@ message GetGeofencedAdProto {
 	double player_lat_degrees = 1;
 	double player_lng_degrees = 2;
 	AdTargetingInfoProto ad_targeting_info = 3;
+	repeated AdType allowed_ad_type = 4;
 }
 
 message GetGiftBoxDetailsOutProto {
@@ -11253,6 +11983,20 @@ message GetMapObjectsProto {
 	double player_lng = 4;
 }
 
+message GetMapObjectsTriggerTelemetry {
+	enum TriggerType {
+		UNSET = 0;
+		TIME = 1;
+		SPACE = 2;
+	}
+
+	TriggerType trigger_type = 1;
+}
+
+message GetMatchmakingStatusDataProto {
+	int32 ob_int32 = 1;
+}
+
 message GetMatchmakingStatusOutProto {
 	enum Result {
 		UNSET = 0;
@@ -11271,6 +12015,13 @@ message GetMatchmakingStatusOutProto {
 
 message GetMatchmakingStatusProto {
 	string queue_id = 1;
+}
+
+message GetMatchmakingStatusResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	GetMatchmakingStatusOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
 }
 
 message GetMementoListOutProto {
@@ -11323,6 +12074,31 @@ message GetMilestonesPreviewProto {
 }
 
 message GetMilestonesProto {
+}
+
+message GetMyAccountRequest {
+}
+
+message GetMyAccountResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+	}
+
+	message ContactProto {
+		enum Type {
+			UNSET = 0;
+			MASKED_PHONE_NUMBER = 1;
+		}
+
+		string contact_id = 1;
+		Type type = 2;
+		string contact = 3;
+	}
+
+	Status status = 1;
+	repeated ContactProto contact = 2;
 }
 
 message GetNewQuestsOutProto {
@@ -11586,6 +12362,7 @@ message GetQuestDetailsProto {
 }
 
 message GetRaidDetailsDataProto {
+	int32 ob_int32 = 1;
 }
 
 message GetRaidDetailsOutProto {
@@ -11640,6 +12417,8 @@ message GetRaidDetailsResponseDataProto {
 	int32 ob_get_raid_details_data_int32_3 = 8;
 	bool ob_get_raid_details_data_bool_4 = 9;
 	bool ob_get_raid_details_data_bool_5 = 10;
+	int32 ob_get_raid_details_data_int32_4 = 11;
+	uint32 ob_get_raid_details_data_uint32_2 = 12;
 }
 
 message GetReferralCodeOutProto {
@@ -11842,6 +12621,21 @@ message GetVsSeekerStatusOutProto {
 message GetVsSeekerStatusProto {
 }
 
+message GetWebTokenActionOutProto {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+	}
+
+	Status status = 1;
+	string access_token = 2;
+}
+
+message GetWebTokenActionProto {
+	string client_id = 1;
+}
+
 message GetWebTokenOutProto {
 	enum Status {
 		UNSET = 0;
@@ -11918,6 +12712,11 @@ message GiftingIapItemProto {
 	Item item = 2;
 }
 
+message GiftingSettingsProto {
+	bool ob_feature_enabled = 1;
+	int32 ob_int32 = 2;
+}
+
 message GlobalEventTicketAttributesProto {
 	HoloBadgeType event_badge = 1;
 	int64 grant_badge_before_event_start_ms = 2;
@@ -11930,10 +12729,12 @@ message GlobalEventTicketAttributesProto {
 	string item_bag_description_variant_selected = 10;
 	repeated string event_variant_button_string_keys = 11;
 	bool is_ticket_eligible_for_gifting = 12;
-	Item ob_item_event_1 = 13;
+	Item ticket = 13;
 	Item ticket_to_gift = 14;
 	string ob_string_event_1 = 15;
-	string ob_string_event_2 = 16;
+	string ticket_shop_image_url = 16;
+	bool is_ticket_eligible_for_discounted_rate = 17;
+	int32 discounted_ticket_purchase_limit = 18;
 	int64 client_event_start_time_utc_ms = 100;
 	int64 client_event_end_time_utc_ms = 101;
 }
@@ -12011,6 +12812,8 @@ message GlobalSettingsProto {
 	ObNewGlobalSetting2 ob_new_global_setting_2 = 76;
 	ObNewGlobalSetting4 ob_new_global_setting_4 = 77;
 	ObNewGlobalSetting5 ob_new_global_setting_5 = 78;
+	ObNewGlobalSetting6 ob_new_global_setting_6 = 79;
+	ObNewGlobalSetting7 ob_new_global_setting_7 = 80;
 }
 
 message GmmSettings {
@@ -12539,6 +13342,15 @@ message HoloholoClientTelemetryOmniProto {
 		PostcardBookTelemetry postcard_book_telemetry = 86;
 		SocialInboxLatencyTelemetry social_inbox_telemetry = 87;
 		HomeWidgetTelemetry home_widget_telemetry = 93;
+		PokemonLoadDelay pokemon_load_delay = 94;
+		AccountDeletionInitiatedTelemetry account_deletion_initiated_telemetry = 95;
+		FortUpdateLatencyTelemetry fort_update_latency_telemetry = 96;
+		GetMapObjectsTriggerTelemetry get_map_objects_trigger_telemetry = 97;
+		UpdateCombatResponseTimeTelemetry update_combat_response_time_telemetry = 98;
+		OpenCampfireMapTelemetry open_campfire_map_telemetry = 99;
+		DownloadAllAssetsTelemetry download_all_assets_telemetry = 100;
+		DailyAdventureIncenseTelemetry daily_adventure_incense_telemetry = 101;
+		ClientToggleSettingsTelemetry client_toggle_settings_telemetry = 102;
 	}
 
 	ServerData server_data = 1001;
@@ -12623,6 +13435,7 @@ message ImageTextCreativeProto {
 	string preview_image_url = 4;
 	string fullscreen_image_url = 5;
 	string cta_link = 6;
+	string web_ar_url = 7;
 }
 
 message ImpressionTrackingSettingsProto {
@@ -12807,6 +13620,20 @@ message InvasionAvailabilitySettingsProto {
 	int64 availability_end_minute = 2;
 }
 
+message InvasionBattleResponseUpdateProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	InvasionStatus.Status status = 3;
+}
+
+message InvasionBattleUpdateProto {
+	int32 ob_int32_1 = 1;
+	int32 ob_int32_2 = 2;
+	bool ob_bool = 3;
+	UpdateInvasionBattleProto.UpdateType update_type = 4;
+	uint32 ob_uint32 = 5;
+}
+
 message InvasionCreateDetail {
 	EnumWrapper.InvasionCharacter origin = 1;
 }
@@ -12850,6 +13677,21 @@ message InvasionNpcDisplaySettingsProto {
 	bool is_male = 9;
 	string party_selection_music = 10;
 	string combat_music = 11;
+}
+
+message InvasionOpenCombatSessionDataProto {
+	int32 ob_int32_1 = 1;
+	CombatType type = 2;
+	repeated int32 ob_list_int32 = 3;
+	uint32 ob_uint32 = 4;
+	int32 ob_int32_2 = 5;
+}
+
+message InvasionOpenCombatSessionResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	InvasionStatus.Status result = 3;
+	ObCommunWebCombatStateProto ob_commun_web_combat_state = 4;
 }
 
 message InvasionStatus {
@@ -13108,6 +13950,7 @@ message JoinBuddyMultiplayerSessionProto {
 message JoinLobbyDataProto {
 	bool ob_join_lobby_data_bool_1 = 1;
 	bool ob_join_lobby_data_bool_2 = 2;
+	int32 ob_join_lobby_data_int32 = 3;
 }
 
 message JoinLobbyOutProto {
@@ -13159,6 +14002,8 @@ message JoinLobbyResponseDataProto {
 	uint32 ob_join_lobby_data_uint32_5 = 10;
 	int32 ob_join_lobby_data_int32_2 = 11;
 	GameplayWeatherProto.WeatherCondition weather_condition = 12;
+	int32 ob_join_lobby_data_int32_3 = 13;
+	uint32 ob_join_lobby_data_uint32_6 = 14;
 }
 
 message JournalAddEntryProto {
@@ -13223,6 +14068,14 @@ message LabelTile {
 	repeated Label labels = 1;
 }
 
+message LanguageSelectorSettingsProto {
+	bool enabled = 1;
+}
+
+message LanguageTelemetry {
+	string selected_language = 1;
+}
+
 message Layer {
 	repeated Feature features = 1;
 }
@@ -13253,6 +14106,11 @@ message LayerRule {
 	uint32 road_attribute_bitfield = 3;
 }
 
+message LeagueIdMismatchDataProto {
+	string ob_string = 1;
+	ObCombatMismatchData.MismatchState.Type type = 2;
+}
+
 message LeaveBuddyMultiplayerSessionOutProto {
 	enum Result {
 		LEAVE_SUCCESS = 0;
@@ -13279,6 +14137,7 @@ message LeaveInteractionRangeTelemetry {
 }
 
 message LeaveLobbyDataProto {
+	int32 ob_int32 = 1;
 }
 
 message LeaveLobbyOutProto {
@@ -13301,6 +14160,8 @@ message LeaveLobbyProto {
 
 message LeaveLobbyResponseDataProto {
 	LeaveLobbyOutProto.Result result = 1;
+	int32 ob_int32 = 2;
+	uint32 ob_uint32 = 3;
 }
 
 message LeavePointOfInterestTelemetry {
@@ -13392,6 +14253,15 @@ message LinkLoginTelemetry {
 	string error = 3;
 	string active_auth_provider_id = 4;
 	string provider = 5;
+}
+
+message LiquidAttribute {
+	oneof Value {
+		int64 int_value = 1;
+		double double_value = 2;
+		string string_value = 3;
+		bool bool_value = 4;
+	}
 }
 
 message ListAvatarCustomizationsOutProto {
@@ -13499,6 +14369,7 @@ message ListLoginActionOutProto {
 
 message ListRouteBadgesOutProto {
 	repeated RouteBadgeListEntry route_badges = 1;
+	repeated AwardedRouteBadge ob_route_badges_info_data = 2;
 }
 
 message ListRouteBadgesProto {
@@ -13538,10 +14409,13 @@ message LobbyProto {
 }
 
 message LobbyVisibilityDataProto {
+	int32 ob_int32 = 1;
 }
 
 message LobbyVisibilityResponseDataProto {
 	SetLobbyVisibilityOutProto.Result result = 1;
+	int32 ob_int32 = 2;
+	uint32 ob_uint32 = 3;
 }
 
 message LocationE6Proto {
@@ -13574,6 +14448,7 @@ message LoginActionTelemetry {
 	bool intent_existing = 4;
 	string error = 5;
 	string auth_status = 6;
+	int64 selection_time = 7;
 }
 
 message LoginDetail {
@@ -13651,6 +14526,10 @@ message MapDisplaySettingsProto {
 		EFFECT_CONFETTI_ROCKET = 7;
 		EFFECT_FIREWORKS_PLAIN = 8;
 		EFFECT_CONFETTI_FLOWER = 9;
+		EFFECT_CONFETTI_PLAINS = 10;
+		EFFECT_CONFETTI_CITY = 11;
+		EFFECT_CONFETTI_TUNDRA = 12;
+		EFFECT_CONFETTI_RAINFOREST = 13;
 	}
 
 	enum MusicType {
@@ -13678,6 +14557,7 @@ message MapDisplaySettingsProto {
 	string event_skydome_2 = 6;
 	string fx_map_visual_effect = 7;
 	bool ob_map_display_bool = 8;
+	string ob_string = 9;
 }
 
 message MapEventsTelemetry {
@@ -13925,7 +14805,7 @@ message MegaLevelPerksProto {
 	float mega_perk_attack_boost_from_mega_different_type = 1;
 	float mega_perk_attack_boost_from_mega_same_type = 2;
 	int32 mega_perk_active_mega_bonus_catch_candy = 3;
-	int32 mega_perk_xp_catch_bonus= 4;
+	int32 mega_perk_xp_catch_bonus = 4;
 	float mega_perk_xl_candy_bonus_chance = 5;
 }
 
@@ -14091,6 +14971,10 @@ message NearbyPokemonProto {
 	PokemonDisplayProto pokemon_display = 6;
 }
 
+message NetworkTelemetry {
+	string network_type = 1;
+}
+
 message NewInboxMessage {
 }
 
@@ -14133,6 +15017,39 @@ message NewsSettingProto {
 	repeated NewsProto news_protos = 1;
 }
 
+message NewsfeedPost {
+	enum NewsfeedChannel {
+		NOT_DEFINED = 0;
+		NEWSFEED_MESSAGE_CHANNEL = 1;
+		IN_APP_MESSAGE_CHANNEL = 2;
+	}
+
+	message PreviewMetadata {
+		map<string, string> attributes = 1;
+		string player_hashed_id = 2;
+		string rendered_title = 3;
+		string rendered_preview_text = 4;
+		string rendered_post_content = 5;
+	}
+
+	string title = 1;
+	string preview_text = 2;
+	string thumbnail_image_url = 3;
+	repeated NewsfeedChannel newsfeed_channel = 4;
+	string post_content = 5;
+	int64 start_timestamp = 21;
+	int64 expiration_timestamp = 22;
+	int64 creation_timestamp = 23;
+	bool priority_flag = 51;
+	bool read_flag = 52;
+	PreviewMetadata preview_metadata = 100;
+}
+
+message NewsfeedPostRecord {
+	NewsfeedPost newsfeed_post = 1;
+	string newsfeed_post_id = 2;
+}
+
 message NianticProfileTelemetry {
 	enum NianticProfileTelemetryIds {
 		UNDEFINED = 0;
@@ -14141,6 +15058,37 @@ message NianticProfileTelemetry {
 	}
 
 	NianticProfileTelemetryIds niantic_profile_telemetry_id = 1;
+}
+
+message NianticPublicSharedLoginTokenSettings {
+	message AppSettings {
+		message TokenConsumerSettings {
+			bool enabled = 1;
+			repeated string allow_originating_auth_provider_id = 2;
+			repeated string allow_originating_app_key = 3;
+		}
+
+		message TokenProducerSettings {
+			bool enabled = 1;
+			repeated string allow_auth_provider_id = 2;
+		}
+
+		string app_key = 1;
+		TokenProducerSettings token_producer_settings = 2;
+		TokenConsumerSettings token_consumer_settings = 3;
+	}
+
+	message ClientSettings {
+		repeated string android_provider_id = 1;
+	}
+
+	repeated AppSettings app_settings = 1;
+	ClientSettings client_settings = 2;
+}
+
+message NianticSharedLoginProto {
+	bytes token = 1;
+	string device_id = 2;
 }
 
 message NicknamePokemonOutProto {
@@ -14196,6 +15144,137 @@ message NpcPokemonProto {
 	PokemonDisplayProto pokemon_display = 2;
 }
 
+message ObClientMapCellProto {
+	int32 ob_int32 = 1;
+	int64 ob_int64_1 = 2;
+	int64 ob_int64_2 = 3;
+	double ob_double_1 = 4;
+	double ob_double_2 = 5;
+	double ob_double_3 = 6;
+}
+
+message ObCombatMismatchData {
+	oneof Data {
+		OpenCombatSessionDataProto open_combat_session_data = 2;
+		OpenCombatSessionResponseDataProto open_combat_session_response_data = 3;
+		UpdateCombatDataProto update_combat_data = 4;
+		UpdateCombatResponseDataProto update_combat_response_data = 5;
+		QuitCombatDataProto quit_combat_data = 6;
+		QuitCombatResponseDataProto quit_combat_response_data = 7;
+		WebSocketResponseDataProto web_socket_response_data = 8;
+		RpcErrorDataProto rpc_error_data = 9;
+		GetCombatPlayerProfileDataProto get_combat_player_profile_data = 10;
+		GetCombatPlayerProfileResponseDataProto get_combat_player_profile_response_data = 11;
+		GenerateCombatChallengeIdDataProto generate_combat_challenge_id_data = 12;
+		GenerateCombatChallengeIdResponseDataProto generate_combat_challenge_id_response_data = 13;
+		CreateCombatChallengeDataProto create_combat_challenge_data = 14;
+		CreateCombatChallengeResponseDataProto create_combat_challenge_response_data = 15;
+		OpenCombatChallengeDataProto open_combat_challenge_data = 16;
+		OpenCombatChallengeResponseDataProto open_combat_challenge_response_data = 17;
+		OpenNpcCombatSessionDataProto open_npc_combat_session_data = 18;
+		OpenNpcCombatSessionResponseDataProto open_npc_combat_session_response_data = 19;
+		AcceptCombatChallengeDataProto accept_combat_challenge_data = 20;
+		AcceptCombatChallengeResponseDataProto accept_combat_challenge_response_data = 21;
+		SubmitCombatChallengePokemonsDataProto submit_combat_challenge_pokemons_data = 22;
+		SubmitCombatChallengePokemonsResponseDataProto submit_combat_challenge_pokemons_response_data = 23;
+		DeclineCombatChallengeDataProto decline_combat_challenge_data = 24;
+		DeclineCombatChallengeResponseDataProto decline_combat_challenge_response_data = 25;
+		CancelCombatChallengeDataProto cancel_combat_challenge_data = 26;
+		CancelCombatChallengeResponseDataProto cancel_combat_challenge_response_data = 27;
+		GetCombatChallengeDataProto get_combat_challenge_data = 28;
+		GetCombatChallengeResponseDataProto get_combat_challenge_response_data = 29;
+		VsSeekerStartMatchmakingDataProto vs_seeker_start_matchmaking_data = 30;
+		VsSeekerStartMatchmakingResponseDataProto vs_seeker_start_matchmaking_response_data = 31;
+		GetMatchmakingStatusDataProto get_matchmaking_status_data = 32;
+		GetMatchmakingStatusResponseDataProto get_matchmaking_status_response_data = 33;
+		CancelMatchmakingDataProto cancel_matchmaking_data = 34;
+		CancelMatchmakingResponseDataProto cancel_matchmaking_response_data = 35;
+		SubmitCombatActionProto submit_combat_action = 36;
+		InvasionOpenCombatSessionDataProto invasion_open_combat_session_data = 37;
+		InvasionOpenCombatSessionResponseDataProto invasion_open_combat_session_response_data = 38;
+		InvasionBattleUpdateProto invasion_battle_update = 39;
+		InvasionBattleResponseUpdateProto invasion_battle_response_update = 40;
+		CombatIdMismatchDataProto combat_id_mismatch_data = 41;
+		LeagueIdMismatchDataProto league_id_mismatch_data = 42;
+		ChallengeIdMismatchDataProto challenge_id_mismatch_data = 43;
+		ProgressTokenDataV2 progress_token_data = 44;
+		OnApplicationFocusDataProto on_application_focus_data = 45;
+		OnApplicationPauseDataProto on_application_pause_data = 46;
+		OnApplicationQuitDataProto on_application_quit_data = 47;
+		ExceptionCaugthDataV2Proto exception_caught_data = 48;
+		CombatPubSubDataProto combat_pub_sub_data = 49;
+		CombatEndDataProto combat_end_data = 50;
+		CombatSyncServerDataProto combat_sync_server_data = 51;
+		CombatSyncServerResponseDataProto combat_sync_server_response_data = 52;
+		CombatSpecialMovePlayerDataProto combat_special_move_player_data = 53;
+	}
+
+	message MismatchState {
+		enum Type {
+			NO_TYPE = 0;
+			OPEN_COMBAT_SESSION = 1;
+			OPEN_COMBAT_SESSION_RESPONSE = 2;
+			UPDATE_COMBAT = 3;
+			UPDATE_COMBAT_RESPONSE = 4;
+			QUIT_COMBAT = 5;
+			QUIT_COMBAT_RESPONSE = 6;
+			WEB_SOCKET_RESPONSE = 7;
+			RPC_ERROR = 8;
+			GET_COMBAT_PLAYER_PROFILE = 9;
+			GET_COMBAT_PLAYER_PROFILE_RESPONSE = 10;
+			GENERATE_COMBAT_CHALLENGE_ID = 11;
+			GENERATE_COMBAT_CHALLENGE_ID_RESPONSE = 12;
+			CREATE_COMBAT_CHALLENGE = 13;
+			CREATE_COMBAT_CHALLENGE_RESPONSE = 14;
+			OPEN_COMBAT_CHALLENGE = 15;
+			OPEN_COMBAT_CHALLENGE_RESPONSE = 16;
+			OPEN_NPC_COMBAT_SESSION = 17;
+			OPEN_NPC_COMBAT_SESSION_RESPONSE = 18;
+			ACCEPT_COMBAT_CHALLENGE = 19;
+			ACCEPT_COMBAT_CHALLENGE_RESPONSE = 20;
+			SUBMIT_COMBAT_CHALLENGE_POKEMONS = 21;
+			SUBMIT_COMBAT_CHALLENGE_POKEMONS_RESPONSE = 22;
+			DECLINE_COMBAT_CHALLENGE = 23;
+			DECLINE_COMBAT_CHALLENGE_RESPONSE = 24;
+			CANCEL_COMBAT_CHALLENGE = 25;
+			CANCEL_COMBAT_CHALLENGE_RESPONSE = 26;
+			GET_COMBAT_CHALLENGE = 27;
+			GET_COMBAT_CHALLENGE_RESPONSE = 28;
+			VS_SEEKER_START_MATCHMAKING = 29;
+			VS_SEEKER_START_MATCHMAKING_RESPONSE = 30;
+			GET_MATCHMAKING_STATUS = 31;
+			GET_MATCHMAKING_STATUS_RESPONSE = 32;
+			CANCEL_MATCHMAKING = 33;
+			CANCEL_MATCHMAKING_RESPONSE = 34;
+			SUBMIT_COMBAT_ACTION = 35;
+			INVASION_OPEN_COMBAT_SESSION = 36;
+			INVASION_OPEN_COMBAT_SESSION_RESPONSE = 37;
+			INVASION_BATTLE_UPDATE = 38;
+			INVASION_BATTLE_UPDATE_RESPONSE = 39;
+			COMBAT_ID_MISMATCH = 40;
+			LEAGUE_ID_MISMATCH = 41;
+			CHALLENGE_ID_MISMATCH = 42;
+			PROGRESS_TOKEN = 43;
+			ON_APPLICATION_FOCUS = 44;
+			ON_APPLICATION_PAUSE = 45;
+			ON_APPLICATION_QUIT = 46;
+			EXCEPTION_CAUGHT = 47;
+			PUB_SUB_MESSAGE = 48;
+			PLAYER_END_COMBAT = 49;
+			COMBAT_SYNC_SERVER = 50;
+			COMBAT_SYNC_SERVER_RESPONSE = 51;
+			COMBAT_SPECIAL_MOVE_PLAYER = 52;
+		}
+
+		Type type = 1;
+		uint32 ob_uint32_1 = 2;
+		uint32 ob_uint32_2 = 3;
+		float ob_float = 4;
+	}
+
+	MismatchState state = 1;
+}
+
 message ObCombatProto {
 	int32 ob_int32_1 = 1;
 	int32 ob_int32_2 = 2;
@@ -14215,6 +15294,75 @@ message ObCombatSettings1 {
 	bool ob_bool_4 = 4;
 }
 
+message ObCombatSpecialmovePlayerData {
+	int32 ob_int32_1 = 1;
+	repeated int32 ob_list_int32_1 = 2;
+	repeated int32 ob_list_int32_2 = 3;
+	ObCommunCombatDataProto ob_commun_data_1 = 4;
+	int32 ob_int32_2 = 5;
+	ObCommunCombatDataProto ob_commun_data_2 = 6;
+	int32 ob_int32_3 = 7;
+}
+
+message ObCommunCombatChallengeDataProto {
+	CombatType type = 1;
+	repeated int32 ob_int32_list_1 = 2;
+	repeated int32 ob_int32_list_2 = 3;
+	CombatChallengeProto.CombatChallengeState combat_challenge_state = 4;
+	uint32 ob_uint32_1 = 5;
+	uint32 ob_uint32_2 = 6;
+}
+
+message ObCommunCombatDataProto {
+	CombatActionProto.ActionType type = 1;
+	int32 ob_int32_1 = 2;
+	int32 ob_int32_2 = 3;
+	int32 ob_int32_3 = 4;
+	int32 ob_int32_4 = 5;
+	int32 ob_int32_5 = 6;
+	int32 ob_int32_6 = 7;
+	float ob_float = 8;
+	HoloPokemonMove move = 9;
+}
+
+message ObCommunWebCombatStateProto {
+	message ObMaybePokemonData {
+		int32 ob_int32_1 = 1;
+		int32 ob_int32_2 = 2;
+		int32 ob_int32_3 = 3;
+		int32 ob_int32_4 = 4;
+		int32 ob_int32_5 = 5;
+	}
+
+	message ObCommunWebCombatDataProto {
+		ObMaybePokemonData ob_active_pokemon = 1;
+		repeated ObMaybePokemonData ob_active_pokemon_list_1 = 2;
+		repeated ObMaybePokemonData ob_active_pokemon_list_2 = 3;
+		ObCommunCombatDataProto ob_commun_combat_data_1 = 4;
+		bool ob_bool = 5;
+		int32 ob_int32_1 = 6;
+		ObCommunCombatDataProto ob_commun_combat_data_2 = 7;
+		uint32 ob_uint32 = 8;
+		int32 ob_int32_2 = 9;
+	}
+
+	CombatProto.CombatState ob_combat_state = 1;
+	ObCommunWebCombatDataProto player = 3;
+	ObCommunWebCombatDataProto ob_commun_web_combat_data_2 = 4;
+	uint32 ob_uint32_1 = 7;
+	int32 ob_int32 = 8;
+	uint32 ob_uint32_2 = 9;
+	uint32 ob_uint32_3 = 10;
+	uint32 ob_uint32_4 = 11;
+	uint32 ob_uint32_5 = 12;
+	uint32 ob_uint32_6 = 13;
+	uint32 ob_uint32_7 = 14;
+	int32 ob_int32_2 = 15;
+	bool ob_bool = 16;
+	int32 ob_int32_3 = 17;
+	uint32 ob_uint32_8 = 18;
+}
+
 message ObEggIncubators1 {
 	float ob_float_1 = 1;
 	float ob_float_2 = 2;
@@ -14226,12 +15374,16 @@ message ObEggIncubators1 {
 }
 
 message ObEggIncubatorsInfos {
-	oneof EggIncubatorsState {
-		ObEggIncubatorsStatus egg_incubators = 1;
-	}
-
 	ObEggIncubatorsStatus ob_egg_incubator_status = 2;
 	ObEggIncubators1 ob_egg_incubators_1 = 3;
+	ObEggIncubatorsState ob_egg_incubator_state = 4;
+}
+
+message ObEggIncubatorsState {
+	float ob_float = 1;
+	repeated float ob_list_float = 2;
+	ObEggStatus ob_egg_status = 3;
+	ObEggIncubators1 ob_egg_incubators_1 = 4;
 }
 
 message ObEggIncubatorsStatus {
@@ -14265,6 +15417,46 @@ message ObEvoleField {
 	float ob_float_2 = 2;
 }
 
+message ObFieldMessageOrResponseProto {
+	string ob_string_1 = 1;
+	string ob_string_2 = 2;
+	string ob_string_3 = 3;
+	string ob_string_4 = 4;
+	string ob_string_5 = 5;
+	string ob_string_6 = 6;
+	repeated ObFieldMessageOrResponseProtoOne ob_field_message_or_response_one_1 = 7;
+	repeated ObFieldMessageOrResponseProtoOne ob_field_message_or_response_one_2 = 8;
+	int64 ob_int64_1 = 9;
+	int64 ob_int64_2 = 10;
+	int64 ob_int64_3 = 11;
+	int64 ob_int64_4 = 12;
+	int64 ob_int64_5 = 13;
+}
+
+message ObFieldMessageOrResponseProtoOne {
+	uint64 ob_uint64 = 1;
+	int32 ob_int32_1 = 2;
+	int32 ob_int32_2 = 3;
+	float ob_float = 4;
+	int32 ob_int32_3 = 5;
+	int32 ob_int32_4 = 6;
+	int32 ob_int32_5 = 7;
+	int32 ob_int32_6 = 8;
+	PokemonDisplayProto pokemon_display = 9;
+	int32 ob_int32_7 = 10;
+	int32 ob_int32_8 = 11;
+	int32 ob_int32_9 = 12;
+	int32 ob_int32_10 = 13;
+	int32 ob_int32_11 = 14;
+	string ob_string = 15;
+	Item pokeball = 16;
+}
+
+message ObFieldMessageOrResponseProtoTwo {
+	ObFieldMessageOrResponseProto ob_field_message_or_response = 1;
+	repeated ObCombatMismatchData ob_combat_mismatch_data = 2;
+}
+
 message ObMegaEvolvePokemonProtoField {
 	message ObField {
 		int32 ob_field_int32_1 = 1;
@@ -14287,7 +15479,7 @@ message ObMethodUpdatePostcardOutProto {
 	}
 
 	Result result = 1;
-	PostcardDisplayProto ob_postcard_display = 2;
+	repeated PostcardDisplayProto ob_postcard_display = 2;
 }
 
 message ObMethodUpdatePostcardOutProto1 {
@@ -14312,6 +15504,10 @@ message ObNewGlobalSetting1 {
 	bool ob_new_global_setting_bool_1 = 1;
 	bool ob_new_global_setting_bool_2 = 2;
 	string ob_new_global_setting_string = 3;
+	bool ob_new_global_setting_bool_3 = 4;
+	int32 ob_new_global_setting_int32 = 5;
+	float ob_new_global_setting_float = 6;
+	string ob_new_global_setting_string_2 = 7;
 }
 
 message ObNewGlobalSetting2 {
@@ -14331,6 +15527,14 @@ message ObNewGlobalSetting5 {
 	repeated ObMessage5 ob_repeated_stuff = 1;
 }
 
+message ObNewGlobalSetting6 {
+	bool ob_enabled = 1;
+}
+
+message ObNewGlobalSetting7 {
+	bool ob_enabled = 1;
+}
+
 message ObPokemonSetting {
 	float ob_pokemon_setting_float_1 = 1;
 	float ob_pokemon_setting_float_2 = 2;
@@ -14344,11 +15548,109 @@ message ObPokemonSetting {
 	float ob_pokemon_setting_float_10 = 10;
 }
 
+message ObRaidClientSetting {
+	RaidLevel raid_level = 1;
+	string ob_string = 2;
+}
+
+message ObRaidClientSetting1 {
+	bool ob_bool = 1;
+}
+
 message ObSponsoredBalloon {
 	string ob_string_1 = 1;
 	string ob_string_2 = 2;
 	string ob_string_3 = 3;
 	string ob_string_4 = 4;
+}
+
+message ObUnknownAwardedRouteStamp {
+	repeated AwardedRouteStamp ob_route_stamp = 1;
+}
+
+message ObUnknownOneOfProto {
+	oneof Update {
+		MapObjectsUpdateProto map_objects_update = 1;
+	}
+
+	message MapObjectsUpdateProto {
+	}
+}
+
+message ObUnkownEventFortProtoOneOutProto {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+		ERROR_FORT_ID_NOT_FOUND = 3;
+		ERROR_VPS_NOT_ENABLED_AT_FORT = 4;
+		ERROR_NO_EVENTS_AT_FORT_FOUND = 5;
+	}
+
+	Status status = 1;
+	repeated ObUnkownEventProtoOne ob_data = 2;
+}
+
+message ObUnkownEventProtoOne {
+	message ObUnkownEventProtoOneDepOne {
+		bool ob_bool = 1;
+		int64 ob_int64_1 = 2;
+		int64 ob_int64_2 = 3;
+	}
+
+	EventTypeStatus event_type_status = 1;
+	int32 ob_int32 = 2;
+	ObUnkownEventProtoOneDepOne ob_event_dep_one = 3;
+	repeated ObUnkownEventProtoOneDepTwo ob_event_dep_two = 4;
+}
+
+message ObUnkownEventProtoOneDepTwo {
+	string ob_string = 1;
+	bytes payload = 2;
+}
+
+message ObUnkownEventProtoOneOutProto {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+		ERROR_FORT_ID_NOT_FOUND = 3;
+		ERROR_VPS_NOT_ENABLED_AT_FORT = 4;
+		ERROR_VPS_EVENT_NOT_FOUND = 5;
+		ERROR_ADD_ANCHOR_ID_ALREADY_EXISTS = 6;
+		ERROR_UPDATE_ANCHOR_ID_DOES_NOT_EXIST = 7;
+	}
+
+	Status status = 1;
+	repeated ObUnkownEventProtoOne ob_data = 2;
+}
+
+message ObUnkownEventProtoTwo {
+	string ob_string = 1;
+	EventTypeStatus event_type_status = 2;
+	int32 ob_int32 = 3;
+}
+
+message ObUnkownOtherEventProtoOne {
+	enum UpdateType {
+		UNSET = 0;
+		ADD = 1;
+		EDIT = 2;
+		REMOVE = 3;
+	}
+
+	UpdateType update_type = 1;
+	ObUnkownEventProtoOneDepTwo mdepghbddnc = 2;
+}
+
+message ObUnkownOtherEventProtoTwo {
+	string ob_string = 1;
+	repeated ObUnkownOtherEventProtoOne ob_data = 2;
+	int32 ob_int32 = 3;
+}
+
+message ObUploadRaidClientLogRequest {
+	UploadRaidClientLogProto ob_upload_raid_client_log = 1;
 }
 
 message OnApplicationFocusDataProto {
@@ -14410,6 +15712,26 @@ message OpenBuddyGiftOutProto {
 message OpenBuddyGiftProto {
 }
 
+message OpenCampfireMapTelemetry {
+	enum SourcePage {
+		UNKNOWN = 0;
+		MAP = 1;
+		NEARBY_RAIDS = 2;
+		GYM_APPROACH = 3;
+		RAID_APPROACH = 4;
+		CATCH_CARD = 5;
+	}
+
+	SourcePage source = 1;
+	bool is_standalone = 2;
+}
+
+message OpenCombatChallengeDataProto {
+	int32 ob_int32 = 1;
+	CombatType type = 2;
+	repeated int32 ob_list_int32 = 3;
+}
+
 message OpenCombatChallengeOutProto {
 	enum Result {
 		UNSET = 0;
@@ -14439,6 +15761,20 @@ message OpenCombatChallengeProto {
 	repeated fixed64 attacking_pokemon_id = 5;
 }
 
+message OpenCombatChallengeResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	OpenCombatChallengeOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
+}
+
+message OpenCombatSessionDataProto {
+	int32 ob_int32 = 1;
+	repeated int32 ob_list_int32 = 2;
+	uint32 ob_uint32 = 3;
+	CombatType combat_type = 4;
+}
+
 message OpenCombatSessionOutProto {
 	enum Result {
 		UNSET = 0;
@@ -14459,6 +15795,8 @@ message OpenCombatSessionOutProto {
 	Result result = 1;
 	CombatProto combat = 2;
 	bool should_debug_log = 3;
+	repeated CombatRefactorToggleProto combat_refactor_toggle = 4;
+	string ob_string = 5;
 }
 
 message OpenCombatSessionProto {
@@ -14467,6 +15805,12 @@ message OpenCombatSessionProto {
 	string combat_league_template_id = 3;
 	int64 lobby_join_time_ms = 4;
 	CombatType combat_type = 5;
+}
+
+message OpenCombatSessionResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	OpenCombatSessionOutProto ob_open_combat_session_response = 3;
 }
 
 message OpenGiftLogEntry {
@@ -14504,6 +15848,7 @@ message OpenGiftOutProto {
 message OpenGiftProto {
 	string player_id = 1;
 	uint64 giftbox_id = 2;
+	bool convert_to_stardust = 3;
 }
 
 message OpenInvasionCombatSessionOutProto {
@@ -14516,6 +15861,12 @@ message OpenInvasionCombatSessionProto {
 	int32 step = 2;
 	repeated fixed64 attacking_pokemon_id = 3;
 	int64 lobby_join_time_ms = 4;
+}
+
+message OpenNpcCombatSessionDataProto {
+	int32 ob_int32 = 1;
+	repeated int32 ob_list_int32 = 2;
+	uint32 ob_uint32 = 3;
 }
 
 message OpenNpcCombatSessionOutProto {
@@ -14537,6 +15888,13 @@ message OpenNpcCombatSessionProto {
 	int64 lobby_join_time_ms = 3;
 }
 
+message OpenNpcCombatSessionResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	OpenNpcCombatSessionOutProto.Result result = 3;
+	ObCommunWebCombatStateProto ob_commun_web_combat_state = 4;
+}
+
 message OpenSponsoredGiftOutProto {
 	enum Result {
 		UNSET = 0;
@@ -14552,6 +15910,7 @@ message OpenSponsoredGiftOutProto {
 
 message OpenSponsoredGiftProto {
 	bytes encrypted_ad_token = 1;
+	bytes gift_token = 2;
 }
 
 message OpenTradingOutProto {
@@ -14722,6 +16081,17 @@ message PgoAsyncFileUploadCompleteProto {
 	int64 next_fort_close_ms = 4;
 }
 
+message PhoneNumberCountryProto {
+	string english_name = 1;
+	string localized_name = 2;
+	string country_code = 3;
+	string calling_code = 4;
+}
+
+message PhotoSettingsProto {
+	float resolution_save_multiplier = 1;
+}
+
 message PhotobombCreateDetail {
 	bool caught_in_photobomb = 1;
 }
@@ -14878,10 +16248,16 @@ message PlayerProfileOutProto {
 		int32 total = 2;
 	}
 
+	message RouteBadges {
+		repeated AwardedRouteBadge route_badge = 1;
+		int32 total = 2;
+	}
+
 	Result result = 1;
 	int64 start_time = 2;
 	repeated PlayerBadgeProto badges = 3;
 	GymBadges gym_badges = 4;
+	RouteBadges route_badges = 5;
 }
 
 message PlayerProfileProto {
@@ -14986,9 +16362,10 @@ message PlayerStatsProto {
 	int32 num_routes_accepted = 64;
 	int32 num_players_referred = 65;
 	int32 num_pokestops_ar_video_scanned = 67;
-	int32 num_on_raid_achievements_screen = 68;
+	int32 num_on_raid_achievements_screen = 68; //todo: not in apk, need look better
 	int32 num_total_route_play = 69;
 	int32 num_unique_route_play = 70;
+	reserved 58;
 }
 
 message PlayerStatsSnapshotsProto {
@@ -15179,6 +16556,7 @@ message PokedexCategoriesSettings {
 
 	bool enabled = 1;
 	repeated PokedexCategoryData pokedex_category_data = 2;
+	bool ob_bool = 3;
 }
 
 message PokedexCategoryMilestoneProto {
@@ -15210,6 +16588,8 @@ message PokedexEntryProto {
 		int32 times_obtained = 3;
 		repeated PokemonDisplayProto.Gender genders_encountered = 4;
 		repeated PokemonDisplayProto.Gender genders_obtained = 5;
+		int32 times_encountered_shiny = 6;
+		int32 times_obtained_shiny = 7;
 	}
 
 	int32 pokedex_entry_number = 1;
@@ -15352,6 +16732,8 @@ message PokemonDisplayProto {
 		HOLIDAY_2021_NOEVOLVE = 52;
 		TCG_2022_NOEVOLVE = 53;
 		JAN_2022_NOEVOLVE = 54;
+		GOFEST_2022_NOEVOLVE = 55;
+		ANNIVERSARY_2022_NOEVOLVE = 56;
 	}
 
 	enum Form {
@@ -17654,6 +19036,38 @@ message PokemonDisplayProto {
 		SPEWPA_SAVANNA = 2782;
 		SPEWPA_SUN = 2783;
 		SPEWPA_TUNDRA = 2784;
+		DECIDUEYE_HISUIAN = 2785;
+		TYPHLOSION_HISUIAN = 2786;
+		SAMUROTT_HISUIAN = 2787;
+		QWILFISH_HISUIAN = 2788;
+		LILLIGANT_HISUIAN = 2789;
+		SLIGGOO_HISUIAN = 2790;
+		GOODRA_HISUIAN = 2791;
+		GROWLITHE_HISUIAN = 2792;
+		ARCANINE_HISUIAN = 2793;
+		SNEASEL_HISUIAN = 2794;
+		AVALUGG_HISUIAN = 2795;
+		ZORUA_HISUIAN = 2796;
+		ZOROARK_HISUIAN = 2797;
+		BRAVIARY_HISUIAN = 2798;
+		MOLTRES_GALARIAN = 2799;
+		ZAPDOS_GALARIAN = 2800;
+		ARTICUNO_GALARIAN = 2801;
+		ENAMORUS_INCARNATE = 2802;
+		ENAMORUS_THERIAN = 2803;
+		BASCULIN_WHITE_STRIPED = 2804;
+		PIKACHU_GOFEST_2022 = 2805;
+		PIKACHU_WCS_2022 = 2806;
+		BASCULEGION_NORMAL = 2807;
+		BASCULEGION_FEMALE = 2808;
+		DECIDUEYE_NORMAL = 2809;
+		SLIGGOO_NORMAL = 2810;
+		GOODRA_NORMAL = 2811;
+		AVALUGG_NORMAL = 2812;
+		PIKACHU_TSHIRT_01 = 2813;
+		PIKACHU_TSHIRT_02 = 2814;
+		PIKACHU_FLYING_01 = 2815;
+		PIKACHU_FLYING_02 = 2816;
 	}
 
 	enum Gender {
@@ -17713,6 +19127,7 @@ message PokemonEncounterRewardProto {
 	PokemonDisplayProto pokemon_display = 3;
 	bool is_hidden_ditto = 4;
 	PokemonDisplayProto ditto_display = 5;
+	Item poke_ball_override = 6;
 }
 
 message PokemonEvolutionQuestProto {
@@ -17836,6 +19251,21 @@ message PokemonInfo {
 message PokemonInventoryTelemetry {
 	PokemonInventoryTelemetryIds pokemon_inventory_click_ids = 1;
 	string sort_id = 2;
+}
+
+message PokemonLoadDelay {
+	PokemonLoadTelemetry pokemon = 1;
+	float load_delay = 2;
+}
+
+message PokemonLoadTelemetry {
+	HoloPokemonId pokemon_id = 1;
+	PokemonDisplayProto.Costume costume = 2;
+	PokemonDisplayProto.Gender gender = 3;
+	bool shiny = 4;
+	PokemonDisplayProto.Form form = 5;
+	PokemonDisplayProto.Alignment alignment = 6;
+	HoloTemporaryEvolutionId temporary_evolution_id = 7;
 }
 
 message PokemonMegaEvolutionLevelProto {
@@ -18014,6 +19444,7 @@ message PokemonSettingsProto {
 	repeated float buddy_encounter_cameo_local_rotation = 65;
 	ObPokemonSetting ob_pokemon_setting = 66;
 	repeated PokemonDisplayProto.Costume costume_evolution = 67;
+	bool ob_bool = 70;
 }
 
 message PokemonStaminaUpdateProto {
@@ -18116,6 +19547,35 @@ message Polyline {
 
 message PolylineList {
 	repeated Polyline polylines = 1;
+}
+
+message PopupControlSettingsProto {
+	bool enabled = 1;
+	bool ob_bool = 2;
+}
+
+message PostStaticNewsfeedRequest {
+	string app_id = 1;
+	NewsfeedPost newsfeed_post = 2;
+	map<string, LiquidAttribute> liquid_attributes = 3;
+	string bucket_name = 4;
+	int64 post_timestamp = 5;
+	string private_key = 6;
+}
+
+message PostStaticNewsfeedResponse {
+	enum Result {
+		UNSET = 0;
+		SUCCESS = 1;
+		INVALID_POST_TIMESTAMP = 2;
+		INVALID_APP_ID = 3;
+		INVALID_NEWSFEED_TITLE = 4;
+		INVALID_NEWSFEED_CONTENT = 5;
+		SEND_FAILED = 6;
+		LIQUID_LOGIC_ERROR = 7;
+	}
+
+	Result result = 1;
 }
 
 message PostcardBookTelemetry {
@@ -18276,6 +19736,8 @@ message ProgressRouteOutProto {
 	RoutePlayProto route_play = 3;
 	RouteActivityResponseProto activity_output = 4;
 	int64 cooldown_finish_ms = 5;
+	LootProto ob_loot = 6;
+	AwardedRouteBadge ob_route_badges_info_data = 7;
 }
 
 message ProgressRouteProto {
@@ -18302,6 +19764,7 @@ message ProgressTokenDataProto {
 		START_RAID_BATTLE = 4;
 		START_RAID_BATTLE_WHEN_READY = 5;
 		END_BATTLE_WHEN_READY = 6;
+		GET_RAID_BOSS_PROTO = 7;
 	}
 
 	enum RaidStateFunction {
@@ -18376,6 +19839,99 @@ message ProgressTokenDataProto {
 	}
 
 	int32 ob_progress_token_int32 = 1;
+}
+
+message ProgressTokenDataV2 {
+	oneof CombatFunction {
+		CombatActiveStateFunctionProto combat_active_state_function = 2;
+		CombatEndStateFunctionProto combat_end_state_function = 3;
+		CombatReadyStateFunctionProto combat_ready_state_function = 4;
+		CombatSwapStateFunctionProto combat_swap_state_function = 5;
+		CombatSpecialMoveStateFunctionProto combat_special_move_state_function = 6;
+		CombatWaitForPlayerStateFunctionProto combat_wait_for_player_state_function = 7;
+		CombatPresentationDirectorFunctionProto combat_presentation_director_function = 8;
+		CombatDirectorV2FunctionProto combat_director_v2_function = 9;
+		CombatStateV2FunctionProto combat_state_v2_function = 10;
+		CombatPokemonFunctionProto combat_pokemon_function = 11;
+	}
+
+	enum CombatPokemonFunctionProto {
+		OBSERVE_ACTION = 0;
+		EXECUTE_ACTION = 1;
+		PAUSE_UPDATES = 2;
+	}
+
+	enum CombatSwapStateFunctionProto {
+		NONE_COMBAT_SWAP_STATE = 0;
+		ENTER_COMBAT_SWAP_STATE = 1;
+		EXIT_COMBAT_SWAP_STATE = 2;
+		DO_WORK_COMBAT_SWAP_STATE = 3;
+	}
+
+	enum CombatStateV2FunctionProto {
+		NONE_COMBAT_STATE_V2 = 0;
+		OBSERVE_COMBAT_STATE = 1;
+		DELAY_SPECIAL_TRANSITION = 2;
+	}
+
+	enum CombatSpecialMoveStateFunctionProto {
+		NONE_COMBAT_SPECIAL_MOVE_STATE = 0;
+		ENTER_COMBAT_SPECIAL_MOVE_STATE = 1;
+		EXIT_COMBAT_SPECIAL_MOVE_STATE = 2;
+		DO_WORK_COMBAT_SPECIAL_MOVE_STATE = 3;
+		PERFORM_FLY_IN = 4;
+		PERFORM_FLY_OUT = 5;
+	}
+
+	enum CombatActiveStateFunctionProto {
+		NONE_COMBAT_ACTIVE_STATE = 0;
+		ENTER_COMBAT_ACTIVE_STATE = 1;
+		EXIT_COMBAT_ACTIVE_STATE = 2;
+		DO_WORK_COMBAT_ACTIVE_STATE = 3;
+	}
+
+	enum CombatReadyStateFunctionProto {
+		NONE_COMBAT_READY_STATE = 0;
+		ENTER_COMBAT_READY_STATE = 1;
+		EXIT_COMBAT_READY_STATE = 2;
+		DO_WORK_COMBAT_READY_STATE = 3;
+	}
+
+	enum CombatEndStateFunctionProto {
+		NONE_COMBAT_END_STATE = 0;
+		ENTER_COMBAT_END_STATE = 1;
+		EXIT_COMBAT_END_STATE = 2;
+		DO_WORK_COMBAT_END_STATE = 3;
+	}
+
+	enum CombatDirectorV2FunctionProto {
+		NONE_COMBAT_DIRECTOR_V2 = 0;
+		TRY_START_COMBAT = 1;
+		START_COMBAT_ERROR = 2;
+		RECEIVE_COMBAT_UPDATE = 3;
+		TRY_FAST_ATTACK = 4;
+		SWAP_POKEMON_TO = 5;
+		QUEUE_SPECIAL_ATTACK = 6;
+		TRY_SPECIAL_ATTACK = 7;
+		TRY_EXECUTE_BUFFERED_ACTION = 8;
+		CAN_ACT_ON_TURN = 9;
+		CAN_PERFORM_ATTACK = 10;
+		CHECK_OPPONENT_CHARGE_MOVE_CHANCE = 11;
+	}
+
+	enum CombatWaitForPlayerStateFunctionProto {
+		NONE_COMBAT_WAIT_FOR_PLAYER_STATE = 0;
+		ENTER_COMBAT_WAIT_FOR_PLAYER_STATE = 1;
+		EXIT_COMBAT_WAIT_FOR_PLAYER_STATE = 2;
+		DO_WORK_COMBAT_WAIT_FOR_PLAYER_STATE = 3;
+	}
+
+	enum CombatPresentationDirectorFunctionProto {
+		NONE_COMBAT_PRESENTATION_DIRECTOR = 0;
+		PLAY_MINI_GAME = 1;
+	}
+
+	int32 ob_int32 = 1;
 }
 
 message ProjectVacationProto {
@@ -18599,6 +20155,7 @@ message QuestConditionProto {
 		WITH_RAID_LOCATION = 48;
 		WITH_FRIENDS_RAID = 49;
 		WITH_POKEMON_COSTUME = 50;
+		WITH_APPLIED_ITEM = 51;
 	}
 
 	ConditionType type = 1;
@@ -18617,6 +20174,8 @@ message QuestDialogProto {
 		SPECIAL_GUEST_3 = 4;
 		SPECIAL_GUEST_4 = 5;
 		SPECIAL_GUEST_5 = 6;
+		SPECIAL_GUEST_RHI = 7;
+		SPECIAL_GUEST_RHI_2 = 8;
 	}
 
 	enum CharacterExpression {
@@ -18648,6 +20207,7 @@ message QuestDialogProto {
 	repeated float character_offset = 5;
 	string text_background_color = 6;
 	string character_tint = 7;
+	string quest_music_override_key = 124;
 }
 
 message QuestDisplayProto {
@@ -18676,6 +20236,7 @@ message QuestDisplayProto {
 	string prop_name = 23;
 	string quest_branch_choice_view_header_background_color = 24;
 	string quest_branch_choice_view_bottom_gradient_color = 25;
+	int32 sort_order = 26;
 }
 
 message QuestEncounterOutProto {
@@ -18737,6 +20298,7 @@ message QuestPokemonEncounterProto {
 	EncounterType encounter_type = 3;
 	bool is_hidden_ditto = 4;
 	PokemonProto ditto = 5;
+	Item poke_ball_override = 6;
 }
 
 message QuestPreconditionProto {
@@ -18748,10 +20310,10 @@ message QuestPreconditionProto {
 		MonthYearBucket month_year_bucket = 6;
 		Group group = 7;
 		StorylineProgressConditionProto story_line = 8;
-		Team team = 9;
+		TeamProto team = 9;
 	}
 
-	message Team {
+	message TeamProto {
 		Operator operator = 1;
 		Team team = 2;
 	}
@@ -18864,7 +20426,7 @@ message QuestProto {
 
 	QuestType quest_type = 1;
 	WithSingleDayProto with_single_day = 98;
-	DaysWithARowQuestProto days_in_arow = 99;
+	DaysWithARowQuestProto days_in_a_row = 99;
 	string quest_id = 100;
 	int64 quest_seed = 101;
 	Context quest_context = 102;
@@ -18960,6 +20522,10 @@ message QuestsProto {
 	repeated QuestIncidentProto quest_incident = 5;
 }
 
+message QuitCombatDataProto {
+	int32 ob_int32 = 1;
+}
+
 message QuitCombatOutProto {
 	enum Result {
 		UNSET = 0;
@@ -18975,6 +20541,12 @@ message QuitCombatOutProto {
 
 message QuitCombatProto {
 	string combat_id = 1;
+}
+
+message QuitCombatResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	QuitCombatOutProto ob_quit_combat_response = 3;
 }
 
 message RaidClientLogInfoProto {
@@ -19065,6 +20637,9 @@ message RaidClientSettingsProto {
 	repeated RaidLevel unsupported_raid_levels_for_friend_invites = 13;
 	repeated RaidLevel unsupported_remote_raid_levels = 14;
 	bool is_nearby_raid_notification_disabled = 15;
+	repeated string ob_repeated_string = 16;
+	repeated ObRaidClientSetting ob_raid_client_setting = 17;
+	ObRaidClientSetting1 ob_raid_client_setting_1 = 18;
 }
 
 message RaidCreateDetail {
@@ -19083,6 +20658,7 @@ message RaidEncounterProto {
 	string fort_id = 7;
 	bool is_exclusive = 8;
 	bool is_event_legendary = 9;
+	Item raid_ball = 10;
 }
 
 message RaidEndDataProto {
@@ -19111,6 +20687,7 @@ message RaidInfoProto {
 	bool is_scheduled_raid = 10;
 	bool is_free = 11;
 	string campaign_id = 12;
+	Item raid_ball = 14;
 }
 
 message RaidInvitationDetails {
@@ -19422,6 +20999,7 @@ message ReferContactListFriendRequest {
 	string receiver_name = 4;
 	string app_store_link = 5;
 	ReferralProto referral = 6;
+	string country_code = 7;
 }
 
 message ReferContactListFriendResponse {
@@ -19516,10 +21094,10 @@ message RegisterBackgroundDeviceResponseProto {
 
 message RegisterSfidaRequest {
 	enum DeviceType {
-		UNSET = 0;
-		SFIDA = 1;
-		PALMA = 2;
-		WAINA = 3;
+		SFIDA = 0;
+		PALMA = 1;
+		WAINA = 2;
+		UNSET = -1;
 	}
 
 	string sfida_id = 1;
@@ -19597,6 +21175,7 @@ message RemoveLoginActionOutProto {
 	enum Status {
 		UNSET = 0;
 		LOGIN_NOT_REMOVABLE = 1;
+		ERROR_UNKNOWN = 2;
 	}
 
 	bool success = 1;
@@ -19655,6 +21234,7 @@ message ReportAdInteractionProto {
 		CTAClickInteraction cta_clicked = 8;
 		AdSpawnInteraction ad_spawned = 9;
 		AdDismissalInteraction ad_dismissed = 10;
+		ViewWebArInteraction view_web_ar = 11;
 	}
 
 	enum AdType {
@@ -19663,11 +21243,16 @@ message ReportAdInteractionProto {
 		AD_TYPE_SPONSORED_BALLOON = 2;
 		AD_TYPE_SPONSORED_BALLOON_WASABI = 3;
 		AD_TYPE_SPONSORED_BALLOON_GOOGLE_MANAGED_AD = 4;
+		AD_TYPE_SPONSORED_BALLOON_AR_AD = 5;
 	}
 
 	message ViewImpressionInteraction {
 		string preview_image_url = 1;
 		bool is_persisted_gift = 2;
+	}
+
+	message ViewWebArInteraction {
+		string web_ar_url = 1;
 	}
 
 	message AdDismissalInteraction {
@@ -19876,6 +21461,7 @@ message RouteGlobalSettingsProto {
 	bool enable_poi_detail_caching = 2;
 	bool enable_route_play = 3;
 	bool enable_route_tappables = 4;
+	float ob_float = 5;
 }
 
 message RouteImageProto {
@@ -19915,6 +21501,7 @@ message RoutePlayProto {
 	int32 play_version = 10;
 	int64 expiration_time_ms = 11;
 	int64 start_time_ms = 12;
+	RouteType route_type = 13;
 }
 
 message RoutePlaySettingsProto {
@@ -19944,6 +21531,10 @@ message RoutePlayStatus {
 message RouteStamp {
 	enum Color {
 		COLOR_UNSET = 0;
+		COLOR_179D62 = 1;
+		COLOR_E10012 = 2;
+		COLOR_1365AE = 3;
+		COLOR_E89A05 = 4;
 	}
 
 	enum Type {
@@ -19956,6 +21547,12 @@ message RouteStamp {
 	string asset_id = 4;
 	string category = 5;
 	int32 stamp_index = 6;
+}
+
+message RouteTypeMetadataProto {
+	RouteType route_type = 1;
+	string modifier_description = 2;
+	string modifier_image_url = 3;
 }
 
 message RouteValidation {
@@ -20025,14 +21622,29 @@ message RpcErrorDataProto {
 }
 
 message RpcResponseTelemetry {
+	enum ConnectionType {
+		UNKNOWN = 0;
+		WIFI = 1;
+		CELL_DEFAULT = 2;
+		CELL_1G = 3;
+		CELL_2G = 4;
+		CELL_3G = 5;
+		CELL_4G = 6;
+		CELL_5G = 7;
+		CELL_6G = 8;
+		CELL_7G = 9;
+	}
+
 	float window_duration = 1;
 	repeated RpcResponseTime response_timings = 2;
+	ConnectionType connection_type = 3;
 }
 
 message RpcResponseTime {
 	Method rpc_id = 1;
 	int32 count_call = 2;
 	float average_response_time = 3;
+	int32 timeout_count = 4;
 }
 
 message RpcSocketResponseTelemetry {
@@ -20154,6 +21766,7 @@ message SearchPlayerProto {
 message SendContactListFriendInviteRequest {
 	repeated string emails = 1;
 	repeated string phone_numbers = 2;
+	string country_code = 3;
 }
 
 message SendContactListFriendInviteResponse {
@@ -20269,6 +21882,7 @@ message SendProbeProto {
 }
 
 message SendRaidInvitationDataProto {
+	int32 ob_int32 = 1;
 }
 
 message SendRaidInvitationOutProto {
@@ -20300,6 +21914,25 @@ message SendRaidInvitationProto {
 message SendRaidInvitationResponseDataProto {
 	SendRaidInvitationOutProto.Result result = 1;
 	int32 ob_send_raid_invitation_data_int32 = 2;
+	int32 ob_send_raid_invitation_data_int32_2 = 3;
+	uint32 ob_send_raid_invitation_data_uint32 = 4;
+}
+
+message SendSmsVerificationCodeRequest {
+	string phone_number = 1;
+	string country_code = 2;
+}
+
+message SendSmsVerificationCodeResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_UNKNOWN = 2;
+		ERROR_RATE_LIMITED = 3;
+	}
+
+	Status status = 1;
+	string error_message = 2;
 }
 
 message ServerData {
@@ -20316,6 +21949,7 @@ message ServerRecordMetadata {
 	string session_id = 3;
 	string request_id = 4;
 	int64 server_timestamp_ms = 5;
+	string client_request_id = 6;
 }
 
 message SetAccountSettingsOutProto {
@@ -20527,6 +22161,7 @@ message SetPokemonTagsForPokemonOutProto {
 	}
 
 	Status status = 2;
+	reserved 1;
 }
 
 message SetPokemonTagsForPokemonProto {
@@ -20682,6 +22317,7 @@ message SfidaMetricsUpdate {
 message SfidaUpdateRequest {
 	double player_lat = 1;
 	double player_lng = 2;
+	reserved 3;
 }
 
 message SfidaUpdateResponse {
@@ -20702,6 +22338,7 @@ message SfidaUpdateResponse {
 	int32 pokedex_number = 10;
 	bool autospin = 12;
 	bool autocatch = 13;
+	reserved 11;
 }
 
 message ShadowAttributesProto {
@@ -20877,6 +22514,7 @@ message SocialSettings {
 		ONLINE_STATUS_TOGGLE = 4;
 		ADDRESS_BOOK_IMPORT = 5;
 		ADDRESS_BOOK_DISCOVERABILITY = 6;
+		ADDRESS_BOOK_PHONE_NUMBER_REGISTRATION = 7;
 	}
 }
 
@@ -20910,6 +22548,7 @@ message SouvenirProto {
 		int64 time_picked_up = 1;
 		double latitude = 3;
 		double longitude = 4;
+		reserved 2;
 	}
 
 	SouvenirTypeId souvenir_type_id = 1;
@@ -20963,6 +22602,7 @@ message SponsoredGeofenceGiftSettingsProto {
 		bool incident_balloon_dismisses_sponsored_balloon = 4;
 		int32 get_wasabi_ad_rpc_interval_ms = 5;
 		SponsoredBalloonMovementSettingsProto balloon_movement_settings = 6;
+		bool ob_bool = 7;
 	}
 
 	message SponsoredGeofenceGiftDetailsProto {
@@ -20988,6 +22628,8 @@ message SponsoredGeofenceGiftSettingsProto {
 	bool ob_bool = 11;
 	ObSponsoredBalloon ob_sponsored_balloon = 12;
 	SponsoredGeofenceGiftDetailsProto sponsored_geofence_gift_details = 13;
+	int32 ob_int32_1 = 14;
+	int32 ob_int32_2 = 15;
 }
 
 message SponsoredPoiFeedbackSettingsProto {
@@ -21060,6 +22702,7 @@ message StartIncidentProto {
 
 message StartRaidBattleDataProto {
 	repeated uint64 ob_start_raid_battle_data_uint64 = 1;
+	int32 ob_start_raid_battle_data_int32 = 2;
 }
 
 message StartRaidBattleOutProto {
@@ -21096,6 +22739,8 @@ message StartRaidBattleProto {
 
 message StartRaidBattleResponseDataProto {
 	StartRaidBattleOutProto.Result result = 1;
+	int32 ob_int32 = 2;
+	uint32 ob_uint32 = 3;
 	FriendshipLevelMilestone friendship_level_milestone = 8;
 }
 
@@ -21133,6 +22778,7 @@ message StickerMetadataProto {
 	string sticker_url = 2;
 	int32 max_count = 3;
 	HoloPokemonId pokemon_id = 4;
+	repeated string ob_list_string = 5;
 }
 
 message StickerProto {
@@ -21153,6 +22799,16 @@ message StickerSentProto {
 message StoreIapSettingsProto {
 	Store for_store = 1;
 	IapLibraryVersion library_version = 2;
+}
+
+message SubmitCombatActionProto {
+	ObCommunCombatDataProto ob_commun_combat_data = 1;
+}
+
+message SubmitCombatChallengePokemonsDataProto {
+	int32 ob_int32 = 1;
+	repeated int32 ob_list_int32 = 2;
+	uint32 ob_uint32 = 3;
 }
 
 message SubmitCombatChallengePokemonsOutProto {
@@ -21177,6 +22833,13 @@ message SubmitCombatChallengePokemonsProto {
 	string challenge_id = 1;
 	repeated fixed64 attacking_pokemon_id = 2;
 	int64 lobby_join_time_ms = 3;
+}
+
+message SubmitCombatChallengePokemonsResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	SubmitCombatChallengePokemonsOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
 }
 
 message SubmitNewPoiOutProto {
@@ -21311,6 +22974,7 @@ message SyncContactListRequest {
 	}
 
 	repeated ContactProto contact = 1;
+	string country_code = 2;
 }
 
 message SyncContactListResponse {
@@ -21380,6 +23044,9 @@ message TelemetryGlobalSettingsProto {
 	int64 frame_rate_sample_interval_ms = 6;
 	int64 frame_rate_sample_period_ms = 7;
 	bool enable_omni_wrapper_sending = 8;
+	float ob_float = 9;
+	bool ob_bool = 10;
+	repeated string ob_list_string = 11;
 }
 
 message TempEvoOverrideProto {
@@ -21836,6 +23503,12 @@ message UpdateBreadcrumbHistoryResponseProto {
 	Status status = 1;
 }
 
+message UpdateCombatDataProto {
+	int32 ob_int32 = 1;
+	ObCommunCombatDataProto ob_commun_combat_data = 2;
+	int32 ob_int32_2 = 3;
+}
+
 message UpdateCombatOutProto {
 	enum Result {
 		UNSET = 0;
@@ -21871,6 +23544,22 @@ message UpdateCombatProto {
 	string combat_id = 1;
 	CombatActionProto action = 2;
 	string debug_log = 3;
+}
+
+message UpdateCombatResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	UpdateCombatOutProto.Result result = 3;
+	ObCommunWebCombatStateProto ob_commun_web_combat_state = 4;
+}
+
+message UpdateCombatResponseTimeTelemetry {
+	float window_duration = 1;
+	int32 count_call = 2;
+	float average_response_time = 3;
+	int32 timeout_count = 4;
+	CombatType combat_type = 5;
+	string realm = 6;
 }
 
 message UpdateFacebookStatusOutProto {
@@ -21964,6 +23653,27 @@ message UpdateNotificationProto {
 	repeated string notification_ids = 1;
 	repeated int64 create_timestamp_ms = 2;
 	NotificationState state = 3;
+}
+
+message UpdatePhoneNumberRequest {
+	string phone_number = 1;
+	string verification_code = 2;
+	string country_code = 3;
+	string contact_id = 4;
+}
+
+message UpdatePhoneNumberResponse {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		ERROR_WRONG_VERIFICATION_CODE = 2;
+		ERROR_UNKNOWN = 3;
+		ERROR_CONTACT_NOT_FOUND = 4;
+		ERROR_RATE_LIMITED = 5;
+	}
+
+	Status status = 1;
+	string error_message = 2;
 }
 
 message UpdatePostcardOutProto {
@@ -22151,10 +23861,12 @@ message UseIncenseActionOutProto {
 		INCENSE_ALREADY_ACTIVE = 2;
 		NONE_IN_INVENTORY = 3;
 		LOCATION_UNSET = 4;
+		INCENSE_DISABLED = 5;
 	}
 
 	Result result = 1;
 	AppliedItemProto applied_incense = 2;
+	LootProto ob_loot = 3;
 }
 
 message UseIncenseActionProto {
@@ -22417,6 +24129,25 @@ message UsernameSuggestionTelemetry {
 	ObSuggestionsEntry ob_suggest_2 = 2;
 }
 
+message ValidateNiaAppleAuthTokenRequestProto {
+	bytes nia_apple_auth_token = 1;
+}
+
+message ValidateNiaAppleAuthTokenResponseProto {
+	enum Status {
+		UNSET = 0;
+		SUCCESS = 1;
+		INVALID_AUTH = 2;
+		EXPIRED_AUTH = 3;
+		SERVER_ERROR = 4;
+	}
+
+	Status status = 1;
+	string apple_user_id = 2;
+	string apple_email = 3;
+	string apple_client_id = 4;
+}
+
 message VasaClientAction {
 	enum ActionEnum {
 		INVALID_VASA_CLIENT_ACTION = 0;
@@ -22494,6 +24225,7 @@ message VsSeekerAttributesProto {
 	VsSeekerRewardTrack reward_track = 7;
 	string battle_now_sku_id = 8;
 	bool additional_battles_granted = 9;
+	reserved 5;
 }
 
 message VsSeekerBattleResult {
@@ -22603,6 +24335,11 @@ message VsSeekerSetLogEntry {
 	int32 number_of_battles = 8;
 }
 
+message VsSeekerStartMatchmakingDataProto {
+	int32 ob_int32 = 1;
+	repeated int32 ob_list_int32 = 2;
+}
+
 message VsSeekerStartMatchmakingOutProto {
 	enum Result {
 		UNSET = 0;
@@ -22628,6 +24365,13 @@ message VsSeekerStartMatchmakingOutProto {
 message VsSeekerStartMatchmakingProto {
 	string combat_league_template_id = 1;
 	repeated fixed64 attacking_pokemon_id = 2;
+}
+
+message VsSeekerStartMatchmakingResponseDataProto {
+	int32 ob_int32 = 1;
+	uint32 ob_uint32 = 2;
+	VsSeekerStartMatchmakingOutProto.Result result = 3;
+	ObCommunCombatChallengeDataProto challenge = 4;
 }
 
 message VsSeekerWinRewardsLogEntry {
@@ -22728,6 +24472,10 @@ message WeatherDetailClickTelemetry {
 	WeatherAlertProto.Severity severity = 3;
 }
 
+message WebSocketResponseDataProto {
+	ObCommunWebCombatStateProto ob_commun_web_combat_state = 1;
+}
+
 message WebTelemetry {
 	WebTelemetryIds web_click_ids = 1;
 	string url = 2;
@@ -22741,9 +24489,9 @@ message WidgetsProto {
 		UNSET = 0;
 		EGG_INCUBATORS = 1;
 		BUDDY_STATS = 2;
+		ACTIVITY_SUMMARY = 3;
 	}
 
-	WidgetType widget_type = 1;
 	repeated WidgetType widgets = 2;
 }
 
