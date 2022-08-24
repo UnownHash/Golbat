@@ -117,7 +117,7 @@ func main() {
 	}
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
-	StartStatsLogger(db)
+	StartStatsLogger(voltDb) // clear internal db
 
 	//if config.Config.Archive == true {
 	StartDatabaseArchiver(db)
