@@ -40,6 +40,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 			if err != nil {
 				log.Errorf("DB - Archive of pokemon table error %s", err)
+				return
 			}
 			_ = result
 			//rows, _ := result.RowsAffected()
