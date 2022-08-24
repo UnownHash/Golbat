@@ -460,6 +460,7 @@ func QueryPokemon(c *gin.Context) {
 
 	// This is bad
 
+	log.Infof("Perform query API: %s", query)
 	rows, err := voltDb.Query(query)
 	if err != nil {
 		return
