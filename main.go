@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io"
 	"io/ioutil"
+	"strings"
 
 	"golbat/decoder"
 	"golbat/webhooks"
@@ -23,11 +25,15 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"golbat/pogo"
 
+	_ "github.com/VoltDB/voltdb-client-go/voltdbclient"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sqlx.DB
+var voltDb *sqlx.DB
+var dbDetails decoder.DbDetails
 
 func main() {
 
@@ -78,21 +84,50 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
+	voltDb, err = sqlx.Open("sqlite3", ":memory:")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+
+	voltDb.SetMaxOpenConns(1)
+
+	pingErr = voltDb.Ping()
+	if pingErr != nil {
+		log.Fatal(pingErr)
+		return
+	}
+
+	// Create database
+	content, fileErr := ioutil.ReadFile("sql/voltdb/create.sql")
+
+	if fileErr != nil {
+		log.Fatal(err)
+	}
+
+	voltDb.MustExec(string(content))
+
+	dbDetails = decoder.DbDetails{
+		PokemonDb: voltDb,
+		GeneralDb: db,
+	}
+
 	if config.Config.DebugLog == true {
 		log.SetLevel(log.DebugLevel)
 	}
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
-	StartStatsLogger(db)
+	//StartStatsLogger(voltDb) // clear internal db
 
-	if config.Config.Archive == true {
-		StartDatabaseArchiver(db)
-	}
+	//if config.Config.Archive == true {
+	StartDatabaseArchiver(voltDb)
+	//}
 
 	r := gin.New()
 	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
+	r.POST("/api/queryPokemon", QueryPokemon)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
@@ -164,7 +199,7 @@ func decodeQuest(sDec []byte, haveAr *bool) string {
 		return res
 	}
 
-	return decoder.UpdatePokestopWithQuest(db, decodedQuest, *haveAr)
+	return decoder.UpdatePokestopWithQuest(dbDetails, decodedQuest, *haveAr)
 
 }
 
@@ -177,9 +212,9 @@ func decodeFortDetails(sDec []byte) string {
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	case pogo.FortType_GYM:
-		return decoder.UpdateGymRecordWithFortDetailsOutProto(db, decodedFort)
+		return decoder.UpdateGymRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	}
 	return "Unknown fort type"
 }
@@ -196,7 +231,7 @@ func decodeGetGymInfo(sDec []byte) string {
 			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
 		return res
 	}
-	return decoder.UpdateGymRecordWithGymInfoProto(db, decodedGymInfo)
+	return decoder.UpdateGymRecordWithGymInfoProto(dbDetails, decodedGymInfo)
 }
 
 func decodeEncounter(sDec []byte) string {
@@ -211,7 +246,7 @@ func decodeEncounter(sDec []byte) string {
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
-	return decoder.UpdatePokemonRecordWithEncounterProto(db, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithEncounterProto(dbDetails, decodedEncounterInfo)
 }
 
 func decodeDiskEncounter(sDec []byte) string {
@@ -227,7 +262,7 @@ func decodeDiskEncounter(sDec []byte) string {
 		return res
 	}
 
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(db, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(dbDetails, decodedEncounterInfo)
 }
 
 func decodeGMO(sDec []byte) string {
@@ -265,8 +300,8 @@ func decodeGMO(sDec []byte) string {
 		}
 	}
 
-	decoder.UpdateFortBatch(db, newForts)
-	decoder.UpdatePokemonBatch(db, newWildPokemon, newNearbyPokemon, newMapPokemon)
+	decoder.UpdateFortBatch(dbDetails, newForts)
+	decoder.UpdatePokemonBatch(dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
@@ -411,4 +446,134 @@ func ClearQuests(c *gin.Context) {
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
 	})
+}
+
+func QueryPokemon(c *gin.Context) {
+
+	data, err := c.GetRawData()
+	if err != nil {
+		return
+	}
+	query := string(data)
+	//if err := c.BindJSON(&query); err != nil {
+	//	return
+	//}
+
+	// This is bad
+
+	log.Infof("Perform query API: [%d] %s", len(query), query)
+	rows, err := voltDb.Query(query)
+	if err != nil {
+		log.Infof("Error executing query: %s", err)
+		c.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	z, err2 := toJson(rows)
+	c.Data(http.StatusAccepted, "application/json", z)
+	_, _ = err, err2
+}
+
+func toJson(rows *sql.Rows) ([]byte, error) {
+	columnTypes, err := rows.ColumnTypes()
+
+	if err != nil {
+		return nil, err
+	}
+
+	count := len(columnTypes)
+	finalRows := []interface{}{}
+
+	for rows.Next() {
+
+		scanArgs := make([]interface{}, count)
+
+		for i, v := range columnTypes {
+			var dbType string
+			dbType = v.DatabaseTypeName()
+			if idx := strings.IndexByte(dbType, '('); idx >= 0 {
+				dbType = dbType[:idx]
+			}
+
+			switch dbType {
+			case "varchar", "text", "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
+				scanArgs[i] = new(sql.NullString)
+				break
+			case "BOOL":
+				scanArgs[i] = new(sql.NullBool)
+				break
+			case "smallint", "INT", "INT4":
+				scanArgs[i] = new(sql.NullInt64)
+				break
+			case "float":
+				scanArgs[i] = new(sql.NullFloat64)
+				break
+			default:
+				scanArgs[i] = new(sql.NullString)
+			}
+		}
+
+		err := rows.Scan(scanArgs...)
+
+		if err != nil {
+			return nil, err
+		}
+
+		masterData := map[string]interface{}{}
+
+		for i, v := range columnTypes {
+
+			if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
+				if z.Valid {
+					masterData[v.Name()] = z.Bool
+				} else {
+					masterData[v.Name()] = nil
+				}
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullString); ok {
+				if z.Valid {
+					masterData[v.Name()] = z.String
+				} else {
+					masterData[v.Name()] = nil
+				}
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
+				if z.Valid {
+					masterData[v.Name()] = z.Int64
+				} else {
+					masterData[v.Name()] = nil
+				}
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
+				if z.Valid {
+					masterData[v.Name()] = z.Float64
+				} else {
+					masterData[v.Name()] = nil
+				}
+				continue
+			}
+
+			if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
+				if z.Valid {
+					masterData[v.Name()] = z.Int32
+				} else {
+					masterData[v.Name()] = nil
+				}
+				continue
+			}
+
+			masterData[v.Name()] = scanArgs[i]
+		}
+
+		finalRows = append(finalRows, masterData)
+	}
+
+	z, err := json.Marshal(finalRows)
+	return z, err
 }

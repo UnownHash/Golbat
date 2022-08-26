@@ -6,7 +6,6 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/pogo"
@@ -107,20 +106,38 @@ type Pokemon struct {
 //KEY `ix_iv` (`iv`)
 //)
 
-func getPokemonRecord(db *sqlx.DB, encounterId string) (*Pokemon, error) {
-	inMemoryPokemon := pokemonCache.Get(encounterId)
-	if inMemoryPokemon != nil {
-		pokemon := inMemoryPokemon.Value()
-		return &pokemon, nil
-	}
+func getPokemonRecord(db DbDetails, encounterId string) (*Pokemon, error) {
+	//inMemoryPokemon := pokemonCache.Get(encounterId)
+	//if inMemoryPokemon != nil {
+	//	pokemon := inMemoryPokemon.Value()
+	//	return &pokemon, nil
+	//}
 	pokemon := Pokemon{}
 
-	err := db.Get(&pokemon,
-		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
-			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
-			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
-			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
-			"FROM pokemon WHERE id = ?", encounterId)
+	row := db.PokemonDb.QueryRow("SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
+		"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
+		"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
+		"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
+		"FROM pokemon WHERE id = ?", encounterId)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//defer stmt.Close()
+
+	//var row *sqlx.Row
+	//row = stmt.QueryRowx(encounterId)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+
+	err := row.Scan(&pokemon.Id, &pokemon.PokemonId, &pokemon.Lat, &pokemon.Lon,
+		&pokemon.SpawnId, &pokemon.ExpireTimestamp, &pokemon.AtkIv, &pokemon.DefIv,
+		&pokemon.StaIv, &pokemon.Move1, &pokemon.Move2, &pokemon.Gender, &pokemon.Form,
+		&pokemon.Cp, &pokemon.Level, &pokemon.Weather, &pokemon.Costume, &pokemon.Weight, &pokemon.Size,
+		&pokemon.Capture1, &pokemon.Capture2, &pokemon.Capture3, &pokemon.DisplayPokemonId, &pokemon.PokestopId,
+		&pokemon.Updated, &pokemon.FirstSeenTimestamp,
+		&pokemon.Changed, &pokemon.CellId, &pokemon.ExpireTimestampVerified, &pokemon.Shiny,
+		&pokemon.Username, &pokemon.Pvp, &pokemon.IsEvent, &pokemon.SeenType)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -130,7 +147,7 @@ func getPokemonRecord(db *sqlx.DB, encounterId string) (*Pokemon, error) {
 		return nil, err
 	}
 
-	pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+	//	pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
 	return &pokemon, nil
 }
 
@@ -138,7 +155,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
+func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
 	oldPokemon, _ := getPokemonRecord(db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
@@ -164,25 +181,49 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
-		res, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		named, i, err2 := db.PokemonDb.BindNamed("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
 			":gender, :form, :cp, :level, :weather, :costume, :weight, :size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
-			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
-			pokemon)
+			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type);", pokemon)
 
-		if err != nil {
-			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
-			log.Errorf("Full structure: %+v", pokemon)
+		if err2 != nil {
 			return
 		}
 
-		_, _ = res, err
+		//var params []interface{}
+		//params = make([]interface{}, 0)
+		//params = append(params, named)
+		//params = append(params, i...)
+
+		res, erre := db.PokemonDb.Exec(named, i...)
+		_, _ = erre, res
+		//err4 := row.Scan()
+		_, _ = named, i //, row, err3, err4, res
+		//_, _, _, _
+		//rows, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		//	"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3,"+
+		//	"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
+		//	"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
+		//	"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
+		//	":gender, :form, :cp, :level, :weather, :costume, :weight, :size, :capture_1, :capture_2, :capture_3,"+
+		//	":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
+		//	":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
+		//	pokemon)
+		//
+		//if err != nil {
+		//	log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+		//	log.Errorf("Full structure: %+v", pokemon)
+		//	return
+		//}
+
+		//_, _ = rows, err
 	} else {
-		res, err := db.NamedExec("UPDATE pokemon SET "+
+
+		named, i, _ := db.PokemonDb.BindNamed("UPDATE pokemon SET "+
 			"pokestop_id = :pokestop_id, "+
 			"spawn_id = :spawn_id, "+
 			"lat = :lat, "+
@@ -218,15 +259,22 @@ func savePokemonRecord(db *sqlx.DB, pokemon *Pokemon) {
 			"is_event = :is_event "+
 			"WHERE id = :id", pokemon,
 		)
+		//var params []interface{}
+		//params = make([]interface{}, 0)
+		//params = append(params, named)
+		//params = append(params, i...)
+
+		_, err := db.PokemonDb.Exec(named, i...)
+
 		if err != nil {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 			log.Errorf("Full structure: %+v", pokemon)
 			return
 		}
-		rows, rowsErr := res.RowsAffected()
-		log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
+		//rows, rowsErr := res.RowsAffected()
+		//log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
 
-		_, _ = res, err
+		//_, _ = res, err
 	}
 
 	pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
@@ -295,7 +343,7 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 	}
 }
 
-func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromWild(db DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
@@ -342,7 +390,7 @@ func (pokemon *Pokemon) updateFromWild(db *sqlx.DB, wildPokemon *pogo.WildPokemo
 	}
 }
 
-func (pokemon *Pokemon) updateFromMap(db *sqlx.DB, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromMap(db DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
 
 	if pokemon.Id != "" {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -402,7 +450,7 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Shiny = null.NewBool(false, false)
 }
 
-func (pokemon *Pokemon) updateFromNearby(db *sqlx.DB, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromNearby(db DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
@@ -491,7 +539,7 @@ const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encou
 // timestampMs - the timestamp to be used for calculations
 // timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
 // a new exact spawnpoint record
-func (pokemon *Pokemon) updateSpawnpointInfo(db *sqlx.DB, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
+func (pokemon *Pokemon) updateSpawnpointInfo(db DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
 	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
 		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
 		pokemon.ExpireTimestamp = null.IntFrom(expireTimeStamp)
@@ -549,7 +597,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterData *pogo.EncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(db DbDetails, encounterData *pogo.EncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -607,7 +655,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db *sqlx.DB, encounterDa
 	updateStats(db, pokemon.Id, stats_encounter)
 }
 
-func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db *sqlx.DB, encounterData *pogo.DiskEncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db DbDetails, encounterData *pogo.DiskEncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -715,7 +763,7 @@ func (pokemon *Pokemon) isDittoDisguised() bool {
 	return false
 }
 
-func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.EncounterOutProto) string {
+func UpdatePokemonRecordWithEncounterProto(db DbDetails, encounter *pogo.EncounterOutProto) string {
 
 	if encounter.Pokemon == nil {
 		return "No encounter"
@@ -737,7 +785,7 @@ func UpdatePokemonRecordWithEncounterProto(db *sqlx.DB, encounter *pogo.Encounte
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
-func UpdatePokemonRecordWithDiskEncounterProto(db *sqlx.DB, encounter *pogo.DiskEncounterOutProto) string {
+func UpdatePokemonRecordWithDiskEncounterProto(db DbDetails, encounter *pogo.DiskEncounterOutProto) string {
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
@@ -769,7 +817,7 @@ const stats_encounter string = "encounter"
 const stats_seenLure string = "seen_lure"
 const stats_lureEncounter string = "lure_encounter"
 
-func updateStats(db *sqlx.DB, id string, event string) {
+func updateStats(db DbDetails, id string, event string) {
 	if config.Config.Stats == false {
 		return
 	}
@@ -791,7 +839,7 @@ func updateStats(db *sqlx.DB, id string, event string) {
 
 	log.Debugf("Updating pokemon timing: [%s] %s", id, event)
 
-	_, err := db.Exec(sqlCommand, id)
+	_, err := db.GeneralDb.Exec(sqlCommand, id)
 
 	if err != nil {
 		log.Errorf("update pokemon timing: [%s] %s", id, err)

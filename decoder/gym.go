@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"golbat/util"
@@ -100,7 +99,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(db *sqlx.DB, fortId string) (*Gym, error) {
+func getGymRecord(db DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -108,7 +107,7 @@ func getGymRecord(db *sqlx.DB, fortId string) (*Gym, error) {
 	}
 	gym := Gym{}
 
-	err := db.Get(&gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp FROM gym WHERE id = ?", fortId)
+	err := db.GeneralDb.Get(&gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp FROM gym WHERE id = ?", fortId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -367,7 +366,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 
 }
 
-func saveGymRecord(db *sqlx.DB, gym *Gym) {
+func saveGymRecord(db DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(db, gym.Id)
 
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -376,7 +375,7 @@ func saveGymRecord(db *sqlx.DB, gym *Gym) {
 
 	log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp) "+
+		res, err := db.GeneralDb.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp)", gym)
 
 		if err != nil {
@@ -386,7 +385,7 @@ func saveGymRecord(db *sqlx.DB, gym *Gym) {
 
 		_, _ = res, err
 	} else {
-		res, err := db.NamedExec("UPDATE gym SET "+
+		res, err := db.GeneralDb.NamedExec("UPDATE gym SET "+
 			"lat = :lat, "+
 			"lon = :lon, "+
 			"name = :name, "+
@@ -433,7 +432,7 @@ func saveGymRecord(db *sqlx.DB, gym *Gym) {
 	createGymWebhooks(oldGym, gym)
 }
 
-func UpdateGymRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsOutProto) string {
+func UpdateGymRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
 		panic(err)
@@ -448,7 +447,7 @@ func UpdateGymRecordWithFortDetailsOutProto(db *sqlx.DB, fort *pogo.FortDetailsO
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGymInfoProto(db *sqlx.DB, gymInfo *pogo.GymGetInfoOutProto) string {
+func UpdateGymRecordWithGymInfoProto(db DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		panic(err)
