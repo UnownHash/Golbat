@@ -32,7 +32,7 @@ import (
 )
 
 var db *sqlx.DB
-var voltDb *sqlx.DB
+var inMemoryDb *sqlx.DB
 var dbDetails decoder.DbDetails
 
 func main() {
@@ -84,32 +84,42 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
-	voltDb, err = sqlx.Open("sqlite3", ":memory:")
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
+	if config.Config.InMemory {
+		// Initialise in memory db
+		inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
+		if err != nil {
+			log.Fatal(err)
+			return
+		}
 
-	voltDb.SetMaxOpenConns(1)
+		inMemoryDb.SetMaxOpenConns(1)
 
-	pingErr = voltDb.Ping()
-	if pingErr != nil {
-		log.Fatal(pingErr)
-		return
-	}
+		pingErr = inMemoryDb.Ping()
+		if pingErr != nil {
+			log.Fatal(pingErr)
+			return
+		}
 
-	// Create database
-	content, fileErr := ioutil.ReadFile("sql/voltdb/create.sql")
+		// Create database
+		content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
 
-	if fileErr != nil {
-		log.Fatal(err)
-	}
+		if fileErr != nil {
+			log.Fatal(err)
+		}
 
-	voltDb.MustExec(string(content))
+		inMemoryDb.MustExec(string(content))
 
-	dbDetails = decoder.DbDetails{
-		PokemonDb: voltDb,
-		GeneralDb: db,
+		dbDetails = decoder.DbDetails{
+			PokemonDb:       inMemoryDb,
+			UsePokemonCache: false,
+			GeneralDb:       db,
+		}
+	} else {
+		dbDetails = decoder.DbDetails{
+			PokemonDb:       db,
+			UsePokemonCache: true,
+			GeneralDb:       db,
+		}
 	}
 
 	if config.Config.DebugLog == true {
@@ -117,11 +127,16 @@ func main() {
 	}
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
-	//StartStatsLogger(voltDb) // clear internal db
 
-	//if config.Config.Archive == true {
-	StartDatabaseArchiver(voltDb)
-	//}
+	StartStatsLogger(db)
+
+	if config.Config.InMemory {
+		StartInMemoryCleardown(inMemoryDb)
+	} else {
+		if config.Config.Archive == true {
+			StartDatabaseArchiver(db)
+		}
+	}
 
 	r := gin.New()
 	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
@@ -462,7 +477,7 @@ func QueryPokemon(c *gin.Context) {
 	// This is bad
 
 	log.Infof("Perform query API: [%d] %s", len(query), query)
-	rows, err := voltDb.Query(query)
+	rows, err := inMemoryDb.Query(query)
 	if err != nil {
 		log.Infof("Error executing query: %s", err)
 		c.String(http.StatusInternalServerError, err.Error())

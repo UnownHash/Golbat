@@ -5,6 +5,7 @@ import (
 )
 
 type DbDetails struct {
-	PokemonDb *sqlx.DB
-	GeneralDb *sqlx.DB
+	PokemonDb       *sqlx.DB
+	UsePokemonCache bool
+	GeneralDb       *sqlx.DB
 }

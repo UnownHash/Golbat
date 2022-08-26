@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"time"
 )
 
@@ -30,6 +31,34 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
+			if config.Config.Stats {
+				result, err = db.Exec("call createStatsAndArchive();")
+			} else {
+				result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
+			}
+			elapsed := time.Since(start)
+
+			if err != nil {
+				log.Errorf("DB - Archive of pokemon table error %s", err)
+				return
+			}
+
+			rows, _ := result.RowsAffected()
+			log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+		}
+	}()
+}
+
+func StartInMemoryCleardown(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+
+			var result sql.Result
+			var err error
+
 			unix := time.Now().Unix()
 
 			result, err = db.Exec(
@@ -42,9 +71,9 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 				log.Errorf("DB - Archive of pokemon table error %s", err)
 				return
 			}
-			_ = result
-			//rows, _ := result.RowsAffected()
-			log.Infof("DB - Archive of pokemon table took %s", elapsed)
+
+			rows, _ := result.RowsAffected()
+			log.Infof("DB - Cleardown of in-memory pokemon table took %s (%d rows)", elapsed, rows)
 
 		}
 	}()

@@ -107,37 +107,21 @@ type Pokemon struct {
 //)
 
 func getPokemonRecord(db DbDetails, encounterId string) (*Pokemon, error) {
-	//inMemoryPokemon := pokemonCache.Get(encounterId)
-	//if inMemoryPokemon != nil {
-	//	pokemon := inMemoryPokemon.Value()
-	//	return &pokemon, nil
-	//}
+	if db.UsePokemonCache {
+		inMemoryPokemon := pokemonCache.Get(encounterId)
+		if inMemoryPokemon != nil {
+			pokemon := inMemoryPokemon.Value()
+			return &pokemon, nil
+		}
+	}
 	pokemon := Pokemon{}
 
-	row := db.PokemonDb.QueryRow("SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
-		"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
-		"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
-		"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
-		"FROM pokemon WHERE id = ?", encounterId)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//defer stmt.Close()
-
-	//var row *sqlx.Row
-	//row = stmt.QueryRowx(encounterId)
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-
-	err := row.Scan(&pokemon.Id, &pokemon.PokemonId, &pokemon.Lat, &pokemon.Lon,
-		&pokemon.SpawnId, &pokemon.ExpireTimestamp, &pokemon.AtkIv, &pokemon.DefIv,
-		&pokemon.StaIv, &pokemon.Move1, &pokemon.Move2, &pokemon.Gender, &pokemon.Form,
-		&pokemon.Cp, &pokemon.Level, &pokemon.Weather, &pokemon.Costume, &pokemon.Weight, &pokemon.Size,
-		&pokemon.Capture1, &pokemon.Capture2, &pokemon.Capture3, &pokemon.DisplayPokemonId, &pokemon.PokestopId,
-		&pokemon.Updated, &pokemon.FirstSeenTimestamp,
-		&pokemon.Changed, &pokemon.CellId, &pokemon.ExpireTimestampVerified, &pokemon.Shiny,
-		&pokemon.Username, &pokemon.Pvp, &pokemon.IsEvent, &pokemon.SeenType)
+	err := db.PokemonDb.Get(&pokemon,
+		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
+			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
+			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
+			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
+			"FROM pokemon WHERE id = ?", encounterId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -147,7 +131,9 @@ func getPokemonRecord(db DbDetails, encounterId string) (*Pokemon, error) {
 		return nil, err
 	}
 
-	//	pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+	if db.UsePokemonCache {
+		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+	}
 	return &pokemon, nil
 }
 
@@ -181,49 +167,25 @@ func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
 	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
-		named, i, err2 := db.PokemonDb.BindNamed("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		res, err := db.PokemonDb.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
 			":gender, :form, :cp, :level, :weather, :costume, :weight, :size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
-			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type);", pokemon)
+			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
+			pokemon)
 
-		if err2 != nil {
+		if err != nil {
+			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+			log.Errorf("Full structure: %+v", pokemon)
 			return
 		}
 
-		//var params []interface{}
-		//params = make([]interface{}, 0)
-		//params = append(params, named)
-		//params = append(params, i...)
-
-		res, erre := db.PokemonDb.Exec(named, i...)
-		_, _ = erre, res
-		//err4 := row.Scan()
-		_, _ = named, i //, row, err3, err4, res
-		//_, _, _, _
-		//rows, err := db.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
-		//	"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3,"+
-		//	"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-		//	"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
-		//	"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
-		//	":gender, :form, :cp, :level, :weather, :costume, :weight, :size, :capture_1, :capture_2, :capture_3,"+
-		//	":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
-		//	":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
-		//	pokemon)
-		//
-		//if err != nil {
-		//	log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
-		//	log.Errorf("Full structure: %+v", pokemon)
-		//	return
-		//}
-
-		//_, _ = rows, err
+		_, _ = res, err
 	} else {
-
-		named, i, _ := db.PokemonDb.BindNamed("UPDATE pokemon SET "+
+		res, err := db.PokemonDb.NamedExec("UPDATE pokemon SET "+
 			"pokestop_id = :pokestop_id, "+
 			"spawn_id = :spawn_id, "+
 			"lat = :lat, "+
@@ -259,25 +221,20 @@ func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
 			"is_event = :is_event "+
 			"WHERE id = :id", pokemon,
 		)
-		//var params []interface{}
-		//params = make([]interface{}, 0)
-		//params = append(params, named)
-		//params = append(params, i...)
-
-		_, err := db.PokemonDb.Exec(named, i...)
-
 		if err != nil {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 			log.Errorf("Full structure: %+v", pokemon)
 			return
 		}
-		//rows, rowsErr := res.RowsAffected()
-		//log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
+		rows, rowsErr := res.RowsAffected()
+		log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
 
-		//_, _ = res, err
+		_, _ = res, err
 	}
 
-	pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
+	if db.UsePokemonCache {
+		pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
+	}
 	createPokemonWebhooks(oldPokemon, pokemon)
 }
 
