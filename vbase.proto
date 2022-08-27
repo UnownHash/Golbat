@@ -82,6 +82,7 @@ enum AdType {
 	AD_TYPE_SPONSORED_BALLOON_WASABI = 3;
 	AD_TYPE_SPONSORED_BALLOON_GOOGLE_MANAGED_AD = 4;
 	AD_TYPE_SPONSORED_BALLOON_AR_AD = 5;
+	AD_TYPE_SPONSORED_BALLOON_VIDEO = 6;
 }
 
 enum AssetTelemetryIds {
@@ -2805,6 +2806,8 @@ enum HoloPokemonMove {
 	SHADOW_FORCE = 371;
 	METEOR_BEAM = 372;
 	WATER_SHURIKEN_FAST = 373;
+	FUSION_BOLT = 374;
+	FUSION_FLARE = 375;
 }
 
 enum HoloPokemonMovementType {
@@ -3412,11 +3415,6 @@ enum PermissionFlowStepTelemetryIds {
 	PERMISSION_FLOW_STEP_TELEMETRY_IDS_ACTIVITY_PERMISSIONS = 4;
 }
 
-enum PermissionStatus {
-	PERMISSION_STATUS_granted = 0;
-	PERMISSION_STATUS_denied = 1;
-}
-
 enum PermissionType {
 	PERMISSION_TYPE_UNSET = 0;
 	PERMISSION_TYPE_READ_CONTACTS = 1;
@@ -3663,6 +3661,7 @@ enum RaidLevel {
 	RAID_LEVEL_MEGA = 6;
 	RAID_LEVEL_MEGA_5 = 7;
 	RAID_LEVEL_ULTRA_BEAST = 8;
+	RAID_LEVEL_EXTENDED_EGG = 9;
 }
 
 enum RaidLocationRequirement {
@@ -4210,6 +4209,7 @@ message ActionLogEntry {
 		BuddyConsumablesLogEntry buddy_consumables = 24;
 		CompleteReferralMilestoneLogEntry complete_referral_milestone = 25;
 		DailyAdventureIncenseLogEntry daily_adventure_incense = 26;
+		CompleteRoutePlayLogEntry complete_route_play = 27;
 	}
 
 	int64 timestamp_ms = 1;
@@ -6133,6 +6133,7 @@ message AwardedRouteBadge {
 	double ob_lat = 15;
 	double ob_lng = 16;
 	int64 ob_int64_2 = 17;
+	RouteBadgeLevel.BadgeLevel badge_level = 18;
 }
 
 message AwardedRouteStamp {
@@ -7796,6 +7797,7 @@ message CombatCompetitiveSeasonSettingsProto {
 	repeated uint64 season_end_time_timestamp = 1;
 	float rating_adjustment_percentage = 2;
 	float ranking_adjustment_percentage = 3;
+	int32 ob_int32 = 4;
 }
 
 message CombatDefensiveInputChallengeSettings {
@@ -8518,6 +8520,12 @@ message CompleteReferralMilestoneLogEntry {
 	repeated QuestRewardProto reward = 2;
 }
 
+message CompleteRoutePlayLogEntry {
+	RouteBadgeLevel.BadgeLevel badge_level = 1;
+	string route_image_url = 2;
+	int32 uniquely_acquired_stamp_count = 3;
+}
+
 message CompleteSnapshotSessionOutProto {
 	enum Status {
 		UNSET = 0;
@@ -9087,11 +9095,13 @@ message DeleteAccountEmailOnFileResponse {
 		ERROR_DUPLICATE_REQUEST = 6;
 		ERROR_HELPSHIFT_ERROR = 7;
 		ERROR_UNKNOWN = 8;
+		ERROR_CODENAME_NOT_ON_FILE = 9;
 	}
 
 	Status status = 1;
 	string error_message = 2;
 	string confirmation_email = 3;
+	bool has_apple_provider = 4;
 }
 
 message DeleteAccountRequest {
@@ -10703,10 +10713,29 @@ message GM18SettingsProto {
 		string ob_string = 1;
 		int32 ob_int32 = 2;
 		bool ob_bool = 3;
+		repeated string ob_list_string = 4;
 	}
 
 	bool ob_bool = 1;
 	repeated GM18Message ob_gm_18_message = 2;
+}
+
+message GM19SettingsProto {
+	message GM19_1 {
+		float ob_float = 1;
+		int32 ob_int32 = 2;
+	}
+
+	message GM19_2 {
+		float ob_float = 1;
+		int32 ob_int32 = 2;
+		string ob_string = 3;
+	}
+
+	bool ob_bool_1 = 1;
+	GM19_2 ob_gm19_2 = 2;
+	bool ob_bool_2 = 3;
+	GM19_1 ob_gm19_1 = 4;
 }
 
 message GM1SettingsProto {
@@ -10718,6 +10747,25 @@ message GM1SettingsProto {
 	Activity activity = 1;
 	int32 ob_int32_1 = 2;
 	int32 ob_int32_2 = 3;
+}
+
+message GM20SettingsProto {
+	bool ob_bool_1 = 1;
+	bool ob_bool_2 = 2;
+	bool ob_bool_3 = 3;
+	repeated ObGM20Setting ob_list_gm20 = 4;
+}
+
+message GM21SettingsProto {
+	bool ob_bool_1 = 1;
+	bool ob_bool_2 = 2;
+	int32 ob_int32_1 = 3;
+	int32 ob_int32_2 = 4;
+	int64 ob_int64 = 5;
+}
+
+message GM22SettingsProto {
+	int32 ob_int32 = 5;
 }
 
 message GM2SettingsProto {
@@ -10935,6 +10983,10 @@ message GameMasterClientTemplateProto {
 	DailyAdventureIncenseSettingsProto daily_adventure_incense_settings = 151;
 	GM17SettingsProto ob_gm_17_settings = 152;
 	GM18SettingsProto ob_gm_18_settings = 153;
+	GM19SettingsProto ob_gm_19_settings = 154;
+	GM20SettingsProto ob_gm_20_settings = 155;
+	GM21SettingsProto ob_gm_21_settings = 156;
+	GM22SettingsProto ob_gm_22_settings = 157;
 }
 
 message GameMasterLocalProto {
@@ -11263,6 +11315,7 @@ message GetBuddyWalkedOutProto {
 }
 
 message GetBuddyWalkedProto {
+	bool buddy_home_widget_active = 1;
 }
 
 message GetClientFeatureFlagsRequest {
@@ -12700,6 +12753,7 @@ message GiftingEligibilityStatusProto {
 		FAILURE_FRIEND_DOES_NOT_EXIST = 7;
 		FAILURE_FRIEND_LEVEL = 8;
 		FAILURE_FRIEND_HAS_TICKET = 9;
+		FAILURE_FRIEND_OPT_OUT_RECEIVE_TICKET_GIFTS = 10;
 	}
 
 	repeated Status sender_check_status = 1;
@@ -12713,8 +12767,14 @@ message GiftingIapItemProto {
 }
 
 message GiftingSettingsProto {
+	message GitData {
+		float ob_float_1 = 1;
+		float ob_float_2 = 2;
+	}
+
 	bool ob_feature_enabled = 1;
 	int32 ob_int32 = 2;
+	repeated GitData ob_git_data_list = 3;
 }
 
 message GlobalEventTicketAttributesProto {
@@ -13822,6 +13882,7 @@ message InviteGameRequest {
 	string friend_id = 1;
 	string friend_nia_account_id = 2;
 	string app_key = 3;
+	ReferralProto referral = 4;
 }
 
 message InviteGameResponse {
@@ -15457,6 +15518,26 @@ message ObFieldMessageOrResponseProtoTwo {
 	repeated ObCombatMismatchData ob_combat_mismatch_data = 2;
 }
 
+message ObGM20Setting {
+	string ob_string_1 = 1;
+	string ob_string_2 = 2;
+	repeated ObGM20SettingSub ob_list_gm20sub = 3;
+	string ob_string_3 = 4;
+}
+
+message ObGM20SettingSub {
+	int64 ob_int64_1 = 1;
+	int64 ob_int64_2 = 2;
+	repeated string ob_list_string = 3;
+	repeated ObGM20SettingSub1 ob_gm20_sub_1 = 4;
+}
+
+message ObGM20SettingSub1 {
+	string ob_string = 1;
+	int64 ob_int64_1 = 2;
+	int64 ob_int64_2 = 3;
+}
+
 message ObMegaEvolvePokemonProtoField {
 	message ObField {
 		int32 ob_field_int32_1 = 1;
@@ -15479,7 +15560,7 @@ message ObMethodUpdatePostcardOutProto {
 	}
 
 	Result result = 1;
-	repeated PostcardDisplayProto ob_postcard_display = 2;
+	PostcardDisplayProto ob_postcard_display = 2;
 }
 
 message ObMethodUpdatePostcardOutProto1 {
@@ -15492,7 +15573,7 @@ message ObMethodUpdatePostcardOutProto1 {
 	}
 
 	Result result = 1;
-	PostcardDisplayProto ob_postcard_display = 2;
+	repeated PostcardDisplayProto ob_postcard_display = 2;
 }
 
 message ObNewGlobalSetting {
@@ -15508,6 +15589,7 @@ message ObNewGlobalSetting1 {
 	int32 ob_new_global_setting_int32 = 5;
 	float ob_new_global_setting_float = 6;
 	string ob_new_global_setting_string_2 = 7;
+	int32 ob_new_global_setting_int32_1 = 8;
 }
 
 message ObNewGlobalSetting2 {
@@ -15533,6 +15615,7 @@ message ObNewGlobalSetting6 {
 
 message ObNewGlobalSetting7 {
 	bool ob_enabled = 1;
+	bool ob_bool = 2;
 }
 
 message ObPokemonSetting {
@@ -16235,6 +16318,7 @@ message PlayerPreferencesProto {
 	BattlePartiesProto battle_parties = 2;
 	string search_filter_preference_base_64 = 3;
 	PostcardTrainerInfoSharingPreference postcard_trainer_info_sharing_preference = 4;
+	bool opt_out_of_receiving_ticket_gifts = 6;
 }
 
 message PlayerProfileOutProto {
@@ -16611,6 +16695,19 @@ message PokedexEntryProto {
 	repeated PokemonDisplayProto.Form captured_shiny_forms = 17;
 	map<string, PokedexCategoryStatus> category_status = 18;
 	repeated PokemonDisplayProto.Alignment captured_shiny_alignments = 19;
+	PokedexStatsProto stats = 20;
+	map<string, PokedexStatsProto> stats_for_forms = 21;
+}
+
+message PokedexStatProto {
+	PokemonStatValueProto min_value = 1;
+	PokemonStatValueProto max_value = 2;
+}
+
+message PokedexStatsProto {
+	int32 num_pokemon_tracked = 1;
+	PokedexStatProto height = 2;
+	PokedexStatProto weight = 3;
 }
 
 message PokemonBulkUpgradeSettingsProto {
@@ -19452,6 +19549,12 @@ message PokemonStaminaUpdateProto {
 	int32 updated_stamina = 2;
 }
 
+message PokemonStatValueProto {
+	fixed64 pokemon_id = 1;
+	double value = 2;
+	int64 pokemon_creation_time_ms = 3;
+}
+
 message PokemonStatsAttributesProto {
 	int32 base_stamina = 1;
 	int32 base_attack = 2;
@@ -20688,6 +20791,7 @@ message RaidInfoProto {
 	bool is_free = 11;
 	string campaign_id = 12;
 	Item raid_ball = 14;
+	repeated RaidVisualEffect visual_effects = 15;
 }
 
 message RaidInvitationDetails {
@@ -20808,6 +20912,12 @@ message RaidTicketSettingsProto {
 
 message RaidTicketsProto {
 	repeated RaidTicketProto raid_ticket = 1;
+}
+
+message RaidVisualEffect {
+	string effect_asset_key = 1;
+	int64 start_millis = 2;
+	int64 stop_millis = 3;
 }
 
 message RangeProto {
@@ -21054,6 +21164,11 @@ message ReferralMilestonesProto {
 	map<string, MilestoneProto> milestone = 5;
 }
 
+message ReferralProto {
+	string referral_code = 1;
+	string referral_link = 2;
+}
+
 message ReferralSettingsProto {
 	message RecentFeatureProto {
 		EventSectionProto.BonusBoxProto.IconType icon_type = 1;
@@ -21227,16 +21342,6 @@ message ReportAdFeedbackResponse {
 }
 
 message ReportAdInteractionProto {
-	oneof InteractionType {
-		ViewImpressionInteraction view_impression = 5;
-		ViewFullscreenInteraction view_fullscreen = 6;
-		FullScreenInteraction fullscreen_interaction = 7;
-		CTAClickInteraction cta_clicked = 8;
-		AdSpawnInteraction ad_spawned = 9;
-		AdDismissalInteraction ad_dismissed = 10;
-		ViewWebArInteraction view_web_ar = 11;
-	}
-
 	enum AdType {
 		AD_TYPE_UNKNOWN = 0;
 		AD_TYPE_SPONSORED_GIFT = 1;
@@ -21244,6 +21349,30 @@ message ReportAdInteractionProto {
 		AD_TYPE_SPONSORED_BALLOON_WASABI = 3;
 		AD_TYPE_SPONSORED_BALLOON_GOOGLE_MANAGED_AD = 4;
 		AD_TYPE_SPONSORED_BALLOON_AR_AD = 5;
+		AD_TYPE_SPONSORED_BALLOON_VIDEO_AD = 6;
+	}
+
+	message GoogleManagedAdDetails {
+		string gam_order_id = 1;
+		string gam_line_item_id = 2;
+		string gam_creative_id = 3;
+	}
+
+	oneof interaction_type {
+		ViewImpressionInteraction view_impression = 5;
+		ViewFullscreenInteraction view_fullscreen = 6;
+		FullScreenInteraction fullscreen_interaction = 7;
+		ViewWebArInteraction view_web_ar = 11;
+		CTAClickInteraction cta_clicked = 8;
+		AdSpawnInteraction ad_spawned = 9;
+		AdDismissalInteraction ad_dismissed = 10;
+		VideoAdLoaded video_ad_loaded = 12;
+		VideoAdBalloonOpened video_ad_balloon_opened = 13;
+		VideoAdClickedOnBalloonCta video_ad_clicked_on_balloon_cta = 14;
+		VideoAdOpened video_ad_opened = 15;
+		VideoAdClosed video_ad_closed = 16;
+		VideoAdPlayerRewarded video_ad_player_rewarded = 17;
+		VideoAdCTAClicked video_ad_cta_clicked = 18;
 	}
 
 	message ViewImpressionInteraction {
@@ -21251,20 +21380,23 @@ message ReportAdInteractionProto {
 		bool is_persisted_gift = 2;
 	}
 
+	message ViewFullscreenInteraction {
+		string fullscreen_image_url = 1;
+	}
+
 	message ViewWebArInteraction {
 		string web_ar_url = 1;
 	}
 
-	message AdDismissalInteraction {
-		enum AdDismissalType {
-			AD_DISMISSAL_UNKNOWN = 0;
-			AD_DISMISSAL_TR_DISPLACES_AD_BALLOON = 1;
-			AD_DISMISSAL_NEW_AD_BALLOON_DISPLACES_OLD = 2;
-			AD_DISMISSAL_AD_BALLOON_AUTO_DISMISS = 3;
-			AD_DISMISSAL_PLAYER_OPTED_OUT_OF_ADS = 4;
-		}
+	message FullScreenInteraction {
+		string fullscreen_image_url = 1;
+		int64 total_residence_time_ms = 2;
+		int64 time_away_ms = 3;
+		bool took_screenshot = 4;
+	}
 
-		AdDismissalType ad_dismissal_type = 1;
+	message CTAClickInteraction {
+		string cta_url = 6;
 	}
 
 	message AdSpawnInteraction {
@@ -21280,25 +21412,48 @@ message ReportAdInteractionProto {
 		AdInhibitionType ad_inhibition_type = 2;
 	}
 
-	message FullScreenInteraction {
-		string fullscreen_image_url = 1;
-		int64 total_residence_time_ms = 2;
-		int64 time_away_ms = 3;
-		bool took_screenshot = 4;
+	message AdDismissalInteraction {
+		enum AdDismissalType {
+			AD_DISMISSAL_UNKNOWN = 0;
+			AD_DISMISSAL_TR_DISPLACES_AD_BALLOON = 1;
+			AD_DISMISSAL_NEW_AD_BALLOON_DISPLACES_OLD = 2;
+			AD_DISMISSAL_AD_BALLOON_AUTO_DISMISS = 3;
+			AD_DISMISSAL_PLAYER_OPTED_OUT_OF_ADS = 4;
+		}
+
+		AdDismissalType ad_dismissal_type = 1;
 	}
 
-	message CTAClickInteraction {
-		string cta_url = 6;
+	message VideoAdLoaded {
+		string video_url = 1;
+		int64 total_load_time_ms = 2;
 	}
 
-	message ViewFullscreenInteraction {
-		string fullscreen_image_url = 1;
+	message VideoAdBalloonOpened {
+		string video_url = 1;
 	}
 
-	message GoogleManagedAdDetails {
-		string gam_order_id = 1;
-		string gam_line_item_id = 2;
-		string gam_creative_id = 3;
+	message VideoAdClickedOnBalloonCta {
+		string video_url = 1;
+	}
+
+	message VideoAdOpened {
+		string video_url = 1;
+	}
+
+	message VideoAdClosed {
+		string video_url = 1;
+		bool complete_video_watched = 2;
+		int64 total_watch_time_ms = 3;
+	}
+
+	message VideoAdPlayerRewarded {
+		string video_url = 1;
+	}
+
+	message VideoAdCTAClicked {
+		string video_url = 1;
+		string cta_url = 2;
 	}
 
 	string game_id = 1;
@@ -21406,6 +21561,15 @@ message RouteActivityType {
 	}
 }
 
+message RouteBadgeLevel {
+	enum BadgeLevel {
+		ROUTE_BADGE_UNSET = 0;
+		ROUTE_BADGE_BRONZE = 1;
+		ROUTE_BADGE_SILVER = 2;
+		ROUTE_BADGE_GOLD = 3;
+	}
+}
+
 message RouteBadgeListEntry {
 	string route_id = 1;
 	RouteType route_type = 2;
@@ -21502,6 +21666,7 @@ message RoutePlayProto {
 	int64 expiration_time_ms = 11;
 	int64 start_time_ms = 12;
 	RouteType route_type = 13;
+	int32 uniquely_acquired_stamp_count = 14;
 }
 
 message RoutePlaySettingsProto {
@@ -22615,6 +22780,12 @@ message SponsoredGeofenceGiftSettingsProto {
 		string campaign_identifier = 7;
 	}
 
+	message ObSponsoredGeofence {
+		string ob_string_1 = 1;
+		string ob_string_2 = 2;
+		string ob_string_3 = 3;
+	}
+
 	bool gift_persistence_enabled = 1;
 	int32 gift_persistence_time_ms = 2;
 	int32 map_presentation_time_ms = 3;
@@ -22630,6 +22801,8 @@ message SponsoredGeofenceGiftSettingsProto {
 	SponsoredGeofenceGiftDetailsProto sponsored_geofence_gift_details = 13;
 	int32 ob_int32_1 = 14;
 	int32 ob_int32_2 = 15;
+	bool ob_bool_1 = 16;
+	ObSponsoredGeofence ob_sponsored_geofence = 17;
 }
 
 message SponsoredPoiFeedbackSettingsProto {
