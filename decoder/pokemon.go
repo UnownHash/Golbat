@@ -314,7 +314,6 @@ func (pokemon *Pokemon) updateFromWild(db DbDetails, wildPokemon *pogo.WildPokem
 	pokemon.Lat = wildPokemon.Latitude
 	pokemon.Lon = wildPokemon.Longitude
 	spawnId, _ := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
-	pokemon.SpawnId = null.IntFrom(spawnId)
 	pokemon.Gender = null.IntFrom(int64(wildPokemon.Pokemon.PokemonDisplay.Gender))
 	pokemon.Form = null.IntFrom(int64(wildPokemon.Pokemon.PokemonDisplay.Form))
 	pokemon.Costume = null.IntFrom(int64(wildPokemon.Pokemon.PokemonDisplay.Costume))
@@ -574,6 +573,12 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db DbDetails, encounterD
 	pokemon.Weather = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition))
 	pokemon.Lat = encounterData.Pokemon.Latitude
 	pokemon.Lon = encounterData.Pokemon.Longitude
+
+	if pokemon.CellId.Valid == false {
+		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
+		cellID := s2.CellIDFromLatLng(centerCoord).Parent(15)
+		pokemon.CellId = null.IntFrom(int64(cellID))
+	}
 
 	pokemon.Shiny = null.BoolFrom(encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny)
 	pokemon.Username = null.StringFrom("Account")

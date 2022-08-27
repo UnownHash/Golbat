@@ -3,6 +3,7 @@ package webhooks
 import (
 	"encoding/json"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/exp/slices"
 	"golbat/config"
 	"sync"
 )
@@ -58,36 +59,47 @@ func AddMessage(webhookType string, message interface{}) {
 }
 
 func collectHooks() []WebhookQueue {
-
 	collectionAccess.Lock()
 	currentCollection := webhookCollections
 	SetMaps()
 	collectionAccess.Unlock()
 
-	var totalCollection []WebhookMessage
-	totalCollection = append(totalCollection, currentCollection[GymDetails].Messages...)
-	totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
-	totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
-	totalCollection = append(totalCollection, currentCollection[Quest].Messages...)
-	totalCollection = append(totalCollection, currentCollection[Invasion].Messages...)
-	totalCollection = append(totalCollection, currentCollection[Pokestop].Messages...)
-
 	var destinations []WebhookQueue
 
-	if len(totalCollection) > 0 {
-		log.Printf("There are %d webhooks to send", len(totalCollection))
-		output, _ := json.Marshal(totalCollection)
+	for _, hook := range config.Config.Webhooks {
 
-		for _, url := range config.Config.Webhooks {
+		var totalCollection []WebhookMessage
+		if hook.Types == nil || slices.Contains(hook.Types, "gym") {
+			totalCollection = append(totalCollection, currentCollection[GymDetails].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "raid") {
+			totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "pokemon") {
+			totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "quest") {
+			totalCollection = append(totalCollection, currentCollection[Quest].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "invasion") {
+			totalCollection = append(totalCollection, currentCollection[Invasion].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "pokestop") {
+			totalCollection = append(totalCollection, currentCollection[Pokestop].Messages...)
+		}
+		log.Infof("There are %d webhooks to send to %s", len(totalCollection), hook.Url)
+
+		if len(totalCollection) > 0 {
+			output, _ := json.Marshal(totalCollection)
+
 			collection := WebhookQueue{
-				url:     url,
+				url:     hook.Url,
 				webhook: output,
 			}
 
 			destinations = append(destinations, collection)
 		}
-	} else {
-		log.Debugln("There are no webhooks to send")
+
 	}
 
 	return destinations

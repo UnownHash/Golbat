@@ -115,7 +115,7 @@ func main() {
 
 	logLevel := log.InfoLevel
 
-	if config.Config.DebugLog == true {
+	if config.Config.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
 	SetupLogger(logLevel)
@@ -128,9 +128,17 @@ func main() {
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)
 	} else {
-		if config.Config.Archive == true {
+		if config.Config.Cleanup.Pokemon == true {
 			StartDatabaseArchiver(db)
 		}
+	}
+
+	if config.Config.Cleanup.Incidents == true {
+		StartIncidentExpiry(db)
+	}
+
+	if config.Config.Cleanup.Quests == true {
+		StartQuestExpiry(db)
 	}
 
 	r := gin.New()

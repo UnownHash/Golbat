@@ -50,7 +50,7 @@ type Gym struct {
 	PowerUpLevel          null.Int    `db:"power_up_level"`
 	PowerUpPoints         null.Int    `db:"power_up_points"`
 	PowerUpEndTimestamp   null.Int    `db:"power_up_end_timestamp"`
-
+	Description           null.String `db:"description"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -107,7 +107,7 @@ func getGymRecord(db DbDetails, fortId string) (*Gym, error) {
 	}
 	gym := Gym{}
 
-	err := db.GeneralDb.Get(&gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp FROM gym WHERE id = ?", fortId)
+	err := db.GeneralDb.Get(&gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description FROM gym WHERE id = ?", fortId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -185,7 +185,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		if fortData.GymDisplay != nil {
 			totalCp := int64(fortData.GymDisplay.TotalGymCp)
 			if gym.TotalCp.Int64-totalCp > 100 || totalCp-gym.TotalCp.Int64 > 100 {
-				gym.TotalCp = null.IntFrom(int64(fortData.GymDisplay.TotalGymCp))
+				gym.TotalCp = null.IntFrom(totalCp)
 			}
 		} else {
 			gym.TotalCp = null.IntFrom(0)
@@ -238,14 +238,16 @@ func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym 
 }
 
 func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *Gym {
-	//gym.Id = gymData.Fo
-	//gym.Lat = gymData.Latitude
-	//gym.Lon = gymData.Longitude
+	gym.Id = gymData.GymStatusAndDefenders.PokemonFortProto.FortId
+	gym.Lat = gymData.GymStatusAndDefenders.PokemonFortProto.Latitude
+	gym.Lon = gymData.GymStatusAndDefenders.PokemonFortProto.Longitude
+
 	// This will have gym defenders in it...
 	if len(gymData.Url) > 0 {
 		gym.Url = null.StringFrom(gymData.Url)
 	}
 	gym.Name = null.StringFrom(gymData.Name)
+	gym.Description = null.StringFrom(gymData.Description)
 
 	return gym
 }
@@ -375,8 +377,8 @@ func saveGymRecord(db DbDetails, gym *Gym) {
 
 	log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.GeneralDb.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp)", gym)
+		res, err := db.GeneralDb.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
 
 		if err != nil {
 			log.Errorf("insert gym: %s", err)
@@ -419,7 +421,8 @@ func saveGymRecord(db DbDetails, gym *Gym) {
 			"ar_scan_eligible = :ar_scan_eligible, "+
 			"power_up_level = :power_up_level, "+
 			"power_up_points = :power_up_points, "+
-			"power_up_end_timestamp = :power_up_end_timestamp "+
+			"power_up_end_timestamp = :power_up_end_timestamp,"+
+			"description = :description "+
 			"WHERE id = :id", gym,
 		)
 		if err != nil {
@@ -435,7 +438,7 @@ func saveGymRecord(db DbDetails, gym *Gym) {
 func UpdateGymRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
-		panic(err)
+		return err.Error()
 	}
 
 	if gym == nil {
@@ -450,7 +453,7 @@ func UpdateGymRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetails
 func UpdateGymRecordWithGymInfoProto(db DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
-		panic(err)
+		return err.Error()
 	}
 
 	if gym == nil {

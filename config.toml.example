@@ -1,0 +1,31 @@
+port = 9001             # Listening port for golbat
+
+stats = false
+inMemory = false        # Use in-memory storage for pokemon only
+
+[cleanup]
+pokemon = true          # Keep pokemon table is kept nice and short
+incidents = true        # Remove incidents after expiry
+quests = true           # Remove quests after expiry
+
+[logging]
+debug = false
+
+[database]
+user = ""
+password = ""
+address = "127.0.0.1:3306"
+db = ""
+
+# You can specify more than one webhook destination by including the [[webhooks]] section
+# multiple times.  The hook types can optionally be filtered by using the types array
+
+[[webhooks]]
+url = "http://localhost:4201"
+# types if specified can be...
+# types = ["pokemon", "gym", "invasion", "quest", "pokestop", "raid"]
+
+#[[webhooks]]
+#url = "http://localhost:4202"
+#types = ["raid"]
+

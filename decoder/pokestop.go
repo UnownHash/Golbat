@@ -8,6 +8,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
+	"golbat/tz"
 	"golbat/util"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -32,6 +33,7 @@ type Pokestop struct {
 	QuestRewards               null.String `db:"quest_rewards"`
 	QuestTemplate              null.String `db:"quest_template"`
 	QuestTitle                 null.String `db:"quest_title"`
+	QuestExpiry                null.Int    `db:"quest_expiry"`
 	CellId                     null.Int    `db:"cell_id"`
 	Deleted                    bool        `db:"deleted"`
 	LureId                     int16       `db:"lure_id"`
@@ -49,6 +51,8 @@ type Pokestop struct {
 	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards"`
 	AlternativeQuestTemplate   null.String `db:"alternative_quest_template"`
 	AlternativeQuestTitle      null.String `db:"alternative_quest_title"`
+	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry"`
+	Description                null.String `db:"description"`
 
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
@@ -104,7 +108,7 @@ func getPokestopRecord(db DbDetails, fortId string) (*Pokestop, error) {
 			"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
 			"alternative_quest_conditions, alternative_quest_rewards,"+
 			"alternative_quest_template, alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id,"+
-			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp "+
+			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
 	if err == sql.ErrNoRows {
@@ -392,6 +396,25 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	questRewards, _ := json.Marshal(rewards)
 	questTimestamp := time.Now().Unix()
 
+	questExpiry := null.NewInt(0, false)
+
+	stopTimezone, _ := tz.SearchTimezone(stop.Lat, stop.Lon)
+	if stopTimezone.Name != "" {
+		loc, err := time.LoadLocation(stopTimezone.Name)
+		if err != nil {
+			log.Warnf("Unrecognised time zone %s at %f,%f", stopTimezone.Name, stop.Lat, stop.Lon)
+		} else {
+			year, month, day := time.Now().In(loc).Date()
+			t := time.Date(year, month, day, 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+			unixTime := t.Unix()
+			questExpiry = null.IntFrom(unixTime)
+		}
+	}
+
+	if questExpiry.Valid == false {
+		questExpiry = null.IntFrom(time.Now().Unix() + 24*60*60) // Set expiry to 24 hours from now
+	}
+
 	if !haveAr {
 		stop.AlternativeQuestType = null.IntFrom(questType)
 		stop.AlternativeQuestTarget = null.IntFrom(questTarget)
@@ -400,6 +423,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.AlternativeQuestConditions = null.StringFrom(string(questConditions))
 		stop.AlternativeQuestRewards = null.StringFrom(string(questRewards))
 		stop.AlternativeQuestTimestamp = null.IntFrom(questTimestamp)
+		stop.AlternativeQuestExpiry = questExpiry
 	} else {
 		stop.QuestType = null.IntFrom(questType)
 		stop.QuestTarget = null.IntFrom(questTarget)
@@ -408,6 +432,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.QuestConditions = null.StringFrom(string(questConditions))
 		stop.QuestRewards = null.StringFrom(string(questRewards))
 		stop.QuestTimestamp = null.IntFrom(questTimestamp)
+		stop.QuestExpiry = questExpiry
 	}
 }
 
@@ -419,6 +444,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 		stop.Url = null.StringFrom(fortData.ImageUrl[0])
 	}
 	stop.Name = null.StringFrom(fortData.Name)
+	stop.Description = null.StringFrom(fortData.Description)
 
 	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
@@ -546,7 +572,8 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 				"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
 				"alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,"+
 				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
-				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp)"+
+				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
+				"quest_expiry, alternative_quest_expiry, description)"+
 				"VALUES ("+
 				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
 				":quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,"+
@@ -554,7 +581,8 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 				":alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,"+
 				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
 				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
-				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP() )",
+				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
+				":quest_expiry, :alternative_quest_expiry, :description )",
 			pokestop)
 
 		if err != nil {
@@ -585,7 +613,7 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 				"alternative_quest_target = :alternative_quest_target, "+
 				"alternative_quest_conditions = :alternative_quest_conditions, "+
 				"alternative_quest_rewards = :alternative_quest_rewards,"+
-				" alternative_quest_template = :alternative_quest_template,"+
+				"alternative_quest_template = :alternative_quest_template,"+
 				"alternative_quest_title = :alternative_quest_title,"+
 				"cell_id = :cell_id,"+
 				"lure_id = :lure_id,"+
@@ -595,7 +623,10 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 				"ar_scan_eligible = :ar_scan_eligible,"+
 				"power_up_points = :power_up_points,"+
 				"power_up_level = :power_up_level,"+
-				"power_up_end_timestamp = :power_up_end_timestamp"+
+				"power_up_end_timestamp = :power_up_end_timestamp,"+
+				"quest_expiry = :quest_expiry,"+
+				"alternative_quest_expiry = :alternative_quest_expiry,"+
+				"description = :description"+
 				" WHERE id = :id",
 			pokestop,
 		)

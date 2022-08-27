@@ -168,7 +168,7 @@ func QueryPokemon(c *gin.Context) {
 	// This is bad
 
 	log.Infof("Perform query API: [%d] %s", len(query), query)
-	rows, err := inMemoryDb.Query(query)
+	rows, err := dbDetails.PokemonDb.Query(query)
 	if err != nil {
 		log.Infof("Error executing query: %s", err)
 		c.String(http.StatusInternalServerError, err.Error())
