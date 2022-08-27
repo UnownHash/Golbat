@@ -1,35 +1,37 @@
 package config
 
 type configDefinition struct {
-	Port     int       `json:"port"`
-	Webhooks []webhook `json:"webhooks"`
-	Database database  `json:"database"`
-	Stats    bool      `json:"stats"`
-	Logging  logging   `json:"logging"`
-	InMemory bool      `json:"inMemory"`
-	Cleanup  cleanup   `json:"cleanup"`
+	Port      int       `toml:"port"`
+	Webhooks  []webhook `toml:"webhooks"`
+	Database  database  `toml:"database"`
+	Stats     bool      `toml:"stats"`
+	Logging   logging   `toml:"logging"`
+	InMemory  bool      `toml:"in_memory"`
+	Cleanup   cleanup   `toml:"cleanup"`
+	RawBearer string    `toml:"raw_bearer"`
+	ApiSecret string    `toml:"api_secret"`
 }
 
 type cleanup struct {
-	Pokemon   bool `json:"pokemon"`
-	Quests    bool `json:"quests"`
-	Incidents bool `json:"incidents"`
+	Pokemon   bool `toml:"pokemon"`
+	Quests    bool `toml:"quests"`
+	Incidents bool `toml:"incidents"`
 }
 
 type webhook struct {
-	Url   string   `json:"url"`
-	Types []string `json:"types"`
+	Url   string   `toml:"url"`
+	Types []string `toml:"types"`
 }
 
 type logging struct {
-	Debug bool `json:"debug"`
+	Debug bool `toml:"debug"`
 }
 
 type database struct {
-	Addr     string `json:"address"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Db       string `json:"db"`
+	Addr     string `toml:"address"`
+	User     string `toml:"user"`
+	Password string `toml:"password"`
+	Db       string `toml:"db"`
 }
 
 var Config configDefinition

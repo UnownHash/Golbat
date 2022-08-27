@@ -39,6 +39,5 @@ func ReadConfig() {
 	err = toml.Unmarshal([]byte(byteValue), &Config)
 	if err != nil {
 		panic(err)
-
 	}
 }

@@ -1,7 +1,9 @@
 port = 9001             # Listening port for golbat
+raw_bearer = ""         # Raw bearer (password) required
+api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
 stats = false
-inMemory = false        # Use in-memory storage for pokemon only
+in_memory = false        # Use in-memory storage for pokemon only
 
 [cleanup]
 pokemon = true          # Keep pokemon table is kept nice and short

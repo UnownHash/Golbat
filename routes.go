@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,14 @@ type InboundRawData struct {
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	var r *http.Request = c.Request
+
+	authHeader := r.Header.Get("Authorization")
+	if config.Config.RawBearer != "" {
+		if authHeader != "Bearer "+config.Config.RawBearer {
+			log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
+			return
+		}
+	}
 
 	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
@@ -149,12 +158,29 @@ func Raw(c *gin.Context) {
 }
 
 func ClearQuests(c *gin.Context) {
+	authHeader := c.Request.Header.Get("X-Golbat-Secret")
+	if config.Config.ApiSecret != "" {
+		if authHeader != config.Config.ApiSecret {
+			log.Errorf("ClearQuests: Incorrect authorisation received (%s)", authHeader)
+			c.String(http.StatusUnauthorized, "Unauthorised")
+			return
+		}
+	}
+
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
 	})
 }
 
 func QueryPokemon(c *gin.Context) {
+	authHeader := c.Request.Header.Get("X-Golbat-Secret")
+	if config.Config.ApiSecret != "" {
+		if authHeader != config.Config.ApiSecret {
+			log.Errorf("Query: Incorrect authorisation received (%s)", authHeader)
+			c.String(http.StatusUnauthorized, "Unauthorised")
+			return
+		}
+	}
 
 	data, err := c.GetRawData()
 	if err != nil {
