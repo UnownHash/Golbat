@@ -30,6 +30,7 @@ which is the latest version as of writing this.
 
 ## Run in docker
 
+0. Authenticate to [GitHub Packages's docker container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 1. copy `docker-compose.yml.example` to `docker-compose.yml`
 2. modify it as you want
 3. `docker-compose up -d`
