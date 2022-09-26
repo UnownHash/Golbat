@@ -105,6 +105,8 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			rows, _ := result.RowsAffected()
 
+			totalRows += rows
+
 			result, err = db.Exec("UPDATE pokestop " +
 				"SET " +
 				"alternative_quest_type = NULL," +
@@ -129,7 +131,7 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			decoder.ClearPokestopCache()
 
-			log.Infof("Cleanup of quest table took %s (%d rows)", elapsed, totalRows)
+			log.Infof("Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
 		}
 	}()
 }
