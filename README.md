@@ -20,13 +20,20 @@ which is the latest version as of writing this.
 
 # Instructions
 
-1. copy `config.json.example` to `config.json`
+1. copy `config.toml.example` to `config.toml`
 2. `go run .`
 
 ## Run in pm2
 
 1. `go build golbat`
 2. `pm2 start golbat`
+
+## Run in docker
+
+0. Authenticate to [GitHub Packages's docker container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+1. copy `docker-compose.yml.example` to `docker-compose.yml`
+2. modify it as you want
+3. `docker-compose up -d`
 
 # Configuration of data source
 

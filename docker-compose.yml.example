@@ -1,0 +1,20 @@
+version: '3.7'
+services:
+  golbat:
+    image: ghcr.io/dragohash/golbat:main
+    container_name: golbat
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./config.toml
+        target: /golbat/config.toml
+      # optional volumes if you want to have access to logs and persist cache
+      # comment if not needed
+      - type: volume
+        source: ${PWD}/cache
+        target: /golbat/cache
+      - type: volume
+        source: ${PWD}/logs
+        target: /golbat/logs
+    ports:
+      - "9001:9001"
