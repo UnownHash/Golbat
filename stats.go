@@ -6,6 +6,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	"golbat/decoder"
 	"time"
 )
 
@@ -85,6 +86,7 @@ func StartQuestExpiry(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
+			decoder.ClearPokestopCache()
 			result, err = db.Exec("UPDATE pokestop " +
 				"SET " +
 				"quest_type = NULL," +
@@ -124,6 +126,8 @@ func StartQuestExpiry(db *sqlx.DB) {
 			totalRows += rows
 
 			elapsed := time.Since(start)
+
+			decoder.ClearPokestopCache()
 
 			log.Infof("Cleanup of quest table took %s (%d rows)", elapsed, totalRows)
 		}

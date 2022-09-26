@@ -73,6 +73,10 @@ func init() {
 	go diskEncounterCache.Start()
 }
 
+func ClearPokestopCache() {
+	pokestopCache.DeleteAll()
+}
+
 var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	delta := math.Abs(x - y)
 	return delta < 0.000001
