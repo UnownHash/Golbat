@@ -21,7 +21,7 @@ func SetupLogger(logLevel log.Level) {
 	}
 
 	// Fork writing into two outputs
-	multiWriter := io.MultiWriter(os.Stderr, lumberjackLogger)
+	multiWriter := io.MultiWriter(os.Stdout, lumberjackLogger)
 
 	logFormatter := new(PlainFormatter)
 	logFormatter.TimestampFormat = "2006-01-02 15:04:05"
