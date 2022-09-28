@@ -270,8 +270,13 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["level"] = info.Level
 		case pogo.QuestConditionProto_WITH_BUDDY:
 			info := conditionData.GetWithBuddy()
-			infoData["min_buddy_level"] = int(info.MinBuddyLevel)
-			infoData["must_be_on_map"] = info.MustBeOnMap
+			if info != nil {
+				infoData["min_buddy_level"] = int(info.MinBuddyLevel)
+				infoData["must_be_on_map"] = info.MustBeOnMap
+			} else {
+				infoData["min_buddy_level"] = 0
+				infoData["must_be_on_map"] = false
+			}
 		case pogo.QuestConditionProto_WITH_DAILY_BUDDY_AFFECTION:
 			info := conditionData.GetWithDailyBuddyAffection()
 			infoData["min_buddy_affection_earned_today"] = info.MinBuddyAffectionEarnedToday
