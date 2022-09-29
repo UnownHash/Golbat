@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"io/ioutil"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
 	"github.com/toorop/gin-logrus"
