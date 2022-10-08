@@ -29,10 +29,12 @@ func SearchTimezone(lat, lng float64) (timezone.Result, error) {
 	return tzc.Search(lat, lng)
 }
 
+const url = "https://github.com/evansiroky/timezone-boundary-builder/releases/download/2021c/timezones-with-oceans.geojson.zip"
+
 func downloadAndBuild() (err error) {
 	log.Infof("Downloading timezone database")
 	var total int
-	err = timezone.ImportZipFile(cacheFilename, timezone.DefaultURL, func(tz timezone.Timezone) error {
+	err = timezone.ImportZipFile(cacheFilename, url, func(tz timezone.Timezone) error {
 		total += len(tz.Polygons)
 		tzc.AddTimezone(tz)
 		return nil
