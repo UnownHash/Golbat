@@ -41,11 +41,10 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 			if err != nil {
 				log.Errorf("DB - Archive of pokemon table error %s", err)
-				return
+			} else {
+				rows, _ := result.RowsAffected()
+				log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
 			}
-
-			rows, _ := result.RowsAffected()
-			log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
 		}
 	}()
 }
@@ -66,11 +65,10 @@ func StartIncidentExpiry(db *sqlx.DB) {
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of incident table error %s", err)
-				return
+			} else {
+				rows, _ := result.RowsAffected()
+				log.Infof("Cleanup of incident table took %s (%d rows)", elapsed, rows)
 			}
-
-			rows, _ := result.RowsAffected()
-			log.Infof("Cleanup of incident table took %s (%d rows)", elapsed, rows)
 		}
 	}()
 }
@@ -120,18 +118,16 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
-				return
+			} else {
+				rows, _ = result.RowsAffected()
+				totalRows += rows
+
+				elapsed := time.Since(start)
+
+				decoder.ClearPokestopCache()
+
+				log.Infof("Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
 			}
-
-			rows, _ = result.RowsAffected()
-
-			totalRows += rows
-
-			elapsed := time.Since(start)
-
-			decoder.ClearPokestopCache()
-
-			log.Infof("Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
 		}
 	}()
 }

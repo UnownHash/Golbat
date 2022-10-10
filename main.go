@@ -119,7 +119,7 @@ func main() {
 	if config.Config.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
-	SetupLogger(logLevel)
+	SetupLogger(logLevel, config.Config.Logging.SaveLogs)
 
 	log.Infoln("Golbat started")
 	webhooks.StartSender()

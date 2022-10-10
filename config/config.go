@@ -24,7 +24,8 @@ type webhook struct {
 }
 
 type logging struct {
-	Debug bool `toml:"debug"`
+	Debug    bool `toml:"debug"`
+	SaveLogs bool `toml:"save_logs" default:"true"`
 }
 
 type database struct {

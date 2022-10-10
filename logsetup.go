@@ -9,9 +9,11 @@ import (
 	"path/filepath"
 )
 
-func SetupLogger(logLevel log.Level) {
+var lumberjackLogger *lumberjack.Logger
 
-	lumberjackLogger := &lumberjack.Logger{
+func SetupLogger(logLevel log.Level, fileLoggingEnabled bool) {
+
+	lumberjackLogger = &lumberjack.Logger{
 		// Log file absolute path, os agnostic
 		Filename:   filepath.ToSlash("logs/golbat.log"),
 		MaxSize:    50, // MB
@@ -20,8 +22,13 @@ func SetupLogger(logLevel log.Level) {
 		Compress:   true, // disabled by default
 	}
 
-	// Fork writing into two outputs
-	multiWriter := io.MultiWriter(os.Stdout, lumberjackLogger)
+	var output io.Writer
+	if fileLoggingEnabled {
+		// Fork writing into two outputs
+		output = io.MultiWriter(os.Stdout, lumberjackLogger)
+	} else {
+		output = os.Stdout
+	}
 
 	logFormatter := new(PlainFormatter)
 	logFormatter.TimestampFormat = "2006-01-02 15:04:05"
@@ -29,7 +36,13 @@ func SetupLogger(logLevel log.Level) {
 
 	log.SetFormatter(logFormatter)
 	log.SetLevel(logLevel)
-	log.SetOutput(multiWriter)
+	log.SetOutput(output)
+}
+
+func RotateLogs() {
+	if lumberjackLogger != nil {
+		_ = lumberjackLogger.Rotate()
+	}
 }
 
 type PlainFormatter struct {

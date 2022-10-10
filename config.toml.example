@@ -12,6 +12,7 @@ quests = true           # Remove quests after expiry
 
 [logging]
 debug = false
+save_logs = true
 
 [database]
 user = ""
