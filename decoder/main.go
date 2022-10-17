@@ -3,6 +3,7 @@ package decoder
 import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
+	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
 	"golbat/pogo"
 	"math"
@@ -36,8 +37,10 @@ var gymCache *ttlcache.Cache[string, Gym]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
-
 var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
+
+var pokestopStripedMutex = stripedmutex.New(32)
+var pokemonStripedMutex = stripedmutex.New(128)
 
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
@@ -94,9 +97,13 @@ func UpdateFortBatch(db DbDetails, p []RawFortData) {
 		fortId := fort.Data.FortId
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT {
 
+			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
+
+			pokestopMutex.Lock()
 			pokestop, err := getPokestopRecord(db, fortId) // should check error
 			if err != nil {
 				log.Errorf("getPokestopRecord: %s", err)
+				pokestopMutex.Unlock()
 				continue
 			}
 
@@ -105,6 +112,7 @@ func UpdateFortBatch(db DbDetails, p []RawFortData) {
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell)
 			savePokestopRecord(db, pokestop)
+			pokestopMutex.Unlock()
 
 			incidents := fort.Data.PokestopDisplays
 			if incidents == nil && fort.Data.PokestopDisplay != nil {
@@ -148,56 +156,68 @@ func UpdateFortBatch(db DbDetails, p []RawFortData) {
 
 func UpdatePokemonBatch(db DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
 	for _, wild := range wildPokemonList {
-		pokemon, err := getPokemonRecord(db, strconv.FormatUint(wild.Data.EncounterId, 10))
+		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
+		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+		pokemonMutex.Lock()
+
+		pokemon, err := getPokemonRecord(db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
-			continue
+		} else {
+			if pokemon == nil {
+				pokemon = &Pokemon{}
+			}
+
+			pokemon.updateFromWild(db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), "Account")
+			savePokemonRecord(db, pokemon)
 		}
 
-		if pokemon == nil {
-			pokemon = &Pokemon{}
-		}
-
-		pokemon.updateFromWild(db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), "Account")
-		savePokemonRecord(db, pokemon)
+		pokemonMutex.Unlock()
 	}
 
 	for _, nearby := range nearbyPokemonList {
-		pokemon, err := getPokemonRecord(db, strconv.FormatUint(nearby.Data.EncounterId, 10))
+		encounterId := strconv.FormatUint(nearby.Data.EncounterId, 10)
+		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+		pokemonMutex.Lock()
+
+		pokemon, err := getPokemonRecord(db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
-			continue
-		}
+		} else {
+			if pokemon == nil {
+				pokemon = &Pokemon{}
+			}
 
-		if pokemon == nil {
-			pokemon = &Pokemon{}
+			pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), "Account")
+			savePokemonRecord(db, pokemon)
 		}
-
-		pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), "Account")
-		savePokemonRecord(db, pokemon)
+		pokemonMutex.Unlock()
 	}
 
 	for _, mapPokemon := range mapPokemonList {
-		pokemon, err := getPokemonRecord(db, strconv.FormatUint(mapPokemon.Data.EncounterId, 10))
+		encounterId := strconv.FormatUint(mapPokemon.Data.EncounterId, 10)
+		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+		pokemonMutex.Lock()
+
+		pokemon, err := getPokemonRecord(db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
-			continue
-		}
+		} else {
+			if pokemon == nil {
+				pokemon = &Pokemon{}
+			}
 
-		if pokemon == nil {
-			pokemon = &Pokemon{}
-		}
+			pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), "Account")
 
-		pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), "Account")
-
-		diskEncounterId := strconv.FormatUint(mapPokemon.Data.EncounterId, 10)
-		storedDiskEncounter := diskEncounterCache.Get(diskEncounterId)
-		if storedDiskEncounter != nil {
-			diskEncounter := storedDiskEncounter.Value()
-			diskEncounterCache.Delete(diskEncounterId)
-			pokemon.updatePokemonFromDiskEncounterProto(db, diskEncounter)
-			log.Infof("Processed stored disk encounter")
+			storedDiskEncounter := diskEncounterCache.Get(encounterId)
+			if storedDiskEncounter != nil {
+				diskEncounter := storedDiskEncounter.Value()
+				diskEncounterCache.Delete(encounterId)
+				pokemon.updatePokemonFromDiskEncounterProto(db, diskEncounter)
+				log.Infof("Processed stored disk encounter")
+			}
+			savePokemonRecord(db, pokemon)
 		}
-		savePokemonRecord(db, pokemon)
+		pokemonMutex.Unlock()
 	}
 }

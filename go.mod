@@ -12,6 +12,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.0.0
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/mattn/go-sqlite3 v1.14.14
+	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/pelletier/go-toml/v2 v2.0.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f

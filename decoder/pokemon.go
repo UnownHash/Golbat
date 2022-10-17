@@ -732,6 +732,11 @@ func UpdatePokemonRecordWithEncounterProto(db DbDetails, encounter *pogo.Encount
 	}
 
 	encounterId := strconv.FormatUint(encounter.Pokemon.EncounterId, 10)
+
+	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+	pokemonMutex.Lock()
+	defer pokemonMutex.Unlock()
+
 	pokemon, err := getPokemonRecord(db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
@@ -753,6 +758,10 @@ func UpdatePokemonRecordWithDiskEncounterProto(db DbDetails, encounter *pogo.Dis
 	}
 
 	encounterId := strconv.FormatUint(uint64(encounter.Pokemon.PokemonDisplay.DisplayId), 10)
+
+	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+	pokemonMutex.Lock()
+	defer pokemonMutex.Unlock()
 
 	pokemon, err := getPokemonRecord(db, encounterId)
 	if err != nil {

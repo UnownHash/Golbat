@@ -646,6 +646,10 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 }
 
 func UpdatePokestopRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
+	pokestopMutex.Lock()
+	defer pokestopMutex.Unlock()
+
 	pokestop, err := getPokestopRecord(db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
@@ -664,6 +668,10 @@ func UpdatePokestopWithQuest(db DbDetails, quest *pogo.FortSearchOutProto, haveA
 	if quest.ChallengeQuest == nil {
 		return "No quest"
 	}
+
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
+	pokestopMutex.Lock()
+	defer pokestopMutex.Unlock()
 
 	pokestop, err := getPokestopRecord(db, quest.FortId)
 	if err != nil {
