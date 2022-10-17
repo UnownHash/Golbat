@@ -131,25 +131,29 @@ func Raw(c *gin.Context) {
 		return
 	}
 
-	for _, entry := range protoData {
-		method := entry.Method
-		payload := entry.Base64Data
+	// Process each proto in a packet in sequence, but in a go-routine
+	go func() {
+		for _, entry := range protoData {
+			method := entry.Method
+			payload := entry.Base64Data
 
-		haveAr := globalHaveAr
-		if entry.HaveAr != nil {
-			haveAr = entry.HaveAr
+			haveAr := globalHaveAr
+			if entry.HaveAr != nil {
+				haveAr = entry.HaveAr
+			}
+
+			protoData := ProtoData{
+				Account: account,
+				Level:   level,
+				HaveAr:  haveAr,
+				Uuid:    uuid,
+			}
+			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
+
+			decode(method, &protoData)
 		}
+	}()
 
-		protoData := ProtoData{
-			Account: account,
-			Level:   level,
-			HaveAr:  haveAr,
-			Uuid:    uuid,
-		}
-		protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
-
-		go decode(method, &protoData)
-	}
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	//if err := json.NewEncoder(w).Encode(t); err != nil {
