@@ -6,6 +6,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
 	"golbat/webhooks"
@@ -99,7 +100,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(db DbDetails, fortId string) (*Gym, error) {
+func getGymRecord(db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -368,7 +369,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 
 }
 
-func saveGymRecord(db DbDetails, gym *Gym) {
+func saveGymRecord(db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(db, gym.Id)
 
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -435,7 +436,7 @@ func saveGymRecord(db DbDetails, gym *Gym) {
 	createGymWebhooks(oldGym, gym)
 }
 
-func UpdateGymRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
+func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
@@ -450,7 +451,7 @@ func UpdateGymRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetails
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGymInfoProto(db DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
+func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()

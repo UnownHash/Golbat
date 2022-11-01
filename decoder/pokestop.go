@@ -7,6 +7,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
 	"golbat/util"
@@ -94,7 +96,7 @@ type Pokestop struct {
 
 }
 
-func getPokestopRecord(db DbDetails, fortId string) (*Pokestop, error) {
+func getPokestopRecord(db db.DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
@@ -560,7 +562,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 }
 
-func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
+func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(db, pokestop.Id)
 
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
@@ -645,7 +647,7 @@ func savePokestopRecord(db DbDetails, pokestop *Pokestop) {
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func UpdatePokestopRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDetailsOutProto) string {
+func UpdatePokestopRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
@@ -664,7 +666,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db DbDetails, fort *pogo.FortDe
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
-func UpdatePokestopWithQuest(db DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
+func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
 		return "No quest"
 	}
@@ -685,4 +687,15 @@ func UpdatePokestopWithQuest(db DbDetails, quest *pogo.FortSearchOutProto, haveA
 	pokestop.updatePokestopFromQuestProto(quest, haveAr)
 	savePokestopRecord(db, pokestop)
 	return fmt.Sprintf("%s", quest.FortId)
+}
+
+func ClearQuestsWithinGeofence(dbDetails db.DbDetails, geofence geo.Geofence) {
+	res, err := db.RemoveQuests(dbDetails, geofence)
+	if err != nil {
+		log.Errorf("ClearQuest: Error removing quests: %s", err)
+		return
+	}
+	ClearPokestopCache()
+	rows, _ := res.RowsAffected()
+	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
 }

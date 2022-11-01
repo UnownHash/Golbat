@@ -1,4 +1,4 @@
-package decoder
+package db
 
 import (
 	"github.com/jmoiron/sqlx"

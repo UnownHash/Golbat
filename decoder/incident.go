@@ -5,6 +5,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"time"
@@ -30,7 +31,7 @@ type Incident struct {
 //->   `character` smallint unsigned NOT NULL,
 //->   `updated` int unsigned NOT NULL,
 
-func getIncidentRecord(db DbDetails, incidentId string) (*Incident, error) {
+func getIncidentRecord(db db.DbDetails, incidentId string) (*Incident, error) {
 	inMemoryIncident := incidentCache.Get(incidentId)
 	if inMemoryIncident != nil {
 		incident := inMemoryIncident.Value()
@@ -58,7 +59,7 @@ func hasChangesIncident(old *Incident, new *Incident) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func saveIncidentRecord(db DbDetails, incident *Incident) {
+func saveIncidentRecord(db db.DbDetails, incident *Incident) {
 	oldIncident, _ := getIncidentRecord(db, incident.Id)
 
 	if oldIncident != nil && !hasChangesIncident(oldIncident, incident) {
@@ -101,7 +102,7 @@ func saveIncidentRecord(db DbDetails, incident *Incident) {
 	createIncidentWebhooks(db, oldIncident, incident)
 }
 
-func createIncidentWebhooks(db DbDetails, oldIncident *Incident, incident *Incident) {
+func createIncidentWebhooks(db db.DbDetails, oldIncident *Incident, incident *Incident) {
 	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
 		stop, _ := getPokestopRecord(db, incident.PokestopId)
 		if stop == nil {

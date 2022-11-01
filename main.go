@@ -6,6 +6,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/webhooks"
 	"google.golang.org/protobuf/proto"
@@ -25,7 +26,7 @@ import (
 
 var db *sqlx.DB
 var inMemoryDb *sqlx.DB
-var dbDetails decoder.DbDetails
+var dbDetails db2.DbDetails
 
 func main() {
 
@@ -101,13 +102,13 @@ func main() {
 
 		inMemoryDb.MustExec(string(content))
 
-		dbDetails = decoder.DbDetails{
+		dbDetails = db2.DbDetails{
 			PokemonDb:       inMemoryDb,
 			UsePokemonCache: false,
 			GeneralDb:       db,
 		}
 	} else {
-		dbDetails = decoder.DbDetails{
+		dbDetails = db2.DbDetails{
 			PokemonDb:       db,
 			UsePokemonCache: true,
 			GeneralDb:       db,

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
 	"gopkg.in/guregu/null.v4"
 	"time"
 )
@@ -30,7 +31,7 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
-func getSpawnpointRecord(db DbDetails, spawnpointId int64) (*Spawnpoint, error) {
+func getSpawnpointRecord(db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint != nil {
 		spawnpoint := inMemorySpawnpoint.Value()
@@ -58,7 +59,7 @@ func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
 		old.DespawnSec != new.DespawnSec
 }
 
-func spawnpointUpdate(db DbDetails, spawnpoint *Spawnpoint) {
+func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
 	oldSpawnpoint, _ := getSpawnpointRecord(db, spawnpoint.Id)
 
 	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
@@ -85,7 +86,7 @@ func spawnpointUpdate(db DbDetails, spawnpoint *Spawnpoint) {
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
-func spawnpointSeen(db DbDetails, spawnpointId int64) {
+func spawnpointSeen(db db.DbDetails, spawnpointId int64) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint == nil {
 		// This should never happen, since all routes here have previously created a spawnpoint in the cache

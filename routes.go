@@ -7,6 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	"golbat/decoder"
+	"golbat/geo"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -161,6 +163,17 @@ func Raw(c *gin.Context) {
 	//}
 }
 
+/* Should really be in a separate file, move later */
+
+type ApiLocation struct {
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lon"`
+}
+
+type GolbatClearQuest struct {
+	Fence []ApiLocation `json:"fence"`
+}
+
 func ClearQuests(c *gin.Context) {
 	authHeader := c.Request.Header.Get("X-Golbat-Secret")
 	if config.Config.ApiSecret != "" {
@@ -170,6 +183,34 @@ func ClearQuests(c *gin.Context) {
 			return
 		}
 	}
+
+	var golbatClearQuest GolbatClearQuest
+	if err := c.BindJSON(&golbatClearQuest); err != nil {
+		log.Warnf("POST /api/clearQuests/ Error during post area %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence)+1)
+	for _, loc := range golbatClearQuest.Fence {
+		locations = append(locations, geo.Location{
+			Latitude:  loc.Latitude,
+			Longitude: loc.Longitude,
+		})
+	}
+
+	// Ensure the fence is closed
+	if locations[0] != locations[len(locations)-1] {
+		locations = append(locations, locations[0])
+	}
+
+	fence := geo.Geofence{
+		Fence: locations,
+	}
+
+	go func() {
+		decoder.ClearQuestsWithinGeofence(dbDetails, fence)
+	}()
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",

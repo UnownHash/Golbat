@@ -8,6 +8,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -106,7 +107,7 @@ type Pokemon struct {
 //KEY `ix_iv` (`iv`)
 //)
 
-func getPokemonRecord(db DbDetails, encounterId string) (*Pokemon, error) {
+func getPokemonRecord(db db.DbDetails, encounterId string) (*Pokemon, error) {
 	if db.UsePokemonCache {
 		inMemoryPokemon := pokemonCache.Get(encounterId)
 		if inMemoryPokemon != nil {
@@ -141,7 +142,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func savePokemonRecord(db DbDetails, pokemon *Pokemon) {
+func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 	oldPokemon, _ := getPokemonRecord(db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
@@ -300,7 +301,7 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 	}
 }
 
-func (pokemon *Pokemon) updateFromWild(db DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromWild(db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
@@ -346,7 +347,7 @@ func (pokemon *Pokemon) updateFromWild(db DbDetails, wildPokemon *pogo.WildPokem
 	}
 }
 
-func (pokemon *Pokemon) updateFromMap(db DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromMap(db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
 
 	if pokemon.Id != "" {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -406,7 +407,7 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Shiny = null.NewBool(false, false)
 }
 
-func (pokemon *Pokemon) updateFromNearby(db DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromNearby(db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
@@ -495,7 +496,7 @@ const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encou
 // timestampMs - the timestamp to be used for calculations
 // timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
 // a new exact spawnpoint record
-func (pokemon *Pokemon) updateSpawnpointInfo(db DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
+func (pokemon *Pokemon) updateSpawnpointInfo(db db.DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
 	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
 		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
 		pokemon.ExpireTimestamp = null.IntFrom(expireTimeStamp)
@@ -553,7 +554,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(db DbDetails, encounterData *pogo.EncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encounterData *pogo.EncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -617,7 +618,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db DbDetails, encounterD
 	updateStats(db, pokemon.Id, stats_encounter)
 }
 
-func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db DbDetails, encounterData *pogo.DiskEncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -725,7 +726,7 @@ func (pokemon *Pokemon) isDittoDisguised() bool {
 	return false
 }
 
-func UpdatePokemonRecordWithEncounterProto(db DbDetails, encounter *pogo.EncounterOutProto) string {
+func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.EncounterOutProto) string {
 
 	if encounter.Pokemon == nil {
 		return "No encounter"
@@ -752,7 +753,7 @@ func UpdatePokemonRecordWithEncounterProto(db DbDetails, encounter *pogo.Encount
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
-func UpdatePokemonRecordWithDiskEncounterProto(db DbDetails, encounter *pogo.DiskEncounterOutProto) string {
+func UpdatePokemonRecordWithDiskEncounterProto(db db.DbDetails, encounter *pogo.DiskEncounterOutProto) string {
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
@@ -788,7 +789,7 @@ const stats_encounter string = "encounter"
 const stats_seenLure string = "seen_lure"
 const stats_lureEncounter string = "lure_encounter"
 
-func updateStats(db DbDetails, id string, event string) {
+func updateStats(db db.DbDetails, id string, event string) {
 	if config.Config.Stats == false {
 		return
 	}

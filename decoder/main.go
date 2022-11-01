@@ -5,6 +5,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
 	"golbat/pogo"
 	"math"
 	"strconv"
@@ -85,7 +86,7 @@ var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	return delta < 0.000001
 })
 
-func UpdateFortBatch(db DbDetails, p []RawFortData) {
+func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)
 	// 2. Fetch current stops from database
@@ -154,7 +155,7 @@ func UpdateFortBatch(db DbDetails, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
+func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
