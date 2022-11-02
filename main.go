@@ -29,8 +29,16 @@ var inMemoryDb *sqlx.DB
 var dbDetails db2.DbDetails
 
 func main() {
-
 	config.ReadConfig()
+
+	logLevel := log.InfoLevel
+
+	if config.Config.Logging.Debug == true {
+		logLevel = log.DebugLevel
+	}
+	SetupLogger(logLevel, config.Config.Logging.SaveLogs)
+
+	log.Infof("Golbat starting")
 
 	// Capture connection properties.
 	cfg := mysql.Config{
@@ -45,6 +53,8 @@ func main() {
 	dbConnectionString := cfg.FormatDSN()
 	driver := "mysql"
 
+	log.Infof("Starting migration")
+
 	m, err := migrate.New(
 		"file://sql",
 		driver+"://"+dbConnectionString+"&multiStatements=true")
@@ -57,6 +67,8 @@ func main() {
 		log.Fatal(err)
 		return
 	}
+
+	log.Infof("Opening database for processing")
 
 	// Get a database handle.
 
@@ -114,13 +126,6 @@ func main() {
 			GeneralDb:       db,
 		}
 	}
-
-	logLevel := log.InfoLevel
-
-	if config.Config.Logging.Debug == true {
-		logLevel = log.DebugLevel
-	}
-	SetupLogger(logLevel, config.Config.Logging.SaveLogs)
 
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
