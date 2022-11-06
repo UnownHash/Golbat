@@ -586,8 +586,8 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encount
 
 	if encounterData.CaptureProbability != nil {
 		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-		pokemon.Capture2 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-		pokemon.Capture3 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
+		pokemon.Capture2 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[1]))
+		pokemon.Capture3 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[2]))
 
 		cpMultiplier := float64(encounterData.Pokemon.Pokemon.CpMultiplier)
 		var level int64
