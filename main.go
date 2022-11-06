@@ -1,11 +1,9 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
-	"github.com/mattn/go-sqlite3"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	db2 "golbat/db"
@@ -92,16 +90,15 @@ func main() {
 	log.Infoln("Connected to database")
 
 	if config.Config.InMemory {
-
-		sql.Register("sqlite3_settings",
-			&sqlite3.SQLiteDriver{
-				ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-					conn.SetLimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 50000)
-					return nil
-				},
-			})
+		//sql.Register("sqlite3_settings",
+		//	&sqlite3.SQLiteDriver{
+		//		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+		//			conn.SetLimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 50000)
+		//			return nil
+		//		},
+		//	})
 		// Initialise in memory db
-		inMemoryDb, err = sqlx.Open("sqlite3_settings", ":memory:")
+		inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
 		if err != nil {
 			log.Fatal(err)
 			return
