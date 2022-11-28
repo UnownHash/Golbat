@@ -33,8 +33,14 @@ type RawMapPokemonData struct {
 	Data *pogo.MapPokemonProto
 }
 
+type RawClientWeatherData struct {
+	Cell int64
+	Data *pogo.ClientWeatherProto
+}
+
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
+var weatherCache *ttlcache.Cache[int64, Weather]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -42,6 +48,7 @@ var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
 
 var pokestopStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
+var weatherStripedMutex = stripedmutex.New(8)
 
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
@@ -53,6 +60,11 @@ func init() {
 		ttlcache.WithTTL[string, Gym](60 * time.Minute),
 	)
 	go gymCache.Start()
+
+	weatherCache = ttlcache.New[int64, Weather](
+		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
+	)
+	go weatherCache.Start()
 
 	spawnpointCache = ttlcache.New[int64, Spawnpoint](
 		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
@@ -220,5 +232,20 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 			savePokemonRecord(db, pokemon)
 		}
 		pokemonMutex.Unlock()
+	}
+}
+
+func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
+	for _, weatherProto := range p {
+		weather, err := getWeatherRecord(db, weatherProto.Cell)
+		if err != nil {
+			log.Printf("getWeatherRecord: %s", err)
+		} else {
+			if weather == nil {
+				weather = &Weather{}
+			}
+			weather.updateWeatherFromClientWeatherProto(weatherProto.Data)
+			saveWeatherRecord(db, weather)
+		}
 	}
 }
