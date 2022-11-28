@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -96,7 +97,35 @@ func hasChangesWeather(old *Weather, new *Weather) bool {
 }
 
 func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
-	//TODO
+
+	//TODO compare old with new
+
+	s2cell := s2.CellFromCellID(s2.CellID(weather.Id))
+
+	var polygon [3]float64
+	for i := range []int{0, 1, 2, 3} {
+		s2cell.Vertex(i)
+		//TODO create polygon
+	}
+	weatherHook := map[string]interface{}{
+		"s2_cell_id":           weather.Id,
+		"latitude":             weather.Latitude,
+		"longitude":            weather.Longitude,
+		"polygon":              polygon,
+		"gameplay_condition":   weather.GameplayCondition.ValueOrZero(),
+		"wind_direction":       weather.WindDirection.ValueOrZero(),
+		"cloud_level":          weather.CloudLevel.ValueOrZero(),
+		"rain_level":           weather.RainLevel.ValueOrZero(),
+		"wind_level":           weather.WindLevel.ValueOrZero(),
+		"snow_level":           weather.SnowLevel.ValueOrZero(),
+		"fog_level":            weather.FogLevel.ValueOrZero(),
+		"special_effect_level": weather.SpecialEffectLevel.ValueOrZero(),
+		"severity":             weather.Severity.ValueOrZero(),
+		"warn_weather":         weather.WarnWeather.ValueOrZero(),
+		"updated":              weather.Updated,
+	}
+
+	webhooks.AddMessage(webhooks.Weather, weatherHook)
 }
 
 func saveWeatherRecord(db db.DbDetails, weather *Weather) {

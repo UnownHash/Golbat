@@ -29,6 +29,7 @@ var Pokemon = "pokemon"
 var Quest = "quest"
 var Pokestop = "pokestop"
 var Invasion = "invasion"
+var Weather = "weather"
 
 var collectionAccess sync.Mutex
 
