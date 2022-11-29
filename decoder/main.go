@@ -237,6 +237,9 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 
 func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 	for _, weatherProto := range p {
+		weatherId := strconv.FormatInt(weatherProto.Data.S2CellId, 10)
+		weatherMutex, _ := weatherStripedMutex.GetLock(weatherId)
+		weatherMutex.Lock()
 		weather, err := getWeatherRecord(db, weatherProto.Cell)
 		if err != nil {
 			log.Printf("getWeatherRecord: %s", err)
@@ -247,5 +250,6 @@ func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 			weather.updateWeatherFromClientWeatherProto(weatherProto.Data)
 			saveWeatherRecord(db, weather)
 		}
+		weatherMutex.Unlock()
 	}
 }
