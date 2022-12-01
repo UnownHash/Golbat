@@ -152,23 +152,22 @@ func saveWeatherRecord(db db.DbDetails, weather *Weather) {
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExec(
-			"UPDATE weather SET"+
-				"latitude = :latitude"+
-				"longitude = :longitude"+
-				"level = :level"+
-				"gameplay_condition = :gameplay_condition"+
-				"wind_direction = :wind_direction"+
-				"cloud_level = :cloud_level"+
-				"rain_level = :rain_level"+
-				"wind_level = :wind_level"+
-				"snow_level = :snow_level"+
-				"fog_level = :fog_level"+
-				"special_effect_level = :special_effect_level"+
-				"severity = :severity"+
-				"warn_weather = :warn_weather"+
-				"updated = UNIX_TIMESTAMP()"+
-				"WHERE id = :id",
+		res, err := db.GeneralDb.NamedExec("UPDATE weather SET "+
+			"latitude = :latitude, "+
+			"longitude = :longitude, "+
+			"level = :level, "+
+			"gameplay_condition = :gameplay_condition, "+
+			"wind_direction = :wind_direction, "+
+			"cloud_level = :cloud_level, "+
+			"rain_level = :rain_level, "+
+			"wind_level = :wind_level, "+
+			"snow_level = :snow_level, "+
+			"fog_level = :fog_level, "+
+			"special_effect_level = :special_effect_level, "+
+			"severity = :severity, "+
+			"warn_weather = :warn_weather, "+
+			"updated = UNIX_TIMESTAMP() "+
+			"WHERE id = :id",
 			weather)
 		if err != nil {
 			log.Errorf("update weather: %s", err)
