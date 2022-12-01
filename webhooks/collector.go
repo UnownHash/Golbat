@@ -46,6 +46,7 @@ func SetMaps() {
 	webhookCollections[Quest] = &WebhookList{}
 	webhookCollections[Pokestop] = &WebhookList{}
 	webhookCollections[Invasion] = &WebhookList{}
+	webhookCollections[Weather] = &WebhookList{}
 }
 
 func AddMessage(webhookType string, message interface{}) {
@@ -75,6 +76,9 @@ func collectHooks() []WebhookQueue {
 		}
 		if hook.Types == nil || slices.Contains(hook.Types, "raid") {
 			totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, "weather") {
+			totalCollection = append(totalCollection, currentCollection[Weather].Messages...)
 		}
 		if hook.Types == nil || slices.Contains(hook.Types, "pokemon") {
 			totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
