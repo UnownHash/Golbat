@@ -174,7 +174,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
-			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, size, :capture_1, :capture_2, :capture_3,"+
+			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, :size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
 			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
 			pokemon)
@@ -568,7 +568,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encount
 	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move1))
 	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move2))
 	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.HeightM))
-	pokemon.Size = null.FloatFrom(int64(encounterData.Pokemon.Pokemon.Size))
+	pokemon.Size = null.IntFrom(int64(encounterData.Pokemon.Size.rawValue))
 	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.WeightKg))
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualDefense))
@@ -634,7 +634,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db db.DbDetails, enc
 	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Move1))
 	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Move2))
 	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.HeightM))
-	pokemon.Size = null.FloatFrom(int64(encounterData.Pokemon.Size))
+	pokemon.Size = null.IntFrom(int64(encounterData.Pokemon.Size.rawValue))
 	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.WeightKg))
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.IndividualDefense))
