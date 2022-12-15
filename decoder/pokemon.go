@@ -24,7 +24,8 @@ type Pokemon struct {
 	Lat                     float64     `db:"lat"`
 	Lon                     float64     `db:"lon"`
 	Weight                  null.Float  `db:"weight"`
-	Size                    null.Float  `db:"size"`
+	Size                    null.Int    `db:"size"`
+	Height                  null.Float  `db:"height"`
 	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
 	Updated                 null.Int    `db:"updated"`
 	PokemonId               int16       `db:"pokemon_id"`
@@ -119,7 +120,7 @@ func getPokemonRecord(db db.DbDetails, encounterId string) (*Pokemon, error) {
 
 	err := db.PokemonDb.Get(&pokemon,
 		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
-			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3, "+
+			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3, "+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", encounterId)
@@ -169,11 +170,11 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
 		res, err := db.PokemonDb.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
-			"gender, form, cp, level, weather, costume, weight, size, capture_1, capture_2, capture_3,"+
+			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
-			":gender, :form, :cp, :level, :weather, :costume, :weight, :size, :capture_1, :capture_2, :capture_3,"+
+			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
 			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
 			pokemon)
@@ -192,6 +193,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			"lat = :lat, "+
 			"lon = :lon, "+
 			"weight = :weight, "+
+			"height = :height, "+
 			"size = :size, "+
 			"expire_timestamp = :expire_timestamp, "+
 			"updated = :updated, "+
@@ -284,7 +286,8 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 			"move_1":                  new.Move1,
 			"move_2":                  new.Move2,
 			"weight":                  new.Weight,
-			"height":                  new.Size,
+			"size":                    new.Size,
+			"height":                  new.Height,
 			"weather":                 new.Weather,
 			"capture_1":               new.Capture1.ValueOrZero(),
 			"capture_2":               new.Capture2.ValueOrZero(),
@@ -399,7 +402,8 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Cp = null.NewInt(0, false)
 	pokemon.Move1 = null.NewInt(0, false)
 	pokemon.Move2 = null.NewInt(0, false)
-	pokemon.Size = null.NewFloat(0, false)
+	pokemon.Height = null.NewFloat(0, false)
+	pokemon.Size = null.NewInt(0, false)
 	pokemon.Weight = null.NewFloat(0, false)
 	pokemon.AtkIv = null.NewInt(0, false)
 	pokemon.DefIv = null.NewInt(0, false)
@@ -563,7 +567,8 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encount
 	pokemon.Cp = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Cp))
 	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move1))
 	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move2))
-	pokemon.Size = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.HeightM))
+	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.HeightM))
+	pokemon.Size = null.FloatFrom(int64(encounterData.Pokemon.Pokemon.Size))
 	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.WeightKg))
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualDefense))
@@ -628,7 +633,8 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db db.DbDetails, enc
 	pokemon.Cp = null.IntFrom(int64(encounterData.Pokemon.Cp))
 	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Move1))
 	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Move2))
-	pokemon.Size = null.FloatFrom(float64(encounterData.Pokemon.HeightM))
+	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.HeightM))
+	pokemon.Size = null.FloatFrom(int64(encounterData.Pokemon.Size))
 	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.WeightKg))
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.IndividualDefense))
@@ -686,7 +692,8 @@ func (pokemon *Pokemon) setDittoAttributes() {
 	pokemon.Move2 = null.IntFrom(moveStruggle)
 	pokemon.Gender = null.IntFrom(3)
 	pokemon.Costume = null.IntFrom(0)
-	pokemon.Size = null.NewFloat(0, false)
+	pokemon.Height = null.NewFloat(0, false)
+	pokemon.Size = null.NewInt(0, false)
 	pokemon.Weight = null.NewFloat(0, false)
 }
 
