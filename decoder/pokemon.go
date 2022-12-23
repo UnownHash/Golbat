@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
@@ -160,6 +161,21 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 		pokemon.Changed = now
 	}
 
+	if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
+		pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+			int(pokemon.Form.ValueOrZero()),
+			int(pokemon.Costume.ValueOrZero()),
+			int(pokemon.Gender.ValueOrZero()),
+			int(pokemon.AtkIv.ValueOrZero()),
+			int(pokemon.DefIv.ValueOrZero()),
+			int(pokemon.StaIv.ValueOrZero()),
+			float64(pokemon.Level.ValueOrZero()))
+		if err == nil {
+			pvpStr, _ := json.Marshal(pvp)
+			pokemon.Pvp = null.StringFrom(string(pvpStr))
+		}
+	}
+
 	var oldSeenType string
 	if oldPokemon == nil {
 		oldSeenType = "n/a"
@@ -297,7 +313,17 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 			"display_pokemon_id":      new.DisplayPokemonId,
 			"is_event":                new.IsEvent,
 			"seen_type":               new.SeenType,
-			//"pvp":                     []string{},
+			"pvp": func() interface{} {
+				if !new.Pvp.Valid {
+					return nil
+				}
+				var j map[string]interface{}
+				if err := json.Unmarshal([]byte(new.Pvp.ValueOrZero()), &j); err != nil {
+					return j
+				} else {
+					return nil
+				}
+			}(),
 		}
 
 		webhooks.AddMessage(webhooks.Pokemon, pokemonHook)

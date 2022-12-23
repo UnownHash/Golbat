@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"github.com/Pupitar/ohbemgo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
@@ -50,6 +51,8 @@ var pokestopStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
 var weatherStripedMutex = stripedmutex.New(8)
 
+var ohbem *ohbemgo.Ohbem
+
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
 		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
@@ -87,6 +90,27 @@ func init() {
 		ttlcache.WithDisableTouchOnHit[string, *pogo.DiskEncounterOutProto](),
 	)
 	go diskEncounterCache.Start()
+
+	var leagues = ohbemgo.Leagues{
+		"little": {
+			Cap:    500,
+			Little: true,
+		},
+		"great": {
+			Cap:    1500,
+			Little: false,
+		},
+		"ultra": {
+			Cap:    2500,
+			Little: false,
+		},
+	}
+
+	ohbem = &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: []float64{50.0, 51.0}}
+	err := ohbem.FetchPokemonData()
+	if err != nil {
+		log.Errorf("ohbem.FetchPokemonData: %s", err)
+	}
 }
 
 func ClearPokestopCache() {
