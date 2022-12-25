@@ -318,7 +318,7 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 					return nil
 				}
 				var j map[string]interface{}
-				if err := json.Unmarshal([]byte(new.Pvp.ValueOrZero()), &j); err != nil {
+				if err := json.Unmarshal([]byte(new.Pvp.ValueOrZero()), &j); err == nil {
 					return j
 				} else {
 					return nil
