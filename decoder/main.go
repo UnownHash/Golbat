@@ -98,34 +98,37 @@ func InitialiseOhbem() {
 		log.Info("Initialising Ohbem for PVP")
 		if len(config.Config.Pvp.Leagues) == 0 {
 			log.Errorf("PVP leagues not configured")
-		} else if len(config.Config.Pvp.LevelCaps) == 0 {
-			log.Errorf("PVP level caps not configured")
-		} else {
-			leagues := make(map[string]ohbemgo.League)
-
-			for _, league := range config.Config.Pvp.Leagues {
-				leagues[league.Name] = ohbemgo.League{
-					Cap:            league.Cap,
-					LittleCupRules: league.LittleCupRules,
-				}
-			}
-
-			var levelCaps []float64
-
-			for _, levelCap := range config.Config.Pvp.LevelCaps {
-				levelCaps = append(levelCaps, float64(levelCap))
-			}
-
-			o := &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: levelCaps,
-				IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
-
-			err := o.FetchPokemonData()
-			if err != nil {
-				log.Errorf("ohbem.FetchPokemonData: %s", err)
-			}
-
-			ohbem = o
+			return
 		}
+		if len(config.Config.Pvp.LevelCaps) == 0 {
+			log.Errorf("PVP level caps not configured")
+			return
+		}
+		leagues := make(map[string]ohbemgo.League)
+
+		for _, league := range config.Config.Pvp.Leagues {
+			leagues[league.Name] = ohbemgo.League{
+				Cap:            league.Cap,
+				LittleCupRules: league.LittleCupRules,
+			}
+		}
+
+		var levelCaps []float64
+
+		for _, levelCap := range config.Config.Pvp.LevelCaps {
+			levelCaps = append(levelCaps, float64(levelCap))
+		}
+
+		o := &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: levelCaps,
+			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+
+		err := o.FetchPokemonData()
+		if err != nil {
+			log.Errorf("ohbem.FetchPokemonData: %s", err)
+			return
+		}
+
+		ohbem = o
 	}
 }
 
