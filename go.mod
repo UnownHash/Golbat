@@ -3,7 +3,7 @@ module golbat
 go 1.18
 
 require (
-	github.com/Pupitar/ohbemgo v0.0.0-20221226162112-f3e8e508880e
+	github.com/Pupitar/ohbemgo v0.5.2
 	github.com/evanoberholster/timezoneLookup/v2 v2.0.0
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
