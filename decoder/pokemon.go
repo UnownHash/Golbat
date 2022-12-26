@@ -161,7 +161,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 		pokemon.Changed = now
 	}
 
-	if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
+	if ohbem != nil && pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
 		pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
 			int(pokemon.Form.ValueOrZero()),
 			int(pokemon.Costume.ValueOrZero()),
@@ -170,6 +170,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			int(pokemon.DefIv.ValueOrZero()),
 			int(pokemon.StaIv.ValueOrZero()),
 			float64(pokemon.Level.ValueOrZero()))
+
 		if err == nil {
 			pvpStr, _ := json.Marshal(pvp)
 			pokemon.Pvp = null.StringFrom(string(pvpStr))
@@ -830,11 +831,12 @@ func updateStats(db db.DbDetails, id string, event string) {
 	var sqlCommand string
 
 	if event == stats_encounter {
-		sqlCommand = "INSERT INTO pokemon_timing (id, first_encounter, last_encounter) " +
-			"VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()) " +
+		sqlCommand = "INSERT INTO pokemon_timing (id, seen_wild, first_encounter, last_encounter) " +
+			"VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), UNIX_TIMESTAMP()) " +
 			"ON DUPLICATE KEY UPDATE " +
 			"first_encounter = COALESCE(first_encounter, VALUES(first_encounter))," +
-			"last_encounter = VALUES(last_encounter) "
+			"last_encounter = VALUES(last_encounter)," +
+			"seen_wild = COALESCE(seen_wild, first_encounter)"
 	} else {
 		sqlCommand = fmt.Sprintf("INSERT INTO pokemon_timing (id, %[1]s)"+
 			"VALUES (?, UNIX_TIMESTAMP())"+

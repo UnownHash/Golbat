@@ -6,6 +6,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
 	"math"
@@ -90,26 +91,41 @@ func init() {
 		ttlcache.WithDisableTouchOnHit[string, *pogo.DiskEncounterOutProto](),
 	)
 	go diskEncounterCache.Start()
+}
 
-	var leagues = ohbemgo.Leagues{
-		"little": {
-			Cap:    500,
-			Little: true,
-		},
-		"great": {
-			Cap:    1500,
-			Little: false,
-		},
-		"ultra": {
-			Cap:    2500,
-			Little: false,
-		},
-	}
+func InitialiseOhbem() {
+	if config.Config.Pvp.Enabled {
+		log.Info("Initialising Ohbem for PVP")
+		if len(config.Config.Pvp.Leagues) == 0 {
+			log.Errorf("PVP leagues not configured")
+		} else if len(config.Config.Pvp.LevelCaps) == 0 {
+			log.Errorf("PVP level caps not configured")
+		} else {
+			leagues := make(map[string]ohbemgo.League)
 
-	ohbem = &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: []float64{50.0, 51.0}}
-	err := ohbem.FetchPokemonData()
-	if err != nil {
-		log.Errorf("ohbem.FetchPokemonData: %s", err)
+			for _, league := range config.Config.Pvp.Leagues {
+				leagues[league.Name] = ohbemgo.League{
+					Cap:            league.Cap,
+					LittleCupRules: league.LittleCupRules,
+				}
+			}
+
+			var levelCaps []float64
+
+			for _, levelCap := range config.Config.Pvp.LevelCaps {
+				levelCaps = append(levelCaps, float64(levelCap))
+			}
+
+			o := &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: levelCaps,
+				IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+
+			err := o.FetchPokemonData()
+			if err != nil {
+				log.Errorf("ohbem.FetchPokemonData: %s", err)
+			}
+
+			ohbem = o
+		}
 	}
 }
 
