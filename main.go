@@ -210,6 +210,10 @@ func decode(method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
 		// ignore
 		break
+	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
+		result = decodeSocialActionProxy(protoData.Data)
+		processed = true
+		break
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
@@ -241,6 +245,69 @@ func decodeQuest(sDec []byte, haveAr *bool) string {
 
 	return decoder.UpdatePokestopWithQuest(dbDetails, decodedQuest, *haveAr)
 
+}
+
+func decodeSocialActionProxy(sDec []byte) string {
+	var proxy pogo.ProxyResponseProto
+
+	if err := proto.Unmarshal(sDec, &proxy); err != nil {
+		log.Fatalln("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if proxy.Status != pogo.ProxyResponseProto_COMPLETED && proxy.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
+		return fmt.Sprintf("unsuccessful proxy response %d %s", int(proxy.Status), proxy.Status)
+	}
+
+	players := make([]*pogo.PlayerSummaryProto, 0)
+
+	// for now, we handle both those protos
+	// but we don't know which one we received...
+	// so we parse both, and continue only if one pass without issue
+	var searchPlayerOutProto pogo.SearchPlayerOutProto
+	var getFriendDetailsOutProto pogo.GetFriendDetailsOutProto
+
+	searchPlayerError := proto.Unmarshal(proxy.Payload, &searchPlayerOutProto)
+	getFriendDetailsError := proto.Unmarshal(proxy.Payload, &getFriendDetailsOutProto)
+
+	if searchPlayerError == nil && getFriendDetailsError == nil {
+		return fmt.Sprintf("Could not determine which social proto received")
+	} else if searchPlayerError == nil {
+		if searchPlayerOutProto.GetResult() != pogo.SearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
+			return fmt.Sprintf("unsuccessful search player response")
+		}
+
+		players = append(players, searchPlayerOutProto.GetPlayer())
+	} else if getFriendDetailsError == nil {
+		if getFriendDetailsOutProto.GetResult() != pogo.GetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
+			return fmt.Sprintf("unsuccessful get friends details")
+		}
+
+		for _, friend := range getFriendDetailsOutProto.GetFriend() {
+			players = append(players, friend.GetPlayer())
+		}
+	} else {
+		return fmt.Sprintf("Failed to parse social proto")
+	}
+
+	failures := 0
+
+	for _, player := range players {
+		var publicData pogo.PlayerPublicProfileProto
+		publicDataErr := proto.Unmarshal(player.GetPublicData(), &publicData)
+
+		if publicDataErr != nil {
+			failures++
+			continue
+		}
+
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, &publicData)
+		if updatePlayerError != nil {
+			failures++
+		}
+	}
+
+	return fmt.Sprintf("%d players decoded on %d", len(players)-failures, len(players))
 }
 
 func decodeFortDetails(sDec []byte) string {
