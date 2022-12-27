@@ -1,17 +1,17 @@
 CREATE TABLE `player`
 (
-    `id`                   varchar(100) NOT NULL,
-    `name`                 varchar(20)  NOT NULL,
-    `last_seen`            int(10)      NOT NULL,
+    `id`                   varchar(100)         DEFAULT NULL,
+    `name`                 varchar(20) NOT NULL,
+    `last_seen`            int(10)     NOT NULL,
     `friend_code`          varchar(12)          DEFAULT NULL,
     `team`                 tinyint(1) UNSIGNED  DEFAULT NULL,
     `level`                tinyint(2) UNSIGNED  DEFAULT NULL,
     `xp`                   bigint(9) UNSIGNED   DEFAULT NULL,
-    `battles_won`          integer(6) UNSIGNED  DEFAULT NULL,
+    `battles_won`          int(6) UNSIGNED      DEFAULT NULL,
     `km_walked`            float UNSIGNED       DEFAULT NULL,
     `caught_pokemon`       int(6) UNSIGNED      DEFAULT NULL,
     `gbl_rank`             tinyint(2) UNSIGNED  DEFAULT NULL,
-    `gbl_rating`           SMALLINT(4) UNSIGNED DEFAULT NULL,
+    `gbl_rating`           smallint(4) UNSIGNED DEFAULT NULL,
     `event_badges`         varchar(500)         DEFAULT NULL,
     `stops_spun`           int(6) UNSIGNED      DEFAULT NULL,
     `evolved`              int(6) UNSIGNED      DEFAULT NULL,
@@ -84,7 +84,7 @@ CREATE TABLE `player`
   COLLATE = utf8mb4_unicode_ci;
 
 ALTER TABLE `player`
-    ADD PRIMARY KEY (`name`, `id`) USING BTREE,
+    ADD PRIMARY KEY (`name`),
     ADD UNIQUE KEY `friend_code` (`friend_code`),
     ADD KEY `id` (`id`) USING BTREE;
 COMMIT;

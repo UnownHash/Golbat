@@ -14,7 +14,7 @@ import (
 )
 
 type Player struct {
-	Id                 string      `db:"id" json:"-"`
+	Id                 null.String `db:"id" json:"-"`
 	Name               string      `db:"name" json:"-"`
 	LastSeen           int64       `db:"last_seen" json:"-"`
 	FriendCode         null.String `db:"friend_code" json:"-"`
@@ -180,8 +180,8 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:   "vivillon",
 }
 
-func getPlayerRecord(db db.DbDetails, playerId string) (*Player, error) {
-	inMemoryPlayer := playerCache.Get(playerId)
+func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
+	inMemoryPlayer := playerCache.Get(name)
 	if inMemoryPlayer != nil {
 		player := inMemoryPlayer.Value()
 		return &player, nil
@@ -270,9 +270,9 @@ func getPlayerRecord(db db.DbDetails, playerId string) (*Player, error) {
 			   caught_dark,
 			   caught_fairy
 		FROM player
-		WHERE player.id = ? 
+		WHERE player.name = ? 
 		`,
-		playerId,
+		name,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -282,7 +282,7 @@ func getPlayerRecord(db db.DbDetails, playerId string) (*Player, error) {
 		return nil, err
 	}
 
-	playerCache.Set(playerId, player, ttlcache.DefaultTTL)
+	playerCache.Set(name, player, ttlcache.DefaultTTL)
 	return &player, nil
 }
 
@@ -291,7 +291,7 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 }
 
 func savePlayerRecord(db db.DbDetails, player *Player) {
-	oldPlayer, _ := getPlayerRecord(db, player.Id)
+	oldPlayer, _ := getPlayerRecord(db, player.Name)
 
 	if oldPlayer != nil && !hasChangesPlayer(oldPlayer, player) {
 		return
@@ -337,7 +337,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	} else {
 		_, err := db.GeneralDb.NamedExec(
 			`UPDATE player SET
-				name = :name, 
+				id = :id, 
 				last_seen = :last_seen, 
 				team = :team, 
 				level = :level, 
@@ -414,7 +414,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 				caught_dragon = :caught_dragon, 
 				caught_dark = :caught_dark, 
 				caught_fairy = :caught_fairy 
-				WHERE id = :id`,
+				WHERE name = :name`,
 			player,
 		)
 
@@ -423,7 +423,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		}
 	}
 
-	playerCache.Set(player.Id, *player, ttlcache.DefaultTTL)
+	playerCache.Set(player.Name, *player, ttlcache.DefaultTTL)
 }
 
 func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicProfileProto) {
@@ -476,15 +476,18 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 }
 
 func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto) error {
-	player, err := getPlayerRecord(db, playerSummary.GetPlayerId())
+	player, err := getPlayerRecord(db, playerSummary.GetCodename())
 	if err != nil {
 		return err
 	}
 
 	if player == nil {
 		player = &Player{
-			Id: playerSummary.GetPlayerId(),
+			Name: playerSummary.GetCodename(),
 		}
+	}
+	if player.Id.IsZero() {
+		player.Id = null.StringFrom(playerSummary.GetPlayerId())
 	}
 	player.updateFromPublicProfile(publicProfile)
 	savePlayerRecord(db, player)
