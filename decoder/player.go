@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -286,8 +287,15 @@ func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
 	return &player, nil
 }
 
+var ignoreApproxFloats = cmpopts.EquateApprox(0, 0.001)
+
+// This transformer allows to use the Approx comparator
+var transformNullFloats = cmp.Transformer("transformNullFloats", func(x null.Float) float64 {
+	return x.Float64
+})
+
 func hasChangesPlayer(old *Player, new *Player) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+	return !cmp.Equal(old, new, transformNullFloats, ignoreApproxFloats)
 }
 
 func savePlayerRecord(db db.DbDetails, player *Player) {
@@ -297,7 +305,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		return
 	}
 
-	log.Traceln(cmp.Diff(oldPlayer, player))
+	log.Traceln(cmp.Diff(oldPlayer, player, transformNullFloats, ignoreApproxFloats))
 
 	player.LastSeen = time.Now().Unix()
 
