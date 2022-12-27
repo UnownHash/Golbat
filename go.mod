@@ -3,7 +3,7 @@ module golbat
 go 1.18
 
 require (
-	github.com/Pupitar/ohbemgo v0.5.2
+	github.com/Pupitar/ohbemgo v0.5.3
 	github.com/evanoberholster/timezoneLookup/v2 v2.0.0
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
@@ -37,7 +37,7 @@ require (
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/ugorji/go/codec v1.2.7 // indirect
+	github.com/ugorji/go/codec v1.2.8 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/crypto v0.4.0 // indirect
 	golang.org/x/net v0.4.0 // indirect

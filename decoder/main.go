@@ -125,14 +125,15 @@ func InitialiseOhbem() {
 			levelCaps = append(levelCaps, float64(levelCap))
 		}
 
-		o := &ohbemgo.Ohbem{WatcherInterval: 30 * time.Minute, Leagues: leagues, LevelCaps: levelCaps,
+		o := &ohbemgo.Ohbem{Leagues: leagues, LevelCaps: levelCaps,
 			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
 
-		err := o.FetchPokemonData()
-		if err != nil {
+		if err := o.FetchPokemonData(); err != nil {
 			log.Errorf("ohbem.FetchPokemonData: %s", err)
 			return
 		}
+
+		_ = o.WatchPokemonData()
 
 		ohbem = o
 	}
