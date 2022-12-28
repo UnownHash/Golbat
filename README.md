@@ -3,7 +3,7 @@
 Golbat is an experimental raw data processor for Pokemon Go.
 Initially designed to be database compatible with RDM, it will
 be able to evolve faster by not needing to retain backward
-compatibility 
+compatibility.
 
 # Requirements
 
