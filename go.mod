@@ -3,7 +3,7 @@ module golbat
 go 1.18
 
 require (
-	github.com/Pupitar/ohbemgo v0.5.3
+	github.com/Pupitar/ohbemgo v0.6.2
 	github.com/evanoberholster/timezoneLookup/v2 v2.0.0
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
@@ -17,7 +17,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.6
 	github.com/sirupsen/logrus v1.9.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
-	golang.org/x/exp v0.0.0-20221217163422-3c43f8badb15
+	golang.org/x/exp v0.0.0-20221227203929-1b447090c38c
 	google.golang.org/protobuf v1.28.1
 	gopkg.in/guregu/null.v4 v4.0.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
