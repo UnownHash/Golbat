@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
@@ -141,7 +142,10 @@ func getPokemonRecord(db db.DbDetails, encounterId string) (*Pokemon, error) {
 }
 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+	return !cmp.Equal(old, new, cmp.Options{
+		ignoreNearFloats,
+		cmpopts.IgnoreFields(Pokemon{}, "Pvp"),
+	})
 }
 
 func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
@@ -161,19 +165,28 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 		pokemon.Changed = now
 	}
 
-	if ohbem != nil && pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
-		pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
-			int(pokemon.Form.ValueOrZero()),
-			int(pokemon.Costume.ValueOrZero()),
-			int(pokemon.Gender.ValueOrZero()),
-			int(pokemon.AtkIv.ValueOrZero()),
-			int(pokemon.DefIv.ValueOrZero()),
-			int(pokemon.StaIv.ValueOrZero()),
-			float64(pokemon.Level.ValueOrZero()))
+	changePvpField := false
+	if ohbem != nil {
+		// Calculating PVP data
+		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
+			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+				int(pokemon.Form.ValueOrZero()),
+				int(pokemon.Costume.ValueOrZero()),
+				int(pokemon.Gender.ValueOrZero()),
+				int(pokemon.AtkIv.ValueOrZero()),
+				int(pokemon.DefIv.ValueOrZero()),
+				int(pokemon.StaIv.ValueOrZero()),
+				float64(pokemon.Level.ValueOrZero()))
 
-		if err == nil {
-			pvpStr, _ := json.Marshal(pvp)
-			pokemon.Pvp = null.StringFrom(string(pvpStr))
+			if err == nil {
+				pvpBytes, _ := json.Marshal(pvp)
+				pokemon.Pvp = null.StringFrom(string(pvpBytes))
+				changePvpField = true
+			}
+		}
+		if !pokemon.AtkIv.Valid && oldPokemon.AtkIv.Valid {
+			pokemon.Pvp = null.NewString("", false)
+			changePvpField = true
 		}
 	}
 
@@ -186,14 +199,18 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 	if oldPokemon == nil {
-		res, err := db.PokemonDb.NamedExec("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		pvpField, pvpValue := "", ""
+		if changePvpField {
+			pvpField, pvpValue = "pvp, ", ":pvp, "
+		}
+		res, err := db.PokemonDb.NamedExec(fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type) "+
+			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
 			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, :size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
-			":expire_timestamp_verified, :shiny, :username, :pvp, :is_event, :seen_type)",
+			":expire_timestamp_verified, :shiny, :username, %s :is_event, :seen_type)", pvpField, pvpValue),
 			pokemon)
 
 		if err != nil {
@@ -204,7 +221,11 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 
 		_, _ = res, err
 	} else {
-		res, err := db.PokemonDb.NamedExec("UPDATE pokemon SET "+
+		pvpUpdate := ""
+		if changePvpField {
+			pvpUpdate = "pvp = :pvp, "
+		}
+		res, err := db.PokemonDb.NamedExec(fmt.Sprintf("UPDATE pokemon SET "+
 			"pokestop_id = :pokestop_id, "+
 			"spawn_id = :spawn_id, "+
 			"lat = :lat, "+
@@ -237,9 +258,9 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			"capture_1 = :capture_1, "+
 			"capture_2 = :capture_2, "+
 			"capture_3 = :capture_3, "+
-			"pvp = :pvp, "+
+			"%s"+
 			"is_event = :is_event "+
-			"WHERE id = :id", pokemon,
+			"WHERE id = :id", pvpUpdate), pokemon,
 		)
 		if err != nil {
 			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
@@ -251,6 +272,8 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 
 		_, _ = res, err
 	}
+
+	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
 		pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
