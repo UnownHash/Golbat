@@ -184,7 +184,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 				changePvpField = true
 			}
 		}
-		if !pokemon.AtkIv.Valid && oldPokemon.AtkIv.Valid {
+		if !pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.AtkIv.Valid) {
 			pokemon.Pvp = null.NewString("", false)
 			changePvpField = true
 		}
