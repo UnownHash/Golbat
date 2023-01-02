@@ -107,8 +107,6 @@ github.com/PuerkitoBio/purell v1.0.0/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbt
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
-github.com/Pupitar/ohbemgo v0.6.5 h1:UUGFhzQdEkSGh3SdYnnf82LfFAApDWpKzRlnbbeOTXU=
-github.com/Pupitar/ohbemgo v0.6.5/go.mod h1:ND5GlUBS+Gwr70KLQIvirT2UmUkyNPp+bYUy6s0pqKM=
 github.com/Pupitar/ohbemgo v0.6.7 h1:pUx82POW+Xg4VzqSAVWK6s05QG0tf9HiqNu/Amccai4=
 github.com/Pupitar/ohbemgo v0.6.7/go.mod h1:ND5GlUBS+Gwr70KLQIvirT2UmUkyNPp+bYUy6s0pqKM=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
