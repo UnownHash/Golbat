@@ -3,14 +3,14 @@ module golbat
 go 1.18
 
 require (
-	github.com/Pupitar/ohbemgo v0.6.7
+	github.com/Pupitar/ohbemgo v0.7.2
 	github.com/evanoberholster/timezoneLookup/v2 v2.0.0
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/golang/geo v0.0.0-20210211234256-740aa86cb551
 	github.com/google/go-cmp v0.5.9
-	github.com/jellydator/ttlcache/v3 v3.0.0
+	github.com/jellydator/ttlcache/v3 v3.0.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/nmvalera/striped-mutex v0.1.0

@@ -119,13 +119,7 @@ func InitialiseOhbem() {
 			}
 		}
 
-		var levelCaps []float64
-
-		for _, levelCap := range config.Config.Pvp.LevelCaps {
-			levelCaps = append(levelCaps, float64(levelCap))
-		}
-
-		o := &ohbemgo.Ohbem{Leagues: leagues, LevelCaps: levelCaps,
+		o := &ohbemgo.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
 			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
 
 		if err := o.FetchPokemonData(); err != nil {
