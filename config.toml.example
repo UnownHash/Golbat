@@ -20,6 +20,27 @@ password = ""
 address = "127.0.0.1:3306"
 db = ""
 
+
+[pvp]
+enabled = true
+include_hundos_under_cap = true
+level_caps = [50, 51]
+
+[[pvp.leagues]]
+name = "little"
+cap = 500
+little = false
+
+[[pvp.leagues]]
+name = "great"
+cap = 1500
+little = false
+
+[[pvp.leagues]]
+name = "ultra"
+cap = 2500
+little = false
+
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array
 
@@ -31,4 +52,3 @@ url = "http://localhost:4201"
 #[[webhooks]]
 #url = "http://localhost:4202"
 #types = ["raid"]
-

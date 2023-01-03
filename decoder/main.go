@@ -1,10 +1,12 @@
 package decoder
 
 import (
+	"github.com/Pupitar/ohbemgo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
 	"math"
@@ -51,6 +53,8 @@ var pokestopStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
 var weatherStripedMutex = stripedmutex.New(8)
 
+var ohbem *ohbemgo.Ohbem
+
 func init() {
 	pokestopCache = ttlcache.New[string, Pokestop](
 		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
@@ -93,6 +97,40 @@ func init() {
 		ttlcache.WithDisableTouchOnHit[string, *pogo.DiskEncounterOutProto](),
 	)
 	go diskEncounterCache.Start()
+}
+
+func InitialiseOhbem() {
+	if config.Config.Pvp.Enabled {
+		log.Info("Initialising Ohbem for PVP")
+		if len(config.Config.Pvp.Leagues) == 0 {
+			log.Errorf("PVP leagues not configured")
+			return
+		}
+		if len(config.Config.Pvp.LevelCaps) == 0 {
+			log.Errorf("PVP level caps not configured")
+			return
+		}
+		leagues := make(map[string]ohbemgo.League)
+
+		for _, league := range config.Config.Pvp.Leagues {
+			leagues[league.Name] = ohbemgo.League{
+				Cap:            league.Cap,
+				LittleCupRules: league.LittleCupRules,
+			}
+		}
+
+		o := &ohbemgo.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
+			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+
+		if err := o.FetchPokemonData(); err != nil {
+			log.Errorf("ohbem.FetchPokemonData: %s", err)
+			return
+		}
+
+		_ = o.WatchPokemonData()
+
+		ohbem = o
+	}
 }
 
 func ClearPokestopCache() {

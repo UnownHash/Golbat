@@ -10,6 +10,7 @@ type configDefinition struct {
 	Cleanup   cleanup   `toml:"cleanup"`
 	RawBearer string    `toml:"raw_bearer"`
 	ApiSecret string    `toml:"api_secret"`
+	Pvp       pvp       `toml:"pvp"`
 }
 
 type cleanup struct {
@@ -21,6 +22,19 @@ type cleanup struct {
 type webhook struct {
 	Url   string   `toml:"url"`
 	Types []string `toml:"types"`
+}
+
+type pvp struct {
+	Enabled               bool         `toml:"enabled"`
+	IncludeHundosUnderCap bool         `toml:"include_hundos_under_cap"`
+	LevelCaps             []int        `toml:"level_caps"`
+	Leagues               []pvpLeagues `toml:"leagues"`
+}
+
+type pvpLeagues struct {
+	Name           string `toml:"name"`
+	Cap            int    `toml:"cap"`
+	LittleCupRules bool   `toml:"little"`
 }
 
 type logging struct {

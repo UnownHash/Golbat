@@ -134,6 +134,8 @@ func main() {
 		}
 	}
 
+	decoder.InitialiseOhbem()
+
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
 
