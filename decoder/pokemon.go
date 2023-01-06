@@ -16,7 +16,6 @@ import (
 	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -282,40 +281,6 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 	if db.UsePokemonCache {
 		pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
 	}
-}
-
-var pokemonStats map[string]map[int16]int = make(map[string]map[int16]int)
-var pokemonStatsLock sync.Mutex
-
-func updatePokemonStats(old *Pokemon, new *Pokemon) {
-	_ = old
-	areas := matchGeofences(new.Lat, new.Lon)
-	if len(areas) > 0 {
-		pokemonStatsLock.Lock()
-		defer pokemonStatsLock.Unlock()
-		for i := 0; i < len(areas); i++ {
-			area := areas[i]
-			areaStats := pokemonStats[area]
-			if areaStats == nil {
-				areaStats = make(map[int16]int)
-				pokemonStats[area] = areaStats
-			}
-			areaStats[new.PokemonId]++
-		}
-	}
-}
-
-func logPokemonStats() {
-	pokemonStatsLock.Lock()
-	defer pokemonStatsLock.Unlock()
-	log.Infof("---STATS---")
-	for area, stats := range pokemonStats {
-		log.Infof("STATS Pokemon stats for %s", area)
-		for id, count := range stats {
-			log.Infof("STATS Pokemon %d: %d", id, count)
-		}
-	}
-	pokemonStats = make(map[string]map[int16]int) // clear stats
 }
 
 func createPokemonWebhooks(old *Pokemon, new *Pokemon) {

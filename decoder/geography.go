@@ -27,7 +27,7 @@ func ReadGeofences() {
 
 	/* This should not be where we turn on stats */
 
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
 		for {
 			<-ticker.C
