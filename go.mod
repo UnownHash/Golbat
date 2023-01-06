@@ -15,6 +15,8 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/pelletier/go-toml/v2 v2.0.6
+	github.com/ringsaturn/tzf v0.10.3
+	github.com/ringsaturn/tzf-rel v0.0.2022-g
 	github.com/sirupsen/logrus v1.9.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
 	golang.org/x/exp v0.0.0-20221230185412-738e83a70c30
@@ -32,11 +34,16 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.15.14 // indirect
 	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/paulmach/orb v0.7.1 // indirect
+	github.com/tidwall/geoindex v1.7.0 // indirect
+	github.com/tidwall/geojson v1.4.3 // indirect
+	github.com/tidwall/rtree v1.9.2 // indirect
+	github.com/twpayne/go-polyline v1.1.1 // indirect
 	github.com/ugorji/go/codec v1.2.8 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/crypto v0.4.0 // indirect

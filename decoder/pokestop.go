@@ -405,11 +405,11 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 
 	questExpiry := null.NewInt(0, false)
 
-	stopTimezone, _ := tz.SearchTimezone(stop.Lat, stop.Lon)
-	if stopTimezone.Name != "" {
-		loc, err := time.LoadLocation(stopTimezone.Name)
+	stopTimezone := tz.SearchTimezone(stop.Lat, stop.Lon)
+	if stopTimezone != "" {
+		loc, err := time.LoadLocation(stopTimezone)
 		if err != nil {
-			log.Warnf("Unrecognised time zone %s at %f,%f", stopTimezone.Name, stop.Lat, stop.Lon)
+			log.Warnf("Unrecognised time zone %s at %f,%f", stopTimezone, stop.Lat, stop.Lon)
 		} else {
 			year, month, day := time.Now().In(loc).Date()
 			t := time.Date(year, month, day, 0, 0, 0, 0, loc).AddDate(0, 0, 1)
