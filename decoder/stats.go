@@ -41,7 +41,15 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				monsIvIncr++
 			}
 
-			if old == nil { // record being created
+			currentSeenType := new.SeenType.ValueOrZero()
+			oldSeenType := ""
+			if old != nil {
+				oldSeenType = old.SeenType.ValueOrZero()
+			}
+
+			if currentSeenType != oldSeenType &&
+				(currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter) &&
+				(oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
 				monsSeenIncr++
 			}
 
