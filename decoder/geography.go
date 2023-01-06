@@ -1,0 +1,63 @@
+package decoder
+
+import (
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
+	"github.com/paulmach/orb/planar"
+	log "github.com/sirupsen/logrus"
+	"io/ioutil"
+	"time"
+)
+
+var featureCollection *geojson.FeatureCollection
+
+func ReadGeofences() {
+	geofence, err := ioutil.ReadFile("geojson/geofence.json")
+	if err != nil {
+		log.Errorf("Error reading geofence file: %s", err)
+		return
+	}
+
+	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+	if geoerr != nil {
+		log.Errorf("Error unmarshalling geofence file: %s", geoerr)
+		return
+	}
+	featureCollection = fc
+
+	/* This should not be where we turn on stats */
+
+	ticker := time.NewTicker(5 * time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			logPokemonStats()
+		}
+	}()
+}
+
+func matchGeofences(lat, lon float64) (areas []string) {
+	if featureCollection == nil {
+		return
+	}
+
+	p := orb.Point{lon, lat}
+
+	for _, f := range featureCollection.Features {
+		geoType := f.Geometry.GeoJSONType()
+		switch geoType {
+		case "Polygon":
+			polygon := f.Geometry.(orb.Polygon)
+			if planar.PolygonContains(polygon, p) {
+				areas = append(areas, f.Properties.MustString("name", "unknown"))
+			}
+		case "MultiPolygon":
+			multiPolygon := f.Geometry.(orb.MultiPolygon)
+			if planar.MultiPolygonContains(multiPolygon, p) {
+				areas = append(areas, f.Properties.MustString("name", "unknown"))
+			}
+		}
+	}
+
+	return
+}
