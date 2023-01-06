@@ -11,7 +11,7 @@ type areaStatsCount struct {
 	monsIv    int
 }
 
-var pokemonStats = make(map[string]areaStatsCount)
+var pokemonStats = make(map[areaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
@@ -64,7 +64,7 @@ func logPokemonStats() {
 	defer pokemonStatsLock.Unlock()
 	log.Infof("---STATS---")
 	for area, stats := range pokemonStats {
-		log.Infof("STATS Pokemon stats for %s %+v", area, stats)
+		log.Infof("STATS Pokemon stats for %+v %+v", area, stats)
 	}
-	pokemonStats = make(map[string]areaStatsCount) // clear stats
+	pokemonStats = make(map[areaName]areaStatsCount) // clear stats
 }

@@ -36,7 +36,12 @@ func ReadGeofences() {
 	}()
 }
 
-func matchGeofences(lat, lon float64) (areas []string) {
+type areaName struct {
+	parent string
+	name   string
+}
+
+func matchGeofences(lat, lon float64) (areas []areaName) {
 	if featureCollection == nil {
 		return
 	}
@@ -49,12 +54,16 @@ func matchGeofences(lat, lon float64) (areas []string) {
 		case "Polygon":
 			polygon := f.Geometry.(orb.Polygon)
 			if planar.PolygonContains(polygon, p) {
-				areas = append(areas, f.Properties.MustString("name", "unknown"))
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, areaName{parent: parent, name: name})
 			}
 		case "MultiPolygon":
 			multiPolygon := f.Geometry.(orb.MultiPolygon)
 			if planar.MultiPolygonContains(multiPolygon, p) {
-				areas = append(areas, f.Properties.MustString("name", "unknown"))
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, areaName{parent: parent, name: name})
 			}
 		}
 	}
