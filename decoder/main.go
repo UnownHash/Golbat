@@ -56,6 +56,11 @@ var weatherStripedMutex = stripedmutex.New(8)
 var ohbem *ohbemgo.Ohbem
 
 func init() {
+	initDataCache()
+	initLiveStats()
+}
+
+func initDataCache() {
 	pokestopCache = ttlcache.New[string, Pokestop](
 		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
 	)

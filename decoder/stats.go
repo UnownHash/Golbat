@@ -1,18 +1,39 @@
 package decoder
 
 import (
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"sync"
+	"time"
 )
 
 type areaStatsCount struct {
-	tthBucket [12]int
-	monsSeen  int
-	monsIv    int
+	tthBucket            [12]int
+	monsSeen             int
+	verifiedEnc          int
+	unverifiedEnc        int
+	verifiedEncSecTotal  int64
+	monsIv               int
+	timeToEncounterCount int
+	timeToEncounterSum   int64
 }
+
+type pokemonTimings struct {
+	first_wild      int64
+	first_encounter int64
+}
+
+var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
 
 var pokemonStats = make(map[areaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
+
+func initLiveStats() {
+	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
+		ttlcache.WithTTL[string, pokemonTimings](60 * time.Minute),
+	)
+	go pokemonTimingCache.Start()
+}
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
 	_ = old
@@ -26,6 +47,10 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			bucket := int64(-1)
 			monsIvIncr := 0
 			monsSeenIncr := 0
+			verifiedEncIncr := 0
+			unverifiedEncIncr := 0
+			verifiedEncSecTotalIncr := int64(0)
+			timeToEncounter := int64(0)
 
 			if new.Cp.Valid && // an encounter has happened
 				(old == nil || // this is first create
@@ -36,7 +61,10 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 					if bucket > 11 {
 						bucket = 11
 					}
-					//areaStats.tthBucket[bucket]++
+					verifiedEncIncr = 1
+					verifiedEncSecTotalIncr = tth
+				} else {
+					unverifiedEncIncr = 1
 				}
 				monsIvIncr++
 			}
@@ -47,20 +75,47 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				oldSeenType = old.SeenType.ValueOrZero()
 			}
 
-			if currentSeenType != oldSeenType &&
-				(currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter) &&
-				(oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
-				monsSeenIncr++
+			if currentSeenType != oldSeenType {
+				if (currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter) &&
+					(oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
+					monsSeenIncr++
+				}
+				if currentSeenType == SeenType_Wild && (oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
+					// transition to wild for the first time
+					pokemonTimingCache.Set(new.Id,
+						pokemonTimings{first_wild: new.Updated.ValueOrZero()},
+						ttlcache.DefaultTTL)
+				}
+				if currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Wild {
+					// transition to encounter from wild
+					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
+					if pokemonTimingEntry != nil {
+						pokemonTiming := pokemonTimingEntry.Value()
+						if pokemonTiming.first_encounter == 0 {
+							pokemonTiming.first_encounter = new.Updated.ValueOrZero()
+							timeToEncounter = pokemonTiming.first_encounter - pokemonTiming.first_wild
+
+							pokemonTimingCache.Set(new.Id, pokemonTiming, ttlcache.DefaultTTL)
+						}
+					}
+				}
 			}
 
 			// Update record if we have a new stat
-			if monsSeenIncr > 0 || monsIvIncr > 0 || bucket >= 0 {
+			if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 || bucket >= 0 || timeToEncounter > 0 {
 				areaStats := pokemonStats[area]
 				if bucket >= 0 {
 					areaStats.tthBucket[bucket]++
 				}
 				areaStats.monsIv += monsIvIncr
 				areaStats.monsSeen += monsSeenIncr
+				areaStats.verifiedEnc += verifiedEncIncr
+				areaStats.unverifiedEnc += unverifiedEncIncr
+				areaStats.verifiedEncSecTotal += verifiedEncSecTotalIncr
+				if timeToEncounter > 1 {
+					areaStats.timeToEncounterCount++
+					areaStats.timeToEncounterSum += timeToEncounter
+				}
 				pokemonStats[area] = areaStats
 			}
 		}
