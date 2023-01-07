@@ -157,8 +157,7 @@ func main() {
 		StartQuestExpiry(db)
 	}
 
-	ginMode := "release"
-	gin.SetMode(ginMode)
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	if config.Config.Logging.Debug {
 		r.Use(ginlogrus.Logger(log.StandardLogger()))
