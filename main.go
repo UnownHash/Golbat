@@ -5,6 +5,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	ginlogrus "github.com/toorop/gin-logrus"
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
@@ -15,8 +16,6 @@ import (
 	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
-	"github.com/toorop/gin-logrus"
-
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -158,8 +157,14 @@ func main() {
 		StartQuestExpiry(db)
 	}
 
+	ginMode := "release"
+	gin.SetMode(ginMode)
 	r := gin.New()
-	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
+	if config.Config.Logging.Debug {
+		r.Use(ginlogrus.Logger(log.StandardLogger()))
+	} else {
+		r.Use(gin.Recovery())
+	}
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
 	r.POST("/api/queryPokemon", QueryPokemon)

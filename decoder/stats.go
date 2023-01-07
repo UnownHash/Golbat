@@ -27,6 +27,16 @@ type pokemonTimings struct {
 	first_encounter int64
 }
 
+var pokemonCount = make(map[areaName]*areaPokemonCountDetail)
+
+type areaPokemonCountDetail struct {
+	hundos  map[int16]int
+	nundos  map[int16]int
+	shiny   map[int16]int
+	count   map[int16]int
+	ivCount map[int16]int
+}
+
 var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
 
 var pokemonStats = make(map[areaName]areaStatsCount)
@@ -47,6 +57,46 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 		defer pokemonStatsLock.Unlock()
 		for i := 0; i < len(areas); i++ {
 			area := areas[i]
+
+			// Count stats
+
+			if old == nil || old.Cp != new.Cp { // pokemon is new or cp has changed (eg encountered, or re-encountered)
+				countStats := pokemonCount[area]
+
+				if countStats == nil {
+					countStats = &areaPokemonCountDetail{
+						hundos:  make(map[int16]int),
+						nundos:  make(map[int16]int),
+						shiny:   make(map[int16]int),
+						count:   make(map[int16]int),
+						ivCount: make(map[int16]int),
+					}
+					pokemonCount[area] = countStats
+				}
+
+				if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
+					countStats.count[new.PokemonId]++
+				}
+				if new.Cp.Valid {
+					countStats.ivCount[new.PokemonId]++
+					if new.Shiny.ValueOrZero() {
+						countStats.shiny[new.PokemonId]++
+					}
+					if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
+						atk := new.AtkIv.ValueOrZero()
+						def := new.DefIv.ValueOrZero()
+						sta := new.StaIv.ValueOrZero()
+						if atk == 15 && def == 15 && sta == 15 {
+							countStats.hundos[new.PokemonId]++
+						}
+						if atk == 0 && def == 0 && sta == 0 {
+							countStats.nundos[new.PokemonId]--
+						}
+					}
+				}
+			}
+
+			// General stats
 
 			bucket := int64(-1)
 			monsIvIncr := 0
@@ -161,4 +211,14 @@ func logPokemonStats() {
 		log.Infof("STATS Pokemon stats for %+v %+v", area, stats)
 	}
 	pokemonStats = make(map[areaName]areaStatsCount) // clear stats
+}
+
+func logPokemonCount() {
+	pokemonStatsLock.Lock()
+	defer pokemonStatsLock.Unlock()
+	log.Infof("---STATS COUNTS---")
+	for area, stats := range pokemonCount {
+		log.Infof("STATS COUNTS Pokemon stats for %+v %+v", area, stats)
+	}
+	pokemonCount = make(map[areaName]*areaPokemonCountDetail) // clear stats
 }

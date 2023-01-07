@@ -34,6 +34,14 @@ func ReadGeofences() {
 			logPokemonStats()
 		}
 	}()
+
+	t2 := time.NewTicker(10 * time.Minute)
+	go func() {
+		for {
+			<-t2.C
+			logPokemonCount()
+		}
+	}()
 }
 
 type areaName struct {
