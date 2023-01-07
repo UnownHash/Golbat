@@ -8,15 +8,18 @@ import (
 )
 
 type areaStatsCount struct {
-	tthBucket            [12]int
-	monsSeen             int
-	verifiedEnc          int
-	unverifiedEnc        int
-	verifiedEncSecTotal  int64
-	monsIv               int
-	mons100Iv            int
-	timeToEncounterCount int
-	timeToEncounterSum   int64
+	tthBucket             [12]int
+	monsSeen              int
+	verifiedEnc           int
+	unverifiedEnc         int
+	verifiedEncSecTotal   int64
+	monsIv                int
+	mons100Iv             int
+	timeToEncounterCount  int
+	timeToEncounterSum    int64
+	statsResetCount       int
+	verifiedReEncounter   int
+	verifiedReEncSecTotal int64
 }
 
 type pokemonTimings struct {
@@ -53,6 +56,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			verifiedEncSecTotalIncr := int64(0)
 			timeToEncounter := int64(0)
 			mons100Incr := 0
+			statsResetCountIncr := 0
+			verifiedReEncounterIncr := 0
+			verifiedReEncSecTotalIncr := int64(0)
 
 			if new.Cp.Valid && // an encounter has happened
 				(old == nil || // this is first create
@@ -65,6 +71,16 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 					}
 					verifiedEncIncr = 1
 					verifiedEncSecTotalIncr = tth
+
+					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
+					if pokemonTimingEntry != nil {
+						pokemonTiming := pokemonTimingEntry.Value()
+						if pokemonTiming.first_encounter > 0 {
+							verifiedReEncounterIncr = 1
+							verifiedReEncSecTotalIncr = tth
+						}
+					}
+
 				} else {
 					unverifiedEncIncr = 1
 				}
@@ -104,11 +120,16 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 						}
 					}
 				}
+				if currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter {
+					// stats reset
+					statsResetCountIncr++
+				}
 			}
 
 			// Update record if we have a new stat
 			if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
-				bucket >= 0 || timeToEncounter > 0 || mons100Incr > 0 {
+				bucket >= 0 || timeToEncounter > 0 || mons100Incr > 0 || statsResetCountIncr > 0 ||
+				verifiedReEncounterIncr > 0 {
 				areaStats := pokemonStats[area]
 				if bucket >= 0 {
 					areaStats.tthBucket[bucket]++
@@ -119,6 +140,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				areaStats.unverifiedEnc += unverifiedEncIncr
 				areaStats.verifiedEncSecTotal += verifiedEncSecTotalIncr
 				areaStats.mons100Iv += mons100Incr
+				areaStats.statsResetCount += statsResetCountIncr
+				areaStats.verifiedReEncounter += verifiedReEncounterIncr
+				areaStats.verifiedReEncSecTotal += verifiedReEncSecTotalIncr
 				if timeToEncounter > 1 {
 					areaStats.timeToEncounterCount++
 					areaStats.timeToEncounterSum += timeToEncounter
