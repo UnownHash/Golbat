@@ -140,6 +140,7 @@ func main() {
 	webhooks.StartSender()
 
 	StartStatsLogger(db)
+	decoder.StartStatsWriter(db)
 
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)

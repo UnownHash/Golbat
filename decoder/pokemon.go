@@ -268,7 +268,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			return
 		}
 		rows, rowsErr := res.RowsAffected()
-		log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
+		log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
 
 		_, _ = res, err
 	}

@@ -6,7 +6,6 @@ import (
 	"github.com/paulmach/orb/planar"
 	log "github.com/sirupsen/logrus"
 	"io/ioutil"
-	"time"
 )
 
 var featureCollection *geojson.FeatureCollection
@@ -24,24 +23,6 @@ func ReadGeofences() {
 		return
 	}
 	featureCollection = fc
-
-	/* This should not be where we turn on stats */
-
-	ticker := time.NewTicker(1 * time.Minute)
-	go func() {
-		for {
-			<-ticker.C
-			logPokemonStats()
-		}
-	}()
-
-	t2 := time.NewTicker(10 * time.Minute)
-	go func() {
-		for {
-			<-t2.C
-			logPokemonCount()
-		}
-	}()
 }
 
 type areaName struct {
