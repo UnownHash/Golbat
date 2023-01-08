@@ -211,7 +211,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData) {
+func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -225,7 +225,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromWild(db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), "Account")
+			pokemon.updateFromWild(db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
 			savePokemonRecord(db, pokemon)
 		}
 
@@ -245,7 +245,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), "Account")
+			pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), username)
 			savePokemonRecord(db, pokemon)
 		}
 		pokemonMutex.Unlock()
@@ -264,7 +264,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), "Account")
+			pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), username)
 
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
 			if storedDiskEncounter != nil {

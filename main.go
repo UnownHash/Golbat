@@ -189,13 +189,13 @@ func decode(method int, protoData *ProtoData) {
 		result = decodeFortDetails(protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		result = decodeGMO(protoData.Data)
+		result = decodeGMO(protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
 		result = decodeGetGymInfo(protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
-		result = decodeEncounter(protoData.Data)
+		result = decodeEncounter(protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
 		result = decodeDiskEncounter(protoData.Data)
@@ -341,7 +341,7 @@ func decodeGetGymInfo(sDec []byte) string {
 	return decoder.UpdateGymRecordWithGymInfoProto(dbDetails, decodedGymInfo)
 }
 
-func decodeEncounter(sDec []byte) string {
+func decodeEncounter(sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
@@ -353,7 +353,7 @@ func decodeEncounter(sDec []byte) string {
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
-	return decoder.UpdatePokemonRecordWithEncounterProto(dbDetails, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithEncounterProto(dbDetails, decodedEncounterInfo, username)
 }
 
 func decodeDiskEncounter(sDec []byte) string {
@@ -372,7 +372,7 @@ func decodeDiskEncounter(sDec []byte) string {
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(dbDetails, decodedEncounterInfo)
 }
 
-func decodeGMO(sDec []byte) string {
+func decodeGMO(sDec []byte, username string) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(sDec, decodedGmo); err != nil {
@@ -412,7 +412,7 @@ func decodeGMO(sDec []byte) string {
 	}
 
 	decoder.UpdateFortBatch(dbDetails, newForts)
-	decoder.UpdatePokemonBatch(dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon)
+	decoder.UpdatePokemonBatch(dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
 	decoder.UpdateClientWeatherBatch(dbDetails, newClientWeather)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))

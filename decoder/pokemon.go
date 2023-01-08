@@ -609,7 +609,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encounterData *pogo.EncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -638,7 +638,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encount
 	}
 
 	pokemon.Shiny = null.BoolFrom(encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny)
-	pokemon.Username = null.StringFrom("Account")
+	pokemon.Username = null.StringFrom(username)
 
 	if encounterData.CaptureProbability != nil {
 		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
@@ -784,7 +784,7 @@ func (pokemon *Pokemon) isDittoDisguised() bool {
 	return false
 }
 
-func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.EncounterOutProto) string {
+func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
 
 	if encounter.Pokemon == nil {
 		return "No encounter"
@@ -805,7 +805,7 @@ func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.Enco
 	if pokemon == nil {
 		pokemon = &Pokemon{}
 	}
-	pokemon.updatePokemonFromEncounterProto(db, encounter)
+	pokemon.updatePokemonFromEncounterProto(db, encounter, username)
 	savePokemonRecord(db, pokemon)
 
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
