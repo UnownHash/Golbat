@@ -14,7 +14,6 @@ type areaStatsCount struct {
 	unverifiedEnc         int
 	verifiedEncSecTotal   int64
 	monsIv                int
-	mons100Iv             int
 	timeToEncounterCount  int
 	timeToEncounterSum    int64
 	statsResetCount       int
@@ -50,11 +49,11 @@ func initLiveStats() {
 }
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
-	_ = old
 	areas := matchGeofences(new.Lat, new.Lon)
 	if len(areas) > 0 {
 		pokemonStatsLock.Lock()
 		defer pokemonStatsLock.Unlock()
+
 		for i := 0; i < len(areas); i++ {
 			area := areas[i]
 
@@ -105,7 +104,6 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			unverifiedEncIncr := 0
 			verifiedEncSecTotalIncr := int64(0)
 			timeToEncounter := int64(0)
-			mons100Incr := 0
 			statsResetCountIncr := 0
 			verifiedReEncounterIncr := 0
 			verifiedReEncSecTotalIncr := int64(0)
@@ -135,9 +133,6 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 					unverifiedEncIncr = 1
 				}
 				monsIvIncr++
-				if new.StaIv.ValueOrZero() == 15 && new.AtkIv.ValueOrZero() == 15 && new.DefIv.ValueOrZero() == 15 {
-					mons100Incr++
-				}
 			}
 
 			currentSeenType := new.SeenType.ValueOrZero()
@@ -170,15 +165,18 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 						}
 					}
 				}
-				if currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter {
-					// stats reset
-					statsResetCountIncr++
-				}
+			}
+
+			if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
+				(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
+					new.PokemonId != old.PokemonId) {
+				// stats reset
+				statsResetCountIncr++
 			}
 
 			// Update record if we have a new stat
 			if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
-				bucket >= 0 || timeToEncounter > 0 || mons100Incr > 0 || statsResetCountIncr > 0 ||
+				bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
 				verifiedReEncounterIncr > 0 {
 				areaStats := pokemonStats[area]
 				if bucket >= 0 {
@@ -189,7 +187,6 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				areaStats.verifiedEnc += verifiedEncIncr
 				areaStats.unverifiedEnc += unverifiedEncIncr
 				areaStats.verifiedEncSecTotal += verifiedEncSecTotalIncr
-				areaStats.mons100Iv += mons100Incr
 				areaStats.statsResetCount += statsResetCountIncr
 				areaStats.verifiedReEncounter += verifiedReEncounterIncr
 				areaStats.verifiedReEncSecTotal += verifiedReEncSecTotalIncr
