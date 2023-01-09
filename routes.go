@@ -122,6 +122,10 @@ func Raw(c *gin.Context) {
 								if ok {
 									return &res
 								}
+							} else {
+								// TODO: Assume AR Quest in inv. Remove after `have_ar` will be added to GC.
+								res := true
+								return &res
 							}
 							return nil
 						}(),
