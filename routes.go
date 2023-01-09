@@ -112,8 +112,8 @@ func Raw(c *gin.Context) {
 			contents := raw["contents"].([]interface{}) // Other MITM
 			for _, v := range contents {
 				entry := v.(map[string]interface{})
-				// Atlas & GC support
-				if userAgent[:10] == "PokmonGO/0" || userAgent[:13] == "Pokemod Atlas" {
+				// Atlas, GC and GDS support
+				if userAgent[:13] == "Pokemod Atlas" || userAgent[:10] == "PokmonGO/0" {
 					protoData = append(protoData, InboundRawData{
 						Base64Data: entry["data"].(string),
 						Method:     int(entry["method"].(float64)),
