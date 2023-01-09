@@ -128,31 +128,24 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			verifiedReEncounterIncr := 0
 			verifiedReEncSecTotalIncr := int64(0)
 
-			if new.Cp.Valid && // an encounter has happened
-				(old == nil || // this is first create
-					!old.Cp.Valid && new.Cp.Valid) { // update is setting encounter details
-				if new.ExpireTimestampVerified {
-					tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
-					bucket = tth / (5 * 60)
-					if bucket > 11 {
-						bucket = 11
-					}
-					verifiedEncIncr = 1
-					verifiedEncSecTotalIncr = tth
+			var pokemonTiming *pokemonTimings
 
+			populatePokemonTiming := func() {
+				if pokemonStats == nil {
 					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
 					if pokemonTimingEntry != nil {
-						pokemonTiming := pokemonTimingEntry.Value()
-						if pokemonTiming.first_encounter > 0 {
-							verifiedReEncounterIncr = 1
-							verifiedReEncSecTotalIncr = tth
-						}
+						p := pokemonTimingEntry.Value()
+						pokemonTiming = &p
+						return
 					}
-
-				} else {
-					unverifiedEncIncr = 1
 				}
-				monsIvIncr++
+				pokemonTiming = &pokemonTimings{}
+			}
+
+			updatePokemonTiming := func() {
+				if pokemonTiming != nil {
+					pokemonTimingCache.Set(new.Id, *pokemonTiming, ttlcache.DefaultTTL)
+				}
 			}
 
 			currentSeenType := new.SeenType.ValueOrZero()
@@ -162,26 +155,52 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			}
 
 			if currentSeenType != oldSeenType {
-				if (currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter) &&
-					(oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
-					monsSeenIncr++
-				}
-				if currentSeenType == SeenType_Wild && (oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell) {
-					// transition to wild for the first time
-					pokemonTimingCache.Set(new.Id,
-						pokemonTimings{first_wild: new.Updated.ValueOrZero()},
-						ttlcache.DefaultTTL)
-				}
-				if currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Wild {
-					// transition to encounter from wild
-					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
-					if pokemonTimingEntry != nil {
-						pokemonTiming := pokemonTimingEntry.Value()
-						if pokemonTiming.first_encounter == 0 {
-							pokemonTiming.first_encounter = new.Updated.ValueOrZero()
-							timeToEncounter = pokemonTiming.first_encounter - pokemonTiming.first_wild
+				if oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell {
+					// New pokemon, or transition from cell or nearby stop
 
-							pokemonTimingCache.Set(new.Id, pokemonTiming, ttlcache.DefaultTTL)
+					if currentSeenType == SeenType_Wild {
+						// transition to wild for the first time
+						pokemonTiming = &pokemonTimings{first_wild: new.Updated.ValueOrZero()}
+						updatePokemonTiming()
+					}
+
+					if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
+						// transition to wild or encounter for the first time
+						monsSeenIncr++
+					}
+				}
+
+				if currentSeenType == SeenType_Encounter {
+					populatePokemonTiming()
+
+					if pokemonTiming.first_encounter == 0 {
+						// This is first encounter
+						pokemonTiming.first_encounter = new.Updated.ValueOrZero()
+						updatePokemonTiming()
+
+						if pokemonTiming.first_wild > 0 {
+							timeToEncounter = pokemonTiming.first_encounter - pokemonTiming.first_wild
+						}
+
+						monsIvIncr++
+
+						if new.ExpireTimestampVerified {
+							tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
+							bucket = tth / (5 * 60)
+							if bucket > 11 {
+								bucket = 11
+							}
+							verifiedEncIncr = 1
+							verifiedEncSecTotalIncr = tth
+						} else {
+							unverifiedEncIncr = 1
+						}
+					} else {
+						if new.ExpireTimestampVerified {
+							tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
+
+							verifiedReEncounterIncr = 1
+							verifiedReEncSecTotalIncr = tth
 						}
 					}
 				}
