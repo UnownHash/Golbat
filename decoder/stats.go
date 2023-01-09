@@ -131,7 +131,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			var pokemonTiming *pokemonTimings
 
 			populatePokemonTiming := func() {
-				if pokemonStats == nil {
+				if pokemonTiming == nil {
 					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
 					if pokemonTimingEntry != nil {
 						p := pokemonTimingEntry.Value()
@@ -182,7 +182,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 							timeToEncounter = pokemonTiming.first_encounter - pokemonTiming.first_wild
 						}
 
-						monsIvIncr++
+						monsIvIncr = 1
 
 						if new.ExpireTimestampVerified {
 							tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
@@ -210,7 +210,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
 					new.PokemonId != old.PokemonId) {
 				// stats reset
-				statsResetCountIncr++
+				statsResetCountIncr = 1
 			}
 
 			// Update record if we have a new stat
