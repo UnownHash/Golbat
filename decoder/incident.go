@@ -31,7 +31,7 @@ type Incident struct {
 //->   `character` smallint unsigned NOT NULL,
 //->   `updated` int unsigned NOT NULL,
 
-func getIncidentRecord(db db.DbDetails, incidentId string) (*Incident, error) {
+func getIncidentRecord(db db.Connections, incidentId string) (*Incident, error) {
 	inMemoryIncident := incidentCache.Get(incidentId)
 	if inMemoryIncident != nil {
 		incident := inMemoryIncident.Value()
@@ -59,7 +59,7 @@ func hasChangesIncident(old *Incident, new *Incident) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func saveIncidentRecord(db db.DbDetails, incident *Incident) {
+func saveIncidentRecord(db db.Connections, incident *Incident) {
 	oldIncident, _ := getIncidentRecord(db, incident.Id)
 
 	if oldIncident != nil && !hasChangesIncident(oldIncident, incident) {
@@ -102,7 +102,7 @@ func saveIncidentRecord(db db.DbDetails, incident *Incident) {
 	createIncidentWebhooks(db, oldIncident, incident)
 }
 
-func createIncidentWebhooks(db db.DbDetails, oldIncident *Incident, incident *Incident) {
+func createIncidentWebhooks(db db.Connections, oldIncident *Incident, incident *Incident) {
 	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
 		stop, _ := getPokestopRecord(db, incident.PokestopId)
 		if stop == nil {
@@ -139,8 +139,8 @@ func createIncidentWebhooks(db db.DbDetails, oldIncident *Incident, incident *In
 
 func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pogo.PokestopIncidentDisplayProto) {
 	incident.Id = pokestopDisplay.IncidentId
-	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
-	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
+	incident.StartTime = pokestopDisplay.IncidentStartMs / 1000
+	incident.ExpirationTime = pokestopDisplay.IncidentExpirationMs / 1000
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
 	characterDisplay := pokestopDisplay.GetCharacterDisplay()
 	if characterDisplay != nil {

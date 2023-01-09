@@ -181,7 +181,7 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:   "Vivillon",
 }
 
-func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
+func getPlayerRecord(db db.Connections, name string) (*Player, error) {
 	inMemoryPlayer := playerCache.Get(name)
 	if inMemoryPlayer != nil {
 		player := inMemoryPlayer.Value()
@@ -298,7 +298,7 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 	return !cmp.Equal(old, new, transformNullFloats, ignoreApproxFloats)
 }
 
-func savePlayerRecord(db db.DbDetails, player *Player) {
+func savePlayerRecord(db db.Connections, player *Player) {
 	oldPlayer, _ := getPlayerRecord(db, player.Name)
 
 	if oldPlayer != nil && !hasChangesPlayer(oldPlayer, player) {
@@ -478,7 +478,7 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 	}
 }
 
-func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto) error {
+func UpdatePlayerRecordWithPlayerSummary(db db.Connections, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto) error {
 	player, err := getPlayerRecord(db, playerSummary.GetCodename())
 	if err != nil {
 		return err

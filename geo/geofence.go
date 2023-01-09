@@ -16,21 +16,21 @@ type BoundingBox struct {
 	MaximumLongitude float64
 }
 
-func (fence *Geofence) GetBoundingBox() BoundingBox {
-	if len(fence.Fence) == 0 {
+func (f *Geofence) GetBoundingBox() BoundingBox {
+	if len(f.Fence) == 0 {
 		return BoundingBox{}
 	}
 
 	bbox := BoundingBox{
-		MinimumLatitude:  fence.Fence[0].Latitude,
-		MinimumLongitude: fence.Fence[0].Longitude,
-		MaximumLongitude: fence.Fence[0].Longitude,
-		MaximumLatitude:  fence.Fence[0].Latitude,
+		MinimumLatitude:  f.Fence[0].Latitude,
+		MinimumLongitude: f.Fence[0].Longitude,
+		MaximumLongitude: f.Fence[0].Longitude,
+		MaximumLatitude:  f.Fence[0].Latitude,
 	}
 
-	if len(fence.Fence) > 1 {
-		for x := 1; x < len(fence.Fence); x++ {
-			point := fence.Fence[x]
+	if len(f.Fence) > 1 {
+		for x := 1; x < len(f.Fence); x++ {
+			point := f.Fence[x]
 			if point.Latitude < bbox.MinimumLatitude {
 				bbox.MinimumLatitude = point.Latitude
 			}
@@ -48,9 +48,9 @@ func (fence *Geofence) GetBoundingBox() BoundingBox {
 	return bbox
 }
 
-func (fence *Geofence) ToPolygonString() string {
+func (f *Geofence) ToPolygonString() string {
 	routeString := ""
-	for _, l := range fence.Fence {
+	for _, l := range f.Fence {
 		if routeString != "" {
 			routeString = routeString + ","
 		}
@@ -61,30 +61,33 @@ func (fence *Geofence) ToPolygonString() string {
 
 }
 
-// NewPolygon: Creates and returns a new pointer to a Polygon
+// NewPolygon Creates and returns a new pointer to a Polygon
 // composed of the passed in points.  Points are
 // considered to be in order such that the last point
 // forms an edge with the first point.
+//
+//goland:noinspection GoUnusedExportedFunction
 func NewPolygon(points []Location) *Geofence {
 	return &Geofence{Fence: points}
 }
 
 // Points returns the points of the current Polygon.
-func (p *Geofence) Points() []Location {
-	return p.Fence
+func (f *Geofence) Points() []Location {
+	return f.Fence
 }
 
-// Add: Appends the passed in contour to the current Polygon.
-func (p *Geofence) Add(point Location) {
-	p.Fence = append(p.Fence, point)
+// Add Appends the passed in contour to the current Polygon.
+func (f *Geofence) Add(point Location) {
+	f.Fence = append(f.Fence, point)
 }
 
 // IsClosed returns whether or not the polygon is closed.
 // TODO:  This can obviously be improved, but for now,
-//        this should be sufficient for detecting if points
-//        are contained using the raycast algorithm.
-func (p *Geofence) IsClosed() bool {
-	if len(p.Fence) < 3 {
+//
+//	this should be sufficient for detecting if points
+//	are contained using the raycast algorithm.
+func (f *Geofence) IsClosed() bool {
+	if len(f.Fence) < 3 {
 		return false
 	}
 
@@ -92,18 +95,18 @@ func (p *Geofence) IsClosed() bool {
 }
 
 // Contains returns whether or not the current Polygon contains the passed in Point.
-func (p *Geofence) Contains(point Location) bool {
-	if !p.IsClosed() {
+func (f *Geofence) Contains(point Location) bool {
+	if !f.IsClosed() {
 		return false
 	}
 
-	start := len(p.Fence) - 1
+	start := len(f.Fence) - 1
 	end := 0
 
-	contains := p.intersectsWithRaycast(point, p.Fence[start], p.Fence[end])
+	contains := f.intersectsWithRaycast(point, f.Fence[start], f.Fence[end])
 
-	for i := 1; i < len(p.Fence); i++ {
-		if p.intersectsWithRaycast(point, p.Fence[i-1], p.Fence[i]) {
+	for i := 1; i < len(f.Fence); i++ {
+		if f.intersectsWithRaycast(point, f.Fence[i-1], f.Fence[i]) {
 			contains = !contains
 		}
 	}
@@ -114,7 +117,7 @@ func (p *Geofence) Contains(point Location) bool {
 // Using the raycast algorithm, this returns whether or not the passed in point
 // Intersects with the edge drawn by the passed in start and end points.
 // Original implementation: http://rosettacode.org/wiki/Ray-casting_algorithm#Go
-func (p *Geofence) intersectsWithRaycast(point Location, start Location, end Location) bool {
+func (f *Geofence) intersectsWithRaycast(point Location, start Location, end Location) bool {
 	// Always ensure that the the first point
 	// has a y coordinate that is less than the second point
 	if start.Longitude > end.Longitude {

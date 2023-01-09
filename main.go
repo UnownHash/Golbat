@@ -10,7 +10,7 @@ import (
 	"golbat/decoder"
 	"golbat/webhooks"
 	"google.golang.org/protobuf/proto"
-	"io/ioutil"
+	"os"
 	"time"
 	_ "time/tzdata"
 
@@ -26,7 +26,7 @@ import (
 
 var db *sqlx.DB
 var inMemoryDb *sqlx.DB
-var dbDetails db2.DbDetails
+var dbDetails db2.Connections
 
 func main() {
 	config.ReadConfig()
@@ -113,7 +113,7 @@ func main() {
 		}
 
 		// Create database
-		content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
+		content, fileErr := os.ReadFile("sql/sqlite/create.sql")
 
 		if fileErr != nil {
 			log.Fatal(err)
@@ -121,13 +121,13 @@ func main() {
 
 		inMemoryDb.MustExec(string(content))
 
-		dbDetails = db2.DbDetails{
+		dbDetails = db2.Connections{
 			PokemonDb:       inMemoryDb,
 			UsePokemonCache: false,
 			GeneralDb:       db,
 		}
 	} else {
-		dbDetails = db2.DbDetails{
+		dbDetails = db2.Connections{
 			PokemonDb:       db,
 			UsePokemonCache: true,
 			GeneralDb:       db,

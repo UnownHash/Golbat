@@ -85,16 +85,19 @@ func StartQuestExpiry(db *sqlx.DB) {
 			var err error
 
 			decoder.ClearPokestopCache()
-			result, err = db.Exec("UPDATE pokestop " +
-				"SET " +
-				"quest_type = NULL," +
-				"quest_timestamp = NULL," +
-				"quest_target = NULL," +
-				"quest_conditions = NULL," +
-				"quest_rewards = NULL," +
-				"quest_template = NULL," +
-				"quest_title = NULL " +
-				"WHERE quest_expiry < UNIX_TIMESTAMP();")
+			result, err = db.Exec(`
+				UPDATE 
+					pokestop 
+				SET 
+					quest_type = NULL, 
+					quest_timestamp = NULL, 
+					quest_target = NULL, 
+					quest_conditions = NULL, 
+					quest_rewards = NULL, 
+					quest_template = NULL, 
+					quest_title = NULL 
+				WHERE 
+					quest_expiry < UNIX_TIMESTAMP();`)
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
@@ -105,16 +108,19 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			totalRows += rows
 
-			result, err = db.Exec("UPDATE pokestop " +
-				"SET " +
-				"alternative_quest_type = NULL," +
-				"alternative_quest_timestamp = NULL," +
-				"alternative_quest_target = NULL," +
-				"alternative_quest_conditions = NULL," +
-				"alternative_quest_rewards = NULL," +
-				"alternative_quest_template = NULL," +
-				"alternative_quest_title = NULL " +
-				"WHERE alternative_quest_expiry < UNIX_TIMESTAMP();")
+			result, err = db.Exec(`
+				UPDATE 
+					pokestop 
+				SET 
+					alternative_quest_type = NULL, 
+					alternative_quest_timestamp = NULL, 
+					alternative_quest_target = NULL, 
+					alternative_quest_conditions = NULL, 
+					alternative_quest_rewards = NULL, 
+					alternative_quest_template = NULL, 
+					alternative_quest_title = NULL 
+				WHERE 
+					alternative_quest_expiry < UNIX_TIMESTAMP();`)
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)

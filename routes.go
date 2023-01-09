@@ -10,7 +10,6 @@ import (
 	"golbat/decoder"
 	"golbat/geo"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 )
@@ -31,7 +30,7 @@ type InboundRawData struct {
 
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
-	var r *http.Request = c.Request
+	var r = c.Request
 
 	authHeader := r.Header.Get("Authorization")
 	if config.Config.RawBearer != "" {
@@ -41,7 +40,7 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
@@ -282,6 +281,7 @@ func toJson(rows *sql.Rows) ([]byte, error) {
 	}
 
 	count := len(columnTypes)
+	//goland:noinspection GoPreferNilSlice
 	finalRows := []interface{}{}
 
 	for rows.Next() {

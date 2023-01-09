@@ -31,7 +31,7 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
-func getSpawnpointRecord(db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
+func getSpawnpointRecord(db db.Connections, spawnpointId int64) (*Spawnpoint, error) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint != nil {
 		spawnpoint := inMemorySpawnpoint.Value()
@@ -59,23 +59,29 @@ func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
 		old.DespawnSec != new.DespawnSec
 }
 
-func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
+func spawnpointUpdate(db db.Connections, spawnpoint *Spawnpoint) {
 	oldSpawnpoint, _ := getSpawnpointRecord(db, spawnpoint.Id)
 
 	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
 		return
 	}
 
-	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
-
-	_, err := db.GeneralDb.NamedExec("INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
-		"VALUES (:id, :lat, :lon, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), :despawn_sec)"+
-		"ON DUPLICATE KEY UPDATE "+
-		"lat=VALUES(lat),"+
-		"lon=VALUES(lon),"+
-		"updated=VALUES(updated),"+
-		"last_seen=VALUES(last_seen),"+
-		"despawn_sec=VALUES(despawn_sec)", spawnpoint)
+	_, err := db.GeneralDb.NamedExec(`
+		INSERT INTO spawnpoint (
+		id, lat, lon, updated, last_seen, despawn_sec
+		) VALUES (
+			:id,
+			:lat,
+			:lon,
+			UNIX_TIMESTAMP(),
+			UNIX_TIMESTAMP(),
+			:despawn_sec
+		) ON DUPLICATE KEY UPDATE 
+		lat=VALUES(lat),
+		lon=VALUES(lon),
+		updated=VALUES(updated),
+		last_seen=VALUES(last_seen),
+		despawn_sec=VALUES(despawn_sec)`, spawnpoint)
 
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
@@ -86,7 +92,7 @@ func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
-func spawnpointSeen(db db.DbDetails, spawnpointId int64) {
+func spawnpointSeen(db db.Connections, spawnpointId int64) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint == nil {
 		// This should never happen, since all routes here have previously created a spawnpoint in the cache

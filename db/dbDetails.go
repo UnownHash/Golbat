@@ -4,7 +4,7 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type DbDetails struct {
+type Connections struct {
 	PokemonDb       *sqlx.DB
 	UsePokemonCache bool
 	GeneralDb       *sqlx.DB

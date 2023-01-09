@@ -3,10 +3,11 @@ package config
 import (
 	"encoding/json"
 	"github.com/pelletier/go-toml/v2"
-	"io/ioutil"
+	"io"
 	"os"
 )
 
+//goland:noinspection GoUnusedExportedFunction
 func ReadJsonConfig() {
 	jsonFile, err := os.Open("config.json")
 	// if we os.Open returns an error then handle it
@@ -14,11 +15,12 @@ func ReadJsonConfig() {
 		panic(err)
 	}
 	// defer the closing of our jsonFile so that we can parse it later on
+	//goland:noinspection GoUnhandledErrorResult
 	defer jsonFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(jsonFile)
+	byteValue, _ := io.ReadAll(jsonFile)
 
-	err = json.Unmarshal([]byte(byteValue), &Config)
+	err = json.Unmarshal(byteValue, &Config)
 	if err != nil {
 		panic(err)
 
@@ -32,14 +34,15 @@ func ReadConfig() {
 		panic(err)
 	}
 	// defer the closing of our tomlFile so that we can parse it later on
+	//goland:noinspection GoUnhandledErrorResult
 	defer tomlFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(tomlFile)
+	byteValue, _ := io.ReadAll(tomlFile)
 
 	// Provide a default value
 	Config.Logging.SaveLogs = true
 
-	err = toml.Unmarshal([]byte(byteValue), &Config)
+	err = toml.Unmarshal(byteValue, &Config)
 	if err != nil {
 		panic(err)
 	}

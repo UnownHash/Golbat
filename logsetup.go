@@ -39,6 +39,7 @@ func SetupLogger(logLevel log.Level, fileLoggingEnabled bool) {
 	log.SetOutput(output)
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func RotateLogs() {
 	if lumberjackLogger != nil {
 		_ = lumberjackLogger.Rotate()

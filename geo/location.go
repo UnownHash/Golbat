@@ -11,12 +11,15 @@ func (l Location) Tuple() (float64, float64) {
 	return l.Latitude, l.Longitude
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func LocationFromFort(fort *pogo.PokemonFortProto) Location {
 	return Location{fort.Latitude, fort.Longitude}
 }
 
+//goland:noinspection GoUnusedGlobalVariable
 var UseCurrentLocation = Location{0, 0}
 
+//goland:noinspection GoUnusedExportedFunction
 func SplitRoute(route []Location, parts int) [][]Location {
 	var routes [][]Location
 	splitLen := len(route) / parts

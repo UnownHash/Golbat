@@ -42,6 +42,7 @@ func sendWebhooks(queue WebhookQueue) {
 		log.Warningf("Webhook: %s", err)
 		return
 	}
+	//goland:noinspection GoUnhandledErrorResult
 	defer resp.Body.Close()
 
 	log.Debugf("Webhook: Response %s", resp.Status)

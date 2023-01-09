@@ -142,7 +142,7 @@ var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	return delta < 0.000001
 })
 
-func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
+func UpdateFortBatch(db db.Connections, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)
 	// 2. Fetch current stops from database
@@ -211,7 +211,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
+func UpdatePokemonBatch(db db.Connections, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -279,7 +279,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 	}
 }
 
-func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
+func UpdateClientWeatherBatch(db db.Connections, p []RawClientWeatherData) {
 	for _, weatherProto := range p {
 		weatherId := strconv.FormatInt(weatherProto.Data.S2CellId, 10)
 		weatherMutex, _ := weatherStripedMutex.GetLock(weatherId)

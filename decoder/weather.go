@@ -50,7 +50,7 @@ type Weather struct {
 //  PRIMARY KEY (`id`)
 //)
 
-func getWeatherRecord(db db.DbDetails, weatherId int64) (*Weather, error) {
+func getWeatherRecord(db db.Connections, weatherId int64) (*Weather, error) {
 	inMemoryWeather := weatherCache.Get(weatherId)
 	if inMemoryWeather != nil {
 		weather := inMemoryWeather.Value()
@@ -58,7 +58,27 @@ func getWeatherRecord(db db.DbDetails, weatherId int64) (*Weather, error) {
 	}
 	weather := Weather{}
 
-	err := db.GeneralDb.Get(&weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
+	err := db.GeneralDb.Get(&weather, `
+		SELECT 
+			id, 
+			latitude, 
+			longitude, 
+			level, 
+			gameplay_condition, 
+			wind_direction, 
+			cloud_level, 
+			rain_level, 
+			wind_level, 
+			snow_level, 
+			fog_level, 
+			special_effect_level, 
+			severity, 
+			warn_weather, 
+			updated 
+		FROM 
+			weather 
+		WHERE 
+			id = ?`, weatherId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -130,45 +150,66 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 	}
 }
 
-func saveWeatherRecord(db db.DbDetails, weather *Weather) {
+func saveWeatherRecord(db db.Connections, weather *Weather) {
 	oldWeather, _ := getWeatherRecord(db, weather.Id)
 	if oldWeather != nil && !hasChangesWeather(oldWeather, weather) {
 		return
 	}
 
 	if oldWeather == nil {
-		res, err := db.GeneralDb.NamedExec(
-			"INSERT INTO weather ("+
-				"id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, "+
-				"wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated)"+
-				"VALUES ("+
-				":id, :latitude, :longitude, :level, :gameplay_condition, :wind_direction, :cloud_level, :rain_level, "+
-				":wind_level, :snow_level, :fog_level, :special_effect_level, :severity, :warn_weather, "+
-				"UNIX_TIMESTAMP())",
-			weather)
+		res, err := db.GeneralDb.NamedExec(`
+			INSERT INTO weather (
+				id, latitude, longitude, level, gameplay_condition, 
+				wind_direction, cloud_level, rain_level, 
+				wind_level, snow_level, fog_level, 
+				special_effect_level, severity, 
+				warn_weather, updated
+			) VALUES (
+				:id, 
+				:latitude, 
+				:longitude, 
+				:level, 
+				:gameplay_condition, 
+				:wind_direction, 
+				:cloud_level, 
+				:rain_level, 
+				:wind_level, 
+				:snow_level, 
+				:fog_level, 
+				:special_effect_level, 
+				:severity, 
+				:warn_weather, 
+				UNIX_TIMESTAMP()
+			)`, weather,
+		)
+
 		if err != nil {
 			log.Errorf("insert weather: %s", err)
 			return
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExec("UPDATE weather SET "+
-			"latitude = :latitude, "+
-			"longitude = :longitude, "+
-			"level = :level, "+
-			"gameplay_condition = :gameplay_condition, "+
-			"wind_direction = :wind_direction, "+
-			"cloud_level = :cloud_level, "+
-			"rain_level = :rain_level, "+
-			"wind_level = :wind_level, "+
-			"snow_level = :snow_level, "+
-			"fog_level = :fog_level, "+
-			"special_effect_level = :special_effect_level, "+
-			"severity = :severity, "+
-			"warn_weather = :warn_weather, "+
-			"updated = UNIX_TIMESTAMP() "+
-			"WHERE id = :id",
-			weather)
+		res, err := db.GeneralDb.NamedExec(`
+			UPDATE 
+				weather 
+			SET 
+				latitude = :latitude, 
+				longitude = :longitude, 
+				level = :level, 
+				gameplay_condition = :gameplay_condition, 
+				wind_direction = :wind_direction, 
+				cloud_level = :cloud_level, 
+				rain_level = :rain_level, 
+				wind_level = :wind_level, 
+				snow_level = :snow_level, 
+				fog_level = :fog_level, 
+				special_effect_level = :special_effect_level, 
+				severity = :severity, 
+				warn_weather = :warn_weather, 
+				updated = UNIX_TIMESTAMP() 
+			WHERE 
+				id = :id`, weather,
+		)
 		if err != nil {
 			log.Errorf("update weather: %s", err)
 			return

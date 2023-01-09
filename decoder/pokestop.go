@@ -96,7 +96,7 @@ type Pokestop struct {
 
 }
 
-func getPokestopRecord(db db.DbDetails, fortId string) (*Pokestop, error) {
+func getPokestopRecord(db db.Connections, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
@@ -183,7 +183,9 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	questTarget := int64(questData.Goal.Target)
 	questTemplate := strings.ToLower(questData.TemplateId)
 
+	//goland:noinspection GoPreferNilSlice
 	conditions := []map[string]interface{}{}
+	//goland:noinspection GoPreferNilSlice
 	rewards := []map[string]interface{}{}
 
 	for _, conditionData := range questData.Goal.Condition {
@@ -195,6 +197,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			info := conditionData.GetWithBadgeType()
 			infoData["amount"] = info.Amount
 			infoData["badge_rank"] = info.BadgeRank
+			//goland:noinspection GoPreferNilSlice
 			badgeTypeById := []int{}
 			for _, badge := range info.BadgeType {
 				badgeTypeById = append(badgeTypeById, int(badge))
@@ -208,6 +211,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			}
 		case pogo.QuestConditionProto_WITH_RAID_LEVEL:
 			info := conditionData.GetWithRaidLevel()
+			//goland:noinspection GoPreferNilSlice
 			raidLevelById := []int{}
 			for _, raidLevel := range info.RaidLevel {
 				raidLevelById = append(raidLevelById, int(raidLevel))
@@ -215,6 +219,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["raid_levels"] = raidLevelById
 		case pogo.QuestConditionProto_WITH_POKEMON_TYPE:
 			info := conditionData.GetWithPokemonType()
+			//goland:noinspection GoPreferNilSlice
 			pokemonTypesById := []int{}
 			for _, t := range info.PokemonType {
 				pokemonTypesById = append(pokemonTypesById, int(t))
@@ -225,6 +230,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			if info.CategoryName != "" {
 				infoData["category_name"] = info.CategoryName
 			}
+			//goland:noinspection GoPreferNilSlice
 			pokemonById := []int{}
 			for _, pokemon := range info.PokemonIds {
 				pokemonById = append(pokemonById, int(pokemon))
@@ -251,6 +257,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["distance"] = info.DistanceKm
 		case pogo.QuestConditionProto_WITH_POKEMON_ALIGNMENT:
 			info := conditionData.GetWithPokemonAlignment()
+			//goland:noinspection GoPreferNilSlice
 			alignmentIds := []int{}
 			for _, alignment := range info.Alignment {
 				alignmentIds = append(alignmentIds, int(alignment))
@@ -258,6 +265,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["alignment_ids"] = alignmentIds
 		case pogo.QuestConditionProto_WITH_INVASION_CHARACTER:
 			info := conditionData.GetWithInvasionCharacter()
+			//goland:noinspection GoPreferNilSlice
 			characterCategoryIds := []int{}
 			for _, characterCategory := range info.Category {
 				characterCategoryIds = append(characterCategoryIds, int(characterCategory))
@@ -284,6 +292,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["min_buddy_affection_earned_today"] = info.MinBuddyAffectionEarnedToday
 		case pogo.QuestConditionProto_WITH_TEMP_EVO_POKEMON:
 			info := conditionData.GetWithTempEvoId()
+			//goland:noinspection GoPreferNilSlice
 			tempEvoIds := []int{}
 			for _, evolution := range info.MegaForm {
 				tempEvoIds = append(tempEvoIds, int(evolution))
@@ -291,6 +300,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["raid_pokemon_evolutions"] = tempEvoIds
 		case pogo.QuestConditionProto_WITH_ITEM_TYPE:
 			info := conditionData.GetWithItemType()
+			//goland:noinspection GoPreferNilSlice
 			itemTypes := []int{}
 			for _, itemType := range info.ItemType {
 				itemTypes = append(itemTypes, int(itemType))
@@ -456,7 +466,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
 		lureId := int16(fortData.Modifier[0].ModifierType)
-		lureExpiry := int64(fortData.Modifier[0].ExpirationTimeMs / 1000)
+		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000
 
 		stop.LureId = lureId
 		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
@@ -562,7 +572,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 }
 
-func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
+func savePokestopRecord(db db.Connections, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(db, pokestop.Id)
 
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
@@ -572,25 +582,58 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 	log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
 	if oldPokestop == nil {
-		res, err := db.GeneralDb.NamedExec(
-			"INSERT INTO pokestop ("+
-				"id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,"+
-				"quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,"+
-				"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
-				"alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,"+
-				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
-				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
-				"quest_expiry, alternative_quest_expiry, description)"+
-				"VALUES ("+
-				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
-				":quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,"+
-				":alternative_quest_type, :alternative_quest_timestamp, :alternative_quest_target,"+
-				":alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,"+
-				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
-				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
-				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
-				":quest_expiry, :alternative_quest_expiry, :description )",
-			pokestop)
+		res, err := db.GeneralDb.NamedExec(`
+			INSERT INTO pokestop (
+				id, lat, lon, name, url, enabled, lure_expire_timestamp, 
+				last_modified_timestamp, quest_type, 
+				quest_timestamp, quest_target, quest_conditions, 
+				quest_rewards, quest_template, quest_title, 
+				alternative_quest_type, alternative_quest_timestamp, 
+				alternative_quest_target, alternative_quest_conditions, 
+				alternative_quest_rewards, alternative_quest_template, 
+				alternative_quest_title, cell_id, 
+				lure_id, sponsor_id, partner_id, 
+				ar_scan_eligible, power_up_points, 
+				power_up_level, power_up_end_timestamp, 
+				updated, first_seen_timestamp, quest_expiry, 
+				alternative_quest_expiry, description
+			) VALUES (
+				:id, 
+				:lat, 
+				:lon, 
+				:name, 
+				:url, 
+				:enabled, 
+				:lure_expire_timestamp, 
+				:last_modified_timestamp, 
+				:quest_type, 
+				:quest_timestamp, 
+				:quest_target, 
+				:quest_conditions, 
+				:quest_rewards, 
+				:quest_template, 
+				:quest_title, 
+				:alternative_quest_type, 
+				:alternative_quest_timestamp, 
+				:alternative_quest_target, 
+				:alternative_quest_conditions, 
+				:alternative_quest_rewards, 
+				:alternative_quest_template, 
+				:alternative_quest_title, 
+				:cell_id, 
+				:lure_id, 
+				:sponsor_id, 
+				:partner_id, 
+				:ar_scan_eligible, 
+				:power_up_points, 
+				:power_up_level, 
+				:power_up_end_timestamp, 
+				UNIX_TIMESTAMP(), 
+				UNIX_TIMESTAMP(), 
+				:quest_expiry, 
+				:alternative_quest_expiry, 
+				:description
+			)`, pokestop)
 
 		if err != nil {
 			log.Errorf("insert pokestop: %s", err)
@@ -598,44 +641,46 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExec(
-			"UPDATE pokestop SET "+
-				"lat = :lat,"+
-				"lon = :lon,"+
-				"name = :name,"+
-				"url = :url,"+
-				"enabled = :enabled,"+
-				"lure_expire_timestamp = :lure_expire_timestamp,"+
-				"last_modified_timestamp = :last_modified_timestamp,"+
-				"updated = UNIX_TIMESTAMP(),"+
-				"quest_type = :quest_type, "+
-				"quest_timestamp = :quest_timestamp, "+
-				"quest_target = :quest_target, "+
-				"quest_conditions = :quest_conditions, "+
-				"quest_rewards = :quest_rewards, "+
-				"quest_template = :quest_template, "+
-				"quest_title = :quest_title,"+
-				"alternative_quest_type = :alternative_quest_type, "+
-				"alternative_quest_timestamp = :alternative_quest_timestamp,"+
-				"alternative_quest_target = :alternative_quest_target, "+
-				"alternative_quest_conditions = :alternative_quest_conditions, "+
-				"alternative_quest_rewards = :alternative_quest_rewards,"+
-				"alternative_quest_template = :alternative_quest_template,"+
-				"alternative_quest_title = :alternative_quest_title,"+
-				"cell_id = :cell_id,"+
-				"lure_id = :lure_id,"+
-				"deleted = false,"+
-				"sponsor_id = :sponsor_id,"+
-				"partner_id = :partner_id,"+
-				"ar_scan_eligible = :ar_scan_eligible,"+
-				"power_up_points = :power_up_points,"+
-				"power_up_level = :power_up_level,"+
-				"power_up_end_timestamp = :power_up_end_timestamp,"+
-				"quest_expiry = :quest_expiry,"+
-				"alternative_quest_expiry = :alternative_quest_expiry,"+
-				"description = :description"+
-				" WHERE id = :id",
-			pokestop,
+		res, err := db.GeneralDb.NamedExec(`
+			UPDATE 
+				pokestop 
+			SET 
+				lat = :lat, 
+				lon = :lon, 
+				name = :name, 
+				url = :url, 
+				enabled = :enabled, 
+				lure_expire_timestamp = :lure_expire_timestamp, 
+				last_modified_timestamp = :last_modified_timestamp, 
+				updated = UNIX_TIMESTAMP(), 
+				quest_type = :quest_type, 
+				quest_timestamp = :quest_timestamp, 
+				quest_target = :quest_target, 
+				quest_conditions = :quest_conditions, 
+				quest_rewards = :quest_rewards, 
+				quest_template = :quest_template, 
+				quest_title = :quest_title, 
+				alternative_quest_type = :alternative_quest_type, 
+				alternative_quest_timestamp = :alternative_quest_timestamp, 
+				alternative_quest_target = :alternative_quest_target, 
+				alternative_quest_conditions = :alternative_quest_conditions, 
+				alternative_quest_rewards = :alternative_quest_rewards, 
+				alternative_quest_template = :alternative_quest_template, 
+				alternative_quest_title = :alternative_quest_title, 
+				cell_id = :cell_id, 
+				lure_id = :lure_id, 
+				deleted = false, 
+				sponsor_id = :sponsor_id, 
+				partner_id = :partner_id, 
+				ar_scan_eligible = :ar_scan_eligible, 
+				power_up_points = :power_up_points, 
+				power_up_level = :power_up_level, 
+				power_up_end_timestamp = :power_up_end_timestamp, 
+				quest_expiry = :quest_expiry, 
+				alternative_quest_expiry = :alternative_quest_expiry, 
+				description = :description 
+			WHERE 
+				id = :id`, pokestop,
 		)
 		if err != nil {
 			log.Errorf("update pokestop: %s", err)
@@ -647,7 +692,7 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func UpdatePokestopRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
+func UpdatePokestopRecordWithFortDetailsOutProto(db db.Connections, fort *pogo.FortDetailsOutProto) string {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
@@ -666,7 +711,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.For
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
-func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
+func UpdatePokestopWithQuest(db db.Connections, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
 		return "No quest"
 	}
@@ -689,7 +734,7 @@ func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, ha
 	return fmt.Sprintf("%s", quest.FortId)
 }
 
-func ClearQuestsWithinGeofence(dbDetails db.DbDetails, geofence geo.Geofence) {
+func ClearQuestsWithinGeofence(dbDetails db.Connections, geofence geo.Geofence) {
 	res, err := db.RemoveQuests(dbDetails, geofence)
 	if err != nil {
 		log.Errorf("ClearQuest: Error removing quests: %s", err)
