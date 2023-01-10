@@ -24,8 +24,8 @@ type areaStatsCount struct {
 }
 
 type pokemonTimings struct {
-	first_wild      int64
-	first_encounter int64
+	firstWild      int64
+	firstEncounter int64
 }
 
 var pokemonCount = make(map[areaName]*areaPokemonCountDetail)
@@ -160,26 +160,26 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 
 					if currentSeenType == SeenType_Wild {
 						// transition to wild for the first time
-						pokemonTiming = &pokemonTimings{first_wild: new.Updated.ValueOrZero()}
+						pokemonTiming = &pokemonTimings{firstWild: new.Updated.ValueOrZero()}
 						updatePokemonTiming()
 					}
 
 					if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
 						// transition to wild or encounter for the first time
-						monsSeenIncr++
+						monsSeenIncr = 1
 					}
 				}
 
 				if currentSeenType == SeenType_Encounter {
 					populatePokemonTiming()
 
-					if pokemonTiming.first_encounter == 0 {
+					if pokemonTiming.firstEncounter == 0 {
 						// This is first encounter
-						pokemonTiming.first_encounter = new.Updated.ValueOrZero()
+						pokemonTiming.firstEncounter = new.Updated.ValueOrZero()
 						updatePokemonTiming()
 
-						if pokemonTiming.first_wild > 0 {
-							timeToEncounter = pokemonTiming.first_encounter - pokemonTiming.first_wild
+						if pokemonTiming.firstWild > 0 {
+							timeToEncounter = pokemonTiming.firstEncounter - pokemonTiming.firstWild
 						}
 
 						monsIvIncr = 1
