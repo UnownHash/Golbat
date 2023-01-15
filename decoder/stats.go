@@ -6,6 +6,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"os"
 	"sync"
 	"time"
 )
@@ -47,15 +48,18 @@ var pokemonStats = make(map[areaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
 
 func initLiveStats() {
+	if err := ReadGeofences(); err != nil {
+		if os.IsNotExist(err) {
+			log.Infof("No geofence file found, skipping")
+			return
+		}
+		panic(fmt.Sprintf("Error reading geofences: %v", err))
+	}
+
 	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
 		ttlcache.WithTTL[string, pokemonTimings](60 * time.Minute),
 	)
 	go pokemonTimingCache.Start()
-
-	if err := ReadGeofences(); err != nil {
-		panic(fmt.Sprintf("Error reading geofences: %v", err))
-
-	}
 
 	// Create new watcher.
 	watcher, err := fsnotify.NewWatcher()
@@ -93,6 +97,10 @@ func initLiveStats() {
 
 func initNests() {
 	if err := ReadNestGeofences(); err != nil {
+		if os.IsNotExist(err) {
+			log.Infof("No nest geofence file found, skipping")
+			return
+		}
 		panic(fmt.Sprintf("Error reading nest geofences: %v", err))
 	}
 }
@@ -106,7 +114,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t2 := time.NewTicker(1 * time.Minute)
+	t2 := time.NewTicker(10 * time.Minute)
 	go func() {
 		for {
 			<-t2.C
@@ -114,7 +122,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t3 := time.NewTicker(1 * time.Minute)
+	t3 := time.NewTicker(15 * time.Minute)
 	go func() {
 		for {
 			<-t3.C
@@ -136,6 +144,10 @@ func ReloadGeofenceAndClearStats() {
 }
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
+	if statsFeatureCollection == nil {
+		return
+	}
+
 	areas := matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
 	if len(areas) > 0 {
 		pokemonStatsLock.Lock()

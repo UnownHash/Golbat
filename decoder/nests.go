@@ -2,6 +2,7 @@ package decoder
 
 import (
 	log "github.com/sirupsen/logrus"
+	"golbat/pogo"
 	"sync"
 )
 
@@ -13,6 +14,10 @@ type nestPokemonCountDetail struct {
 }
 
 func updatePokemonNests(old *Pokemon, new *Pokemon) {
+	if nestFeatureCollection == nil {
+		return
+	}
+
 	if (old == nil || old.SeenType.ValueOrZero() != SeenType_Encounter) && new.SeenType.ValueOrZero() == SeenType_Encounter {
 		nestAreas := matchGeofences(nestFeatureCollection, new.Lat, new.Lon)
 
@@ -55,7 +60,7 @@ func logNestCount() {
 
 		if total > 0 {
 			percentage := float64(maxPokemonCount) / float64(total) * 100
-			log.Infof("NESTS: %s: saw pokemon %d %d times (%d %%)", area, maxPokemonId, maxPokemonCount, int(percentage))
+			log.Infof("NESTS: %s: saw pokemon %d %s %d times (%d %%)", area, maxPokemonId, pogo.HoloPokemonId(maxPokemonId), maxPokemonCount, int(percentage))
 		}
 	}
 }
