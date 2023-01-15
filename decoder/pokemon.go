@@ -275,6 +275,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 
 	createPokemonWebhooks(oldPokemon, pokemon)
 	updatePokemonStats(oldPokemon, pokemon)
+	updatePokemonNests(oldPokemon, pokemon)
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 

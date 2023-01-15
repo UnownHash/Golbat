@@ -31,12 +31,14 @@ type pokemonTimings struct {
 
 var pokemonCount = make(map[areaName]*areaPokemonCountDetail)
 
+const maxPokemonNo = 1000
+
 type areaPokemonCountDetail struct {
-	hundos  map[int16]int
-	nundos  map[int16]int
-	shiny   map[int16]int
-	count   map[int16]int
-	ivCount map[int16]int
+	hundos  [maxPokemonNo]int
+	nundos  [maxPokemonNo]int
+	shiny   [maxPokemonNo]int
+	count   [maxPokemonNo]int
+	ivCount [maxPokemonNo]int
 }
 
 var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
@@ -89,6 +91,12 @@ func initLiveStats() {
 	}
 }
 
+func initNests() {
+	if err := ReadNestGeofences(); err != nil {
+		panic(fmt.Sprintf("Error reading nest geofences: %v", err))
+	}
+}
+
 func StartStatsWriter(statsDb *sqlx.DB) {
 	ticker := time.NewTicker(1 * time.Minute)
 	go func() {
@@ -103,6 +111,14 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		for {
 			<-t2.C
 			logPokemonCount(statsDb)
+		}
+	}()
+
+	t3 := time.NewTicker(1 * time.Minute)
+	go func() {
+		for {
+			<-t3.C
+			logNestCount()
 		}
 	}()
 }
@@ -120,7 +136,7 @@ func ReloadGeofenceAndClearStats() {
 }
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
-	areas := matchGeofences(new.Lat, new.Lon)
+	areas := matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
 	if len(areas) > 0 {
 		pokemonStatsLock.Lock()
 		defer pokemonStatsLock.Unlock()
@@ -134,13 +150,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 				countStats := pokemonCount[area]
 
 				if countStats == nil {
-					countStats = &areaPokemonCountDetail{
-						hundos:  make(map[int16]int),
-						nundos:  make(map[int16]int),
-						shiny:   make(map[int16]int),
-						count:   make(map[int16]int),
-						ivCount: make(map[int16]int),
-					}
+					countStats = &areaPokemonCountDetail{}
 					pokemonCount[area] = countStats
 				}
 
@@ -379,7 +389,7 @@ type pokemonCountDbRow struct {
 	Date      time.Time `db:"date"`
 	Area      string    `db:"area"`
 	Fence     string    `db:"fence"`
-	PokemonId int16     `db:"pokemon_id"`
+	PokemonId int       `db:"pokemon_id"`
 	Count     int       `db:"count"`
 }
 
@@ -403,7 +413,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]pokemonCountDbRow, pokemonId int16, count int) {
+			addRows := func(rows *[]pokemonCountDbRow, pokemonId int, count int) {
 				*rows = append(*rows, pokemonCountDbRow{
 					Date:      midnight,
 					Area:      area.parent,
