@@ -134,7 +134,6 @@ func main() {
 	}
 
 	decoder.InitialiseOhbem()
-	decoder.ReadGeofences()
 
 	log.Infoln("Golbat started")
 	webhooks.StartSender()

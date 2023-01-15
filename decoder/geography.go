@@ -4,25 +4,25 @@ import (
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/paulmach/orb/planar"
-	log "github.com/sirupsen/logrus"
 	"io/ioutil"
 )
 
 var featureCollection *geojson.FeatureCollection
 
-func ReadGeofences() {
-	geofence, err := ioutil.ReadFile("geojson/geofence.json")
+const geojsonFilename = "geojson/geofence.json"
+
+func ReadGeofences() error {
+	geofence, err := ioutil.ReadFile(geojsonFilename)
 	if err != nil {
-		log.Errorf("Error reading geofence file: %s", err)
-		return
+		return err
 	}
 
 	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
 	if geoerr != nil {
-		log.Errorf("Error unmarshalling geofence file: %s", geoerr)
-		return
+		return geoerr
 	}
 	featureCollection = fc
+	return nil
 }
 
 type areaName struct {

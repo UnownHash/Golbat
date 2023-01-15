@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
@@ -48,6 +49,44 @@ func initLiveStats() {
 		ttlcache.WithTTL[string, pokemonTimings](60 * time.Minute),
 	)
 	go pokemonTimingCache.Start()
+
+	if err := ReadGeofences(); err != nil {
+		panic(fmt.Sprintf("Error reading geofences: %v", err))
+
+	}
+
+	// Create new watcher.
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Start listening for events.
+	go func() {
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op == fsnotify.Write && event.Name == geojsonFilename {
+					log.Infof("Reloading geofence and clearing stats")
+					ReloadGeofenceAndClearStats()
+				}
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	// Add a path.
+	err = watcher.Add("geojson")
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func StartStatsWriter(statsDb *sqlx.DB) {
@@ -66,6 +105,18 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 			logPokemonCount(statsDb)
 		}
 	}()
+}
+
+func ReloadGeofenceAndClearStats() {
+	pokemonStatsLock.Lock()
+	defer pokemonStatsLock.Unlock()
+
+	if err := ReadGeofences(); err != nil {
+		log.Errorf("Error reading geofences during hot=reload: %v", err)
+		return
+	}
+	pokemonStats = make(map[areaName]areaStatsCount)          // clear stats
+	pokemonCount = make(map[areaName]*areaPokemonCountDetail) // clear count
 }
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
@@ -310,13 +361,15 @@ func logPokemonStats(statsDb *sqlx.DB) {
 			})
 		}
 
-		_, err := statsDb.NamedExec(
-			"INSERT INTO pokemon_area_stats "+
-				"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
-				"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
-			rows)
-		if err != nil {
-			log.Errorf("Error inserting pokemon_area_stats: %v", err)
+		if len(rows) > 0 {
+			_, err := statsDb.NamedExec(
+				"INSERT INTO pokemon_area_stats "+
+					"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
+					"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
+				rows)
+			if err != nil {
+				log.Errorf("Error inserting pokemon_area_stats: %v", err)
+			}
 		}
 	}()
 
@@ -388,14 +441,16 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		}
 
 		updateStatsCount := func(table string, rows []pokemonCountDbRow) {
-			_, err := statsDb.NamedExec(
-				fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, `count`)"+
-					" VALUES (:date, :area, :fence, :pokemon_id, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)", table),
-				rows,
-			)
-			if err != nil {
-				log.Errorf("Error inserting %s: %v", table, err)
+			if len(rows) > 0 {
+				_, err := statsDb.NamedExec(
+					fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, `count`)"+
+						" VALUES (:date, :area, :fence, :pokemon_id, :count)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)", table),
+					rows,
+				)
+				if err != nil {
+					log.Errorf("Error inserting %s: %v", table, err)
+				}
 			}
 		}
 		updateStatsCount("pokemon_stats", allRows)
