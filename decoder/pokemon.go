@@ -280,7 +280,14 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
+		remaining := ttlcache.DefaultTTL
+		if pokemon.ExpireTimestampVerified {
+			timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+			if timeLeft > 1 {
+				remaining = time.Duration(timeLeft) * time.Second
+			}
+		}
+		pokemonCache.Set(pokemon.Id, *pokemon, remaining)
 	}
 }
 

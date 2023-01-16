@@ -57,7 +57,8 @@ func initLiveStats() {
 	}
 
 	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
-		ttlcache.WithTTL[string, pokemonTimings](60 * time.Minute),
+		ttlcache.WithTTL[string, pokemonTimings](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[string, pokemonTimings](),
 	)
 	go pokemonTimingCache.Start()
 
@@ -217,7 +218,14 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 
 			updatePokemonTiming := func() {
 				if pokemonTiming != nil {
-					pokemonTimingCache.Set(new.Id, *pokemonTiming, ttlcache.DefaultTTL)
+					remaining := ttlcache.DefaultTTL
+					if new.ExpireTimestampVerified {
+						timeLeft := 60 + new.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+						if timeLeft > 1 {
+							remaining = time.Duration(timeLeft) * time.Second
+						}
+					}
+					pokemonTimingCache.Set(new.Id, *pokemonTiming, remaining)
 				}
 			}
 
