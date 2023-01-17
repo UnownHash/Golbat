@@ -68,3 +68,9 @@ CREATE TABLE  `pokemon_area_stats` (
 
     PRIMARY KEY (`datetime`,`area`,`fence`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+---
+--- Long standing fix for the pokemon_history table
+---
+ALTER TABLE pokemon_history
+    MODIFY COLUMN cell_id bigint default NULL;
