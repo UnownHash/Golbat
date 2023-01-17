@@ -41,9 +41,15 @@ type RawClientWeatherData struct {
 	Data *pogo.ClientWeatherProto
 }
 
+type RawClientMapCellS2CellData struct {
+	Cell int64
+	Data *pogo.ClientMapCellProto
+}
+
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
+var s2cellCache *ttlcache.Cache[int64, S2cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -77,6 +83,11 @@ func initDataCache() {
 		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
 	)
 	go weatherCache.Start()
+
+	s2cellCache = ttlcache.New[int64, S2cell](
+		ttlcache.WithTTL[int64, S2cell](15 * time.Minute),
+	)
+	go s2cellCache.Start()
 
 	spawnpointCache = ttlcache.New[int64, Spawnpoint](
 		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
@@ -306,5 +317,20 @@ func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 			saveWeatherRecord(db, weather)
 		}
 		weatherMutex.Unlock()
+	}
+}
+
+func UpdateClientMapCells2cellBatch(db db.DbDetails, r []RawClientMapCellS2CellData) {
+	for _, s2cellProto := range r {
+		s2cell, err := getS2cellRecord(db, s2cellProto.Cell)
+		if err != nil {
+			log.Printf("getS2CellRecord: %s", err)
+		} else {
+			if s2cell == nil {
+				s2cell = &S2cell{}
+			}
+			s2cell.updateS2cellFromClientMapCellProto(s2cellProto.Data)
+			saveS2CellRecord(db, s2cell)
+		}
 	}
 }
