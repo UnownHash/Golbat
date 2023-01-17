@@ -404,6 +404,7 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newClientWeather []decoder.RawClientWeatherData
+	var newClientMapCellS2cell []decoder.RawClientMapCellS2CellData
 
 	for _, mapCell := range decodedGmo.MapCell {
 		timestampMs := uint64(mapCell.AsOfTimeMs)
@@ -425,9 +426,14 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
 
+	for _, clientS2Cell := range decodedGmo.MapCell {
+		newClientMapCellS2cell = append(newClientMapCellS2cell, decoder.RawClientMapCellS2CellData{Cell: int64(clientS2Cell.S2CellId), Data: clientS2Cell})
+	}
+
 	decoder.UpdateFortBatch(ctx, dbDetails, newForts)
 	decoder.UpdatePokemonBatch(ctx, dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
 	decoder.UpdateClientWeatherBatch(dbDetails, newClientWeather)
+	decoder.UpdateClientMapCells2cellBatch(dbDetails, newClientMapCellS2cell)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
