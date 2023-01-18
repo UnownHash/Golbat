@@ -254,7 +254,10 @@ func StartGymPokestopTransition(db *sqlx.DB) {
 
 				elapsed := time.Since(start)
 
-				decoder.ClearPokestopCache()
+				if rows > 0 {
+					decoder.ClearPokestopCache()
+					decoder.ClearGymCache()
+				}
 
 				log.Infof("DB - Gym/Pokestop transition - took %s (%d forts)", elapsed, totalRows)
 			}
