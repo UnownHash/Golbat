@@ -139,7 +139,7 @@ func main() {
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
 
-	StartStatsLogger(db)
+	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
 
 	if config.Config.InMemory {
@@ -156,6 +156,10 @@ func main() {
 
 	if config.Config.Cleanup.Quests == true {
 		StartQuestExpiry(db)
+	}
+
+	if config.Config.Cleanup.Stats == true {
+		StartStatsExpiry(db)
 	}
 
 	gin.SetMode(gin.ReleaseMode)

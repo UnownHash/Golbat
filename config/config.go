@@ -17,6 +17,7 @@ type cleanup struct {
 	Pokemon   bool `toml:"pokemon"`
 	Quests    bool `toml:"quests"`
 	Incidents bool `toml:"incidents"`
+	Stats     bool `toml:"stats"`
 }
 
 type webhook struct {
