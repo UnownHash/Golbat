@@ -48,6 +48,12 @@ var pokemonStats = make(map[areaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
 
 func initLiveStats() {
+	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
+		ttlcache.WithTTL[string, pokemonTimings](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[string, pokemonTimings](),
+	)
+	go pokemonTimingCache.Start()
+
 	if err := ReadGeofences(); err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("No geofence file found, skipping")
@@ -55,12 +61,6 @@ func initLiveStats() {
 		}
 		panic(fmt.Sprintf("Error reading geofences: %v", err))
 	}
-
-	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
-		ttlcache.WithTTL[string, pokemonTimings](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, pokemonTimings](),
-	)
-	go pokemonTimingCache.Start()
 
 	// Create new watcher.
 	watcher, err := fsnotify.NewWatcher()
