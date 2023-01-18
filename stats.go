@@ -24,29 +24,74 @@ func StartStatsLogger(db *sqlx.DB) {
 
 func StartDatabaseArchiver(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Minute)
-	go func() {
-		for {
-			<-ticker.C
-			start := time.Now()
 
-			var result sql.Result
-			var err error
+	if config.Config.Stats {
+		go func() {
+			for {
+				<-ticker.C
+				start := time.Now()
 
-			if config.Config.Stats {
+				var result sql.Result
+				var err error
+
 				result, err = db.Exec("call createStatsAndArchive();")
-			} else {
-				result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
-			}
-			elapsed := time.Since(start)
 
-			if err != nil {
-				log.Errorf("DB - Archive of pokemon table error %s", err)
-			} else {
-				rows, _ := result.RowsAffected()
-				log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+				elapsed := time.Since(start)
+
+				if err != nil {
+					log.Errorf("DB - Archive of pokemon table error %s", err)
+				} else {
+					rows, _ := result.RowsAffected()
+					log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+				}
 			}
-		}
-	}()
+		}()
+	} else {
+		go func() {
+			for {
+				<-ticker.C
+				start := time.Now()
+
+				var result sql.Result
+				var err error
+
+				for {
+					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 1000;")
+
+					elapsed := time.Since(start)
+
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table error %s", err)
+						break
+					} else {
+						rows, _ := result.RowsAffected()
+						log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, rows)
+						if rows < 1000 {
+							break
+						}
+					}
+				}
+
+				for {
+					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 1000;")
+
+					elapsed := time.Since(start)
+
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table error %s", err)
+						break
+					} else {
+						rows, _ := result.RowsAffected()
+						log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+						if rows < 1000 {
+							break
+						}
+					}
+				}
+			}
+		}()
+	}
+
 }
 
 func StartIncidentExpiry(db *sqlx.DB) {
