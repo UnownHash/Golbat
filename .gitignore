@@ -23,3 +23,5 @@ docker-compose.yml
 /cache/*
 /golbat
 /geojson/*
+vbase.proto
+
