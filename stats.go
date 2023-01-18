@@ -52,6 +52,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 				<-ticker.C
 				start := time.Now()
 
+				var resultCounter int64
 				var result sql.Result
 				var err error
 
@@ -60,34 +61,36 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 1000;")
 
-					elapsed := time.Since(start)
-
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table error %s", err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
-						log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, rows)
+						resultCounter += rows
 						if rows < 1000 {
+							elapsed := time.Since(start)
+							log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, resultCounter)
 							break
 						}
 					}
 				}
+
+				resultCounter = 0
 
 				for {
 					start = time.Now()
 
 					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 1000;")
 
-					elapsed := time.Since(start)
-
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table error %s", err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
-						log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+						resultCounter += rows
 						if rows < 1000 {
+							elapsed := time.Since(start)
+							log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
 							break
 						}
 					}
