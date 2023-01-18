@@ -145,11 +145,19 @@ func ReloadGeofenceAndClearStats() {
 }
 
 func updatePokemonStats(old *Pokemon, new *Pokemon) {
-	if statsFeatureCollection == nil {
-		return
+	var areas []areaName
+
+	if statsFeatureCollection != nil {
+		areas = matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
+	} else {
+		areas = []areaName{
+			{
+				parent: "world",
+				name:   "world",
+			},
+		}
 	}
 
-	areas := matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
 	if len(areas) > 0 {
 		pokemonStatsLock.Lock()
 		defer pokemonStatsLock.Unlock()
