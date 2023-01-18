@@ -242,6 +242,10 @@ func StartGymPokestopTransition(db *sqlx.DB) {
 
 			rows, _ := result.RowsAffected()
 
+			if rows > 0 {
+				decoder.ClearPokestopCache()
+			}
+
 			totalRows += rows
 
 			result, err = db.Exec("update gym join pokestop on gym.id=pokestop.id set gym.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated < pokestop.updated;")
@@ -255,7 +259,6 @@ func StartGymPokestopTransition(db *sqlx.DB) {
 				elapsed := time.Since(start)
 
 				if rows > 0 {
-					decoder.ClearPokestopCache()
 					decoder.ClearGymCache()
 				}
 
