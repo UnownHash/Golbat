@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
@@ -61,39 +60,6 @@ func initLiveStats() {
 		}
 		panic(fmt.Sprintf("Error reading geofences: %v", err))
 	}
-
-	// Create new watcher.
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Start listening for events.
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op == fsnotify.Write && event.Name == geojsonFilename {
-					log.Infof("Reloading geofence and clearing stats")
-					ReloadGeofenceAndClearStats()
-				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-				log.Println("error:", err)
-			}
-		}
-	}()
-
-	// Add a path.
-	err = watcher.Add("geojson")
-	if err != nil {
-		log.Fatal(err)
-	}
 }
 
 func initNests() {
@@ -133,11 +99,13 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 }
 
 func ReloadGeofenceAndClearStats() {
+	log.Info("Reloading stats geofence")
+
 	pokemonStatsLock.Lock()
 	defer pokemonStatsLock.Unlock()
 
 	if err := ReadGeofences(); err != nil {
-		log.Errorf("Error reading geofences during hot=reload: %v", err)
+		log.Errorf("Error reading geofences during hot-reload: %v", err)
 		return
 	}
 	pokemonStats = make(map[areaName]areaStatsCount)          // clear stats
