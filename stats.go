@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func StartStatsLogger(db *sqlx.DB) {
+func StartDbUsageStatsLogger(db *sqlx.DB) {
 	ticker := time.NewTicker(30 * time.Second)
 	go func() {
 		for {
@@ -24,6 +24,83 @@ func StartStatsLogger(db *sqlx.DB) {
 
 func StartDatabaseArchiver(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Minute)
+
+	if config.Config.Stats {
+		go func() {
+			for {
+				<-ticker.C
+				start := time.Now()
+
+				var result sql.Result
+				var err error
+
+				result, err = db.Exec("call createStatsAndArchive();")
+
+				elapsed := time.Since(start)
+
+				if err != nil {
+					log.Errorf("DB - Archive of pokemon table error %s", err)
+				} else {
+					rows, _ := result.RowsAffected()
+					log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+				}
+			}
+		}()
+	} else {
+		go func() {
+			for {
+				<-ticker.C
+				start := time.Now()
+
+				var resultCounter int64
+				var result sql.Result
+				var err error
+
+				start = time.Now()
+
+				for {
+					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 1000;")
+
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table error %s", err)
+						break
+					} else {
+						rows, _ := result.RowsAffected()
+						resultCounter += rows
+						if rows < 1000 {
+							elapsed := time.Since(start)
+							log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, resultCounter)
+							break
+						}
+					}
+				}
+
+				resultCounter = 0
+				start = time.Now()
+
+				for {
+					result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 1000;")
+
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table error %s", err)
+						break
+					} else {
+						rows, _ := result.RowsAffected()
+						resultCounter += rows
+						if rows < 1000 {
+							elapsed := time.Since(start)
+							log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, resultCounter)
+							break
+						}
+					}
+				}
+			}
+		}()
+	}
+}
+
+func StartStatsExpiry(db *sqlx.DB) {
+	ticker := time.NewTicker(3 * time.Hour)
 	go func() {
 		for {
 			<-ticker.C
@@ -32,18 +109,32 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
-			if config.Config.Stats {
-				result, err = db.Exec("call createStatsAndArchive();")
-			} else {
-				result, err = db.Exec("DELETE FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 3600);")
-			}
+			result, err = db.Exec("DELETE FROM pokemon_area_stats WHERE `datetime` < UNIX_TIMESTAMP() - 10080;")
+
 			elapsed := time.Since(start)
 
 			if err != nil {
-				log.Errorf("DB - Archive of pokemon table error %s", err)
+				log.Errorf("DB - Cleanup of pokemon_area_stats table error %s", err)
 			} else {
 				rows, _ := result.RowsAffected()
-				log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+				log.Infof("DB - Cleanup of pokemon_area_stats table took %s (%d rows)", elapsed, rows)
+			}
+
+			tables := []string{"pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats"}
+
+			for _, table := range tables {
+				start = time.Now()
+
+				result, err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE `date` < DATE(NOW() - INTERVAL 7 DAY);", table))
+
+				elapsed = time.Since(start)
+
+				if err != nil {
+					log.Errorf("DB - Cleanup of %s table error %s", table, err)
+				} else {
+					rows, _ := result.RowsAffected()
+					log.Infof("DB - Cleanup of %s table took %s (%d rows)", table, elapsed, rows)
+				}
 			}
 		}
 	}()
@@ -67,7 +158,7 @@ func StartIncidentExpiry(db *sqlx.DB) {
 				log.Errorf("DB - Cleanup of incident table error %s", err)
 			} else {
 				rows, _ := result.RowsAffected()
-				log.Infof("Cleanup of incident table took %s (%d rows)", elapsed, rows)
+				log.Infof("DB - Cleanup of incident table took %s (%d rows)", elapsed, rows)
 			}
 		}
 	}()
@@ -126,7 +217,46 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 				decoder.ClearPokestopCache()
 
-				log.Infof("Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
+				log.Infof("DB - Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
+			}
+		}
+	}()
+}
+
+func StartGymPokestopTransition(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Hour)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+			var totalRows int64 = 0
+
+			var result sql.Result
+			var err error
+
+			decoder.ClearPokestopCache()
+			result, err = db.Exec("update pokestop join gym on gym.id=pokestop.id set pokestop.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated > pokestop.updated;")
+
+			if err != nil {
+				log.Errorf("DB - Gym/Pokestop transition - Updating pokestops error %s", err)
+				return
+			}
+
+			rows, _ := result.RowsAffected()
+
+			totalRows += rows
+
+			result, err = db.Exec("update gym join pokestop on gym.id=pokestop.id set gym.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated < pokestop.updated;")
+
+			if err != nil {
+				log.Errorf("DB - Gym/Pokestop transition - Updating gyms error %s", err)
+			} else {
+				rows, _ = result.RowsAffected()
+				totalRows += rows
+
+				elapsed := time.Since(start)
+
+				log.Infof("DB - Gym/Pokestop transition - took %s (%d forts)", elapsed, totalRows)
 			}
 		}
 	}()

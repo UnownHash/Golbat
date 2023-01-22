@@ -22,5 +22,6 @@ docker-compose.yml
 /logs/*
 /cache/*
 /golbat
+/geojson/*
 vbase.proto
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	ginlogrus "github.com/toorop/gin-logrus"
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
@@ -15,8 +17,6 @@ import (
 	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
-	"github.com/toorop/gin-logrus"
-
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -139,7 +139,10 @@ func main() {
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
 
-	StartStatsLogger(db)
+	StartDbUsageStatsLogger(db)
+	decoder.StartStatsWriter(db)
+
+	StartGymPokestopTransition(db)
 
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)
@@ -157,10 +160,21 @@ func main() {
 		StartQuestExpiry(db)
 	}
 
+	if config.Config.Cleanup.Stats == true {
+		StartStatsExpiry(db)
+	}
+
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	r.Use(ginlogrus.Logger(log.StandardLogger()), gin.Recovery())
+	if config.Config.Logging.Debug {
+		r.Use(ginlogrus.Logger(log.StandardLogger()))
+	} else {
+		r.Use(gin.Recovery())
+	}
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
+	r.POST("/api/reloadGeojson", ReloadGeojson)
+	r.GET("/api/reloadGeojson", ReloadGeojson)
 	r.POST("/api/queryPokemon", QueryPokemon)
 
 	//router := mux.NewRouter().StrictSlash(true)
@@ -173,7 +187,7 @@ func main() {
 	}
 }
 
-func decode(method int, protoData *ProtoData) {
+func decode(ctx context.Context, method int, protoData *ProtoData) {
 	if protoData.Level < 30 {
 		log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, pogo.Method(method))
 
@@ -186,22 +200,22 @@ func decode(method int, protoData *ProtoData) {
 
 	switch pogo.Method(method) {
 	case pogo.Method_METHOD_FORT_DETAILS:
-		result = decodeFortDetails(protoData.Data)
+		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		result = decodeGMO(protoData.Data, protoData.Account)
+		result = decodeGMO(ctx, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
 		result = decodeGetGymInfo(protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
-		result = decodeEncounter(protoData.Data, protoData.Account)
+		result = decodeEncounter(ctx, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
-		result = decodeDiskEncounter(protoData.Data)
+		result = decodeDiskEncounter(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
-		result = decodeQuest(protoData.Data, protoData.HaveAr)
+		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		break
@@ -225,7 +239,7 @@ func decode(method int, protoData *ProtoData) {
 	}
 }
 
-func decodeQuest(sDec []byte, haveAr *bool) string {
+func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	if haveAr == nil {
 		log.Infoln("Cannot determine AR quest - ignoring")
 		// We should either assume AR quest, or trace inventory like RDM probably
@@ -243,7 +257,7 @@ func decodeQuest(sDec []byte, haveAr *bool) string {
 		return res
 	}
 
-	return decoder.UpdatePokestopWithQuest(dbDetails, decodedQuest, *haveAr)
+	return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
 
 }
 
@@ -310,7 +324,7 @@ func decodeSocialActionProxy(sDec []byte) string {
 	return fmt.Sprintf("%d players decoded on %d", len(players)-failures, len(players))
 }
 
-func decodeFortDetails(sDec []byte) string {
+func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	decodedFort := &pogo.FortDetailsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
 		log.Fatalln("Failed to parse", err)
@@ -319,7 +333,7 @@ func decodeFortDetails(sDec []byte) string {
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(dbDetails, decodedFort)
+		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	case pogo.FortType_GYM:
 		return decoder.UpdateGymRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	}
@@ -341,7 +355,7 @@ func decodeGetGymInfo(sDec []byte) string {
 	return decoder.UpdateGymRecordWithGymInfoProto(dbDetails, decodedGymInfo)
 }
 
-func decodeEncounter(sDec []byte, username string) string {
+func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
@@ -353,10 +367,10 @@ func decodeEncounter(sDec []byte, username string) string {
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
-	return decoder.UpdatePokemonRecordWithEncounterProto(dbDetails, decodedEncounterInfo, username)
+	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
-func decodeDiskEncounter(sDec []byte) string {
+func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
@@ -369,10 +383,10 @@ func decodeDiskEncounter(sDec []byte) string {
 		return res
 	}
 
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(dbDetails, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
 }
 
-func decodeGMO(sDec []byte, username string) string {
+func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(sDec, decodedGmo); err != nil {
@@ -411,8 +425,8 @@ func decodeGMO(sDec []byte, username string) string {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
 
-	decoder.UpdateFortBatch(dbDetails, newForts)
-	decoder.UpdatePokemonBatch(dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
+	decoder.UpdateFortBatch(ctx, dbDetails, newForts)
+	decoder.UpdatePokemonBatch(ctx, dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
 	decoder.UpdateClientWeatherBatch(dbDetails, newClientWeather)
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))

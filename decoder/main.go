@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"github.com/Pupitar/ohbemgo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -56,6 +57,12 @@ var weatherStripedMutex = stripedmutex.New(8)
 var ohbem *ohbemgo.Ohbem
 
 func init() {
+	initDataCache()
+	initLiveStats()
+	initNests()
+}
+
+func initDataCache() {
 	pokestopCache = ttlcache.New[string, Pokestop](
 		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
 	)
@@ -137,12 +144,16 @@ func ClearPokestopCache() {
 	pokestopCache.DeleteAll()
 }
 
+func ClearGymCache() {
+	gymCache.DeleteAll()
+}
+
 var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	delta := math.Abs(x - y)
 	return delta < 0.000001
 })
 
-func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
+func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)
 	// 2. Fetch current stops from database
@@ -157,7 +168,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
-			pokestop, err := getPokestopRecord(db, fortId) // should check error
+			pokestop, err := getPokestopRecord(ctx, db, fortId) // should check error
 			if err != nil {
 				log.Errorf("getPokestopRecord: %s", err)
 				pokestopMutex.Unlock()
@@ -168,7 +179,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 				pokestop = &Pokestop{}
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell)
-			savePokestopRecord(db, pokestop)
+			savePokestopRecord(ctx, db, pokestop)
 			pokestopMutex.Unlock()
 
 			incidents := fort.Data.PokestopDisplays
@@ -178,7 +189,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
-					incident, err := getIncidentRecord(db, incidentProto.IncidentId)
+					incident, err := getIncidentRecord(ctx, db, incidentProto.IncidentId)
 					if err != nil {
 						log.Errorf("getIncident: %s", err)
 						continue
@@ -189,7 +200,7 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 						}
 					}
 					incident.updateFromPokestopIncidentDisplay(incidentProto)
-					saveIncidentRecord(db, incident)
+					saveIncidentRecord(ctx, db, incident)
 				}
 			}
 		}
@@ -211,13 +222,13 @@ func UpdateFortBatch(db db.DbDetails, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
+func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(db, encounterId)
+		pokemon, err := getPokemonRecord(ctx, db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
 		} else {
@@ -225,8 +236,8 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromWild(db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
-			savePokemonRecord(db, pokemon)
+			pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
+			savePokemonRecord(ctx, db, pokemon)
 		}
 
 		pokemonMutex.Unlock()
@@ -237,7 +248,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(db, encounterId)
+		pokemon, err := getPokemonRecord(ctx, db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
 		} else {
@@ -245,8 +256,8 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromNearby(db, nearby.Data, int64(nearby.Cell), username)
-			savePokemonRecord(db, pokemon)
+			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
+			savePokemonRecord(ctx, db, pokemon)
 		}
 		pokemonMutex.Unlock()
 	}
@@ -256,7 +267,7 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(db, encounterId)
+		pokemon, err := getPokemonRecord(ctx, db, encounterId)
 		if err != nil {
 			log.Printf("getPokemonRecord: %s", err)
 		} else {
@@ -264,16 +275,16 @@ func UpdatePokemonBatch(db db.DbDetails, wildPokemonList []RawWildPokemonData, n
 				pokemon = &Pokemon{}
 			}
 
-			pokemon.updateFromMap(db, mapPokemon.Data, int64(mapPokemon.Cell), username)
+			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), username)
 
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
 			if storedDiskEncounter != nil {
 				diskEncounter := storedDiskEncounter.Value()
 				diskEncounterCache.Delete(encounterId)
-				pokemon.updatePokemonFromDiskEncounterProto(db, diskEncounter)
+				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter)
 				log.Infof("Processed stored disk encounter")
 			}
-			savePokemonRecord(db, pokemon)
+			savePokemonRecord(ctx, db, pokemon)
 		}
 		pokemonMutex.Unlock()
 	}

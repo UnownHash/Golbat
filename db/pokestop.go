@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"golbat/geo"
 )
@@ -31,7 +32,7 @@ func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, er
 	return areas, nil
 }
 
-func RemoveQuests(db DbDetails, fence geo.Geofence) (sql.Result, error) {
+func RemoveQuests(ctx context.Context, db DbDetails, fence geo.Geofence) (sql.Result, error) {
 	bbox := fence.GetBoundingBox()
 
 	query := "UPDATE pokestop " +
@@ -54,6 +55,6 @@ func RemoveQuests(db DbDetails, fence geo.Geofence) (sql.Result, error) {
 		"alternative_quest_expiry = NULL " +
 		"WHERE lat > ? and lon > ? and lat < ? and lon < ? and enabled = 1 " +
 		"and ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON((" + fence.ToPolygonString() + "))'), point(lat,lon))"
-	return db.GeneralDb.Exec(query,
+	return db.GeneralDb.ExecContext(ctx, query,
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude)
 }

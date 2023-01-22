@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	b64 "encoding/base64"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"time"
 )
 
 type ProtoData struct {
@@ -158,6 +160,9 @@ func Raw(c *gin.Context) {
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+
 		for _, entry := range protoData {
 			method := entry.Method
 			payload := entry.Base64Data
@@ -175,7 +180,7 @@ func Raw(c *gin.Context) {
 			}
 			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
 
-			decode(method, &protoData)
+			decode(ctx, method, &protoData)
 		}
 	}()
 
@@ -232,8 +237,28 @@ func ClearQuests(c *gin.Context) {
 	}
 
 	go func() {
-		decoder.ClearQuestsWithinGeofence(dbDetails, fence)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
 	}()
+
+	c.JSON(http.StatusAccepted, map[string]interface{}{
+		"status": "ok",
+	})
+}
+
+func ReloadGeojson(c *gin.Context) {
+	authHeader := c.Request.Header.Get("X-Golbat-Secret")
+	if config.Config.ApiSecret != "" {
+		if authHeader != config.Config.ApiSecret {
+			log.Errorf("ClearQuests: Incorrect authorisation received (%s)", authHeader)
+			c.String(http.StatusUnauthorized, "Unauthorised")
+			return
+		}
+	}
+
+	decoder.ReloadGeofenceAndClearStats()
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
