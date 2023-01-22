@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
-func getSpawnpointRecord(db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
+func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint != nil {
 		spawnpoint := inMemorySpawnpoint.Value()
@@ -39,7 +40,7 @@ func getSpawnpointRecord(db db.DbDetails, spawnpointId int64) (*Spawnpoint, erro
 	}
 	spawnpoint := Spawnpoint{}
 
-	err := db.GeneralDb.Get(&spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
+	err := db.GeneralDb.GetContext(ctx, &spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -59,8 +60,8 @@ func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
 		old.DespawnSec != new.DespawnSec
 }
 
-func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
-	oldSpawnpoint, _ := getSpawnpointRecord(db, spawnpoint.Id)
+func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
+	oldSpawnpoint, _ := getSpawnpointRecord(ctx, db, spawnpoint.Id)
 
 	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
 		return
@@ -68,7 +69,7 @@ func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
 
 	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
 
-	_, err := db.GeneralDb.NamedExec("INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
+	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), :despawn_sec)"+
 		"ON DUPLICATE KEY UPDATE "+
 		"lat=VALUES(lat),"+
@@ -86,7 +87,7 @@ func spawnpointUpdate(db db.DbDetails, spawnpoint *Spawnpoint) {
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
-func spawnpointSeen(db db.DbDetails, spawnpointId int64) {
+func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint == nil {
 		// This should never happen, since all routes here have previously created a spawnpoint in the cache
@@ -99,7 +100,7 @@ func spawnpointSeen(db db.DbDetails, spawnpointId int64) {
 	if now-spawnpoint.LastSeen > 900 {
 		spawnpoint.LastSeen = now
 
-		_, err := db.GeneralDb.Exec("UPDATE spawnpoint "+
+		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
 			"SET last_seen=? "+
 			"WHERE id = ? ", now, spawnpointId)
 		if err != nil {

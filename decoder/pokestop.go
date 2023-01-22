@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -96,14 +97,14 @@ type Pokestop struct {
 
 }
 
-func getPokestopRecord(db db.DbDetails, fortId string) (*Pokestop, error) {
+func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
 		return &pokestop, nil
 	}
 	pokestop := Pokestop{}
-	err := db.GeneralDb.Get(&pokestop,
+	err := db.GeneralDb.GetContext(ctx, &pokestop,
 		"SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,"+
 			"pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,"+
 			"quest_rewards, quest_template, quest_title,"+
@@ -405,11 +406,11 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 
 	questExpiry := null.NewInt(0, false)
 
-	stopTimezone, _ := tz.SearchTimezone(stop.Lat, stop.Lon)
-	if stopTimezone.Name != "" {
-		loc, err := time.LoadLocation(stopTimezone.Name)
+	stopTimezone := tz.SearchTimezone(stop.Lat, stop.Lon)
+	if stopTimezone != "" {
+		loc, err := time.LoadLocation(stopTimezone)
 		if err != nil {
-			log.Warnf("Unrecognised time zone %s at %f,%f", stopTimezone.Name, stop.Lat, stop.Lon)
+			log.Warnf("Unrecognised time zone %s at %f,%f", stopTimezone, stop.Lat, stop.Lon)
 		} else {
 			year, month, day := time.Now().In(loc).Date()
 			t := time.Date(year, month, day, 0, 0, 0, 0, loc).AddDate(0, 0, 1)
@@ -562,8 +563,8 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 }
 
-func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
-	oldPokestop, _ := getPokestopRecord(db, pokestop.Id)
+func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
+	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
 
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
 		return
@@ -572,7 +573,7 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 	log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
 	if oldPokestop == nil {
-		res, err := db.GeneralDb.NamedExec(
+		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"INSERT INTO pokestop ("+
 				"id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,"+
 				"quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,"+
@@ -598,7 +599,7 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExec(
+		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"UPDATE pokestop SET "+
 				"lat = :lat,"+
 				"lon = :lon,"+
@@ -647,12 +648,12 @@ func savePokestopRecord(db db.DbDetails, pokestop *Pokestop) {
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func UpdatePokestopRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
+func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := getPokestopRecord(db, fort.Id) // should check error
+	pokestop, err := getPokestopRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -662,11 +663,11 @@ func UpdatePokestopRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.For
 		pokestop = &Pokestop{}
 	}
 	pokestop.updatePokestopFromFortDetailsProto(fort)
-	savePokestopRecord(db, pokestop)
+	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
 
-func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
+func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
 		return "No quest"
 	}
@@ -675,7 +676,7 @@ func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, ha
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := getPokestopRecord(db, quest.FortId)
+	pokestop, err := getPokestopRecord(ctx, db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -685,12 +686,12 @@ func UpdatePokestopWithQuest(db db.DbDetails, quest *pogo.FortSearchOutProto, ha
 		pokestop = &Pokestop{}
 	}
 	pokestop.updatePokestopFromQuestProto(quest, haveAr)
-	savePokestopRecord(db, pokestop)
+	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s", quest.FortId)
 }
 
-func ClearQuestsWithinGeofence(dbDetails db.DbDetails, geofence geo.Geofence) {
-	res, err := db.RemoveQuests(dbDetails, geofence)
+func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence geo.Geofence) {
+	res, err := db.RemoveQuests(ctx, dbDetails, geofence)
 	if err != nil {
 		log.Errorf("ClearQuest: Error removing quests: %s", err)
 		return

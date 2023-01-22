@@ -2,13 +2,14 @@ port = 9001             # Listening port for golbat
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
-stats = false
-in_memory = false        # Use in-memory storage for pokemon only
+stats = false           # Enable creation of pokemon_timing and pokemon_history table (now recommended=false)
+in_memory = false       # Use in-memory storage for pokemon only
 
 [cleanup]
 pokemon = true          # Keep pokemon table is kept nice and short
 incidents = true        # Remove incidents after expiry
 quests = true           # Remove quests after expiry
+stats = true            # Remove entries from pokemon_area_stats, pokemon_stats, etc after 7 days
 
 [logging]
 debug = false

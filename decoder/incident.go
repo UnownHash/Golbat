@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -31,7 +32,7 @@ type Incident struct {
 //->   `character` smallint unsigned NOT NULL,
 //->   `updated` int unsigned NOT NULL,
 
-func getIncidentRecord(db db.DbDetails, incidentId string) (*Incident, error) {
+func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) (*Incident, error) {
 	inMemoryIncident := incidentCache.Get(incidentId)
 	if inMemoryIncident != nil {
 		incident := inMemoryIncident.Value()
@@ -39,7 +40,7 @@ func getIncidentRecord(db db.DbDetails, incidentId string) (*Incident, error) {
 	}
 
 	incident := Incident{}
-	err := db.GeneralDb.Get(&incident,
+	err := db.GeneralDb.GetContext(ctx, &incident,
 		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated "+
 			"FROM incident "+
 			"WHERE incident.id = ? ", incidentId)
@@ -59,8 +60,8 @@ func hasChangesIncident(old *Incident, new *Incident) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
 
-func saveIncidentRecord(db db.DbDetails, incident *Incident) {
-	oldIncident, _ := getIncidentRecord(db, incident.Id)
+func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident) {
+	oldIncident, _ := getIncidentRecord(ctx, db, incident.Id)
 
 	if oldIncident != nil && !hasChangesIncident(oldIncident, incident) {
 		return
@@ -99,12 +100,12 @@ func saveIncidentRecord(db db.DbDetails, incident *Incident) {
 	}
 
 	incidentCache.Set(incident.Id, *incident, ttlcache.DefaultTTL)
-	createIncidentWebhooks(db, oldIncident, incident)
+	createIncidentWebhooks(ctx, db, oldIncident, incident)
 }
 
-func createIncidentWebhooks(db db.DbDetails, oldIncident *Incident, incident *Incident) {
+func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *Incident, incident *Incident) {
 	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
-		stop, _ := getPokestopRecord(db, incident.PokestopId)
+		stop, _ := getPokestopRecord(ctx, db, incident.PokestopId)
 		if stop == nil {
 			stop = &Pokestop{}
 		}

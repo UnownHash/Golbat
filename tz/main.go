@@ -1,51 +1,35 @@
 package tz
 
+import _ "time/tzdata"
+
 import (
-	timezone "github.com/evanoberholster/timezoneLookup/v2"
-	log "github.com/sirupsen/logrus"
-	"os"
-	"syscall"
+	"github.com/ringsaturn/tzf"
+	tzfrel "github.com/ringsaturn/tzf-rel"
+	"github.com/ringsaturn/tzf/pb"
+	"google.golang.org/protobuf/proto"
 )
 
-var tzc timezone.Timezonecache
-
-var dbFilename string = "cache/tz"
-var cacheFilename string = "cache/tz-geoJSON.zip"
+var finder *tzf.Finder
 
 func init() {
-	f, err := os.OpenFile(dbFilename, syscall.O_RDWR, 0644)
-	if err != nil {
-		downloadAndBuild()
-		return
+	input := &pb.Timezones{}
+
+	// Lite data, about 11MB
+	//dataFile := tzfrel.LiteData
+
+	// Full data, about 83.5MB
+	dataFile := tzfrel.FullData
+
+	if err := proto.Unmarshal(dataFile, input); err != nil {
+		panic(err)
 	}
-	defer f.Close()
-	if err = tzc.Load(f); err != nil {
-		downloadAndBuild()
-		return
+	var err error
+	finder, err = tzf.NewFinderFromPB(input)
+	if err != nil {
+		panic(err)
 	}
 }
 
-func SearchTimezone(lat, lng float64) (timezone.Result, error) {
-	return tzc.Search(lat, lng)
-}
-
-const url = "https://github.com/evansiroky/timezone-boundary-builder/releases/download/2021c/timezones-with-oceans.geojson.zip"
-
-func downloadAndBuild() (err error) {
-	log.Infof("Downloading timezone database")
-	var total int
-	err = timezone.ImportZipFile(cacheFilename, url, func(tz timezone.Timezone) error {
-		total += len(tz.Polygons)
-		tzc.AddTimezone(tz)
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if err = tzc.Save(dbFilename); err != nil {
-		return err
-	}
-	log.Infof("Timezone - %d Polygons added", total)
-	log.Infof("Timezone - Saved Timezone data to %s", dbFilename)
-	return nil
+func SearchTimezone(lat, lng float64) string {
+	return finder.GetTimezoneName(lng, lat)
 }

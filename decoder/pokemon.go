@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -110,7 +111,7 @@ type Pokemon struct {
 //KEY `ix_iv` (`iv`)
 //)
 
-func getPokemonRecord(db db.DbDetails, encounterId string) (*Pokemon, error) {
+func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) (*Pokemon, error) {
 	if db.UsePokemonCache {
 		inMemoryPokemon := pokemonCache.Get(encounterId)
 		if inMemoryPokemon != nil {
@@ -120,7 +121,7 @@ func getPokemonRecord(db db.DbDetails, encounterId string) (*Pokemon, error) {
 	}
 	pokemon := Pokemon{}
 
-	err := db.PokemonDb.Get(&pokemon,
+	err := db.PokemonDb.GetContext(ctx, &pokemon,
 		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3, "+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
@@ -148,8 +149,8 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	})
 }
 
-func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
-	oldPokemon, _ := getPokemonRecord(db, pokemon.Id)
+func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
+	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
@@ -203,7 +204,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 		if changePvpField {
 			pvpField, pvpValue = "pvp, ", ":pvp, "
 		}
-		res, err := db.PokemonDb.NamedExec(fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
@@ -225,7 +226,7 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 		if changePvpField {
 			pvpUpdate = "pvp = :pvp, "
 		}
-		res, err := db.PokemonDb.NamedExec(fmt.Sprintf("UPDATE pokemon SET "+
+		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
 			"pokestop_id = :pokestop_id, "+
 			"spawn_id = :spawn_id, "+
 			"lat = :lat, "+
@@ -268,17 +269,26 @@ func savePokemonRecord(db db.DbDetails, pokemon *Pokemon) {
 			return
 		}
 		rows, rowsErr := res.RowsAffected()
-		log.Debugf("Updating pokemon [%s] after update res = %d %s", pokemon.Id, rows, rowsErr)
+		log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
 
 		_, _ = res, err
 	}
 
 	createPokemonWebhooks(oldPokemon, pokemon)
+	updatePokemonStats(oldPokemon, pokemon)
+	updatePokemonNests(oldPokemon, pokemon)
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, *pokemon, ttlcache.DefaultTTL)
+		remaining := ttlcache.DefaultTTL
+		if pokemon.ExpireTimestampVerified {
+			timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+			if timeLeft > 1 {
+				remaining = time.Duration(timeLeft) * time.Second
+			}
+		}
+		pokemonCache.Set(pokemon.Id, *pokemon, remaining)
 	}
 }
 
@@ -355,13 +365,13 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 	}
 }
 
-func (pokemon *Pokemon) updateFromWild(db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
 
 	if pokemon.Id == "" || pokemon.SeenType.ValueOrZero() == SeenType_Cell || pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop {
-		updateStats(db, encounterId, stats_seenWild)
+		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
 	pokemon.Id = encounterId
 
@@ -381,7 +391,7 @@ func (pokemon *Pokemon) updateFromWild(db db.DbDetails, wildPokemon *pogo.WildPo
 
 	// Not sure I like the idea about an object updater loading another object
 
-	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs, true)
+	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, true)
 
 	pokemon.SpawnId = null.IntFrom(spawnId)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -394,14 +404,14 @@ func (pokemon *Pokemon) updateFromWild(db db.DbDetails, wildPokemon *pogo.WildPo
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 
 		pokemon.clearEncounterDetails()
-		updateStats(db, encounterId, stats_statsReset)
+		updateStats(ctx, db, encounterId, stats_statsReset)
 
 	} else if pokemon.SeenType.ValueOrZero() != SeenType_Encounter {
 		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
 	}
 }
 
-func (pokemon *Pokemon) updateFromMap(db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
 
 	if pokemon.Id != "" {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -412,11 +422,11 @@ func (pokemon *Pokemon) updateFromMap(db db.DbDetails, mapPokemon *pogo.MapPokem
 
 	encounterId := strconv.FormatUint(mapPokemon.EncounterId, 10)
 	pokemon.Id = encounterId
-	updateStats(db, encounterId, stats_seenLure)
+	updateStats(ctx, db, encounterId, stats_seenLure)
 
 	spawnpointId := mapPokemon.SpawnpointId
 
-	pokestop, _ := getPokestopRecord(db, spawnpointId)
+	pokestop, _ := getPokestopRecord(ctx, db, spawnpointId)
 	if pokestop == nil {
 		// Unrecognised pokestop
 		return
@@ -462,16 +472,16 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Shiny = null.NewBool(false, false)
 }
 
-func (pokemon *Pokemon) updateFromNearby(db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
 
 	if pokemon.Id == "" {
 		if pokestopId == "" {
-			updateStats(db, encounterId, stats_seenCell)
+			updateStats(ctx, db, encounterId, stats_seenCell)
 		} else {
-			updateStats(db, encounterId, stats_seenStop)
+			updateStats(ctx, db, encounterId, stats_seenStop)
 		}
 	}
 
@@ -504,7 +514,7 @@ func (pokemon *Pokemon) updateFromNearby(db db.DbDetails, nearbyPokemon *pogo.Ne
 			// clear encounter details and finish making changes - lat, lon is preserved
 			pokemon.SeenType = null.StringFrom(SeenType_Wild)
 
-			updateStats(db, encounterId, stats_statsReset)
+			updateStats(ctx, db, encounterId, stats_statsReset)
 			pokemon.clearEncounterDetails()
 
 			return
@@ -520,7 +530,7 @@ func (pokemon *Pokemon) updateFromNearby(db db.DbDetails, nearbyPokemon *pogo.Ne
 
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
 	} else {
-		pokestop, _ := getPokestopRecord(db, pokestopId)
+		pokestop, _ := getPokestopRecord(ctx, db, pokestopId)
 		if pokestop == nil {
 			// Unrecognised pokestop
 			return
@@ -551,7 +561,7 @@ const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encou
 // timestampMs - the timestamp to be used for calculations
 // timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
 // a new exact spawnpoint record
-func (pokemon *Pokemon) updateSpawnpointInfo(db db.DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
+func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
 	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
 		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
 		pokemon.ExpireTimestamp = null.IntFrom(expireTimeStamp)
@@ -566,12 +576,12 @@ func (pokemon *Pokemon) updateSpawnpointInfo(db db.DbDetails, wildPokemon *pogo.
 				Lon:        pokemon.Lon,
 				DespawnSec: null.IntFrom(int64(secondOfHour)),
 			}
-			spawnpointUpdate(db, &spawnpoint)
+			spawnpointUpdate(ctx, db, &spawnpoint)
 		}
 	} else {
 		pokemon.ExpireTimestampVerified = false
 
-		spawnPoint, _ := getSpawnpointRecord(db, spawnId)
+		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 			despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 
@@ -584,7 +594,7 @@ func (pokemon *Pokemon) updateSpawnpointInfo(db db.DbDetails, wildPokemon *pogo.
 			}
 			pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
 			pokemon.ExpireTimestampVerified = true
-			spawnpointSeen(db, spawnId)
+			spawnpointSeen(ctx, db, spawnId)
 		} else {
 			spawnpoint := Spawnpoint{
 				Id:         spawnId,
@@ -592,7 +602,7 @@ func (pokemon *Pokemon) updateSpawnpointInfo(db db.DbDetails, wildPokemon *pogo.
 				Lon:        pokemon.Lon,
 				DespawnSec: null.NewInt(0, false),
 			}
-			spawnpointUpdate(db, &spawnpoint)
+			spawnpointUpdate(ctx, db, &spawnpoint)
 			pokemon.setUnknownTimestamp()
 		}
 	}
@@ -609,7 +619,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encounterData *pogo.EncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -668,13 +678,13 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(db db.DbDetails, encount
 	pokemon.SpawnId = null.IntFrom(spawnId)
 	timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
 
-	pokemon.updateSpawnpointInfo(db, wildPokemon, spawnId, timestampMs, false)
+	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, false)
 
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
-	updateStats(db, pokemon.Id, stats_encounter)
+	updateStats(ctx, db, pokemon.Id, stats_encounter)
 }
 
-func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
 	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
 
 	pokemon.IsEvent = 0
@@ -730,7 +740,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(db db.DbDetails, enc
 	}
 
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
-	updateStats(db, pokemon.Id, stats_lureEncounter)
+	updateStats(ctx, db, pokemon.Id, stats_lureEncounter)
 }
 
 func (pokemon *Pokemon) setDittoAttributes() {
@@ -784,7 +794,7 @@ func (pokemon *Pokemon) isDittoDisguised() bool {
 	return false
 }
 
-func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.EncounterOutProto) string {
+func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto) string {
 
 	if encounter.Pokemon == nil {
 		return "No encounter"
@@ -796,7 +806,7 @@ func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.Enco
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
 
-	pokemon, err := getPokemonRecord(db, encounterId)
+	pokemon, err := getPokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
@@ -805,13 +815,13 @@ func UpdatePokemonRecordWithEncounterProto(db db.DbDetails, encounter *pogo.Enco
 	if pokemon == nil {
 		pokemon = &Pokemon{}
 	}
-	pokemon.updatePokemonFromEncounterProto(db, encounter)
-	savePokemonRecord(db, pokemon)
+	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter)
+	savePokemonRecord(ctx, db, pokemon)
 
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
-func UpdatePokemonRecordWithDiskEncounterProto(db db.DbDetails, encounter *pogo.DiskEncounterOutProto) string {
+func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto) string {
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
@@ -822,7 +832,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(db db.DbDetails, encounter *pogo.
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
 
-	pokemon, err := getPokemonRecord(db, encounterId)
+	pokemon, err := getPokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
@@ -833,8 +843,8 @@ func UpdatePokemonRecordWithDiskEncounterProto(db db.DbDetails, encounter *pogo.
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")
 	}
-	pokemon.updatePokemonFromDiskEncounterProto(db, encounter)
-	savePokemonRecord(db, pokemon)
+	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter)
+	savePokemonRecord(ctx, db, pokemon)
 
 	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
@@ -847,7 +857,7 @@ const stats_encounter string = "encounter"
 const stats_seenLure string = "seen_lure"
 const stats_lureEncounter string = "lure_encounter"
 
-func updateStats(db db.DbDetails, id string, event string) {
+func updateStats(ctx context.Context, db db.DbDetails, id string, event string) {
 	if config.Config.Stats == false {
 		return
 	}
@@ -869,12 +879,10 @@ func updateStats(db db.DbDetails, id string, event string) {
 	}
 
 	log.Debugf("Updating pokemon timing: [%s] %s", id, event)
-
-	_, err := db.GeneralDb.Exec(sqlCommand, id)
+	_, err := db.GeneralDb.ExecContext(ctx, sqlCommand, id)
 
 	if err != nil {
 		log.Errorf("update pokemon timing: [%s] %s", id, err)
 		return
 	}
-
 }
