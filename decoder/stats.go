@@ -117,7 +117,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 
 	if statsFeatureCollection != nil {
 		areas = matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
-	} else {
+	}
+
+	if len(areas) == 0 {
 		areas = []areaName{
 			{
 				parent: "world",
@@ -126,172 +128,170 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 		}
 	}
 
-	if len(areas) > 0 {
-		pokemonStatsLock.Lock()
-		defer pokemonStatsLock.Unlock()
+	// General stats
 
-		for i := 0; i < len(areas); i++ {
-			area := areas[i]
+	bucket := int64(-1)
+	monsIvIncr := 0
+	monsSeenIncr := 0
+	verifiedEncIncr := 0
+	unverifiedEncIncr := 0
+	verifiedEncSecTotalIncr := int64(0)
+	timeToEncounter := int64(0)
+	statsResetCountIncr := 0
+	verifiedReEncounterIncr := 0
+	verifiedReEncSecTotalIncr := int64(0)
 
-			// Count stats
+	var pokemonTiming *pokemonTimings
 
-			if old == nil || old.Cp != new.Cp { // pokemon is new or cp has changed (eg encountered, or re-encountered)
-				countStats := pokemonCount[area]
+	populatePokemonTiming := func() {
+		if pokemonTiming == nil {
+			pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
+			if pokemonTimingEntry != nil {
+				p := pokemonTimingEntry.Value()
+				pokemonTiming = &p
+				return
+			}
+		}
+		pokemonTiming = &pokemonTimings{}
+	}
 
-				if countStats == nil {
-					countStats = &areaPokemonCountDetail{}
-					pokemonCount[area] = countStats
+	updatePokemonTiming := func() {
+		if pokemonTiming != nil {
+			remaining := ttlcache.DefaultTTL
+			if new.ExpireTimestampVerified {
+				timeLeft := 60 + new.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+				if timeLeft > 1 {
+					remaining = time.Duration(timeLeft) * time.Second
+				}
+			}
+			pokemonTimingCache.Set(new.Id, *pokemonTiming, remaining)
+		}
+	}
+
+	currentSeenType := new.SeenType.ValueOrZero()
+	oldSeenType := ""
+	if old != nil {
+		oldSeenType = old.SeenType.ValueOrZero()
+	}
+
+	if currentSeenType != oldSeenType {
+		if oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell {
+			// New pokemon, or transition from cell or nearby stop
+
+			if currentSeenType == SeenType_Wild {
+				// transition to wild for the first time
+				pokemonTiming = &pokemonTimings{firstWild: new.Updated.ValueOrZero()}
+				updatePokemonTiming()
+			}
+
+			if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
+				// transition to wild or encounter for the first time
+				monsSeenIncr = 1
+			}
+		}
+
+		if currentSeenType == SeenType_Encounter {
+			populatePokemonTiming()
+
+			if pokemonTiming.firstEncounter == 0 {
+				// This is first encounter
+				pokemonTiming.firstEncounter = new.Updated.ValueOrZero()
+				updatePokemonTiming()
+
+				if pokemonTiming.firstWild > 0 {
+					timeToEncounter = pokemonTiming.firstEncounter - pokemonTiming.firstWild
 				}
 
-				if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
-					countStats.count[new.PokemonId]++
-				}
-				if new.Cp.Valid {
-					countStats.ivCount[new.PokemonId]++
-					if new.Shiny.ValueOrZero() {
-						countStats.shiny[new.PokemonId]++
+				monsIvIncr = 1
+
+				if new.ExpireTimestampVerified {
+					tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
+					bucket = tth / (5 * 60)
+					if bucket > 11 {
+						bucket = 11
 					}
-					if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
-						atk := new.AtkIv.ValueOrZero()
-						def := new.DefIv.ValueOrZero()
-						sta := new.StaIv.ValueOrZero()
-						if atk == 15 && def == 15 && sta == 15 {
-							countStats.hundos[new.PokemonId]++
-						}
-						if atk == 0 && def == 0 && sta == 0 {
-							countStats.nundos[new.PokemonId]--
-						}
+					verifiedEncIncr = 1
+					verifiedEncSecTotalIncr = tth
+				} else {
+					unverifiedEncIncr = 1
+				}
+			} else {
+				if new.ExpireTimestampVerified {
+					tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
+
+					verifiedReEncounterIncr = 1
+					verifiedReEncSecTotalIncr = tth
+				}
+			}
+		}
+	}
+
+	if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
+		(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
+			new.PokemonId != old.PokemonId) {
+		// stats reset
+		statsResetCountIncr = 1
+	}
+
+	pokemonStatsLock.Lock()
+	defer pokemonStatsLock.Unlock()
+
+	for i := 0; i < len(areas); i++ {
+		area := areas[i]
+
+		// Count stats
+
+		if old == nil || old.Cp != new.Cp { // pokemon is new or cp has changed (eg encountered, or re-encountered)
+			countStats := pokemonCount[area]
+
+			if countStats == nil {
+				countStats = &areaPokemonCountDetail{}
+				pokemonCount[area] = countStats
+			}
+
+			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
+				countStats.count[new.PokemonId]++
+			}
+			if new.Cp.Valid {
+				countStats.ivCount[new.PokemonId]++
+				if new.Shiny.ValueOrZero() {
+					countStats.shiny[new.PokemonId]++
+				}
+				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
+					atk := new.AtkIv.ValueOrZero()
+					def := new.DefIv.ValueOrZero()
+					sta := new.StaIv.ValueOrZero()
+					if atk == 15 && def == 15 && sta == 15 {
+						countStats.hundos[new.PokemonId]++
+					}
+					if atk == 0 && def == 0 && sta == 0 {
+						countStats.nundos[new.PokemonId]--
 					}
 				}
 			}
+		}
 
-			// General stats
-
-			bucket := int64(-1)
-			monsIvIncr := 0
-			monsSeenIncr := 0
-			verifiedEncIncr := 0
-			unverifiedEncIncr := 0
-			verifiedEncSecTotalIncr := int64(0)
-			timeToEncounter := int64(0)
-			statsResetCountIncr := 0
-			verifiedReEncounterIncr := 0
-			verifiedReEncSecTotalIncr := int64(0)
-
-			var pokemonTiming *pokemonTimings
-
-			populatePokemonTiming := func() {
-				if pokemonTiming == nil {
-					pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
-					if pokemonTimingEntry != nil {
-						p := pokemonTimingEntry.Value()
-						pokemonTiming = &p
-						return
-					}
-				}
-				pokemonTiming = &pokemonTimings{}
+		// Update record if we have a new stat
+		if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
+			bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
+			verifiedReEncounterIncr > 0 {
+			areaStats := pokemonStats[area]
+			if bucket >= 0 {
+				areaStats.tthBucket[bucket]++
 			}
-
-			updatePokemonTiming := func() {
-				if pokemonTiming != nil {
-					remaining := ttlcache.DefaultTTL
-					if new.ExpireTimestampVerified {
-						timeLeft := 60 + new.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
-						if timeLeft > 1 {
-							remaining = time.Duration(timeLeft) * time.Second
-						}
-					}
-					pokemonTimingCache.Set(new.Id, *pokemonTiming, remaining)
-				}
+			areaStats.monsIv += monsIvIncr
+			areaStats.monsSeen += monsSeenIncr
+			areaStats.verifiedEnc += verifiedEncIncr
+			areaStats.unverifiedEnc += unverifiedEncIncr
+			areaStats.verifiedEncSecTotal += verifiedEncSecTotalIncr
+			areaStats.statsResetCount += statsResetCountIncr
+			areaStats.verifiedReEncounter += verifiedReEncounterIncr
+			areaStats.verifiedReEncSecTotal += verifiedReEncSecTotalIncr
+			if timeToEncounter > 1 {
+				areaStats.timeToEncounterCount++
+				areaStats.timeToEncounterSum += timeToEncounter
 			}
-
-			currentSeenType := new.SeenType.ValueOrZero()
-			oldSeenType := ""
-			if old != nil {
-				oldSeenType = old.SeenType.ValueOrZero()
-			}
-
-			if currentSeenType != oldSeenType {
-				if oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell {
-					// New pokemon, or transition from cell or nearby stop
-
-					if currentSeenType == SeenType_Wild {
-						// transition to wild for the first time
-						pokemonTiming = &pokemonTimings{firstWild: new.Updated.ValueOrZero()}
-						updatePokemonTiming()
-					}
-
-					if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
-						// transition to wild or encounter for the first time
-						monsSeenIncr = 1
-					}
-				}
-
-				if currentSeenType == SeenType_Encounter {
-					populatePokemonTiming()
-
-					if pokemonTiming.firstEncounter == 0 {
-						// This is first encounter
-						pokemonTiming.firstEncounter = new.Updated.ValueOrZero()
-						updatePokemonTiming()
-
-						if pokemonTiming.firstWild > 0 {
-							timeToEncounter = pokemonTiming.firstEncounter - pokemonTiming.firstWild
-						}
-
-						monsIvIncr = 1
-
-						if new.ExpireTimestampVerified {
-							tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
-							bucket = tth / (5 * 60)
-							if bucket > 11 {
-								bucket = 11
-							}
-							verifiedEncIncr = 1
-							verifiedEncSecTotalIncr = tth
-						} else {
-							unverifiedEncIncr = 1
-						}
-					} else {
-						if new.ExpireTimestampVerified {
-							tth := new.ExpireTimestamp.ValueOrZero() - new.Updated.ValueOrZero() // relies on Updated being set
-
-							verifiedReEncounterIncr = 1
-							verifiedReEncSecTotalIncr = tth
-						}
-					}
-				}
-			}
-
-			if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
-				(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
-					new.PokemonId != old.PokemonId) {
-				// stats reset
-				statsResetCountIncr = 1
-			}
-
-			// Update record if we have a new stat
-			if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
-				bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
-				verifiedReEncounterIncr > 0 {
-				areaStats := pokemonStats[area]
-				if bucket >= 0 {
-					areaStats.tthBucket[bucket]++
-				}
-				areaStats.monsIv += monsIvIncr
-				areaStats.monsSeen += monsSeenIncr
-				areaStats.verifiedEnc += verifiedEncIncr
-				areaStats.unverifiedEnc += unverifiedEncIncr
-				areaStats.verifiedEncSecTotal += verifiedEncSecTotalIncr
-				areaStats.statsResetCount += statsResetCountIncr
-				areaStats.verifiedReEncounter += verifiedReEncounterIncr
-				areaStats.verifiedReEncSecTotal += verifiedReEncSecTotalIncr
-				if timeToEncounter > 1 {
-					areaStats.timeToEncounterCount++
-					areaStats.timeToEncounterSum += timeToEncounter
-				}
-				pokemonStats[area] = areaStats
-			}
+			pokemonStats[area] = areaStats
 		}
 	}
 }
