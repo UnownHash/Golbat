@@ -65,6 +65,8 @@ func Raw(c *gin.Context) {
 	// than I would like
 
 	pogodroidHeader := r.Header.Get("origin")
+	userAgent := r.Header.Get("User-Agent")
+
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
 		if err := json.Unmarshal(body, &raw); err != nil {
@@ -112,19 +114,40 @@ func Raw(c *gin.Context) {
 			contents := raw["contents"].([]interface{}) // Other MITM
 			for _, v := range contents {
 				entry := v.(map[string]interface{})
-				protoData = append(protoData, InboundRawData{
-					Base64Data: entry["payload"].(string),
-					Method:     int(entry["type"].(float64)),
-					HaveAr: func() *bool {
-						if v := entry["have_ar"]; v != nil {
-							res, ok := v.(bool)
-							if ok {
+				// Atlas, GC and GDS support
+				if len(userAgent) >= 13 && userAgent[:13] == "Pokemod Atlas" || len(userAgent) >= 10 && userAgent[:10] == "PokmonGO/0" {
+					protoData = append(protoData, InboundRawData{
+						Base64Data: entry["data"].(string),
+						Method:     int(entry["method"].(float64)),
+						HaveAr: func() *bool {
+							if v := entry["have_ar"]; v != nil {
+								res, ok := v.(bool)
+								if ok {
+									return &res
+								}
+							} else {
+								// TODO: Assume AR Quest in inv. Remove after `have_ar` will be added to GC.
+								res := true
 								return &res
 							}
-						}
-						return nil
-					}(),
-				})
+							return nil
+						}(),
+					})
+				} else {
+					protoData = append(protoData, InboundRawData{
+						Base64Data: entry["payload"].(string),
+						Method:     int(entry["type"].(float64)),
+						HaveAr: func() *bool {
+							if v := entry["have_ar"]; v != nil {
+								res, ok := v.(bool)
+								if ok {
+									return &res
+								}
+							}
+							return nil
+						}(),
+					})
+				}
 			}
 		}
 	}
