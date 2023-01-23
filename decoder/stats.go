@@ -233,8 +233,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 		statsResetCountIncr = 1
 	}
 
-	pokemonStatsLock.Lock()
-	defer pokemonStatsLock.Unlock()
+	locked := false
 
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
@@ -242,6 +241,11 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 		// Count stats
 
 		if old == nil || old.Cp != new.Cp { // pokemon is new or cp has changed (eg encountered, or re-encountered)
+			if locked == false {
+				pokemonStatsLock.Lock()
+				locked = true
+			}
+
 			countStats := pokemonCount[area]
 
 			if countStats == nil {
@@ -265,7 +269,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 						countStats.hundos[new.PokemonId]++
 					}
 					if atk == 0 && def == 0 && sta == 0 {
-						countStats.nundos[new.PokemonId]--
+						countStats.nundos[new.PokemonId]++
 					}
 				}
 			}
@@ -275,6 +279,11 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 		if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
 			bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
 			verifiedReEncounterIncr > 0 {
+			if locked == false {
+				pokemonStatsLock.Lock()
+				locked = true
+			}
+
 			areaStats := pokemonStats[area]
 			if bucket >= 0 {
 				areaStats.tthBucket[bucket]++
@@ -293,6 +302,10 @@ func updatePokemonStats(old *Pokemon, new *Pokemon) {
 			}
 			pokemonStats[area] = areaStats
 		}
+	}
+
+	if locked {
+		pokemonStatsLock.Unlock()
 	}
 }
 
