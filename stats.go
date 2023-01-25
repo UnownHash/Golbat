@@ -234,7 +234,6 @@ func StartGymPokestopTransition(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
-			decoder.ClearPokestopCache()
 			result, err = db.Exec("update pokestop join gym on gym.id=pokestop.id set pokestop.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated > pokestop.updated;")
 
 			if err != nil {
