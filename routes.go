@@ -252,7 +252,7 @@ func ReloadGeojson(c *gin.Context) {
 	authHeader := c.Request.Header.Get("X-Golbat-Secret")
 	if config.Config.ApiSecret != "" {
 		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ClearQuests: Incorrect authorisation received (%s)", authHeader)
+			log.Errorf("ReloadGeojson: Incorrect authorisation received (%s)", authHeader)
 			c.String(http.StatusUnauthorized, "Unauthorised")
 			return
 		}
