@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"fmt"
 	"github.com/Pupitar/ohbemgo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -332,7 +331,7 @@ func ClearRemovedForts(ctx context.Context, db db.DbDetails,
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
 				ClearOldGyms(ctx, db, cellId, gyms)
-				fmt.Sprintf("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
+				log.Infof("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
@@ -345,7 +344,7 @@ func ClearRemovedForts(ctx context.Context, db db.DbDetails,
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
 				ClearOldPokestops(ctx, db, cellId, stops)
-				fmt.Sprintf("cached cell contains %d stops, mapCell contains %d stops", cachedCell.stopCount, len(stops))
+				log.Infof("cached cell contains %d stops, mapCell contains %d stops", cachedCell.stopCount, len(stops))
 				cachedCell.stopCount = len(stops)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
