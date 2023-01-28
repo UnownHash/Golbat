@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
@@ -469,4 +470,12 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func ClearOldGyms(ctx context.Context, db db.DbDetails, cellId uint64, gymIds []string) {
+	//TODO: clear old gyms
+	// first select affected IDs
+	// SELECT FROM gym WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
+	// second delete IDs from result
+	// third send webhook
 }

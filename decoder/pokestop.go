@@ -704,3 +704,11 @@ func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geof
 	rows, _ := res.RowsAffected()
 	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
 }
+
+func ClearOldPokestops(ctx context.Context, db db.DbDetails, cellId uint64, stopIds []string) {
+	//TODO: clear old stops
+	// first select affected IDs
+	// SELECT FROM pokestop WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
+	// second delete IDs from result
+	// third send webhook
+}
