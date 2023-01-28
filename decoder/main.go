@@ -331,11 +331,7 @@ func ClearRemovedForts(ctx context.Context, db db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
-				//TODO: clear old gyms
-				// first select affected IDs
-				// SELECT FROM gym WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
-				// second delete IDs from result
-				// third send webhook
+				ClearOldGyms(ctx, db, cellId, gyms)
 				fmt.Sprintf("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
@@ -348,11 +344,7 @@ func ClearRemovedForts(ctx context.Context, db db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
-				//TODO: clear old stops
-				// first select affected IDs
-				// SELECT FROM pokestop WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
-				// second delete IDs from result
-				// third send webhook
+				ClearOldPokestops(ctx, db, cellId, stops)
 				fmt.Sprintf("cached cell contains %d stops, mapCell contains %d stops", cachedCell.stopCount, len(stops))
 				cachedCell.stopCount = len(stops)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
