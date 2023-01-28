@@ -565,10 +565,14 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
-
+	now := time.Now().Unix()
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
-		return
+		if oldPokestop.Updated > now-900 {
+			// if a pokestop is unchanged, but we did see it again after 15 minutes, then save again
+			return
+		}
 	}
+	pokestop.Updated = now
 
 	log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
