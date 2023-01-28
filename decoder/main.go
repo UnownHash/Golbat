@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"fmt"
 	"github.com/Pupitar/ohbemgo"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -41,15 +42,10 @@ type RawClientWeatherData struct {
 	Data *pogo.ClientWeatherProto
 }
 
-type RawClientMapCellS2CellData struct {
-	Cell int64
-	Data *pogo.ClientMapCellProto
-}
-
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
-var s2cellCache *ttlcache.Cache[int64, S2cell]
+var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -84,10 +80,10 @@ func initDataCache() {
 	)
 	go weatherCache.Start()
 
-	s2cellCache = ttlcache.New[int64, S2cell](
-		ttlcache.WithTTL[int64, S2cell](15 * time.Minute),
+	s2CellCache = ttlcache.New[uint64, S2Cell](
+		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
 	)
-	go s2cellCache.Start()
+	go s2CellCache.Start()
 
 	spawnpointCache = ttlcache.New[int64, Spawnpoint](
 		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
@@ -320,17 +316,47 @@ func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 	}
 }
 
-func UpdateClientMapCells2cellBatch(db db.DbDetails, r []RawClientMapCellS2CellData) {
-	for _, s2cellProto := range r {
-		s2cell, err := getS2cellRecord(db, s2cellProto.Cell)
-		if err != nil {
-			log.Printf("getS2CellRecord: %s", err)
-		} else {
-			if s2cell == nil {
-				s2cell = &S2cell{}
+func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64) {
+	for _, mapS2CellId := range r {
+		s2Cell := &S2Cell{}
+		s2Cell.updateS2CellFromClientMapProto(mapS2CellId)
+		saveS2CellRecord(ctx, db, s2Cell)
+	}
+}
+
+func ClearRemovedForts(ctx context.Context, db db.DbDetails,
+	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
+	// check gyms in cell
+	for cellId, gyms := range gymIdsPerCell {
+		if c := s2CellCache.Get(cellId); c != nil {
+			cachedCell := c.Value()
+			if cachedCell.gymCount != len(gyms) {
+				//TODO: clear old gyms
+				// first select affected IDs
+				// SELECT FROM gym WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
+				// second delete IDs from result
+				// third send webhook
+				fmt.Sprintf("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
+				cachedCell.gymCount = len(gyms)
+				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
-			s2cell.updateS2cellFromClientMapCellProto(s2cellProto.Data)
-			saveS2CellRecord(db, s2cell)
+		}
+
+	}
+	// check stops in cell
+	for cellId, stops := range stopIdsPerCell {
+		if c := s2CellCache.Get(cellId); c != nil {
+			cachedCell := c.Value()
+			if cachedCell.stopCount != len(stops) {
+				//TODO: clear old stops
+				// first select affected IDs
+				// SELECT FROM pokestop WHERE deleted = 0 AND cell_id = {cellId} AND id NOT IN ({stops])
+				// second delete IDs from result
+				// third send webhook
+				fmt.Sprintf("cached cell contains %d stops, mapCell contains %d stops", cachedCell.stopCount, len(stops))
+				cachedCell.stopCount = len(stops)
+				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+			}
 		}
 	}
 }

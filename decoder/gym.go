@@ -372,14 +372,20 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 func saveGymRecord(db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(db, gym.Id)
 
+	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
-		return
+		if oldGym.Updated > now-900 {
+			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
+			return
+		}
 	}
+
+	gym.Updated = now
 
 	log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
 		res, err := db.GeneralDb.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,UNIX_TIMESTAMP(),:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
 
 		if err != nil {
 			log.Errorf("insert gym: %s", err)
@@ -397,7 +403,7 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 			"raid_end_timestamp = :raid_end_timestamp, "+
 			"raid_spawn_timestamp = :raid_spawn_timestamp, "+
 			"raid_battle_timestamp = :raid_battle_timestamp, "+
-			"updated = UNIX_TIMESTAMP(), "+
+			"updated = :updated, "+
 			"raid_pokemon_id = :raid_pokemon_id, "+
 			"guarding_pokemon_id = :guarding_pokemon_id, "+
 			"available_slots = :available_slots, "+
