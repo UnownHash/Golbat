@@ -340,8 +340,6 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				}
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
-			} else {
-				log.Infof("Cell %d matches with GMO and Cache", cellId)
 			}
 		}
 
@@ -361,8 +359,6 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				}
 				cachedCell.stopCount = len(stops)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
-			} else {
-				log.Infof("Cell %d matches with GMO and Cache", cellId)
 			}
 		}
 	}
