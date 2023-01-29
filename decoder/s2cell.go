@@ -31,6 +31,7 @@ type S2Cell struct {
 
 func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell {
 	mapS2Cell := s2.CellFromCellID(s2.CellID(mapS2CellId))
+	s2Cell.Id = mapS2CellId
 	s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
 	s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
 	s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
