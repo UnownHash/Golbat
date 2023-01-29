@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 )
 
 func ClearOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
@@ -24,6 +25,7 @@ func ClearOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []str
 		list = append(list, element.Id)
 	}
 
+	log.Infof("Query to find old gyms in cell %d - gyms: %v - query: %s", cellId, list, query)
 	query2, args2, _ := sqlx.In("UPDATE gym SET deleted = 1 WHERE id IN (?)", list)
 	query2 = db.GeneralDb.Rebind(query2)
 
