@@ -46,7 +46,7 @@ func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
 	s2Cell.Updated = now
 
 	res, err := db.GeneralDb.NamedExecContext(ctx,
-		"INSERT INTO s2Cell (id, center_lat, center_lon, level, updated) "+
+		"INSERT INTO s2cell (id, center_lat, center_lon, level, updated) "+
 			"VALUES (:id, :center_lat, :center_lon, :level, :updated) "+
 			"ON DUPLICATE KEY UPDATE "+
 			"center_lat=VALUES(center_lat), center_lon=VALUES(center_lon), level=VALUES(level), updated=VALUES(updated)",
