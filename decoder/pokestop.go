@@ -612,7 +612,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"enabled = :enabled,"+
 				"lure_expire_timestamp = :lure_expire_timestamp,"+
 				"last_modified_timestamp = :last_modified_timestamp,"+
-				"updated = UNIX_TIMESTAMP(),"+
+				"updated = :updated,"+
 				"quest_type = :quest_type, "+
 				"quest_timestamp = :quest_timestamp, "+
 				"quest_target = :quest_target, "+
