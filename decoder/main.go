@@ -338,7 +338,6 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					log.Infof("Found old Gym(s) in Database: %v", fortIds)
 					//TODO send webhook
 				}
-				log.Infof("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
