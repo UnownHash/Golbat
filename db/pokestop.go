@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"github.com/jmoiron/sqlx"
 	"golbat/geo"
 )
 
@@ -10,6 +11,10 @@ type QuestLocation struct {
 	Id        string  `db:"id"`
 	Latitude  float64 `db:"lat"`
 	Longitude float64 `db:"lon"`
+}
+
+type FortId struct {
+	Id string `db:"id"`
 }
 
 func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, error) {
@@ -57,4 +62,33 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence geo.Geofence) (sql.Re
 		"and ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON((" + fence.ToPolygonString() + "))'), point(lat,lon))"
 	return db.GeneralDb.ExecContext(ctx, query,
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude)
+}
+
+func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
+	fortIds := []FortId{}
+	query, args, _ := sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
+	query = db.GeneralDb.Rebind(query)
+	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	// convert slices of struct to slices of string
+	var list []string
+	for _, element := range fortIds {
+		list = append(list, element.Id)
+	}
+
+	query2, args2, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?)", list)
+	query2 = db.GeneralDb.Rebind(query2)
+
+	_, err2 := db.GeneralDb.ExecContext(ctx, query2, args2...)
+	if err2 != nil {
+		return nil, err
+	}
+
+	return list, nil
 }

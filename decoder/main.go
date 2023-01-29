@@ -323,14 +323,21 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64
 	}
 }
 
-func ClearRemovedForts(ctx context.Context, db db.DbDetails,
+func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
-				ClearOldGyms(ctx, db, cellId, gyms)
+				fortIds, err := db.ClearOldGyms(ctx, dbDetails, cellId, gyms)
+				if err != nil {
+					log.Errorf("Unable to clear old gyms: %s", err)
+				}
+				if fortIds != nil {
+					log.Infof("Found old Gym(s) in Database: %v", fortIds)
+					//TODO send webhook
+				}
 				log.Infof("cached cell contains %d gyms, mapCell contains %d gyms", cachedCell.gymCount, len(gyms))
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
@@ -343,8 +350,14 @@ func ClearRemovedForts(ctx context.Context, db db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
-				ClearOldPokestops(ctx, db, cellId, stops)
-				log.Infof("cached cell contains %d stops, mapCell contains %d stops", cachedCell.stopCount, len(stops))
+				fortIds, err := db.ClearOldPokestops(ctx, dbDetails, cellId, stops)
+				if err != nil {
+					log.Errorf("Unable to clear old gyms: %s", err)
+				}
+				if fortIds != nil {
+					log.Infof("Found old Stop(s) in Database: %v", fortIds)
+					//TODO send webhook
+				}
 				cachedCell.stopCount = len(stops)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
