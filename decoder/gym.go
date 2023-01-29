@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
@@ -12,7 +11,6 @@ import (
 	"golbat/util"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
-	"strings"
 	"time"
 )
 
@@ -471,30 +469,4 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
-}
-
-func ClearOldGyms(ctx context.Context, db db.DbDetails, cellId uint64, gymIds []string) {
-	rows, err := db.GeneralDb.QueryContext(ctx, "SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN"+
-		"(?"+strings.Repeat(",?", len(gymIds)-1)+")",
-		cellId, gymIds)
-	if err != nil {
-		return
-	}
-	var toClear []string
-	for rows.Next() {
-		var id string
-		err = rows.Scan(&id)
-		if err != nil {
-			return
-		}
-		toClear = append(toClear, id)
-	}
-	if len(toClear) > 0 {
-		_, err2 := db.GeneralDb.ExecContext(ctx, "UPDATE gym SET deleted = 1 WHERE id IN "+
-			"(?"+strings.Repeat(",?", len(toClear)-1)+")", toClear)
-		if err2 != nil {
-			return
-		}
-	}
-	//TODO send webhook
 }
