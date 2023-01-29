@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 	"golbat/geo"
 )
 
@@ -64,9 +65,9 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence geo.Geofence) (sql.Re
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude)
 }
 
-func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
+func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, stopIds []string) ([]string, error) {
 	fortIds := []FortId{}
-	query, args, _ := sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
+	query, args, _ := sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, stopIds)
 	query = db.GeneralDb.Rebind(query)
 	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
 	if err == sql.ErrNoRows {
@@ -81,6 +82,8 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, gymIds 
 	for _, element := range fortIds {
 		list = append(list, element.Id)
 	}
+
+	log.Infof("Query to find old stops in cell %d - stops: %v - query: %s", cellId, list, query)
 
 	query2, args2, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?)", list)
 	query2 = db.GeneralDb.Rebind(query2)
