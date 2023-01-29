@@ -39,10 +39,15 @@ func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell
 }
 
 func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
-	oldS2Cell := s2CellCache.Get(s2Cell.Id)
 	now := time.Now().Unix()
-	if oldS2Cell != nil && oldS2Cell.Value().Updated > now-900 {
-		return
+	if c := s2CellCache.Get(s2Cell.Id); c != nil {
+		cachedCell := c.Value()
+		if cachedCell.Updated > now-900 {
+			return
+		} else {
+			s2Cell.gymCount = cachedCell.gymCount
+			s2Cell.stopCount = cachedCell.stopCount
+		}
 	}
 	s2Cell.Updated = now
 
