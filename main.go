@@ -417,9 +417,10 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
 			}
 			// collect fort information of cell
-			if fort.FortType == pogo.FortType_CHECKPOINT {
+			switch fort.FortType {
+			case pogo.FortType_CHECKPOINT:
 				stopIdsPerCell[mapCell.S2CellId] = append(stopIdsPerCell[mapCell.S2CellId], fort.FortId)
-			} else if fort.FortType == pogo.FortType_GYM {
+			case pogo.FortType_GYM:
 				gymIdsPerCell[mapCell.S2CellId] = append(gymIdsPerCell[mapCell.S2CellId], fort.FortId)
 			}
 		}
