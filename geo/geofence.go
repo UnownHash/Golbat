@@ -81,8 +81,9 @@ func (p *Geofence) Add(point Location) {
 
 // IsClosed returns whether or not the polygon is closed.
 // TODO:  This can obviously be improved, but for now,
-//        this should be sufficient for detecting if points
-//        are contained using the raycast algorithm.
+//
+//	this should be sufficient for detecting if points
+//	are contained using the raycast algorithm.
 func (p *Geofence) IsClosed() bool {
 	if len(p.Fence) < 3 {
 		return false

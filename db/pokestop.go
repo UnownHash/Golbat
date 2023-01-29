@@ -70,11 +70,11 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, stopIds
 	query, args, _ := sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, stopIds)
 	query = db.GeneralDb.Rebind(query)
 	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
-	if len(fortIds) == 0 {
-		return nil, nil
-	}
 	if err != nil {
 		return nil, err
+	}
+	if len(fortIds) == 0 {
+		return nil, nil
 	}
 
 	// convert slices of struct to slices of string
