@@ -335,11 +335,13 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
 				if fortIds != nil {
-					log.Infof("Found old Gym(s) in Database: %v", fortIds)
+					log.Infof("Found old Gym(s) in cell %d: %v", cellId, fortIds)
 					//TODO send webhook
 				}
 				cachedCell.gymCount = len(gyms)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+			} else {
+				log.Infof("Cell %d matches with GMO and Cache", cellId)
 			}
 		}
 
@@ -354,11 +356,13 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
 				if fortIds != nil {
-					log.Infof("Found old Stop(s) in Database: %v", fortIds)
+					log.Infof("Found old Stop(s) in cell %d: %v", cellId, fortIds)
 					//TODO send webhook
 				}
 				cachedCell.stopCount = len(stops)
 				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+			} else {
+				log.Infof("Cell %d matches with GMO and Cache", cellId)
 			}
 		}
 	}
