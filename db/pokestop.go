@@ -83,7 +83,7 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, cellId uint64, stopIds
 		list = append(list, element.Id)
 	}
 
-	log.Debugf("Query to find old stops in cell %d - stop: %v - to delete: %v - query: %s", cellId, stopIds, list, query)
+	log.Infof("Query to find old stops in cell %d - stop: %v - to delete: %v - query: %s", cellId, stopIds, list, query)
 
 	query2, args2, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?);", list)
 	query2 = db.GeneralDb.Rebind(query2)
