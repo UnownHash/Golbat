@@ -45,6 +45,7 @@ var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
+var fortsToClearCache *ttlcache.Cache[string, int]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -83,6 +84,11 @@ func initDataCache() {
 		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
 	)
 	go s2CellCache.Start()
+
+	fortsToClearCache = ttlcache.New[string, int](
+		ttlcache.WithTTL[string, int](30 * time.Minute),
+	)
+	go fortsToClearCache.Start()
 
 	spawnpointCache = ttlcache.New[int64, Spawnpoint](
 		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
@@ -330,16 +336,38 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
-				fortIds, err := db.ClearOldGyms(ctx, dbDetails, cellId, gyms)
+				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
+				for _, gym := range gyms {
+					fortsToClearCache.Delete(gym)
+				}
+				var toClear []string
 				if fortIds != nil {
-					log.Infof("Found old Gym(s) in cell %d: %v", cellId, fortIds)
+					for _, fortId := range fortIds {
+						if f := fortsToClearCache.Get(fortId); f != nil {
+							toClearCount := f.Value()
+							if toClearCount < 3 {
+								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
+							} else {
+								toClear = append(toClear, fortId)
+							}
+						} else {
+							fortsToClearCache.Set(fortId, 1, ttlcache.DefaultTTL)
+						}
+					}
+				} else {
+					// iff there is no fort to clear we update cached cell gym count
+					cachedCell.gymCount = len(gyms)
+					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+				}
+				if len(toClear) > 0 {
+					db.ClearOldGyms(ctx, dbDetails, toClear)
+					log.Infof("Found old Gym(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}
-				cachedCell.gymCount = len(gyms)
-				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+
 			}
 		}
 
@@ -349,16 +377,38 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
-				fortIds, err := db.ClearOldPokestops(ctx, dbDetails, cellId, stops)
+				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
+				for _, stop := range stops {
+					// delete from cache if it's shown again in GMO
+					fortsToClearCache.Delete(stop)
+				}
+				var toClear []string
 				if fortIds != nil {
-					log.Infof("Found old Stop(s) in cell %d: %v", cellId, fortIds)
+					for _, fortId := range fortIds {
+						if f := fortsToClearCache.Get(fortId); f != nil {
+							toClearCount := f.Value()
+							if toClearCount < 3 {
+								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
+							} else {
+								toClear = append(toClear, fortId)
+							}
+						} else {
+							fortsToClearCache.Set(fortId, 1, ttlcache.DefaultTTL)
+						}
+					}
+				} else {
+					// iff there is no fort to clear we update cached cell stop count
+					cachedCell.stopCount = len(stops)
+					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+				}
+				if len(toClear) > 0 {
+					db.ClearOldPokestops(ctx, dbDetails, toClear)
+					log.Infof("Found old Stop(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}
-				cachedCell.stopCount = len(stops)
-				s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 			}
 		}
 	}
