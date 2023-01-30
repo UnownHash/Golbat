@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
 )
 
 func FindOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
@@ -26,12 +25,13 @@ func FindOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []stri
 	return list, nil
 }
 
-func ClearOldGyms(ctx context.Context, db DbDetails, gymIds []string) {
+func ClearOldGyms(ctx context.Context, db DbDetails, gymIds []string) error {
 	query, args, _ := sqlx.In("UPDATE gym SET deleted = 1 WHERE id IN (?);", gymIds)
 	query = db.GeneralDb.Rebind(query)
 
 	_, err := db.GeneralDb.ExecContext(ctx, query, args...)
 	if err != nil {
-		log.Errorf("Unable to clear old gyms '%v': %s", gymIds, err)
+		return err
 	}
+	return nil
 }

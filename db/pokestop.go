@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
 	"golbat/geo"
 )
 
@@ -85,12 +84,13 @@ func FindOldPokestops(ctx context.Context, db DbDetails, cellId uint64, stopIds 
 	return list, nil
 }
 
-func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) {
+func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) error {
 	query, args, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?);", stopIds)
 	query = db.GeneralDb.Rebind(query)
 
 	_, err := db.GeneralDb.ExecContext(ctx, query, args...)
 	if err != nil {
-		log.Errorf("Unable to clear old stops '%v': %s", stopIds, err)
+		return err
 	}
+	return nil
 }

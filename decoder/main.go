@@ -331,8 +331,10 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64
 
 func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
+
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
+		// delete from cache if it's shown again in GMO
 		for _, gym := range gyms {
 			fortsToClearCache.Delete(gym)
 		}
@@ -343,7 +345,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
-				var toClear []string
+				var toClear []string // only clear if fort is not seen within 30 minutes
 				if fortIds != nil {
 					now := time.Now().Unix()
 					for _, fortId := range fortIds {
@@ -364,7 +366,10 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 				}
 				if len(toClear) > 0 {
-					db.ClearOldGyms(ctx, dbDetails, toClear)
+					err2 := db.ClearOldGyms(ctx, dbDetails, toClear)
+					if err2 != nil {
+						log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
+					}
 					log.Infof("Found old Gym(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}
@@ -375,13 +380,11 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
+		// delete from cache if it's shown again in GMO
 		for _, stop := range stops {
-			// delete from cache if it's shown again in GMO
 			fortsToClearCache.Delete(stop)
-			if stop == "880ac223bc0041dead1bba87fe7f76cd.16" || stop == "6a267847d2934d199fa9a50ee54e270b.16" {
-				log.Infof("Found stop %s again in GMO", stop)
-			}
 		}
+		// compare with cached cell
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
@@ -389,7 +392,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				if err != nil {
 					log.Errorf("Unable to clear old stops: %s", err)
 				}
-				var toClear []string
+				var toClear []string // only clear if fort is not seen within 30 minutes
 				if fortIds != nil {
 					now := time.Now().Unix()
 					for _, fortId := range fortIds {
@@ -410,7 +413,10 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
 				}
 				if len(toClear) > 0 {
-					db.ClearOldPokestops(ctx, dbDetails, toClear)
+					err2 := db.ClearOldPokestops(ctx, dbDetails, toClear)
+					if err2 != nil {
+						log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
+					}
 					log.Infof("Found old Stop(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}

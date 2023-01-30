@@ -393,6 +393,7 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 		}
 
 		_, _ = res, err
+		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExec("UPDATE gym SET "+
 			"lat = :lat, "+
