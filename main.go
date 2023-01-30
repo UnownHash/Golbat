@@ -142,8 +142,6 @@ func main() {
 	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
 
-	StartGymPokestopTransition(db)
-
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)
 	} else {
