@@ -45,7 +45,7 @@ var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
-var fortsToClearCache *ttlcache.Cache[string, int]
+var fortsToClearCache *ttlcache.Cache[string, int64]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -85,8 +85,8 @@ func initDataCache() {
 	)
 	go s2CellCache.Start()
 
-	fortsToClearCache = ttlcache.New[string, int](
-		ttlcache.WithTTL[string, int](30 * time.Minute),
+	fortsToClearCache = ttlcache.New[string, int64](
+		ttlcache.WithTTL[string, int64](60 * time.Minute),
 	)
 	go fortsToClearCache.Start()
 
@@ -345,16 +345,18 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				}
 				var toClear []string
 				if fortIds != nil {
+					log.Infof("Found forts %v to clear, check fortsToClearCache", fortIds)
+					now := time.Now().Unix()
+
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
-							toClearCount := f.Value()
-							if toClearCount < 10 {
-								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
-							} else {
+							toClearTimestamp := f.Value()
+							if toClearTimestamp < now-1800 {
 								toClear = append(toClear, fortId)
 							}
 						} else {
-							fortsToClearCache.Set(fortId, 1, ttlcache.DefaultTTL)
+							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
+							fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
 						}
 					}
 				} else {
@@ -385,22 +387,21 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					// delete from cache if it's shown again in GMO
 					fortsToClearCache.Delete(stop)
 					if stop == "880ac223bc0041dead1bba87fe7f76cd.16" || stop == "6a267847d2934d199fa9a50ee54e270b.16" {
-						log.Infof("Found stop again in GMO")
+						log.Infof("Found stop %s again in GMO", stop)
 					}
 				}
 				var toClear []string
 				if fortIds != nil {
+					now := time.Now().Unix()
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
-							toClearCount := f.Value()
-							if toClearCount < 10 {
-								log.Infof("Increase clear count %d for stop %s", toClearCount, fortId)
-								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
-							} else {
+							toClearTimestamp := f.Value()
+							if toClearTimestamp < now-1800 {
 								toClear = append(toClear, fortId)
 							}
 						} else {
-							fortsToClearCache.Set(fortId, 1, ttlcache.DefaultTTL)
+							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
+							fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
 						}
 					}
 				} else {
