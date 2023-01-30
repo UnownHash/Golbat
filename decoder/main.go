@@ -360,7 +360,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 						log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
 						continue
 					}
-					log.Infof("Found old Gym(s) in cell %d: %v", cellId, toClear)
+					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}
 
@@ -398,7 +398,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 						log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
 						continue
 					}
-					log.Infof("Found old Stop(s) in cell %d: %v", cellId, toClear)
+					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
 				}
 			}
@@ -413,11 +413,12 @@ func checkForFortIdsInCache(fortIds []string) []string {
 		if f := fortsToClearCache.Get(fortId); f != nil {
 			toClearTimestamp := f.Value()
 			if toClearTimestamp < now-1800 {
+				log.Debugf("Time to clear fort %s, not seen since 30 minutes", fortId)
 				toClear = append(toClear, fortId)
 				fortsToClearCache.Delete(fortId)
 			}
 		} else {
-			log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
+			log.Debugf("Found fort %s to clear, insert into fortsToClearCache", fortId)
 			fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
 		}
 	}
