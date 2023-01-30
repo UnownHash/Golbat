@@ -423,12 +423,6 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 			case pogo.FortType_GYM:
 				gymIdsPerCell[mapCell.S2CellId] = append(gymIdsPerCell[mapCell.S2CellId], fort.FortId)
 			}
-			if fort.FortId == "6a267847d2934d199fa9a50ee54e270b.16" || fort.FortId == "880ac223bc0041dead1bba87fe7f76cd.16" {
-				log.Infof("Found stop: %s", fort.FortId)
-			}
-		}
-		if mapCell.S2CellId == 5146962338993143808 || mapCell.S2CellId == 5146778065568792576 {
-			log.Infof("Map Cell stops count: %v", len(stopIdsPerCell[mapCell.S2CellId]))
 		}
 		newClientMapCellS2CellIds = append(newClientMapCellS2CellIds, mapCell.S2CellId)
 		for _, mon := range mapCell.WildPokemon {
