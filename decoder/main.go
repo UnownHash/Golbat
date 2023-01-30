@@ -348,19 +348,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				}
 				var toClear []string // only clear if fort is not seen within 30 minutes
 				if fortIds != nil {
-					now := time.Now().Unix()
-					for _, fortId := range fortIds {
-						if f := fortsToClearCache.Get(fortId); f != nil {
-							toClearTimestamp := f.Value()
-							if toClearTimestamp < now-1800 {
-								toClear = append(toClear, fortId)
-								fortsToClearCache.Delete(fortId)
-							}
-						} else {
-							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
-							fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
-						}
-					}
+					toClear = checkForFortIdsInCache(fortIds)
 				} else {
 					// iff there is no fort to clear we update cached cell gym count
 					cachedCell.gymCount = len(gyms)
@@ -395,21 +383,10 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					log.Errorf("Unable to clear old stops: %s", err)
 					continue
 				}
-				var toClear []string // only clear if fort is not seen within 30 minutes
+				// only clear if fort is not seen within 30 minutes
+				var toClear []string
 				if fortIds != nil {
-					now := time.Now().Unix()
-					for _, fortId := range fortIds {
-						if f := fortsToClearCache.Get(fortId); f != nil {
-							toClearTimestamp := f.Value()
-							if toClearTimestamp < now-1800 {
-								toClear = append(toClear, fortId)
-								fortsToClearCache.Delete(fortId)
-							}
-						} else {
-							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
-							fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
-						}
-					}
+					toClear = checkForFortIdsInCache(fortIds)
 				} else {
 					// iff there is no fort to clear we update cached cell stop count
 					cachedCell.stopCount = len(stops)
@@ -427,4 +404,22 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 			}
 		}
 	}
+}
+
+func checkForFortIdsInCache(fortIds []string) []string {
+	now := time.Now().Unix()
+	var toClear []string
+	for _, fortId := range fortIds {
+		if f := fortsToClearCache.Get(fortId); f != nil {
+			toClearTimestamp := f.Value()
+			if toClearTimestamp < now-1800 {
+				toClear = append(toClear, fortId)
+				fortsToClearCache.Delete(fortId)
+			}
+		} else {
+			log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
+			fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
+		}
+	}
+	return toClear
 }
