@@ -333,6 +333,9 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
+		for _, gym := range gyms {
+			fortsToClearCache.Delete(gym)
+		}
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
@@ -340,19 +343,15 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
 				}
-				for _, gym := range gyms {
-					fortsToClearCache.Delete(gym)
-				}
 				var toClear []string
 				if fortIds != nil {
-					log.Infof("Found forts %v to clear, check fortsToClearCache", fortIds)
 					now := time.Now().Unix()
-
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
 							toClearTimestamp := f.Value()
 							if toClearTimestamp < now-1800 {
 								toClear = append(toClear, fortId)
+								fortsToClearCache.Delete(fortId)
 							}
 						} else {
 							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
@@ -376,19 +375,19 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
+		for _, stop := range stops {
+			// delete from cache if it's shown again in GMO
+			fortsToClearCache.Delete(stop)
+			if stop == "880ac223bc0041dead1bba87fe7f76cd.16" || stop == "6a267847d2934d199fa9a50ee54e270b.16" {
+				log.Infof("Found stop %s again in GMO", stop)
+			}
+		}
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
 				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
 				if err != nil {
-					log.Errorf("Unable to clear old gyms: %s", err)
-				}
-				for _, stop := range stops {
-					// delete from cache if it's shown again in GMO
-					fortsToClearCache.Delete(stop)
-					if stop == "880ac223bc0041dead1bba87fe7f76cd.16" || stop == "6a267847d2934d199fa9a50ee54e270b.16" {
-						log.Infof("Found stop %s again in GMO", stop)
-					}
+					log.Errorf("Unable to clear old stops: %s", err)
 				}
 				var toClear []string
 				if fortIds != nil {
@@ -398,6 +397,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 							toClearTimestamp := f.Value()
 							if toClearTimestamp < now-1800 {
 								toClear = append(toClear, fortId)
+								fortsToClearCache.Delete(fortId)
 							}
 						} else {
 							log.Infof("Found forts %v to clear, insert into fortsToClearCache", fortId)
