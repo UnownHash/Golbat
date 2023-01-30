@@ -348,7 +348,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
 							toClearCount := f.Value()
-							if toClearCount < 3 {
+							if toClearCount < 5 {
 								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
 							} else {
 								toClear = append(toClear, fortId)
