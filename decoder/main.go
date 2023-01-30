@@ -334,11 +334,11 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
-		// delete from cache if it's shown again in GMO
-		for _, gym := range gyms {
-			fortsToClearCache.Delete(gym)
-		}
 		if c := s2CellCache.Get(cellId); c != nil {
+			// delete from cache if it's shown again in GMO
+			for _, gym := range gyms {
+				fortsToClearCache.Delete(gym)
+			}
 			cachedCell := c.Value()
 			if cachedCell.gymCount != len(gyms) {
 				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
@@ -380,12 +380,12 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
-		// delete from cache if it's shown again in GMO
-		for _, stop := range stops {
-			fortsToClearCache.Delete(stop)
-		}
 		// compare with cached cell
 		if c := s2CellCache.Get(cellId); c != nil {
+			// delete from cache if it's shown again in GMO
+			for _, stop := range stops {
+				fortsToClearCache.Delete(stop)
+			}
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
 				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
