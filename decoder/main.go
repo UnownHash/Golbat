@@ -349,9 +349,6 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
 			if cachedCell.stopCount != len(stops) {
-				if cellId == 5146962338993143808 || cellId == 5146778065568792576 {
-					log.Infof("Mismatch: %d - %d", cachedCell.stopCount, len(stops))
-				}
 				fortIds, err := db.ClearOldPokestops(ctx, dbDetails, cellId, stops)
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
