@@ -105,8 +105,7 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 		for i := range []int{0, 1, 2, 3} {
 			vertex := s2cell.Vertex(i)
 			latLng := s2.LatLngFromPoint(vertex)
-			coord := [...]float64{latLng.Lat.Degrees(), latLng.Lng.Degrees()}
-			polygon[i] = coord
+			polygon[i] = [...]float64{latLng.Lat.Degrees(), latLng.Lng.Degrees()}
 		}
 		weatherHook := map[string]interface{}{
 			"s2_cell_id":           weather.Id,
