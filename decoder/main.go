@@ -348,7 +348,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
 							toClearCount := f.Value()
-							if toClearCount < 5 {
+							if toClearCount < 10 {
 								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
 							} else {
 								toClear = append(toClear, fortId)
@@ -384,13 +384,17 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				for _, stop := range stops {
 					// delete from cache if it's shown again in GMO
 					fortsToClearCache.Delete(stop)
+					if stop == "880ac223bc0041dead1bba87fe7f76cd.16" || stop == "6a267847d2934d199fa9a50ee54e270b.16" {
+						log.Infof("Found stop again in GMO")
+					}
 				}
 				var toClear []string
 				if fortIds != nil {
 					for _, fortId := range fortIds {
 						if f := fortsToClearCache.Get(fortId); f != nil {
 							toClearCount := f.Value()
-							if toClearCount < 5 {
+							if toClearCount < 10 {
+								log.Infof("Increase clear count %d for stop %s", toClearCount, fortId)
 								fortsToClearCache.Set(fortId, toClearCount+1, ttlcache.DefaultTTL)
 							} else {
 								toClear = append(toClear, fortId)
