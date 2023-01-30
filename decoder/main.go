@@ -344,6 +344,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
+					continue
 				}
 				var toClear []string // only clear if fort is not seen within 30 minutes
 				if fortIds != nil {
@@ -369,6 +370,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					err2 := db.ClearOldGyms(ctx, dbDetails, toClear)
 					if err2 != nil {
 						log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
+						continue
 					}
 					log.Infof("Found old Gym(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
@@ -391,6 +393,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
 				if err != nil {
 					log.Errorf("Unable to clear old stops: %s", err)
+					continue
 				}
 				var toClear []string // only clear if fort is not seen within 30 minutes
 				if fortIds != nil {
@@ -416,6 +419,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 					err2 := db.ClearOldPokestops(ctx, dbDetails, toClear)
 					if err2 != nil {
 						log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
+						continue
 					}
 					log.Infof("Found old Stop(s) in cell %d: %v", cellId, toClear)
 					//TODO send webhook
