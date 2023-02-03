@@ -15,8 +15,9 @@ import (
 )
 
 type Player struct {
-	Id                 null.String `db:"id"`
+	// Name is the primary key
 	Name               string      `db:"name"`
+	FriendshipId       null.String `db:"friendship_id"`
 	LastSeen           int64       `db:"last_seen"`
 	FriendCode         null.String `db:"friend_code"`
 	Team               null.Int    `db:"team"`
@@ -191,8 +192,8 @@ func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
 	player := Player{}
 	err := db.GeneralDb.Get(&player,
 		`
-		SELECT id,
-			   name,
+		SELECT name,
+			   friendship_id,
 			   last_seen,
 			   friend_code,
 			   team,
@@ -312,7 +313,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	if oldPlayer == nil {
 		_, err := db.GeneralDb.NamedExec(
 			`
-			INSERT INTO player (id, name, last_seen, team, level, xp, battles_won, km_walked, caught_pokemon, gbl_rank, gbl_rating,
+			INSERT INTO player (name, friendship_id, last_seen, team, level, xp, battles_won, km_walked, caught_pokemon, gbl_rank, gbl_rating,
 								event_badges, stops_spun, evolved, hatched, quests, trades, photobombs, purified, grunts_defeated,
 								gym_battles_won, normal_raids_won, legendary_raids_won, trainings_won, berries_fed, hours_defended,
 								best_friends, best_buddies, giovanni_defeated, mega_evos, collections_done, unique_stops_spun,
@@ -323,7 +324,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 								dex_gen7, dex_gen8, dex_gen8a, caught_normal, caught_fighting, caught_flying, caught_poison,
 								caught_ground, caught_rock, caught_bug, caught_ghost, caught_steel, caught_fire, caught_water,
 								caught_grass, caught_electric, caught_psychic, caught_ice, caught_dragon, caught_dark, caught_fairy)
-			VALUES (:id, :name, :last_seen, :team, :level, :xp, :battles_won, :km_walked, :caught_pokemon, :gbl_rank, :gbl_rating,
+			VALUES (:name, :friendship_id, :last_seen, :team, :level, :xp, :battles_won, :km_walked, :caught_pokemon, :gbl_rank, :gbl_rating,
 					:event_badges, :stops_spun, :evolved, :hatched, :quests, :trades, :photobombs, :purified, :grunts_defeated,
 					:gym_battles_won, :normal_raids_won, :legendary_raids_won, :trainings_won, :berries_fed, :hours_defended,
 					:best_friends, :best_buddies, :giovanni_defeated, :mega_evos, :collections_done, :unique_stops_spun,
@@ -345,7 +346,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	} else {
 		_, err := db.GeneralDb.NamedExec(
 			`UPDATE player SET
-				id = :id, 
+				friendship_id = :friendship_id, 
 				last_seen = :last_seen, 
 				team = :team, 
 				level = :level, 
@@ -489,8 +490,8 @@ func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.Pl
 			Name: playerSummary.GetCodename(),
 		}
 	}
-	if player.Id.IsZero() {
-		player.Id = null.StringFrom(playerSummary.GetPlayerId())
+	if player.FriendshipId.IsZero() {
+		player.FriendshipId = null.StringFrom(playerSummary.GetPlayerId())
 	}
 	player.updateFromPublicProfile(publicProfile)
 	savePlayerRecord(db, player)
