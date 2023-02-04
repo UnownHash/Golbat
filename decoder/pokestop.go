@@ -565,10 +565,14 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
-
+	now := time.Now().Unix()
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
-		return
+		if oldPokestop.Updated > now-900 {
+			// if a pokestop is unchanged, but we did see it again after 15 minutes, then save again
+			return
+		}
 	}
+	pokestop.Updated = now
 
 	log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
@@ -598,6 +602,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			return
 		}
 		_ = res
+		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"UPDATE pokestop SET "+
@@ -608,7 +613,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"enabled = :enabled,"+
 				"lure_expire_timestamp = :lure_expire_timestamp,"+
 				"last_modified_timestamp = :last_modified_timestamp,"+
-				"updated = UNIX_TIMESTAMP(),"+
+				"updated = :updated,"+
 				"quest_type = :quest_type, "+
 				"quest_timestamp = :quest_timestamp, "+
 				"quest_target = :quest_target, "+

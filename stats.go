@@ -223,44 +223,6 @@ func StartQuestExpiry(db *sqlx.DB) {
 	}()
 }
 
-func StartGymPokestopTransition(db *sqlx.DB) {
-	ticker := time.NewTicker(time.Hour)
-	go func() {
-		for {
-			<-ticker.C
-			start := time.Now()
-			var totalRows int64 = 0
-
-			var result sql.Result
-			var err error
-
-			result, err = db.Exec("update pokestop join gym on gym.id=pokestop.id set pokestop.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated > pokestop.updated;")
-
-			if err != nil {
-				log.Errorf("DB - Gym/Pokestop transition - Updating pokestops error %s", err)
-				return
-			}
-
-			rows, _ := result.RowsAffected()
-
-			totalRows += rows
-
-			result, err = db.Exec("update gym join pokestop on gym.id=pokestop.id set gym.deleted = 1 where pokestop.deleted = 0 and gym.deleted = 0 and gym.updated < pokestop.updated;")
-
-			if err != nil {
-				log.Errorf("DB - Gym/Pokestop transition - Updating gyms error %s", err)
-			} else {
-				rows, _ = result.RowsAffected()
-				totalRows += rows
-
-				elapsed := time.Since(start)
-
-				log.Infof("DB - Gym/Pokestop transition - took %s (%d forts)", elapsed, totalRows)
-			}
-		}
-	}()
-}
-
 func StartInMemoryCleardown(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Minute)
 	go func() {

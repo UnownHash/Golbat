@@ -44,6 +44,8 @@ type RawClientWeatherData struct {
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
+var s2CellCache *ttlcache.Cache[uint64, S2Cell]
+var fortsToClearCache *ttlcache.Cache[string, int64]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
@@ -77,6 +79,16 @@ func initDataCache() {
 		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
 	)
 	go weatherCache.Start()
+
+	s2CellCache = ttlcache.New[uint64, S2Cell](
+		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
+	)
+	go s2CellCache.Start()
+
+	fortsToClearCache = ttlcache.New[string, int64](
+		ttlcache.WithTTL[string, int64](60 * time.Minute),
+	)
+	go fortsToClearCache.Start()
 
 	spawnpointCache = ttlcache.New[int64, Spawnpoint](
 		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
@@ -307,4 +319,108 @@ func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 		}
 		weatherMutex.Unlock()
 	}
+}
+
+func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64) {
+	for _, mapS2CellId := range r {
+		s2Cell := &S2Cell{}
+		s2Cell.updateS2CellFromClientMapProto(mapS2CellId)
+		saveS2CellRecord(ctx, db, s2Cell)
+	}
+}
+
+func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
+	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
+
+	// check gyms in cell
+	for cellId, gyms := range gymIdsPerCell {
+		if c := s2CellCache.Get(cellId); c != nil {
+			// delete from cache if it's shown again in GMO
+			for _, gym := range gyms {
+				fortsToClearCache.Delete(gym)
+			}
+			cachedCell := c.Value()
+			if cachedCell.gymCount != len(gyms) {
+				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
+				if err != nil {
+					log.Errorf("Unable to clear old gyms: %s", err)
+					continue
+				}
+				var toClear []string // only clear if fort is not seen within 30 minutes
+				if fortIds != nil {
+					toClear = checkForFortIdsInCache(fortIds)
+				} else {
+					// iff there is no fort to clear we update cached cell gym count
+					cachedCell.gymCount = len(gyms)
+					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+				}
+				if len(toClear) > 0 {
+					err2 := db.ClearOldGyms(ctx, dbDetails, toClear)
+					if err2 != nil {
+						log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
+						continue
+					}
+					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, toClear)
+					//TODO send webhook
+				}
+
+			}
+		}
+
+	}
+	// check stops in cell
+	for cellId, stops := range stopIdsPerCell {
+		// compare with cached cell
+		if c := s2CellCache.Get(cellId); c != nil {
+			// delete from cache if it's shown again in GMO
+			for _, stop := range stops {
+				fortsToClearCache.Delete(stop)
+			}
+			cachedCell := c.Value()
+			if cachedCell.stopCount != len(stops) {
+				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
+				if err != nil {
+					log.Errorf("Unable to clear old stops: %s", err)
+					continue
+				}
+				// only clear if fort is not seen within 30 minutes
+				var toClear []string
+				if fortIds != nil {
+					toClear = checkForFortIdsInCache(fortIds)
+				} else {
+					// iff there is no fort to clear we update cached cell stop count
+					cachedCell.stopCount = len(stops)
+					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
+				}
+				if len(toClear) > 0 {
+					err2 := db.ClearOldPokestops(ctx, dbDetails, toClear)
+					if err2 != nil {
+						log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
+						continue
+					}
+					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, toClear)
+					//TODO send webhook
+				}
+			}
+		}
+	}
+}
+
+func checkForFortIdsInCache(fortIds []string) []string {
+	now := time.Now().Unix()
+	var toClear []string
+	for _, fortId := range fortIds {
+		if f := fortsToClearCache.Get(fortId); f != nil {
+			toClearTimestamp := f.Value()
+			if toClearTimestamp < now-1800 {
+				log.Debugf("Time to clear fort %s, not seen since 30 minutes", fortId)
+				toClear = append(toClear, fortId)
+				fortsToClearCache.Delete(fortId)
+			}
+		} else {
+			log.Debugf("Found fort %s to clear, insert into fortsToClearCache", fortId)
+			fortsToClearCache.Set(fortId, now, ttlcache.DefaultTTL)
+		}
+	}
+	return toClear
 }
