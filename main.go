@@ -228,6 +228,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeSocialActionProxy(protoData.Data)
 		processed = true
 		break
+	case pogo.Method_METHOD_GET_MAP_FORTS:
+		result = decodeGetMapForts(ctx, protoData.Data)
+		processed = true
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
@@ -338,6 +341,39 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 		return decoder.UpdateGymRecordWithFortDetailsOutProto(dbDetails, decodedFort)
 	}
 	return "Unknown fort type"
+}
+
+func decodeGetMapForts(ctx context.Context, sDec []byte) string {
+	decodedMapForts := &pogo.GetMapFortsOutProto{}
+	if err := proto.Unmarshal(sDec, decodedMapForts); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedMapForts.Status != pogo.GetMapFortsOutProto_SUCCESS {
+		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.Status,
+			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.Status)])
+		return res
+	}
+
+	var outputString string
+	processedForts := 0
+
+	for _, fort := range decodedMapForts.Fort {
+		status, output := decoder.UpdatePokestopRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
+		if !status {
+			status, output = decoder.UpdateGymRecordWithGetMapFortsOutProto(dbDetails, fort)
+		}
+		if status {
+			processedForts += 1
+			outputString += output + ", "
+		}
+	}
+
+	if processedForts > 0 {
+		return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
+	}
+	return "No forts updated"
 }
 
 func decodeGetGymInfo(sDec []byte) string {

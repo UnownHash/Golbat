@@ -466,6 +466,19 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	return stop
 }
 
+func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Pokestop {
+	stop.Id = fortData.Id
+	stop.Lat = fortData.Latitude
+	stop.Lon = fortData.Longitude
+
+	if len(fortData.Image) > 0 {
+		stop.Url = null.StringFrom(fortData.Image[0].Url)
+	}
+	stop.Name = null.StringFrom(fortData.Name)
+
+	return stop
+}
+
 func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
@@ -699,4 +712,24 @@ func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geof
 	ClearPokestopCache()
 	rows, _ := res.RowsAffected()
 	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
+}
+
+func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.Id)
+	pokestopMutex.Lock()
+	defer pokestopMutex.Unlock()
+
+	pokestop, err := getPokestopRecord(ctx, db, mapFort.Id)
+	if err != nil {
+		log.Printf("Update pokestop %s", err)
+		return false, fmt.Sprintf("Error %s", err)
+	}
+
+	if pokestop == nil { // Maybe it's okay. We have to check gym now.
+		return false, ""
+	}
+
+	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
+	savePokestopRecord(ctx, db, pokestop)
+	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }

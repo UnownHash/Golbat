@@ -253,6 +253,19 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	return gym
 }
 
+func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Gym {
+	gym.Id = fortData.Id
+	gym.Lat = fortData.Latitude
+	gym.Lon = fortData.Longitude
+
+	if len(fortData.Image) > 0 {
+		gym.Url = null.StringFrom(fortData.Image[0].Url)
+	}
+	gym.Name = null.StringFrom(fortData.Name)
+
+	return gym
+}
+
 func hasChangesGym(old *Gym, new *Gym) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
@@ -463,4 +476,19 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	gym, err := getGymRecord(db, mapFort.Id)
+	if err != nil {
+		return false, err.Error()
+	}
+
+	if gym == nil {
+		return false, ""
+	}
+
+	gym.updateGymFromGetMapFortsOutProto(mapFort)
+	saveGymRecord(db, gym)
+	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
