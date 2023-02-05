@@ -450,6 +450,10 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 }
 
 func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
+	gymMutex, _ := gymStripedMutex.GetLock(fort.Id)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
@@ -465,6 +469,10 @@ func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDeta
 }
 
 func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
+	gymMutex, _ := gymStripedMutex.GetLock(gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
@@ -479,6 +487,10 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 }
 
 func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	gymMutex, _ := gymStripedMutex.GetLock(mapFort.Id)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, err := getGymRecord(db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()

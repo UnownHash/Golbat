@@ -50,6 +50,7 @@ var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
 var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
 
+var gymStripedMutex = stripedmutex.New(32)
 var pokestopStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
 var weatherStripedMutex = stripedmutex.New(8)
@@ -206,9 +207,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 		}
 
 		if fort.Data.FortType == pogo.FortType_GYM {
+
+			gymMutex, _ := gymStripedMutex.GetLock(fortId)
+
+			gymMutex.Lock()
 			gym, err := getGymRecord(db, fortId)
 			if err != nil {
 				log.Errorf("getGymRecord: %s", err)
+				gymMutex.Unlock()
 				continue
 			}
 
@@ -218,6 +224,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
 			saveGymRecord(db, gym)
+			gymMutex.Unlock()
 		}
 	}
 }
