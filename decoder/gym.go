@@ -253,7 +253,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	return gym
 }
 
-func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Gym {
+func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Gym {
 	gym.Id = fortData.Id
 	gym.Lat = fortData.Latitude
 	gym.Lon = fortData.Longitude
@@ -261,7 +261,9 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	if len(fortData.Image) > 0 {
 		gym.Url = null.StringFrom(fortData.Image[0].Url)
 	}
-	gym.Name = null.StringFrom(fortData.Name)
+	if !skipName {
+		gym.Name = null.StringFrom(fortData.Name)
+	}
 
 	return gym
 }
@@ -449,12 +451,12 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 	createGymWebhooks(oldGym, gym)
 }
 
-func updateGymGetMapFortCache(gym *Gym) {
+func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 	storedGetMapFort := getMapFortsCache.Get(gym.Id)
 	if storedGetMapFort != nil {
 		getMapFort := storedGetMapFort.Value()
 		getMapFortsCache.Delete(gym.Id)
-		gym.updateGymFromGetMapFortsOutProto(getMapFort)
+		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
 		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
 	}
 }
@@ -474,7 +476,7 @@ func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDeta
 	}
 	gym.updateGymFromFortProto(fort)
 
-	updateGymGetMapFortCache(gym)
+	updateGymGetMapFortCache(gym, true)
 	saveGymRecord(db, gym)
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
@@ -495,7 +497,7 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 
-	updateGymGetMapFortCache(gym)
+	updateGymGetMapFortCache(gym, true)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
@@ -517,7 +519,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMa
 		return false, ""
 	}
 
-	gym.updateGymFromGetMapFortsOutProto(mapFort)
+	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
 	saveGymRecord(db, gym)
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
