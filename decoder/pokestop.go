@@ -661,6 +661,16 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
+func updatePokestopGetMapFortCache(pokestop *Pokestop) {
+	storedGetMapFort := getMapFortsCache.Get(pokestop.Id)
+	if storedGetMapFort != nil {
+		getMapFort := storedGetMapFort.Value()
+		getMapFortsCache.Delete(pokestop.Id)
+		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
+		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
+	}
+}
+
 func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
 	pokestopMutex.Lock()
@@ -676,6 +686,8 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 		pokestop = &Pokestop{}
 	}
 	pokestop.updatePokestopFromFortDetailsProto(fort)
+
+	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
@@ -699,6 +711,8 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 		pokestop = &Pokestop{}
 	}
 	pokestop.updatePokestopFromQuestProto(quest, haveAr)
+
+	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s", quest.FortId)
 }
@@ -725,7 +739,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 		return false, fmt.Sprintf("Error %s", err)
 	}
 
-	if pokestop == nil { // Maybe it's okay. We have to check gym now.
+	if pokestop == nil {
 		return false, ""
 	}
 

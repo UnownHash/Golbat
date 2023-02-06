@@ -449,6 +449,16 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 	createGymWebhooks(oldGym, gym)
 }
 
+func updateGymGetMapFortCache(gym *Gym) {
+	storedGetMapFort := getMapFortsCache.Get(gym.Id)
+	if storedGetMapFort != nil {
+		getMapFort := storedGetMapFort.Value()
+		getMapFortsCache.Delete(gym.Id)
+		gym.updateGymFromGetMapFortsOutProto(getMapFort)
+		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
+	}
+}
+
 func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	gymMutex, _ := gymStripedMutex.GetLock(fort.Id)
 	gymMutex.Lock()
@@ -463,6 +473,8 @@ func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDeta
 		gym = &Gym{}
 	}
 	gym.updateGymFromFortProto(fort)
+
+	updateGymGetMapFortCache(gym)
 	saveGymRecord(db, gym)
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
@@ -482,6 +494,8 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 		gym = &Gym{}
 	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
+
+	updateGymGetMapFortCache(gym)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
@@ -496,7 +510,10 @@ func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMa
 		return false, err.Error()
 	}
 
+	// we missed it in Pokestop & Gym. Lets save it to cache
 	if gym == nil {
+		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
+		log.Debugf("Saved getMapFort in cache: %s", gym.Id)
 		return false, ""
 	}
 
