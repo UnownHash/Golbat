@@ -513,7 +513,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMa
 	// we missed it in Pokestop & Gym. Lets save it to cache
 	if gym == nil {
 		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
-		log.Debugf("Saved getMapFort in cache: %s", gym.Id)
+		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 		return false, ""
 	}
 
