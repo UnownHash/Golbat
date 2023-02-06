@@ -398,7 +398,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 
 	if oldPokemonId != 0 && (oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather) {
 		if oldWeather.Valid && oldPokemonId != 0 {
-			log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to wild id %d weather %d",
+			log.Debugf("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to wild id %d weather %d",
 				pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
 		}
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
@@ -503,7 +503,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.Username = null.StringFrom(username)
 
 	if oldWeather.Valid && oldPokemonId != 0 {
-		log.Infof("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
+		log.Debugf("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
 			pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
 
 		if pokemon.SeenType.ValueOrZero() == SeenType_Wild {

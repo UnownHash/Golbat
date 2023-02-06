@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"database/sql"
-	"github.com/evanoberholster/timezoneLookup/v2/geo"
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
@@ -102,11 +101,11 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 		oldWeather.WarnWeather.ValueOrZero() != weather.WarnWeather.ValueOrZero() {
 
 		s2cell := s2.CellFromCellID(s2.CellID(weather.Id))
-		var polygon = geo.Polygon{}
+		var polygon [4][2]float64
 		for i := range []int{0, 1, 2, 3} {
 			vertex := s2cell.Vertex(i)
 			latLng := s2.LatLngFromPoint(vertex)
-			polygon.Add(latLng.Lat.Degrees(), latLng.Lng.Degrees())
+			polygon[i] = [...]float64{latLng.Lat.Degrees(), latLng.Lng.Degrees()}
 		}
 		weatherHook := map[string]interface{}{
 			"s2_cell_id":           weather.Id,
