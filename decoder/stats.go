@@ -461,14 +461,29 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 		updateStatsCount := func(table string, rows []pokemonCountDbRow) {
 			if len(rows) > 0 {
-				_, err := statsDb.NamedExec(
-					fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, `count`)"+
-						" VALUES (:date, :area, :fence, :pokemon_id, :count)"+
-						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)", table),
-					rows,
-				)
-				if err != nil {
-					log.Errorf("Error inserting %s: %v", table, err)
+
+				chunkSize := 100
+
+				for i := 0; i < len(rows); i += chunkSize {
+					end := i + chunkSize
+
+					// necessary check to avoid slicing beyond
+					// slice capacity
+					if end > len(rows) {
+						end = len(rows)
+					}
+
+					rowsToWrite := rows[i:end]
+
+					_, err := statsDb.NamedExec(
+						fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, `count`)"+
+							" VALUES (:date, :area, :fence, :pokemon_id, :count)"+
+							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)", table),
+						rowsToWrite,
+					)
+					if err != nil {
+						log.Errorf("Error inserting %s: %v", table, err)
+					}
 				}
 			}
 		}
