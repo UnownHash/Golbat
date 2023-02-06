@@ -466,7 +466,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	return stop
 }
 
-func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Pokestop {
+func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Pokestop {
 	stop.Id = fortData.Id
 	stop.Lat = fortData.Latitude
 	stop.Lon = fortData.Longitude
@@ -474,9 +474,7 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 	if len(fortData.Image) > 0 {
 		stop.Url = null.StringFrom(fortData.Image[0].Url)
 	}
-	if !skipName {
-		stop.Name = null.StringFrom(fortData.Name)
-	}
+	stop.Name = null.StringFrom(fortData.Name)
 
 	return stop
 }
@@ -663,12 +661,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	createPokestopWebhooks(oldPokestop, pokestop)
 }
 
-func updatePokestopGetMapFortCache(pokestop *Pokestop, skipName bool) {
+func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 	storedGetMapFort := getMapFortsCache.Get(pokestop.Id)
 	if storedGetMapFort != nil {
 		getMapFort := storedGetMapFort.Value()
 		getMapFortsCache.Delete(pokestop.Id)
-		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort, skipName)
+		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
 		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
 	}
 }
@@ -689,7 +687,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 	}
 	pokestop.updatePokestopFromFortDetailsProto(fort)
 
-	updatePokestopGetMapFortCache(pokestop, true)
+	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
 }
@@ -714,7 +712,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	}
 	pokestop.updatePokestopFromQuestProto(quest, haveAr)
 
-	updatePokestopGetMapFortCache(pokestop, false)
+	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
 	return fmt.Sprintf("%s", quest.FortId)
 }
@@ -745,7 +743,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 		return false, ""
 	}
 
-	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort, false)
+	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
 	savePokestopRecord(ctx, db, pokestop)
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
