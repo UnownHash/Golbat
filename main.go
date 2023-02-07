@@ -186,7 +186,7 @@ func main() {
 }
 
 func decode(ctx context.Context, method int, protoData *ProtoData) {
-	if protoData.Level < 30 {
+	if method != int(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION) && protoData.Level < 30 {
 		log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, pogo.Method(method))
 
 		return
