@@ -184,7 +184,6 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 	for _, fort := range p {
 		fortId := fort.Data.FortId
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT {
-
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
@@ -200,7 +199,6 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell)
 			savePokestopRecord(ctx, db, pokestop)
-			pokestopMutex.Unlock()
 
 			incidents := fort.Data.PokestopDisplays
 			if incidents == nil && fort.Data.PokestopDisplay != nil {
@@ -223,14 +221,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 					saveIncidentRecord(ctx, db, incident)
 				}
 			}
+			pokestopMutex.Unlock()
 		}
 
 		if fort.Data.FortType == pogo.FortType_GYM {
-
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()
-			gym, err := getGymRecord(db, fortId)
+			gym, err := getGymRecord(ctx, db, fortId)
 			if err != nil {
 				log.Errorf("getGymRecord: %s", err)
 				gymMutex.Unlock()
@@ -242,7 +240,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			}
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
-			saveGymRecord(db, gym)
+			saveGymRecord(ctx, db, gym)
 			gymMutex.Unlock()
 		}
 	}

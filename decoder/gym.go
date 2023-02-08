@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"github.com/google/go-cmp/cmp"
@@ -100,7 +101,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(db db.DbDetails, fortId string) (*Gym, error) {
+func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -108,7 +109,7 @@ func getGymRecord(db db.DbDetails, fortId string) (*Gym, error) {
 	}
 	gym := Gym{}
 
-	err := db.GeneralDb.Get(&gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description FROM gym WHERE id = ?", fortId)
+	err := db.GeneralDb.GetContext(ctx, &gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description FROM gym WHERE id = ?", fortId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -384,8 +385,8 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 
 }
 
-func saveGymRecord(db db.DbDetails, gym *Gym) {
-	oldGym, _ := getGymRecord(db, gym.Id)
+func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
+	oldGym, _ := getGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -399,7 +400,7 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 
 	log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.GeneralDb.NamedExec("INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
 
 		if err != nil {
@@ -410,7 +411,7 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 		_, _ = res, err
 		//TODO send webhook for new gym
 	} else {
-		res, err := db.GeneralDb.NamedExec("UPDATE gym SET "+
+		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
 			"lat = :lat, "+
 			"lon = :lon, "+
 			"name = :name, "+
@@ -468,12 +469,12 @@ func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 	}
 }
 
-func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
+func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
 	gymMutex, _ := gymStripedMutex.GetLock(fort.Id)
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(db, fort.Id) // should check error
+	gym, err := getGymRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -484,17 +485,17 @@ func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDeta
 	gym.updateGymFromFortProto(fort)
 
 	updateGymGetMapFortCache(gym, true)
-	saveGymRecord(db, gym)
+	saveGymRecord(ctx, db, gym)
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
+func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
 	gymMutex, _ := gymStripedMutex.GetLock(gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
+	gym, err := getGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -505,16 +506,16 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 
 	updateGymGetMapFortCache(gym, true)
-	saveGymRecord(db, gym)
+	saveGymRecord(ctx, db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
 	gymMutex, _ := gymStripedMutex.GetLock(mapFort.Id)
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(db, mapFort.Id)
+	gym, err := getGymRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -525,6 +526,6 @@ func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMa
 	}
 
 	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
-	saveGymRecord(db, gym)
+	saveGymRecord(ctx, db, gym)
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
