@@ -12,7 +12,7 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
 	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, mapFort)
 	if !status {
-		status, output = UpdateGymRecordWithGetMapFortsOutProto(db, mapFort)
+		status, output = UpdateGymRecordWithGetMapFortsOutProto(ctx, db, mapFort)
 	}
 
 	if !status {

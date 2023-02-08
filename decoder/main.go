@@ -314,12 +314,12 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 	}
 }
 
-func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
+func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []RawClientWeatherData) {
 	for _, weatherProto := range p {
 		weatherId := strconv.FormatInt(weatherProto.Data.S2CellId, 10)
 		weatherMutex, _ := weatherStripedMutex.GetLock(weatherId)
 		weatherMutex.Lock()
-		weather, err := getWeatherRecord(db, weatherProto.Cell)
+		weather, err := getWeatherRecord(ctx, db, weatherProto.Cell)
 		if err != nil {
 			log.Printf("getWeatherRecord: %s", err)
 		} else {
@@ -327,7 +327,7 @@ func UpdateClientWeatherBatch(db db.DbDetails, p []RawClientWeatherData) {
 				weather = &Weather{}
 			}
 			weather.updateWeatherFromClientWeatherProto(weatherProto.Data)
-			saveWeatherRecord(db, weather)
+			saveWeatherRecord(ctx, db, weather)
 		}
 		weatherMutex.Unlock()
 	}

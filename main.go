@@ -204,7 +204,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeGMO(ctx, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
-		result = decodeGetGymInfo(protoData.Data)
+		result = decodeGetGymInfo(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
 		result = decodeEncounter(ctx, protoData.Data, protoData.Account)
@@ -336,7 +336,7 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	case pogo.FortType_CHECKPOINT:
 		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	case pogo.FortType_GYM:
-		return decoder.UpdateGymRecordWithFortDetailsOutProto(dbDetails, decodedFort)
+		return decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	}
 	return "Unknown fort type"
 }
@@ -371,7 +371,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	return "No forts updated"
 }
 
-func decodeGetGymInfo(sDec []byte) string {
+func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
 		log.Fatalln("Failed to parse", err)
@@ -383,7 +383,7 @@ func decodeGetGymInfo(sDec []byte) string {
 			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
 		return res
 	}
-	return decoder.UpdateGymRecordWithGymInfoProto(dbDetails, decodedGymInfo)
+	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
 func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
@@ -469,7 +469,7 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 
 	decoder.UpdateFortBatch(ctx, dbDetails, newForts)
 	decoder.UpdatePokemonBatch(ctx, dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
-	decoder.UpdateClientWeatherBatch(dbDetails, newClientWeather)
+	decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
 	decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newClientMapCellS2CellIds)
 
 	decoder.ClearRemovedForts(ctx, dbDetails, gymIdsPerCell, stopIdsPerCell)

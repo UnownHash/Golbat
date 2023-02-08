@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"github.com/golang/geo/s2"
 	"github.com/google/go-cmp/cmp"
@@ -49,7 +50,7 @@ type Weather struct {
 //  PRIMARY KEY (`id`)
 //)
 
-func getWeatherRecord(db db.DbDetails, weatherId int64) (*Weather, error) {
+func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, error) {
 	inMemoryWeather := weatherCache.Get(weatherId)
 	if inMemoryWeather != nil {
 		weather := inMemoryWeather.Value()
@@ -57,7 +58,7 @@ func getWeatherRecord(db db.DbDetails, weatherId int64) (*Weather, error) {
 	}
 	weather := Weather{}
 
-	err := db.GeneralDb.Get(&weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
+	err := db.GeneralDb.GetContext(ctx, &weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -129,14 +130,14 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 	}
 }
 
-func saveWeatherRecord(db db.DbDetails, weather *Weather) {
-	oldWeather, _ := getWeatherRecord(db, weather.Id)
+func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
+	oldWeather, _ := getWeatherRecord(ctx, db, weather.Id)
 	if oldWeather != nil && !hasChangesWeather(oldWeather, weather) {
 		return
 	}
 
 	if oldWeather == nil {
-		res, err := db.GeneralDb.NamedExec(
+		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"INSERT INTO weather ("+
 				"id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, "+
 				"wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated)"+
@@ -151,7 +152,7 @@ func saveWeatherRecord(db db.DbDetails, weather *Weather) {
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExec("UPDATE weather SET "+
+		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE weather SET "+
 			"latitude = :latitude, "+
 			"longitude = :longitude, "+
 			"level = :level, "+
