@@ -403,10 +403,10 @@ type pokemonCountDbRow struct {
 }
 
 func logPokemonCount(statsDb *sqlx.DB) {
-	pokemonStatsLock.Lock()
 
 	log.Infof("STATS: Update pokemon count tables")
 
+	pokemonStatsLock.Lock()
 	currentStats := pokemonCount
 	pokemonCount = make(map[areaName]*areaPokemonCountDetail) // clear stats
 	pokemonStatsLock.Unlock()
@@ -461,7 +461,6 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 		updateStatsCount := func(table string, rows []pokemonCountDbRow) {
 			if len(rows) > 0 {
-
 				chunkSize := 100
 
 				for i := 0; i < len(rows); i += chunkSize {
@@ -478,7 +477,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 					_, err := statsDb.NamedExec(
 						fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, `count`)"+
 							" VALUES (:date, :area, :fence, :pokemon_id, :count)"+
-							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`)", table),
+							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
 						rowsToWrite,
 					)
 					if err != nil {
