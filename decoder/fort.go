@@ -17,7 +17,7 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 
 	if !status {
 		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
-		log.Infof("Saved getMapFort in cache: %s", mapFort.Id)
+		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 	}
 	return status, output
 }

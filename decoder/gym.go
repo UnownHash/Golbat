@@ -457,7 +457,7 @@ func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 		getMapFort := storedGetMapFort.Value()
 		getMapFortsCache.Delete(gym.Id)
 		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
-		log.Infof("Updated Gym using stored getMapFort: %s", gym.Id)
+		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
 	}
 }
 
