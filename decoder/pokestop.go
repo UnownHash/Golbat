@@ -667,7 +667,7 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 		getMapFort := storedGetMapFort.Value()
 		getMapFortsCache.Delete(pokestop.Id)
 		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
-		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
+		log.Infof("Updated Gym using stored getMapFort: %s", pokestop.Id)
 	}
 }
 

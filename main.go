@@ -360,11 +360,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	processedForts := 0
 
 	for _, fort := range decodedMapForts.Fort {
-		// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
-		status, output := decoder.UpdatePokestopRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
-		if !status {
-			status, output = decoder.UpdateGymRecordWithGetMapFortsOutProto(dbDetails, fort)
-		}
+		status, output := decoder.UpdateFortRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
 		if status {
 			processedForts += 1
 			outputString += output + ", "

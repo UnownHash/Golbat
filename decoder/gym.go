@@ -457,7 +457,7 @@ func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 		getMapFort := storedGetMapFort.Value()
 		getMapFortsCache.Delete(gym.Id)
 		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
-		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
+		log.Infof("Updated Gym using stored getMapFort: %s", gym.Id)
 	}
 }
 
@@ -514,8 +514,6 @@ func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMa
 
 	// we missed it in Pokestop & Gym. Lets save it to cache
 	if gym == nil {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
-		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 		return false, ""
 	}
 
