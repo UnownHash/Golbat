@@ -4,8 +4,6 @@ go 1.18
 
 require (
 	github.com/Pupitar/ohbemgo v0.7.3
-	github.com/evanoberholster/timezoneLookup/v2 v2.0.0
-	github.com/fsnotify/fsnotify v1.4.9
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang-migrate/migrate/v4 v4.15.2
@@ -28,13 +26,11 @@ require (
 )
 
 require (
-	github.com/bwmarrin/discordgo v0.27.0 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-playground/locales v0.14.0 // indirect
 	github.com/go-playground/universal-translator v0.18.0 // indirect
 	github.com/go-playground/validator/v10 v10.11.1 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
