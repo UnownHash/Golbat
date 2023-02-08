@@ -253,6 +253,21 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	return gym
 }
 
+func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Gym {
+	gym.Id = fortData.Id
+	gym.Lat = fortData.Latitude
+	gym.Lon = fortData.Longitude
+
+	if len(fortData.Image) > 0 {
+		gym.Url = null.StringFrom(fortData.Image[0].Url)
+	}
+	if !skipName {
+		gym.Name = null.StringFrom(fortData.Name)
+	}
+
+	return gym
+}
+
 func hasChangesGym(old *Gym, new *Gym) bool {
 	return !cmp.Equal(old, new, ignoreNearFloats)
 }
@@ -443,7 +458,21 @@ func saveGymRecord(db db.DbDetails, gym *Gym) {
 	createGymWebhooks(oldGym, gym)
 }
 
+func updateGymGetMapFortCache(gym *Gym, skipName bool) {
+	storedGetMapFort := getMapFortsCache.Get(gym.Id)
+	if storedGetMapFort != nil {
+		getMapFort := storedGetMapFort.Value()
+		getMapFortsCache.Delete(gym.Id)
+		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
+		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
+	}
+}
+
 func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
+	gymMutex, _ := gymStripedMutex.GetLock(fort.Id)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, err := getGymRecord(db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
@@ -453,12 +482,18 @@ func UpdateGymRecordWithFortDetailsOutProto(db db.DbDetails, fort *pogo.FortDeta
 		gym = &Gym{}
 	}
 	gym.updateGymFromFortProto(fort)
+
+	updateGymGetMapFortCache(gym, true)
 	saveGymRecord(db, gym)
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
 func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
+	gymMutex, _ := gymStripedMutex.GetLock(gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, err := getGymRecord(db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
@@ -468,6 +503,28 @@ func UpdateGymRecordWithGymInfoProto(db db.DbDetails, gymInfo *pogo.GymGetInfoOu
 		gym = &Gym{}
 	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
+
+	updateGymGetMapFortCache(gym, true)
 	saveGymRecord(db, gym)
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func UpdateGymRecordWithGetMapFortsOutProto(db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	gymMutex, _ := gymStripedMutex.GetLock(mapFort.Id)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
+	gym, err := getGymRecord(db, mapFort.Id)
+	if err != nil {
+		return false, err.Error()
+	}
+
+	// we missed it in Pokestop & Gym. Lets save it to cache
+	if gym == nil {
+		return false, ""
+	}
+
+	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
+	saveGymRecord(db, gym)
+	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
