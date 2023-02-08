@@ -395,11 +395,11 @@ func logPokemonStats(statsDb *sqlx.DB) {
 }
 
 type pokemonCountDbRow struct {
-	Date      time.Time `db:"date"`
-	Area      string    `db:"area"`
-	Fence     string    `db:"fence"`
-	PokemonId int       `db:"pokemon_id"`
-	Count     int       `db:"count"`
+	Date      string `db:"date"`
+	Area      string `db:"area"`
+	Fence     string `db:"fence"`
+	PokemonId int    `db:"pokemon_id"`
+	Count     int    `db:"count"`
 }
 
 func logPokemonCount(statsDb *sqlx.DB) {
@@ -418,13 +418,13 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		var ivRows []pokemonCountDbRow
 		var allRows []pokemonCountDbRow
 
-		t := time.Now()
-		midnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
+		t := time.Now().In(time.Local)
+		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
 			addRows := func(rows *[]pokemonCountDbRow, pokemonId int, count int) {
 				*rows = append(*rows, pokemonCountDbRow{
-					Date:      midnight,
+					Date:      midnightString,
 					Area:      area.parent,
 					Fence:     area.name,
 					PokemonId: pokemonId,
