@@ -1,5 +1,7 @@
 package config
 
+import "golbat/geo"
+
 type configDefinition struct {
 	Port      int       `toml:"port"`
 	Webhooks  []webhook `toml:"webhooks"`
@@ -21,8 +23,10 @@ type cleanup struct {
 }
 
 type webhook struct {
-	Url   string   `toml:"url"`
-	Types []string `toml:"types"`
+	Url       string         `toml:"url"`
+	Types     []string       `toml:"types"`
+	Areas     []string       `toml:"areas"`
+	AreaNames []geo.AreaName `toml:"-"`
 }
 
 type pvp struct {

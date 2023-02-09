@@ -481,26 +481,13 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 
 func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
+	areas := geo.MatchGeofences(statsFeatureCollection, stop.Lat, stop.Lon)
+
 	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
 		questHook := map[string]interface{}{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
 			"longitude":   stop.Lon,
-			"type":        stop.AlternativeQuestType,
-			"target":      stop.AlternativeQuestTarget,
-			"template":    stop.AlternativeQuestTemplate,
-			"title":       stop.AlternativeQuestTarget,
-			"conditions": func() []map[string]interface{} {
-				var r []map[string]interface{}
-				_ = json.Unmarshal([]byte(stop.AlternativeQuestConditions.ValueOrZero()), &r)
-				return r
-			}(),
-			"rewards": func() []map[string]interface{} {
-				var r []map[string]interface{}
-				_ = json.Unmarshal([]byte(stop.AlternativeQuestRewards.ValueOrZero()), &r)
-				return r
-			}(),
-			"updated": stop.Updated,
 			"pokestop_name": func() string {
 				if stop.Name.Valid {
 					return stop.Name.String
@@ -508,11 +495,18 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 					return "Unknown"
 				}
 			}(),
+			"type":             stop.AlternativeQuestType,
+			"target":           stop.AlternativeQuestTarget,
+			"template":         stop.AlternativeQuestTemplate,
+			"title":            stop.AlternativeQuestTarget,
+			"conditions":       json.RawMessage(stop.AlternativeQuestConditions.ValueOrZero()),
+			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
+			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
 			"pokestop_url":     stop.Url.Valid,
 			"with_ar":          false,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook)
+		webhooks.AddMessage(webhooks.Quest, questHook, areas)
 	}
 
 	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
@@ -520,21 +514,6 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
 			"longitude":   stop.Lon,
-			"type":        stop.QuestType,
-			"target":      stop.QuestTarget,
-			"template":    stop.QuestTemplate,
-			"title":       stop.QuestTarget,
-			"conditions": func() []map[string]interface{} {
-				var r []map[string]interface{}
-				_ = json.Unmarshal([]byte(stop.QuestConditions.ValueOrZero()), &r)
-				return r
-			}(),
-			"rewards": func() []map[string]interface{} {
-				var r []map[string]interface{}
-				_ = json.Unmarshal([]byte(stop.QuestRewards.ValueOrZero()), &r)
-				return r
-			}(),
-			"updated": stop.Updated,
 			"pokestop_name": func() string {
 				if stop.Name.Valid {
 					return stop.Name.String
@@ -542,11 +521,18 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 					return "Unknown"
 				}
 			}(),
+			"type":             stop.QuestType,
+			"target":           stop.QuestTarget,
+			"template":         stop.QuestTemplate,
+			"title":            stop.QuestTarget,
+			"conditions":       json.RawMessage(stop.QuestConditions.ValueOrZero()),
+			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
+			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
 			"pokestop_url":     stop.Url.Valid,
 			"with_ar":          true,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook)
+		webhooks.AddMessage(webhooks.Quest, questHook, areas)
 	}
 	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
 		pokestopHook := map[string]interface{}{
@@ -572,7 +558,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"updated":                stop.Updated,
 		}
 
-		webhooks.AddMessage(webhooks.Pokestop, pokestopHook)
+		webhooks.AddMessage(webhooks.Pokestop, pokestopHook, areas)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -125,8 +126,8 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 			"warn_weather":         weather.WarnWeather.ValueOrZero(),
 			"updated":              weather.Updated,
 		}
-
-		webhooks.AddMessage(webhooks.Weather, weatherHook)
+		areas := geo.MatchGeofences(statsFeatureCollection, weather.Latitude, weather.Longitude)
+		webhooks.AddMessage(webhooks.Weather, weatherHook, areas)
 	}
 }
 

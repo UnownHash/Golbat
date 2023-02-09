@@ -5,6 +5,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"golbat/geo"
 	"os"
 	"sync"
 	"time"
@@ -29,7 +30,7 @@ type pokemonTimings struct {
 	firstEncounter int64
 }
 
-var pokemonCount = make(map[areaName]*areaPokemonCountDetail)
+var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
 
 const maxPokemonNo = 1000
 
@@ -43,7 +44,7 @@ type areaPokemonCountDetail struct {
 
 var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
 
-var pokemonStats = make(map[areaName]areaStatsCount)
+var pokemonStats = make(map[geo.AreaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
 
 func initLiveStats() {
@@ -108,24 +109,22 @@ func ReloadGeofenceAndClearStats() {
 		log.Errorf("Error reading geofences during hot-reload: %v", err)
 		return
 	}
-	pokemonStats = make(map[areaName]areaStatsCount)          // clear stats
-	pokemonCount = make(map[areaName]*areaPokemonCountDetail) // clear count
+	pokemonStats = make(map[geo.AreaName]areaStatsCount)          // clear stats
+	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear count
 }
 
-func updatePokemonStats(old *Pokemon, new *Pokemon) {
-	var areas []areaName
+func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
+	var areas []geo.AreaName
 
-	if statsFeatureCollection != nil {
-		areas = matchGeofences(statsFeatureCollection, new.Lat, new.Lon)
-	}
-
-	if len(areas) == 0 {
-		areas = []areaName{
+	if len(areaNames) == 0 {
+		areas = []geo.AreaName{
 			{
-				parent: "world",
-				name:   "world",
+				Parent: "world",
+				Name:   "world",
 			},
 		}
+	} else {
+		areas = areaNames
 	}
 
 	// General stats
@@ -343,7 +342,7 @@ func logPokemonStats(statsDb *sqlx.DB) {
 	log.Infof("STATS: Write area stats")
 
 	currentStats := pokemonStats
-	pokemonStats = make(map[areaName]areaStatsCount) // clear stats
+	pokemonStats = make(map[geo.AreaName]areaStatsCount) // clear stats
 	pokemonStatsLock.Unlock()
 	go func() {
 		var rows []pokemonStatsDbRow
@@ -351,8 +350,8 @@ func logPokemonStats(statsDb *sqlx.DB) {
 		for area, stats := range currentStats {
 			rows = append(rows, pokemonStatsDbRow{
 				DateTime:      t,
-				Area:          area.parent,
-				Fence:         area.name,
+				Area:          area.Parent,
+				Fence:         area.Name,
 				TotMon:        stats.monsSeen,
 				IvMon:         stats.monsIv,
 				VerifiedEnc:   stats.verifiedEnc,
@@ -408,7 +407,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 	pokemonStatsLock.Lock()
 	currentStats := pokemonCount
-	pokemonCount = make(map[areaName]*areaPokemonCountDetail) // clear stats
+	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear stats
 	pokemonStatsLock.Unlock()
 
 	go func() {

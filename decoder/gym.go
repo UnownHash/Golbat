@@ -8,6 +8,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
 	"golbat/util"
 	"golbat/webhooks"
@@ -310,6 +311,7 @@ type GymDetailsWebhook struct {
 }
 
 func createGymWebhooks(oldGym *Gym, gym *Gym) {
+	areas := geo.MatchGeofences(statsFeatureCollection, gym.Lat, gym.Lon)
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
@@ -331,7 +333,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
 		}
 
-		webhooks.AddMessage(webhooks.GymDetails, gymDetails)
+		webhooks.AddMessage(webhooks.GymDetails, gymDetails, areas)
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
@@ -379,7 +381,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 				"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
 			}
 
-			webhooks.AddMessage(webhooks.Raid, raidHook)
+			webhooks.AddMessage(webhooks.Raid, raidHook, areas)
 		}
 	}
 

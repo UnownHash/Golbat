@@ -2,6 +2,7 @@ package decoder
 
 import (
 	log "github.com/sirupsen/logrus"
+	"golbat/geo"
 	"golbat/pogo"
 	"sync"
 )
@@ -19,7 +20,7 @@ func updatePokemonNests(old *Pokemon, new *Pokemon) {
 	}
 
 	if (old == nil || old.SeenType.ValueOrZero() != SeenType_Encounter) && new.SeenType.ValueOrZero() == SeenType_Encounter {
-		nestAreas := matchGeofences(nestFeatureCollection, new.Lat, new.Lon)
+		nestAreas := geo.MatchGeofences(nestFeatureCollection, new.Lat, new.Lon)
 
 		if len(nestAreas) > 0 {
 			nestCountLock.Lock()
@@ -27,11 +28,11 @@ func updatePokemonNests(old *Pokemon, new *Pokemon) {
 			for i := 0; i < len(nestAreas); i++ {
 				area := nestAreas[i]
 
-				countStats := nestCount[area.name]
+				countStats := nestCount[area.Name]
 
 				if countStats == nil {
 					countStats = &nestPokemonCountDetail{}
-					nestCount[area.name] = countStats
+					nestCount[area.Name] = countStats
 				}
 
 				countStats.count[new.PokemonId]++

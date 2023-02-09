@@ -2,8 +2,16 @@ package geo
 
 import (
 	"fmt"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
+	"github.com/paulmach/orb/planar"
 	"math"
 )
+
+type AreaName struct {
+	Parent string
+	Name   string
+}
 
 type Geofence struct {
 	Fence []Location
@@ -162,4 +170,34 @@ func (p *Geofence) intersectsWithRaycast(point Location, start Location, end Loc
 	diagSlope := (end.Longitude - start.Longitude) / (end.Latitude - start.Latitude)
 
 	return raySlope >= diagSlope
+}
+
+func MatchGeofences(featureCollection *geojson.FeatureCollection, lat, lon float64) (areas []AreaName) {
+	if featureCollection == nil {
+		return
+	}
+
+	p := orb.Point{lon, lat}
+
+	for _, f := range featureCollection.Features {
+		geoType := f.Geometry.GeoJSONType()
+		switch geoType {
+		case "Polygon":
+			polygon := f.Geometry.(orb.Polygon)
+			if planar.PolygonContains(polygon, p) {
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, AreaName{Parent: parent, Name: name})
+			}
+		case "MultiPolygon":
+			multiPolygon := f.Geometry.(orb.MultiPolygon)
+			if planar.MultiPolygonContains(multiPolygon, p) {
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, AreaName{Parent: parent, Name: name})
+			}
+		}
+	}
+
+	return
 }

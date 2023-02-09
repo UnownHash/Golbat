@@ -7,6 +7,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"time"
@@ -134,7 +135,8 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			"updated":                   incident.Updated,
 		}
 
-		webhooks.AddMessage(webhooks.Invasion, incidentHook)
+		areas := geo.MatchGeofences(statsFeatureCollection, stop.Lat, stop.Lon)
+		webhooks.AddMessage(webhooks.Invasion, incidentHook, areas)
 	}
 }
 
