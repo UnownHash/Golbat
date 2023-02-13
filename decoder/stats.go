@@ -424,8 +424,8 @@ func logPokemonCount(statsDb *sqlx.DB) {
 			addRows := func(rows *[]pokemonCountDbRow, pokemonId int, count int) {
 				*rows = append(*rows, pokemonCountDbRow{
 					Date:      midnightString,
-					Area:      area.parent,
-					Fence:     area.name,
+					Area:      area.Parent,
+					Fence:     area.Name,
 					PokemonId: pokemonId,
 					Count:     count,
 				})
