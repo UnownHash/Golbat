@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"github.com/pelletier/go-toml/v2"
+	log "github.com/sirupsen/logrus"
 	"golbat/geo"
 	"io/ioutil"
 	"os"
@@ -48,16 +49,17 @@ func ReadConfig() {
 	// translate webhook areas to array of geo.AreaName struct
 	for _, hook := range Config.Webhooks {
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
+		log.Infof("Hook contains areas: %v - %v", hook.Areas, hook.AreaNames)
 	}
 }
 
-func splitIntoAreaAndFenceName(areaNames []string) (areas []geo.AreaName) {
-	for _, areaName := range areaNames {
+func splitIntoAreaAndFenceName(areas []string) (areaNames []geo.AreaName) {
+	for _, areaName := range areas {
 		splitted := strings.Split(areaName, "/") // "London/*", "London/Chelsea", "Chelsea"
 		if len(splitted) == 2 {
-			areas = append(areas, geo.AreaName{Parent: splitted[0], Name: splitted[1]})
+			areaNames = append(areaNames, geo.AreaName{Parent: splitted[0], Name: splitted[1]})
 		} else {
-			areas = append(areas, geo.AreaName{Parent: "*", Name: areaName})
+			areaNames = append(areaNames, geo.AreaName{Parent: "*", Name: areaName})
 		}
 	}
 	return
