@@ -175,7 +175,6 @@ func StartQuestExpiry(db *sqlx.DB) {
 			var result sql.Result
 			var err error
 
-			decoder.ClearPokestopCache()
 			result, err = db.Exec("UPDATE pokestop " +
 				"SET " +
 				"quest_type = NULL," +
@@ -190,11 +189,13 @@ func StartQuestExpiry(db *sqlx.DB) {
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
 				return
+			} else {
+				rows, _ := result.RowsAffected()
+				totalRows += rows
+				if rows > 0 {
+					decoder.ClearPokestopCache()
+				}
 			}
-
-			rows, _ := result.RowsAffected()
-
-			totalRows += rows
 
 			result, err = db.Exec("UPDATE pokestop " +
 				"SET " +
@@ -210,15 +211,15 @@ func StartQuestExpiry(db *sqlx.DB) {
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
 			} else {
-				rows, _ = result.RowsAffected()
+				rows, _ := result.RowsAffected()
 				totalRows += rows
-
-				elapsed := time.Since(start)
-
-				decoder.ClearPokestopCache()
-
-				log.Infof("DB - Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
+				if rows > 0 {
+					decoder.ClearPokestopCache()
+				}
 			}
+
+			elapsed := time.Since(start)
+			log.Infof("DB - Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
 		}
 	}()
 }
