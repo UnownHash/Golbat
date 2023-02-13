@@ -188,7 +188,6 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
-				return
 			} else {
 				rows, _ := result.RowsAffected()
 				totalRows += rows
