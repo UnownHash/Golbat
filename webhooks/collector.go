@@ -110,6 +110,9 @@ func collectHooks() []WebhookQueue {
 
 		}
 		if hook.Types == nil || slices.Contains(hook.Types, "pokemon") {
+			if len(hook.AreaNames) != len(hook.Areas) {
+				log.Infof("Something does not match: %v - %v", hook.AreaNames, hook.Areas)
+			}
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
 			} else {
