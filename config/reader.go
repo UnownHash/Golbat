@@ -46,7 +46,8 @@ func ReadConfig() {
 		panic(err)
 	}
 	// translate webhook areas to array of geo.AreaName struct
-	for _, hook := range Config.Webhooks {
+	for i := 0; i < len(Config.Webhooks); i++ {
+		hook := &Config.Webhooks[i]
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
 	}
 }
