@@ -12,6 +12,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -273,9 +274,9 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 
 		_, _ = res, err
 	}
-
-	createPokemonWebhooks(oldPokemon, pokemon)
-	updatePokemonStats(oldPokemon, pokemon)
+	areas := geo.MatchGeofences(statsFeatureCollection, pokemon.Lat, pokemon.Lon)
+	createPokemonWebhooks(oldPokemon, pokemon, areas)
+	updatePokemonStats(oldPokemon, pokemon, areas)
 	updatePokemonNests(oldPokemon, pokemon)
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
@@ -292,7 +293,7 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 	}
 }
 
-func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
+func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	//nullString := func (v null.Int) interface{} {
 	//	if !v.Valid {
 	//		return "null"
@@ -351,17 +352,13 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon) {
 			"pvp": func() interface{} {
 				if !new.Pvp.Valid {
 					return nil
-				}
-				var j map[string]interface{}
-				if err := json.Unmarshal([]byte(new.Pvp.ValueOrZero()), &j); err == nil {
-					return j
 				} else {
-					return nil
+					return json.RawMessage(new.Pvp.ValueOrZero())
 				}
 			}(),
 		}
 
-		webhooks.AddMessage(webhooks.Pokemon, pokemonHook)
+		webhooks.AddMessage(webhooks.Pokemon, pokemonHook, areas)
 	}
 }
 

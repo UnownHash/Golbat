@@ -53,3 +53,8 @@ url = "http://localhost:4201"
 #[[webhooks]]
 #url = "http://localhost:4202"
 #types = ["raid"]
+
+#[[webhooks]]
+#url = "http://localhost:4202"
+#types = ["raid"]
+#areas = ["London/*", "*/Harrow", "Harrow"]
