@@ -479,8 +479,8 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 	}
 }
 
-func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto) error {
 	player, err := getPlayerRecord(db, playerSummary.GetCodename())
+func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
 	if err != nil {
 		return err
 	}

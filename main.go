@@ -223,7 +223,11 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		// ignore
 		break
 	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
-		result = decodeSocialActionProxy(protoData.Data)
+		if protoData.Request != nil {
+			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
+		} else {
+			result = decodeSocialActionProxy(protoData.Data)
+		}
 		processed = true
 		break
 	case pogo.Method_METHOD_GET_MAP_FORTS:
@@ -260,6 +264,111 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 
 	return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
 
+}
+
+func decodeSocialActionWithRequest(request []byte, payload []byte) string {
+	var proxyRequestProto pogo.ProxyRequestProto
+
+	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
+		log.Fatalln("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	var proxyResponseProto pogo.ProxyResponseProto
+
+	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
+		log.Fatalln("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
+		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
+	}
+
+	switch pogo.SocialAction(proxyRequestProto.GetAction()) {
+	case pogo.SocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
+		return decodeGetFriendDetails(proxyResponseProto.Payload)
+	case pogo.SocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
+		return decodeSearchPlayer(proxyRequestProto, proxyResponseProto.Payload)
+
+	}
+
+	return fmt.Sprintf("Can't parse %s", pogo.SocialAction(proxyRequestProto.GetAction()).String())
+}
+
+func decodeGetFriendDetails(payload []byte) string {
+	var getFriendDetailsOutProto pogo.GetFriendDetailsOutProto
+	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
+
+	if getFriendDetailsError != nil {
+		log.Fatalln("Failed to parse %s", getFriendDetailsError)
+		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
+	}
+
+	if getFriendDetailsOutProto.GetResult() != pogo.GetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
+		return fmt.Sprintf("unsuccessful get friends details")
+	}
+
+	failures := 0
+
+	for _, friend := range getFriendDetailsOutProto.GetFriend() {
+		player := friend.GetPlayer()
+		publicData, publicDataErr := decodePlayerPublicProfile(player.GetPublicData())
+
+		if publicDataErr != nil {
+			failures++
+			continue
+		}
+
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, "", player.GetPlayerId())
+		if updatePlayerError != nil {
+			failures++
+		}
+	}
+
+	return fmt.Sprintf("%d players decoded on %d", len(getFriendDetailsOutProto.GetFriend())-failures, len(getFriendDetailsOutProto.GetFriend()))
+}
+
+func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte) string {
+	var searchPlayerOutProto pogo.SearchPlayerOutProto
+	searchPlayerOutError := proto.Unmarshal(payload, &searchPlayerOutProto)
+
+	if searchPlayerOutError != nil {
+		log.Fatalln("Failed to parse %s", searchPlayerOutError)
+		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
+	}
+
+	if searchPlayerOutProto.GetResult() != pogo.SearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
+		return fmt.Sprintf("unsuccessful search player response")
+	}
+
+	var searchPlayerProto pogo.SearchPlayerProto
+	searchPlayerError := proto.Unmarshal(proxyRequestProto.GetPayload(), &searchPlayerProto)
+
+	if searchPlayerError != nil || searchPlayerProto.GetFriendCode() == "" {
+		return fmt.Sprintf("Failed to parse %s", searchPlayerError)
+	}
+
+	player := searchPlayerOutProto.GetPlayer()
+	publicData, publicDataError := decodePlayerPublicProfile(player.GetPublicData())
+
+	if publicDataError != nil {
+		return fmt.Sprintf("Failed to parse %s", publicDataError)
+	}
+
+	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, searchPlayerProto.GetFriendCode(), "")
+	if updatePlayerError != nil {
+		return fmt.Sprintf("Failed update player %s", updatePlayerError)
+	}
+
+	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
+}
+
+func decodePlayerPublicProfile(publicProfile []byte) (*pogo.PlayerPublicProfileProto, error) {
+	var publicData pogo.PlayerPublicProfileProto
+	publicDataErr := proto.Unmarshal(publicProfile, &publicData)
+
+	return &publicData, publicDataErr
 }
 
 func decodeSocialActionProxy(sDec []byte) string {
@@ -316,7 +425,7 @@ func decodeSocialActionProxy(sDec []byte) string {
 			continue
 		}
 
-		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, &publicData)
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, &publicData, "", "")
 		if updatePlayerError != nil {
 			failures++
 		}
