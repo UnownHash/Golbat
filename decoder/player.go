@@ -182,7 +182,7 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:   "Vivillon",
 }
 
-func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
+func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCode string) (*Player, error) {
 	inMemoryPlayer := playerCache.Get(name)
 	if inMemoryPlayer != nil {
 		player := inMemoryPlayer.Value()
@@ -192,91 +192,39 @@ func getPlayerRecord(db db.DbDetails, name string) (*Player, error) {
 	player := Player{}
 	err := db.GeneralDb.Get(&player,
 		`
-		SELECT name,
-			   friendship_id,
-			   last_seen,
-			   friend_code,
-			   team,
-			   level,
-			   xp,
-			   battles_won,
-			   km_walked,
-			   caught_pokemon,
-			   gbl_rank,
-			   gbl_rating,
-			   event_badges,
-			   stops_spun,
-			   evolved,
-			   hatched,
-			   quests,
-			   trades,
-			   photobombs,
-			   purified,
-			   grunts_defeated,
-			   gym_battles_won,
-			   normal_raids_won,
-			   legendary_raids_won,
-			   trainings_won,
-			   berries_fed,
-			   hours_defended,
-			   best_friends,
-			   best_buddies,
-			   giovanni_defeated,
-			   mega_evos,
-			   unique_stops_spun,
-			   unique_mega_evos,
-			   unique_raid_bosses,
-			   unique_unown,
-			   seven_day_streaks,
-			   trade_km,
-			   raids_with_friends,
-			   caught_at_lure,
-			   wayfarer_agreements,
-			   trainers_referred,
-			   raid_achievements,
-			   xl_karps,
-			   xs_rats,
-			   pikachu_caught,
-			   league_great_won,
-			   league_ultra_won,
-			   league_master_won,
-			   tiny_pokemon_caught,
-			   jumbo_pokemon_caught,
-			   collections_done,
-			   vivillon,
-			   dex_gen1,
-			   dex_gen2,
-			   dex_gen3,
-			   dex_gen4,
-			   dex_gen5,
-			   dex_gen6,
-			   dex_gen7,
-			   dex_gen8,
-			   dex_gen8a,
-			   caught_normal,
-			   caught_fighting,
-			   caught_flying,
-			   caught_poison,
-			   caught_ground,
-			   caught_rock,
-			   caught_bug,
-			   caught_ghost,
-			   caught_steel,
-			   caught_fire,
-			   caught_water,
-			   caught_grass,
-			   caught_electric,
-			   caught_psychic,
-			   caught_ice,
-			   caught_dragon,
-			   caught_dark,
-			   caught_fairy
+		SELECT *
 		FROM player
 		WHERE player.name = ? 
 		`,
 		name,
 	)
 	if err == sql.ErrNoRows {
+		if friendshipId != "" {
+			err = db.GeneralDb.Get(&player,
+				`
+				SELECT *
+				FROM player
+				WHERE player.friendship_id = ? 
+				`,
+				friendshipId,
+			)
+		} else if friendCode != "" {
+			err = db.GeneralDb.Get(&player,
+				`
+				SELECT *
+				FROM player
+				WHERE player.friend_code = ? 
+				`,
+				friendCode,
+			)
+		}
+
+		if err == sql.ErrNoRows {
+			return nil, nil
+		} else if err != nil {
+			return nil, err
+		}
+
 		return nil, nil
 	}
 
@@ -300,7 +248,7 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 }
 
 func savePlayerRecord(db db.DbDetails, player *Player) {
-	oldPlayer, _ := getPlayerRecord(db, player.Name)
+	oldPlayer, _ := getPlayerRecord(db, player.Name, player.FriendshipId.String, player.FriendCode.String)
 
 	if oldPlayer != nil && !hasChangesPlayer(oldPlayer, player) {
 		return
@@ -313,7 +261,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	if oldPlayer == nil {
 		_, err := db.GeneralDb.NamedExec(
 			`
-			INSERT INTO player (name, friendship_id, last_seen, team, level, xp, battles_won, km_walked, caught_pokemon, gbl_rank, gbl_rating,
+			INSERT INTO player (name, friendship_id, friend_code, last_seen, team, level, xp, battles_won, km_walked, caught_pokemon, gbl_rank, gbl_rating,
 								event_badges, stops_spun, evolved, hatched, quests, trades, photobombs, purified, grunts_defeated,
 								gym_battles_won, normal_raids_won, legendary_raids_won, trainings_won, berries_fed, hours_defended,
 								best_friends, best_buddies, giovanni_defeated, mega_evos, collections_done, unique_stops_spun,
@@ -324,7 +272,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 								dex_gen7, dex_gen8, dex_gen8a, caught_normal, caught_fighting, caught_flying, caught_poison,
 								caught_ground, caught_rock, caught_bug, caught_ghost, caught_steel, caught_fire, caught_water,
 								caught_grass, caught_electric, caught_psychic, caught_ice, caught_dragon, caught_dark, caught_fairy)
-			VALUES (:name, :friendship_id, :last_seen, :team, :level, :xp, :battles_won, :km_walked, :caught_pokemon, :gbl_rank, :gbl_rating,
+			VALUES (:name, :friendship_id, :friend_code, :last_seen, :team, :level, :xp, :battles_won, :km_walked, :caught_pokemon, :gbl_rank, :gbl_rating,
 					:event_badges, :stops_spun, :evolved, :hatched, :quests, :trades, :photobombs, :purified, :grunts_defeated,
 					:gym_battles_won, :normal_raids_won, :legendary_raids_won, :trainings_won, :berries_fed, :hours_defended,
 					:best_friends, :best_buddies, :giovanni_defeated, :mega_evos, :collections_done, :unique_stops_spun,
@@ -479,8 +427,8 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 	}
 }
 
-	player, err := getPlayerRecord(db, playerSummary.GetCodename())
 func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
+	player, err := getPlayerRecord(db, playerSummary.GetCodename(), friendshipId, friendCode)
 	if err != nil {
 		return err
 	}
@@ -490,9 +438,14 @@ func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.Pl
 			Name: playerSummary.GetCodename(),
 		}
 	}
-	if player.FriendshipId.IsZero() {
-		player.FriendshipId = null.StringFrom(playerSummary.GetPlayerId())
+
+	if player.FriendshipId.IsZero() && friendshipId != "" {
+		player.FriendshipId = null.StringFrom(friendshipId)
 	}
+	if player.FriendCode.IsZero() && friendCode != "" {
+		player.FriendCode = null.StringFrom(friendCode)
+	}
+
 	player.updateFromPublicProfile(publicProfile)
 	savePlayerRecord(db, player)
 	return nil
