@@ -19,6 +19,7 @@ import (
 
 type ProtoData struct {
 	Data    []byte
+	Request []byte
 	HaveAr  *bool
 	Account string
 	Level   int
@@ -27,6 +28,7 @@ type ProtoData struct {
 
 type InboundRawData struct {
 	Base64Data string
+	Request    string
 	Method     int
 	HaveAr     *bool
 }
@@ -132,7 +134,16 @@ func Raw(c *gin.Context) {
 				} else {
 					protoData = append(protoData, InboundRawData{
 						Base64Data: entry["payload"].(string),
-						Method:     int(entry["type"].(float64)),
+						Request: func() string {
+							if request := entry["request"]; request != nil {
+								res, ok := request.(string)
+								if ok {
+									return res
+								}
+							}
+							return ""
+						}(),
+						Method: int(entry["type"].(float64)),
 						HaveAr: func() *bool {
 							if v := entry["have_ar"]; v != nil {
 								res, ok := v.(bool)
@@ -162,6 +173,7 @@ func Raw(c *gin.Context) {
 		for _, entry := range protoData {
 			method := entry.Method
 			payload := entry.Base64Data
+			request := entry.Request
 
 			haveAr := globalHaveAr
 			if entry.HaveAr != nil {
@@ -175,6 +187,9 @@ func Raw(c *gin.Context) {
 				Uuid:    uuid,
 			}
 			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
+			if request != "" {
+				protoData.Request, _ = b64.StdEncoding.DecodeString(request)
+			}
 
 			decode(ctx, method, &protoData)
 		}
