@@ -2,10 +2,13 @@ package decoder
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
+	"golbat/webhooks"
 )
 
 type FortWebhook struct {
@@ -51,26 +54,30 @@ const (
 	GYM      FortType = "gym"
 )
 
-func InitWebHookFortFromGym(gym *Gym) FortWebhook {
-	return FortWebhook{
-		Type:        GYM.String(),
-		Name:        gym.Name.ValueOrZero(),
-		ImageUrl:    gym.Url.ValueOrZero(),
-		Description: gym.Description.ValueOrZero(),
-		Longitude:   gym.Lon,
-		Latitude:    gym.Lat,
+func InitWebHookFortFromGym(gym *Gym) (fort FortWebhook) {
+	if gym == nil {
+		return
 	}
+	fort.Type = GYM.String()
+	fort.Name = gym.Name.ValueOrZero()
+	fort.ImageUrl = gym.Url.ValueOrZero()
+	fort.Description = gym.Description.ValueOrZero()
+	fort.Longitude = gym.Lon
+	fort.Latitude = gym.Lat
+	return
 }
 
-func InitWebHookFortFromPokestop(stop *Pokestop) FortWebhook {
-	return FortWebhook{
-		Type:        POKESTOP.String(),
-		Name:        stop.Name.ValueOrZero(),
-		ImageUrl:    stop.Url.ValueOrZero(),
-		Description: stop.Description.ValueOrZero(),
-		Longitude:   stop.Lon,
-		Latitude:    stop.Lat,
+func InitWebHookFortFromPokestop(stop *Pokestop) (fort FortWebhook) {
+	if stop == nil {
+		return
 	}
+	fort.Type = POKESTOP.String()
+	fort.Name = stop.Name.ValueOrZero()
+	fort.ImageUrl = stop.Url.ValueOrZero()
+	fort.Description = stop.Description.ValueOrZero()
+	fort.Longitude = stop.Lon
+	fort.Latitude = stop.Lat
+	return
 }
 
 func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []string, fortType FortType, change FortChange) {
@@ -111,7 +118,53 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 }
 
 func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
-	//TODO: send webhooks
+	if change == NEW {
+		areas := geo.MatchGeofences(statsFeatureCollection, new.Latitude, new.Longitude)
+		hook := map[string]interface{}{
+			"change_type": change.String(),
+			"fort": func() interface{} {
+				bytes, err := json.Marshal(new)
+				if err != nil {
+					return nil
+				}
+				return json.RawMessage(bytes)
+			},
+		}
+		webhooks.AddMessage(webhooks.Fort, hook, areas)
+	} else if change == REMOVAL {
+		areas := geo.MatchGeofences(statsFeatureCollection, old.Latitude, old.Longitude)
+		hook := map[string]interface{}{
+			"change_type": change.String(),
+			"fort": func() interface{} {
+				bytes, err := json.Marshal(old)
+				if err != nil {
+					return nil
+				}
+				return json.RawMessage(bytes)
+			},
+		}
+		webhooks.AddMessage(webhooks.Fort, hook, areas)
+	} else if change == EDIT {
+		areas := geo.MatchGeofences(statsFeatureCollection, new.Latitude, new.Longitude)
+		hook := map[string]interface{}{
+			"change_type": change.String(),
+			"old": func() interface{} {
+				bytes, err := json.Marshal(old)
+				if err != nil {
+					return nil
+				}
+				return json.RawMessage(bytes)
+			},
+			"new": func() interface{} {
+				bytes, err := json.Marshal(new)
+				if err != nil {
+					return nil
+				}
+				return json.RawMessage(bytes)
+			},
+		}
+		webhooks.AddMessage(webhooks.Fort, hook, areas)
+	}
 }
 
 func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
