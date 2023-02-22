@@ -11,13 +11,17 @@ import (
 	"golbat/webhooks"
 )
 
+type Location struct {
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lon"`
+}
+
 type FortWebhook struct {
-	Type        string  `json:"type"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	ImageUrl    string  `json:"image_url"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
+	Type        string   `json:"type"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	ImageUrl    string   `json:"image_url"`
+	Location    Location `json:"location"`
 }
 
 type FortChange string
@@ -62,8 +66,7 @@ func InitWebHookFortFromGym(gym *Gym) (fort FortWebhook) {
 	fort.Name = gym.Name.ValueOrZero()
 	fort.ImageUrl = gym.Url.ValueOrZero()
 	fort.Description = gym.Description.ValueOrZero()
-	fort.Longitude = gym.Lon
-	fort.Latitude = gym.Lat
+	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
 	return
 }
 
@@ -75,8 +78,7 @@ func InitWebHookFortFromPokestop(stop *Pokestop) (fort FortWebhook) {
 	fort.Name = stop.Name.ValueOrZero()
 	fort.ImageUrl = stop.Url.ValueOrZero()
 	fort.Description = stop.Description.ValueOrZero()
-	fort.Longitude = stop.Lon
-	fort.Latitude = stop.Lat
+	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
 	return
 }
 
@@ -119,7 +121,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 
 func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 	if change == NEW {
-		areas := geo.MatchGeofences(statsFeatureCollection, new.Latitude, new.Longitude)
+		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"fort": func() interface{} {
@@ -132,7 +134,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 		}
 		webhooks.AddMessage(webhooks.Fort, hook, areas)
 	} else if change == REMOVAL {
-		areas := geo.MatchGeofences(statsFeatureCollection, old.Latitude, old.Longitude)
+		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"fort": func() interface{} {
@@ -145,7 +147,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 		}
 		webhooks.AddMessage(webhooks.Fort, hook, areas)
 	} else if change == EDIT {
-		areas := geo.MatchGeofences(statsFeatureCollection, new.Latitude, new.Longitude)
+		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"edit_types":  []string{"name"}, // TODO: extract that information from new and old fort
