@@ -8,7 +8,7 @@ import (
 	"golbat/pogo"
 )
 
-type WebHookFort struct {
+type FortWebhook struct {
 	Type        string
 	Name        string
 	Description string
@@ -51,8 +51,8 @@ const (
 	GYM      FortType = "gym"
 )
 
-func InitWebHookFortFromGym(gym *Gym) WebHookFort {
-	return WebHookFort{
+func InitWebHookFortFromGym(gym *Gym) FortWebhook {
+	return FortWebhook{
 		Type:        GYM.String(),
 		Name:        gym.Name.ValueOrZero(),
 		ImageUrl:    gym.Url.ValueOrZero(),
@@ -62,8 +62,8 @@ func InitWebHookFortFromGym(gym *Gym) WebHookFort {
 	}
 }
 
-func InitWebHookFortFromPokestop(stop *Pokestop) WebHookFort {
-	return WebHookFort{
+func InitWebHookFortFromPokestop(stop *Pokestop) FortWebhook {
+	return FortWebhook{
 		Type:        POKESTOP.String(),
 		Name:        stop.Name.ValueOrZero(),
 		ImageUrl:    stop.Url.ValueOrZero(),
@@ -102,15 +102,15 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	}
 	for _, gym := range gyms {
 		fort := InitWebHookFortFromGym(&gym)
-		CreateFortWebHooks(fort, WebHookFort{}, change)
+		CreateFortWebHooks(fort, FortWebhook{}, change)
 	}
 	for _, stop := range stops {
 		fort := InitWebHookFortFromPokestop(&stop)
-		CreateFortWebHooks(fort, WebHookFort{}, change)
+		CreateFortWebHooks(fort, FortWebhook{}, change)
 	}
 }
 
-func CreateFortWebHooks(old WebHookFort, new WebHookFort, change FortChange) {
+func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 	//TODO: send webhooks
 }
 
