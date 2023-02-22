@@ -55,6 +55,7 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 
 var gymStripedMutex = stripedmutex.New(32)
 var pokestopStripedMutex = stripedmutex.New(32)
+var s2cellStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
 var weatherStripedMutex = stripedmutex.New(8)
 
@@ -346,6 +347,8 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
+		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
+		s2cellMutex.Lock()
 		if c := s2CellCache.Get(cellId); c != nil {
 			// delete from cache if it's shown again in GMO
 			for _, gym := range gyms {
@@ -378,10 +381,12 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 
 			}
 		}
-
+		s2cellMutex.Unlock()
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
+		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
+		s2cellMutex.Lock()
 		// compare with cached cell
 		if c := s2CellCache.Get(cellId); c != nil {
 			// delete from cache if it's shown again in GMO
@@ -415,6 +420,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				}
 			}
 		}
+		s2cellMutex.Unlock()
 	}
 }
 

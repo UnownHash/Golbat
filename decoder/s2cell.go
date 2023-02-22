@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"gopkg.in/guregu/null.v4"
+	"strconv"
 	"time"
 )
 
@@ -40,6 +41,10 @@ func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell
 
 func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
 	now := time.Now().Unix()
+	s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(s2Cell.Id, 10))
+	s2cellMutex.Lock()
+	defer s2cellMutex.Unlock()
+
 	if c := s2CellCache.Get(s2Cell.Id); c != nil {
 		cachedCell := c.Value()
 		if cachedCell.Updated > now-900 {
