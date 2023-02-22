@@ -188,9 +188,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
-			pokestop, err := getPokestopRecord(ctx, db, fortId) // should check error
+			pokestop, err := GetPokestopRecord(ctx, db, fortId) // should check error
 			if err != nil {
-				log.Errorf("getPokestopRecord: %s", err)
+				log.Errorf("GetPokestopRecord: %s", err)
 				pokestopMutex.Unlock()
 				continue
 			}
@@ -229,9 +229,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()
-			gym, err := getGymRecord(ctx, db, fortId)
+			gym, err := GetGymRecord(ctx, db, fortId)
 			if err != nil {
-				log.Errorf("getGymRecord: %s", err)
+				log.Errorf("GetGymRecord: %s", err)
 				gymMutex.Unlock()
 				continue
 			}
@@ -376,7 +376,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 						continue
 					}
 					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, toClear)
-					//TODO send webhook
+					CreateFortWebhooks(ctx, dbDetails, toClear, GYM, REMOVAL)
 				}
 
 			}
@@ -416,7 +416,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 						continue
 					}
 					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, toClear)
-					//TODO send webhook
+					CreateFortWebhooks(ctx, dbDetails, toClear, POKESTOP, REMOVAL)
 				}
 			}
 		}

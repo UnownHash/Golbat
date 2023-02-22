@@ -106,7 +106,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *Incident, incident *Incident) {
 	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
-		stop, _ := getPokestopRecord(ctx, db, incident.PokestopId)
+		stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
 		if stop == nil {
 			stop = &Pokestop{}
 		}

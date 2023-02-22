@@ -13,6 +13,7 @@ import (
 	"golbat/util"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
+	"reflect"
 	"time"
 )
 
@@ -102,7 +103,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
+func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -310,6 +311,16 @@ type GymDetailsWebhook struct {
 	//"ar_scan_eligible": arScanEligible ?? 0
 }
 
+func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
+	fort := InitWebHookFortFromGym(gym)
+	oldFort := InitWebHookFortFromGym(oldGym)
+	if oldGym == nil {
+		CreateFortWebHooks(oldFort, fort, NEW)
+	} else if !reflect.DeepEqual(fort, oldFort) {
+		CreateFortWebHooks(oldFort, fort, EDIT)
+	}
+}
+
 func createGymWebhooks(oldGym *Gym, gym *Gym) {
 	areas := geo.MatchGeofences(statsFeatureCollection, gym.Lat, gym.Lon)
 	if oldGym == nil ||
@@ -388,7 +399,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 }
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
-	oldGym, _ := getGymRecord(ctx, db, gym.Id)
+	oldGym, _ := GetGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -459,6 +470,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	createGymWebhooks(oldGym, gym)
+	createGymFortWebhooks(oldGym, gym)
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
@@ -476,7 +488,7 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, fort.Id) // should check error
+	gym, err := GetGymRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -497,7 +509,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
+	gym, err := GetGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -517,7 +529,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, mapFort.Id)
+	gym, err := GetGymRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()
 	}
