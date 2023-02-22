@@ -12,12 +12,12 @@ import (
 )
 
 type FortWebhook struct {
-	Type        string
-	Name        string
-	Description string
-	ImageUrl    string
-	Latitude    float64
-	Longitude   float64
+	Type        string  `json:"type"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	ImageUrl    string  `json:"image_url"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 }
 
 type FortChange string
@@ -148,6 +148,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Latitude, new.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
+			"edit_types":  []string{"name"}, // TODO: extract that information from new and old fort
 			"old": func() interface{} {
 				bytes, err := json.Marshal(old)
 				if err != nil {
