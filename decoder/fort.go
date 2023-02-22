@@ -124,7 +124,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
-			"fort": func() interface{} {
+			"new": func() interface{} {
 				bytes, err := json.Marshal(new)
 				if err != nil {
 					return nil
@@ -137,7 +137,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
-			"fort": func() interface{} {
+			"old": func() interface{} {
 				bytes, err := json.Marshal(old)
 				if err != nil {
 					return nil
