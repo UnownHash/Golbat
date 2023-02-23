@@ -9,6 +9,7 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
+	"gopkg.in/guregu/null.v4"
 )
 
 type Location struct {
@@ -17,11 +18,11 @@ type Location struct {
 }
 
 type FortWebhook struct {
-	Type        string   `json:"type"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	ImageUrl    string   `json:"image_url"`
-	Location    Location `json:"location"`
+	Type        null.String `json:"type"`
+	Name        null.String `json:"name"`
+	Description null.String `json:"description"`
+	ImageUrl    null.String `json:"image_url"`
+	Location    Location    `json:"location"`
 }
 
 type FortChange string
@@ -62,10 +63,10 @@ func InitWebHookFortFromGym(gym *Gym) (fort FortWebhook) {
 	if gym == nil {
 		return
 	}
-	fort.Type = GYM.String()
-	fort.Name = gym.Name.ValueOrZero()
-	fort.ImageUrl = gym.Url.ValueOrZero()
-	fort.Description = gym.Description.ValueOrZero()
+	fort.Type = null.StringFrom(GYM.String())
+	fort.Name = gym.Name
+	fort.ImageUrl = gym.Url
+	fort.Description = gym.Description
 	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
 	return
 }
@@ -74,10 +75,10 @@ func InitWebHookFortFromPokestop(stop *Pokestop) (fort FortWebhook) {
 	if stop == nil {
 		return
 	}
-	fort.Type = POKESTOP.String()
-	fort.Name = stop.Name.ValueOrZero()
-	fort.ImageUrl = stop.Url.ValueOrZero()
-	fort.Description = stop.Description.ValueOrZero()
+	fort.Type = null.StringFrom(POKESTOP.String())
+	fort.Name = stop.Name
+	fort.ImageUrl = stop.Url
+	fort.Description = stop.Description
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
 	return
 }
@@ -148,9 +149,22 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
+		var editTypes []string
+		if old.Name != new.Name {
+			editTypes = append(editTypes, "name")
+		}
+		if old.Description != new.Description {
+			editTypes = append(editTypes, "description")
+		}
+		if old.ImageUrl != new.ImageUrl {
+			editTypes = append(editTypes, "image_url")
+		}
+		if old.Location != new.Location {
+			editTypes = append(editTypes, "location")
+		}
 		hook := map[string]interface{}{
 			"change_type": change.String(),
-			"edit_types":  []string{"name"}, // TODO: extract that information from new and old fort
+			"edit_types":  editTypes,
 			"old": func() interface{} {
 				bytes, err := json.Marshal(old)
 				if err != nil {
