@@ -315,9 +315,9 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	fort := InitWebHookFortFromGym(gym)
 	oldFort := InitWebHookFortFromGym(oldGym)
 	if oldGym == nil {
-		CreateFortWebHooks(oldFort, fort, NEW)
+		CreateFortWebHooks(&oldFort, &fort, NEW)
 	} else if !reflect.DeepEqual(fort, oldFort) {
-		CreateFortWebHooks(oldFort, fort, EDIT)
+		CreateFortWebHooks(&oldFort, &fort, EDIT)
 	}
 }
 

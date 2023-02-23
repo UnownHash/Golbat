@@ -111,15 +111,15 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	}
 	for _, gym := range gyms {
 		fort := InitWebHookFortFromGym(&gym)
-		CreateFortWebHooks(fort, FortWebhook{}, change)
+		CreateFortWebHooks(&fort, &FortWebhook{}, change)
 	}
 	for _, stop := range stops {
 		fort := InitWebHookFortFromPokestop(&stop)
-		CreateFortWebHooks(fort, FortWebhook{}, change)
+		CreateFortWebHooks(&fort, &FortWebhook{}, change)
 	}
 }
 
-func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
+func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	if change == NEW {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
