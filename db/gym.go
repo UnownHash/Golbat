@@ -10,7 +10,7 @@ func FindOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []stri
 	var query string
 	var args []interface{}
 	if len(gymIds) == 0 {
-		query, args, _ = sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ?;", cellId, gymIds)
+		query, args, _ = sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ?;", cellId)
 	} else {
 		query, args, _ = sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
 	}
