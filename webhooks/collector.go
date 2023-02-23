@@ -50,6 +50,7 @@ func SetMaps() {
 	webhookCollections[Pokestop] = &WebhookList{}
 	webhookCollections[Invasion] = &WebhookList{}
 	webhookCollections[Weather] = &WebhookList{}
+	webhookCollections[FortUpdate] = &WebhookList{}
 }
 
 func AddMessage(webhookType string, message interface{}, areas []geo.AreaName) {
