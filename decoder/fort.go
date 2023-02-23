@@ -81,7 +81,6 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 	fort.ImageUrl = stop.Url.Ptr()
 	fort.Description = stop.Description.Ptr()
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
-	log.Printf("Init: %s", *fort.Name)
 	return fort
 }
 
