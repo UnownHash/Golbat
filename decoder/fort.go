@@ -9,7 +9,6 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
 )
 
 type Location struct {
@@ -18,11 +17,11 @@ type Location struct {
 }
 
 type FortWebhook struct {
-	Type        null.String `json:"type"`
-	Name        null.String `json:"name"`
-	Description null.String `json:"description"`
-	ImageUrl    null.String `json:"image_url"`
-	Location    Location    `json:"location"`
+	Type        string   `json:"type"`
+	Name        *string  `json:"name"`
+	Description *string  `json:"description"`
+	ImageUrl    *string  `json:"image_url"`
+	Location    Location `json:"location"`
 }
 
 type FortChange string
@@ -63,10 +62,10 @@ func InitWebHookFortFromGym(gym *Gym) (fort FortWebhook) {
 	if gym == nil {
 		return
 	}
-	fort.Type = null.StringFrom(GYM.String())
-	fort.Name = gym.Name
-	fort.ImageUrl = gym.Url
-	fort.Description = gym.Description
+	fort.Type = GYM.String()
+	fort.Name = gym.Name.Ptr()
+	fort.ImageUrl = gym.Url.Ptr()
+	fort.Description = gym.Description.Ptr()
 	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
 	return
 }
@@ -75,10 +74,10 @@ func InitWebHookFortFromPokestop(stop *Pokestop) (fort FortWebhook) {
 	if stop == nil {
 		return
 	}
-	fort.Type = null.StringFrom(POKESTOP.String())
-	fort.Name = stop.Name
-	fort.ImageUrl = stop.Url
-	fort.Description = stop.Description
+	fort.Type = POKESTOP.String()
+	fort.Name = stop.Name.Ptr()
+	fort.ImageUrl = stop.Url.Ptr()
+	fort.Description = stop.Description.Ptr()
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
 	return
 }
