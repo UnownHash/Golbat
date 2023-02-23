@@ -484,7 +484,7 @@ func createPokestopFortWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	oldFort := InitWebHookFortFromPokestop(oldStop)
 	if oldStop == nil {
 		CreateFortWebHooks(&oldFort, &fort, NEW)
-	} else if !cmp.Equal(fort, oldFort, ignoreNearFloats) {
+	} else {
 		CreateFortWebHooks(&oldFort, &fort, EDIT)
 	}
 }
