@@ -13,7 +13,6 @@ import (
 	"golbat/util"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
-	"reflect"
 	"time"
 )
 
@@ -316,7 +315,7 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	oldFort := InitWebHookFortFromGym(oldGym)
 	if oldGym == nil {
 		CreateFortWebHooks(&oldFort, &fort, NEW)
-	} else if !reflect.DeepEqual(fort, oldFort) {
+	} else if !cmp.Equal(fort, oldFort, ignoreNearFloats) {
 		CreateFortWebHooks(&oldFort, &fort, EDIT)
 	}
 }
