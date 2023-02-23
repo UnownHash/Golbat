@@ -9,6 +9,7 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
+	"strings"
 )
 
 type Location struct {
@@ -143,13 +144,13 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		var editTypes []string
-		if old.Name != new.Name {
+		if strings.Compare(*old.Name, *new.Name) == 0 {
 			editTypes = append(editTypes, "name")
 		}
-		if old.Description != new.Description {
+		if strings.Compare(*old.Description, *new.Description) == 0 {
 			editTypes = append(editTypes, "description")
 		}
-		if old.ImageUrl != new.ImageUrl {
+		if strings.Compare(*old.ImageUrl, *new.ImageUrl) == 0 {
 			editTypes = append(editTypes, "image_url")
 		}
 		if !cmp.Equal(old.Location, new.Location, ignoreNearFloats) {
