@@ -87,7 +87,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	var stops []Pokestop
 	if fortType == GYM {
 		for _, id := range ids {
-			gym, err := GetGymRecord(ctx, dbDetails, id)
+			gym, err := getGymRecord(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}
@@ -99,7 +99,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	}
 	if fortType == POKESTOP {
 		for _, id := range ids {
-			stop, err := GetPokestopRecord(ctx, dbDetails, id)
+			stop, err := getPokestopRecord(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}
@@ -132,7 +132,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 				return json.RawMessage(bytes)
 			},
 		}
-		webhooks.AddMessage(webhooks.Fort, hook, areas)
+		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == REMOVAL {
 		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
 		hook := map[string]interface{}{
@@ -145,7 +145,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 				return json.RawMessage(bytes)
 			},
 		}
-		webhooks.AddMessage(webhooks.Fort, hook, areas)
+		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
@@ -166,7 +166,7 @@ func CreateFortWebHooks(old FortWebhook, new FortWebhook, change FortChange) {
 				return json.RawMessage(bytes)
 			},
 		}
-		webhooks.AddMessage(webhooks.Fort, hook, areas)
+		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	}
 }
 

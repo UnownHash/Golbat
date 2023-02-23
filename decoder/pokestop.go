@@ -98,7 +98,7 @@ type Pokestop struct {
 
 }
 
-func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
+func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
@@ -574,7 +574,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 }
 
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
-	oldPokestop, _ := GetPokestopRecord(ctx, db, pokestop.Id)
+	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
 	now := time.Now().Unix()
 	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
 		if oldPokestop.Updated > now-900 {
@@ -679,7 +679,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, fort.Id) // should check error
+	pokestop, err := getPokestopRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -704,7 +704,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, quest.FortId)
+	pokestop, err := getPokestopRecord(ctx, db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -736,7 +736,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, mapFort.Id)
+	pokestop, err := getPokestopRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)

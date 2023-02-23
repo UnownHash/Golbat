@@ -188,9 +188,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
-			pokestop, err := GetPokestopRecord(ctx, db, fortId) // should check error
+			pokestop, err := getPokestopRecord(ctx, db, fortId) // should check error
 			if err != nil {
-				log.Errorf("GetPokestopRecord: %s", err)
+				log.Errorf("getPokestopRecord: %s", err)
 				pokestopMutex.Unlock()
 				continue
 			}
@@ -229,9 +229,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()
-			gym, err := GetGymRecord(ctx, db, fortId)
+			gym, err := getGymRecord(ctx, db, fortId)
 			if err != nil {
-				log.Errorf("GetGymRecord: %s", err)
+				log.Errorf("getGymRecord: %s", err)
 				gymMutex.Unlock()
 				continue
 			}
