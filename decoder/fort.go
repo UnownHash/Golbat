@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -124,26 +123,14 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
-			"new": func() interface{} {
-				bytes, err := json.Marshal(new)
-				if err != nil {
-					return nil
-				}
-				return json.RawMessage(bytes)
-			},
+			"new":         new,
 		}
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == REMOVAL {
 		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
-			"old": func() interface{} {
-				bytes, err := json.Marshal(old)
-				if err != nil {
-					return nil
-				}
-				return json.RawMessage(bytes)
-			},
+			"old":         old,
 		}
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
@@ -164,20 +151,8 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"edit_types":  editTypes,
-			"old": func() interface{} {
-				bytes, err := json.Marshal(old)
-				if err != nil {
-					return nil
-				}
-				return json.RawMessage(bytes)
-			},
-			"new": func() interface{} {
-				bytes, err := json.Marshal(new)
-				if err != nil {
-					return nil
-				}
-				return json.RawMessage(bytes)
-			},
+			"old":         old,
+			"new":         new,
 		}
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	}
