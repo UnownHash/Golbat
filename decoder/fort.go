@@ -58,28 +58,30 @@ const (
 	GYM      FortType = "gym"
 )
 
-func InitWebHookFortFromGym(gym *Gym) (fort FortWebhook) {
+func InitWebHookFortFromGym(gym *Gym) *FortWebhook {
+	fort := &FortWebhook{}
 	if gym == nil {
-		return
+		return nil
 	}
 	fort.Type = GYM.String()
 	fort.Name = gym.Name.Ptr()
 	fort.ImageUrl = gym.Url.Ptr()
 	fort.Description = gym.Description.Ptr()
 	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
-	return
+	return fort
 }
 
-func InitWebHookFortFromPokestop(stop *Pokestop) (fort FortWebhook) {
+func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
+	fort := &FortWebhook{}
 	if stop == nil {
-		return
+		return nil
 	}
 	fort.Type = POKESTOP.String()
 	fort.Name = stop.Name.Ptr()
 	fort.ImageUrl = stop.Url.Ptr()
 	fort.Description = stop.Description.Ptr()
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
-	return
+	return fort
 }
 
 func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []string, fortType FortType, change FortChange) {
@@ -111,11 +113,11 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	}
 	for _, gym := range gyms {
 		fort := InitWebHookFortFromGym(&gym)
-		CreateFortWebHooks(&fort, &FortWebhook{}, change)
+		CreateFortWebHooks(fort, &FortWebhook{}, change)
 	}
 	for _, stop := range stops {
 		fort := InitWebHookFortFromPokestop(&stop)
-		CreateFortWebHooks(&fort, &FortWebhook{}, change)
+		CreateFortWebHooks(fort, &FortWebhook{}, change)
 	}
 }
 
@@ -126,6 +128,8 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			"change_type": change.String(),
 			"new":         new,
 		}
+		log.Printf("Fort-Webhook - Hook %v", hook)
+		log.Printf("Fort-Webhook - new %v", new)
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == REMOVAL {
 		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
@@ -133,6 +137,8 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			"change_type": change.String(),
 			"old":         old,
 		}
+		log.Printf("Fort-Webhook - Hook %v", hook)
+		log.Printf("Fort-Webhook - old %v", old)
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
@@ -156,10 +162,10 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 				"old":         old,
 				"new":         new,
 			}
-			log.Printf("Hook %v", hook)
-			log.Printf("old %v", old)
-			log.Printf("new %v", new)
-			// webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
+			log.Printf("Fort-Webhook - Hook %v", hook)
+			log.Printf("Fort-Webhook - old %v", old)
+			log.Printf("Fort-Webhook - new %v", new)
+			webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 		}
 	}
 }
