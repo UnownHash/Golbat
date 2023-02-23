@@ -156,7 +156,10 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 				"old":         old,
 				"new":         new,
 			}
-			webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
+			log.Printf("Hook %v", hook)
+			log.Printf("old %v", old)
+			log.Printf("new %v", new)
+			// webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 		}
 	}
 }
