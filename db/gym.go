@@ -7,7 +7,13 @@ import (
 
 func FindOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
 	fortIds := []FortId{}
-	query, args, _ := sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
+	var query string
+	var args []interface{}
+	if len(gymIds) == 0 {
+		query, args, _ = sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ?;", cellId, gymIds)
+	} else {
+		query, args, _ = sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
+	}
 	query = db.GeneralDb.Rebind(query)
 	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
 	if err != nil {

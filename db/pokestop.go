@@ -66,7 +66,14 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence geo.Geofence) (sql.Re
 
 func FindOldPokestops(ctx context.Context, db DbDetails, cellId uint64, stopIds []string) ([]string, error) {
 	fortIds := []FortId{}
-	query, args, _ := sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, stopIds)
+	var query string
+	var args []interface{}
+	if len(stopIds) == 0 {
+		query, args, _ = sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ?;", cellId)
+	} else {
+		query, args, _ = sqlx.In("SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, stopIds)
+	}
+
 	query = db.GeneralDb.Rebind(query)
 	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
 	if err != nil {

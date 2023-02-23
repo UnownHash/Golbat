@@ -355,7 +355,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				fortsToClearCache.Delete(gym)
 			}
 			cachedCell := c.Value()
-			if cachedCell.gymCount != len(gyms) {
+			if cachedCell.gymCount != len(gyms) || len(gyms) == 0 {
 				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
 				if err != nil {
 					log.Errorf("Unable to clear old gyms: %s", err)
@@ -394,7 +394,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 				fortsToClearCache.Delete(stop)
 			}
 			cachedCell := c.Value()
-			if cachedCell.stopCount != len(stops) {
+			if cachedCell.stopCount != len(stops) || len(stops) == 0 {
 				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
 				if err != nil {
 					log.Errorf("Unable to clear old stops: %s", err)
