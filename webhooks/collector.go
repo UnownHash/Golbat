@@ -32,7 +32,7 @@ var Quest = "quest"
 var Pokestop = "pokestop"
 var Invasion = "invasion"
 var Weather = "weather"
-var Fort = "fort"
+var FortUpdate = "fort_update"
 
 var collectionAccess sync.Mutex
 
@@ -153,11 +153,11 @@ func collectHooks() []WebhookQueue {
 				}
 			}
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "fort") {
+		if hook.Types == nil || slices.Contains(hook.Types, "fort_update") {
 			if len(hook.AreaNames) == 0 {
-				totalCollection = append(totalCollection, currentCollection[Fort].Messages...)
+				totalCollection = append(totalCollection, currentCollection[FortUpdate].Messages...)
 			} else {
-				for _, message := range currentCollection[Fort].Messages {
+				for _, message := range currentCollection[FortUpdate].Messages {
 					if doAreasMatch(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
