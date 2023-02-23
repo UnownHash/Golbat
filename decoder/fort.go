@@ -143,13 +143,16 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
 		var editTypes []string
-		if *old.Name != *new.Name {
+		if !(old.Name == nil && new.Name == nil) &&
+			(old.Name == nil || new.Name == nil || *old.Name != *new.Name) {
 			editTypes = append(editTypes, "name")
 		}
-		if *old.Description != *new.Description {
+		if !(old.Description == nil && new.Description == nil) &&
+			(old.Description == nil || new.Description == nil || *old.Description != *new.Description) {
 			editTypes = append(editTypes, "description")
 		}
-		if *old.ImageUrl != *new.ImageUrl {
+		if !(old.ImageUrl == nil && new.ImageUrl == nil) &&
+			(old.ImageUrl == nil || new.ImageUrl == nil || *old.ImageUrl != *new.ImageUrl) {
 			editTypes = append(editTypes, "image_url")
 		}
 		if !cmp.Equal(old.Location, new.Location, ignoreNearFloats) {
