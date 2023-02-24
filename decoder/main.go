@@ -351,28 +351,25 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	now := time.Now().Unix()
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
-		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
-		s2cellMutex.Lock()
 		// delete from cache if it's shown again in GMO
 		for _, gym := range gyms {
 			fortsToClearCache.Delete(gym)
 		}
 		// lookup for last check
-		cachedCell, ok := s2CellGymLookup.Load(cellId)
-		var timestamp int64
-		if ok {
-			timestamp = cachedCell.(int64)
-		} else {
-			s2CellGymLookup.Store(cellId, now)
-			s2cellMutex.Unlock()
-			continue
-		}
-		if timestamp > now-1800 {
-			s2cellMutex.Unlock()
+		if shouldSkipCellGymCheck(cellId, now) {
 			continue
 		}
 
 		// time to check again
+		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
+		s2cellMutex.Lock()
+
+		if shouldSkipCellGymCheck(cellId, now) {
+			// if another GMO processed that cella already, then skip
+			s2cellMutex.Unlock()
+			continue
+		}
+
 		fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
 		if err != nil {
 			log.Errorf("Unable to clear old gyms: %s", err)
@@ -400,28 +397,23 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
-		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
-		s2cellMutex.Lock()
 		// delete from cache if it's shown again in GMO
 		for _, stop := range stops {
 			fortsToClearCache.Delete(stop)
 		}
 		// lookup for last check
-		cachedCell, ok := s2CellStopLookup.Load(cellId)
-		var timestamp int64
-		if ok {
-			timestamp = cachedCell.(int64)
-		} else {
-			s2CellStopLookup.Store(cellId, now)
-			s2cellMutex.Unlock()
-			continue
-		}
-		if timestamp > now-1800 {
-			s2cellMutex.Unlock()
+		if shouldSkipCellStopCheck(cellId, now) {
 			continue
 		}
 
 		// time to check again
+		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
+		s2cellMutex.Lock()
+		if shouldSkipCellStopCheck(cellId, now) {
+			// if another GMO processed that cella already, then skip
+			s2cellMutex.Unlock()
+			continue
+		}
 		fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
 		if err != nil {
 			log.Errorf("Unable to clear old stops: %s", err)
@@ -448,6 +440,36 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 		}
 		s2cellMutex.Unlock()
 	}
+}
+
+func shouldSkipCellGymCheck(cellId uint64, now int64) bool {
+	cachedCell, ok := s2CellGymLookup.Load(cellId)
+	var timestamp int64
+	if ok {
+		timestamp = cachedCell.(int64)
+	} else {
+		s2CellGymLookup.Store(cellId, now)
+		return true
+	}
+	if timestamp > now-1800 {
+		return true
+	}
+	return false
+}
+
+func shouldSkipCellStopCheck(cellId uint64, now int64) bool {
+	cachedCell, ok := s2CellStopLookup.Load(cellId)
+	var timestamp int64
+	if ok {
+		timestamp = cachedCell.(int64)
+	} else {
+		s2CellStopLookup.Store(cellId, now)
+		return true
+	}
+	if timestamp > now-1800 {
+		return true
+	}
+	return false
 }
 
 func checkForFortIdsInCache(fortIds []string, now int64) []string {
