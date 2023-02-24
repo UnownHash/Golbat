@@ -421,7 +421,6 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		}
 
 		_, _ = res, err
-		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
 			"lat = :lat, "+

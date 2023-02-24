@@ -611,7 +611,6 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			return
 		}
 		_ = res
-		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"UPDATE pokestop SET "+

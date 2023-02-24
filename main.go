@@ -436,8 +436,6 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newClientWeather []decoder.RawClientWeatherData
 	var newMapCells []uint64
-	var gymIdsPerCell = make(map[uint64][]string)
-	var stopIdsPerCell = make(map[uint64][]string)
 
 	for _, mapCell := range decodedGmo.MapCell {
 		timestampMs := uint64(mapCell.AsOfTimeMs)
@@ -447,19 +445,6 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 			if fort.ActivePokemon != nil {
 				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
 			}
-			// collect fort information of cell
-			switch fort.FortType {
-			case pogo.FortType_CHECKPOINT:
-				stopIdsPerCell[mapCell.S2CellId] = append(stopIdsPerCell[mapCell.S2CellId], fort.FortId)
-			case pogo.FortType_GYM:
-				gymIdsPerCell[mapCell.S2CellId] = append(gymIdsPerCell[mapCell.S2CellId], fort.FortId)
-			}
-		}
-		if _, exists := stopIdsPerCell[mapCell.S2CellId]; !exists {
-			stopIdsPerCell[mapCell.S2CellId] = []string{}
-		}
-		if _, exists := gymIdsPerCell[mapCell.S2CellId]; !exists {
-			gymIdsPerCell[mapCell.S2CellId] = []string{}
 		}
 		newMapCells = append(newMapCells, mapCell.S2CellId)
 		for _, mon := range mapCell.WildPokemon {
@@ -479,7 +464,7 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 	decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 
 	if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-		decoder.ClearRemovedForts(ctx, dbDetails, gymIdsPerCell, stopIdsPerCell)
+		decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
