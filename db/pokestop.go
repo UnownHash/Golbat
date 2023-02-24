@@ -19,9 +19,9 @@ type FortId struct {
 }
 
 type QuestStatus struct {
-	Quests     uint32 `db:"quests"`
-	AltQuests  uint32 `db:"alt_quests"`
-	TotalStops uint32 `db:"total"`
+	Quests     uint32 `db:"quests" json:"quests"`
+	AltQuests  uint32 `db:"alt_quests" json:"alt_quests"`
+	TotalStops uint32 `db:"total" json:"total"`
 }
 
 func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, error) {
