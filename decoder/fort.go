@@ -17,6 +17,7 @@ type Location struct {
 }
 
 type FortWebhook struct {
+	Id          string   `json:"id"`
 	Type        string   `json:"type"`
 	Name        *string  `json:"name"`
 	Description *string  `json:"description"`
@@ -64,6 +65,7 @@ func InitWebHookFortFromGym(gym *Gym) *FortWebhook {
 		return nil
 	}
 	fort.Type = GYM.String()
+	fort.Id = gym.Id
 	fort.Name = gym.Name.Ptr()
 	fort.ImageUrl = gym.Url.Ptr()
 	fort.Description = gym.Description.Ptr()
@@ -77,6 +79,7 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 		return nil
 	}
 	fort.Type = POKESTOP.String()
+	fort.Id = stop.Id
 	fort.Name = stop.Name.Ptr()
 	fort.ImageUrl = stop.Url.Ptr()
 	fort.Description = stop.Description.Ptr()
