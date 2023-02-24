@@ -440,7 +440,7 @@ func checkForFortIdsInCache(fortIds []string, now int64) []string {
 	for _, fortId := range fortIds {
 		if f := fortsToClearCache.Get(fortId); f != nil {
 			toClearTimestamp := f.Value()
-			if toClearTimestamp < now-1800 {
+			if toClearTimestamp < now-3600 {
 				log.Debugf("Time to clear fort %s, not seen since 30 minutes", fortId)
 				toClear = append(toClear, fortId)
 				fortsToClearCache.Delete(fortId)
