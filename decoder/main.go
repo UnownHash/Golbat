@@ -12,6 +12,7 @@ import (
 	"golbat/pogo"
 	"math"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -55,9 +56,11 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 
 var gymStripedMutex = stripedmutex.New(32)
 var pokestopStripedMutex = stripedmutex.New(32)
-var s2cellStripedMutex = stripedmutex.New(32)
 var pokemonStripedMutex = stripedmutex.New(128)
 var weatherStripedMutex = stripedmutex.New(8)
+
+var s2CellGymLookup = sync.Map{}
+var s2CellStopLookup = sync.Map{}
 
 var ohbem *ohbemgo.Ohbem
 
@@ -344,88 +347,95 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64
 
 func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails,
 	gymIdsPerCell map[uint64][]string, stopIdsPerCell map[uint64][]string) {
-
+	now := time.Now().Unix()
 	// check gyms in cell
 	for cellId, gyms := range gymIdsPerCell {
-		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
-		s2cellMutex.Lock()
-		if c := s2CellCache.Get(cellId); c != nil {
-			// delete from cache if it's shown again in GMO
-			for _, gym := range gyms {
-				fortsToClearCache.Delete(gym)
-			}
-			cachedCell := c.Value()
-			if cachedCell.gymCount != len(gyms) || len(gyms) == 0 {
-				fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
-				if err != nil {
-					log.Errorf("Unable to clear old gyms: %s", err)
-					continue
-				}
-				var toClear []string // only clear if fort is not seen within 30 minutes
-				if fortIds != nil {
-					toClear = checkForFortIdsInCache(fortIds)
-				} else {
-					// iff there is no fort to clear we update cached cell gym count
-					cachedCell.gymCount = len(gyms)
-					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
-				}
-				if len(toClear) > 0 {
-					err2 := db.ClearOldGyms(ctx, dbDetails, toClear)
-					if err2 != nil {
-						log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
-						continue
-					}
-					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, toClear)
-					CreateFortWebhooks(ctx, dbDetails, toClear, GYM, REMOVAL)
-				}
-
-			}
+		// delete from cache if it's shown again in GMO
+		for _, gym := range gyms {
+			fortsToClearCache.Delete(gym)
 		}
-		s2cellMutex.Unlock()
+		// lookup for last check
+		cachedCell, ok := s2CellGymLookup.Load(cellId)
+		var timestamp int64
+		if ok {
+			timestamp = cachedCell.(int64)
+		} else {
+			s2CellGymLookup.Store(cellId, now)
+			return
+		}
+		if timestamp > now-1800 {
+			return
+		}
+
+		// time to check again
+		fortIds, err := db.FindOldGyms(ctx, dbDetails, cellId, gyms)
+		if err != nil {
+			log.Errorf("Unable to clear old gyms: %s", err)
+			continue
+		}
+		var toClear []string // only clear if fort is not seen within 30 minutes
+		if fortIds != nil {
+			toClear = checkForFortIdsInCache(fortIds, now)
+		} else {
+			// iff there is no fort to clear we update s2CellGymLookup
+			s2CellGymLookup.Store(cellId, now)
+		}
+		if len(toClear) > 0 {
+			err2 := db.ClearOldGyms(ctx, dbDetails, toClear)
+			if err2 != nil {
+				log.Errorf("Unable to clear old gyms '%v': %s", toClear, err2)
+				continue
+			}
+			log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, toClear)
+			CreateFortWebhooks(ctx, dbDetails, toClear, GYM, REMOVAL)
+		}
 	}
 	// check stops in cell
 	for cellId, stops := range stopIdsPerCell {
-		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
-		s2cellMutex.Lock()
-		// compare with cached cell
-		if c := s2CellCache.Get(cellId); c != nil {
-			// delete from cache if it's shown again in GMO
-			for _, stop := range stops {
-				fortsToClearCache.Delete(stop)
-			}
-			cachedCell := c.Value()
-			if cachedCell.stopCount != len(stops) || len(stops) == 0 {
-				fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
-				if err != nil {
-					log.Errorf("Unable to clear old stops: %s", err)
-					continue
-				}
-				// only clear if fort is not seen within 30 minutes
-				var toClear []string
-				if fortIds != nil {
-					toClear = checkForFortIdsInCache(fortIds)
-				} else {
-					// iff there is no fort to clear we update cached cell stop count
-					cachedCell.stopCount = len(stops)
-					s2CellCache.Set(cellId, cachedCell, ttlcache.DefaultTTL)
-				}
-				if len(toClear) > 0 {
-					err2 := db.ClearOldPokestops(ctx, dbDetails, toClear)
-					if err2 != nil {
-						log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
-						continue
-					}
-					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, toClear)
-					CreateFortWebhooks(ctx, dbDetails, toClear, POKESTOP, REMOVAL)
-				}
-			}
+		// delete from cache if it's shown again in GMO
+		for _, stop := range stops {
+			fortsToClearCache.Delete(stop)
 		}
-		s2cellMutex.Unlock()
+		// lookup for last check
+		cachedCell, ok := s2CellStopLookup.Load(cellId)
+		var timestamp int64
+		if ok {
+			timestamp = cachedCell.(int64)
+		} else {
+			s2CellStopLookup.Store(cellId, now)
+			return
+		}
+		if timestamp > now-1800 {
+			return
+		}
+
+		// time to check again
+		fortIds, err := db.FindOldPokestops(ctx, dbDetails, cellId, stops)
+		if err != nil {
+			log.Errorf("Unable to clear old stops: %s", err)
+			continue
+		}
+		// only clear if fort is not seen within 30 minutes
+		var toClear []string
+		if fortIds != nil {
+			toClear = checkForFortIdsInCache(fortIds, now)
+		} else {
+			// iff there is no fort to clear we update s2CellStopLookup
+			s2CellStopLookup.Store(cellId, now)
+		}
+		if len(toClear) > 0 {
+			err2 := db.ClearOldPokestops(ctx, dbDetails, toClear)
+			if err2 != nil {
+				log.Errorf("Unable to clear old stops '%v': %s", toClear, err2)
+				continue
+			}
+			log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, toClear)
+			CreateFortWebhooks(ctx, dbDetails, toClear, POKESTOP, REMOVAL)
+		}
 	}
 }
 
-func checkForFortIdsInCache(fortIds []string) []string {
-	now := time.Now().Unix()
+func checkForFortIdsInCache(fortIds []string, now int64) []string {
 	var toClear []string
 	for _, fortId := range fortIds {
 		if f := fortsToClearCache.Get(fortId); f != nil {
