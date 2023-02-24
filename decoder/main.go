@@ -414,8 +414,8 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 	if ok {
 		timestamp = cachedCell.(int64)
 	} else {
-		s2CellLookup.Store(cellId, now)
-		return true
+		s2CellLookup.Store(cellId, now-2000) // add it with timestamp in the past, because we need to check twice
+		return false
 	}
 	if timestamp > now-1800 {
 		return true
