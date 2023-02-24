@@ -131,8 +131,6 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			"change_type": change.String(),
 			"new":         new,
 		}
-		log.Printf("Fort-Webhook - Hook %v", hook)
-		log.Printf("Fort-Webhook - new %v", new)
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == REMOVAL {
 		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
@@ -140,8 +138,6 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			"change_type": change.String(),
 			"old":         old,
 		}
-		log.Printf("Fort-Webhook - Hook %v", hook)
-		log.Printf("Fort-Webhook - old %v", old)
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
 		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
@@ -168,7 +164,6 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 				"old":         old,
 				"new":         new,
 			}
-			log.Printf("Fort-Webhook - Hook %+v", hook)
 			webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 		}
 	}
