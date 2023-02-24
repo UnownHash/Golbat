@@ -3,25 +3,27 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
-	ginlogrus "github.com/toorop/gin-logrus"
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/webhooks"
-	"google.golang.org/protobuf/proto"
 	"io/ioutil"
 	"time"
 	_ "time/tzdata"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
+	ginlogrus "github.com/toorop/gin-logrus"
+	"google.golang.org/protobuf/proto"
+
+	"golbat/pogo"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
-	"golbat/pogo"
 )
 
 var db *sqlx.DB
@@ -171,6 +173,7 @@ func main() {
 	}
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
+	r.POST("/api/getQuestStatus", GetQuestStatus)
 	r.POST("/api/reloadGeojson", ReloadGeojson)
 	r.GET("/api/reloadGeojson", ReloadGeojson)
 	r.POST("/api/queryPokemon", QueryPokemon)

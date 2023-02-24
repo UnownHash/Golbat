@@ -3,8 +3,9 @@ package db
 import (
 	"context"
 	"database/sql"
-	"github.com/jmoiron/sqlx"
 	"golbat/geo"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type QuestLocation struct {
@@ -15,6 +16,12 @@ type QuestLocation struct {
 
 type FortId struct {
 	Id string `db:"id"`
+}
+
+type QuestStatus struct {
+	Quests     uint32 `db:"quests"`
+	AltQuests  uint32 `db:"alt_quests"`
+	TotalStops uint32 `db:"total"`
 }
 
 func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, error) {
@@ -93,4 +100,31 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) erro
 		return err
 	}
 	return nil
+}
+
+func GetQuestStatus(db DbDetails, fence geo.Geofence) (QuestStatus, error) {
+	if len(fence.Fence) == 0 {
+		return QuestStatus{}, nil
+	}
+	bbox := fence.GetBoundingBox()
+
+	areas := QuestStatus{}
+	err := db.GeneralDb.Get(&areas,
+		"SELECT COUNT(*) AS total, "+
+			"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS quests, "+
+			"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS alt_quests FROM pokestop "+
+			"WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 "+
+			"AND ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON(("+fence.ToPolygonString()+"))'), point(lat,lon)) ",
+		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude,
+	)
+
+	if err == sql.ErrNoRows {
+		return areas, nil
+	}
+
+	if err != nil {
+		return areas, err
+	}
+
+	return areas, nil
 }
