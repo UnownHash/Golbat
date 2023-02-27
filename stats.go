@@ -22,6 +22,10 @@ func StartDbUsageStatsLogger(db *sqlx.DB) {
 	}()
 }
 
+type PokemonIdToDelete struct {
+	Id string `db:"id"`
+}
+
 func StartDatabaseArchiver(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Minute)
 
@@ -59,7 +63,18 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 				start = time.Now()
 
 				for {
-					result, err = db.Exec("DELETE FROM pokemon WHERE id IN (SELECT * FROM (SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 100) as t1);")
+					pokemonId := []PokemonIdToDelete{}
+					err = db.Select(&pokemonId,
+						"SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 100;")
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table select error [after %d rows] %s", resultCounter, err)
+						break
+					}
+
+					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", pokemonId)
+					query = db.Rebind(query)
+
+					result, err = db.Exec(query, args...)
 
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table error [after %d rows] %s", resultCounter, err)
