@@ -62,7 +62,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					result, err = db.Exec("DELETE FROM pokemon WHERE id IN (SELECT * FROM (SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 100) as t1);")
 
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table error %s", err)
+						log.Errorf("DB - Archive of pokemon table error [after %d rows] %s", resultCounter, err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
@@ -82,7 +82,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					result, err = db.Exec("DELETE FROM pokemon WHERE id IN (SELECT * FROM (SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 100) as t1);")
 
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table error %s", err)
+						log.Errorf("DB - Archive of pokemon table error  [after %d rows] %s", resultCounter, err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
