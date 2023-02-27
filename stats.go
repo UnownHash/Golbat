@@ -109,7 +109,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					err = db.Select(&pokemonId,
 						fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) AND expire_timestamp_verified = 0 LIMIT %d;", databaseDeleteChunkSize))
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (all) select error [after %d rows] %s", resultCounter, err)
+						log.Errorf("DB - Archive of pokemon table (unverified timestamps) select error [after %d rows] %s", resultCounter, err)
 						break
 					}
 
@@ -128,14 +128,14 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					result, err = db.Exec(query, args...)
 
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (all) error [after %d rows] %s", resultCounter, err)
+						log.Errorf("DB - Archive of pokemon table (unverified timestamps) error [after %d rows] %s", resultCounter, err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
 						resultCounter += rows
 						if rows < databaseDeleteChunkSize {
 							elapsed := time.Since(start)
-							log.Infof("DB - Archive of pokemon table (all) took %s (%d rows)", elapsed, resultCounter)
+							log.Infof("DB - Archive of pokemon table (unverified timestamps) took %s (%d rows)", elapsed, resultCounter)
 							break
 						}
 					}
