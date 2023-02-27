@@ -71,7 +71,12 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 						break
 					}
 
-					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", pokemonId)
+					var ids []string
+					for i := 0; i < len(pokemonId); i++ {
+						ids = append(ids, pokemonId[i].Id)
+					}
+
+					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
 					query = db.Rebind(query)
 
 					result, err = db.Exec(query, args...)
