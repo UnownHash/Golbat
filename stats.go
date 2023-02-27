@@ -107,7 +107,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 				for {
 					pokemonId := []PokemonIdToDelete{}
 					err = db.Select(&pokemonId,
-						fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT %d;", databaseDeleteChunkSize))
+						fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) AND expire_timestamp_verified = 0 LIMIT %d;", databaseDeleteChunkSize))
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (all) select error [after %d rows] %s", resultCounter, err)
 						break
