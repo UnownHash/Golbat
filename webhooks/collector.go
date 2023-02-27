@@ -25,13 +25,14 @@ func (webhookList *WebhookList) AddItem(item WebhookMessage) {
 
 var webhookCollections map[string]*WebhookList
 
-var GymDetails = "gym_details"
-var Raid = "raid"
-var Pokemon = "pokemon"
-var Quest = "quest"
-var Pokestop = "pokestop"
-var Invasion = "invasion"
-var Weather = "weather"
+const GymDetails = "gym_details"
+const Raid = "raid"
+const Pokemon = "pokemon"
+const Quest = "quest"
+const Pokestop = "pokestop"
+const Invasion = "invasion"
+const Weather = "weather"
+const FortUpdate = "fort_update"
 
 var collectionAccess sync.Mutex
 
@@ -49,6 +50,7 @@ func SetMaps() {
 	webhookCollections[Pokestop] = &WebhookList{}
 	webhookCollections[Invasion] = &WebhookList{}
 	webhookCollections[Weather] = &WebhookList{}
+	webhookCollections[FortUpdate] = &WebhookList{}
 }
 
 func AddMessage(webhookType string, message interface{}, areas []geo.AreaName) {
@@ -85,7 +87,7 @@ func collectHooks() []WebhookQueue {
 				}
 			}
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "raid") {
+		if hook.Types == nil || slices.Contains(hook.Types, Raid) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
 			} else {
@@ -95,9 +97,8 @@ func collectHooks() []WebhookQueue {
 					}
 				}
 			}
-
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "weather") {
+		if hook.Types == nil || slices.Contains(hook.Types, Weather) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Weather].Messages...)
 			} else {
@@ -107,9 +108,8 @@ func collectHooks() []WebhookQueue {
 					}
 				}
 			}
-
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "pokemon") {
+		if hook.Types == nil || slices.Contains(hook.Types, Pokemon) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
 			} else {
@@ -121,7 +121,7 @@ func collectHooks() []WebhookQueue {
 			}
 
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "quest") {
+		if hook.Types == nil || slices.Contains(hook.Types, Quest) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Quest].Messages...)
 			} else {
@@ -131,9 +131,8 @@ func collectHooks() []WebhookQueue {
 					}
 				}
 			}
-
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "invasion") {
+		if hook.Types == nil || slices.Contains(hook.Types, Invasion) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Invasion].Messages...)
 			} else {
@@ -143,9 +142,8 @@ func collectHooks() []WebhookQueue {
 					}
 				}
 			}
-
 		}
-		if hook.Types == nil || slices.Contains(hook.Types, "pokestop") {
+		if hook.Types == nil || slices.Contains(hook.Types, Pokestop) {
 			if len(hook.AreaNames) == 0 {
 				totalCollection = append(totalCollection, currentCollection[Pokestop].Messages...)
 			} else {
@@ -155,7 +153,17 @@ func collectHooks() []WebhookQueue {
 					}
 				}
 			}
-
+		}
+		if hook.Types == nil || slices.Contains(hook.Types, FortUpdate) {
+			if len(hook.AreaNames) == 0 {
+				totalCollection = append(totalCollection, currentCollection[FortUpdate].Messages...)
+			} else {
+				for _, message := range currentCollection[FortUpdate].Messages {
+					if doAreasMatch(message.Areas, hook.AreaNames) {
+						totalCollection = append(totalCollection, message)
+					}
+				}
+			}
 		}
 		log.Infof("There are %d webhooks to send to %s", len(totalCollection), hook.Url)
 

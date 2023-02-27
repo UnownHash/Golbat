@@ -16,8 +16,6 @@ type S2Cell struct {
 	Longitude float64  `db:"center_lon"`
 	Level     null.Int `db:"level"`
 	Updated   int64    `db:"updated"`
-	stopCount int
-	gymCount  int
 }
 
 // CREATE TABLE `weather` (
@@ -40,13 +38,11 @@ func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell
 
 func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
 	now := time.Now().Unix()
+
 	if c := s2CellCache.Get(s2Cell.Id); c != nil {
 		cachedCell := c.Value()
 		if cachedCell.Updated > now-900 {
 			return
-		} else {
-			s2Cell.gymCount = cachedCell.gymCount
-			s2Cell.stopCount = cachedCell.stopCount
 		}
 	}
 	s2Cell.Updated = now

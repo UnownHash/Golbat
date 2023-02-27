@@ -310,6 +310,16 @@ type GymDetailsWebhook struct {
 	//"ar_scan_eligible": arScanEligible ?? 0
 }
 
+func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
+	fort := InitWebHookFortFromGym(gym)
+	oldFort := InitWebHookFortFromGym(oldGym)
+	if oldGym == nil {
+		CreateFortWebHooks(oldFort, fort, NEW)
+	} else {
+		CreateFortWebHooks(oldFort, fort, EDIT)
+	}
+}
+
 func createGymWebhooks(oldGym *Gym, gym *Gym) {
 	areas := geo.MatchGeofences(statsFeatureCollection, gym.Lat, gym.Lon)
 	if oldGym == nil ||
@@ -411,7 +421,6 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		}
 
 		_, _ = res, err
-		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
 			"lat = :lat, "+
@@ -459,6 +468,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	createGymWebhooks(oldGym, gym)
+	createGymFortWebhooks(oldGym, gym)
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {

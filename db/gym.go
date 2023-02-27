@@ -5,11 +5,10 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-func FindOldGyms(ctx context.Context, db DbDetails, cellId uint64, gymIds []string) ([]string, error) {
+func FindOldGyms(ctx context.Context, db DbDetails, cellId int64) ([]string, error) {
 	fortIds := []FortId{}
-	query, args, _ := sqlx.In("SELECT id FROM gym WHERE deleted = 0 AND cell_id = ? AND id NOT IN (?);", cellId, gymIds)
-	query = db.GeneralDb.Rebind(query)
-	err := db.GeneralDb.SelectContext(ctx, &fortIds, query, args...)
+	err := db.GeneralDb.SelectContext(ctx, &fortIds,
+		"SELECT id FROM gym WHERE deleted = 0 AND cell_id = ? AND updated < UNIX_TIMESTAMP() - 3600;", cellId)
 	if err != nil {
 		return nil, err
 	}

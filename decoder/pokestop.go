@@ -479,6 +479,16 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 	return stop
 }
 
+func createPokestopFortWebhooks(oldStop *Pokestop, stop *Pokestop) {
+	fort := InitWebHookFortFromPokestop(stop)
+	oldFort := InitWebHookFortFromPokestop(oldStop)
+	if oldStop == nil {
+		CreateFortWebHooks(oldFort, fort, NEW)
+	} else {
+		CreateFortWebHooks(oldFort, fort, EDIT)
+	}
+}
+
 func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 	areas := geo.MatchGeofences(statsFeatureCollection, stop.Lat, stop.Lon)
@@ -601,7 +611,6 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			return
 		}
 		_ = res
-		//TODO send webhook for new gym
 	} else {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"UPDATE pokestop SET "+
@@ -650,6 +659,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	}
 	pokestopCache.Set(pokestop.Id, *pokestop, ttlcache.DefaultTTL)
 	createPokestopWebhooks(oldPokestop, pokestop)
+	createPokestopFortWebhooks(oldPokestop, pokestop)
 }
 
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {
