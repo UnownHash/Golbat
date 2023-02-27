@@ -246,7 +246,7 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 			"atk_iv = :atk_iv, "+
 			"def_iv = :def_iv, "+
 			"sta_iv = :sta_iv, "+
-			"iv = :iv"+
+			"iv = :iv,"+
 			"form = :form, "+
 			"level = :level, "+
 			"weather = :weather, "+
