@@ -67,7 +67,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					err = db.Select(&pokemonId,
 						"SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT 100;")
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table select error [after %d rows] %s", resultCounter, err)
+						log.Errorf("DB - Archive of pokemon table (expire time verified) select error [after %d rows] %s", resultCounter, err)
 						break
 					}
 
@@ -82,7 +82,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					result, err = db.Exec(query, args...)
 
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table error [after %d rows] %s", resultCounter, err)
+						log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
@@ -99,17 +99,33 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 				start = time.Now()
 
 				for {
-					result, err = db.Exec("DELETE FROM pokemon WHERE id IN (SELECT * FROM (SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 100) as t1);")
+					pokemonId := []PokemonIdToDelete{}
+					err = db.Select(&pokemonId,
+						"SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) LIMIT 100;")
+					if err != nil {
+						log.Errorf("DB - Archive of pokemon table (all) select error [after %d rows] %s", resultCounter, err)
+						break
+					}
+
+					var ids []string
+					for i := 0; i < len(pokemonId); i++ {
+						ids = append(ids, pokemonId[i].Id)
+					}
+
+					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
+					query = db.Rebind(query)
+
+					result, err = db.Exec(query, args...)
 
 					if err != nil {
-						log.Errorf("DB - Archive of pokemon table error  [after %d rows] %s", resultCounter, err)
+						log.Errorf("DB - Archive of pokemon table (all) error [after %d rows] %s", resultCounter, err)
 						break
 					} else {
 						rows, _ := result.RowsAffected()
 						resultCounter += rows
 						if rows < 100 {
 							elapsed := time.Since(start)
-							log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, resultCounter)
+							log.Infof("DB - Archive of pokemon table (all) took %s (%d rows)", elapsed, resultCounter)
 							break
 						}
 					}
