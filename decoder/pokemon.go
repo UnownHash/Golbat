@@ -783,11 +783,11 @@ func (pokemon *Pokemon) setWeather(weather null.Int) {
 		if pokemon.IsDitto {
 			if weather.ValueOrZero() == 3 {
 				// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
-				//pokemon.Level += null.IntFrom(5)
+				pokemon.Level.Int64 += 5
 				pokemon.clearEncounterDetails()
 			} else if pokemon.Weather.ValueOrZero() == 3 {
 				if pokemon.Level.ValueOrZero() >= 5 {
-					//pokemon.Level -= 5
+					pokemon.Level.Int64 -= 5
 					pokemon.clearEncounterDetails()
 				}
 			}
