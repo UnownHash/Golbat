@@ -40,6 +40,7 @@ type Pokemon struct {
 	AtkIv                   null.Int    `db:"atk_iv"`
 	DefIv                   null.Int    `db:"def_iv"`
 	StaIv                   null.Int    `db:"sta_iv"`
+	Iv                      null.Float  `db:"iv"`
 	Form                    null.Int    `db:"form"`
 	Level                   null.Int    `db:"level"`
 	Weather                 null.Int    `db:"weather"`
@@ -123,7 +124,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	pokemon := Pokemon{}
 
 	err := db.PokemonDb.GetContext(ctx, &pokemon,
-		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2, "+
+		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv, move_1, move_2, "+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3, "+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
@@ -205,11 +206,11 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		if changePvpField {
 			pvpField, pvpValue = "pvp, ", ":pvp, "
 		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, move_1, move_2,"+
+		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :move_1, :move_2,"+
+			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :iv, :move_1, :move_2,"+
 			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, :size, :capture_1, :capture_2, :capture_3,"+
 			":display_pokemon_id, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
 			":expire_timestamp_verified, :shiny, :username, %s :is_event, :seen_type)", pvpField, pvpValue),
@@ -245,6 +246,7 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 			"atk_iv = :atk_iv, "+
 			"def_iv = :def_iv, "+
 			"sta_iv = :sta_iv, "+
+			"iv = :iv,"+
 			"form = :form, "+
 			"level = :level, "+
 			"weather = :weather, "+
@@ -466,7 +468,16 @@ func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.AtkIv = null.NewInt(0, false)
 	pokemon.DefIv = null.NewInt(0, false)
 	pokemon.StaIv = null.NewInt(0, false)
+	pokemon.Iv = null.NewFloat(0, false)
 	pokemon.Shiny = null.NewBool(false, false)
+}
+
+func (pokemon *Pokemon) calculateIv() {
+	if !pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
+		pokemon.Iv = null.NewFloat(0, false)
+	} else {
+		pokemon.Iv = null.NewFloat(float64(pokemon.AtkIv.ValueOrZero()+pokemon.DefIv.ValueOrZero()+pokemon.StaIv.ValueOrZero())*100.0/45.0, true)
+	}
 }
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
@@ -631,6 +642,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualDefense))
 	pokemon.StaIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualStamina))
+	pokemon.calculateIv()
 	pokemon.Costume = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Costume))
 	pokemon.Form = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Form))
 	pokemon.Gender = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Gender))
@@ -697,6 +709,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.IndividualAttack))
 	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.IndividualDefense))
 	pokemon.StaIv = null.IntFrom(int64(encounterData.Pokemon.IndividualStamina))
+	pokemon.calculateIv()
 	pokemon.Costume = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Costume))
 	pokemon.Form = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Form))
 	pokemon.Gender = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Gender))
