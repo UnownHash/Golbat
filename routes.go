@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	b64 "encoding/base64"
 	"encoding/json"
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
 	"golbat/geo"
@@ -13,9 +15,6 @@ import (
 	"net/http"
 	"strings"
 	"time"
-
-	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 )
 
 type ProtoData struct {

@@ -5,19 +5,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
 	"golbat/util"
 	"golbat/webhooks"
+	"gopkg.in/guregu/null.v4"
 	"strings"
 	"time"
-
-	"github.com/google/go-cmp/cmp"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type Pokestop struct {

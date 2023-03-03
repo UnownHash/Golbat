@@ -3,27 +3,25 @@ package main
 import (
 	"context"
 	"fmt"
-	"golbat/config"
-	db2 "golbat/db"
-	"golbat/decoder"
-	"golbat/webhooks"
-	"io/ioutil"
-	"time"
-	_ "time/tzdata"
-
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
+	"golbat/config"
+	db2 "golbat/db"
+	"golbat/decoder"
+	"golbat/webhooks"
 	"google.golang.org/protobuf/proto"
-
-	"golbat/pogo"
+	"io/ioutil"
+	"time"
+	_ "time/tzdata"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
+	"golbat/pogo"
 )
 
 var db *sqlx.DB

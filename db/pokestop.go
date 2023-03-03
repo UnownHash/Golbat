@@ -3,9 +3,8 @@ package db
 import (
 	"context"
 	"database/sql"
-	"golbat/geo"
-
 	"github.com/jmoiron/sqlx"
+	"golbat/geo"
 )
 
 type QuestLocation struct {
