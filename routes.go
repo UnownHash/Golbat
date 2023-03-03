@@ -412,7 +412,7 @@ func GetQuestStatus(c *gin.Context) {
 
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
-		log.Warnf("POST /api/getQuestStatus/ Error during post area %v", err)
+		log.Warnf("POST /api/questStatus/ Error during post area %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
