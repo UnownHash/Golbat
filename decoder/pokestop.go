@@ -149,7 +149,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 
 	if len(fortData.ActiveFortModifier) > 0 {
 		lureId := int16(fortData.ActiveFortModifier[0])
-		if lureId >= 501 && lureId <= 505 {
+		if lureId >= 501 && lureId <= 510 {
 			lureEnd := lastModifiedTimestamp + LureTime
 			if stop.LureId != lureId {
 				stop.LureExpireTimestamp = null.IntFrom(lureEnd)
