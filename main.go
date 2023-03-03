@@ -171,6 +171,7 @@ func main() {
 	}
 	r.POST("/raw", Raw)
 	r.POST("/api/clearQuests", ClearQuests)
+	r.POST("/api/questStatus", GetQuestStatus)
 	r.POST("/api/reloadGeojson", ReloadGeojson)
 	r.GET("/api/reloadGeojson", ReloadGeojson)
 	r.POST("/api/queryPokemon", QueryPokemon)

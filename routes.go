@@ -413,3 +413,50 @@ func toJson(rows *sql.Rows) ([]byte, error) {
 	z, err := json.Marshal(finalRows)
 	return z, err
 }
+
+func GetQuestStatus(c *gin.Context) {
+	authHeader := c.Request.Header.Get("X-Golbat-Secret")
+	if config.Config.ApiSecret != "" {
+		if authHeader != config.Config.ApiSecret {
+			log.Errorf("GetQuestStatus: Incorrect authorisation received (%s)", authHeader)
+			c.String(http.StatusUnauthorized, "Unauthorised")
+			return
+		}
+	}
+
+	var golbatClearQuest GolbatClearQuest
+	if err := c.BindJSON(&golbatClearQuest); err != nil {
+		log.Warnf("POST /api/questStatus/ Error during post area %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	if len(golbatClearQuest.Fence) == 0 {
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status": "error",
+			"data":   nil,
+		})
+		return
+	}
+
+	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence))
+	for _, loc := range golbatClearQuest.Fence {
+		locations = append(locations, geo.Location{
+			Latitude:  loc.Latitude,
+			Longitude: loc.Longitude,
+		})
+	}
+
+	// Ensure the fence is closed
+	if locations[0] != locations[len(locations)-1] {
+		locations = append(locations, locations[0])
+	}
+
+	fence := geo.Geofence{
+		Fence: locations,
+	}
+
+	questStatus := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
+
+	c.JSON(http.StatusOK, &questStatus)
+}

@@ -729,6 +729,15 @@ func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geof
 	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
 }
 
+func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence geo.Geofence) db.QuestStatus {
+	res, err := db.GetQuestStatus(dbDetails, geofence)
+	if err != nil {
+		log.Errorf("QuestStatus: Error retrieving quests: %s", err)
+		return db.QuestStatus{}
+	}
+	return res
+}
+
 func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.Id)
 	pokestopMutex.Lock()
