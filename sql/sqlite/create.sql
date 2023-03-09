@@ -23,7 +23,7 @@ CREATE TABLE pokemon (
                          costume smallint  ,
                          first_seen_timestamp int  NOT NULL,
                          changed int   DEFAULT 0 NOT NULL,
-                         `iv` float(5,2) unsigned DEFAULT NULL,
+                         `iv` float(5,2) unsigned,
                          cell_id bigint  ,
                          expire_timestamp_verified TINYINT NOT NULL,
                          display_pokemon_id smallint  ,
