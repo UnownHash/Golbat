@@ -172,11 +172,11 @@ func main() {
 		r.Use(gin.Recovery())
 	}
 	r.POST("/raw", Raw)
-	r.POST("/api/clearQuests", ClearQuests)
-	r.POST("/api/questStatus", GetQuestStatus)
-	r.POST("/api/reloadGeojson", ReloadGeojson)
-	r.GET("/api/reloadGeojson", ReloadGeojson)
-	r.POST("/api/queryPokemon", QueryPokemon)
+	r.POST("/api/clear-quests", ClearQuests)
+	r.POST("/api/quest-status", GetQuestStatus)
+	r.POST("/api/reload-geojson", ReloadGeojson)
+	r.GET("/api/reload-geojson", ReloadGeojson)
+	r.POST("/api/query-pokemon", QueryPokemon)
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
 
