@@ -89,6 +89,8 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
+	decoder.SetKojiUrl(config.Config.KojiGeofenceUrl, config.Config.KojiNestGeofenceUrl, config.Config.KojiBearerToken)
+
 	if config.Config.InMemory {
 		//sql.Register("sqlite3_settings",
 		//	&sqlite3.SQLiteDriver{
