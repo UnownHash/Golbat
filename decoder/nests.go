@@ -70,13 +70,20 @@ func logNestCount() {
 	}
 }
 
+func ReloadNestsAndClearStats(dbDetails db.DbDetails) {
+	LoadNests(dbDetails)
+	nestCountLock.Lock()
+	defer nestCountLock.Unlock()
+	nestCount = make(map[string]*nestPokemonCountDetail)
+}
+
 func LoadNests(dbDetails db.DbDetails) {
 	nests, err := db.LoadNests(dbDetails)
 	if err != nil {
 		panic(err)
 	}
 
-	nestFeatureCollection = geojson.NewFeatureCollection()
+	newFeatureCollection := geojson.NewFeatureCollection()
 
 	for _, nest := range nests {
 		geom, err := wkt.Unmarshal(nest.Polygon)
@@ -86,6 +93,8 @@ func LoadNests(dbDetails db.DbDetails) {
 		feat := geojson.NewFeature(geom)
 		feat.Properties["name"] = strconv.Itoa(nest.Id)
 
-		nestFeatureCollection = nestFeatureCollection.Append(feat)
+		newFeatureCollection = newFeatureCollection.Append(feat)
 	}
+
+	nestFeatureCollection = newFeatureCollection
 }
