@@ -53,23 +53,15 @@ func initLiveStats() {
 		ttlcache.WithDisableTouchOnHit[string, pokemonTimings](),
 	)
 	go pokemonTimingCache.Start()
+}
 
+func LoadStatsGeofences() {
 	if err := ReadGeofences(); err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("No geofence file found, skipping")
 			return
 		}
 		panic(fmt.Sprintf("Error reading geofences: %v", err))
-	}
-}
-
-func initNests() {
-	if err := ReadNestGeofences(); err != nil {
-		if os.IsNotExist(err) {
-			log.Infof("No nest geofence file found, skipping")
-			return
-		}
-		panic(fmt.Sprintf("Error reading nest geofences: %v", err))
 	}
 }
 

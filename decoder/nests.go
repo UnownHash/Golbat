@@ -1,9 +1,13 @@
 package decoder
 
 import (
+	"github.com/paulmach/orb/encoding/wkt"
+	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
+	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
+	"strconv"
 	"sync"
 )
 
@@ -63,5 +67,25 @@ func logNestCount() {
 			percentage := float64(maxPokemonCount) / float64(total) * 100
 			log.Infof("NESTS: %s: saw pokemon %d %s %d times (%d %%)", area, maxPokemonId, pogo.HoloPokemonId(maxPokemonId), maxPokemonCount, int(percentage))
 		}
+	}
+}
+
+func LoadNests(dbDetails db.DbDetails) {
+	nests, err := db.LoadNests(dbDetails)
+	if err != nil {
+		panic(err)
+	}
+
+	nestFeatureCollection = geojson.NewFeatureCollection()
+
+	for _, nest := range nests {
+		geom, err := wkt.Unmarshal(nest.Polygon)
+		if err != nil {
+			panic(err)
+		}
+		feat := geojson.NewFeature(geom)
+		feat.Properties["name"] = strconv.Itoa(nest.Id)
+
+		nestFeatureCollection = nestFeatureCollection.Append(feat)
 	}
 }
