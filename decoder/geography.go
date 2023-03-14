@@ -19,17 +19,18 @@ type KojiResponse struct {
 
 var statsFeatureCollection *geojson.FeatureCollection
 var nestFeatureCollection *geojson.FeatureCollection
-var kojiGeofenceUrl = ""
-var kojiNestGeofenceUrl = ""
+var kojiUrl = ""
 var kojiBearerToken = ""
 
 const geojsonFilename = "geojson/geofence.json"
-const nestFilename = "geojson/nests.json"
 
-func SetKojiUrl(geofenceUrl string, nestGeofenceUrl string, bearerToken string) {
-	log.Print("Setting Koji Info " + geofenceUrl + " " + nestGeofenceUrl + " " + bearerToken + "")
-	kojiGeofenceUrl = geofenceUrl
-	kojiNestGeofenceUrl = nestGeofenceUrl
+const kojiCacheFilename = "cache/koji_geofence.json"
+
+// const nestFilename = "geojson/nests.json"
+
+func SetKojiUrl(geofenceUrl string, bearerToken string) {
+	log.Print("Setting Koji Info " + geofenceUrl + " " + bearerToken + "")
+	kojiUrl = geofenceUrl
 	kojiBearerToken = bearerToken
 }
 
@@ -51,7 +52,7 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 		return nil, err
 	}
 
-	log.Debugf("KOJI: Response %s", resp.Status)
+	log.Infof("KOJI: Response %s", resp.Status)
 
 	defer resp.Body.Close()
 
@@ -62,24 +63,41 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 }
 
 func ReadGeofences() error {
-	if kojiGeofenceUrl != "" {
-		fc, err := GetKojiGeofence(kojiGeofenceUrl)
+	if kojiUrl != "" {
+		fc, err := GetKojiGeofence(kojiUrl)
 		if err != nil {
-			return err
+			log.Warnf("KOJI: Unable to get geofence from koji - %s", err)
+			geofence, err := ioutil.ReadFile(kojiCacheFilename)
+			if err != nil {
+				log.Warnf("KOJI: Unable to read cached geofence - %s", err)
+			} else {
+				fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+				if geoerr != nil {
+					log.Warnf("KOJI: Unable to parse cached geofence - %s", geoerr)
+				} else {
+					statsFeatureCollection = fc
+					log.Infof("KOJI: Loaded cached geofence")
+					return nil
+				}
+			}
 		} else {
+			log.Infof("KOJI: Loaded geofence from koji, caching")
+			bytes, _ := json.MarshalIndent(fc, "", "  ")
+			ioutil.WriteFile(kojiCacheFilename, []byte(bytes), 0644)
 			statsFeatureCollection = fc
+			return nil
 		}
-	} else {
-		geofence, err := ioutil.ReadFile(geojsonFilename)
-		if err != nil {
-			return err
-		}
-		fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
-		if geoerr != nil {
-			return geoerr
-		}
-		statsFeatureCollection = fc
 	}
+	geofence, err := ioutil.ReadFile(geojsonFilename)
+	if err != nil {
+		return err
+	}
+	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+	if geoerr != nil {
+		return geoerr
+	}
+	statsFeatureCollection = fc
+
 	return nil
 }
 
