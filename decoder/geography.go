@@ -83,24 +83,16 @@ func ReadGeofences() error {
 	return nil
 }
 
-func ReadNestGeofences() error {
-	if kojiNestGeofenceUrl != "" {
-		fc, err := GetKojiGeofence(kojiNestGeofenceUrl)
-		if err != nil {
-			return err
-		} else {
-			nestFeatureCollection = fc
-		}
-	} else {
-		geofence, err := ioutil.ReadFile(nestFilename)
-		if err != nil {
-			return err
-		}
-		fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
-		if geoerr != nil {
-			return geoerr
-		}
-		nestFeatureCollection = fc
-	}
-	return nil
-}
+//func ReadNestGeofences() error {
+//	geofence, err := ioutil.ReadFile(nestFilename)
+//	if err != nil {
+//		return err
+//	}
+//
+//	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+//	if geoerr != nil {
+//		return geoerr
+//	}
+//	nestFeatureCollection = fc
+//	return nil
+//}
