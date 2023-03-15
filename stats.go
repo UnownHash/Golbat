@@ -145,6 +145,8 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 	}
 }
 
+var statsHistoryDeleteTime = config.Config.Cleanup.Stats
+
 func StartStatsExpiry(db *sqlx.DB) {
 	ticker := time.NewTicker(3 * time.Hour)
 	go func() {
@@ -171,8 +173,7 @@ func StartStatsExpiry(db *sqlx.DB) {
 			for _, table := range tables {
 				start = time.Now()
 
-				result, err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE `date` < DATE(NOW() - INTERVAL 7 DAY);", table))
-
+				result, err = db.Exec(fmt.Sprintf("DELETE FROM %s WHERE `date` < DATE(NOW() - INTERVAL %d DAY);", table, statsHistoryDeleteTime))
 				elapsed = time.Since(start)
 
 				if err != nil {
