@@ -158,7 +158,7 @@ func main() {
 		StartQuestExpiry(db)
 	}
 
-	if config.Config.Cleanup.Stats >= 0 {
+	if config.Config.Cleanup.Stats == true {
 		StartStatsExpiry(db)
 	}
 

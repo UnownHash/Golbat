@@ -145,7 +145,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 	}
 }
 
-var statsHistoryDeleteTime = config.Config.Cleanup.Stats
+var statsHistoryDeleteTime = config.Config.Cleanup.StatsDays
 
 func StartStatsExpiry(db *sqlx.DB) {
 	ticker := time.NewTicker(3 * time.Hour)
