@@ -10,7 +10,7 @@ pokemon = true          # Keep pokemon table is kept nice and short
 incidents = true        # Remove incidents after expiry
 quests = true           # Remove quests after expiry
 stats = true            # Enable/Disable stats history
-statsDays = 14            # Remove entries from ["pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats" after x days
+stats_days = 7          # Remove entries from ["pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats" after x days
 
 [logging]
 debug = false
