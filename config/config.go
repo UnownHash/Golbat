@@ -20,7 +20,7 @@ type cleanup struct {
 	Quests    bool `toml:"quests"`
 	Incidents bool `toml:"incidents"`
 	Stats     bool `toml:"stats"`
-	StatsDays int  `toml:"statsDays"`
+	StatsDays int  `toml:"stats_days"`
 }
 
 type webhook struct {
