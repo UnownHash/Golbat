@@ -40,6 +40,7 @@ func ReadConfig() {
 
 	// Provide a default value
 	Config.Logging.SaveLogs = true
+	Config.Cleanup.StatsDays = 7
 
 	err = toml.Unmarshal([]byte(byteValue), &Config)
 	if err != nil {
