@@ -813,8 +813,8 @@ func (pokemon *Pokemon) setDittoAttributes() {
 	pokemon.Size = null.NewInt(0, false)
 	pokemon.Weight = null.NewFloat(0, false)
 	if pokemon.Weather.ValueOrZero() == 0 && pokemon.Level.ValueOrZero() > 30 {
-		// Log.debug(message: "[POKEMON] Pokemon \(id) is a weather boosted Ditto level \(level ?? 0) - reset IV")
-		//pokemon.Level -= 5
+		log.Debugf("Pokemon %s is a weather boosted Ditto level %d - reset IV", pokemon.Id, pokemon.Level.ValueOrZero())
+		pokemon.Level.Int64 -= 5
 		pokemon.clearEncounterDetails()
 	}
 }
