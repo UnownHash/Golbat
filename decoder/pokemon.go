@@ -469,8 +469,10 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 func (pokemon *Pokemon) clearEncounterDetails() {
 	pokemon.Cp = null.NewInt(0, false)
-	pokemon.Move1 = null.NewInt(0, false)
-	pokemon.Move2 = null.NewInt(0, false)
+	if !pokemon.IsDitto {
+		pokemon.Move1 = null.NewInt(0, false)
+		pokemon.Move2 = null.NewInt(0, false)
+	}
 	pokemon.Height = null.NewFloat(0, false)
 	pokemon.Size = null.NewInt(0, false)
 	pokemon.Weight = null.NewFloat(0, false)
