@@ -804,8 +804,10 @@ func (pokemon *Pokemon) setWeather(weather null.Int) {
 func (pokemon *Pokemon) setDittoAttributes() {
 	var moveTransformFast int64 = 242
 	var moveStruggle int64 = 133
-	pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-	pokemon.PokemonId = int16(Ditto)
+	if !pokemon.IsDitto {
+		pokemon.PokemonId = int16(Ditto)
+		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+	}
 	pokemon.Form = null.IntFrom(0)
 	pokemon.Move1 = null.IntFrom(moveTransformFast)
 	pokemon.Move2 = null.IntFrom(moveStruggle)
