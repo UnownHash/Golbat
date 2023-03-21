@@ -25,16 +25,16 @@ func ReadGeofences() error {
 	return nil
 }
 
-func ReadNestGeofences() error {
-	geofence, err := ioutil.ReadFile(nestFilename)
-	if err != nil {
-		return err
-	}
-
-	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
-	if geoerr != nil {
-		return geoerr
-	}
-	nestFeatureCollection = fc
-	return nil
-}
+//func ReadNestGeofences() error {
+//	geofence, err := ioutil.ReadFile(nestFilename)
+//	if err != nil {
+//		return err
+//	}
+//
+//	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+//	if geoerr != nil {
+//		return geoerr
+//	}
+//	nestFeatureCollection = fc
+//	return nil
+//}

@@ -66,7 +66,6 @@ var ohbem *ohbemgo.Ohbem
 func init() {
 	initDataCache()
 	initLiveStats()
-	initNests()
 }
 
 func initDataCache() {

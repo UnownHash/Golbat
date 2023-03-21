@@ -135,6 +135,8 @@ func main() {
 	}
 
 	decoder.InitialiseOhbem()
+	decoder.LoadStatsGeofences()
+	decoder.LoadNests(dbDetails)
 
 	log.Infoln("Golbat started")
 	webhooks.StartSender()
@@ -175,6 +177,8 @@ func main() {
 	r.POST("/api/reloadGeojson", ReloadGeojson)
 	r.GET("/api/reloadGeojson", ReloadGeojson)
 	r.POST("/api/queryPokemon", QueryPokemon)
+	r.POST("/api/reload-nests", ReloadNests)
+	r.GET("/api/reload-nests", ReloadNests)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
