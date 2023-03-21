@@ -386,6 +386,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	if pokemon.IsDitto {
 		// TODO: add some more logic regarding event change, actually a Ditto will remain as Ditto
+		pokemon.setDittoAttributes()
 		return
 	}
 	pokemon.Id = encounterId
@@ -506,6 +507,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 
 	if pokemon.IsDitto {
 		// TODO: add some more logic regarding event change, actually a Ditto will remain as Ditto
+		pokemon.setDittoAttributes()
 		return
 	}
 
