@@ -21,6 +21,15 @@ import (
 	"time"
 )
 
+// Pokemon struct.
+//
+// AtkIv/DefIv/StaIv: Should not be set directly. Use calculateIv
+//
+// IvInactive: This field is used for storing weather-boosted IV when spawn is not boosted,
+// or non-boosted IV when spawn is boosted.
+// Since it should not be used for indexing, it stores atk in the lowest 4 bits, and then def and sta.
+//
+// FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
 	Id                      string      `db:"id"`
 	PokestopId              null.String `db:"pokestop_id"`
@@ -40,6 +49,7 @@ type Pokemon struct {
 	AtkIv                   null.Int    `db:"atk_iv"`
 	DefIv                   null.Int    `db:"def_iv"`
 	StaIv                   null.Int    `db:"sta_iv"`
+	IvInactive              null.Int    `db:"iv_inactive"`
 	Iv                      null.Float  `db:"iv"`
 	Form                    null.Int    `db:"form"`
 	Level                   null.Int    `db:"level"`
@@ -125,9 +135,9 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	pokemon := Pokemon{}
 
 	err := db.PokemonDb.GetContext(ctx, &pokemon,
-		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv, move_1, move_2, "+
-			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3, "+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
+		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, "+
+			"move_1, move_2, gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, "+
+			"capture_3, display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", encounterId)
 
@@ -145,19 +155,19 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	return &pokemon, nil
 }
 
+func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) (*Pokemon, error) {
+	pokemon, err := getPokemonRecord(ctx, db, encounterId)
+	if pokemon != nil || err != nil {
+		return pokemon, err
+	}
+	return &Pokemon{Id: encounterId}, nil
+}
+
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, cmp.Options{
 		ignoreNearFloats,
 		cmpopts.IgnoreFields(Pokemon{}, "Pvp"),
 	})
-}
-
-func weatherBoostChanged(old null.Int, new null.Int) bool {
-	if old.Valid && new.Valid {
-		return (old.ValueOrZero() == 0 && new.ValueOrZero() > 0) ||
-			(new.ValueOrZero() == 0 && old.ValueOrZero() > 0)
-	}
-	return false
 }
 
 func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
@@ -215,15 +225,16 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		if changePvpField {
 			pvpField, pvpValue = "pvp, ", ":pvp, "
 		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv, move_1, move_2,"+
+		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
+			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
 			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
 			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv, :iv, :move_1, :move_2,"+
-			":gender, :form, :cp, :level, :weather, :costume, :weight, :height, :size, :capture_1, :capture_2, :capture_3,"+
-			":display_pokemon_id, :is_ditto, :pokestop_id, :updated, :first_seen_timestamp, :changed, :cell_id,"+
-			":expire_timestamp_verified, :shiny, :username, %s :is_event, :seen_type)", pvpField, pvpValue),
-			pokemon)
+			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
+			":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :weather, :costume, :weight, :height,"+
+			":size, :capture_1, :capture_2, :capture_3, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
+			":seen_type)", pvpField, pvpValue), pokemon)
 
 		if err != nil {
 			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
@@ -255,6 +266,7 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 			"atk_iv = :atk_iv, "+
 			"def_iv = :def_iv, "+
 			"sta_iv = :sta_iv, "+
+			"iv_inactive = :iv_inactive,"+
 			"iv = :iv,"+
 			"form = :form, "+
 			"level = :level, "+
@@ -374,57 +386,50 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	}
 }
 
-func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
-	pokemon.IsEvent = 0
-	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
-	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
-	pokemonId := int16(wildPokemon.Pokemon.PokemonId)
-	pokemon.setPokemonDisplay(pokemonId, wildPokemon.Pokemon.PokemonDisplay)
+func (pokemon *Pokemon) isNewRecord() bool {
+	return pokemon.FirstSeenTimestamp != 0
+}
 
-	if pokemon.Id == "" || pokemon.SeenType.ValueOrZero() == SeenType_Cell || pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop {
-		updateStats(ctx, db, encounterId, stats_seenWild)
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
+		panic("Unmatched EncounterId")
 	}
-	if pokemon.IsDitto {
-		// TODO: add some more logic regarding event change, actually a Ditto will remain as Ditto
-		pokemon.setDittoAttributes()
-		return
-	}
-	pokemon.Id = encounterId
-
 	pokemon.Lat = wildPokemon.Latitude
 	pokemon.Lon = wildPokemon.Longitude
-	spawnId, _ := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 
-	if pokemon.Username.Valid == false {
-		// Don't be the reason that a pokemon gets updated
-		pokemon.Username = null.StringFrom(username)
+	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	if err != nil {
+		panic(err)
 	}
 
 	// Not sure I like the idea about an object updater loading another object
 
 	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, true)
-
 	pokemon.SpawnId = null.IntFrom(spawnId)
-	pokemon.CellId = null.IntFrom(cellId)
+}
 
-	if oldPokemonId != 0 && (oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather) {
-		if oldWeather.Valid && oldPokemonId != 0 {
-			log.Debugf("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to wild id %d weather %d",
-				pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
-		}
+func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+	pokemon.IsEvent = 0
+	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
+	switch pokemon.SeenType.ValueOrZero() {
+	case "":
+	case SeenType_Cell:
+	case SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
-
-		pokemon.clearEncounterDetails()
-		updateStats(ctx, db, encounterId, stats_statsReset)
-
-	} else if pokemon.SeenType.ValueOrZero() != SeenType_Encounter {
-		pokemon.SeenType = null.StringFrom(SeenType_Wild) // should be string value
+		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
+	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
+	if !pokemon.Username.Valid {
+		// Don't be the reason that a pokemon gets updated
+		pokemon.Username = null.StringFrom(username)
+	}
+	pokemon.CellId = null.IntFrom(cellId)
 }
 
 func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
 
-	if pokemon.Id != "" {
+	if !pokemon.isNewRecord() {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
 		return
 	}
@@ -446,7 +451,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.PokemonId = int16(mapPokemon.PokedexTypeId)
 	pokemon.Lat = pokestop.Lat
 	pokemon.Lon = pokestop.Lon
-	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // may have been encounter... this needs fixing
+	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
 
 	if mapPokemon.PokemonDisplay != nil {
 		pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
@@ -467,39 +472,22 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) clearEncounterDetails() {
-	pokemon.Cp = null.NewInt(0, false)
-	if !pokemon.IsDitto {
-		pokemon.Move1 = null.NewInt(0, false)
-		pokemon.Move2 = null.NewInt(0, false)
-	}
-	pokemon.Height = null.NewFloat(0, false)
-	pokemon.Size = null.NewInt(0, false)
-	pokemon.Weight = null.NewFloat(0, false)
-	pokemon.AtkIv = null.NewInt(0, false)
-	pokemon.DefIv = null.NewInt(0, false)
-	pokemon.StaIv = null.NewInt(0, false)
-	pokemon.Iv = null.NewFloat(0, false)
-	pokemon.Shiny = null.NewBool(false, false)
-}
-
-func (pokemon *Pokemon) calculateIv() {
-	if !pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
-		pokemon.Iv = null.NewFloat(0, false)
-	} else {
-		pokemon.Iv = null.NewFloat(float64(pokemon.AtkIv.ValueOrZero()+pokemon.DefIv.ValueOrZero()+pokemon.StaIv.ValueOrZero())*100.0/45.0, true)
-	}
+func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
+	pokemon.AtkIv = null.IntFrom(a)
+	pokemon.DefIv = null.IntFrom(d)
+	pokemon.StaIv = null.IntFrom(s)
+	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
 }
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
-	oldWeather, oldPokemonId := pokemon.Weather, pokemon.PokemonId
 	pokemonId := int16(nearbyPokemon.PokedexNumber)
 	pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay)
+	pokemon.Username = null.StringFrom(username)
 
-	if pokemon.Id == "" {
+	if pokemon.isNewRecord() {
 		if pokestopId == "" {
 			updateStats(ctx, db, encounterId, stats_seenCell)
 		} else {
@@ -507,64 +495,48 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		}
 	}
 
-	if pokemon.IsDitto {
-		// TODO: add some more logic regarding event change, actually a Ditto will remain as Ditto
-		pokemon.setDittoAttributes()
-		return
-	}
-
-	pokemon.Id = encounterId
-	pokemon.PokemonId = pokemonId
-
-	if oldWeather == pokemon.Weather && oldPokemonId == pokemon.PokemonId {
-		// No change of pokemon, do not downgrade to nearby
-		return
-	}
-
-	pokemon.Username = null.StringFrom(username)
-
-	if oldWeather.Valid && oldPokemonId != 0 {
-		log.Debugf("Pokemon [%s] was seen-type %s, id %d, weather %d will be changed to nearby-cell id %d weather %d",
-			pokemon.Id, pokemon.SeenType.ValueOrZero(), oldPokemonId, oldWeather.ValueOrZero(), pokemon.PokemonId, pokemon.Weather.ValueOrZero())
-
-		if pokemon.SeenType.ValueOrZero() == SeenType_Wild {
-			return
-		}
-
-		if pokemon.SeenType.ValueOrZero() == SeenType_Encounter {
-			// clear encounter details and finish making changes - lat, lon is preserved
-			pokemon.SeenType = null.StringFrom(SeenType_Wild)
-
-			updateStats(ctx, db, encounterId, stats_statsReset)
-			pokemon.clearEncounterDetails()
-
-			return
-		}
-	}
-
+	var lat, lon float64
+	overrideLatLon := pokemon.isNewRecord()
 	if pokestopId == "" {
 		// Cell Pokemon
+		if !overrideLatLon && pokemon.SeenType.ValueOrZero() != SeenType_Cell {
+			// do not downgrade to nearby cell
+			return
+		}
 
 		s2cell := s2.CellFromCellID(s2.CellID(cellId))
-		pokemon.Lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
-		pokemon.Lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
+		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
+		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
+		pokemon.CellId = null.IntFrom(cellId)
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
 	} else {
+		switch pokemon.SeenType.ValueOrZero() {
+		case "":
+		case SeenType_Cell:
+			overrideLatLon = true // a better estimate is available
+		case SeenType_NearbyStop:
+			break
+		default:
+			return
+		}
+		pokemon.CellId = null.IntFrom(cellId)
 		pokestop, _ := getPokestopRecord(ctx, db, pokestopId)
 		if pokestop == nil {
 			// Unrecognised pokestop
 			return
 		}
 		pokemon.PokestopId = null.StringFrom(pokestopId)
-		pokemon.Lat = pokestop.Lat
-		pokemon.Lon = pokestop.Lon
+		lat, lon = pokestop.Lat, pokestop.Lon
 		pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
 	}
-
-	pokemon.CellId = null.IntFrom(cellId)
-	pokemon.setUnknownTimestamp()
-	pokemon.clearEncounterDetails()
+	if overrideLatLon {
+		pokemon.Lat, pokemon.Lon = lat, lon
+	} else {
+		// TODO hopefully this never wraps over
+		pokemon.Lat = (pokemon.Lat + lat) / 2
+		pokemon.Lon = (pokemon.Lon + lon) / 2
+	}
 }
 
 const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
@@ -640,28 +612,80 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
-	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto) {
+	oldWeather := pokemon.Weather
+	pokemon.Cp = null.IntFrom(int64(proto.Cp))
+	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
+	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
+	pokemon.Height = null.FloatFrom(float64(proto.HeightM))
+	pokemon.Size = null.IntFrom(int64(proto.Size))
+	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
+	pokemon.setPokemonDisplay(int16(proto.PokemonId), proto.PokemonDisplay)
+	cpMultiplier := float64(proto.CpMultiplier)
+	var level int64
+	if cpMultiplier < 0.734 {
+		level = int64(math.Round((58.35178527*cpMultiplier-2.838007664)*cpMultiplier + 0.8539209906))
+	} else {
+		level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
+	}
 
+	if pokemon.IsDitto {
+		if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) ||
+			oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+			// when disguise is boosted, it has same IV as Ditto
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
+		} else {
+			weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
+			if err == nil {
+				if weather.GameplayCondition.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+					pokemon.Level = null.IntFrom(level - 5)
+					pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
+						int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+				} else {
+					pokemon.Level = null.IntFrom(level)
+					pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+						int64(proto.IndividualStamina))
+				}
+			} else {
+				log.Warnf("[POKEMON] Failed to retrieve weather at (%f, %f) for Ditto. Scanned IV is lost. %s",
+					pokemon.Lat, pokemon.Lon, err)
+			}
+		}
+	} else {
+		if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
+			if level <= 5 || pokemon.AtkIv.Int64 < 4 || pokemon.DefIv.Int64 < 4 || pokemon.StaIv.Int64 < 4 {
+				log.Debugf("[POKEMON] Pokemon [%s] Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+				pokemon.IsDitto = true
+				pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+				pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+			}
+		} else if level > 30 {
+			log.Debugf("[POKEMON] Pokemon [%s] weather boosted Ditto found, disguised as %d", pokemon.Id,
+				pokemon.PokemonId)
+			pokemon.IsDitto = true
+			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+			pokemon.Level = null.IntFrom(level - 5)
+			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
+				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+		} else {
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
+		}
+	}
+}
+
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
-	pokemon.Id = strconv.FormatUint(encounterData.Pokemon.EncounterId, 10)
-	pokemon.PokemonId = int16(encounterData.Pokemon.Pokemon.PokemonId)
-	pokemon.Cp = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Cp))
-	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move1))
-	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Move2))
-	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.HeightM))
-	pokemon.Size = null.IntFrom(int64(encounterData.Pokemon.Pokemon.Size))
-	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.Pokemon.WeightKg))
-	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualAttack))
-	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualDefense))
-	pokemon.StaIv = null.IntFrom(int64(encounterData.Pokemon.Pokemon.IndividualStamina))
-	pokemon.calculateIv()
-	pokemon.Costume = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Costume))
-	pokemon.Form = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Form))
-	pokemon.Gender = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.Gender))
-	pokemon.Weather = null.IntFrom(int64(encounterData.Pokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition))
-	pokemon.Lat = encounterData.Pokemon.Latitude
-	pokemon.Lon = encounterData.Pokemon.Longitude
+	// TODO is there a better way to get this from the proto? This is how RDM does it
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -672,64 +696,13 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.Shiny = null.BoolFrom(encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny)
 	pokemon.Username = null.StringFrom(username)
 
-	if encounterData.CaptureProbability != nil {
-		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-		pokemon.Capture2 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[1]))
-		pokemon.Capture3 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[2]))
-
-		cpMultiplier := float64(encounterData.Pokemon.Pokemon.CpMultiplier)
-		var level int64
-		if cpMultiplier < 0.734 {
-			level = int64(math.Round(58.35178527*cpMultiplier*cpMultiplier -
-				2.838007664*cpMultiplier + 0.8539209906))
-		} else {
-			level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
-		}
-		pokemon.Level = null.IntFrom(level)
-
-		if oldCp != pokemon.Cp || oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
-			if !pokemon.IsDitto && pokemon.isDittoDisguised() {
-				pokemon.IsDitto = true
-				pokemon.setDittoAttributes()
-			} else if pokemon.IsDitto {
-				pokemon.setDittoAttributes()
-			}
-		}
-	}
-
-	wildPokemon := encounterData.Pokemon
-
-	spawnId, _ := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
-	pokemon.SpawnId = null.IntFrom(spawnId)
-	timestampMs := time.Now().Unix() * 1000 // is there a better way to get this from the proto? This is how RDM does it
-
-	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, false)
-
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 	updateStats(ctx, db, pokemon.Id, stats_encounter)
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
-	oldCp, oldWeather, oldPokemonId := pokemon.Cp, pokemon.Weather, pokemon.PokemonId
-
 	pokemon.IsEvent = 0
-
-	//pokemon.Id = strconv.FormatUint(encounterData.EncounterId, 10)
-	pokemon.PokemonId = int16(encounterData.Pokemon.PokemonId)
-	pokemon.Cp = null.IntFrom(int64(encounterData.Pokemon.Cp))
-	pokemon.Move1 = null.IntFrom(int64(encounterData.Pokemon.Move1))
-	pokemon.Move2 = null.IntFrom(int64(encounterData.Pokemon.Move2))
-	pokemon.Height = null.FloatFrom(float64(encounterData.Pokemon.HeightM))
-	pokemon.Size = null.IntFrom(int64(encounterData.Pokemon.Size))
-	pokemon.Weight = null.FloatFrom(float64(encounterData.Pokemon.WeightKg))
-	pokemon.AtkIv = null.IntFrom(int64(encounterData.Pokemon.IndividualAttack))
-	pokemon.DefIv = null.IntFrom(int64(encounterData.Pokemon.IndividualDefense))
-	pokemon.StaIv = null.IntFrom(int64(encounterData.Pokemon.IndividualStamina))
-	pokemon.calculateIv()
-	pokemon.Costume = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Costume))
-	pokemon.Form = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Form))
-	pokemon.Gender = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.Gender))
-	pokemon.Weather = null.IntFrom(int64(encounterData.Pokemon.PokemonDisplay.WeatherBoostedCondition))
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon)
 
 	if encounterData.Pokemon.PokemonDisplay.Shiny {
 		pokemon.Shiny = null.BoolFrom(true)
@@ -743,122 +716,100 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 		}
 	}
 
-	if encounterData.CaptureProbability != nil {
-		pokemon.Capture1 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-		pokemon.Capture2 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-		pokemon.Capture3 = null.FloatFrom(float64(encounterData.CaptureProbability.CaptureProbability[0]))
-
-		cpMultiplier := float64(encounterData.Pokemon.CpMultiplier)
-		var level int64
-		if cpMultiplier < 0.734 {
-			level = int64(math.Round(58.35178527*cpMultiplier*cpMultiplier -
-				2.838007664*cpMultiplier + 0.8539209906))
-		} else {
-			level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
-		}
-		pokemon.Level = null.IntFrom(level)
-
-		if oldCp != pokemon.Cp || oldPokemonId != pokemon.PokemonId || oldWeather != pokemon.Weather {
-			if !pokemon.IsDitto && pokemon.isDittoDisguised() {
-				pokemon.IsDitto = true
-				pokemon.setDittoAttributes()
-			} else if pokemon.IsDitto {
-				pokemon.setDittoAttributes()
-			}
-		}
-	}
-
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
 	updateStats(ctx, db, pokemon.Id, stats_lureEncounter)
 }
 
 func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
+	if !pokemon.isNewRecord() {
+		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
+		if pokemon.PokemonId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
+			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
+			pokemon.Gender != null.IntFrom(int64(display.Gender)) {
+			log.Infof("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, pokemon.PokemonId,
+				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
+				pokemonId, display.Form, display.Costume, display.Gender)
+			// TODO: repopulate weight/size/height?
+			pokemon.Weight = null.NewFloat(0, false)
+			pokemon.Height = null.NewFloat(0, false)
+			pokemon.Size = null.NewInt(0, false)
+			pokemon.Move1 = null.NewInt(0, false)
+			pokemon.Move2 = null.NewInt(0, false)
+			pokemon.Cp = null.NewInt(0, false)
+			pokemon.Shiny = null.NewBool(false, false)
+			pokemon.IsDitto = false
+			pokemon.DisplayPokemonId = null.NewInt(0, false)
+			pokemon.Pvp = null.NewString("", false)
+		}
+	}
+	if pokemon.isNewRecord() || !pokemon.IsDitto {
+		pokemon.PokemonId = pokemonId
+	}
 	pokemon.Gender = null.IntFrom(int64(display.Gender))
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
-	pokemon.setWeather(null.IntFrom(int64(display.WeatherBoostedCondition)))
-	if pokemon.PokemonId == 0 || !pokemon.IsDitto {
-		pokemon.PokemonId = pokemonId
-	}
+	pokemon.setWeather(int64(display.WeatherBoostedCondition))
 }
 
-func (pokemon *Pokemon) setWeather(weather null.Int) {
-	if pokemon.PokemonId != 0 && pokemon.Weather.ValueOrZero() != weather.ValueOrZero() {
+func (pokemon *Pokemon) setWeather(weather int64) bool {
+	reset := false
+	if !pokemon.isNewRecord() && pokemon.Weather.ValueOrZero() != weather {
+		var isBoosted bool
 		if pokemon.IsDitto {
-			if weather.ValueOrZero() == 3 {
+			if weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
 				// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
-				pokemon.Level.Int64 += 5
-				pokemon.clearEncounterDetails()
-			} else if pokemon.Weather.ValueOrZero() == 3 {
-				if pokemon.Level.ValueOrZero() >= 5 {
-					pokemon.Level.Int64 -= 5
-					pokemon.clearEncounterDetails()
+				isBoosted = true
+				reset = true
+			} else if pokemon.Weather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				// both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
+				isBoosted = false
+				reset = true
+			}
+		} else {
+			isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
+			reset = pokemon.Weather.ValueOrZero() != int64(pogo.GameplayWeatherProto_NONE) != isBoosted
+		}
+		if reset {
+			var currentIv null.Int
+			if pokemon.AtkIv.Valid {
+				if !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
+					panic("Set atk but not also def and sta")
+				}
+				currentIv = null.IntFrom(pokemon.AtkIv.Int64 | pokemon.DefIv.Int64<<4 | pokemon.StaIv.Int64<<8)
+			} else {
+				currentIv = null.NewInt(0, false)
+			}
+			if pokemon.IvInactive.Valid {
+				pokemon.calculateIv(pokemon.IvInactive.Int64&15, pokemon.IvInactive.Int64>>4&15,
+					pokemon.IvInactive.Int64>>8&15)
+				switch pokemon.SeenType.ValueOrZero() {
+				case SeenType_LureWild:
+					pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
+				case SeenType_Wild:
+					pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+				}
+			} else {
+				switch pokemon.SeenType.ValueOrZero() {
+				case SeenType_LureEncounter:
+					pokemon.SeenType = null.StringFrom(SeenType_LureWild)
+				case SeenType_Encounter:
+					pokemon.SeenType = null.StringFrom(SeenType_Wild)
 				}
 			}
-		} else if weatherBoostChanged(pokemon.Weather, weather) {
-
-			pokemon.clearEncounterDetails()
+			pokemon.IvInactive = currentIv
+			pokemon.Cp = null.NewInt(0, false)
+			if pokemon.Level.Valid {
+				if isBoosted {
+					pokemon.Level.Int64 += 5
+				} else {
+					pokemon.Level.Int64 -= 5
+				}
+			}
+			pokemon.Pvp = null.NewString("", false)
 		}
 	}
-	pokemon.Weather = weather
-}
-
-func (pokemon *Pokemon) setDittoAttributes() {
-	var moveTransformFast int64 = 242
-	var moveStruggle int64 = 133
-	if pokemon.PokemonId != int16(Ditto) {
-		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-	}
-	pokemon.PokemonId = int16(Ditto)
-	pokemon.Form = null.IntFrom(0)
-	pokemon.Move1 = null.IntFrom(moveTransformFast)
-	pokemon.Move2 = null.IntFrom(moveStruggle)
-	pokemon.Gender = null.IntFrom(3)
-	pokemon.Costume = null.IntFrom(0)
-	pokemon.Height = null.NewFloat(0, false)
-	pokemon.Size = null.NewInt(0, false)
-	pokemon.Weight = null.NewFloat(0, false)
-	if pokemon.Weather.ValueOrZero() == 0 && pokemon.Level.ValueOrZero() > 30 {
-		log.Debugf("Pokemon %s is a weather boosted Ditto level %d - reset IV", pokemon.Id, pokemon.Level.ValueOrZero())
-		pokemon.Level.Int64 -= 5
-		pokemon.clearEncounterDetails()
-	}
-}
-
-var Ditto = 132
-var weatherBoostMinLevel = 6
-var weatherBoostMinIvStat = 4
-
-func (pokemon *Pokemon) isDittoDisguised() bool {
-	if int(pokemon.PokemonId) == Ditto {
-		return true
-	}
-	level := int(pokemon.Level.ValueOrZero())
-	atkIv := int(pokemon.AtkIv.ValueOrZero())
-	defIv := int(pokemon.DefIv.ValueOrZero())
-	staIv := int(pokemon.StaIv.ValueOrZero())
-
-	isUnderLevelBoosted := level > 0 && level < weatherBoostMinLevel
-	isUnderIvStatBoosted := level > 0 &&
-		(atkIv < weatherBoostMinIvStat ||
-			defIv < weatherBoostMinIvStat ||
-			staIv < weatherBoostMinIvStat)
-
-	isWeatherBoosted := pokemon.Weather.ValueOrZero() > 0
-	isOverLevel := level > 30
-
-	if isWeatherBoosted {
-		if isUnderLevelBoosted || isUnderIvStatBoosted {
-			log.Debugf("[POKEMON] Pokemon [%s] Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-			return true
-		}
-	} else {
-		if isOverLevel {
-			log.Debugf("[POKEMON] Pokemon [%s] Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-			return true
-		}
-	}
-	return false
+	pokemon.Weather = null.IntFrom(weather)
+	return reset
 }
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
@@ -880,7 +831,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	}
 
 	if pokemon == nil {
-		pokemon = &Pokemon{}
+		pokemon = &Pokemon{Id: encounterId}
 	}
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username)
 	savePokemonRecord(ctx, db, pokemon)
@@ -919,7 +870,6 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 const stats_seenWild string = "seen_wild"
 const stats_seenStop string = "seen_stop"
 const stats_seenCell string = "seen_cell"
-const stats_statsReset string = "stats_reset"
 const stats_encounter string = "encounter"
 const stats_seenLure string = "seen_lure"
 const stats_lureEncounter string = "lure_encounter"

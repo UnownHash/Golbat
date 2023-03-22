@@ -249,14 +249,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
 			savePokemonRecord(ctx, db, pokemon)
 		}
@@ -269,14 +265,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
 			savePokemonRecord(ctx, db, pokemon)
 		}
@@ -288,14 +280,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), username)
 
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
