@@ -457,6 +457,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
+	} else {
+		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %s", pokemon.Id)
 	}
 	if !pokemon.Username.Valid {
 		pokemon.Username = null.StringFrom(username)
@@ -829,15 +831,12 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
 
-	pokemon, err := getPokemonRecord(ctx, db, encounterId)
+	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
-	if pokemon == nil {
-		pokemon = &Pokemon{Id: encounterId}
-	}
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username)
 	savePokemonRecord(ctx, db, pokemon)
 
