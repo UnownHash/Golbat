@@ -533,9 +533,10 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	if overrideLatLon {
 		pokemon.Lat, pokemon.Lon = lat, lon
 	} else {
-		// TODO hopefully this never wraps over
-		pokemon.Lat = (pokemon.Lat + lat) / 2
-		pokemon.Lon = (pokemon.Lon + lon) / 2
+		midpoint := s2.LatLngFromPoint(s2.Point{s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
+			Add(s2.PointFromLatLng(s2.LatLngFromDegrees(lat, lon)).Vector)})
+		pokemon.Lat = midpoint.Lat.Degrees()
+		pokemon.Lon = midpoint.Lng.Degrees()
 	}
 }
 
