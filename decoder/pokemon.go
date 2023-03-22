@@ -790,6 +790,10 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 					pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 				}
 			} else {
+				pokemon.AtkIv = null.NewInt(0, false)
+				pokemon.DefIv = null.NewInt(0, false)
+				pokemon.StaIv = null.NewInt(0, false)
+				pokemon.Iv = null.NewFloat(0, false)
 				switch pokemon.SeenType.ValueOrZero() {
 				case SeenType_LureEncounter:
 					pokemon.SeenType = null.StringFrom(SeenType_LureWild)
