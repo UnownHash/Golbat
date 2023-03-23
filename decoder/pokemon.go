@@ -418,7 +418,9 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
-	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	if pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
+		updateStats(ctx, db, pokemon.Id, stats_statsReset)
+	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
 	if !pokemon.Username.Valid {
 		// Don't be the reason that a pokemon gets updated
@@ -454,7 +456,9 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
 
 	if mapPokemon.PokemonDisplay != nil {
-		pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
+		if pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay) {
+			updateStats(ctx, db, pokemon.Id, stats_statsReset)
+		}
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
 	} else {
@@ -486,7 +490,9 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
 	pokemonId := int16(nearbyPokemon.PokedexNumber)
-	pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay)
+	if pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay) {
+		updateStats(ctx, db, pokemon.Id, stats_statsReset)
+	}
 	pokemon.Username = null.StringFrom(username)
 
 	if pokemon.isNewRecord() {
@@ -804,7 +810,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	updateStats(ctx, db, pokemon.Id, stats_lureEncounter)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
+func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		if pokemon.PokemonId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
@@ -832,7 +838,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	pokemon.Gender = null.IntFrom(int64(display.Gender))
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
-	pokemon.setWeather(int64(display.WeatherBoostedCondition))
+	return pokemon.setWeather(int64(display.WeatherBoostedCondition))
 }
 
 func (pokemon *Pokemon) compressIv() null.Int {
@@ -958,6 +964,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 const stats_seenWild string = "seen_wild"
 const stats_seenStop string = "seen_stop"
 const stats_seenCell string = "seen_cell"
+const stats_statsReset string = "stats_reset"
 const stats_encounter string = "encounter"
 const stats_seenLure string = "seen_lure"
 const stats_lureEncounter string = "lure_encounter"
