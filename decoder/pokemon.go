@@ -689,13 +689,12 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 			if oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_NONE) {
-				log.Debugf("[POKEMON] Pokemon [%s] 00>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+				log.Infof("[POKEMON] Pokemon [%s] 00>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 				pokemon.Level = null.IntFrom(level - 5)
 				pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
 					int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
 			} else {
-				log.Debugf("[POKEMON] Pokemon [%s] B0>00/PP Ditto found, disguised as %d",
-					pokemon.Id, pokemon.PokemonId)
+				log.Infof("[POKEMON] Pokemon [%s] B0>00/PP Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 				pokemon.IvInactive = pokemon.compressIv()
 				pokemon.Level = null.IntFrom(level)
 				pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
@@ -703,7 +702,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			}
 			return
 		case -5:
-			log.Debugf("[POKEMON] Pokemon [%s] 0P>00 or 00/PP>B0 Ditto found, disguised as %d",
+			log.Infof("[POKEMON] Pokemon [%s] 0P>00 or 00/PP>B0 Ditto found, disguised as %d",
 				pokemon.Id, pokemon.PokemonId)
 			pokemon.IsDitto = true
 			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
@@ -714,7 +713,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 				int64(proto.IndividualStamina))
 			return
 		case 10:
-			log.Debugf("[POKEMON] Pokemon [%s] B0>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+			log.Infof("[POKEMON] Pokemon [%s] B0>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 			pokemon.IsDitto = true
 			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
@@ -732,7 +731,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
 			return
 		case -10:
-			log.Debugf("[POKEMON] Pokemon [%s] 0P>B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+			log.Infof("[POKEMON] Pokemon [%s] 0P>B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 			pokemon.IsDitto = true
 			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
@@ -751,13 +750,13 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 			int64(proto.IndividualStamina))
 		if level <= 5 || pokemon.AtkIv.Int64 < 4 || pokemon.DefIv.Int64 < 4 || pokemon.StaIv.Int64 < 4 {
-			log.Debugf("[POKEMON] Pokemon [%s] B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+			log.Infof("[POKEMON] Pokemon [%s] B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 			pokemon.IsDitto = true
 			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 		}
 	} else if level > 30 {
-		log.Debugf("[POKEMON] Pokemon [%s] 0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
+		log.Infof("[POKEMON] Pokemon [%s] 0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 		pokemon.IsDitto = true
 		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
