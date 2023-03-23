@@ -715,7 +715,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				setDittoAttributes("B0>PP", true, true)
 				// Now we need to determine the remaining two modes.
 				// Note that if we reach here, it must be the case that only 1 set of IV was scanned.
-			} else if oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_NONE) || !pokemon.IvInactive.Valid {
+			} else if !pokemon.IvInactive.Valid {
 				setDittoAttributes("00>0P", false, false)
 			} else {
 				setDittoAttributes("B0>00", true, true)
