@@ -387,7 +387,7 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 }
 
 func (pokemon *Pokemon) isNewRecord() bool {
-	return pokemon.FirstSeenTimestamp != 0
+	return pokemon.FirstSeenTimestamp == 0
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
@@ -907,7 +907,6 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 }
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
-
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
