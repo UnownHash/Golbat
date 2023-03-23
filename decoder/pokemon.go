@@ -663,6 +663,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		}
 		return
 	}
+	// archive should be set to false for [normal]>0P or 0P>B0
 	setDittoAttributes := func(mode string, to0P bool, archive bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d)",
