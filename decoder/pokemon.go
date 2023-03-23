@@ -622,10 +622,16 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 }
 
 func (pokemon *Pokemon) setDittoAttributes(mode string, oldWeather int64, level int64, proto *pogo.PokemonProto, active bool) {
-	log.Infof("[POKEMON] Pokemon [%s] %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d,%d)>(%d,%d,%d/%d/%d)",
-		pokemon.Id, mode, pokemon.PokemonId, oldWeather, pokemon.Level.Int64, pokemon.AtkIv.ValueOrZero(),
-		pokemon.DefIv.ValueOrZero(), pokemon.StaIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
-		pokemon.Weather.Int64, level, proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
+	if len(mode) <= 2 { // B0 or 0P Ditto
+		log.Debugf("[POKEMON] Pokemon [%s] %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d)", pokemon.Id, mode,
+			pokemon.PokemonId, pokemon.Weather.Int64, level,
+			proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
+	} else {
+		log.Infof("[POKEMON] Pokemon [%s] %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d,%d)>(%d,%d,%d/%d/%d)",
+			pokemon.Id, mode, pokemon.PokemonId, oldWeather, pokemon.Level.Int64, pokemon.AtkIv.ValueOrZero(),
+			pokemon.DefIv.ValueOrZero(), pokemon.StaIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
+			pokemon.Weather.Int64, level, proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
+	}
 	pokemon.IsDitto = true
 	pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 	pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
