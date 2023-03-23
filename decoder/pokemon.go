@@ -663,7 +663,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		}
 		return
 	}
-	setDittoAttributes := func(mode string, active bool, archive bool) {
+	setDittoAttributes := func(mode string, to0P bool, archive bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d)",
 				pokemon.Id, mode, pokemon.PokemonId,
@@ -677,14 +677,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		pokemon.IsDitto = true
 		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
-		if active {
-			if archive {
-				pokemon.IvInactive = pokemon.compressIv()
-			}
-			pokemon.Level = null.IntFrom(level)
-			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-				int64(proto.IndividualStamina))
-		} else {
+		if to0P { // IV switching needed if we are transitioning into a 0P Ditto
 			if archive {
 				if pokemon.IvInactive.Valid {
 					pokemon.calculateIv(pokemon.IvInactive.Int64&15, pokemon.IvInactive.Int64>>4&15,
@@ -699,6 +692,13 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			pokemon.Level = null.IntFrom(level - 5)
 			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
 				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+		} else {
+			if archive {
+				pokemon.IvInactive = pokemon.compressIv()
+			}
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
 		}
 	}
 	// There are 10 total possible transitions among these states, i.e. all 12 of them except for 0P <-> PP.
@@ -712,32 +712,32 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
 			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				setDittoAttributes("B0>PP", true, true)
+				setDittoAttributes("B0>PP", false, true)
 				// Now we need to determine the remaining two modes.
 				// Note that if we reach here, it must be the case that only 1 set of IV was scanned.
 			} else if pokemon.IvInactive.Valid {
-				setDittoAttributes("B0>00", true, true)
+				setDittoAttributes("B0>00", false, true)
 			} else {
-				setDittoAttributes("00>0P", false, false)
+				setDittoAttributes("00>0P", true, false)
 			}
 			return
 		case -5:
 			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
-				setDittoAttributes("0P>00", true, true)
+				setDittoAttributes("0P>00", false, true)
 			} else if !pokemon.AtkIv.Valid {
-				setDittoAttributes("00>B0", true, true)
+				setDittoAttributes("00>B0", false, true)
 			} else if !pokemon.IvInactive.Valid {
-				setDittoAttributes("PP>B0", true, true)
+				setDittoAttributes("PP>B0", false, true)
 			} else {
 				// Weather switched at least thrice. Give up trying to infer mode
-				setDittoAttributes("00/PP>B0", true, true)
+				setDittoAttributes("00/PP>B0", false, true)
 			}
 			return
 		case 10:
-			setDittoAttributes("B0>0P", false, true)
+			setDittoAttributes("B0>0P", true, true)
 			return
 		case -10:
-			setDittoAttributes("0P>B0", true, false)
+			setDittoAttributes("0P>B0", false, false)
 			return
 		default:
 			log.Warnf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Rescanned IV is lost.",
@@ -747,14 +747,14 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
 		if level <= 5 || proto.IndividualAttack < 4 || proto.IndividualDefense < 4 || proto.IndividualStamina < 4 {
-			setDittoAttributes("B0", true, false)
+			setDittoAttributes("B0", false, false)
 		} else {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
 		}
 	} else if level > 30 {
-		setDittoAttributes("0P", false, false)
+		setDittoAttributes("0P", true, false)
 	} else {
 		pokemon.Level = null.IntFrom(level)
 		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
