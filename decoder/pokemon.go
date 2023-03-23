@@ -621,6 +621,25 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
+func (pokemon *Pokemon) setDittoAttributes(mode string, oldWeather int64, level int64, proto *pogo.PokemonProto, active bool) {
+	log.Infof("[POKEMON] Pokemon [%s] %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d,%d)>(%d,%d,%d/%d/%d)",
+		pokemon.Id, mode, pokemon.PokemonId, oldWeather, pokemon.Level.Int64, pokemon.AtkIv.ValueOrZero(),
+		pokemon.DefIv.ValueOrZero(), pokemon.StaIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
+		pokemon.Weather.Int64, level, proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
+	pokemon.IsDitto = true
+	pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+	pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+	if active {
+		pokemon.Level = null.IntFrom(level)
+		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+			int64(proto.IndividualStamina))
+	} else {
+		pokemon.Level = null.IntFrom(level - 5)
+		pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
+			int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+	}
+}
+
 func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	oldWeather := pokemon.Weather
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
@@ -673,38 +692,18 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 			if oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_NONE) {
-				log.Infof("[POKEMON] Pokemon [%s] 00>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-				pokemon.Level = null.IntFrom(level - 5)
-				pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-					int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+				pokemon.setDittoAttributes("00>0P", oldWeather.Int64, level, proto, false)
 			} else {
-				log.Infof("[POKEMON] Pokemon [%s] B0>00/PP Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
 				pokemon.IvInactive = pokemon.compressIv()
-				pokemon.Level = null.IntFrom(level)
-				pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-					int64(proto.IndividualStamina))
+				pokemon.setDittoAttributes("B0>00/PP", oldWeather.Int64, level, proto, true)
 			}
 			return
 		case -5:
-			log.Infof("[POKEMON] Pokemon [%s] 0P>00 or 00/PP>B0 Ditto found, disguised as %d",
-				pokemon.Id, pokemon.PokemonId)
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 			pokemon.IvInactive = pokemon.compressIv()
-			pokemon.Level = null.IntFrom(level)
-			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-				int64(proto.IndividualStamina))
+			pokemon.setDittoAttributes("0P>00 or 00/PP>B0", oldWeather.Int64, level, proto, true)
 			return
 		case 10:
-			log.Infof("[POKEMON] Pokemon [%s] B0>0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 			if pokemon.IvInactive.Valid {
 				pokemon.calculateIv(pokemon.IvInactive.Int64&15, pokemon.IvInactive.Int64>>4&15,
 					pokemon.IvInactive.Int64>>8&15)
@@ -714,18 +713,10 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				pokemon.StaIv = null.NewInt(0, false)
 				pokemon.Iv = null.NewFloat(0, false)
 			}
-			pokemon.Level = null.IntFrom(level - 5)
-			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+			pokemon.setDittoAttributes("B0>0P", oldWeather.Int64, level, proto, false)
 			return
 		case -10:
-			log.Infof("[POKEMON] Pokemon [%s] 0P>B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
-			pokemon.Level = null.IntFrom(level)
-			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-				int64(proto.IndividualStamina))
+			pokemon.setDittoAttributes("0P>B0", oldWeather.Int64, level, proto, true)
 			return
 		default:
 			log.Warnf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Rescanned IV is lost.",
@@ -734,23 +725,15 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		}
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
-		pokemon.Level = null.IntFrom(level)
-		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-			int64(proto.IndividualStamina))
 		if level <= 5 || pokemon.AtkIv.Int64 < 4 || pokemon.DefIv.Int64 < 4 || pokemon.StaIv.Int64 < 4 {
-			log.Infof("[POKEMON] Pokemon [%s] B0 Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+			pokemon.setDittoAttributes("B0", oldWeather.Int64, level, proto, true)
+		} else {
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
 		}
 	} else if level > 30 {
-		log.Infof("[POKEMON] Pokemon [%s] 0P Ditto found, disguised as %d", pokemon.Id, pokemon.PokemonId)
-		pokemon.IsDitto = true
-		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
-		pokemon.Level = null.IntFrom(level - 5)
-		pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-			int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+		pokemon.setDittoAttributes("0P", oldWeather.Int64, level, proto, false)
 	} else {
 		pokemon.Level = null.IntFrom(level)
 		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
