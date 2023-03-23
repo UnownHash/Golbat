@@ -711,10 +711,14 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
-			if oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_NONE) {
+			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				setDittoAttributes("B0>PP", true, true)
+				// Now we need to determine the remaining two modes.
+				// Note that if we reach here, it must be the case that only 1 set of IV was scanned.
+			} else if oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_NONE) || !pokemon.IvInactive.Valid {
 				setDittoAttributes("00>0P", false, false)
 			} else {
-				setDittoAttributes("B0>00/PP", true, true)
+				setDittoAttributes("B0>00", true, true)
 			}
 			return
 		case -5:
