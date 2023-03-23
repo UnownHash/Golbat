@@ -840,6 +840,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 						pokemon.Iv = null.NewFloat(0, false)
 					}
 					pokemon.IvInactive = t
+					pokemon.Weather = null.IntFrom(int64(pogo.GameplayWeatherProto_NONE))
 				}
 				pokemon.IsDitto = false
 			}
