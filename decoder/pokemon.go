@@ -641,9 +641,10 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	// Here comes the Ditto logic. Embrace yourself :)
 	// Ditto weather can be split into 4 categories:
 	//  - 00: No weather boost
-	//  - 0P: No weather boost but Ditto is actually boosted by partly cloudy
-	//  - B0: Weather boosts disguise but not Ditto
+	//  - 0P: No weather boost but Ditto is actually boosted by partly cloudy [atypical]
+	//  - B0: Weather boosts disguise but not Ditto [atypical]
 	//  - PP: Weather being partly cloudy boosts both disguise and Ditto
+	// We will also use 0N/BN/PN to denote a normal non-Ditto spawn with corresponding weather boosts.
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
 	if pokemon.IsDitto {
 		// For a confirmed Ditto, we persist IV in inactive only in 0P state
@@ -664,7 +665,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		return
 	}
 	// archive should be set to false for [normal]>0P or 0P>B0
-	setDittoAttributes := func(mode string, to0P bool, archive bool) {
+	setDittoAttributes := func(mode string, to0P bool, archive bool, setDitto bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d)",
 				pokemon.Id, mode, pokemon.PokemonId,
@@ -675,9 +676,11 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				pokemon.DefIv.ValueOrZero(), pokemon.StaIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
 				pokemon.Weather.Int64, level, proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
 		}
-		pokemon.IsDitto = true
-		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+		if setDitto {
+			pokemon.IsDitto = true
+			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+		}
 		if to0P { // IV switching needed if we are transitioning into a 0P Ditto
 			if archive {
 				if pokemon.IvInactive.Valid {
@@ -712,33 +715,48 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
-			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				setDittoAttributes("B0>PP", false, true)
-				// Now we need to determine the remaining two modes.
-				// Note that if we reach here, it must be the case that only 1 set of IV was scanned.
-			} else if pokemon.IvInactive.Valid {
-				setDittoAttributes("B0>00", false, true)
-			} else {
-				setDittoAttributes("00>0P", true, false)
+			switch pokemon.Weather.Int64 {
+			case int64(pogo.GameplayWeatherProto_NONE):
+				if !pokemon.IvInactive.Valid {
+					setDittoAttributes("00/0N>0P", true, false, true)
+				} else if level > 30 {
+					setDittoAttributes("00/0N/BN/PN>0P", true, false, true)
+				} else {
+					// TODO set Ditto if species did not reroll
+					setDittoAttributes("B0>00/0N", false, true, false)
+				}
+			case int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
+				// we can never be sure if this is a Ditto or rerolling into non-Ditto so assume not
+				// TODO set Ditto if species did not reroll
+				setDittoAttributes("B0>PP/PN", false, true, false)
+			default:
+				setDittoAttributes("B0>BN", false, true, false)
 			}
-			return
 		case -5:
-			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
-				setDittoAttributes("0P>00", false, true)
-			} else if !pokemon.AtkIv.Valid {
-				setDittoAttributes("00>B0", false, true)
-			} else if !pokemon.IvInactive.Valid {
-				setDittoAttributes("PP>B0", false, true)
-			} else {
-				// Weather switched at least thrice. Give up trying to infer mode
-				setDittoAttributes("00/PP>B0", false, true)
+			switch pokemon.Weather.Int64 {
+			case int64(pogo.GameplayWeatherProto_NONE):
+				// we can never be sure if this is a Ditto or rerolling into non-Ditto so assume not
+				// TODO set Ditto if species did not reroll
+				setDittoAttributes("0P>00/0N", false, true, false)
+			case int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
+				setDittoAttributes("0P>PN", false, true, false)
+			default:
+				if !pokemon.IvInactive.Valid {
+					setDittoAttributes("BN/PP/PN>B0", false, true, true)
+				} else if level <= 5 ||
+					proto.IndividualAttack < 4 || proto.IndividualDefense < 4 || proto.IndividualStamina < 4 {
+					setDittoAttributes("00/0N/BN/PP/PN>B0", false, true, true)
+				} else {
+					// TODO always set Ditto if species did not reroll since 0N>B0 vs 0P>BN are completely indistinguishable
+					setDittoAttributes("00/0N/BN/PP/PN>B0 or 0P>BN", false, true, false)
+				}
 			}
 			return
 		case 10:
-			setDittoAttributes("B0>0P", true, true)
+			setDittoAttributes("B0>0P", true, true, true)
 			return
 		case -10:
-			setDittoAttributes("0P>B0", false, false)
+			setDittoAttributes("0P>B0", false, false, true)
 			return
 		default:
 			log.Warnf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Rescanned IV is lost.",
@@ -748,14 +766,14 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
 		if level <= 5 || proto.IndividualAttack < 4 || proto.IndividualDefense < 4 || proto.IndividualStamina < 4 {
-			setDittoAttributes("B0", false, false)
+			setDittoAttributes("B0", false, true, true)
 		} else {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
 		}
 	} else if level > 30 {
-		setDittoAttributes("0P", true, false)
+		setDittoAttributes("0P", true, false, true)
 	} else {
 		pokemon.Level = null.IntFrom(level)
 		pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
