@@ -824,7 +824,24 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Move2 = null.NewInt(0, false)
 			pokemon.Cp = null.NewInt(0, false)
 			pokemon.Shiny = null.NewBool(false, false)
-			pokemon.IsDitto = false
+			if pokemon.IsDitto {
+				if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) &&
+					pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+					// switch back IV for B0 state Ditto
+					t := pokemon.compressIv()
+					if pokemon.IvInactive.Valid {
+						pokemon.calculateIv(pokemon.IvInactive.Int64&15, pokemon.IvInactive.Int64>>4&15,
+							pokemon.IvInactive.Int64>>8&15)
+					} else {
+						pokemon.AtkIv = null.NewInt(0, false)
+						pokemon.DefIv = null.NewInt(0, false)
+						pokemon.StaIv = null.NewInt(0, false)
+						pokemon.Iv = null.NewFloat(0, false)
+					}
+					pokemon.IvInactive = t
+				}
+				pokemon.IsDitto = false
+			}
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
 		}
