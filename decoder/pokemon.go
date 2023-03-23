@@ -737,7 +737,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		}
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
-		if level <= 5 || pokemon.AtkIv.Int64 < 4 || pokemon.DefIv.Int64 < 4 || pokemon.StaIv.Int64 < 4 {
+		if level <= 5 || proto.IndividualAttack < 4 || proto.IndividualDefense < 4 || proto.IndividualStamina < 4 {
 			setDittoAttributes("B0", true, false)
 		} else {
 			pokemon.Level = null.IntFrom(level)
