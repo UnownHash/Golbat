@@ -724,10 +724,10 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		case -5:
 			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
 				setDittoAttributes("0P>00", true, true)
-			} else if !pokemon.IvInactive.Valid {
-				setDittoAttributes("PP>B0", true, true)
 			} else if !pokemon.AtkIv.Valid {
 				setDittoAttributes("00>B0", true, true)
+			} else if !pokemon.IvInactive.Valid {
+				setDittoAttributes("PP>B0", true, true)
 			} else {
 				// Weather switched at least thrice. Give up trying to infer mode
 				setDittoAttributes("00/PP>B0", true, true)
