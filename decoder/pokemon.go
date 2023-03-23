@@ -622,7 +622,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 }
 
 func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
-	oldWeather := pokemon.Weather
+	oldWeather := pokemon.Weather // note: unreliable since it might have already been changed from wild/nearby
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -666,8 +666,8 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	setDittoAttributes := func(mode string, active bool, archive bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d)",
-				pokemon.Id, mode, pokemon.PokemonId, pokemon.Weather.Int64, level,
-				proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
+				pokemon.Id, mode, pokemon.PokemonId,
+				pokemon.Weather.Int64, level, proto.IndividualAttack, proto.IndividualDefense, proto.IndividualStamina)
 		} else {
 			log.Infof("[POKEMON] %s: %s Ditto found, disguised as %d. (%d,%d,%d/%d/%d,%d)>(%d,%d,%d/%d/%d)",
 				pokemon.Id, mode, pokemon.PokemonId, oldWeather.Int64, pokemon.Level.Int64, pokemon.AtkIv.ValueOrZero(),
