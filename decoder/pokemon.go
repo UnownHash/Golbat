@@ -812,10 +812,16 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
-		if pokemon.PokemonId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
+		var oldId int16
+		if pokemon.IsDitto {
+			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
+		} else {
+			oldId = pokemon.PokemonId
+		}
+		if oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) {
-			log.Infof("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, pokemon.PokemonId,
+			log.Infof("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender)
 			// TODO: repopulate weight/size/height?
