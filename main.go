@@ -78,7 +78,7 @@ func main() {
 		return
 	}
 
-	db.SetMaxOpenConns(50)
+	db.SetMaxOpenConns(config.Config.Database.MaxPool)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxIdleTime(time.Minute)
 

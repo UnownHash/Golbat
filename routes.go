@@ -167,7 +167,11 @@ func Raw(c *gin.Context) {
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		timeout := 3 * time.Second
+		if config.Config.ExtendedTimeout {
+			timeout = 10 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		for _, entry := range protoData {
