@@ -853,19 +853,15 @@ func (pokemon *Pokemon) compressIv() null.Int {
 }
 
 func (pokemon *Pokemon) setWeather(weather int64) bool {
-	reset := false
+	shouldReencounter := false // whether reencountering might give more information. Returns false for new record
 	if !pokemon.isNewRecord() && pokemon.Weather.ValueOrZero() != weather {
-		var isBoosted bool
+		var reset, isBoosted bool
 		if pokemon.IsDitto {
-			if weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
-				isBoosted = true
-				reset = true
-			} else if pokemon.Weather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				// both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
-				isBoosted = false
-				reset = true
-			}
+			isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+			// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
+			// or both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
+			reset = isBoosted || pokemon.Weather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+			// Technically Ditto should also be rescanned during 0P>B0 (and optionally B0>0P) but this is not the place to do it
 		} else {
 			isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
 			reset = pokemon.Weather.ValueOrZero() != int64(pogo.GameplayWeatherProto_NONE) != isBoosted
@@ -886,6 +882,7 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 				pokemon.DefIv = null.NewInt(0, false)
 				pokemon.StaIv = null.NewInt(0, false)
 				pokemon.Iv = null.NewFloat(0, false)
+				shouldReencounter = true
 				switch pokemon.SeenType.ValueOrZero() {
 				case SeenType_LureEncounter:
 					pokemon.SeenType = null.StringFrom(SeenType_LureWild)
@@ -906,7 +903,7 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 		}
 	}
 	pokemon.Weather = null.IntFrom(weather)
-	return reset
+	return shouldReencounter
 }
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
