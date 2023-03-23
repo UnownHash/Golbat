@@ -621,7 +621,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto) {
+func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	oldWeather := pokemon.Weather
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
@@ -647,31 +647,19 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
 	if pokemon.IsDitto {
 		// For a confirmed Ditto, we persist IV in inactive only in 0P state
-		// TODO add shortcut: check if pokemon has rock/normal type, if so skip to first branch directly
+		// when disguise is boosted, it has same IV as Ditto
 		if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) ||
-			oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-			// when disguise is boosted, it has same IV as Ditto
 			// otherwise if disguise is not boosted, and we can confirm we are not in 0P since we were in 0P/PP
+			oldWeather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) ||
+			// at this point we are not sure if we are in 00 or 0P, so we guess 00 if the last scanned level agrees
+			pokemon.Level.Int64 == level {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
 		} else {
-			// at this point we are not sure if we are in 00 or 0P
-			weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
-			if err != nil {
-				log.Warnf("[POKEMON] Failed to retrieve weather at (%f, %f) for Ditto. Rescanned IV is lost. %s",
-					pokemon.Lat, pokemon.Lon, err)
-				return
-			}
-			if weather.GameplayCondition.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				pokemon.Level = null.IntFrom(level - 5)
-				pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-					int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
-			} else {
-				pokemon.Level = null.IntFrom(level)
-				pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-					int64(proto.IndividualStamina))
-			}
+			pokemon.Level = null.IntFrom(level - 5)
+			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
+				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
 		}
 		return
 	}
@@ -774,7 +762,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon)
+	pokemon.addEncounterPokemon(encounterData.Pokemon.Pokemon)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -791,7 +779,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
 	pokemon.IsEvent = 0
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon)
+	pokemon.addEncounterPokemon(encounterData.Pokemon)
 
 	if encounterData.Pokemon.PokemonDisplay.Shiny {
 		pokemon.Shiny = null.BoolFrom(true)
