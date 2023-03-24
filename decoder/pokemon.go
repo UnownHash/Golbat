@@ -178,6 +178,14 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		return
 	}
 
+	// uncomment to debug excessive writes
+	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.Username == pokemon.Username && oldPokemon.PokestopId == pokemon.PokestopId && oldPokemon.SeenType == pokemon.SeenType && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
+	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
+	//		ignoreNearFloats,
+	//		cmpopts.IgnoreFields(Pokemon{}, "Iv", "Pvp"),
+	//	}))
+	//}
+
 	now := time.Now().Unix()
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = now
@@ -519,7 +527,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
-			pokemon.CellId = null.IntFrom(cellId)
 			pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
 			pokemon.PokestopId = null.StringFrom(pokestopId)
 			lat, lon = pokestop.Lat, pokestop.Lon
@@ -537,7 +544,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
-		pokemon.CellId = null.IntFrom(cellId)
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
 	}
 	if overrideLatLon {
@@ -548,6 +554,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		pokemon.Lat = midpoint.Lat.Degrees()
 		pokemon.Lon = midpoint.Lng.Degrees()
 	}
+	pokemon.CellId = null.IntFrom(cellId)
 	pokemon.setUnknownTimestamp()
 }
 
