@@ -38,7 +38,6 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 	req, err := http.NewRequest("GET", url, nil)
 
 	if err != nil {
-		log.Warnf("KOJI: Unable to create new request", url, err)
 		return nil, err
 	}
 
@@ -48,7 +47,6 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
-		log.Warnf("KOJI: unable to connect to %s - %s", url, err)
 		return nil, err
 	}
 
