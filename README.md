@@ -47,4 +47,39 @@ URL which will be `http://ip:port/raw`
 
 # Optimising maria db
 
-innodb_buffer_pool_size
+These options can help you quite significantly with performance.
+
+```
+# This should be 50% of RAM, leaving space for golbat
+innodb_buffer_pool_size = 64G
+
+# Log file size, should certainly be >= 1GB, but on a big system this is more appropriate
+innodb_log_file_size = 16G
+
+# This should be number of cores
+innodb_read_io_threads = 10
+innodb_write_io_threads = 10
+innodb_purge_threads = 10
+
+# Some people receommend at least 1 per gb, so could be increased above
+innodb_buffer_pool_instances = 8
+
+
+# allow big sorts, in memory temp tables
+max_heap_table_size=256M
+
+# extend wait timeout for locks to ensure a good chance to finish requests
+innodb_lock_wait_timeout = 15
+
+# logs are written once per second rather than after
+innodb_flush_log_at_trx_commit = 0
+
+# background tasks can work at high iops
+innodb_io_capacity=1000
+
+# Number of maximum available IOPS to background tasks
+innodb_io_capacity_max=2000
+
+# Trust disk system at the expense of recovery
+innodb_doublewrite = 0
+```
