@@ -548,6 +548,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		pokemon.Lat = midpoint.Lat.Degrees()
 		pokemon.Lon = midpoint.Lng.Degrees()
 	}
+	pokemon.setUnknownTimestamp()
 }
 
 const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
