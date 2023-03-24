@@ -136,8 +136,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 
 	err := db.PokemonDb.GetContext(ctx, &pokemon,
 		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, "+
-			"move_1, move_2, gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, "+
-			"capture_3, display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
+			"move_1, move_2, gender, form, cp, level, weather, costume, weight, height, size, display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", encounterId)
 
@@ -228,12 +227,12 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		}
 		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
 			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
-			"gender, form, cp, level, weather, costume, weight, height, size, capture_1, capture_2, capture_3,"+
+			"gender, form, cp, level, weather, costume, weight, height, size,"+
 			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
 			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
 			":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :weather, :costume, :weight, :height,"+
-			":size, :capture_1, :capture_2, :capture_3, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+			":size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
 			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
 			":seen_type)", pvpField, pvpValue), pokemon)
 
@@ -282,9 +281,6 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 			"seen_type = :seen_type, "+
 			"shiny = :shiny, "+
 			"username = :username, "+
-			"capture_1 = :capture_1, "+
-			"capture_2 = :capture_2, "+
-			"capture_3 = :capture_3, "+
 			"%s"+
 			"is_event = :is_event "+
 			"WHERE id = :id", pvpUpdate), pokemon,
