@@ -166,7 +166,8 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, cmp.Options{
 		ignoreNearFloats,
-		cmpopts.IgnoreFields(Pokemon{}, "Pvp"),
+		// ignore all generated fields
+		cmpopts.IgnoreFields(Pokemon{}, "Iv", "Pvp"),
 	})
 }
 
