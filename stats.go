@@ -88,7 +88,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 					result, err = db.Exec(query, args...)
 
-					log.Infof("DB - Archive of pokemon table - starting second phase")
+					log.Infof("DB - Archive of pokemon table - single batch complete")
 
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
@@ -104,7 +104,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					}
 				}
 
-				log.Infof("DB - Archive of pokemon table - single batch complete")
+				log.Infof("DB - Archive of pokemon table - starting second phase (unverified timestamps)")
 
 				resultCounter = 0
 				start = time.Now()

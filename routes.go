@@ -169,7 +169,7 @@ func Raw(c *gin.Context) {
 	go func() {
 		timeout := 3 * time.Second
 		if config.Config.ExtendedTimeout {
-			timeout = 20 * time.Second
+			timeout = 30 * time.Second
 		}
 
 		for _, entry := range protoData {

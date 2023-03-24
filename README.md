@@ -45,3 +45,6 @@ which is the latest version as of writing this.
 The data source should be configured to send to Golbat's 
 URL which will be `http://ip:port/raw`
 
+# Optimising maria db
+
+innodb_buffer_pool_size

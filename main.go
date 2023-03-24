@@ -144,6 +144,10 @@ func main() {
 	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
 
+	if config.Config.ExtendedTimeout {
+		log.Info("Extended timeout enabled")
+	}
+
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)
 	} else {
