@@ -506,7 +506,30 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
-	if pokestopId == "" {
+	useCellLatLon := true
+	if pokestopId != "" {
+		switch pokemon.SeenType.ValueOrZero() {
+		case "":
+		case SeenType_Cell:
+			overrideLatLon = true // a better estimate is available
+		case SeenType_NearbyStop:
+			break
+		default:
+			return
+		}
+		pokestop, _ := getPokestopRecord(ctx, db, pokestopId)
+		if pokestop == nil {
+			// Unrecognised pokestop, rollback changes
+			overrideLatLon = pokemon.isNewRecord()
+		} else {
+			pokemon.CellId = null.IntFrom(cellId)
+			pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
+			pokemon.PokestopId = null.StringFrom(pokestopId)
+			lat, lon = pokestop.Lat, pokestop.Lon
+			useCellLatLon = false
+		}
+	}
+	if useCellLatLon {
 		// Cell Pokemon
 		if !overrideLatLon && pokemon.SeenType.ValueOrZero() != SeenType_Cell {
 			// do not downgrade to nearby cell
@@ -519,25 +542,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 
 		pokemon.CellId = null.IntFrom(cellId)
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
-	} else {
-		switch pokemon.SeenType.ValueOrZero() {
-		case "":
-		case SeenType_Cell:
-			overrideLatLon = true // a better estimate is available
-		case SeenType_NearbyStop:
-			break
-		default:
-			return
-		}
-		pokemon.CellId = null.IntFrom(cellId)
-		pokestop, _ := getPokestopRecord(ctx, db, pokestopId)
-		if pokestop == nil {
-			// Unrecognised pokestop
-			return
-		}
-		pokemon.PokestopId = null.StringFrom(pokestopId)
-		lat, lon = pokestop.Lat, pokestop.Lon
-		pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
 	}
 	if overrideLatLon {
 		pokemon.Lat, pokemon.Lon = lat, lon
