@@ -3,18 +3,22 @@ package config
 import "golbat/geo"
 
 type configDefinition struct {
-	Port            int       `toml:"port"`
-	Webhooks        []webhook `toml:"webhooks"`
-	Database        database  `toml:"database"`
-	Stats           bool      `toml:"stats"`
-	Logging         logging   `toml:"logging"`
-	InMemory        bool      `toml:"in_memory"`
-	Cleanup         cleanup   `toml:"cleanup"`
-	RawBearer       string    `toml:"raw_bearer"`
-	ApiSecret       string    `toml:"api_secret"`
-	Pvp             pvp       `toml:"pvp"`
-	KojiBearerToken string    `toml:"koji_bearer_token"`
-	KojiUrl         string    `toml:"koji_url"`
+	Port      int       `toml:"port"`
+	Webhooks  []webhook `toml:"webhooks"`
+	Database  database  `toml:"database"`
+	Stats     bool      `toml:"stats"`
+	Logging   logging   `toml:"logging"`
+	InMemory  bool      `toml:"in_memory"`
+	Cleanup   cleanup   `toml:"cleanup"`
+	RawBearer string    `toml:"raw_bearer"`
+	ApiSecret string    `toml:"api_secret"`
+	Pvp       pvp       `toml:"pvp"`
+	Koji      koji      `toml:"koji"`
+}
+
+type koji struct {
+	Url         string `toml:"url"`
+	BearerToken string `toml:"bearer_token"`
 }
 
 type cleanup struct {

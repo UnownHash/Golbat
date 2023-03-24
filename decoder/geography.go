@@ -96,6 +96,7 @@ func ReadGeofences() error {
 	if geoerr != nil {
 		return geoerr
 	}
+	log.Infof("GEO: Loaded geofence from geofence.json")
 	statsFeatureCollection = fc
 
 	return nil

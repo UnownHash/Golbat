@@ -89,7 +89,7 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
-	decoder.SetKojiUrl(config.Config.KojiUrl, config.Config.KojiBearerToken)
+	decoder.SetKojiUrl(config.Config.Koji.Url, config.Config.Koji.BearerToken)
 
 	if config.Config.InMemory {
 		//sql.Register("sqlite3_settings",
