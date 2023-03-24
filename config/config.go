@@ -13,6 +13,12 @@ type configDefinition struct {
 	RawBearer string    `toml:"raw_bearer"`
 	ApiSecret string    `toml:"api_secret"`
 	Pvp       pvp       `toml:"pvp"`
+	Koji      koji      `toml:"koji"`
+}
+
+type koji struct {
+	Url         string `toml:"url"`
+	BearerToken string `toml:"bearer_token"`
 }
 
 type cleanup struct {
