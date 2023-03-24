@@ -169,10 +169,8 @@ func Raw(c *gin.Context) {
 	go func() {
 		timeout := 3 * time.Second
 		if config.Config.ExtendedTimeout {
-			timeout = 10 * time.Second
+			timeout = 20 * time.Second
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 
 		for _, entry := range protoData {
 			method := entry.Method
@@ -195,7 +193,10 @@ func Raw(c *gin.Context) {
 				protoData.Request, _ = b64.StdEncoding.DecodeString(request)
 			}
 
+			// provide independent cancellation contexts for each proto decode
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, method, &protoData)
+			cancel()
 		}
 	}()
 
