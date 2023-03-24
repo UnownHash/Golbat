@@ -413,9 +413,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	switch pokemon.SeenType.ValueOrZero() {
-	case "":
-	case SeenType_Cell:
-	case SeenType_NearbyStop:
+	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
@@ -509,8 +507,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	useCellLatLon := true
 	if pokestopId != "" {
 		switch pokemon.SeenType.ValueOrZero() {
-		case "":
-		case SeenType_Cell:
+		case "", SeenType_Cell:
 			overrideLatLon = true // a better estimate is available
 		case SeenType_NearbyStop:
 			break
