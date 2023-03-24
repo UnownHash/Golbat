@@ -167,7 +167,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, cmp.Options{
 		ignoreNearFloats,
 		// ignore all generated fields
-		cmpopts.IgnoreFields(Pokemon{}, "Iv", "Pvp"),
+		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
 	})
 }
 
@@ -429,10 +429,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
-	if !pokemon.Username.Valid {
-		// Don't be the reason that a pokemon gets updated
-		pokemon.Username = null.StringFrom(username)
-	}
+	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
