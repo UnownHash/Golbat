@@ -10,6 +10,7 @@ import (
 	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
+	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
 	"sync"
@@ -168,6 +169,13 @@ func ClearGymCache() {
 var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	delta := math.Abs(x - y)
 	return delta < 0.000001
+})
+var ignoreNearNullFloats = cmp.Comparer(func(x, y null.Float) bool {
+	if x.Valid {
+		return y.Valid && math.Abs(x.Float64-y.Float64) < 0.000001
+	} else {
+		return !y.Valid
+	}
 })
 
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {

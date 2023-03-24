@@ -165,7 +165,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, cmp.Options{
-		ignoreNearFloats,
+		ignoreNearFloats, ignoreNearNullFloats,
 		// ignore all generated fields
 		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
 	})
@@ -179,10 +179,10 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 	}
 
 	// uncomment to debug excessive writes
-	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.Username == pokemon.Username && oldPokemon.PokestopId == pokemon.PokestopId && oldPokemon.SeenType == pokemon.SeenType && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
+	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
 	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
-	//		ignoreNearFloats,
-	//		cmpopts.IgnoreFields(Pokemon{}, "Iv", "Pvp"),
+	//		ignoreNearFloats, ignoreNearNullFloats,
+	//		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
 	//	}))
 	//}
 
