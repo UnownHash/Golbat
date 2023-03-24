@@ -5,9 +5,14 @@ Initially designed to be database compatible with RDM, it will
 be able to evolve faster by not needing to retain backward
 compatibility.
 
+# Support and discussion
+
+There is a [Discord server](https://discord.gg/Vjze47qchG) for support and discussion.
+At this time this is likely to be mostly development discussion.
+
 # Requirements
 
-`go 1.18`
+`go 1.18` - although these days you should be installing go 1.20
 
 On Ubuntu 22 (jammy), installing using apt 
 `sudo apt install golang-go` should install the right version.
