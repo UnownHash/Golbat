@@ -258,7 +258,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 			}
 
 			pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
-			savePokemonRecord(ctx, db, pokemon)
+			//savePokemonRecord(ctx, db, pokemon)
 		}
 
 		pokemonMutex.Unlock()
