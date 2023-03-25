@@ -739,6 +739,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			default:
 				setDittoAttributes("B0>BN", false, true, false)
 			}
+			return
 		case -5:
 			switch pokemon.Weather.Int64 {
 			case int64(pogo.GameplayWeatherProto_NONE):
@@ -766,9 +767,13 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			setDittoAttributes("0P>B0", false, false, true)
 			return
 		default:
-			log.Warnf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Rescanned IV is lost.",
+			log.Errorf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Old IV is lost.",
 				pokemon.Id, pokemon.Level.Int64, level)
-			return
+			pokemon.AtkIv = null.NewInt(0, false)
+			pokemon.DefIv = null.NewInt(0, false)
+			pokemon.StaIv = null.NewInt(0, false)
+			pokemon.Iv = null.NewFloat(0, false)
+			pokemon.IvInactive = null.NewInt(0, false)
 		}
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
