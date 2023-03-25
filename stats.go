@@ -88,8 +88,6 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 					result, err = db.Exec(query, args...)
 
-					log.Infof("DB - Archive of pokemon table - single batch complete")
-
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
 						break
@@ -131,8 +129,6 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					query = db.Rebind(query)
 
 					result, err = db.Exec(query, args...)
-
-					log.Infof("DB - Archiving of pokemon table - single batch complete")
 
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (unverified timestamps) error [after %d rows] %s", resultCounter, err)
