@@ -176,6 +176,10 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
+	savePokemonRecordAsAtTime(ctx, db, pokemon, time.Now().Unix())
+}
+
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
@@ -195,7 +199,6 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		}))
 	}
 
-	now := time.Now().Unix()
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = now
 	}
@@ -505,6 +508,15 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	pokemon.DefIv = null.IntFrom(d)
 	pokemon.StaIv = null.IntFrom(s)
 	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
+}
+
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) nearbySignificantUpdate(nearbyPokemon *pogo.NearbyPokemonProto) bool {
+	return (pokemon.SeenType.ValueOrZero() == SeenType_Cell && nearbyPokemon.FortId != "") ||
+		pokemon.PokemonId != int16(nearbyPokemon.PokedexNumber) ||
+		pokemon.Form.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.WeatherBoostedCondition)
 }
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {

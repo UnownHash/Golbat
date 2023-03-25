@@ -262,6 +262,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 			log.Errorf("getOrCreatePokemonRecord: %s", err)
 		} else {
 			if pokemon == nil || pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data) {
+				updateTime := time.Now().Unix()
 				go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
 					time.Sleep(15 * time.Second)
 					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -274,11 +275,12 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
 						log.Errorf("getOrCreatePokemonRecord: %s", err)
 					} else {
-						if pokemon.wildSignificantUpdate(wildPokemon) {
+						// Update if there is still a change required & this update is the most recent
+						if pokemon.wildSignificantUpdate(wildPokemon) && pokemon.Updated.ValueOrZero() < updateTime {
 							log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
 
 							pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
-							savePokemonRecord(ctx, db, pokemon)
+							savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
 						}
 					}
 				}(wild.Data, int64(wild.Cell), int64(wild.Timestamp))
@@ -297,8 +299,31 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
-			savePokemonRecord(ctx, db, pokemon)
+			if pokemon == nil || pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data) {
+				updateTime := time.Now().Unix()
+				go func(nearbyPokemon *pogo.NearbyPokemonProto, cellId int64) {
+					time.Sleep(60 * time.Second)
+					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+					pokemonMutex.Lock()
+					defer pokemonMutex.Unlock()
+
+					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					defer cancel()
+
+					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
+						log.Errorf("getOrCreatePokemonRecord: %s", err)
+					} else {
+						// Update if there is still a change required & this update is the most recent
+						if pokemon.nearbySignificantUpdate(nearbyPokemon) && pokemon.Updated.ValueOrZero() < updateTime {
+							log.Debugf("DELAYED UPDATE: Updating pokemon %s from nearby", encounterId)
+
+							pokemon.updateFromNearby(ctx, db, nearbyPokemon, cellId, username)
+
+							savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
+						}
+					}
+				}(nearby.Data, int64(nearby.Cell))
+			}
 		}
 		pokemonMutex.Unlock()
 	}
