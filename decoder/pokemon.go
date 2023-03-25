@@ -734,7 +734,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 					} else if level > 30 {
 						setDittoAttributes("00/0N/BN/PN>0P", true, false, true)
 					} else {
-						pokemon.IvInactive = null.NewInt(0, false) // clear old IV if present
+						pokemon.IvInactive = null.NewInt(0, false) // worst case: clear old IV if present
 						setDittoAttributes("00/0N/BN/PN>0P or B0>00/0N", false, false, false)
 					}
 				case uint8(pogo.GameplayWeatherProto_NONE),
@@ -746,10 +746,12 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				default:
 					if level > 30 {
 						setDittoAttributes("BN>0P", true, false, true)
-					} else {
+					} else if oldWeather&EncounterWeather_Rerolled == 0 {
 						// set Ditto as it is most likely B0>00 if species did not reroll
-						setDittoAttributes("BN>0P or B0>00/0N", false, true,
-							oldWeather&EncounterWeather_Rerolled == 0)
+						setDittoAttributes("BN>0P or B0>00/0N", false, true, true)
+					} else {
+						pokemon.IvInactive = null.NewInt(0, false) // worst case: clear old IV if present
+						setDittoAttributes("BN>0P or B0>00/0N", false, true, false)
 					}
 				}
 			case uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
