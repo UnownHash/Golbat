@@ -257,12 +257,43 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+		pokemon, err := getPokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getOrCreatePokemonRecord: %s", err)
+			log.Errorf("getPokemonRecord: %s", err)
 		} else {
-			pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
-			savePokemonRecord(ctx, db, pokemon)
+			if pokemon == nil || pokemon.wildSignificantUpdate(wild.Data) {
+				go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+					time.Sleep(15 * time.Second)
+					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+					pokemonMutex.Lock()
+					defer pokemonMutex.Unlock()
+
+					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
+						log.Errorf("getOrCreatePokemonRecord: %s", err)
+					} else {
+						if pokemon.wildSignificantUpdate(wildPokemon) {
+							log.Infof("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
+							ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+							defer cancel()
+							pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
+							savePokemonRecord(ctx, db, pokemon)
+						}
+					}
+				}(wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
+			}
+			newRecord := pokemon.isNewRecord()
+			pokemonId := pokemon.PokemonId
+			weather := pokemon.Weather
+
+			if !newRecord {
+				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
+			}
+
+			if newRecord || pokemonId != pokemon.PokemonId || weather != pokemon.Weather {
+				// If the pokemon has changed, we
+			} else {
+				savePokemonRecord(ctx, db, pokemon)
+			}
 		}
 
 		pokemonMutex.Unlock()

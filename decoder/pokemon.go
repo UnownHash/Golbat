@@ -417,6 +417,15 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.SpawnId = null.IntFrom(spawnId)
 }
 
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto) bool {
+	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
+		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
+		pokemon.Form.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition)
+}
+
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
