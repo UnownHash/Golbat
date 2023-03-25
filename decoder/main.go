@@ -268,13 +268,15 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 					pokemonMutex.Lock()
 					defer pokemonMutex.Unlock()
 
+					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+					defer cancel()
+
 					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
 						log.Errorf("getOrCreatePokemonRecord: %s", err)
 					} else {
 						if pokemon.wildSignificantUpdate(wildPokemon) {
 							log.Infof("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
-							ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-							defer cancel()
+
 							pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
 							savePokemonRecord(ctx, db, pokemon)
 						}
