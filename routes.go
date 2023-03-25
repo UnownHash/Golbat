@@ -167,8 +167,10 @@ func Raw(c *gin.Context) {
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		timeout := 5 * time.Second
+		if config.Config.ExtendedTimeout {
+			timeout = 30 * time.Second
+		}
 
 		for _, entry := range protoData {
 			method := entry.Method
@@ -191,7 +193,10 @@ func Raw(c *gin.Context) {
 				protoData.Request, _ = b64.StdEncoding.DecodeString(request)
 			}
 
+			// provide independent cancellation contexts for each proto decode
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, method, &protoData)
+			cancel()
 		}
 	}()
 

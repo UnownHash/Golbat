@@ -54,11 +54,11 @@ var playerCache *ttlcache.Cache[string, Player]
 var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
-var gymStripedMutex = stripedmutex.New(32)
-var pokestopStripedMutex = stripedmutex.New(32)
-var pokemonStripedMutex = stripedmutex.New(128)
-var weatherStripedMutex = stripedmutex.New(8)
-var s2cellStripedMutex = stripedmutex.New(32)
+var gymStripedMutex = stripedmutex.New(128)
+var pokestopStripedMutex = stripedmutex.New(128)
+var pokemonStripedMutex = stripedmutex.New(1024)
+var weatherStripedMutex = stripedmutex.New(128)
+var s2cellStripedMutex = stripedmutex.New(1024)
 
 var s2CellLookup = sync.Map{}
 

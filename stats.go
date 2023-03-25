@@ -56,6 +56,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 		go func() {
 			for {
 				<-ticker.C
+				log.Infof("DB - Archive of pokemon table - starting")
 				start := time.Now()
 
 				var resultCounter int64
@@ -87,6 +88,8 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 
 					result, err = db.Exec(query, args...)
 
+					log.Infof("DB - Archive of pokemon table - single batch complete")
+
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
 						break
@@ -100,6 +103,8 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 						}
 					}
 				}
+
+				log.Infof("DB - Archive of pokemon table - starting second phase (unverified timestamps)")
 
 				resultCounter = 0
 				start = time.Now()
@@ -126,6 +131,8 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 					query = db.Rebind(query)
 
 					result, err = db.Exec(query, args...)
+
+					log.Infof("DB - Archiving of pokemon table - single batch complete")
 
 					if err != nil {
 						log.Errorf("DB - Archive of pokemon table (unverified timestamps) error [after %d rows] %s", resultCounter, err)
