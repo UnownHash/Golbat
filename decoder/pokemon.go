@@ -285,7 +285,7 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 			"iv = :iv,"+
 			"form = :form, "+
 			"level = :level, "+
-			"encounter_weather = :weather, "+
+			"encounter_weather = :encounter_weather, "+
 			"weather = :weather, "+
 			"costume = :costume, "+
 			"first_seen_timestamp = :first_seen_timestamp, "+
