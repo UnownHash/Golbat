@@ -1,0 +1,2 @@
+ALTER TABLE pokemon
+    ADD COLUMN `encounter_weather` TINYINT(3) UNSIGNED NOT NULL DEFAULT 255 AFTER `level`;
