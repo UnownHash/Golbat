@@ -515,7 +515,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		case "", SeenType_Cell:
 			overrideLatLon = true // a better estimate is available
 		case SeenType_NearbyStop:
-			break
 		default:
 			return
 		}
@@ -718,7 +717,6 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	if pokemon.Level.Valid {
 		switch level - pokemon.Level.Int64 {
 		case 0:
-			break
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
