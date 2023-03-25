@@ -302,7 +302,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 			if pokemon == nil || pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data) {
 				updateTime := time.Now().Unix()
 				go func(nearbyPokemon *pogo.NearbyPokemonProto, cellId int64) {
-					time.Sleep(60 * time.Second)
+					time.Sleep(120 * time.Second)
 					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 					pokemonMutex.Lock()
 					defer pokemonMutex.Unlock()
