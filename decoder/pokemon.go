@@ -160,7 +160,11 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	if pokemon != nil || err != nil {
 		return pokemon, err
 	}
-	return &Pokemon{Id: encounterId}, nil
+	pokemon = &Pokemon{Id: encounterId}
+	if db.UsePokemonCache {
+		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+	}
+	return pokemon, nil
 }
 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
@@ -178,13 +182,18 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 		return
 	}
 
+	// Blank, non-persisted record are now inserted into the cache to save on DB calls
+	if oldPokemon.isNewRecord() {
+		oldPokemon = nil
+	}
+
 	// uncomment to debug excessive writes
-	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
-	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
-	//		ignoreNearFloats, ignoreNearNullFloats,
-	//		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
-	//	}))
-	//}
+	if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
+		log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
+			ignoreNearFloats, ignoreNearNullFloats,
+			cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
+		}))
+	}
 
 	now := time.Now().Unix()
 	if pokemon.FirstSeenTimestamp == 0 {
@@ -988,7 +997,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
-	if pokemon == nil {
+	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")

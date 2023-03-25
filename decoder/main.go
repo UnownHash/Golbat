@@ -257,9 +257,9 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Errorf("getPokemonRecord: %s", err)
+			log.Errorf("getOrCreatePokemonRecord: %s", err)
 		} else {
 			if pokemon == nil || pokemon.wildSignificantUpdate(wild.Data) {
 				go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
