@@ -281,19 +281,6 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 					}
 				}(wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
 			}
-			newRecord := pokemon.isNewRecord()
-			pokemonId := pokemon.PokemonId
-			weather := pokemon.Weather
-
-			if !newRecord {
-				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
-			}
-
-			if newRecord || pokemonId != pokemon.PokemonId || weather != pokemon.Weather {
-				// If the pokemon has changed, we
-			} else {
-				savePokemonRecord(ctx, db, pokemon)
-			}
 		}
 
 		pokemonMutex.Unlock()
