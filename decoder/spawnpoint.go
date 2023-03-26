@@ -56,10 +56,36 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 	return &spawnpoint, nil
 }
 
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	return !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+	if !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
-		old.DespawnSec != new.DespawnSec
+		(old.DespawnSec.Valid && !new.DespawnSec.Valid) ||
+		(!old.DespawnSec.Valid && new.DespawnSec.Valid) {
+		return true
+	}
+	if !old.DespawnSec.Valid && !new.DespawnSec.Valid {
+		return false
+	}
+
+	// Ignore small movements in despawn time
+	oldDespawnSec := old.DespawnSec.Int64
+	newDespawnSec := new.DespawnSec.Int64
+
+	if oldDespawnSec <= 1 && newDespawnSec >= 3598 {
+		return false
+	}
+	if newDespawnSec <= 1 && oldDespawnSec >= 3598 {
+		return false
+	}
+
+	return Abs(old.DespawnSec.Int64-new.DespawnSec.Int64) > 2
 }
 
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
