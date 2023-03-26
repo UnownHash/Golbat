@@ -10,6 +10,7 @@ import (
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
+	"golbat/external"
 	"golbat/webhooks"
 	"google.golang.org/protobuf/proto"
 	"io/ioutil"
@@ -32,6 +33,12 @@ func main() {
 	config.ReadConfig()
 
 	logLevel := log.InfoLevel
+
+	// Both Sentry & Pyroscope are optional and off by default. Read more:
+	// https://docs.sentry.io/platforms/go
+	// https://pyroscope.io/docs/golang
+	external.InitSentry()
+	external.InitPyroscope()
 
 	if config.Config.Logging.Debug == true {
 		logLevel = log.DebugLevel
