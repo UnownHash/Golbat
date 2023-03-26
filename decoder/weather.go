@@ -73,6 +73,10 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 	return &weather, nil
 }
 
+func findWeatherRecordByLatLon(ctx context.Context, db db.DbDetails, lat float64, lon float64) (*Weather, error) {
+	return getWeatherRecord(ctx, db, int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10)))
+}
+
 func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) *Weather {
 	weather.Id = clientWeather.S2CellId
 	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
