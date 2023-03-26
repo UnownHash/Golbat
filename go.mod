@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/Pupitar/ohbemgo v0.7.3
+	github.com/getsentry/sentry-go v0.19.0
 	github.com/gin-gonic/gin v1.8.2
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/golang-migrate/migrate/v4 v4.15.2
@@ -15,6 +16,7 @@ require (
 	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/paulmach/orb v0.7.1
 	github.com/pelletier/go-toml/v2 v2.0.6
+	github.com/pyroscope-io/client v0.7.0
 	github.com/ringsaturn/tzf v0.10.3
 	github.com/ringsaturn/tzf-rel v0.0.2022-g
 	github.com/sirupsen/logrus v1.9.0
@@ -39,6 +41,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	github.com/tidwall/geoindex v1.7.0 // indirect
 	github.com/tidwall/geojson v1.4.3 // indirect
 	github.com/tidwall/rtree v1.9.2 // indirect

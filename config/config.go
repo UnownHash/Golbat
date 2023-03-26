@@ -8,6 +8,8 @@ type configDefinition struct {
 	Database  database  `toml:"database"`
 	Stats     bool      `toml:"stats"`
 	Logging   logging   `toml:"logging"`
+	Sentry    sentry    `toml:"sentry"`
+	Pyroscope pyroscope `toml:"pyroscope"`
 	InMemory  bool      `toml:"in_memory"`
 	Cleanup   cleanup   `toml:"cleanup"`
 	RawBearer string    `toml:"raw_bearer"`
@@ -50,6 +52,22 @@ type pvpLeagues struct {
 	LittleCupRules bool   `toml:"little"`
 }
 
+type sentry struct {
+	DSN              string  `toml:"dsn"`
+	SampleRate       float64 `toml:"sample_rate"`
+	EnableTracing    bool    `toml:"enable_tracing"`
+	TracesSampleRate float64 `toml:"traces_sample_rate"`
+}
+
+type pyroscope struct {
+	ApplicationName      string `toml:"application_name"`
+	ServerAddress        string `toml:"server_address"`
+	ApiKey               string `toml:"api_key"`
+	Logger               bool   `toml:"logger"`
+	MutexProfileFraction int    `toml:"mutex_profile_fraction"`
+	BlockProfileRate     int    `toml:"block_profile_rate"`
+}
+
 type logging struct {
 	Debug    bool `toml:"debug"`
 	SaveLogs bool `toml:"save_logs" default:"true"`
@@ -69,4 +87,14 @@ type tuning struct {
 	ProcessNearby   bool `toml:"process_nearby_pokemon	"`
 }
 
-var Config configDefinition
+var Config = configDefinition{
+	Sentry: sentry{
+		SampleRate:       1.0,
+		TracesSampleRate: 1.0,
+	},
+	Pyroscope: pyroscope{
+		ApplicationName:      "golbat",
+		MutexProfileFraction: 5,
+		BlockProfileRate:     5,
+	},
+}
