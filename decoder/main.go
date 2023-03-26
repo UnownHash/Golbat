@@ -168,7 +168,7 @@ func ClearGymCache() {
 const floatTolerance = 0.000001
 
 func floatAlmostEqual(a, b, tolerance float64) bool {
-	return math.Abs(a-b) <= tolerance
+	return math.Abs(a-b) < tolerance
 }
 
 func nullFloatAlmostEqual(a, b null.Float, tolerance float64) bool {
