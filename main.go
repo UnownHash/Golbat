@@ -78,7 +78,7 @@ func main() {
 		return
 	}
 
-	db.SetMaxOpenConns(50)
+	db.SetMaxOpenConns(config.Config.Database.MaxPool)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxIdleTime(time.Minute)
 
@@ -145,6 +145,10 @@ func main() {
 
 	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
+
+	if config.Config.Tuning.ExtendedTimeout {
+		log.Info("Extended timeout enabled")
+	}
 
 	if config.Config.InMemory {
 		StartInMemoryCleardown(inMemoryDb)
