@@ -49,7 +49,7 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 	}
 
 	if err != nil {
-		return nil, err
+		return &Spawnpoint{Id: spawnpointId}, err
 	}
 
 	spawnpointCache.Set(spawnpointId, spawnpoint, ttlcache.DefaultTTL)
@@ -104,8 +104,11 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 
 	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
 
+	spawnpoint.Updated = time.Now().Unix()  // ensure future updates are set correctly
+	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
+
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
-		"VALUES (:id, :lat, :lon, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), :despawn_sec)"+
+		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+
 		"ON DUPLICATE KEY UPDATE "+
 		"lat=VALUES(lat),"+
 		"lon=VALUES(lon),"+
@@ -118,7 +121,6 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		return
 	}
 
-	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
@@ -132,7 +134,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 	spawnpoint := inMemorySpawnpoint.Value()
 	now := time.Now().Unix()
 
-	if now-spawnpoint.LastSeen > 900 {
+	if now-spawnpoint.LastSeen > 3600 {
 		spawnpoint.LastSeen = now
 
 		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
