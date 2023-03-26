@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"github.com/golang/geo/s2"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -14,6 +13,8 @@ import (
 	"gopkg.in/guregu/null.v4"
 )
 
+// Weather struct.
+// REMINDER! Keep hasChangesWeather updated after making changes
 type Weather struct {
 	Id                 int64     `db:"id"`
 	Latitude           float64   `db:"latitude"`
@@ -98,8 +99,24 @@ func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.
 	return weather
 }
 
+// hasChangesWeather compares two Weather structs
+// Float tolerance: Latitude, Longitude
 func hasChangesWeather(old *Weather, new *Weather) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+	return old.Id != new.Id ||
+		old.Level != new.Level ||
+		old.GameplayCondition != new.GameplayCondition ||
+		old.WindDirection != new.WindDirection ||
+		old.CloudLevel != new.CloudLevel ||
+		old.RainLevel != new.RainLevel ||
+		old.WindLevel != new.WindLevel ||
+		old.SnowLevel != new.SnowLevel ||
+		old.FogLevel != new.FogLevel ||
+		old.SpecialEffectLevel != new.SpecialEffectLevel ||
+		old.Severity != new.Severity ||
+		old.WarnWeather != new.WarnWeather ||
+		old.Updated != new.Updated ||
+		!floatAlmostEqual(old.Latitude, new.Latitude, floatTolerance) ||
+		!floatAlmostEqual(old.Longitude, new.Longitude, floatTolerance)
 }
 
 func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {

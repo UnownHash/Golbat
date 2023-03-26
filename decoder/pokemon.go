@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/golang/geo/s2"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
@@ -22,6 +20,7 @@ import (
 )
 
 // Pokemon struct.
+// REMINDER! Keep hasChangesPokemon updated after making changes
 //
 // AtkIv/DefIv/StaIv: Should not be set directly. Use calculateIv
 //
@@ -167,12 +166,46 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	return pokemon, nil
 }
 
+// hasChangesPokemon compares two Pokemon structs
+// Ignored: Username, Iv, Pvp
+// Float tolerance: Lat, Lon
+// Null Float tolerance: Weight, Height, Capture1, Capture2, Capture3
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
-	return !cmp.Equal(old, new, cmp.Options{
-		ignoreNearFloats, ignoreNearNullFloats,
-		// ignore all generated fields
-		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
-	})
+	return old.Id != new.Id ||
+		old.PokestopId != new.PokestopId ||
+		old.SpawnId != new.SpawnId ||
+		old.Size != new.Size ||
+		old.ExpireTimestamp != new.ExpireTimestamp ||
+		old.Updated != new.Updated ||
+		old.PokemonId != new.PokemonId ||
+		old.Move1 != new.Move1 ||
+		old.Move2 != new.Move2 ||
+		old.Gender != new.Gender ||
+		old.Cp != new.Cp ||
+		old.AtkIv != new.AtkIv ||
+		old.DefIv != new.DefIv ||
+		old.StaIv != new.StaIv ||
+		old.IvInactive != new.IvInactive ||
+		old.Form != new.Form ||
+		old.Level != new.Level ||
+		old.Weather != new.Weather ||
+		old.Costume != new.Costume ||
+		old.FirstSeenTimestamp != new.FirstSeenTimestamp ||
+		old.Changed != new.Changed ||
+		old.CellId != new.CellId ||
+		old.ExpireTimestampVerified != new.ExpireTimestampVerified ||
+		old.DisplayPokemonId != new.DisplayPokemonId ||
+		old.IsDitto != new.IsDitto ||
+		old.SeenType != new.SeenType ||
+		old.Shiny != new.Shiny ||
+		old.IsEvent != new.IsEvent ||
+		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
+		!nullFloatAlmostEqual(old.Weight, new.Weight, floatTolerance) ||
+		!nullFloatAlmostEqual(old.Height, new.Height, floatTolerance) ||
+		!nullFloatAlmostEqual(old.Capture1, new.Capture1, floatTolerance) ||
+		!nullFloatAlmostEqual(old.Capture2, new.Capture2, floatTolerance) ||
+		!nullFloatAlmostEqual(old.Capture3, new.Capture3, floatTolerance)
 }
 
 func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
