@@ -506,15 +506,6 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
 }
 
-// nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
-// should be written.
-func (pokemon *Pokemon) nearbySignificantUpdate(nearbyPokemon *pogo.NearbyPokemonProto) bool {
-	return (pokemon.SeenType.ValueOrZero() == SeenType_Cell && nearbyPokemon.FortId != "") ||
-		pokemon.PokemonId != int16(nearbyPokemon.PokedexNumber) ||
-		pokemon.Form.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.WeatherBoostedCondition)
-}
-
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
@@ -591,10 +582,7 @@ const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encou
 // information held.
 // db - the database connection to be used
 // wildPokemon - the Pogo Proto to be decoded
-// spawnId - the spawn id the Pokemon was seen at
 // timestampMs - the timestamp to be used for calculations
-// timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
-// a new exact spawnpoint record
 func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
 	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	if err != nil {
