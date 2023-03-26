@@ -411,22 +411,14 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, timestampAccurate bool) {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
 	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
 	pokemon.Lat = wildPokemon.Latitude
 	pokemon.Lon = wildPokemon.Longitude
 
-	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
-	if err != nil {
-		panic(err)
-	}
-
-	// Not sure I like the idea about an object updater loading another object
-
-	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, timestampAccurate)
-	pokemon.SpawnId = null.IntFrom(spawnId)
+	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
 }
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -449,7 +441,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	if pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
-	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
+	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
@@ -599,50 +591,30 @@ const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encou
 // timestampMs - the timestamp to be used for calculations
 // timestampAccurate - whether the timestamp is considered accurate (eg came from a GMO), and so can be used to create
 // a new exact spawnpoint record
-func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, spawnId int64, timestampMs int64, timestampAccurate bool) {
-	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
-		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
-		pokemon.ExpireTimestamp = null.IntFrom(expireTimeStamp)
+func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	pokemon.SpawnId = null.IntFrom(spawnId)
+	pokemon.ExpireTimestampVerified = false
+
+	spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
+		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
+
+		date := time.Unix(timestampMs/1000, 0)
+		secondOfHour := date.Second() + date.Minute()*60
+
+		despawnOffset := despawnSecond - secondOfHour
+		if despawnOffset < 0 {
+			despawnOffset += 3600
+		}
+		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
 		pokemon.ExpireTimestampVerified = true
-
-		if timestampAccurate {
-			date := time.Unix(expireTimeStamp, 0)
-			secondOfHour := date.Second() + date.Minute()*60
-			spawnpoint := Spawnpoint{
-				Id:         spawnId,
-				Lat:        pokemon.Lat,
-				Lon:        pokemon.Lon,
-				DespawnSec: null.IntFrom(int64(secondOfHour)),
-			}
-			spawnpointUpdate(ctx, db, &spawnpoint)
-		}
 	} else {
-		pokemon.ExpireTimestampVerified = false
-
-		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
-		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
-			despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
-
-			date := time.Unix(timestampMs/1000, 0)
-			secondOfHour := date.Second() + date.Minute()*60
-
-			despawnOffset := despawnSecond - secondOfHour
-			if despawnOffset < 0 {
-				despawnOffset += 3600
-			}
-			pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
-			pokemon.ExpireTimestampVerified = true
-			spawnpointSeen(ctx, db, spawnId)
-		} else {
-			spawnpoint := Spawnpoint{
-				Id:         spawnId,
-				Lat:        pokemon.Lat,
-				Lon:        pokemon.Lon,
-				DespawnSec: null.NewInt(0, false),
-			}
-			spawnpointUpdate(ctx, db, &spawnpoint)
-			pokemon.setUnknownTimestamp()
-		}
+		pokemon.setUnknownTimestamp()
 	}
 }
 
@@ -824,7 +796,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000, false)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
 	pokemon.addEncounterPokemon(encounterData.Pokemon.Pokemon)
 
 	if pokemon.CellId.Valid == false {

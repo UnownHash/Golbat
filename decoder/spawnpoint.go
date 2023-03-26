@@ -6,7 +6,9 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/pogo"
 	"gopkg.in/guregu/null.v4"
+	"strconv"
 	"time"
 )
 
@@ -58,6 +60,38 @@ func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
 	return old.Lat != new.Lat ||
 		old.Lon != new.Lon ||
 		old.DespawnSec != new.DespawnSec
+}
+
+func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
+		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
+
+		date := time.Unix(expireTimeStamp, 0)
+		secondOfHour := date.Second() + date.Minute()*60
+		spawnpoint := Spawnpoint{
+			Id:         spawnId,
+			Lat:        wildPokemon.Latitude,
+			Lon:        wildPokemon.Longitude,
+			DespawnSec: null.IntFrom(int64(secondOfHour)),
+		}
+		spawnpointUpdate(ctx, db, &spawnpoint)
+	} else {
+		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+		if spawnPoint == nil {
+			spawnpoint := Spawnpoint{
+				Id:  spawnId,
+				Lat: wildPokemon.Latitude,
+				Lon: wildPokemon.Longitude,
+			}
+			spawnpointUpdate(ctx, db, &spawnpoint)
+		}
+		spawnpointSeen(ctx, db, spawnId)
+	}
 }
 
 func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {

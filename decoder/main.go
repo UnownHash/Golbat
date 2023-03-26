@@ -252,8 +252,11 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 }
 
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
-	if config.Config.Tuning.ProcessWilds {
-		for _, wild := range wildPokemonList {
+
+	for _, wild := range wildPokemonList {
+		spawnpointUpdateFromWild(ctx, db, wild.Data, int64(wild.Timestamp))
+
+		if config.Config.Tuning.ProcessWilds {
 			encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 			pokemonMutex.Lock()
