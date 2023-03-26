@@ -45,6 +45,24 @@ which is the latest version as of writing this.
 The data source should be configured to send to Golbat's 
 URL which will be `http://ip:port/raw`
 
+# Tuning
+
+There can be a tuning section in the config file
+
+```toml
+[tuning]
+# process_wilds = true
+# process_nearby = true
+```
+
+* process_wilds - by default Golbat will process the wilds from the GMO after a 15 second
+delay. This allows time for your MITM to send an encounter to overtake it saving a disk write. If
+you are confident that your MITM is sending encounters, you can disable wilds in all cases
+saving some CPU and memory
+* process_nearby - by default Golbat will process the nearby pokestop and cell pokemon from the GMO.
+This comes at a cost of ~20% more disk writes than ignoring them.  Many argue these are vanity
+pokemon and not worth the cost.  Some argue that early sight of a rare pokemon is worth the cost.
+
 # Optimising maria db
 
 These options can help you quite significantly with performance.

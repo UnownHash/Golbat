@@ -3,17 +3,17 @@ package config
 import "golbat/geo"
 
 type configDefinition struct {
-	Port            int       `toml:"port"`
-	Webhooks        []webhook `toml:"webhooks"`
-	Database        database  `toml:"database"`
-	Stats           bool      `toml:"stats"`
-	Logging         logging   `toml:"logging"`
-	InMemory        bool      `toml:"in_memory"`
-	Cleanup         cleanup   `toml:"cleanup"`
-	RawBearer       string    `toml:"raw_bearer"`
-	ApiSecret       string    `toml:"api_secret"`
-	Pvp             pvp       `toml:"pvp"`
-	ExtendedTimeout bool      `toml:"extended_timeout"`
+	Port      int       `toml:"port"`
+	Webhooks  []webhook `toml:"webhooks"`
+	Database  database  `toml:"database"`
+	Stats     bool      `toml:"stats"`
+	Logging   logging   `toml:"logging"`
+	InMemory  bool      `toml:"in_memory"`
+	Cleanup   cleanup   `toml:"cleanup"`
+	RawBearer string    `toml:"raw_bearer"`
+	ApiSecret string    `toml:"api_secret"`
+	Pvp       pvp       `toml:"pvp"`
+	Tuning    tuning    `toml:"tuning"`
 }
 
 type cleanup struct {
@@ -55,6 +55,12 @@ type database struct {
 	Password string `toml:"password"`
 	Db       string `toml:"db"`
 	MaxPool  int    `toml:"max_pool"`
+}
+
+type tuning struct {
+	ExtendedTimeout bool `toml:"extended_timeout"`
+	ProcessWilds    bool `toml:"process_wild_pokemon"`
+	ProcessNearby   bool `toml:"process_nearby_pokemon	"`
 }
 
 var Config configDefinition

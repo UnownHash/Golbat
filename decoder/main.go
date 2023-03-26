@@ -252,80 +252,62 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 }
 
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
-	for _, wild := range wildPokemonList {
-		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-		pokemonMutex.Lock()
+	if config.Config.Tuning.ProcessWilds {
+		for _, wild := range wildPokemonList {
+			encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
+			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+			pokemonMutex.Lock()
 
-		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
-		if err != nil {
-			log.Errorf("getOrCreatePokemonRecord: %s", err)
-		} else {
-			if pokemon == nil || pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data) {
-				updateTime := time.Now().Unix()
-				go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
-					time.Sleep(15 * time.Second)
-					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-					pokemonMutex.Lock()
-					defer pokemonMutex.Unlock()
+			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+			if err != nil {
+				log.Errorf("getOrCreatePokemonRecord: %s", err)
+			} else {
+				if pokemon == nil || pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data) {
+					updateTime := time.Now().Unix()
+					go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
+						time.Sleep(15 * time.Second)
+						pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+						pokemonMutex.Lock()
+						defer pokemonMutex.Unlock()
 
-					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					defer cancel()
+						ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+						defer cancel()
 
-					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
-						log.Errorf("getOrCreatePokemonRecord: %s", err)
-					} else {
-						// Update if there is still a change required & this update is the most recent
-						if pokemon.wildSignificantUpdate(wildPokemon) && pokemon.Updated.ValueOrZero() < updateTime {
-							log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
+						if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
+							log.Errorf("getOrCreatePokemonRecord: %s", err)
+						} else {
+							// Update if there is still a change required & this update is the most recent
+							if pokemon.wildSignificantUpdate(wildPokemon) && pokemon.Updated.ValueOrZero() < updateTime {
+								log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
 
-							pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
-							savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
+								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
+								savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
+							}
 						}
-					}
-				}(wild.Data, int64(wild.Cell), int64(wild.Timestamp))
+					}(wild.Data, int64(wild.Cell), int64(wild.Timestamp))
+				}
 			}
-		}
 
-		pokemonMutex.Unlock()
+			pokemonMutex.Unlock()
+		}
 	}
 
-	for _, nearby := range nearbyPokemonList {
-		encounterId := strconv.FormatUint(nearby.Data.EncounterId, 10)
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-		pokemonMutex.Lock()
+	if config.Config.Tuning.ProcessNearby {
+		for _, nearby := range nearbyPokemonList {
+			encounterId := strconv.FormatUint(nearby.Data.EncounterId, 10)
+			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+			pokemonMutex.Lock()
 
-		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
-		if err != nil {
-			log.Printf("getOrCreatePokemonRecord: %s", err)
-		} else {
-			if pokemon == nil || pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data) {
-				updateTime := time.Now().Unix()
-				go func(nearbyPokemon *pogo.NearbyPokemonProto, cellId int64) {
-					time.Sleep(120 * time.Second)
-					pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-					pokemonMutex.Lock()
-					defer pokemonMutex.Unlock()
-
-					ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					defer cancel()
-
-					if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
-						log.Errorf("getOrCreatePokemonRecord: %s", err)
-					} else {
-						// Update if there is still a change required & this update is the most recent
-						if pokemon.nearbySignificantUpdate(nearbyPokemon) && pokemon.Updated.ValueOrZero() < updateTime {
-							log.Debugf("DELAYED UPDATE: Updating pokemon %s from nearby", encounterId)
-
-							pokemon.updateFromNearby(ctx, db, nearbyPokemon, cellId, username)
-
-							savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
-						}
-					}
-				}(nearby.Data, int64(nearby.Cell))
+			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+			if err != nil {
+				log.Printf("getOrCreatePokemonRecord: %s", err)
+			} else {
+				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
+				savePokemonRecord(ctx, db, pokemon)
 			}
+
+			pokemonMutex.Unlock()
 		}
-		pokemonMutex.Unlock()
 	}
 
 	for _, mapPokemon := range mapPokemonList {

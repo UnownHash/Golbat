@@ -42,6 +42,8 @@ func ReadConfig() {
 	Config.Logging.SaveLogs = true
 	Config.Cleanup.StatsDays = 7
 	Config.Database.MaxPool = 100
+	Config.Tuning.ProcessWilds = true
+	Config.Tuning.ProcessNearby = true
 
 	err = toml.Unmarshal([]byte(byteValue), &Config)
 	if err != nil {
