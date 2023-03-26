@@ -89,8 +89,9 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 				Lon: wildPokemon.Longitude,
 			}
 			spawnpointUpdate(ctx, db, &spawnpoint)
+		} else {
+			spawnpointSeen(ctx, db, spawnId)
 		}
-		spawnpointSeen(ctx, db, spawnId)
 	}
 }
 
