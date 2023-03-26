@@ -424,10 +424,14 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
 func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto) bool {
+	pokemonDisplay := wildPokemon.Pokemon.PokemonDisplay
 	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
+		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		pokemon.Form.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition)
+		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
+		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
+		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender)
 }
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
@@ -502,7 +506,7 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
 }
 
-// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
 func (pokemon *Pokemon) nearbySignificantUpdate(nearbyPokemon *pogo.NearbyPokemonProto) bool {
 	return (pokemon.SeenType.ValueOrZero() == SeenType_Cell && nearbyPokemon.FortId != "") ||
