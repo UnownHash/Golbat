@@ -252,7 +252,6 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 }
 
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
-
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -266,7 +265,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
 			} else {
 				if pokemon == nil || pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data) {
-					updateTime := time.Now().Unix()
+					updateTime := int64(wild.Timestamp / 1000)
 					go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
 						time.Sleep(15 * time.Second)
 						pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
