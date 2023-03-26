@@ -254,13 +254,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
 
 	for _, wild := range wildPokemonList {
+		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
+		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+		pokemonMutex.Lock()
+
 		spawnpointUpdateFromWild(ctx, db, wild.Data, int64(wild.Timestamp))
 
 		if config.Config.Tuning.ProcessWilds {
-			encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
-			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-			pokemonMutex.Lock()
-
 			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
@@ -290,9 +290,8 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 					}(wild.Data, int64(wild.Cell), int64(wild.Timestamp))
 				}
 			}
-
-			pokemonMutex.Unlock()
 		}
+		pokemonMutex.Unlock()
 	}
 
 	if config.Config.Tuning.ProcessNearby {
