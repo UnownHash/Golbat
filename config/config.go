@@ -13,6 +13,13 @@ type configDefinition struct {
 	RawBearer string    `toml:"raw_bearer"`
 	ApiSecret string    `toml:"api_secret"`
 	Pvp       pvp       `toml:"pvp"`
+	Koji      koji      `toml:"koji"`
+	Tuning    tuning    `toml:"tuning"`
+}
+
+type koji struct {
+	Url         string `toml:"url"`
+	BearerToken string `toml:"bearer_token"`
 }
 
 type cleanup struct {
@@ -53,6 +60,13 @@ type database struct {
 	User     string `toml:"user"`
 	Password string `toml:"password"`
 	Db       string `toml:"db"`
+	MaxPool  int    `toml:"max_pool"`
+}
+
+type tuning struct {
+	ExtendedTimeout bool `toml:"extended_timeout"`
+	ProcessWilds    bool `toml:"process_wild_pokemon"`
+	ProcessNearby   bool `toml:"process_nearby_pokemon	"`
 }
 
 var Config configDefinition

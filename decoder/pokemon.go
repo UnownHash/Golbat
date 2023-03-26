@@ -166,7 +166,11 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	if pokemon != nil || err != nil {
 		return pokemon, err
 	}
-	return &Pokemon{Id: encounterId, EncounterWeather: EncounterWeather_Invalid}, nil
+	pokemon = &Pokemon{Id: encounterId, EncounterWeather: EncounterWeather_Invalid}
+	if db.UsePokemonCache {
+		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+	}
+	return pokemon, nil
 }
 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
@@ -178,10 +182,19 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
+	savePokemonRecordAsAtTime(ctx, db, pokemon, time.Now().Unix())
+}
+
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
+	}
+
+	// Blank, non-persisted record are now inserted into the cache to save on DB calls
+	if oldPokemon.isNewRecord() {
+		oldPokemon = nil
 	}
 
 	// uncomment to debug excessive writes
@@ -192,7 +205,6 @@ func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
 	//	}))
 	//}
 
-	now := time.Now().Unix()
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = now
 	}
@@ -421,6 +433,15 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.SpawnId = null.IntFrom(spawnId)
 }
 
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto) bool {
+	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
+		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
+		pokemon.Form.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition)
+}
+
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
@@ -491,6 +512,15 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	pokemon.DefIv = null.IntFrom(d)
 	pokemon.StaIv = null.IntFrom(s)
 	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
+}
+
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) nearbySignificantUpdate(nearbyPokemon *pogo.NearbyPokemonProto) bool {
+	return (pokemon.SeenType.ValueOrZero() == SeenType_Cell && nearbyPokemon.FortId != "") ||
+		pokemon.PokemonId != int16(nearbyPokemon.PokedexNumber) ||
+		pokemon.Form.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.WeatherBoostedCondition)
 }
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
@@ -1027,7 +1057,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
-	if pokemon == nil {
+	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")
