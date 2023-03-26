@@ -10,6 +10,7 @@ import (
 	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
+	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
 	"sync"
@@ -169,6 +170,13 @@ var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
 	delta := math.Abs(x - y)
 	return delta < 0.000001
 })
+var ignoreNearNullFloats = cmp.Comparer(func(x, y null.Float) bool {
+	if x.Valid {
+		return y.Valid && math.Abs(x.Float64-y.Float64) < 0.000001
+	} else {
+		return !y.Valid
+	}
+})
 
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 	// Logic is:
@@ -249,14 +257,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), int64(wild.Timestamp), username)
 			savePokemonRecord(ctx, db, pokemon)
 		}
@@ -269,14 +273,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
 			savePokemonRecord(ctx, db, pokemon)
 		}
@@ -288,14 +288,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		pokemon, err := getPokemonRecord(ctx, db, encounterId)
+		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
-			log.Printf("getPokemonRecord: %s", err)
+			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			if pokemon == nil {
-				pokemon = &Pokemon{}
-			}
-
 			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), username)
 
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
