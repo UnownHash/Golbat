@@ -146,7 +146,7 @@ func main() {
 	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
 
-	if config.Config.ExtendedTimeout {
+	if config.Config.Tuning.ExtendedTimeout {
 		log.Info("Extended timeout enabled")
 	}
 
