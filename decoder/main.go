@@ -178,6 +178,12 @@ var ignoreNearNullFloats = cmp.Comparer(func(x, y null.Float) bool {
 	}
 })
 
+const floatTolerance = 0.000001
+
+func floatAlmostEqual(a, b, tolerance float64) bool {
+	return math.Abs(a-b) < tolerance
+}
+
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)

@@ -57,8 +57,8 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 }
 
 func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	return old.Lat != new.Lat ||
-		old.Lon != new.Lon ||
+	return !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
 		old.DespawnSec != new.DespawnSec
 }
 
