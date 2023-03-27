@@ -159,25 +159,45 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	if pokemon != nil || err != nil {
 		return pokemon, err
 	}
-	return &Pokemon{Id: encounterId}, nil
+	pokemon = &Pokemon{Id: encounterId}
+	if db.UsePokemonCache {
+		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+	}
+	return pokemon, nil
 }
 
 func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 	return !cmp.Equal(old, new, cmp.Options{
-		ignoreNearFloats,
+		ignoreNearFloats, ignoreNearNullFloats,
 		// ignore all generated fields
-		cmpopts.IgnoreFields(Pokemon{}, "Iv", "Pvp"),
+		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
 	})
 }
 
 func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
+	savePokemonRecordAsAtTime(ctx, db, pokemon, time.Now().Unix())
+}
+
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
 	}
 
-	now := time.Now().Unix()
+	// Blank, non-persisted record are now inserted into the cache to save on DB calls
+	if oldPokemon.isNewRecord() {
+		oldPokemon = nil
+	}
+
+	// uncomment to debug excessive writes
+	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
+	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
+	//		ignoreNearFloats, ignoreNearNullFloats,
+	//		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
+	//	}))
+	//}
+
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = now
 	}
@@ -387,7 +407,7 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, timestampAccurate bool) {
 	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
@@ -401,8 +421,17 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 
 	// Not sure I like the idea about an object updater loading another object
 
-	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, true)
+	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, spawnId, timestampMs, timestampAccurate)
 	pokemon.SpawnId = null.IntFrom(spawnId)
+}
+
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto) bool {
+	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
+		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
+		pokemon.Form.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(wildPokemon.Pokemon.PokemonDisplay.WeatherBoostedCondition)
 }
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
@@ -416,11 +445,8 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	if pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
-	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
-	if !pokemon.Username.Valid {
-		// Don't be the reason that a pokemon gets updated
-		pokemon.Username = null.StringFrom(username)
-	}
+	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
+	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
@@ -480,6 +506,15 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
 }
 
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) nearbySignificantUpdate(nearbyPokemon *pogo.NearbyPokemonProto) bool {
+	return (pokemon.SeenType.ValueOrZero() == SeenType_Cell && nearbyPokemon.FortId != "") ||
+		pokemon.PokemonId != int16(nearbyPokemon.PokedexNumber) ||
+		pokemon.Form.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(nearbyPokemon.PokemonDisplay.WeatherBoostedCondition)
+}
+
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
@@ -506,7 +541,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		case "", SeenType_Cell:
 			overrideLatLon = true // a better estimate is available
 		case SeenType_NearbyStop:
-			break
 		default:
 			return
 		}
@@ -515,7 +549,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
-			pokemon.CellId = null.IntFrom(cellId)
 			pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
 			pokemon.PokestopId = null.StringFrom(pokestopId)
 			lat, lon = pokestop.Lat, pokestop.Lon
@@ -533,7 +566,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
-		pokemon.CellId = null.IntFrom(cellId)
 		pokemon.SeenType = null.StringFrom(SeenType_Cell)
 	}
 	if overrideLatLon {
@@ -544,6 +576,8 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		pokemon.Lat = midpoint.Lat.Degrees()
 		pokemon.Lon = midpoint.Lng.Degrees()
 	}
+	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.setUnknownTimestamp()
 }
 
 const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
@@ -709,7 +743,6 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	if pokemon.Level.Valid {
 		switch level - pokemon.Level.Int64 {
 		case 0:
-			break
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
@@ -730,6 +763,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			default:
 				setDittoAttributes("B0>BN", false, true, false)
 			}
+			return
 		case -5:
 			switch pokemon.Weather.Int64 {
 			case int64(pogo.GameplayWeatherProto_NONE):
@@ -757,9 +791,13 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			setDittoAttributes("0P>B0", false, false, true)
 			return
 		default:
-			log.Warnf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Rescanned IV is lost.",
+			log.Errorf("[POKEMON] An unexpected level was seen upon reencountering %s: %d -> %d. Old IV is lost.",
 				pokemon.Id, pokemon.Level.Int64, level)
-			return
+			pokemon.AtkIv = null.NewInt(0, false)
+			pokemon.DefIv = null.NewInt(0, false)
+			pokemon.StaIv = null.NewInt(0, false)
+			pokemon.Iv = null.NewFloat(0, false)
+			pokemon.IvInactive = null.NewInt(0, false)
 		}
 	}
 	if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) {
@@ -782,7 +820,7 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000, false)
 	pokemon.addEncounterPokemon(encounterData.Pokemon.Pokemon)
 
 	if pokemon.CellId.Valid == false {
@@ -967,7 +1005,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
-	if pokemon == nil {
+	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")

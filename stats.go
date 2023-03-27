@@ -56,6 +56,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 		go func() {
 			for {
 				<-ticker.C
+				log.Infof("DB - Archive of pokemon table - starting")
 				start := time.Now()
 
 				var resultCounter int64
@@ -100,6 +101,8 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 						}
 					}
 				}
+
+				log.Infof("DB - Archive of pokemon table - starting second phase (unverified timestamps)")
 
 				resultCounter = 0
 				start = time.Now()
