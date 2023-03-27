@@ -690,11 +690,26 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	if pokemon.IsDitto {
 		// For a confirmed Ditto, we persist IV in inactive only in 0P state
 		// when disguise is boosted, it has same IV as Ditto
-		if pokemon.EncounterWeather != uint8(pogo.GameplayWeatherProto_NONE) ||
-			// otherwise if disguise is not boosted, and we can confirm we are not in 0P since we were in 0P/PP
-			oldWeather == uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) ||
-			// at this point we are not sure if we are in 00 or 0P, so we guess 00 if the last scanned level agrees
-			pokemon.Level.Int64 == level {
+		isNoLongerDitto := false
+		is0P := false
+		if pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
+			// a 0P Ditto can never be in PP state
+			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+			// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
+			if pokemon.Level.Int64 == level-5 {
+				is0P = true
+			} else if pokemon.Level.Int64 != level {
+				isNoLongerDitto = true
+			}
+		} else if pokemon.Level.Int64 != level {
+			isNoLongerDitto = true
+		}
+		if isNoLongerDitto {
+			pokemon.IsDitto = false
+			pokemon.PokemonId = int16(proto.PokemonId)
+			pokemon.DisplayPokemonId = null.NewInt(0, false)
+		}
+		if is0P {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
@@ -717,10 +732,13 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				pokemon.DefIv.ValueOrZero(), pokemon.AtkIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
 				pokemon.Weather.Int64, level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
 		}
+		pokemon.IsDitto = setDitto
 		if setDitto {
-			pokemon.IsDitto = true
-			pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
+			pokemon.DisplayPokemonId = null.IntFrom(int64(proto.PokemonId))
 			pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+		} else {
+			pokemon.DisplayPokemonId = null.NewInt(0, false)
+			pokemon.PokemonId = int16(proto.PokemonId)
 		}
 		if to0P { // IV switching needed if we are transitioning into a 0P Ditto
 			if archive {
