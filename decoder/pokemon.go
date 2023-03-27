@@ -690,33 +690,23 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	if pokemon.IsDitto {
 		// For a confirmed Ditto, we persist IV in inactive only in 0P state
 		// when disguise is boosted, it has same IV as Ditto
-		isNoLongerDitto := false
-		is0P := false
-		if pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
+		is0P := pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
 			// a 0P Ditto can never be in PP state
-			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
 			// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
-			if pokemon.Level.Int64 == level-5 {
-				is0P = true
-			} else if pokemon.Level.Int64 != level {
-				isNoLongerDitto = true
-			}
-		} else if pokemon.Level.Int64 != level {
-			isNoLongerDitto = true
-		}
-		if isNoLongerDitto {
+			pokemon.Level.Int64 == level-5
+		if !is0P && pokemon.Level.Int64 != level {
 			pokemon.IsDitto = false
 			pokemon.PokemonId = int16(proto.PokemonId)
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 		}
 		if is0P {
+			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
+				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+		} else {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
-		} else {
-			pokemon.Level = null.IntFrom(level - 5)
-			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
 		}
 		return
 	}
