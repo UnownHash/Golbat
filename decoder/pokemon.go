@@ -701,8 +701,8 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 		}
 		if is0P {
-			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+			pokemon.IvInactive = null.IntFrom(int64(
+				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 		} else {
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
@@ -743,8 +743,8 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				}
 			}
 			pokemon.Level = null.IntFrom(level - 5)
-			pokemon.IvInactive = null.IntFrom(int64(proto.IndividualAttack) |
-				int64(proto.IndividualDefense)<<4 | int64(proto.IndividualStamina)<<8)
+			pokemon.IvInactive = null.IntFrom(int64(
+				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 		} else {
 			if archive {
 				pokemon.IvInactive = pokemon.compressIv()
