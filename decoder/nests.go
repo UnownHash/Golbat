@@ -80,7 +80,8 @@ func ReloadNestsAndClearStats(dbDetails db.DbDetails) {
 func LoadNests(dbDetails db.DbDetails) {
 	nests, err := db.LoadNests(dbDetails)
 	if err != nil {
-		panic(err)
+		log.Errorf("Load Nests returns error = %s", err)
+		return
 	}
 
 	newFeatureCollection := geojson.NewFeatureCollection()

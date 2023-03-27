@@ -423,15 +423,18 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
-func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto) bool {
+func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto, time int64) bool {
 	pokemonDisplay := wildPokemon.Pokemon.PokemonDisplay
+	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
+
 	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
 		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
 		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
 		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
 		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender)
+		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
+		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
 }
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
