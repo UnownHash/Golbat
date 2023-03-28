@@ -6,7 +6,9 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/pogo"
 	"gopkg.in/guregu/null.v4"
+	"strconv"
 	"time"
 )
 
@@ -47,17 +49,76 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 	}
 
 	if err != nil {
-		return nil, err
+		return &Spawnpoint{Id: spawnpointId}, err
 	}
 
 	spawnpointCache.Set(spawnpointId, spawnpoint, ttlcache.DefaultTTL)
 	return &spawnpoint, nil
 }
 
+func Abs(x int64) int64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
 func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	return old.Lat != new.Lat ||
-		old.Lon != new.Lon ||
-		old.DespawnSec != new.DespawnSec
+	if !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
+		(old.DespawnSec.Valid && !new.DespawnSec.Valid) ||
+		(!old.DespawnSec.Valid && new.DespawnSec.Valid) {
+		return true
+	}
+	if !old.DespawnSec.Valid && !new.DespawnSec.Valid {
+		return false
+	}
+
+	// Ignore small movements in despawn time
+	oldDespawnSec := old.DespawnSec.Int64
+	newDespawnSec := new.DespawnSec.Int64
+
+	if oldDespawnSec <= 1 && newDespawnSec >= 3598 {
+		return false
+	}
+	if newDespawnSec <= 1 && oldDespawnSec >= 3598 {
+		return false
+	}
+
+	return Abs(old.DespawnSec.Int64-new.DespawnSec.Int64) > 2
+}
+
+func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	if err != nil {
+		panic(err)
+	}
+
+	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
+		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
+
+		date := time.Unix(expireTimeStamp, 0)
+		secondOfHour := date.Second() + date.Minute()*60
+		spawnpoint := Spawnpoint{
+			Id:         spawnId,
+			Lat:        wildPokemon.Latitude,
+			Lon:        wildPokemon.Longitude,
+			DespawnSec: null.IntFrom(int64(secondOfHour)),
+		}
+		spawnpointUpdate(ctx, db, &spawnpoint)
+	} else {
+		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+		if spawnPoint == nil {
+			spawnpoint := Spawnpoint{
+				Id:  spawnId,
+				Lat: wildPokemon.Latitude,
+				Lon: wildPokemon.Longitude,
+			}
+			spawnpointUpdate(ctx, db, &spawnpoint)
+		} else {
+			spawnpointSeen(ctx, db, spawnId)
+		}
+	}
 }
 
 func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
@@ -69,8 +130,11 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 
 	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
 
+	spawnpoint.Updated = time.Now().Unix()  // ensure future updates are set correctly
+	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
+
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
-		"VALUES (:id, :lat, :lon, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), :despawn_sec)"+
+		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+
 		"ON DUPLICATE KEY UPDATE "+
 		"lat=VALUES(lat),"+
 		"lon=VALUES(lon),"+
@@ -83,7 +147,6 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		return
 	}
 
-	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
 }
 
@@ -97,7 +160,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 	spawnpoint := inMemorySpawnpoint.Value()
 	now := time.Now().Unix()
 
-	if now-spawnpoint.LastSeen > 900 {
+	if now-spawnpoint.LastSeen > 3600 {
 		spawnpoint.LastSeen = now
 
 		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
