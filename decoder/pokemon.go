@@ -194,6 +194,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		old.IvInactive != new.IvInactive ||
 		old.Form != new.Form ||
 		old.Level != new.Level ||
+		old.EncounterWeather != new.EncounterWeather ||
 		old.Weather != new.Weather ||
 		old.Costume != new.Costume ||
 		old.FirstSeenTimestamp != new.FirstSeenTimestamp ||
