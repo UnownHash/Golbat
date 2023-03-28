@@ -84,7 +84,7 @@ type database struct {
 type tuning struct {
 	ExtendedTimeout bool `toml:"extended_timeout"`
 	ProcessWilds    bool `toml:"process_wild_pokemon"`
-	ProcessNearby   bool `toml:"process_nearby_pokemon	"`
+	ProcessNearby   bool `toml:"process_nearby_pokemon"`
 }
 
 var Config = configDefinition{
