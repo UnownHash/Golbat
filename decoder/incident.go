@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -13,6 +12,8 @@ import (
 	"time"
 )
 
+// Incident struct.
+// REMINDER! Keep hasChangesIncident updated after making changes
 type Incident struct {
 	Id             string `db:"id"`
 	PokestopId     string `db:"pokestop_id"`
@@ -57,8 +58,16 @@ func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) 
 	return &incident, nil
 }
 
+// hasChangesIncident compares two Incident structs
 func hasChangesIncident(old *Incident, new *Incident) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+	return old.Id != new.Id ||
+		old.PokestopId != new.PokestopId ||
+		old.StartTime != new.StartTime ||
+		old.ExpirationTime != new.ExpirationTime ||
+		old.DisplayType != new.DisplayType ||
+		old.Style != new.Style ||
+		old.Character != new.Character ||
+		old.Updated != new.Updated
 }
 
 func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident) {
@@ -68,7 +77,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 		return
 	}
 
-	log.Traceln(cmp.Diff(oldIncident, incident))
+	//log.Traceln(cmp.Diff(oldIncident, incident))
 
 	incident.Updated = time.Now().Unix()
 

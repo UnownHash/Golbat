@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -154,7 +153,8 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			(old.ImageUrl == nil || new.ImageUrl == nil || *old.ImageUrl != *new.ImageUrl) {
 			editTypes = append(editTypes, "image_url")
 		}
-		if !cmp.Equal(old.Location, new.Location, ignoreNearFloats) {
+		if !floatAlmostEqual(old.Location.Latitude, new.Location.Latitude, floatTolerance) ||
+			!floatAlmostEqual(old.Location.Longitude, new.Location.Longitude, floatTolerance) {
 			editTypes = append(editTypes, "location")
 		}
 		if len(editTypes) > 0 {

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -19,6 +18,8 @@ import (
 	"time"
 )
 
+// Pokestop struct.
+// REMINDER! Keep hasChangesPokestop updated after making changes
 type Pokestop struct {
 	Id                         string      `db:"id"`
 	Lat                        float64     `db:"lat"`
@@ -126,8 +127,45 @@ func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	return &pokestop, nil
 }
 
-func hasChanges(old *Pokestop, new *Pokestop) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+// hasChangesPokestop compares two Pokestop structs
+// Float tolerance: Lat, Lon
+func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
+	return old.Id != new.Id ||
+		old.Name != new.Name ||
+		old.Url != new.Url ||
+		old.LureExpireTimestamp != new.LureExpireTimestamp ||
+		old.LastModifiedTimestamp != new.LastModifiedTimestamp ||
+		old.Updated != new.Updated ||
+		old.Enabled != new.Enabled ||
+		old.QuestType != new.QuestType ||
+		old.QuestTimestamp != new.QuestTimestamp ||
+		old.QuestTarget != new.QuestTarget ||
+		old.QuestConditions != new.QuestConditions ||
+		old.QuestRewards != new.QuestRewards ||
+		old.QuestTemplate != new.QuestTemplate ||
+		old.QuestTitle != new.QuestTitle ||
+		old.QuestExpiry != new.QuestExpiry ||
+		old.CellId != new.CellId ||
+		old.Deleted != new.Deleted ||
+		old.LureId != new.LureId ||
+		old.FirstSeenTimestamp != new.FirstSeenTimestamp ||
+		old.SponsorId != new.SponsorId ||
+		old.PartnerId != new.PartnerId ||
+		old.ArScanEligible != new.ArScanEligible ||
+		old.PowerUpLevel != new.PowerUpLevel ||
+		old.PowerUpPoints != new.PowerUpPoints ||
+		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
+		old.AlternativeQuestType != new.AlternativeQuestType ||
+		old.AlternativeQuestTimestamp != new.AlternativeQuestTimestamp ||
+		old.AlternativeQuestTarget != new.AlternativeQuestTarget ||
+		old.AlternativeQuestConditions != new.AlternativeQuestConditions ||
+		old.AlternativeQuestRewards != new.AlternativeQuestRewards ||
+		old.AlternativeQuestTemplate != new.AlternativeQuestTemplate ||
+		old.AlternativeQuestTitle != new.AlternativeQuestTitle ||
+		old.AlternativeQuestExpiry != new.AlternativeQuestExpiry ||
+		old.Description != new.Description ||
+		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
 }
 
 var LureTime int64 = 1800
@@ -575,7 +613,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
 	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
 	now := time.Now().Unix()
-	if oldPokestop != nil && !hasChanges(oldPokestop, pokestop) {
+	if oldPokestop != nil && !hasChangesPokestop(oldPokestop, pokestop) {
 		if oldPokestop.Updated > now-900 {
 			// if a pokestop is unchanged, but we did see it again after 15 minutes, then save again
 			return
@@ -583,7 +621,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	}
 	pokestop.Updated = now
 
-	log.Traceln(cmp.Diff(oldPokestop, pokestop))
+	//log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
 	if oldPokestop == nil {
 		res, err := db.GeneralDb.NamedExecContext(ctx,

@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"github.com/Pupitar/ohbemgo"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
@@ -166,22 +165,18 @@ func ClearGymCache() {
 	gymCache.DeleteAll()
 }
 
-var ignoreNearFloats = cmp.Comparer(func(x, y float64) bool {
-	delta := math.Abs(x - y)
-	return delta < 0.000001
-})
-var ignoreNearNullFloats = cmp.Comparer(func(x, y null.Float) bool {
-	if x.Valid {
-		return y.Valid && math.Abs(x.Float64-y.Float64) < 0.000001
-	} else {
-		return !y.Valid
-	}
-})
-
 const floatTolerance = 0.000001
 
 func floatAlmostEqual(a, b, tolerance float64) bool {
 	return math.Abs(a-b) < tolerance
+}
+
+func nullFloatAlmostEqual(a, b null.Float, tolerance float64) bool {
+	if a.Valid {
+		return b.Valid && math.Abs(a.Float64-b.Float64) < tolerance
+	} else {
+		return !b.Valid
+	}
 }
 
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {

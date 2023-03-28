@@ -2,8 +2,6 @@ package decoder
 
 import (
 	"database/sql"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -14,6 +12,8 @@ import (
 	"time"
 )
 
+// Player struct. Name is the primary key.
+// REMINDER! Keep hasChangesPlayer updated after making changes
 type Player struct {
 	// Name is the primary key
 	Name               string      `db:"name"`
@@ -236,15 +236,88 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 	return &player, nil
 }
 
-var ignoreApproxFloats = cmpopts.EquateApprox(0, 0.001)
-
-// This transformer allows to use the Approx comparator
-var transformNullFloats = cmp.Transformer("transformNullFloats", func(x null.Float) float64 {
-	return x.Float64
-})
-
+// hasChangesPlayer compares two Player structs
+// Float tolerance: KmWalked = 0.001
 func hasChangesPlayer(old *Player, new *Player) bool {
-	return !cmp.Equal(old, new, transformNullFloats, ignoreApproxFloats)
+	return old.Name != new.Name ||
+		old.FriendshipId != new.FriendshipId ||
+		old.LastSeen != new.LastSeen ||
+		old.FriendCode != new.FriendCode ||
+		old.Team != new.Team ||
+		old.Level != new.Level ||
+		old.Xp != new.Xp ||
+		old.BattlesWon != new.BattlesWon ||
+		old.CaughtPokemon != new.CaughtPokemon ||
+		old.GblRank != new.GblRank ||
+		old.GblRating != new.GblRating ||
+		old.EventBadges != new.EventBadges ||
+		old.StopsSpun != new.StopsSpun ||
+		old.Evolved != new.Evolved ||
+		old.Hatched != new.Hatched ||
+		old.Quests != new.Quests ||
+		old.Trades != new.Trades ||
+		old.Photobombs != new.Photobombs ||
+		old.Purified != new.Purified ||
+		old.GruntsDefeated != new.GruntsDefeated ||
+		old.GymBattlesWon != new.GymBattlesWon ||
+		old.NormalRaidsWon != new.NormalRaidsWon ||
+		old.LegendaryRaidsWon != new.LegendaryRaidsWon ||
+		old.TrainingsWon != new.TrainingsWon ||
+		old.BerriesFed != new.BerriesFed ||
+		old.HoursDefended != new.HoursDefended ||
+		old.BestFriends != new.BestFriends ||
+		old.BestBuddies != new.BestBuddies ||
+		old.GiovanniDefeated != new.GiovanniDefeated ||
+		old.MegaEvos != new.MegaEvos ||
+		old.CollectionsDone != new.CollectionsDone ||
+		old.UniqueStopsSpun != new.UniqueStopsSpun ||
+		old.UniqueMegaEvos != new.UniqueMegaEvos ||
+		old.UniqueRaidBosses != new.UniqueRaidBosses ||
+		old.UniqueUnown != new.UniqueUnown ||
+		old.SevenDayStreaks != new.SevenDayStreaks ||
+		old.TradeKm != new.TradeKm ||
+		old.RaidsWithFriends != new.RaidsWithFriends ||
+		old.CaughtAtLure != new.CaughtAtLure ||
+		old.WayfarerAgreements != new.WayfarerAgreements ||
+		old.TrainersReferred != new.TrainersReferred ||
+		old.RaidAchievements != new.RaidAchievements ||
+		old.XlKarps != new.XlKarps ||
+		old.XsRats != new.XsRats ||
+		old.PikachuCaught != new.PikachuCaught ||
+		old.LeagueGreatWon != new.LeagueGreatWon ||
+		old.LeagueUltraWon != new.LeagueUltraWon ||
+		old.LeagueMasterWon != new.LeagueMasterWon ||
+		old.TinyPokemonCaught != new.TinyPokemonCaught ||
+		old.JumboPokemonCaught != new.JumboPokemonCaught ||
+		old.Vivillon != new.Vivillon ||
+		old.DexGen1 != new.DexGen1 ||
+		old.DexGen2 != new.DexGen2 ||
+		old.DexGen3 != new.DexGen3 ||
+		old.DexGen4 != new.DexGen4 ||
+		old.DexGen5 != new.DexGen5 ||
+		old.DexGen6 != new.DexGen6 ||
+		old.DexGen7 != new.DexGen7 ||
+		old.DexGen8 != new.DexGen8 ||
+		old.DexGen8A != new.DexGen8A ||
+		old.CaughtNormal != new.CaughtNormal ||
+		old.CaughtFighting != new.CaughtFighting ||
+		old.CaughtFlying != new.CaughtFlying ||
+		old.CaughtPoison != new.CaughtPoison ||
+		old.CaughtGround != new.CaughtGround ||
+		old.CaughtRock != new.CaughtRock ||
+		old.CaughtBug != new.CaughtBug ||
+		old.CaughtGhost != new.CaughtGhost ||
+		old.CaughtSteel != new.CaughtSteel ||
+		old.CaughtFire != new.CaughtFire ||
+		old.CaughtWater != new.CaughtWater ||
+		old.CaughtGrass != new.CaughtGrass ||
+		old.CaughtElectric != new.CaughtElectric ||
+		old.CaughtPsychic != new.CaughtPsychic ||
+		old.CaughtIce != new.CaughtIce ||
+		old.CaughtDragon != new.CaughtDragon ||
+		old.CaughtDark != new.CaughtDark ||
+		old.CaughtFairy != new.CaughtFairy ||
+		!nullFloatAlmostEqual(old.KmWalked, new.KmWalked, 0.001)
 }
 
 func savePlayerRecord(db db.DbDetails, player *Player) {
@@ -254,7 +327,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		return
 	}
 
-	log.Traceln(cmp.Diff(oldPlayer, player, transformNullFloats, ignoreApproxFloats))
+	//log.Traceln(cmp.Diff(oldPlayer, player, transformNullFloats, ignoreApproxFloats))
 
 	player.LastSeen = time.Now().Unix()
 
