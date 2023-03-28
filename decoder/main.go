@@ -355,10 +355,8 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []RawClien
 	}
 }
 
-func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64) {
-	for _, mapS2CellId := range r {
-		saveS2CellRecord(ctx, db, mapS2CellId)
-	}
+func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []uint64) {
+	saveS2CellRecords(ctx, db, cellIds)
 }
 
 func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64) {
