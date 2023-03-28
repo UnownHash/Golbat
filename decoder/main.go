@@ -357,9 +357,7 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []RawClien
 
 func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, r []uint64) {
 	for _, mapS2CellId := range r {
-		s2Cell := &S2Cell{}
-		s2Cell.updateS2CellFromClientMapProto(mapS2CellId)
-		saveS2CellRecord(ctx, db, s2Cell)
+		saveS2CellRecord(ctx, db, mapS2CellId)
 	}
 }
 

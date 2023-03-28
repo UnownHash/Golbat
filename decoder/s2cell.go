@@ -27,24 +27,23 @@ type S2Cell struct {
 //  PRIMARY KEY (`id`)
 //)
 
-func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell {
-	mapS2Cell := s2.CellFromCellID(s2.CellID(mapS2CellId))
-	s2Cell.Id = mapS2CellId
-	s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
-	s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
-	s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
-	return s2Cell
-}
-
-func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
+func saveS2CellRecord(ctx context.Context, db db.DbDetails, mapS2CellId uint64) {
 	now := time.Now().Unix()
-
-	if c := s2CellCache.Get(s2Cell.Id); c != nil {
+	var s2Cell = S2Cell{}
+	if c := s2CellCache.Get(mapS2CellId); c != nil {
 		cachedCell := c.Value()
 		if cachedCell.Updated > now-900 {
 			return
 		}
+		s2Cell = cachedCell
+	} else {
+		mapS2Cell := s2.CellFromCellID(s2.CellID(mapS2CellId))
+		s2Cell.Id = mapS2CellId
+		s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
+		s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
+		s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
 	}
+
 	s2Cell.Updated = now
 
 	res, err := db.GeneralDb.NamedExecContext(ctx,
@@ -59,5 +58,5 @@ func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
 	}
 	_, _ = res, err
 
-	s2CellCache.Set(s2Cell.Id, *s2Cell, ttlcache.DefaultTTL)
+	s2CellCache.Set(s2Cell.Id, s2Cell, ttlcache.DefaultTTL)
 }
