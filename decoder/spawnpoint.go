@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+// Spawnpoint struct.
+// REMINDER! Keep hasChangesSpawnpoint updated after making changes
 type Spawnpoint struct {
 	Id         int64    `db:"id"`
 	Lat        float64  `db:"lat"`

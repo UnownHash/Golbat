@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
@@ -16,6 +15,8 @@ import (
 	"time"
 )
 
+// Gym struct.
+// REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
 	Id                    string      `db:"id"`
 	Lat                   float64     `db:"lat"`
@@ -270,8 +271,46 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	return gym
 }
 
+// hasChangesGym compares two Gym structs
+// Float tolerance: Lat, Lon
 func hasChangesGym(old *Gym, new *Gym) bool {
-	return !cmp.Equal(old, new, ignoreNearFloats)
+	return old.Id != new.Id ||
+		old.Name != new.Name ||
+		old.Url != new.Url ||
+		old.LastModifiedTimestamp != new.LastModifiedTimestamp ||
+		old.RaidEndTimestamp != new.RaidEndTimestamp ||
+		old.RaidSpawnTimestamp != new.RaidSpawnTimestamp ||
+		old.RaidBattleTimestamp != new.RaidBattleTimestamp ||
+		old.Updated != new.Updated ||
+		old.RaidPokemonId != new.RaidPokemonId ||
+		old.GuardingPokemonId != new.GuardingPokemonId ||
+		old.AvailableSlots != new.AvailableSlots ||
+		old.TeamId != new.TeamId ||
+		old.RaidLevel != new.RaidLevel ||
+		old.Enabled != new.Enabled ||
+		old.ExRaidEligible != new.ExRaidEligible ||
+		old.InBattle != new.InBattle ||
+		old.RaidPokemonMove1 != new.RaidPokemonMove1 ||
+		old.RaidPokemonMove2 != new.RaidPokemonMove2 ||
+		old.RaidPokemonForm != new.RaidPokemonForm ||
+		old.RaidPokemonCp != new.RaidPokemonCp ||
+		old.RaidIsExclusive != new.RaidIsExclusive ||
+		old.CellId != new.CellId ||
+		old.Deleted != new.Deleted ||
+		old.TotalCp != new.TotalCp ||
+		old.FirstSeenTimestamp != new.FirstSeenTimestamp ||
+		old.RaidPokemonGender != new.RaidPokemonGender ||
+		old.SponsorId != new.SponsorId ||
+		old.PartnerId != new.PartnerId ||
+		old.RaidPokemonCostume != new.RaidPokemonCostume ||
+		old.RaidPokemonEvolution != new.RaidPokemonEvolution ||
+		old.ArScanEligible != new.ArScanEligible ||
+		old.PowerUpLevel != new.PowerUpLevel ||
+		old.PowerUpPoints != new.PowerUpPoints ||
+		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
+		old.Description != new.Description ||
+		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
 }
 
 type GymDetailsWebhook struct {
@@ -410,7 +449,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	gym.Updated = now
 
-	log.Traceln(cmp.Diff(oldGym, gym))
+	//log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
 		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
