@@ -51,8 +51,8 @@ There can be a tuning section in the config file
 
 ```toml
 [tuning]
-# process_wilds = true
-# process_nearby = true
+# process_wild_pokemon = true
+# process_nearby_pokemon = true
 ```
 
 * process_wilds - by default Golbat will process the wilds from the GMO after a 15 second
