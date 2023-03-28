@@ -75,7 +75,7 @@ func main() {
 		return
 	}
 
-	log.Infof("Opening database for processing")
+	log.Infof("Opening database for processing, max pool = %d", config.Config.Database.MaxPool)
 
 	// Get a database handle.
 

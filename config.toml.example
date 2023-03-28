@@ -29,7 +29,7 @@ db = ""
 
 [pvp]
 enabled = true
-include_hundos_under_cap = true
+include_hundos_under_cap = false
 level_caps = [50, 51]
 
 [[pvp.leagues]]
