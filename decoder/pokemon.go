@@ -678,7 +678,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
 		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
 			log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
-		} else if weather.GameplayCondition.Int64 != int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+		} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
 			isUnboostedPartlyCloudy = true
 		} else {
 			pokemon.EncounterWeather = EncounterWeather_UnboostedNotPartlyCloudy
