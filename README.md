@@ -12,16 +12,7 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-`go 1.18` - although these days you should be installing go 1.20
-
-On Ubuntu 22 (jammy), installing using apt 
-`sudo apt install golang-go` should install the right version.
-
-To get Go 1.18 on earlier versions of Ubuntu, I followed 
-[this](https://nextgentips.com/2021/12/23/how-to-install-go-1-18-on-ubuntu-20-04/) 
-guide. Instead of the download link given there, you can use 
-`https://go.dev/dl/go1.18.3.linux-amd64.tar.gz`, 
-which is the latest version as of writing this.
+[go 1.20](https://go.dev/doc/install)
 
 # Instructions
 
@@ -31,7 +22,7 @@ which is the latest version as of writing this.
 ## Run in pm2
 
 1. `go build golbat`
-2. `pm2 start golbat`
+2. `pm2 start ./golbat --name golbat -o "/dev/null"`
 
 ## Run in docker
 
