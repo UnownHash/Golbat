@@ -73,8 +73,10 @@ type Pokemon struct {
 	IsEvent                 int8        `db:"is_event"`
 }
 
-const EncounterWeather_Invalid uint8 = 0xFF  // invalid/unscanned
-const EncounterWeather_Rerolled uint8 = 0x80 // flag for marking that the spawn rerolled since last scan
+const EncounterWeather_Invalid uint8 = 0xFF                  // invalid/unscanned
+const EncounterWeather_Rerolled uint8 = 0x80                 // flag for marking that the spawn rerolled since last scan
+const EncounterWeather_UnboostedNotPartlyCloudy uint8 = 0x40 // flag for marking that it was not partly cloudy when scanned and the spawn was not boosted
+const EncounterWeather_UnboostedPartlyCloudy uint8 = 0x60    // flag for marking that it was partly cloudy when scanned and the spawn was not boosted
 
 //
 //CREATE TABLE `pokemon` (
@@ -662,7 +664,7 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto) {
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -672,6 +674,16 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	pokemon.setPokemonDisplay(int16(proto.PokemonId), proto.PokemonDisplay)
 	oldWeather := pokemon.EncounterWeather
 	pokemon.EncounterWeather = uint8(proto.PokemonDisplay.WeatherBoostedCondition)
+	if proto.PokemonDisplay.WeatherBoostedCondition == pogo.GameplayWeatherProto_NONE {
+		weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
+		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
+			log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+		} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+			pokemon.EncounterWeather = EncounterWeather_UnboostedPartlyCloudy
+		} else {
+			pokemon.EncounterWeather = EncounterWeather_UnboostedNotPartlyCloudy
+		}
+	}
 	cpMultiplier := float64(proto.CpMultiplier)
 	var level int64
 	if cpMultiplier < 0.734 {
@@ -691,11 +703,13 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	if pokemon.IsDitto {
 		// For a confirmed Ditto, we persist IV in inactive only in 0P state
 		// when disguise is boosted, it has same IV as Ditto
-		if pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
-			// a 0P Ditto can never be in PP state
-			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
-			// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
-			pokemon.Level.Int64 == level-5 {
+		if pokemon.EncounterWeather == EncounterWeather_UnboostedPartlyCloudy ||
+			pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
+				// a 0P Ditto can never be in PP state
+				oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
+				// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
+				pokemon.Level.Int64 == level-5 {
+			pokemon.Level = null.IntFrom(level - 5)
 			pokemon.IvInactive = null.IntFrom(int64(
 				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 		} else {
@@ -709,13 +723,14 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 	setDittoAttributes := func(mode string, to0P, archive, setDitto bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%x,%d,%x%x%x)",
-				pokemon.Id, mode, pokemon.PokemonId,
-				pokemon.Weather.Int64, level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
+				pokemon.Id, mode, pokemon.PokemonId, pokemon.EncounterWeather,
+				level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
 		} else {
 			log.Infof("[POKEMON] %s: %s Ditto found, disguised as %d. (%x,%d,%x%x%x,%03x)>(%x,%d,%x%x%x)",
 				pokemon.Id, mode, pokemon.PokemonId, oldWeather, pokemon.Level.Int64, pokemon.StaIv.ValueOrZero(),
 				pokemon.DefIv.ValueOrZero(), pokemon.AtkIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
-				pokemon.Weather.Int64, level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
+				pokemon.EncounterWeather, level,
+				proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
 		}
 		pokemon.IsDitto = setDitto
 		if setDitto {
@@ -758,8 +773,8 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 		// the Pokemon has been encountered before but we find an unexpected level when reencountering it => Ditto
 		// note that at this point the level should have been already readjusted according to the new weather boost
 		case 5:
-			switch pokemon.EncounterWeather {
-			case uint8(pogo.GameplayWeatherProto_NONE):
+			switch pokemon.Weather.Int64 {
+			case int64(pogo.GameplayWeatherProto_NONE):
 				switch oldWeather {
 				case EncounterWeather_Invalid: // should only happen when upgrading with pre-existing data
 					if !pokemon.IvInactive.Valid {
@@ -770,7 +785,10 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 						setDittoAttributes("00/0N/BN/PN>0P or B0>00/[0N]", false, true, false)
 					}
 				case uint8(pogo.GameplayWeatherProto_NONE),
-					uint8(pogo.GameplayWeatherProto_NONE) | EncounterWeather_Rerolled:
+					EncounterWeather_UnboostedNotPartlyCloudy, EncounterWeather_UnboostedPartlyCloudy,
+					uint8(pogo.GameplayWeatherProto_NONE) | EncounterWeather_Rerolled,
+					EncounterWeather_UnboostedNotPartlyCloudy | EncounterWeather_Rerolled,
+					EncounterWeather_UnboostedPartlyCloudy | EncounterWeather_Rerolled:
 					setDittoAttributes("00/0N>0P", true, false, true)
 				case uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY),
 					uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) | EncounterWeather_Rerolled:
@@ -778,15 +796,17 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 				default:
 					if level > 30 {
 						setDittoAttributes("BN>0P", true, false, true)
-					} else if oldWeather&EncounterWeather_Rerolled == 0 {
-						// set Ditto as it is most likely B0>00 if species did not reroll
-						setDittoAttributes("BN>0P or B0>[00]/0N", false, true, true)
-					} else {
+					} else if oldWeather&EncounterWeather_Rerolled != 0 {
 						// in case of BN>0P, we set Ditto to be a hidden 0P state, hoping we rediscover later
 						setDittoAttributes("BN>0P or B0>00/[0N]", false, true, false)
+					} else if pokemon.EncounterWeather == EncounterWeather_UnboostedNotPartlyCloudy {
+						setDittoAttributes("BN>[0P] or B0>00/0N", true, false, true)
+					} else {
+						// set Ditto as it is most likely B0>00 if species did not reroll
+						setDittoAttributes("BN>0P or B0>[00]/0N", false, true, true)
 					}
 				}
-			case uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
+			case int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
 				// we can never be sure if this is a Ditto or rerolling into non-Ditto so assume not
 				if oldWeather&EncounterWeather_Rerolled == 0 {
 					setDittoAttributes("B0>[PP]/PN", false, true, true)
@@ -798,15 +818,15 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 			}
 			return
 		case -5:
-			switch pokemon.EncounterWeather {
-			case uint8(pogo.GameplayWeatherProto_NONE):
-				if oldWeather == uint8(pogo.GameplayWeatherProto_NONE) {
+			switch pokemon.Weather.Int64 {
+			case int64(pogo.GameplayWeatherProto_NONE):
+				if oldWeather&EncounterWeather_Rerolled == 0 {
 					setDittoAttributes("0P>[00]/0N", false, true, true)
 				} else {
 					// we can never be sure if this is a Ditto or rerolling into non-Ditto so assume not
 					setDittoAttributes("0P>00/[0N]", false, true, false)
 				}
-			case uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
+			case int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
 				setDittoAttributes("0P>PN", false, true, false)
 			default:
 				switch oldWeather {
@@ -820,12 +840,15 @@ func (pokemon *Pokemon) addEncounterPokemon(proto *pogo.PokemonProto) {
 						setDittoAttributes("00/0N/BN/PP/PN>B0 or 0P>[BN]", false, true, false)
 					}
 				case uint8(pogo.GameplayWeatherProto_NONE),
-					uint8(pogo.GameplayWeatherProto_NONE) | EncounterWeather_Rerolled:
+					EncounterWeather_UnboostedNotPartlyCloudy, EncounterWeather_UnboostedPartlyCloudy,
+					uint8(pogo.GameplayWeatherProto_NONE) | EncounterWeather_Rerolled,
+					EncounterWeather_UnboostedNotPartlyCloudy | EncounterWeather_Rerolled,
+					EncounterWeather_UnboostedPartlyCloudy | EncounterWeather_Rerolled:
 					if level <= 5 ||
 						proto.IndividualAttack < 4 || proto.IndividualDefense < 4 || proto.IndividualStamina < 4 {
 						setDittoAttributes("00/0N>B0", false, true, true)
-					} else if oldWeather == uint8(pogo.GameplayWeatherProto_NONE) {
-						// always set Ditto if species did not reroll since 0N>B0 vs 0P>BN are completely indistinguishable
+					} else if oldWeather != EncounterWeather_Rerolled &&
+						oldWeather != EncounterWeather_Rerolled|EncounterWeather_UnboostedPartlyCloudy {
 						setDittoAttributes("00/0N>[B0] or 0P>BN", false, true, true)
 					} else {
 						setDittoAttributes("00/0N>B0 or 0P>[BN]", false, true, false)
@@ -875,7 +898,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
-	pokemon.addEncounterPokemon(encounterData.Pokemon.Pokemon)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -892,7 +915,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
 	pokemon.IsEvent = 0
-	pokemon.addEncounterPokemon(encounterData.Pokemon)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon)
 
 	if encounterData.Pokemon.PokemonDisplay.Shiny {
 		pokemon.Shiny = null.BoolFrom(true)
