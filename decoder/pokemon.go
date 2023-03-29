@@ -703,11 +703,11 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// archive should be set to false for [normal]>0P or 0P>B0
 	setDittoAttributes := func(mode string, to0P, archive, setDitto bool) {
 		if mode == "B0" || mode == "0P" {
-			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%x,%d,%x%x%x)",
+			log.Debugf("[POKEMON] %s: %s Ditto found, current display %d. (%x,%d,%x%x%x)",
 				pokemon.Id, mode, pokemon.PokemonId, pokemon.EncounterWeather,
 				level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
 		} else {
-			log.Infof("[POKEMON] %s: %s Ditto found, disguised as %d. (%x,%d,%x%x%x,%03x)>(%x,%d,%x%x%x)",
+			log.Infof("[POKEMON] %s: %s Ditto found, current display %d. (%x,%d,%x%x%x,%03x)>(%x,%d,%x%x%x)",
 				pokemon.Id, mode, pokemon.PokemonId, oldWeather, pokemon.Level.Int64, pokemon.StaIv.ValueOrZero(),
 				pokemon.DefIv.ValueOrZero(), pokemon.AtkIv.ValueOrZero(), pokemon.IvInactive.ValueOrZero(),
 				pokemon.EncounterWeather, level,
