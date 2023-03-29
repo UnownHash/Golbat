@@ -27,37 +27,50 @@ type S2Cell struct {
 //  PRIMARY KEY (`id`)
 //)
 
-func (s2Cell *S2Cell) updateS2CellFromClientMapProto(mapS2CellId uint64) *S2Cell {
-	mapS2Cell := s2.CellFromCellID(s2.CellID(mapS2CellId))
-	s2Cell.Id = mapS2CellId
-	s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
-	s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
-	s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
-	return s2Cell
-}
-
-func saveS2CellRecord(ctx context.Context, db db.DbDetails, s2Cell *S2Cell) {
+func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	now := time.Now().Unix()
+	outputCellIds := []S2Cell{}
 
-	if c := s2CellCache.Get(s2Cell.Id); c != nil {
-		cachedCell := c.Value()
-		if cachedCell.Updated > now-900 {
-			return
+	// prepare list of cells to update
+	for _, cellId := range cellIds {
+		var s2Cell = S2Cell{}
+
+		if c := s2CellCache.Get(cellId); c != nil {
+			cachedCell := c.Value()
+			if cachedCell.Updated > now-900 {
+				continue
+			}
+			s2Cell = cachedCell
+		} else {
+			mapS2Cell := s2.CellFromCellID(s2.CellID(cellId))
+			s2Cell.Id = cellId
+			s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
+			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
+			s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
 		}
-	}
-	s2Cell.Updated = now
+		s2Cell.Updated = now
 
-	res, err := db.GeneralDb.NamedExecContext(ctx,
-		"INSERT INTO s2cell (id, center_lat, center_lon, level, updated) "+
-			"VALUES (:id, :center_lat, :center_lon, :level, :updated) "+
-			"ON DUPLICATE KEY UPDATE "+
-			"center_lat=VALUES(center_lat), center_lon=VALUES(center_lon), level=VALUES(level), updated=VALUES(updated)",
-		s2Cell)
-	if err != nil {
-		log.Errorf("insert s2Cell: %s", err)
+		outputCellIds = append(outputCellIds, s2Cell)
+	}
+
+	if len(outputCellIds) == 0 {
 		return
 	}
-	_, _ = res, err
 
-	s2CellCache.Set(s2Cell.Id, *s2Cell, ttlcache.DefaultTTL)
+	// run bulk query
+	_, err := db.GeneralDb.NamedExecContext(ctx, `
+		INSERT INTO s2cell (id, center_lat, center_lon, level, updated)
+		VALUES (:id, :center_lat, :center_lon, :level, :updated)
+		ON DUPLICATE KEY UPDATE updated=VALUES(updated)
+	`, outputCellIds)
+
+	if err != nil {
+		log.Errorf("saveS2CellRecords: %s", err)
+		return
+	}
+
+	// set cache
+	for _, cellId := range outputCellIds {
+		s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
+	}
 }
