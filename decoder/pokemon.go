@@ -807,8 +807,10 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 					} else if oldWeather&EncounterWeather_Rerolled != 0 {
 						// in case of BN>0P, we set Ditto to be a hidden 0P state, hoping we rediscover later
 						setDittoAttributes("BN>0P or B0>00/[0N]", false, true, false)
+					} else if pokemon.EncounterWeather == EncounterWeather_UnboostedPartlyCloudy {
+						setDittoAttributes("BN>0P or B0>[0N]", false, true, false)
 					} else if pokemon.EncounterWeather == EncounterWeather_UnboostedNotPartlyCloudy {
-						setDittoAttributes("BN>[0P] or B0>00/0N", true, false, true)
+						setDittoAttributes("B0>[00]/0N", false, true, true)
 					} else {
 						// set Ditto as it is most likely B0>00 if species did not reroll
 						setDittoAttributes("BN>0P or B0>[00]/0N", false, true, true)
