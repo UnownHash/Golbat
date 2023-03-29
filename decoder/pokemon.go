@@ -945,7 +945,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 		if oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) {
-			log.Infof("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, oldId,
+			log.Debugf("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender)
 			// TODO: repopulate weight/size/height?
