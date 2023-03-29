@@ -700,25 +700,6 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	//  - PP: Weather being partly cloudy boosts both disguise and Ditto
 	// We will also use 0N/BN/PN to denote a normal non-Ditto spawn with corresponding weather boosts.
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
-	if pokemon.IsDitto {
-		// For a confirmed Ditto, we persist IV in inactive only in 0P state
-		// when disguise is boosted, it has same IV as Ditto
-		if pokemon.EncounterWeather == EncounterWeather_UnboostedPartlyCloudy ||
-			pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
-				// a 0P Ditto can never be in PP state
-				oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
-				// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
-				pokemon.Level.Int64 == level-5 {
-			pokemon.Level = null.IntFrom(level - 5)
-			pokemon.IvInactive = null.IntFrom(int64(
-				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
-		} else {
-			pokemon.Level = null.IntFrom(level)
-			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-				int64(proto.IndividualStamina))
-		}
-		return
-	}
 	// archive should be set to false for [normal]>0P or 0P>B0
 	setDittoAttributes := func(mode string, to0P, archive, setDitto bool) {
 		if len(mode) <= 2 { // B0 or 0P Ditto
@@ -763,6 +744,33 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
 		}
+	}
+	if pokemon.IsDitto {
+		// For a confirmed Ditto, we persist IV in inactive only in 0P state
+		// when disguise is boosted, it has same IV as Ditto
+		if pokemon.EncounterWeather == EncounterWeather_UnboostedPartlyCloudy {
+			if pokemon.Level.Int64 == level-5 {
+				pokemon.IvInactive = null.IntFrom(int64(
+					proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
+			} else {
+				setDittoAttributes("0N", false, true, false)
+			}
+		} else if pokemon.EncounterWeather == uint8(pogo.GameplayWeatherProto_NONE) &&
+			// a 0P Ditto can never be in PP state
+			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
+			// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
+			pokemon.Level.Int64 == level-5 {
+			pokemon.IvInactive = null.IntFrom(int64(
+				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
+		} else if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) &&
+			pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) && pokemon.Level.Int64 != level {
+			setDittoAttributes("BN", false, true, false)
+		} else {
+			pokemon.Level = null.IntFrom(level)
+			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
+				int64(proto.IndividualStamina))
+		}
+		return
 	}
 	// There are 10 total possible transitions among these states, i.e. all 12 of them except for 0P <-> PP.
 	// A Ditto in 00/PP state is undetectable. We try to detect them in the remaining possibilities.
