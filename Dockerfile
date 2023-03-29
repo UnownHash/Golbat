@@ -1,5 +1,5 @@
 # Build image
-FROM golang:1.18 as build
+FROM golang:1.20 as build
 
 WORKDIR /go/src/app
 COPY . .
