@@ -1,7 +1,7 @@
 version: '3.7'
 services:
   golbat:
-    image: ghcr.io/dragohash/golbat:main
+    image: ghcr.io/unownhash/golbat:main
     container_name: golbat
     restart: unless-stopped
     volumes:
