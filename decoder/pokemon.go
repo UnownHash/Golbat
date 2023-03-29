@@ -702,7 +702,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
 	// archive should be set to false for [normal]>0P or 0P>B0
 	setDittoAttributes := func(mode string, to0P, archive, setDitto bool) {
-		if len(mode) <= 2 { // B0 or 0P Ditto
+		if mode == "B0" || mode == "0P" {
 			log.Debugf("[POKEMON] %s: %s Ditto found, disguised as %d. (%x,%d,%x%x%x)",
 				pokemon.Id, mode, pokemon.PokemonId, pokemon.EncounterWeather,
 				level, proto.IndividualStamina, proto.IndividualDefense, proto.IndividualAttack)
