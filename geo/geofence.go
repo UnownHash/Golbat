@@ -189,6 +189,10 @@ func LoadRtree(featureCollection *geojson.FeatureCollection) *rtree.RTreeG[*geoj
 }
 
 func MatchGeofencesRtree(tree *rtree.RTreeG[*geojson.Feature], lat, lon float64) (areas []AreaName) {
+	if tree == nil {
+		return
+	}
+
 	p := orb.Point{lon, lat}
 
 	tree.Search([2]float64{lon, lat}, [2]float64{lon, lat}, func(min, max [2]float64, f *geojson.Feature) bool {
