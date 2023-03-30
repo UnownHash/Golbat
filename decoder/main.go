@@ -252,7 +252,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 	}
 }
 
-func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
+func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -260,7 +260,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 
 		spawnpointUpdateFromWild(ctx, db, wild.Data, int64(wild.Timestamp))
 
-		if config.Config.Tuning.ProcessWilds {
+		if scanParameters.processWild {
 			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
@@ -294,7 +294,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, wildPokemonList []
 		pokemonMutex.Unlock()
 	}
 
-	if config.Config.Tuning.ProcessNearby {
+	if scanParameters.processNearby {
 		for _, nearby := range nearbyPokemonList {
 			encounterId := strconv.FormatUint(nearby.Data.EncounterId, 10)
 			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)

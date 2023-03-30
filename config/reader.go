@@ -54,6 +54,12 @@ func ReadConfig() {
 		hook := &Config.Webhooks[i]
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
 	}
+
+	// translate scan areas to array of geo.AreaName struct
+	for i := 0; i < len(Config.ScanRules); i++ {
+		rule := &Config.ScanRules[i]
+		rule.AreaNames = splitIntoAreaAndFenceName(rule.Areas)
+	}
 }
 
 func splitIntoAreaAndFenceName(areaNames []string) (areas []geo.AreaName) {

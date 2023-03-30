@@ -3,20 +3,21 @@ package config
 import "golbat/geo"
 
 type configDefinition struct {
-	Port      int       `toml:"port"`
-	Webhooks  []webhook `toml:"webhooks"`
-	Database  database  `toml:"database"`
-	Stats     bool      `toml:"stats"`
-	Logging   logging   `toml:"logging"`
-	Sentry    sentry    `toml:"sentry"`
-	Pyroscope pyroscope `toml:"pyroscope"`
-	InMemory  bool      `toml:"in_memory"`
-	Cleanup   cleanup   `toml:"cleanup"`
-	RawBearer string    `toml:"raw_bearer"`
-	ApiSecret string    `toml:"api_secret"`
-	Pvp       pvp       `toml:"pvp"`
-	Koji      koji      `toml:"koji"`
-	Tuning    tuning    `toml:"tuning"`
+	Port      int        `toml:"port"`
+	Webhooks  []webhook  `toml:"webhooks"`
+	Database  database   `toml:"database"`
+	Stats     bool       `toml:"stats"`
+	Logging   logging    `toml:"logging"`
+	Sentry    sentry     `toml:"sentry"`
+	Pyroscope pyroscope  `toml:"pyroscope"`
+	InMemory  bool       `toml:"in_memory"`
+	Cleanup   cleanup    `toml:"cleanup"`
+	RawBearer string     `toml:"raw_bearer"`
+	ApiSecret string     `toml:"api_secret"`
+	Pvp       pvp        `toml:"pvp"`
+	Koji      koji       `toml:"koji"`
+	Tuning    tuning     `toml:"tuning"`
+	ScanRules []scanRule `toml:"scan"`
 }
 
 type koji struct {
@@ -85,6 +86,15 @@ type tuning struct {
 	ExtendedTimeout bool `toml:"extended_timeout"`
 	ProcessWilds    bool `toml:"process_wild_pokemon"`
 	ProcessNearby   bool `toml:"process_nearby_pokemon"`
+}
+
+type scanRule struct {
+	Areas          []string       `toml:"areas"`
+	AreaNames      []geo.AreaName `toml:"-"`
+	ScanContext    []string       `toml:"context"`
+	ProcessPokemon bool           `toml:"process_pokemon"`
+	ProcessWilds   bool           `toml:"process_wild_pokemon"`
+	ProcessNearby  bool           `toml:"process_nearby_pokemon"`
 }
 
 var Config = configDefinition{

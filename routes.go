@@ -18,12 +18,15 @@ import (
 )
 
 type ProtoData struct {
-	Data    []byte
-	Request []byte
-	HaveAr  *bool
-	Account string
-	Level   int
-	Uuid    string
+	Data        []byte
+	Request     []byte
+	HaveAr      *bool
+	Account     string
+	Level       int
+	Uuid        string
+	ScanContext string
+	Lat         float64
+	Lon         float64
 }
 
 type InboundRawData struct {
@@ -59,6 +62,8 @@ func Raw(c *gin.Context) {
 	uuid := ""
 	account := ""
 	level := 30
+	scanContext := ""
+	var latTarget, lonTarget float64
 	var globalHaveAr *bool
 	var protoData []InboundRawData
 
@@ -113,6 +118,18 @@ func Raw(c *gin.Context) {
 					level = int(lvl)
 				}
 			}
+			if v := raw["scan_context"]; v != nil {
+				scanContext, _ = v.(string)
+			}
+
+			if v := raw["lat_target"]; v != nil {
+				latTarget, _ = v.(float64)
+			}
+
+			if v := raw["lon_target"]; v != nil {
+				lonTarget, _ = v.(float64)
+			}
+
 			contents := raw["contents"].([]interface{}) // Other MITM
 			for _, v := range contents {
 				entry := v.(map[string]interface{})
@@ -183,10 +200,13 @@ func Raw(c *gin.Context) {
 			}
 
 			protoData := ProtoData{
-				Account: account,
-				Level:   level,
-				HaveAr:  haveAr,
-				Uuid:    uuid,
+				Account:     account,
+				Level:       level,
+				HaveAr:      haveAr,
+				Uuid:        uuid,
+				Lat:         latTarget,
+				Lon:         lonTarget,
+				ScanContext: scanContext,
 			}
 			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
 			if request != "" {
