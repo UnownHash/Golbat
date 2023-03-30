@@ -120,7 +120,8 @@ func Raw(c *gin.Context) {
 			for _, v := range contents {
 				entry := v.(map[string]interface{})
 				// Atlas, GC and GDS support
-				if len(userAgent) >= 13 && userAgent[:13] == "Pokemod Atlas" || len(userAgent) >= 10 && (userAgent[:10] == "PokmonGO/0" || userAgent[:10] == "PokmonGO/1") {
+				if (len(userAgent) > 6 && userAgent[:6] == "okhttp") ||
+					(len(userAgent) >= 13 && userAgent[:13] == "Pokemod Atlas") || len(userAgent) >= 10 && (userAgent[:10] == "PokmonGO/0" || userAgent[:10] == "PokmonGO/1") {
 					protoData = append(protoData, InboundRawData{
 						Base64Data: entry["data"].(string),
 						Method:     int(entry["method"].(float64)),
