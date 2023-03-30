@@ -19,12 +19,9 @@ type nestPokemonCountDetail struct {
 }
 
 func updatePokemonNests(old *Pokemon, new *Pokemon) {
-	if nestFeatureCollection == nil {
-		return
-	}
 
 	if (old == nil || old.SeenType.ValueOrZero() != SeenType_Encounter) && new.SeenType.ValueOrZero() == SeenType_Encounter {
-		nestAreas := geo.MatchGeofences(nestFeatureCollection, new.Lat, new.Lon)
+		nestAreas := MatchNestGeofence(new.Lat, new.Lon)
 
 		if len(nestAreas) > 0 {
 			nestCountLock.Lock()
@@ -97,5 +94,5 @@ func LoadNests(dbDetails db.DbDetails) {
 		newFeatureCollection = newFeatureCollection.Append(feat)
 	}
 
-	nestFeatureCollection = newFeatureCollection
+	nestTree = geo.LoadRtree(newFeatureCollection)
 }

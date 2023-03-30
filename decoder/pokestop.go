@@ -529,7 +529,7 @@ func createPokestopFortWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
-	areas := geo.MatchGeofences(statsFeatureCollection, stop.Lat, stop.Lon)
+	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 
 	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
 		questHook := map[string]interface{}{
