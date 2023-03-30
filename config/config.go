@@ -17,7 +17,7 @@ type configDefinition struct {
 	Pvp       pvp        `toml:"pvp"`
 	Koji      koji       `toml:"koji"`
 	Tuning    tuning     `toml:"tuning"`
-	ScanRules []scanRule `toml:"scan"`
+	ScanRules []scanRule `toml:"scan_rules"`
 }
 
 type koji struct {
@@ -92,9 +92,9 @@ type scanRule struct {
 	Areas          []string       `toml:"areas"`
 	AreaNames      []geo.AreaName `toml:"-"`
 	ScanContext    []string       `toml:"context"`
-	ProcessPokemon bool           `toml:"process_pokemon"`
-	ProcessWilds   bool           `toml:"process_wild_pokemon"`
-	ProcessNearby  bool           `toml:"process_nearby_pokemon"`
+	ProcessPokemon bool           `toml:"pokemon"`
+	ProcessWilds   bool           `toml:"wild_pokemon"`
+	ProcessNearby  bool           `toml:"nearby_pokemon"`
 }
 
 var Config = configDefinition{
