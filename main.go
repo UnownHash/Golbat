@@ -526,11 +526,15 @@ func decodeGMO(ctx context.Context, protoData *ProtoData) string {
 	if scanParameters.ProcessPokemon {
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, protoData.Account)
 	}
-	decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
-	decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
+	if scanParameters.ProcessWeather {
+		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
+	}
+	if scanParameters.ProcessCells {
+		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 
-	if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-		decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+		if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
+			decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }

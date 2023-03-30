@@ -92,9 +92,12 @@ type scanRule struct {
 	Areas          []string       `toml:"areas"`
 	AreaNames      []geo.AreaName `toml:"-"`
 	ScanContext    []string       `toml:"context"`
-	ProcessPokemon bool           `toml:"pokemon"`
-	ProcessWilds   bool           `toml:"wild_pokemon"`
-	ProcessNearby  bool           `toml:"nearby_pokemon"`
+	ProcessPokemon *bool          `toml:"pokemon"`
+	ProcessWilds   *bool          `toml:"wild_pokemon"`
+	ProcessNearby  *bool          `toml:"nearby_pokemon"`
+	ProcessWeather *bool          `toml:"weather"`
+	ProcessForts   *bool          `toml:"forts"`
+	ProcessCells   *bool          `toml:"cells"`
 }
 
 var Config = configDefinition{

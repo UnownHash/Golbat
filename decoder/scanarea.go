@@ -8,8 +8,11 @@ import (
 
 type ScanParameters struct {
 	ProcessPokemon bool
-	processWild    bool
-	processNearby  bool
+	ProcessWild    bool
+	ProcessNearby  bool
+	ProcessWeather bool
+	ProcessForts   bool
+	ProcessCells   bool
 }
 
 func FindScanArea(scanContext string, lat, lon float64) ScanParameters {
@@ -41,16 +44,28 @@ func FindScanArea(scanContext string, lat, lon float64) ScanParameters {
 
 		// We have a match
 
+		defaultTrue := func(value *bool) bool {
+			if value == nil {
+				return true
+			}
+			return *value
+		}
 		return ScanParameters{
-			ProcessPokemon: rule.ProcessPokemon,
-			processWild:    rule.ProcessWilds,
-			processNearby:  rule.ProcessNearby,
+			ProcessPokemon: defaultTrue(rule.ProcessPokemon),
+			ProcessWild:    defaultTrue(rule.ProcessWilds),
+			ProcessNearby:  defaultTrue(rule.ProcessNearby),
+			ProcessCells:   defaultTrue(rule.ProcessCells),
+			ProcessWeather: defaultTrue(rule.ProcessWeather),
+			ProcessForts:   defaultTrue(rule.ProcessForts),
 		}
 	}
 
 	return ScanParameters{
 		ProcessPokemon: true,
-		processWild:    true,
-		processNearby:  true,
+		ProcessWild:    true,
+		ProcessNearby:  true,
+		ProcessCells:   true,
+		ProcessWeather: true,
+		ProcessForts:   true,
 	}
 }
