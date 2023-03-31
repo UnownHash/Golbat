@@ -5,6 +5,7 @@ import (
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/paulmach/orb/planar"
+	"github.com/tidwall/rtree"
 	"math"
 )
 
@@ -170,6 +171,52 @@ func (p *Geofence) intersectsWithRaycast(point Location, start Location, end Loc
 	diagSlope := (end.Longitude - start.Longitude) / (end.Latitude - start.Latitude)
 
 	return raySlope >= diagSlope
+}
+
+func LoadRtree(featureCollection *geojson.FeatureCollection) *rtree.RTreeG[*geojson.Feature] {
+	if featureCollection == nil {
+		return nil
+	}
+
+	var tree rtree.RTreeG[*geojson.Feature]
+
+	for _, f := range featureCollection.Features {
+		bbox := f.Geometry.Bound()
+		tree.Insert(bbox.Min, bbox.Max, f)
+	}
+
+	return &tree
+}
+
+func MatchGeofencesRtree(tree *rtree.RTreeG[*geojson.Feature], lat, lon float64) (areas []AreaName) {
+	if tree == nil {
+		return
+	}
+
+	p := orb.Point{lon, lat}
+
+	tree.Search([2]float64{lon, lat}, [2]float64{lon, lat}, func(min, max [2]float64, f *geojson.Feature) bool {
+		geoType := f.Geometry.GeoJSONType()
+		switch geoType {
+		case "Polygon":
+			polygon := f.Geometry.(orb.Polygon)
+			if planar.PolygonContains(polygon, p) {
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, AreaName{Parent: parent, Name: name})
+			}
+		case "MultiPolygon":
+			multiPolygon := f.Geometry.(orb.MultiPolygon)
+			if planar.MultiPolygonContains(multiPolygon, p) {
+				name := f.Properties.MustString("name", "unknown")
+				parent := f.Properties.MustString("parent", name)
+				areas = append(areas, AreaName{Parent: parent, Name: name})
+			}
+		}
+		return true // always continue
+	})
+
+	return
 }
 
 func MatchGeofences(featureCollection *geojson.FeatureCollection, lat, lon float64) (areas []AreaName) {

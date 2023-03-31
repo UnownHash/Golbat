@@ -2,6 +2,8 @@ package decoder
 
 import (
 	"encoding/json"
+	"github.com/tidwall/rtree"
+	"golbat/geo"
 	"io/ioutil"
 	"net/http"
 
@@ -17,8 +19,8 @@ type KojiResponse struct {
 	// Stats      KojiStats     `json:"stats"`
 }
 
-var statsFeatureCollection *geojson.FeatureCollection
-var nestFeatureCollection *geojson.FeatureCollection
+var statsTree *rtree.RTreeG[*geojson.Feature]
+var nestTree *rtree.RTreeG[*geojson.Feature]
 var kojiUrl = ""
 var kojiBearerToken = ""
 
@@ -61,6 +63,8 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 }
 
 func ReadGeofences() error {
+	var statsFeatureCollection *geojson.FeatureCollection
+
 	if kojiUrl != "" {
 		fc, err := GetKojiGeofence(kojiUrl)
 		if err != nil {
@@ -75,7 +79,7 @@ func ReadGeofences() error {
 				} else {
 					statsFeatureCollection = fc
 					log.Infof("KOJI: Loaded cached geofence")
-					return nil
+
 				}
 			}
 		} else {
@@ -83,33 +87,30 @@ func ReadGeofences() error {
 			bytes, _ := json.MarshalIndent(fc, "", "  ")
 			ioutil.WriteFile(kojiCacheFilename, []byte(bytes), 0644)
 			statsFeatureCollection = fc
-			return nil
+
 		}
+	} else {
+		geofence, err := ioutil.ReadFile(geojsonFilename)
+		if err != nil {
+			return err
+		}
+		fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
+		if geoerr != nil {
+			return geoerr
+		}
+		log.Infof("GEO: Loaded geofence from geofence.json")
+		statsFeatureCollection = fc
 	}
-	geofence, err := ioutil.ReadFile(geojsonFilename)
-	if err != nil {
-		return err
-	}
-	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
-	if geoerr != nil {
-		return geoerr
-	}
-	log.Infof("GEO: Loaded geofence from geofence.json")
-	statsFeatureCollection = fc
+
+	statsTree = geo.LoadRtree(statsFeatureCollection)
 
 	return nil
 }
 
-//func ReadNestGeofences() error {
-//	geofence, err := ioutil.ReadFile(nestFilename)
-//	if err != nil {
-//		return err
-//	}
-//
-//	fc, geoerr := geojson.UnmarshalFeatureCollection(geofence)
-//	if geoerr != nil {
-//		return geoerr
-//	}
-//	nestFeatureCollection = fc
-//	return nil
-//}
+func MatchStatsGeofence(lat, lon float64) []geo.AreaName {
+	return geo.MatchGeofencesRtree(statsTree, lat, lon)
+}
+
+func MatchNestGeofence(lat, lon float64) []geo.AreaName {
+	return geo.MatchGeofencesRtree(nestTree, lat, lon)
+}

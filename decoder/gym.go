@@ -7,7 +7,6 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
-	"golbat/geo"
 	"golbat/pogo"
 	"golbat/util"
 	"golbat/webhooks"
@@ -360,7 +359,7 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 }
 
 func createGymWebhooks(oldGym *Gym, gym *Gym) {
-	areas := geo.MatchGeofences(statsFeatureCollection, gym.Lat, gym.Lon)
+	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
