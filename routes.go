@@ -67,7 +67,7 @@ func Raw(c *gin.Context) {
 	// than I would like
 
 	pogodroidHeader := r.Header.Get("origin")
-	userAgent := r.Header.Get("User-Agent")
+	//userAgent := r.Header.Get("User-Agent")
 
 	//log.Infof("Raw: Received data from %s", body)
 	//log.Infof("User agent is %s", userAgent)
