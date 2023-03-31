@@ -22,7 +22,7 @@ func FindScanArea(scanContext string, lat, lon float64) ScanParameters {
 	for _, rule := range config.Config.ScanRules {
 		if len(rule.AreaNames) > 0 {
 			if !areaLookedUp {
-				areas = geo.MatchGeofences(statsFeatureCollection, lat, lon)
+				areas = MatchStatsGeofence(lat, lon)
 				areaLookedUp = true
 			}
 			if !geo.AreaMatchWithWildcards(areas, rule.AreaNames) {
