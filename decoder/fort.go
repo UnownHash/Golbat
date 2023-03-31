@@ -5,7 +5,6 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
-	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
 )
@@ -125,21 +124,21 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	if change == NEW {
-		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
+		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"new":         new,
 		}
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == REMOVAL {
-		areas := geo.MatchGeofences(statsFeatureCollection, old.Location.Latitude, old.Location.Longitude)
+		areas := MatchStatsGeofence(old.Location.Latitude, old.Location.Longitude)
 		hook := map[string]interface{}{
 			"change_type": change.String(),
 			"old":         old,
 		}
 		webhooks.AddMessage(webhooks.FortUpdate, hook, areas)
 	} else if change == EDIT {
-		areas := geo.MatchGeofences(statsFeatureCollection, new.Location.Latitude, new.Location.Longitude)
+		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
 		var editTypes []string
 		if !(old.Name == nil && new.Name == nil) &&
 			(old.Name == nil || new.Name == nil || *old.Name != *new.Name) {

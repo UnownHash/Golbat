@@ -358,7 +358,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 		_, _ = res, err
 	}
-	areas := geo.MatchGeofences(statsFeatureCollection, pokemon.Lat, pokemon.Lon)
+	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
 	updatePokemonNests(oldPokemon, pokemon)
