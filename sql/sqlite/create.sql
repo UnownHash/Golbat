@@ -27,6 +27,7 @@ CREATE TABLE pokemon (
                          cell_id bigint  ,
                          expire_timestamp_verified TINYINT NOT NULL,
                          display_pokemon_id smallint  ,
+                         is_ditto TINYINT NOT NULL DEFAULT 0,
                          seen_type varchar(20) ,
                          shiny TINYINT DEFAULT 0,
                          username varchar(32) ,
