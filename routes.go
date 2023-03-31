@@ -67,7 +67,10 @@ func Raw(c *gin.Context) {
 	// than I would like
 
 	pogodroidHeader := r.Header.Get("origin")
-	userAgent := r.Header.Get("User-Agent")
+	//userAgent := r.Header.Get("User-Agent")
+
+	//log.Infof("Raw: Received data from %s", body)
+	//log.Infof("User agent is %s", userAgent)
 
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
@@ -107,54 +110,73 @@ func Raw(c *gin.Context) {
 			if v := raw["username"]; v != nil {
 				account, _ = v.(string)
 			}
-			if v := raw["trainerlvl"]; v != nil { // Other MITM might use
+			if v := raw["trainerlvl"]; v != nil {
 				lvl, ok := v.(float64)
 				if ok {
 					level = int(lvl)
 				}
 			}
-			contents := raw["contents"].([]interface{}) // Other MITM
+			contents := raw["contents"].([]interface{})
+
+			decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
+				if v := data[key1]; v != nil {
+					return v
+				}
+				if v := data[key2]; v != nil {
+					return v
+				}
+				return nil
+			}
+
 			for _, v := range contents {
 				entry := v.(map[string]interface{})
-				// Atlas, GC and GDS support
-				if len(userAgent) >= 13 && userAgent[:13] == "Pokemod Atlas" || len(userAgent) >= 10 && (userAgent[:10] == "PokmonGO/0" || userAgent[:10] == "PokmonGO/1") {
-					protoData = append(protoData, InboundRawData{
-						Base64Data: entry["data"].(string),
-						Method:     int(entry["method"].(float64)),
-						HaveAr: func() *bool {
-							if v := entry["have_ar"]; v != nil {
-								res, ok := v.(bool)
-								if ok {
-									return &res
-								}
-							}
-							return nil
-						}(),
-					})
-				} else {
-					protoData = append(protoData, InboundRawData{
-						Base64Data: entry["payload"].(string),
-						Request: func() string {
-							if request := entry["request"]; request != nil {
-								res, ok := request.(string)
-								if ok {
-									return res
-								}
-							}
-							return ""
-						}(),
-						Method: int(entry["type"].(float64)),
-						HaveAr: func() *bool {
-							if v := entry["have_ar"]; v != nil {
-								res, ok := v.(bool)
-								if ok {
-									return &res
-								}
-							}
-							return nil
-						}(),
-					})
+				// Try to decode the payload automatically without requiring any knowledge of the
+				// provider type
+
+				b64data := decodeAlternate(entry, "data", "payload")
+				method := decodeAlternate(entry, "method", "type")
+				request := entry["request"]
+				haveAr := entry["have_ar"]
+
+				if method == nil || b64data == nil {
+					log.Errorf("Error decoding raw")
+					continue
 				}
+				inboundRawData := InboundRawData{
+					Base64Data: func() string {
+						if res, ok := b64data.(string); ok {
+							return res
+						}
+						return ""
+					}(),
+					Method: func() int {
+						if res, ok := method.(float64); ok {
+							return int(res)
+						}
+
+						return 0
+					}(),
+					Request: func() string {
+						if request != nil {
+							res, ok := request.(string)
+							if ok {
+								return res
+							}
+						}
+						return ""
+					}(),
+					HaveAr: func() *bool {
+						if haveAr != nil {
+							res, ok := haveAr.(bool)
+							if ok {
+								return &res
+							}
+						}
+						return nil
+					}(),
+				}
+
+				protoData = append(protoData, inboundRawData)
 			}
 		}
 	}
