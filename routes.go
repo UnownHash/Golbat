@@ -110,13 +110,13 @@ func Raw(c *gin.Context) {
 			if v := raw["username"]; v != nil {
 				account, _ = v.(string)
 			}
-			if v := raw["trainerlvl"]; v != nil { // Other MITM might use
+			if v := raw["trainerlvl"]; v != nil {
 				lvl, ok := v.(float64)
 				if ok {
 					level = int(lvl)
 				}
 			}
-			contents := raw["contents"].([]interface{}) // Other MITM
+			contents := raw["contents"].([]interface{})
 
 			decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
 				if v := data[key1]; v != nil {
