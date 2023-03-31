@@ -35,6 +35,8 @@ CREATE TABLE pokemon (
                          capture_3 float ,
                          pvp varchar(10),
                          is_event TINYINT NOT NULL,
+                         iv_inactive smallint DEFAULT NULL,
+                         encounter_weather TINYINT DEFAULT 255 NOT NULL,
                          PRIMARY KEY (id)
 ) ;
 
