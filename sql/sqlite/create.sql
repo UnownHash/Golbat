@@ -23,10 +23,11 @@ CREATE TABLE pokemon (
                          costume smallint  ,
                          first_seen_timestamp int  NOT NULL,
                          changed int   DEFAULT 0 NOT NULL,
-                         `iv` float(5,2),
+                         iv float(5,2),
                          cell_id bigint  ,
                          expire_timestamp_verified TINYINT NOT NULL,
                          display_pokemon_id smallint  ,
+                         is_ditto TINYINT NOT NULL DEFAULT 0,
                          seen_type varchar(20) ,
                          shiny TINYINT DEFAULT 0,
                          username varchar(32) ,
@@ -35,6 +36,8 @@ CREATE TABLE pokemon (
                          capture_3 float ,
                          pvp varchar(10),
                          is_event TINYINT NOT NULL,
+                         iv_inactive smallint DEFAULT NULL,
+                         encounter_weather TINYINT DEFAULT 255 NOT NULL,
                          PRIMARY KEY (id)
 ) ;
 

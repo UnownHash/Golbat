@@ -228,7 +228,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	// Blank, non-persisted record are now inserted into the cache to save on DB calls
-	if oldPokemon.isNewRecord() {
+	if oldPokemon != nil && oldPokemon.isNewRecord() {
 		oldPokemon = nil
 	}
 
