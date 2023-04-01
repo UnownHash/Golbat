@@ -320,6 +320,26 @@ func ReloadNests(c *gin.Context) {
 	})
 }
 
+type ApiRetrieve struct {
+	Min geo.Location `json:"min"`
+	Max geo.Location `json:"max"`
+}
+
+func Retrieve(c *gin.Context) {
+	var requestBody ApiRetrieve
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	start := time.Now()
+	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max)
+	log.Infof("Retrieve took %s", time.Since(start))
+	c.JSON(http.StatusAccepted, res)
+}
+
 func QueryPokemon(c *gin.Context) {
 	authHeader := c.Request.Header.Get("X-Golbat-Secret")
 	if config.Config.ApiSecret != "" {

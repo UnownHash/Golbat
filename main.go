@@ -193,6 +193,8 @@ func main() {
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
 
+	r.POST("/api/retrieve-test", Retrieve)
+
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
 	addr := fmt.Sprintf(":%d", config.Config.Port)

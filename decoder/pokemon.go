@@ -358,6 +358,17 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 		_, _ = res, err
 	}
+
+	// Update pokemon rtree
+	if oldPokemon == nil {
+		addPokemonToTree(pokemon)
+	} else {
+		if pokemon.Lat != oldPokemon.Lat || pokemon.Lon != oldPokemon.Lon {
+			removePokemonFromTree(oldPokemon)
+			addPokemonToTree(pokemon)
+		}
+	}
+
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
