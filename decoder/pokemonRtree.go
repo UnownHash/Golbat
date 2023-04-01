@@ -39,7 +39,7 @@ func GetPokemonInArea(min, max geo.Location) []*Pokemon {
 
 	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 		func(min, max [2]float64, data string) bool {
-			println(data)
+			// println(data)
 			if pokemon := pokemonCache.Get(data); pokemon != nil {
 				pData := pokemon.Value()
 				results = append(results, &pData)

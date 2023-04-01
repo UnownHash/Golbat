@@ -32,45 +32,45 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	Id                      string      `db:"id"`
-	PokestopId              null.String `db:"pokestop_id"`
-	SpawnId                 null.Int    `db:"spawn_id"`
-	Lat                     float64     `db:"lat"`
-	Lon                     float64     `db:"lon"`
-	Weight                  null.Float  `db:"weight"`
-	Size                    null.Int    `db:"size"`
-	Height                  null.Float  `db:"height"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
-	Updated                 null.Int    `db:"updated"`
-	PokemonId               int16       `db:"pokemon_id"`
-	Move1                   null.Int    `db:"move_1"`
-	Move2                   null.Int    `db:"move_2"`
-	Gender                  null.Int    `db:"gender"`
-	Cp                      null.Int    `db:"cp"`
-	AtkIv                   null.Int    `db:"atk_iv"`
-	DefIv                   null.Int    `db:"def_iv"`
-	StaIv                   null.Int    `db:"sta_iv"`
-	IvInactive              null.Int    `db:"iv_inactive"`
-	Iv                      null.Float  `db:"iv"`
-	Form                    null.Int    `db:"form"`
-	Level                   null.Int    `db:"level"`
-	EncounterWeather        uint8       `db:"encounter_weather"`
-	Weather                 null.Int    `db:"weather"`
-	Costume                 null.Int    `db:"costume"`
-	FirstSeenTimestamp      int64       `db:"first_seen_timestamp"`
-	Changed                 int64       `db:"changed"`
-	CellId                  null.Int    `db:"cell_id"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int    `db:"display_pokemon_id"`
-	IsDitto                 bool        `db:"is_ditto"`
-	SeenType                null.String `db:"seen_type"`
-	Shiny                   null.Bool   `db:"shiny"`
-	Username                null.String `db:"username"`
-	Capture1                null.Float  `db:"capture_1"`
-	Capture2                null.Float  `db:"capture_2"`
-	Capture3                null.Float  `db:"capture_3"`
-	Pvp                     null.String `db:"pvp"`
-	IsEvent                 int8        `db:"is_event"`
+	Id                      string      `db:"id" json:"id"`
+	PokestopId              null.String `db:"pokestop_id" json:"pokestop_id"`
+	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
+	Lat                     float64     `db:"lat" json:"lat"`
+	Lon                     float64     `db:"lon" json:"lon"`
+	Weight                  null.Float  `db:"weight" json:"weight"`
+	Size                    null.Int    `db:"size" json:"size"`
+	Height                  null.Float  `db:"height" json:"height"`
+	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
+	Updated                 null.Int    `db:"updated" json:"updated"`
+	PokemonId               int16       `db:"pokemon_id" json:"pokemon_id"`
+	Move1                   null.Int    `db:"move_1" json:"move_1"`
+	Move2                   null.Int    `db:"move_2" json:"move_2"`
+	Gender                  null.Int    `db:"gender" json:"gender"`
+	Cp                      null.Int    `db:"cp" json:"cp"`
+	AtkIv                   null.Int    `db:"atk_iv" json:"atk_iv"`
+	DefIv                   null.Int    `db:"def_iv" json:"def_iv"`
+	StaIv                   null.Int    `db:"sta_iv" json:"sta_iv"`
+	IvInactive              null.Int    `db:"iv_inactive" json:"iv_inactive"`
+	Iv                      null.Float  `db:"iv" json:"iv"`
+	Form                    null.Int    `db:"form" json:"form"`
+	Level                   null.Int    `db:"level" json:"level"`
+	EncounterWeather        uint8       `db:"encounter_weather" json:"encounter_weather"`
+	Weather                 null.Int    `db:"weather" json:"weather"`
+	Costume                 null.Int    `db:"costume" json:"costume"`
+	FirstSeenTimestamp      int64       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	Changed                 int64       `db:"changed" json:"changed"`
+	CellId                  null.Int    `db:"cell_id" json:"cell_id"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
+	DisplayPokemonId        null.Int    `db:"display_pokemon_id" json:"display_pokemon_id"`
+	IsDitto                 bool        `db:"is_ditto" json:"is_ditto"`
+	SeenType                null.String `db:"seen_type" json:"seen_type"`
+	Shiny                   null.Bool   `db:"shiny" json:"shiny"`
+	Username                null.String `db:"username" json:"username"`
+	Capture1                null.Float  `db:"capture_1" json:"capture_1"`
+	Capture2                null.Float  `db:"capture_2" json:"capture_2"`
+	Capture3                null.Float  `db:"capture_3" json:"capture_3"`
+	Pvp                     null.String `db:"pvp" json:"pvp"`
+	IsEvent                 int8        `db:"is_event" json:"is_event"`
 }
 
 const EncounterWeather_Invalid uint8 = 0xFF                  // invalid/unscanned
