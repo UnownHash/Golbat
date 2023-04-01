@@ -219,13 +219,15 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		result = decodeGMO(ctx, protoData)
+		result = decodeGMO(ctx, protoData, getScanParameters(protoData))
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
 		result = decodeGetGymInfo(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
-		result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+		if getScanParameters(protoData).ProcessPokemon {
+			result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
 		result = decodeDiskEncounter(ctx, protoData.Data)
@@ -258,6 +260,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 
 		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
 	}
+}
+
+func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
+	return decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 }
 
 func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
@@ -479,7 +485,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
 }
 
-func decodeGMO(ctx context.Context, protoData *ProtoData) string {
+func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
@@ -519,8 +525,6 @@ func decodeGMO(ctx context.Context, protoData *ProtoData) string {
 	for _, clientWeather := range decodedGmo.ClientWeather {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
-
-	scanParameters := decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
