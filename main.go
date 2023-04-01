@@ -520,9 +520,11 @@ func decodeGMO(ctx context.Context, protoData *ProtoData) string {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
 
-	scanParameters := decoder.FindScanArea(protoData.ScanContext, protoData.Lat, protoData.Lon)
+	scanParameters := decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 
-	decoder.UpdateFortBatch(ctx, dbDetails, newForts)
+	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
+	}
 	if scanParameters.ProcessPokemon {
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, protoData.Account)
 	}

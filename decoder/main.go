@@ -179,7 +179,7 @@ func nullFloatAlmostEqual(a, b null.Float, tolerance float64) bool {
 	}
 }
 
-func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
+func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawFortData) {
 	// Logic is:
 	// 1. Filter out pokestops that are unchanged (last modified time)
 	// 2. Fetch current stops from database
@@ -189,7 +189,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 
 	for _, fort := range p {
 		fortId := fort.Data.FortId
-		if fort.Data.FortType == pogo.FortType_CHECKPOINT {
+		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
@@ -230,7 +230,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, p []RawFortData) {
 			pokestopMutex.Unlock()
 		}
 
-		if fort.Data.FortType == pogo.FortType_GYM {
+		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()

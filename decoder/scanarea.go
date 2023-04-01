@@ -7,15 +7,16 @@ import (
 )
 
 type ScanParameters struct {
-	ProcessPokemon bool
-	ProcessWild    bool
-	ProcessNearby  bool
-	ProcessWeather bool
-	ProcessForts   bool
-	ProcessCells   bool
+	ProcessPokemon   bool
+	ProcessWild      bool
+	ProcessNearby    bool
+	ProcessWeather   bool
+	ProcessPokestops bool
+	ProcessGyms      bool
+	ProcessCells     bool
 }
 
-func FindScanArea(scanContext string, lat, lon float64) ScanParameters {
+func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters {
 	var areas []geo.AreaName
 	areaLookedUp := false
 
@@ -51,21 +52,23 @@ func FindScanArea(scanContext string, lat, lon float64) ScanParameters {
 			return *value
 		}
 		return ScanParameters{
-			ProcessPokemon: defaultTrue(rule.ProcessPokemon),
-			ProcessWild:    defaultTrue(rule.ProcessWilds),
-			ProcessNearby:  defaultTrue(rule.ProcessNearby),
-			ProcessCells:   defaultTrue(rule.ProcessCells),
-			ProcessWeather: defaultTrue(rule.ProcessWeather),
-			ProcessForts:   defaultTrue(rule.ProcessForts),
+			ProcessPokemon:   defaultTrue(rule.ProcessPokemon),
+			ProcessWild:      defaultTrue(rule.ProcessWilds),
+			ProcessNearby:    defaultTrue(rule.ProcessNearby),
+			ProcessCells:     defaultTrue(rule.ProcessCells),
+			ProcessWeather:   defaultTrue(rule.ProcessWeather),
+			ProcessPokestops: defaultTrue(rule.ProcessPokestops),
+			ProcessGyms:      defaultTrue(rule.ProcessGyms),
 		}
 	}
 
 	return ScanParameters{
-		ProcessPokemon: true,
-		ProcessWild:    true,
-		ProcessNearby:  true,
-		ProcessCells:   true,
-		ProcessWeather: true,
-		ProcessForts:   true,
+		ProcessPokemon:   true,
+		ProcessWild:      true,
+		ProcessNearby:    true,
+		ProcessCells:     true,
+		ProcessWeather:   true,
+		ProcessGyms:      true,
+		ProcessPokestops: true,
 	}
 }
