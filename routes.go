@@ -341,8 +341,9 @@ func ReloadNests(c *gin.Context) {
 }
 
 type ApiRetrieve struct {
-	Min geo.Location `json:"min"`
-	Max geo.Location `json:"max"`
+	Min    geo.Location                 `json:"min"`
+	Max    geo.Location                 `json:"max"`
+	Filter map[string]decoder.ApiFilter `json:"filters"`
 }
 
 func Retrieve(c *gin.Context) {
@@ -355,7 +356,7 @@ func Retrieve(c *gin.Context) {
 	}
 
 	start := time.Now()
-	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max)
+	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max, &requestBody.Filter)
 	log.Infof("Retrieve took %s", time.Since(start))
 	c.JSON(http.StatusAccepted, res)
 }
