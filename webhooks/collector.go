@@ -81,7 +81,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[GymDetails].Messages...)
 			} else {
 				for _, message := range currentCollection[GymDetails].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -92,7 +92,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Raid].Messages...)
 			} else {
 				for _, message := range currentCollection[Raid].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -103,7 +103,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Weather].Messages...)
 			} else {
 				for _, message := range currentCollection[Weather].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -114,7 +114,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Pokemon].Messages...)
 			} else {
 				for _, message := range currentCollection[Pokemon].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -126,7 +126,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Quest].Messages...)
 			} else {
 				for _, message := range currentCollection[Quest].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -137,7 +137,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Invasion].Messages...)
 			} else {
 				for _, message := range currentCollection[Invasion].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -148,7 +148,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[Pokestop].Messages...)
 			} else {
 				for _, message := range currentCollection[Pokestop].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -159,7 +159,7 @@ func collectHooks() []WebhookQueue {
 				totalCollection = append(totalCollection, currentCollection[FortUpdate].Messages...)
 			} else {
 				for _, message := range currentCollection[FortUpdate].Messages {
-					if doAreasMatch(message.Areas, hook.AreaNames) {
+					if geo.AreaMatchWithWildcards(message.Areas, hook.AreaNames) {
 						totalCollection = append(totalCollection, message)
 					}
 				}
@@ -181,25 +181,4 @@ func collectHooks() []WebhookQueue {
 	}
 
 	return destinations
-}
-
-func doAreasMatch(messageAreas []geo.AreaName, hookAreas []geo.AreaName) bool {
-	for _, hookArea := range hookAreas {
-		for _, messageArea := range messageAreas {
-			if hookArea.Name == "*" {
-				if hookArea.Parent == messageArea.Parent {
-					return true
-				}
-			} else if hookArea.Parent == "*" {
-				if hookArea.Name == messageArea.Name {
-					return true
-				}
-			} else {
-				if hookArea.Parent == messageArea.Parent && hookArea.Name == messageArea.Name {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
