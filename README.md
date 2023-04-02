@@ -36,29 +36,39 @@ At this time this is likely to be mostly development discussion.
 The data source should be configured to send to Golbat's 
 URL which will be `http://ip:port/raw`
 
-# Tuning
+# Scan Rules
 
-There can be a tuning section in the config file
+Scan rules can be added to the configuration. These will be processed in order, first match applies - and allows disabling of processing certain types of game objects.
+
+The scan rules can match the object to a geofence, or use the scanner 'mode' when it is supported by raw senders (looking at you Flygon!)
 
 ```toml
-[tuning]
-# process_wild_pokemon = true
-# process_nearby_pokemon = true
+[[scan_rules]]
+areas = ["MainArea"]
+nearby_pokemon = false
+
+[[scan_rules]]
+context = ["Scout"]
+
+[[scan_rules]]
+pokemon = false
 ```
 
-* `process_wild_pokemon` - by default Golbat will process the wilds from the GMO after a 15 second
-delay. This allows time for your MITM to send an encounter to overtake it saving a disk write. If
-you are confident that your MITM is sending encounters, you can disable wilds in all cases
-saving some CPU and memory
-* `process_nearby_pokemon` - by default Golbat will process the nearby pokestop and cell pokemon from the GMO.
-This comes at a cost of ~20% more disk writes than ignoring them.  Many argue these are vanity
-pokemon and not worth the cost.  Some argue that early sight of a rare pokemon is worth the cost.
+Here the main area would not process nearby pokemon. Messages arriving in 'scout' mode would have everything processed; and the default would not process any pokemon (so outside main area not delivered by the scout service)
+
+pokemon - any pokemon processing (disables spawnpoints also)
+wild_pokemon - process wild pokemon from GMO
+nearby_pokemon - process nearby pokemon from GMO
+weather - process weather in GMO
+gyms - process gyms in GMO
+pokestops - process pokestops in GMO
+cells - process cell updates (disabling this also disables automatic fort clearance)
 
 # Optimising maria db
 
 These options can help you quite significantly with performance.
 
-```
+```toml
 # This should be 50% of RAM, leaving space for golbat
 innodb_buffer_pool_size = 64G
 

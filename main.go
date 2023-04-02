@@ -221,13 +221,15 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		result = decodeGMO(ctx, protoData.Data, protoData.Account)
+		result = decodeGMO(ctx, protoData, getScanParameters(protoData))
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
 		result = decodeGetGymInfo(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
-		result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+		if getScanParameters(protoData).ProcessPokemon {
+			result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
 		result = decodeDiskEncounter(ctx, protoData.Data)
@@ -260,6 +262,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 
 		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
 	}
+}
+
+func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
+	return decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 }
 
 func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
@@ -481,10 +487,10 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
 }
 
-func decodeGMO(ctx context.Context, sDec []byte, username string) string {
+func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
-	if err := proto.Unmarshal(sDec, decodedGmo); err != nil {
+	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
 		log.Fatalln("Failed to parse", err)
 	}
 
@@ -522,13 +528,21 @@ func decodeGMO(ctx context.Context, sDec []byte, username string) string {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
 
-	decoder.UpdateFortBatch(ctx, dbDetails, newForts)
-	decoder.UpdatePokemonBatch(ctx, dbDetails, newWildPokemon, newNearbyPokemon, newMapPokemon, username)
-	decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
-	decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
+	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
+	}
+	if scanParameters.ProcessPokemon {
+		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, protoData.Account)
+	}
+	if scanParameters.ProcessWeather {
+		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
+	}
+	if scanParameters.ProcessCells {
+		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 
-	if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-		decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+		if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
+			decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
 }
