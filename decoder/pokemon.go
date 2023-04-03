@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/Pupitar/ohbemgo"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -250,6 +251,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	changePvpField := false
+	var pvpResults map[string][]ohbemgo.PokemonEntry
 	if ohbem != nil {
 		// Calculating PVP data
 		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
@@ -266,6 +268,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				pvpBytes, _ := json.Marshal(pvp)
 				pokemon.Pvp = null.StringFrom(string(pvpBytes))
 				changePvpField = true
+				pvpResults = pvp
 			}
 		}
 		if !pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.AtkIv.Valid) {
@@ -369,6 +372,11 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
+	updatePokemonLookup(pokemon)
+	if changePvpField {
+		updatePokemonPvpLookup(pokemon, pvpResults)
+	}
+
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
@@ -377,14 +385,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		remaining := ttlcache.DefaultTTL
-		if pokemon.ExpireTimestampVerified {
-			timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
-			if timeLeft > 1 {
-				remaining = time.Duration(timeLeft) * time.Second
-			}
-		}
-		pokemonCache.Set(pokemon.Id, *pokemon, remaining)
+		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration())
 	}
 }
 
@@ -459,6 +460,17 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 
 func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
+}
+
+func (pokemon *Pokemon) remainingDuration() time.Duration {
+	remaining := ttlcache.DefaultTTL
+	if pokemon.ExpireTimestampVerified {
+		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+		if timeLeft > 1 {
+			remaining = time.Duration(timeLeft) * time.Second
+		}
+	}
+	return remaining
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {

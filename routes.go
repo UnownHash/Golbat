@@ -356,7 +356,7 @@ func Retrieve(c *gin.Context) {
 	}
 
 	start := time.Now()
-	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max, &requestBody.Filter)
+	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max, requestBody.Filter)
 	log.Infof("Retrieve took %s", time.Since(start))
 	c.JSON(http.StatusAccepted, res)
 }
