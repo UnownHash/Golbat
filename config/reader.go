@@ -1,35 +1,81 @@
 package config
 
 import (
-	"github.com/pelletier/go-toml/v2"
+	"fmt"
+	"github.com/knadh/koanf/parsers/toml"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/structs"
+	"github.com/knadh/koanf/v2"
 	"golbat/geo"
-	"io/ioutil"
-	"os"
+	"strconv"
 	"strings"
 )
 
+var k = koanf.New(".")
+
 func ReadConfig() {
-	tomlFile, err := os.Open("config.toml")
-	// if we os.Open returns an error then handle it
-	if err != nil {
-		panic(err)
+	// Default values
+	defaultErr := k.Load(structs.Provider(configDefinition{
+		Sentry: sentry{
+			SampleRate:       1.0,
+			TracesSampleRate: 1.0,
+		},
+		Pyroscope: pyroscope{
+			ApplicationName:      "golbat",
+			MutexProfileFraction: 5,
+			BlockProfileRate:     5,
+		},
+		Logging: logging{
+			SaveLogs: false,
+		},
+		Cleanup: cleanup{
+			StatsDays: 7,
+		},
+		Database: database{
+			MaxPool: 100,
+		},
+		Tuning: tuning{
+			ProcessWilds:  true,
+			ProcessNearby: true,
+		},
+	}, "koanf"), nil)
+	if defaultErr != nil {
+		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))
 	}
-	// defer the closing of our tomlFile so that we can parse it later on
-	defer tomlFile.Close()
 
-	byteValue, _ := ioutil.ReadAll(tomlFile)
-
-	// Provide a default value
-	Config.Logging.SaveLogs = true
-	Config.Cleanup.StatsDays = 7
-	Config.Database.MaxPool = 100
-	Config.Tuning.ProcessWilds = true
-	Config.Tuning.ProcessNearby = true
-
-	err = toml.Unmarshal([]byte(byteValue), &Config)
-	if err != nil {
-		panic(err)
+	readConfigErr := k.Load(file.Provider("config.toml"), toml.Parser())
+	if readConfigErr != nil && readConfigErr.Error() != "open config.toml: no such file or directory" {
+		fmt.Println(fmt.Errorf("failed to read config file: %w", readConfigErr))
 	}
+
+	envLoadingErr := k.Load(ProviderWithValue("GOLBAT.", ".", func(rawKey string, value string, currentMap map[string]interface{}) (string, interface{}) {
+		key := strings.ToLower(strings.TrimPrefix(rawKey, "GOLBAT."))
+
+		if strings.HasPrefix(key, "webhooks") {
+			parseEnvVarToSlice("webhooks", key, value, currentMap)
+
+			return "", nil
+		} else if strings.HasPrefix(key, "pvp.leagues") {
+			parseEnvVarToSlice("pvp.leagues", key, value, currentMap)
+
+			return "", nil
+		}
+
+		return key, value
+	}), nil)
+
+	if envLoadingErr != nil {
+		fmt.Println(fmt.Errorf("%w", envLoadingErr))
+	}
+
+	k.Print()
+
+	unmarshalError := k.Unmarshal("", &Config)
+	if unmarshalError != nil {
+		panic(fmt.Errorf("failed to Unmarshal config: %w", unmarshalError))
+		return
+	}
+
 	// translate webhook areas to array of geo.AreaName struct
 	for i := 0; i < len(Config.Webhooks); i++ {
 		hook := &Config.Webhooks[i]
@@ -41,6 +87,24 @@ func ReadConfig() {
 		rule := &Config.ScanRules[i]
 		rule.AreaNames = splitIntoAreaAndFenceName(rule.Areas)
 	}
+}
+
+func parseEnvVarToSlice(sliceName string, key string, value string, currentMap map[string]interface{}) {
+	splitPath := strings.Split(key, ".")
+	lastPart := splitPath[len(splitPath)-1]
+	index, _ := strconv.Atoi(splitPath[len(splitPath)-2])
+
+	// create the slice if it doesn't exist
+	if currentMap[sliceName] == nil {
+		currentMap[sliceName] = make([]interface{}, 0)
+	}
+	// create the element at index
+	if len(currentMap[sliceName].([]interface{})) <= index {
+		currentMap[sliceName] = append(currentMap[sliceName].([]interface{}), map[string]interface{}{})
+	}
+
+	// set the value in map at index in slice
+	currentMap[sliceName].([]interface{})[index].(map[string]interface{})[lastPart] = value
 }
 
 func splitIntoAreaAndFenceName(areaNames []string) (areas []geo.AreaName) {
