@@ -72,8 +72,6 @@ func ReadConfig() {
 		fmt.Println(fmt.Errorf("%w", envLoadingErr))
 	}
 
-	k.Print()
-
 	unmarshalError := k.Unmarshal("", &Config)
 	if unmarshalError != nil {
 		panic(fmt.Errorf("failed to Unmarshal config: %w", unmarshalError))
