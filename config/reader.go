@@ -59,6 +59,10 @@ func ReadConfig() {
 			parseEnvVarToSlice("pvp.leagues", key, value, currentMap)
 
 			return "", nil
+		} else if strings.HasPrefix(key, "scan_rules") {
+			parseEnvVarToSlice("scan_rules", key, value, currentMap)
+
+			return "", nil
 		}
 
 		return key, value
