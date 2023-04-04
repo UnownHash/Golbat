@@ -340,14 +340,8 @@ func ReloadNests(c *gin.Context) {
 	})
 }
 
-type ApiRetrieve struct {
-	Min    geo.Location                 `json:"min"`
-	Max    geo.Location                 `json:"max"`
-	Filter map[string]decoder.ApiFilter `json:"filters"`
-}
-
 func Retrieve(c *gin.Context) {
-	var requestBody ApiRetrieve
+	var requestBody decoder.ApiRetrieve
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
@@ -356,7 +350,7 @@ func Retrieve(c *gin.Context) {
 	}
 
 	start := time.Now()
-	res := decoder.GetPokemonInArea(requestBody.Min, requestBody.Max, requestBody.Filter)
+	res := decoder.GetPokemonInArea(requestBody)
 	log.Infof("Retrieve took %s", time.Since(start))
 	c.JSON(http.StatusAccepted, res)
 }

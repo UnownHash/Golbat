@@ -14,6 +14,12 @@ import (
 	"time"
 )
 
+type ApiRetrieve struct {
+	Min             geo.Location         `json:"min"`
+	Max             geo.Location         `json:"max"`
+	GlobalFilter    *ApiFilter           `json:"global"`
+	SpecificFilters map[string]ApiFilter `json:"filters"`
+}
 type ApiFilter struct {
 	Iv     []int8             `json:"iv"`
 	AtkIv  []int8             `json:"atk_iv"`
@@ -134,7 +140,48 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	pokemonTreeMutex.Unlock()
 }
 
-func GetPokemonInArea(min, max geo.Location, filters map[string]ApiFilter) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
+	min := retrieveParameters.Min
+	max := retrieveParameters.Max
+	filters := retrieveParameters.SpecificFilters
+	globalFilter := retrieveParameters.GlobalFilter
+
+	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
+		filterMatched := true // assume basic match is true unless any filter doesn't match
+		pvpMatched := false   // assume pvp match is false unless any filter matches
+
+		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
+			filterMatched = false
+		} else if filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) {
+			filterMatched = false
+		} else if filter.AtkIv != nil && (pokemonLookup.Sta < filter.AtkIv[0] || pokemonLookup.Sta > filter.AtkIv[1]) {
+			filterMatched = false
+		} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
+			filterMatched = false
+		}
+
+		if filter.Pvp != nil && pvpLookup != nil {
+
+		pvpLoop:
+			for key, value := range filter.Pvp {
+				if rankings, found := pvpLookup.Pvp[key]; found == false {
+					// Did not find this pvp league against the pokemon (try others)
+					continue
+				} else {
+
+					for _, ranking := range rankings {
+						if ranking >= value[0] && ranking <= value[1] {
+							pvpMatched = true
+							break pvpLoop
+						}
+					}
+				}
+			}
+		}
+
+		return filterMatched || pvpMatched
+	}
+
 	results := make([]*Pokemon, 0, 1000)
 
 	pokemonTreeMutex.Lock()
@@ -150,49 +197,29 @@ func GetPokemonInArea(min, max geo.Location, filters map[string]ApiFilter) []*Po
 
 			pokemonLookup := pokemonLookupItem.Value()
 
-			filterMatched := true // assume basic match is true unless any filter doesn't match
-			pvpMatched := false   // assume pvp match is false unless any filter matches
+			var pvpLookup *PokemonPvpLookup
+			if pvpLookupItem := pokemonPvpLookupCache.Get(data); pvpLookupItem != nil {
+				// Did not find cached result, something amiss?
+				// Treat the PVP values like an 'or' - one of the matching leagues must be in the range
+				pvpLookup = pvpLookupItem.Value()
+			}
 
-			if filters != nil {
+			globalFilterMatched := false
+			if globalFilter != nil {
+				globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
+			}
+			specificFilterMatched := false
+
+			if !globalFilterMatched && filters != nil {
 				formString := fmt.Sprintf("%d-%d", pokemonLookup.PokemonId, pokemonLookup.Form)
 				filter, found := filters[formString]
 
 				if found {
-					if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
-						filterMatched = false
-					} else if filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) {
-						filterMatched = false
-					}
-
-					if filter.Pvp != nil {
-						pvpLookupItem := pokemonPvpLookupCache.Get(data)
-						if pvpLookupItem != nil {
-							// Did not find cached result, something amiss?
-
-							// Treat the PVP values like an 'or' - one of the matching leagues must be in the range
-							pvpLookup := pvpLookupItem.Value()
-
-						pvpLoop:
-							for key, value := range filter.Pvp {
-								if rankings, found := pvpLookup.Pvp[key]; found == false {
-									// Did not find this pvp league against the pokemon (try others)
-									continue
-								} else {
-
-									for _, ranking := range rankings {
-										if ranking >= value[0] && ranking <= value[1] {
-											pvpMatched = true
-											break pvpLoop
-										}
-									}
-								}
-							}
-						}
-					}
+					specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
 				}
 			}
 
-			if filterMatched || pvpMatched {
+			if globalFilterMatched || specificFilterMatched {
 				if pokemon := pokemonCache.Get(data); pokemon != nil {
 					pData := pokemon.Value()
 					results = append(results, &pData)
