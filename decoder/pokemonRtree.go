@@ -158,32 +158,36 @@ func GetPokemonInArea(min, max geo.Location, filters map[string]ApiFilter) []*Po
 					if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
 						return true
 					}
-				}
-				if filter.Pvp != nil {
-					pvpLookupItem := pokemonPvpLookupCache.Get(data)
-					if pvpLookupItem == nil {
-						// Did not find cached result, something amiss?
-						return true
-					}
 
-					pvpLookup := pvpLookupItem.Value()
-
-					for key, value := range filter.Pvp {
-						if rankings, found := pvpLookup.Pvp[key]; found == false {
-							// Did not find this pvp league against the pokemon
+					if filter.Pvp != nil {
+						pvpLookupItem := pokemonPvpLookupCache.Get(data)
+						if pvpLookupItem == nil {
+							// Did not find cached result, something amiss?
 							return true
-						} else {
-							matching := false
-							for _, ranking := range rankings {
-								if ranking >= value[0] && ranking <= value[1] {
-									matching = true
-									break
+						}
+
+						// Treat the PVP values like an 'or' - one of the matching leagues must be in the range
+						pvpLookup := pvpLookupItem.Value()
+
+						matching := false
+
+					pvpLoop:
+						for key, value := range filter.Pvp {
+							if rankings, found := pvpLookup.Pvp[key]; found == false {
+								// Did not find this pvp league against the pokemon (try others)
+								continue
+							} else {
+								for _, ranking := range rankings {
+									if ranking >= value[0] && ranking <= value[1] {
+										matching = true
+										break pvpLoop
+									}
 								}
 							}
-							if !matching {
-								// not a match continue to next item
-								return true
-							}
+						}
+						if !matching {
+							// not a match continue to next item
+							return true
 						}
 					}
 				}
