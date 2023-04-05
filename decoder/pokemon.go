@@ -244,11 +244,6 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		pokemon.FirstSeenTimestamp = now
 	}
 
-	pokemon.Updated = null.IntFrom(now)
-	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
-		pokemon.Changed = now
-	}
-
 	changePvpField := false
 	if ohbem != nil {
 		// Calculating PVP data
@@ -267,11 +262,32 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				pokemon.Pvp = null.StringFrom(string(pvpBytes))
 				changePvpField = true
 			}
+			var displayPokemon int64
+			if pokemon.IsDitto {
+				displayPokemon = pokemon.DisplayPokemonId.Int64
+			} else {
+				displayPokemon = int64(pokemon.PokemonId)
+			}
+			if cp, err := ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.Int64), 0, int(pokemon.AtkIv.Int64),
+				int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64), float64(pokemon.Level.Int64)); err == nil {
+				if !pokemon.Cp.Valid {
+					pokemon.Cp = null.IntFrom(int64(cp))
+				} else if pokemon.Cp.Int64 != int64(cp) {
+					log.Warnf("Unexpected CP seen: %d != %d for (%d,%d,%d,%d,%d,%d,%d)", cp, pokemon.Cp.Int64,
+						pokemon.PokemonId, pokemon.DisplayPokemonId.ValueOrZero(), pokemon.Form.Int64,
+						pokemon.AtkIv.Int64, pokemon.DefIv.Int64, pokemon.StaIv.Int64, pokemon.Level.Int64)
+				}
+			}
 		}
 		if !pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.AtkIv.Valid) {
 			pokemon.Pvp = null.NewString("", false)
 			changePvpField = true
 		}
+	}
+
+	pokemon.Updated = null.IntFrom(now)
+	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
+		pokemon.Changed = now
 	}
 
 	var oldSeenType string
