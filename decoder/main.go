@@ -445,7 +445,7 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 	return false
 }
 
-func UpdateInvasionLineup(ctx context.Context, db db.DbDetails, id string, proto *pogo.OpenInvasionCombatSessionOutProto) string {
+func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, id string, proto *pogo.OpenInvasionCombatSessionOutProto) string {
 	incident, err := getIncidentRecord(context.Background(), db, id)
 	if err != nil {
 		return fmt.Sprintf("getIncident: %s", err)

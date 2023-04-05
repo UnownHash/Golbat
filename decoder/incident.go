@@ -147,21 +147,22 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		if stop == nil {
 			stop = &Pokestop{}
 		}
-		lineup := [3]webhookLineup{}
-		lineup[0] = webhookLineup{
-			slot:      1,
-			pokemonId: incident.Slot1PokemonId,
-			form:      incident.Slot1Form,
-		}
-		lineup[1] = webhookLineup{
-			slot:      2,
-			pokemonId: incident.Slot2PokemonId,
-			form:      incident.Slot2Form,
-		}
-		lineup[2] = webhookLineup{
-			slot:      3,
-			pokemonId: incident.Slot3PokemonId,
-			form:      incident.Slot3Form,
+		lineup := [3]webhookLineup{
+			{
+				slot:      1,
+				pokemonId: incident.Slot1PokemonId,
+				form:      incident.Slot1Form,
+			},
+			{
+				slot:      2,
+				pokemonId: incident.Slot2PokemonId,
+				form:      incident.Slot2Form,
+			},
+			{
+				slot:      3,
+				pokemonId: incident.Slot3PokemonId,
+				form:      incident.Slot3Form,
+			},
 		}
 		incidentHook := map[string]interface{}{
 			"id":          incident.Id,
@@ -199,12 +200,14 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
 	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
-	characterDisplay := pokestopDisplay.GetCharacterDisplay()
-	if characterDisplay != nil {
-		// team := pokestopDisplay.Open
-		incident.Style = int16(characterDisplay.Style)
-		incident.Character = int16(characterDisplay.Character)
-	} else {
-		incident.Style, incident.Character = 0, 0
+	if !incident.Confirmed {
+		characterDisplay := pokestopDisplay.GetCharacterDisplay()
+		if characterDisplay != nil {
+			// team := pokestopDisplay.Open
+			incident.Style = int16(characterDisplay.Style)
+			incident.Character = int16(characterDisplay.Character)
+		} else {
+			incident.Style, incident.Character = 0, 0
+		}
 	}
 }
