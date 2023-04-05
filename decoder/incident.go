@@ -8,20 +8,34 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
+	null "gopkg.in/guregu/null.v4"
 	"time"
 )
 
 // Incident struct.
 // REMINDER! Keep hasChangesIncident updated after making changes
 type Incident struct {
-	Id             string `db:"id"`
-	PokestopId     string `db:"pokestop_id"`
-	StartTime      int64  `db:"start"`
-	ExpirationTime int64  `db:"expiration"`
-	DisplayType    int16  `db:"display_type"`
-	Style          int16  `db:"style"`
-	Character      int16  `db:"character"`
-	Updated        int64  `db:"updated"`
+	Id             string   `db:"id"`
+	PokestopId     string   `db:"pokestop_id"`
+	StartTime      int64    `db:"start"`
+	ExpirationTime int64    `db:"expiration"`
+	DisplayType    int16    `db:"display_type"`
+	Style          int16    `db:"style"`
+	Character      int16    `db:"character"`
+	Updated        int64    `db:"updated"`
+	Confirmed      bool     `db:"confirmed"`
+	Slot1PokemonId null.Int `db:"slot_1_pokemon_id"`
+	Slot1Form      null.Int `db:"slot_1_form"`
+	Slot2PokemonId null.Int `db:"slot_2_pokemon_id"`
+	Slot2Form      null.Int `db:"slot_2_form"`
+	Slot3PokemonId null.Int `db:"slot_3_pokemon_id"`
+	Slot3Form      null.Int `db:"slot_3_form"`
+}
+
+type webhookLineup struct {
+	slot      uint8    `json:"slot"`
+	pokemonId null.Int `json:"pokemon_id"`
+	form      null.Int `json:"form"`
 }
 
 //->   `id` varchar(35) NOT NULL,
@@ -42,7 +56,7 @@ func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) 
 
 	incident := Incident{}
 	err := db.GeneralDb.GetContext(ctx, &incident,
-		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated "+
+		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form "+
 			"FROM incident "+
 			"WHERE incident.id = ? ", incidentId)
 	if err == sql.ErrNoRows {
@@ -66,7 +80,15 @@ func hasChangesIncident(old *Incident, new *Incident) bool {
 		old.DisplayType != new.DisplayType ||
 		old.Style != new.Style ||
 		old.Character != new.Character ||
-		old.Updated != new.Updated
+		old.Confirmed != new.Confirmed ||
+		old.Updated != new.Updated ||
+		old.Slot1PokemonId != new.Slot1PokemonId ||
+		old.Slot1Form != new.Slot1Form ||
+		old.Slot2PokemonId != new.Slot2PokemonId ||
+		old.Slot2Form != new.Slot2Form ||
+		old.Slot3PokemonId != new.Slot3PokemonId ||
+		old.Slot3Form != new.Slot3Form
+
 }
 
 func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident) {
@@ -83,8 +105,8 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	//log.Println(cmp.Diff(oldIncident, incident))
 
 	if oldIncident == nil {
-		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated) "+
-			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated)", incident)
+		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+
+			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, :slot_2_form, :slot_3_pokemon_id, :slot_3_form)", incident)
 
 		if err != nil {
 			log.Errorf("insert incident: %s", err)
@@ -99,7 +121,14 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 			"display_type = :display_type, "+
 			"style = :style, "+
 			"`character` = :character, "+
-			"updated = :updated "+
+			"updated = :updated, "+
+			"confirmed = :confirmed, "+
+			"slot_1_pokemon_id = :slot_1_pokemon_id, "+
+			"slot_1_form = :slot_1_form, "+
+			"slot_2_pokemon_id = :slot_2_pokemon_id, "+
+			"slot_2_form = :slot_2_form, "+
+			"slot_3_pokemon_id = :slot_3_pokemon_id, "+
+			"slot_3_form = :slot_3_form "+
 			"WHERE id = :id", incident,
 		)
 		if err != nil {
@@ -118,7 +147,22 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		if stop == nil {
 			stop = &Pokestop{}
 		}
-
+		lineup := [3]webhookLineup{}
+		lineup[0] = webhookLineup{
+			slot:      1,
+			pokemonId: incident.Slot1PokemonId,
+			form:      incident.Slot1Form,
+		}
+		lineup[1] = webhookLineup{
+			slot:      2,
+			pokemonId: incident.Slot2PokemonId,
+			form:      incident.Slot2Form,
+		}
+		lineup[2] = webhookLineup{
+			slot:      3,
+			pokemonId: incident.Slot3PokemonId,
+			form:      incident.Slot3Form,
+		}
 		incidentHook := map[string]interface{}{
 			"id":          incident.Id,
 			"pokestop_id": incident.PokestopId,
@@ -141,6 +185,8 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			"grunt_type":                incident.Character, // deprecated, remove old key in the future
 			"character":                 incident.Character,
 			"updated":                   incident.Updated,
+			"confirmed":                 incident.Confirmed,
+			"lineup":                    lineup,
 		}
 
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
@@ -155,6 +201,7 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
 	characterDisplay := pokestopDisplay.GetCharacterDisplay()
 	if characterDisplay != nil {
+		// team := pokestopDisplay.Open
 		incident.Style = int16(characterDisplay.Style)
 		incident.Character = int16(characterDisplay.Character)
 	} else {

@@ -3,26 +3,28 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
-	ginlogrus "github.com/toorop/gin-logrus"
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/external"
 	"golbat/webhooks"
-	"google.golang.org/protobuf/proto"
 	"io/ioutil"
 	"time"
 	_ "time/tzdata"
+
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
+	ginlogrus "github.com/toorop/gin-logrus"
+	"google.golang.org/protobuf/proto"
+
+	"golbat/pogo"
 
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
-	"golbat/pogo"
 )
 
 var db *sqlx.DB
@@ -215,6 +217,12 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	result := ""
 
 	switch pogo.Method(method) {
+	case pogo.Method_METHOD_START_INCIDENT:
+		result = decodeInvasionConfirmation(ctx, protoData.Data)
+	case pogo.Method_METHOD_INVASION_OPEN_COMBAT_SESSION:
+		result = decodeInvasionLineupWithRequest(ctx, protoData.Request, protoData.Data)
+		processed = true
+		break
 	case pogo.Method_METHOD_FORT_DETAILS:
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
@@ -483,6 +491,45 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	}
 
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
+}
+
+func decodeInvasionConfirmation(ctx context.Context, sDec []byte) string {
+	decodedGiovanni := &pogo.StartIncidentOutProto{}
+	if err := proto.Unmarshal(sDec, decodedGiovanni); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedGiovanni.Status != pogo.StartIncidentOutProto_SUCCESS {
+		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedGiovanni.Status,
+			pogo.StartIncidentOutProto_Status_name[int32(decodedGiovanni.Status)])
+		return res
+	}
+
+	return decoder.ConfirmIncident(ctx, dbDetails, decodedGiovanni)
+}
+
+func decodeInvasionLineupWithRequest(ctx context.Context, request []byte, payload []byte) string {
+	decodeInvasionRequest := &pogo.OpenInvasionCombatSessionProto{}
+
+	if err := proto.Unmarshal(request, decodeInvasionRequest); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	decodedInvasionLineup := &pogo.OpenInvasionCombatSessionOutProto{}
+	if err := proto.Unmarshal(payload, decodedInvasionLineup); err != nil {
+		log.Fatalln("Failed to parse", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedInvasionLineup.Status != pogo.InvasionStatus_SUCCESS {
+		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedInvasionLineup.Status,
+			pogo.InvasionStatus_Status_name[int32(decodedInvasionLineup.Status)])
+		return res
+	}
+
+	return decoder.UpdateInvasionLineup(ctx, dbDetails, decodeInvasionRequest.IncidentLookup.IncidentId, decodedInvasionLineup)
 }
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {

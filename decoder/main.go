@@ -2,18 +2,20 @@ package decoder
 
 import (
 	"context"
-	"github.com/Pupitar/ohbemgo"
-	"github.com/jellydator/ttlcache/v3"
-	stripedmutex "github.com/nmvalera/striped-mutex"
-	log "github.com/sirupsen/logrus"
+	"fmt"
 	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/Pupitar/ohbemgo"
+	"github.com/jellydator/ttlcache/v3"
+	stripedmutex "github.com/nmvalera/striped-mutex"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 type RawFortData struct {
@@ -441,4 +443,43 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 		return true
 	}
 	return false
+}
+
+func UpdateInvasionLineup(ctx context.Context, db db.DbDetails, id string, proto *pogo.OpenInvasionCombatSessionOutProto) string {
+	incident, err := getIncidentRecord(context.Background(), db, id)
+	if err != nil {
+		return fmt.Sprintf("getIncident: %s", err)
+	}
+	if incident == nil {
+		return fmt.Sprintf("incident not found: %s", id)
+	}
+	incident.Slot1PokemonId = null.NewInt(int64(proto.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
+	incident.Slot1Form = null.NewInt(int64(proto.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
+	for i, pokemon := range proto.Combat.Opponent.ReservePokemon {
+		if i == 0 {
+			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+		} else if i == 1 {
+			incident.Slot3PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+		}
+	}
+
+	saveIncidentRecord(ctx, db, incident)
+	return ""
+}
+
+func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
+	incident, err := getIncidentRecord(context.Background(), db, proto.Incident.IncidentId)
+	if err != nil {
+		return fmt.Sprintf("getIncident: %s", err)
+	}
+	if incident == nil {
+		return fmt.Sprintf("incident not found: %s", proto.Incident.IncidentId)
+	}
+	incident.Character = int16(proto.Incident.Step[0].GetInvasionBattle().GetCharacter())
+
+	incident.Confirmed = true
+	saveIncidentRecord(ctx, db, incident)
+	return ""
 }
