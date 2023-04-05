@@ -145,6 +145,14 @@ func InitialiseOhbem() {
 
 		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
 			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+		switch config.Config.Pvp.RankingComparator {
+		case "prefer_higher_cp":
+			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
+		case "prefer_lower_cp":
+			o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
+		default:
+			o.RankingComparator = gohbem.RankingComparatorDefault
+		}
 
 		if err := o.FetchPokemonData(); err != nil {
 			log.Errorf("ohbem.FetchPokemonData: %s", err)

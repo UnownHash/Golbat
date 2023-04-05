@@ -45,6 +45,7 @@ type pvp struct {
 	IncludeHundosUnderCap bool         `toml:"include_hundos_under_cap"`
 	LevelCaps             []int        `toml:"level_caps"`
 	Leagues               []pvpLeagues `toml:"leagues"`
+	RankingComparator     string       `toml:"ranking_comparator"`
 }
 
 type pvpLeagues struct {
