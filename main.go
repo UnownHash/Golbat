@@ -494,19 +494,19 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 }
 
 func decodeInvasionConfirmation(ctx context.Context, sDec []byte) string {
-	decodedGiovanni := &pogo.StartIncidentOutProto{}
-	if err := proto.Unmarshal(sDec, decodedGiovanni); err != nil {
+	decodedIncident := &pogo.StartIncidentOutProto{}
+	if err := proto.Unmarshal(sDec, decodedIncident); err != nil {
 		log.Fatalln("Failed to parse", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedGiovanni.Status != pogo.StartIncidentOutProto_SUCCESS {
-		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedGiovanni.Status,
-			pogo.StartIncidentOutProto_Status_name[int32(decodedGiovanni.Status)])
+	if decodedIncident.Status != pogo.StartIncidentOutProto_SUCCESS {
+		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.Status,
+			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.Status)])
 		return res
 	}
 
-	return decoder.ConfirmIncident(ctx, dbDetails, decodedGiovanni)
+	return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
 }
 
 func decodeInvasionLineupWithRequest(ctx context.Context, request []byte, payload []byte) string {
