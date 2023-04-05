@@ -84,21 +84,19 @@ type database struct {
 
 type tuning struct {
 	ExtendedTimeout bool `koanf:"extended_timeout"`
-	ProcessWilds    bool `koanf:"process_wild_pokemon"`
-	ProcessNearby   bool `koanf:"process_nearby_pokemon"`
 }
 
 type scanRule struct {
-	Areas            []string       `toml:"areas"`
-	AreaNames        []geo.AreaName `toml:"-"`
-	ScanContext      []string       `toml:"context"`
-	ProcessPokemon   *bool          `toml:"pokemon"`
-	ProcessWilds     *bool          `toml:"wild_pokemon"`
-	ProcessNearby    *bool          `toml:"nearby_pokemon"`
-	ProcessWeather   *bool          `toml:"weather"`
-	ProcessCells     *bool          `toml:"cells"`
-	ProcessPokestops *bool          `toml:"pokestops"`
-	ProcessGyms      *bool          `toml:"gyms"`
+	Areas            []string       `koanf:"areas"`
+	AreaNames        []geo.AreaName `koanf:"-"`
+	ScanContext      []string       `koanf:"context"`
+	ProcessPokemon   *bool          `koanf:"pokemon"`
+	ProcessWilds     *bool          `koanf:"wild_pokemon"`
+	ProcessNearby    *bool          `koanf:"nearby_pokemon"`
+	ProcessWeather   *bool          `koanf:"weather"`
+	ProcessCells     *bool          `koanf:"cells"`
+	ProcessPokestops *bool          `koanf:"pokestops"`
+	ProcessGyms      *bool          `koanf:"gyms"`
 }
 
 var Config configDefinition

@@ -34,10 +34,6 @@ func ReadConfig() {
 		Database: database{
 			MaxPool: 100,
 		},
-		Tuning: tuning{
-			ProcessWilds:  true,
-			ProcessNearby: true,
-		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))
