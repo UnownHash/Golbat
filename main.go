@@ -529,7 +529,7 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 		return res
 	}
 
-	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest.IncidentLookup.IncidentId, decodedOpenInvasionResponse)
+	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
 }
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {

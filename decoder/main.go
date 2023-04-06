@@ -445,17 +445,21 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 	return false
 }
 
-func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, id string, proto *pogo.OpenInvasionCombatSessionOutProto) string {
-	incident, err := getIncidentRecord(ctx, db, id)
+func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.OpenInvasionCombatSessionProto, protoRes *pogo.OpenInvasionCombatSessionOutProto) string {
+	incident, err := getIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId)
 	if err != nil {
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
-		return fmt.Sprintf("incident not found: %s", id)
+		log.Infof("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
+		incident = &Incident{
+			Id:         protoReq.IncidentLookup.IncidentId,
+			PokestopId: protoReq.IncidentLookup.FortId,
+		}
 	}
-	incident.Slot1PokemonId = null.NewInt(int64(proto.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
-	incident.Slot1Form = null.NewInt(int64(proto.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
-	for i, pokemon := range proto.Combat.Opponent.ReservePokemon {
+	incident.Slot1PokemonId = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
+	incident.Slot1Form = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
+	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
 		if i == 0 {
 			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
 			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
@@ -475,7 +479,11 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
-		return fmt.Sprintf("incident not found: %s", proto.Incident.IncidentId)
+		log.Infof("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
+		incident = &Incident{
+			Id:         proto.Incident.IncidentId,
+			PokestopId: proto.Incident.FortId,
+		}
 	}
 	incident.Character = int16(proto.Incident.Step[0].GetInvasionBattle().GetCharacter())
 	incident.Confirmed = true

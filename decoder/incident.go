@@ -200,6 +200,10 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
 	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
+	if incident.Character == 46 && incident.Confirmed {
+		log.Debugf("Incident has already been confirmed as a decoy: %s", incident.Id)
+		return
+	}
 	characterDisplay := pokestopDisplay.GetCharacterDisplay()
 	if characterDisplay != nil {
 		// team := pokestopDisplay.Open
