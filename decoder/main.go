@@ -446,7 +446,7 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 }
 
 func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, id string, proto *pogo.OpenInvasionCombatSessionOutProto) string {
-	incident, err := getIncidentRecord(context.Background(), db, id)
+	incident, err := getIncidentRecord(ctx, db, id)
 	if err != nil {
 		return fmt.Sprintf("getIncident: %s", err)
 	}
@@ -470,7 +470,7 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, id string, proto
 }
 
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
-	incident, err := getIncidentRecord(context.Background(), db, proto.Incident.IncidentId)
+	incident, err := getIncidentRecord(ctx, db, proto.Incident.IncidentId)
 	if err != nil {
 		return fmt.Sprintf("getIncident: %s", err)
 	}
@@ -478,8 +478,8 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 		return fmt.Sprintf("incident not found: %s", proto.Incident.IncidentId)
 	}
 	incident.Character = int16(proto.Incident.Step[0].GetInvasionBattle().GetCharacter())
-
 	incident.Confirmed = true
+
 	saveIncidentRecord(ctx, db, incident)
 	return ""
 }

@@ -200,14 +200,12 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
 	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
-	if !incident.Confirmed {
-		characterDisplay := pokestopDisplay.GetCharacterDisplay()
-		if characterDisplay != nil {
-			// team := pokestopDisplay.Open
-			incident.Style = int16(characterDisplay.Style)
-			incident.Character = int16(characterDisplay.Character)
-		} else {
-			incident.Style, incident.Character = 0, 0
-		}
+	characterDisplay := pokestopDisplay.GetCharacterDisplay()
+	if characterDisplay != nil {
+		// team := pokestopDisplay.Open
+		incident.Style = int16(characterDisplay.Style)
+		incident.Character = int16(characterDisplay.Character)
+	} else {
+		incident.Style, incident.Character = 0, 0
 	}
 }
