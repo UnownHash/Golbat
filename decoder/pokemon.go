@@ -244,6 +244,11 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		pokemon.FirstSeenTimestamp = now
 	}
 
+	pokemon.Updated = null.IntFrom(now)
+	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
+		pokemon.Changed = now
+	}
+
 	changePvpField := false
 	if ohbem != nil {
 		// Calculating PVP data
@@ -267,11 +272,6 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			pokemon.Pvp = null.NewString("", false)
 			changePvpField = true
 		}
-	}
-
-	pokemon.Updated = null.IntFrom(now)
-	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
-		pokemon.Changed = now
 	}
 
 	var oldSeenType string
