@@ -1060,21 +1060,30 @@ func (pokemon *Pokemon) setWeather(ctx context.Context, db db.DbDetails, weather
 		} else {
 			displayPokemon = int64(pokemon.PokemonId)
 		}
-		var ivAvailable bool
-		if useInactive {
-			ivAvailable = pokemon.IvInactive.Valid
-		} else {
-			ivAvailable = pokemon.AtkIv.Valid
-		}
-		if ivAvailable {
-			if cp, err := ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
-				int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
-				float64(pokemon.Level.Int64)); err == nil {
+		func() {
+			var cp int
+			var err error
+			if useInactive {
+				if !pokemon.IvInactive.Valid {
+					return
+				}
+				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+					int(pokemon.IvInactive.Int64&15), int(pokemon.IvInactive.Int64>>4&15),
+					int(pokemon.IvInactive.Int64>>8&15), float64(pokemon.Level.Int64))
+			} else {
+				if !pokemon.AtkIv.Valid {
+					return
+				}
+				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+					int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
+					float64(pokemon.Level.Int64))
+			}
+			if err == nil {
 				pokemon.Cp = null.IntFrom(int64(cp))
 			} else {
 				log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
 			}
-		}
+		}()
 	}
 	pokemon.Weather = null.IntFrom(weather)
 	return shouldReencounter
