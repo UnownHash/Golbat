@@ -1067,9 +1067,10 @@ func (pokemon *Pokemon) setWeather(ctx context.Context, db db.DbDetails, weather
 				if !pokemon.IvInactive.Valid {
 					return
 				}
+				// You should see boosted IV for 0P Ditto
 				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
 					int(pokemon.IvInactive.Int64&15), int(pokemon.IvInactive.Int64>>4&15),
-					int(pokemon.IvInactive.Int64>>8&15), float64(pokemon.Level.Int64))
+					int(pokemon.IvInactive.Int64>>8&15), float64(pokemon.Level.Int64+5))
 			} else {
 				if !pokemon.AtkIv.Valid {
 					return
