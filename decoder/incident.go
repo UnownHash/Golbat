@@ -200,7 +200,7 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
 	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
 	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
-	if incident.Character == 46 && incident.Confirmed {
+	if (incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_MALE) || incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_FEMALE)) && incident.Confirmed {
 		log.Debugf("Incident has already been confirmed as a decoy: %s", incident.Id)
 		return
 	}
