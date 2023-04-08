@@ -147,23 +147,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		if stop == nil {
 			stop = &Pokestop{}
 		}
-		lineup := [3]webhookLineup{
-			{
-				slot:      1,
-				pokemonId: incident.Slot1PokemonId,
-				form:      incident.Slot1Form,
-			},
-			{
-				slot:      2,
-				pokemonId: incident.Slot2PokemonId,
-				form:      incident.Slot2Form,
-			},
-			{
-				slot:      3,
-				pokemonId: incident.Slot3PokemonId,
-				form:      incident.Slot3Form,
-			},
-		}
+
 		incidentHook := map[string]interface{}{
 			"id":          incident.Id,
 			"pokestop_id": incident.PokestopId,
@@ -187,9 +171,28 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			"character":                 incident.Character,
 			"updated":                   incident.Updated,
 			"confirmed":                 incident.Confirmed,
-			"lineup":                    lineup,
+			"lineup":                    nil,
 		}
 
+		if incident.Slot1PokemonId != null.NewInt(0, false) {
+			incidentHook["lineup"] = [3]webhookLineup{
+				{
+					slot:      1,
+					pokemonId: incident.Slot1PokemonId,
+					form:      incident.Slot1Form,
+				},
+				{
+					slot:      2,
+					pokemonId: incident.Slot2PokemonId,
+					form:      incident.Slot2Form,
+				},
+				{
+					slot:      3,
+					pokemonId: incident.Slot3PokemonId,
+					form:      incident.Slot3Form,
+				},
+			}
+		}
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 		webhooks.AddMessage(webhooks.Invasion, incidentHook, areas)
 	}
