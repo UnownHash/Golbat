@@ -174,8 +174,8 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			"lineup":                    nil,
 		}
 
-		if incident.Slot1PokemonId != null.NewInt(0, false) {
-			incidentHook["lineup"] = [3]webhookLineup{
+		if incident.Slot1PokemonId.Valid {
+			incidentHook["lineup"] = []webhookLineup{
 				{
 					slot:      1,
 					pokemonId: incident.Slot1PokemonId,
