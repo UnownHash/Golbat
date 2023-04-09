@@ -37,6 +37,9 @@ func ReadConfig() {
 		Tuning: tuning{
 			MaxPokemonResults: 3000,
 		},
+		Pvp: pvp{
+			LevelCaps: []int{50, 51},
+		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))

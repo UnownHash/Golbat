@@ -42,7 +42,6 @@ services:
 
       - GOLBAT.PVP.ENABLED=true
       - GOLBAT.PVP.INCLUDE_HUNDOS_UNDER_CAP=false
-      - GOLBAT.PVP.LEVEL_CAPS=50,51
 
       - GOLBAT.WEBHOOKS.0.URL=http://localhost:4201
       - GOLBAT.WEBHOOKS.0.TYPES=pokemon,gym,invasion,quest,pokestop,raid
