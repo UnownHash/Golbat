@@ -461,7 +461,13 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
-	incident.updateFromOpenInvasionCombatSession(protoReq)
+	if incident == nil {
+		log.Debugf("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
+		incident = &Incident{
+			Id:         protoReq.IncidentLookup.IncidentId,
+			PokestopId: protoReq.IncidentLookup.FortId,
+		}
+	}
 	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
 
 	saveIncidentRecord(ctx, db, incident)
@@ -477,6 +483,13 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 	if err != nil {
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
+	}
+	if incident == nil {
+		log.Debugf("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
+		incident = &Incident{
+			Id:         proto.Incident.IncidentId,
+			PokestopId: proto.Incident.FortId,
+		}
 	}
 	incident.updateFromStartIncidentOut(proto)
 
