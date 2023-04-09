@@ -57,6 +57,7 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
+var incidentStripedMutex = stripedmutex.New(128)
 var pokemonStripedMutex = stripedmutex.New(1024)
 var weatherStripedMutex = stripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
@@ -215,9 +216,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
+					incidentMutex, _ := incidentStripedMutex.GetLock(incidentProto.IncidentId)
+
+					incidentMutex.Lock()
 					incident, err := getIncidentRecord(ctx, db, incidentProto.IncidentId)
 					if err != nil {
 						log.Errorf("getIncident: %s", err)
+						incidentMutex.Unlock()
 						continue
 					}
 					if incident == nil {
@@ -227,6 +232,8 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 					}
 					incident.updateFromPokestopIncidentDisplay(incidentProto)
 					saveIncidentRecord(ctx, db, incident)
+
+					incidentMutex.Unlock()
 				}
 			}
 			pokestopMutex.Unlock()
@@ -446,8 +453,12 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 }
 
 func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.OpenInvasionCombatSessionProto, protoRes *pogo.OpenInvasionCombatSessionOutProto) string {
+	incidentMutex, _ := incidentStripedMutex.GetLock(protoReq.IncidentLookup.IncidentId)
+
+	incidentMutex.Lock()
 	incident, err := getIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId)
 	if err != nil {
+		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
@@ -470,12 +481,17 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 	}
 
 	saveIncidentRecord(ctx, db, incident)
+	incidentMutex.Unlock()
 	return ""
 }
 
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
+	incidentMutex, _ := incidentStripedMutex.GetLock(proto.Incident.IncidentId)
+
+	incidentMutex.Lock()
 	incident, err := getIncidentRecord(ctx, db, proto.Incident.IncidentId)
 	if err != nil {
+		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
@@ -489,5 +505,6 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 	incident.Confirmed = true
 
 	saveIncidentRecord(ctx, db, incident)
+	incidentMutex.Unlock()
 	return ""
 }
