@@ -18,8 +18,8 @@ type FortId struct {
 }
 
 type QuestStatus struct {
-	Quests     uint32 `db:"quests" json:"quests"`
-	AltQuests  uint32 `db:"alt_quests" json:"alt_quests"`
+	ArQuests   uint32 `db:"ar_quests" json:"ar_quests"`
+	NoArQuests uint32 `db:"no_ar_quests" json:"no_ar_quests"`
 	TotalStops uint32 `db:"total" json:"total"`
 }
 
@@ -109,8 +109,8 @@ func GetQuestStatus(db DbDetails, fence geo.Geofence) (QuestStatus, error) {
 	areas := QuestStatus{}
 	err := db.GeneralDb.Get(&areas,
 		"SELECT COUNT(*) AS total, "+
-			"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS quests, "+
-			"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS alt_quests FROM pokestop "+
+			"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS ar_quests, "+
+			"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS no_ar_quests FROM pokestop "+
 			"WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 "+
 			"AND ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON(("+fence.ToPolygonString()+"))'), point(lat,lon)) ",
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude,
