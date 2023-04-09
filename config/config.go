@@ -45,14 +45,7 @@ type pvp struct {
 	Enabled               bool         `koanf:"enabled"`
 	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
 	LevelCaps             []int        `koanf:"level_caps"`
-	Leagues               []pvpLeagues `koanf:"leagues"`
 	RankingComparator     string       `koanf:"ranking_comparator"`
-}
-
-type pvpLeagues struct {
-	Name           string `koanf:"name"`
-	Cap            int    `koanf:"cap"`
-	LittleCupRules bool   `koanf:"little"`
 }
 
 type sentry struct {

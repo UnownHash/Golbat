@@ -54,10 +54,6 @@ func ReadConfig() {
 			parseEnvVarToSlice("webhooks", key, value, currentMap)
 
 			return "", nil
-		} else if strings.HasPrefix(key, "pvp.leagues") {
-			parseEnvVarToSlice("pvp.leagues", key, value, currentMap)
-
-			return "", nil
 		} else if strings.HasPrefix(key, "scan_rules") {
 			parseEnvVarToSlice("scan_rules", key, value, currentMap)
 
