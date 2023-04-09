@@ -461,24 +461,8 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
-	if incident == nil {
-		log.Infof("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
-		incident = &Incident{
-			Id:         protoReq.IncidentLookup.IncidentId,
-			PokestopId: protoReq.IncidentLookup.FortId,
-		}
-	}
-	incident.Slot1PokemonId = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
-	incident.Slot1Form = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
-	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
-		if i == 0 {
-			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
-		} else if i == 1 {
-			incident.Slot3PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
-		}
-	}
+	incident.updateFromOpenInvasionCombatSession(protoReq)
+	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
 
 	saveIncidentRecord(ctx, db, incident)
 	incidentMutex.Unlock()
@@ -494,16 +478,13 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
-	if incident == nil {
-		log.Infof("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
-		incident = &Incident{
-			Id:         proto.Incident.IncidentId,
-			PokestopId: proto.Incident.FortId,
-		}
-	}
-	incident.Character = int16(proto.Incident.Step[0].GetInvasionBattle().GetCharacter())
-	incident.Confirmed = true
+	incident.updateFromStartIncidentOut(proto)
 
+	if incident == nil {
+		incidentMutex.Unlock()
+		// I only saw this once during testing but I couldn't reproduce it so just in case
+		return "Unable to process incident"
+	}
 	saveIncidentRecord(ctx, db, incident)
 	incidentMutex.Unlock()
 	return ""

@@ -219,6 +219,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	switch pogo.Method(method) {
 	case pogo.Method_METHOD_START_INCIDENT:
 		result = decodeStartIncident(ctx, protoData.Data)
+		processed = true
 	case pogo.Method_METHOD_INVASION_OPEN_COMBAT_SESSION:
 		result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
 		processed = true

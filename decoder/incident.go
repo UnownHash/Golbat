@@ -216,3 +216,39 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 		incident.Style, incident.Character = 0, 0
 	}
 }
+
+func (incident *Incident) updateFromOpenInvasionCombatSession(protoReq *pogo.OpenInvasionCombatSessionProto) {
+	if incident == nil {
+		log.Debugf("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
+		incident = &Incident{
+			Id:         protoReq.IncidentLookup.IncidentId,
+			PokestopId: protoReq.IncidentLookup.FortId,
+		}
+	}
+}
+
+func (incident *Incident) updateFromOpenInvasionCombatSessionOut(protoRes *pogo.OpenInvasionCombatSessionOutProto) {
+	incident.Slot1PokemonId = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
+	incident.Slot1Form = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
+	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
+		if i == 0 {
+			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+		} else if i == 1 {
+			incident.Slot3PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+		}
+	}
+}
+
+func (incident *Incident) updateFromStartIncidentOut(proto *pogo.StartIncidentOutProto) {
+	if incident == nil {
+		log.Debugf("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
+		incident = &Incident{
+			Id:         proto.Incident.IncidentId,
+			PokestopId: proto.Incident.FortId,
+		}
+	}
+	incident.Character = int16(proto.Incident.Step[0].GetInvasionBattle().GetCharacter())
+	incident.Confirmed = true
+}
