@@ -4,17 +4,64 @@ services:
     image: ghcr.io/unownhash/golbat:main
     container_name: golbat
     restart: unless-stopped
-    volumes:
-      - type: bind
-        source: ./config.toml
-        target: /golbat/config.toml
-      # optional volumes if you want to have access to logs and persist cache
-      # comment if not needed
-      - type: volume
-        source: ${PWD}/cache
-        target: /golbat/cache
-      - type: volume
-        source: ${PWD}/logs
-        target: /golbat/logs
     ports:
       - "9001:9001"
+    volumes:
+      # EITHER you mount the config.toml file
+      # OR you use environment variables below
+      - ${PWD}/config.toml:/golbat/config.toml
+      # optional volumes if you want to have access to logs and persist cache
+      # comment if not needed
+      - ${PWD}/cache:/golbat/cache
+      - ${PWD}/logs:/golbat/logs
+    environment:
+      # refer to config.toml.example and README for explanations
+      - GOLBAT.PORT=9001
+      - GOLBAT.RAW_BEARER=
+      - GOLBAT.API_SECRET=golbat
+
+      - GOLBAT.STATS=false
+      - GOLBAT.IN_MEMORY=false
+
+      - GOLBAT.KOJI.URL=http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}
+      - GOLBAT.KOJI.BEARER_TOKEN=secret
+
+      - GOLBAT.CLEANUP.POKEMON=true
+      - GOLBAT.CLEANUP.INCIDENTS=true
+      - GOLBAT.CLEANUP.QUESTS=true
+      - GOLBAT.CLEANUP.STATS=true
+      - GOLBAT.CLEANUP.STATS_DAYS=7
+
+      - GOLBAT.LOGGING.DEBUG=false
+      - GOLBAT.LOGGING.SAVE.LOGS=true
+
+      - GOLBAT.DATABASE.USER=
+      - GOLBAT.DATABASE.PASSWORD=
+      - GOLBAT.DATABASE.ADDRESS=host.docker.internal:3306
+      - GOLBAT.DATABASE.DB=
+
+      - GOLBAT.PVP.ENABLED=true
+      - GOLBAT.PVP.INCLUDE_HUNDOS_UNDER_CAP=false
+      - GOLBAT.PVP.LEVEL_CAPS=50,51
+
+      - GOLBAT.PVP.LEAGUES.0.NAME=little
+      - GOLBAT.PVP.LEAGUES.0.CAP=500
+      - GOLBAT.PVP.LEAGUES.0.LITTLE=false
+
+      - GOLBAT.PVP.LEAGUES.1.NAME=great
+      - GOLBAT.PVP.LEAGUES.1.CAP=1500
+      - GOLBAT.PVP.LEAGUES.1.LITTLE=false
+
+      - GOLBAT.PVP.LEAGUES.2.NAME=ultra
+      - GOLBAT.PVP.LEAGUES.2.CAP=2500
+      - GOLBAT.PVP.LEAGUES.2.LITTLE=false
+
+      - GOLBAT.WEBHOOKS.0.URL=http://localhost:4201
+      - GOLBAT.WEBHOOKS.0.TYPES=pokemon,gym,invasion,quest,pokestop,raid
+
+      - GOLBAT.WEBHOOKS.1.URL=http://localhost:4202
+      - GOLBAT.WEBHOOKS.1.TYPES=raid
+
+      - GOLBAT.WEBHOOKS.2.URL=http://localhost:4202
+      - GOLBAT.WEBHOOKS.2.TYPES=raid
+      - GOLBAT.WEBHOOKS.2.AREAS=London/*,*/Harrow,Harrow
