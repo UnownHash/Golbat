@@ -45,7 +45,7 @@ type pvp struct {
 	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
 	LevelCaps             []int        `koanf:"level_caps"`
 	Leagues               []pvpLeagues `koanf:"leagues"`
-  RankingComparator     string       `koanf:"ranking_comparator"`
+	RankingComparator     string       `koanf:"ranking_comparator"`
 }
 
 type pvpLeagues struct {
