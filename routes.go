@@ -11,7 +11,6 @@ import (
 	"golbat/decoder"
 	"golbat/geo"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -48,7 +47,7 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	body, err := ioutil.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
 	if err != nil {
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
@@ -72,7 +71,7 @@ func Raw(c *gin.Context) {
 	// than I would like
 
 	pogodroidHeader := r.Header.Get("origin")
-	//userAgent := r.Header.Get("User-Agent")
+	userAgent := r.Header.Get("User-Agent")
 
 	//log.Infof("Raw: Received data from %s", body)
 	//log.Infof("User agent is %s", userAgent)
@@ -133,72 +132,79 @@ func Raw(c *gin.Context) {
 				lonTarget, _ = v.(float64)
 			}
 
-			contents := raw["contents"].([]interface{})
+			contents, ok := raw["contents"].([]interface{})
+			if !ok {
+				decodeError = true
 
-			decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
-				if v := data[key1]; v != nil {
-					return v
+			} else {
+
+				decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
+					if v := data[key1]; v != nil {
+						return v
+					}
+					if v := data[key2]; v != nil {
+						return v
+					}
+					return nil
 				}
-				if v := data[key2]; v != nil {
-					return v
-				}
-				return nil
-			}
 
-			for _, v := range contents {
-				entry := v.(map[string]interface{})
-				// Try to decode the payload automatically without requiring any knowledge of the
-				// provider type
+				for _, v := range contents {
+					entry := v.(map[string]interface{})
+					// Try to decode the payload automatically without requiring any knowledge of the
+					// provider type
 
-				b64data := decodeAlternate(entry, "data", "payload")
-				method := decodeAlternate(entry, "method", "type")
-				request := entry["request"]
-				haveAr := entry["have_ar"]
+					b64data := decodeAlternate(entry, "data", "payload")
+					method := decodeAlternate(entry, "method", "type")
+					request := entry["request"]
+					haveAr := entry["have_ar"]
 
-				if method == nil || b64data == nil {
-					log.Errorf("Error decoding raw")
-					continue
-				}
-				inboundRawData := InboundRawData{
-					Base64Data: func() string {
-						if res, ok := b64data.(string); ok {
-							return res
-						}
-						return ""
-					}(),
-					Method: func() int {
-						if res, ok := method.(float64); ok {
-							return int(res)
-						}
-
-						return 0
-					}(),
-					Request: func() string {
-						if request != nil {
-							res, ok := request.(string)
-							if ok {
+					if method == nil || b64data == nil {
+						log.Errorf("Error decoding raw")
+						continue
+					}
+					inboundRawData := InboundRawData{
+						Base64Data: func() string {
+							if res, ok := b64data.(string); ok {
 								return res
 							}
-						}
-						return ""
-					}(),
-					HaveAr: func() *bool {
-						if haveAr != nil {
-							res, ok := haveAr.(bool)
-							if ok {
-								return &res
+							return ""
+						}(),
+						Method: func() int {
+							if res, ok := method.(float64); ok {
+								return int(res)
 							}
-						}
-						return nil
-					}(),
-				}
 
-				protoData = append(protoData, inboundRawData)
+							return 0
+						}(),
+						Request: func() string {
+							if request != nil {
+								res, ok := request.(string)
+								if ok {
+									return res
+								}
+							}
+							return ""
+						}(),
+						HaveAr: func() *bool {
+							if haveAr != nil {
+								res, ok := haveAr.(bool)
+								if ok {
+									return &res
+								}
+							}
+							return nil
+						}(),
+					}
+
+					protoData = append(protoData, inboundRawData)
+				}
 			}
 		}
 	}
 
 	if decodeError == true {
+		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
+
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
