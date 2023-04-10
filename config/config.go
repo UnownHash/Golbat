@@ -3,112 +3,101 @@ package config
 import "golbat/geo"
 
 type configDefinition struct {
-	Port      int        `toml:"port"`
-	Webhooks  []webhook  `toml:"webhooks"`
-	Database  database   `toml:"database"`
-	Stats     bool       `toml:"stats"`
-	Logging   logging    `toml:"logging"`
-	Sentry    sentry     `toml:"sentry"`
-	Pyroscope pyroscope  `toml:"pyroscope"`
-	InMemory  bool       `toml:"in_memory"`
-	Cleanup   cleanup    `toml:"cleanup"`
-	RawBearer string     `toml:"raw_bearer"`
-	ApiSecret string     `toml:"api_secret"`
-	Pvp       pvp        `toml:"pvp"`
-	Koji      koji       `toml:"koji"`
-	Tuning    tuning     `toml:"tuning"`
-	ScanRules []scanRule `toml:"scan_rules"`
+	Port      int        `koanf:"port"`
+	Webhooks  []webhook  `koanf:"webhooks"`
+	Database  database   `koanf:"database"`
+	Stats     bool       `koanf:"stats"`
+	Logging   logging    `koanf:"logging"`
+	Sentry    sentry     `koanf:"sentry"`
+	Pyroscope pyroscope  `koanf:"pyroscope"`
+	InMemory  bool       `koanf:"in_memory"`
+	Cleanup   cleanup    `koanf:"cleanup"`
+	RawBearer string     `koanf:"raw_bearer"`
+	ApiSecret string     `koanf:"api_secret"`
+	Pvp       pvp        `koanf:"pvp"`
+	Koji      koji       `koanf:"koji"`
+	Tuning    tuning     `koanf:"tuning"`
+	ScanRules []scanRule `koanf:"scan_rules"`
 }
 
 type koji struct {
-	Url         string `toml:"url"`
-	BearerToken string `toml:"bearer_token"`
+	Url         string `koanf:"url"`
+	BearerToken string `koanf:"bearer_token"`
 }
 
 type cleanup struct {
-	Pokemon   bool `toml:"pokemon"`
-	Quests    bool `toml:"quests"`
-	Incidents bool `toml:"incidents"`
-	Stats     bool `toml:"stats"`
-	StatsDays int  `toml:"stats_days"`
+	Pokemon   bool `koanf:"pokemon"`
+	Quests    bool `koanf:"quests"`
+	Incidents bool `koanf:"incidents"`
+	Stats     bool `koanf:"stats"`
+	StatsDays int  `koanf:"stats_days"`
 }
 
 type webhook struct {
-	Url       string         `toml:"url"`
-	Types     []string       `toml:"types"`
-	Areas     []string       `toml:"areas"`
-	AreaNames []geo.AreaName `toml:"-"`
+	Url       string         `koanf:"url"`
+	Types     []string       `koanf:"types"`
+	Areas     []string       `koanf:"areas"`
+	AreaNames []geo.AreaName `koanf:"-"`
 }
 
 type pvp struct {
-	Enabled               bool         `toml:"enabled"`
-	IncludeHundosUnderCap bool         `toml:"include_hundos_under_cap"`
-	LevelCaps             []int        `toml:"level_caps"`
-	Leagues               []pvpLeagues `toml:"leagues"`
+	Enabled               bool         `koanf:"enabled"`
+	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
+	LevelCaps             []int        `koanf:"level_caps"`
+	Leagues               []pvpLeagues `koanf:"leagues"`
+	RankingComparator     string       `koanf:"ranking_comparator"`
 }
 
 type pvpLeagues struct {
-	Name           string `toml:"name"`
-	Cap            int    `toml:"cap"`
-	LittleCupRules bool   `toml:"little"`
+	Name           string `koanf:"name"`
+	Cap            int    `koanf:"cap"`
+	LittleCupRules bool   `koanf:"little"`
 }
 
 type sentry struct {
-	DSN              string  `toml:"dsn"`
-	SampleRate       float64 `toml:"sample_rate"`
-	EnableTracing    bool    `toml:"enable_tracing"`
-	TracesSampleRate float64 `toml:"traces_sample_rate"`
+	DSN              string  `koanf:"dsn"`
+	SampleRate       float64 `koanf:"sample_rate"`
+	EnableTracing    bool    `koanf:"enable_tracing"`
+	TracesSampleRate float64 `koanf:"traces_sample_rate"`
 }
 
 type pyroscope struct {
-	ApplicationName      string `toml:"application_name"`
-	ServerAddress        string `toml:"server_address"`
-	ApiKey               string `toml:"api_key"`
-	Logger               bool   `toml:"logger"`
-	MutexProfileFraction int    `toml:"mutex_profile_fraction"`
-	BlockProfileRate     int    `toml:"block_profile_rate"`
+	ApplicationName      string `koanf:"application_name"`
+	ServerAddress        string `koanf:"server_address"`
+	ApiKey               string `koanf:"api_key"`
+	Logger               bool   `koanf:"logger"`
+	MutexProfileFraction int    `koanf:"mutex_profile_fraction"`
+	BlockProfileRate     int    `koanf:"block_profile_rate"`
 }
 
 type logging struct {
-	Debug    bool `toml:"debug"`
-	SaveLogs bool `toml:"save_logs" default:"true"`
+	Debug    bool `koanf:"debug"`
+	SaveLogs bool `koanf:"save_logs" default:"true"`
 }
 
 type database struct {
-	Addr     string `toml:"address"`
-	User     string `toml:"user"`
-	Password string `toml:"password"`
-	Db       string `toml:"db"`
-	MaxPool  int    `toml:"max_pool"`
+	Addr     string `koanf:"address"`
+	User     string `koanf:"user"`
+	Password string `koanf:"password"`
+	Db       string `koanf:"db"`
+	MaxPool  int    `koanf:"max_pool"`
 }
 
 type tuning struct {
-	ExtendedTimeout bool `toml:"extended_timeout"`
-	ProcessWilds    bool `toml:"process_wild_pokemon"`
-	ProcessNearby   bool `toml:"process_nearby_pokemon"`
+	ExtendedTimeout bool `koanf:"extended_timeout"`
 }
 
 type scanRule struct {
-	Areas            []string       `toml:"areas"`
-	AreaNames        []geo.AreaName `toml:"-"`
-	ScanContext      []string       `toml:"context"`
-	ProcessPokemon   *bool          `toml:"pokemon"`
-	ProcessWilds     *bool          `toml:"wild_pokemon"`
-	ProcessNearby    *bool          `toml:"nearby_pokemon"`
-	ProcessWeather   *bool          `toml:"weather"`
-	ProcessCells     *bool          `toml:"cells"`
-	ProcessPokestops *bool          `toml:"pokestops"`
-	ProcessGyms      *bool          `toml:"gyms"`
+	Areas            []string       `koanf:"areas"`
+	AreaNames        []geo.AreaName `koanf:"-"`
+	ScanContext      []string       `koanf:"context"`
+	ProcessPokemon   *bool          `koanf:"pokemon"`
+	ProcessWilds     *bool          `koanf:"wild_pokemon"`
+	ProcessNearby    *bool          `koanf:"nearby_pokemon"`
+	ProcessWeather   *bool          `koanf:"weather"`
+	ProcessCells     *bool          `koanf:"cells"`
+	ProcessPokestops *bool          `koanf:"pokestops"`
+	ProcessGyms      *bool          `koanf:"gyms"`
 }
 
-var Config = configDefinition{
-	Sentry: sentry{
-		SampleRate:       1.0,
-		TracesSampleRate: 1.0,
-	},
-	Pyroscope: pyroscope{
-		ApplicationName:      "golbat",
-		MutexProfileFraction: 5,
-		BlockProfileRate:     5,
-	},
-}
+var Config configDefinition
