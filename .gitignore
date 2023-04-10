@@ -24,4 +24,4 @@ docker-compose.yml
 /golbat
 /geojson/*
 vbase.proto
-
+__debug_bin
