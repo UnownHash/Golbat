@@ -2,6 +2,10 @@ package decoder
 
 import (
 	"context"
+	"github.com/UnownHash/gohbem"
+	"github.com/jellydator/ttlcache/v3"
+	stripedmutex "github.com/nmvalera/striped-mutex"
+	log "github.com/sirupsen/logrus"
 	"fmt"
 	"golbat/config"
 	"golbat/db"
@@ -64,7 +68,7 @@ var s2cellStripedMutex = stripedmutex.New(1024)
 
 var s2CellLookup = sync.Map{}
 
-var ohbem *ohbemgo.Ohbem
+var ohbem *gohbem.Ohbem
 
 func init() {
 	initDataCache()
@@ -137,17 +141,25 @@ func InitialiseOhbem() {
 			log.Errorf("PVP level caps not configured")
 			return
 		}
-		leagues := make(map[string]ohbemgo.League)
+		leagues := make(map[string]gohbem.League)
 
 		for _, league := range config.Config.Pvp.Leagues {
-			leagues[league.Name] = ohbemgo.League{
+			leagues[league.Name] = gohbem.League{
 				Cap:            league.Cap,
 				LittleCupRules: league.LittleCupRules,
 			}
 		}
 
-		o := &ohbemgo.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
+		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
 			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+		switch config.Config.Pvp.RankingComparator {
+		case "prefer_higher_cp":
+			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
+		case "prefer_lower_cp":
+			o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
+		default:
+			o.RankingComparator = gohbem.RankingComparatorDefault
+		}
 
 		if err := o.FetchPokemonData(); err != nil {
 			log.Errorf("ohbem.FetchPokemonData: %s", err)

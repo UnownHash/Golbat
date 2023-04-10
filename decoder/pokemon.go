@@ -484,7 +484,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
-	if pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
+	if pokemon.setPokemonDisplay(ctx, db, int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
@@ -519,7 +519,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
 
 	if mapPokemon.PokemonDisplay != nil {
-		if pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay) {
+		if pokemon.setPokemonDisplay(ctx, db, pokemon.PokemonId, mapPokemon.PokemonDisplay) {
 			updateStats(ctx, db, pokemon.Id, stats_statsReset)
 		}
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
@@ -553,7 +553,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
 	pokemonId := int16(nearbyPokemon.PokedexNumber)
-	if pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay) {
+	if pokemon.setPokemonDisplay(ctx, db, pokemonId, nearbyPokemon.PokemonDisplay) {
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
 	pokemon.Username = null.StringFrom(username)
@@ -670,7 +670,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	pokemon.Height = null.FloatFrom(float64(proto.HeightM))
 	pokemon.Size = null.IntFrom(int64(proto.Size))
 	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
-	pokemon.setPokemonDisplay(int16(proto.PokemonId), proto.PokemonDisplay)
+	pokemon.setPokemonDisplay(ctx, db, int16(proto.PokemonId), proto.PokemonDisplay)
 	oldWeather := pokemon.EncounterWeather
 	pokemon.EncounterWeather = uint8(proto.PokemonDisplay.WeatherBoostedCondition)
 	isUnboostedPartlyCloudy := false
@@ -938,7 +938,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	updateStats(ctx, db, pokemon.Id, stats_lureEncounter)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
+func (pokemon *Pokemon) setPokemonDisplay(ctx context.Context, db db.DbDetails, pokemonId int16, display *pogo.PokemonDisplayProto) bool {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
@@ -980,7 +980,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	pokemon.Gender = null.IntFrom(int64(display.Gender))
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
-	return pokemon.setWeather(int64(display.WeatherBoostedCondition))
+	return pokemon.setWeather(ctx, db, int64(display.WeatherBoostedCondition))
 }
 
 func (pokemon *Pokemon) compressIv() null.Int {
@@ -994,7 +994,7 @@ func (pokemon *Pokemon) compressIv() null.Int {
 	}
 }
 
-func (pokemon *Pokemon) setWeather(weather int64) bool {
+func (pokemon *Pokemon) setWeather(ctx context.Context, db db.DbDetails, weather int64) bool {
 	shouldReencounter := false // whether reencountering might give more information. Returns false for new record
 	if !pokemon.isNewRecord() && pokemon.Weather.ValueOrZero() != weather {
 		var reset, isBoosted bool
@@ -1043,6 +1043,48 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 			}
 			pokemon.Pvp = null.NewString("", false)
 		}
+	}
+	if !pokemon.Cp.Valid && ohbem != nil {
+		var displayPokemon int64
+		useInactive := false
+		if pokemon.IsDitto {
+			displayPokemon = pokemon.DisplayPokemonId.Int64
+			if weather == int64(pogo.GameplayWeatherProto_NONE) {
+				weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
+				if err != nil || weather == nil || !weather.GameplayCondition.Valid {
+					log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+				} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+					useInactive = true
+				}
+			}
+		} else {
+			displayPokemon = int64(pokemon.PokemonId)
+		}
+		func() {
+			var cp int
+			var err error
+			if useInactive {
+				if !pokemon.IvInactive.Valid {
+					return
+				}
+				// You should see boosted IV for 0P Ditto
+				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+					int(pokemon.IvInactive.Int64&15), int(pokemon.IvInactive.Int64>>4&15),
+					int(pokemon.IvInactive.Int64>>8&15), float64(pokemon.Level.Int64+5))
+			} else {
+				if !pokemon.AtkIv.Valid {
+					return
+				}
+				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+					int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
+					float64(pokemon.Level.Int64))
+			}
+			if err == nil {
+				pokemon.Cp = null.IntFrom(int64(cp))
+			} else {
+				log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
+			}
+		}()
 	}
 	pokemon.Weather = null.IntFrom(weather)
 	return shouldReencounter

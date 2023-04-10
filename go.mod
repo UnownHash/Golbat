@@ -3,7 +3,7 @@ module golbat
 go 1.18
 
 require (
-	github.com/Pupitar/ohbemgo v0.8.0
+	github.com/UnownHash/gohbem v0.10.0
 	github.com/getsentry/sentry-go v0.19.0
 	github.com/gin-gonic/gin v1.9.0
 	github.com/go-sql-driver/mysql v1.7.0
@@ -23,6 +23,7 @@ require (
 	github.com/ringsaturn/tzf v0.13.0
 	github.com/ringsaturn/tzf-rel v0.0.2023-b
 	github.com/sirupsen/logrus v1.9.0
+	github.com/tidwall/rtree v1.10.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
 	golang.org/x/exp v0.0.0-20230321023759-10a507213a29
 	google.golang.org/protobuf v1.30.0
@@ -56,7 +57,6 @@ require (
 	github.com/pyroscope-io/godeltaprof v0.1.0 // indirect
 	github.com/tidwall/geoindex v1.7.0 // indirect
 	github.com/tidwall/geojson v1.4.3 // indirect
-	github.com/tidwall/rtree v1.10.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/twpayne/go-polyline v1.1.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
