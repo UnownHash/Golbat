@@ -3,7 +3,7 @@ package decoder
 import (
 	"context"
 	"fmt"
-	"github.com/Pupitar/ohbemgo"
+	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/tidwall/rtree"
 	"golbat/config"
@@ -104,7 +104,7 @@ func updatePokemonLookup(pokemon *Pokemon) {
 	}, pokemon.remainingDuration())
 }
 
-func updatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]ohbemgo.PokemonEntry) {
+func updatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) {
 	if pvpResults == nil {
 		pokemonPvpLookupCache.Delete(pokemon.Id)
 		return

@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/Pupitar/ohbemgo"
+	"github.com/UnownHash/gohbem"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -251,7 +251,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	changePvpField := false
-	var pvpResults map[string][]ohbemgo.PokemonEntry
+	var pvpResults map[string][]gohbem.PokemonEntry
 	if ohbem != nil {
 		// Calculating PVP data
 		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
