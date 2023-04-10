@@ -38,7 +38,8 @@ func ReadConfig() {
 			MaxPokemonResults: 3000,
 		},
 		Pvp: pvp{
-			LevelCaps: []int{50, 51},
+			LevelCaps:         []int{50, 51},
+			UseLittleCupRules: true,
 		},
 	}, "koanf"), nil)
 	if defaultErr != nil {

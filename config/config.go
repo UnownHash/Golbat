@@ -42,10 +42,11 @@ type webhook struct {
 }
 
 type pvp struct {
-	Enabled               bool         `koanf:"enabled"`
-	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
-	LevelCaps             []int        `koanf:"level_caps"`
-	RankingComparator     string       `koanf:"ranking_comparator"`
+	Enabled               bool   `koanf:"enabled"`
+	IncludeHundosUnderCap bool   `koanf:"include_hundos_under_cap"`
+	LevelCaps             []int  `koanf:"level_caps"`
+	RankingComparator     string `koanf:"ranking_comparator"`
+	UseLittleCupRules     bool   `koanf:"use_little_cup_rules"`
 }
 
 type sentry struct {
