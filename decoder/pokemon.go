@@ -1051,47 +1051,46 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 
 func (pokemon *Pokemon) repopulateStatsIfNeeded(ctx context.Context, db db.DbDetails) {
 	// TODO: repopulate weight/size/height?
-	if !pokemon.Cp.Valid && ohbem != nil {
-		var displayPokemon int64
-		useInactive := false
-		if pokemon.IsDitto {
-			displayPokemon = pokemon.DisplayPokemonId.Int64
-			if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
-				weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
-				if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-					log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
-				} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-					useInactive = true
-				}
+	if pokemon.Cp.Valid || ohbem == nil {
+		return
+	}
+	var displayPokemon int64
+	useInactive := false
+	if pokemon.IsDitto {
+		displayPokemon = pokemon.DisplayPokemonId.Int64
+		if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
+			weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
+			if err != nil || weather == nil || !weather.GameplayCondition.Valid {
+				log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+			} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				useInactive = true
 			}
-		} else {
-			displayPokemon = int64(pokemon.PokemonId)
 		}
-		func() {
-			var cp int
-			var err error
-			if useInactive {
-				if !pokemon.IvInactive.Valid {
-					return
-				}
-				// You should see boosted IV for 0P Ditto
-				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
-					int(pokemon.IvInactive.Int64&15), int(pokemon.IvInactive.Int64>>4&15),
-					int(pokemon.IvInactive.Int64>>8&15), float64(pokemon.Level.Int64+5))
-			} else {
-				if !pokemon.AtkIv.Valid {
-					return
-				}
-				cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
-					int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
-					float64(pokemon.Level.Int64))
-			}
-			if err == nil {
-				pokemon.Cp = null.IntFrom(int64(cp))
-			} else {
-				log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
-			}
-		}()
+	} else {
+		displayPokemon = int64(pokemon.PokemonId)
+	}
+	var cp int
+	var err error
+	if useInactive {
+		if !pokemon.IvInactive.Valid {
+			return
+		}
+		// You should see boosted IV for 0P Ditto
+		cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+			int(pokemon.IvInactive.Int64&15), int(pokemon.IvInactive.Int64>>4&15), int(pokemon.IvInactive.Int64>>8&15),
+			float64(pokemon.Level.Int64+5))
+	} else {
+		if !pokemon.AtkIv.Valid {
+			return
+		}
+		cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
+			int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
+			float64(pokemon.Level.Int64))
+	}
+	if err == nil {
+		pokemon.Cp = null.IntFrom(int64(cp))
+	} else {
+		log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
 	}
 }
 
