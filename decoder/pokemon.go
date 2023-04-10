@@ -450,7 +450,7 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) bool {
 	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
@@ -458,6 +458,7 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.Lon = wildPokemon.Longitude
 
 	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
+	return pokemon.setPokemonDisplay(ctx, db, int16(wildPokemon.Pokemon.DisplayPokemonId), wildPokemon.Pokemon.PokemonDisplay)
 }
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -484,10 +485,9 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
-	if pokemon.setPokemonDisplay(ctx, db, int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay) {
+	if pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs) {
 		updateStats(ctx, db, pokemon.Id, stats_statsReset)
 	}
-	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
@@ -670,7 +670,6 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	pokemon.Height = null.FloatFrom(float64(proto.HeightM))
 	pokemon.Size = null.IntFrom(int64(proto.Size))
 	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
-	pokemon.setPokemonDisplay(ctx, db, int16(proto.PokemonId), proto.PokemonDisplay)
 	oldWeather := pokemon.EncounterWeather
 	pokemon.EncounterWeather = uint8(proto.PokemonDisplay.WeatherBoostedCondition)
 	isUnboostedPartlyCloudy := false
