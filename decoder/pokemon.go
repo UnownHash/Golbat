@@ -458,7 +458,7 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.Lon = wildPokemon.Longitude
 
 	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
-	return pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.DisplayPokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	return pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
 }
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
