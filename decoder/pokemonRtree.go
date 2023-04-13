@@ -10,6 +10,7 @@ import (
 	"golbat/geo"
 	"gopkg.in/guregu/null.v4"
 	"math"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -52,11 +53,11 @@ type PokemonPvpLookup struct {
 	Pvp map[string]map[int16]int16
 }
 
-var pokemonLookupCache *ttlcache.Cache[string, *PokemonLookup]
-var pokemonPvpLookupCache *ttlcache.Cache[string, *PokemonPvpLookup]
+var pokemonLookupCache *ttlcache.Cache[uint64, *PokemonLookup]
+var pokemonPvpLookupCache *ttlcache.Cache[uint64, *PokemonPvpLookup]
 
 var pokemonTreeMutex sync.Mutex
-var pokemonTree rtree.RTreeG[string]
+var pokemonTree rtree.RTreeG[uint64]
 
 func watchPokemonCache() {
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
@@ -65,14 +66,14 @@ func watchPokemonCache() {
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
 
-	pokemonLookupCache = ttlcache.New[string, *PokemonLookup](
-		ttlcache.WithTTL[string, *PokemonLookup](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, *PokemonLookup](), // Pokemon will last 60 mins from when we first see them not last see them
+	pokemonLookupCache = ttlcache.New[uint64, *PokemonLookup](
+		ttlcache.WithTTL[uint64, *PokemonLookup](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, *PokemonLookup](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonLookupCache.Start()
-	pokemonPvpLookupCache = ttlcache.New[string, *PokemonPvpLookup](
-		ttlcache.WithTTL[string, *PokemonPvpLookup](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, *PokemonPvpLookup](), // Pokemon will last 60 mins from when we first see them not last see them
+	pokemonPvpLookupCache = ttlcache.New[uint64, *PokemonPvpLookup](
+		ttlcache.WithTTL[uint64, *PokemonPvpLookup](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, *PokemonPvpLookup](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonPvpLookupCache.Start()
 }
@@ -85,13 +86,17 @@ func valueOrMinus1(n null.Int) int {
 }
 
 func addPokemonToTree(pokemon *Pokemon) {
+	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+
 	pokemonTreeMutex.Lock()
-	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemon.Id)
+	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
 }
 
 func updatePokemonLookup(pokemon *Pokemon) {
-	pokemonLookupCache.Set(pokemon.Id, &PokemonLookup{
+	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+
+	pokemonLookupCache.Set(pokemonId, &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
 		Form:               int16(pokemon.Form.ValueOrZero()),
 		HasEncounterValues: pokemon.Move1.Valid,
@@ -105,8 +110,10 @@ func updatePokemonLookup(pokemon *Pokemon) {
 }
 
 func updatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) {
+	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+
 	if pvpResults == nil {
-		pokemonPvpLookupCache.Delete(pokemon.Id)
+		pokemonPvpLookupCache.Delete(pokemonId)
 		return
 	}
 
@@ -129,14 +136,15 @@ func updatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.Pok
 		}
 	}
 
-	pokemonPvpLookupCache.Set(pokemon.Id, &PokemonPvpLookup{
+	pokemonPvpLookupCache.Set(pokemonId, &PokemonPvpLookup{
 		Pvp: pvpStore,
 	}, pokemon.remainingDuration())
 }
 
 func removePokemonFromTree(pokemon *Pokemon) {
+	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 	pokemonTreeMutex.Lock()
-	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemon.Id)
+	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
 }
 
@@ -188,7 +196,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 	defer pokemonTreeMutex.Unlock()
 
 	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
-		func(min, max [2]float64, data string) bool {
+		func(min, max [2]float64, data uint64) bool {
 			pokemonLookupItem := pokemonLookupCache.Get(data)
 			if pokemonLookupItem == nil {
 				// Did not find cached result, something amiss?
@@ -220,7 +228,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			}
 
 			if globalFilterMatched || specificFilterMatched {
-				if pokemon := pokemonCache.Get(data); pokemon != nil {
+				if pokemon := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemon != nil {
 					pData := pokemon.Value()
 					results = append(results, &pData)
 				}
