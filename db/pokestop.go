@@ -111,7 +111,7 @@ func GetQuestStatus(db DbDetails, fence geo.Geofence) (QuestStatus, error) {
 		"SELECT COUNT(*) AS total, "+
 			"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS ar_quests, "+
 			"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS no_ar_quests FROM pokestop "+
-			"WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 "+
+			"WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 AND deleted = 0 "+
 			"AND ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON(("+fence.ToPolygonString()+"))'), point(lat,lon)) ",
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude,
 	)
