@@ -372,10 +372,10 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
-	updatePokemonLookup(pokemon)
-	if changePvpField {
-		updatePokemonPvpLookup(pokemon, pvpResults)
-	}
+	updatePokemonLookup(pokemon, changePvpField, pvpResults)
+	//if changePvpField {
+	//	updatePokemonPvpLookup(pokemon, pvpResults)
+	//}
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
