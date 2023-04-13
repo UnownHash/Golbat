@@ -154,7 +154,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			filterMatched = false
 		} else if filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) {
 			filterMatched = false
-		} else if filter.AtkIv != nil && (pokemonLookup.Sta < filter.AtkIv[0] || pokemonLookup.Sta > filter.AtkIv[1]) {
+		} else if filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) {
 			filterMatched = false
 		} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
 			filterMatched = false
