@@ -65,6 +65,7 @@ type PokemonLookup struct {
 	Xxs                bool
 	Xxl                bool
 	Iv                 int8
+	Size               int8
 }
 
 type PokemonPvpLookup struct {
@@ -121,6 +122,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Level:              int8(valueOrMinus1(pokemon.Level)),
 		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
 		Iv:                 int8(math.Round(pokemon.Iv.Float64)),
+		Size:               int8(valueOrMinus1(pokemon.Size)),
 	}
 
 	if changePvp {
@@ -191,7 +193,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
 		// start with filter true if we have any filter set (no filters no match)
-		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil
+		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0 || filter.Xxl || filter.Xxs
 		pvpMatched := false // assume pvp match is true unless any filter matches
 		additionalMatch := false
 
@@ -209,6 +211,10 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			} else if filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) {
 				filterMatched = false
 			} else if filter.Gender != 0 && pokemonLookup.Gender != filter.Gender {
+				filterMatched = false
+			} else if filter.Xxl && pokemonLookup.Size != 5 {
+				filterMatched = false
+			} else if filter.Xxs && pokemonLookup.Size != 1 {
 				filterMatched = false
 			}
 		}
