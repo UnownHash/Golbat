@@ -107,7 +107,9 @@ func addPokemonToTree(pokemon *Pokemon) {
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
+	pokemonTreeMutex.RLock()
 	pokemonLookupCacheItem := pokemonLookupCache[pokemonId]
+	pokemonTreeMutex.RUnlock()
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
@@ -125,7 +127,9 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		pokemonLookupCacheItem.PokemonPvpLookup = calculatePokemonPvpLookup(pokemon, pvpResults)
 	}
 
+	pokemonTreeMutex.Lock()
 	pokemonLookupCache[pokemonId] = pokemonLookupCacheItem
+	pokemonTreeMutex.Unlock()
 }
 
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
