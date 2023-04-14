@@ -44,7 +44,7 @@ type ApiPvpFilter struct {
 type ApiAdditionalFilter struct {
 	IncludeEverything bool `json:"include_everything"`
 	IncludeHundos     bool `json:"include_hundoiv"`
-	IncludeNundos     bool `json:"include_zeroid"`
+	IncludeNundos     bool `json:"include_zeroiv"`
 }
 
 type PokemonLookupCacheItem struct {
