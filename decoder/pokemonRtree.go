@@ -23,16 +23,21 @@ type ApiRetrieve struct {
 	SpecificFilters map[string]ApiFilter `json:"filters"`
 }
 type ApiFilter struct {
-	Iv     []int8             `json:"iv"`
-	AtkIv  []int8             `json:"atk_iv"`
-	DefIv  []int8             `json:"def_iv"`
-	StaIv  []int8             `json:"sta_iv"`
-	Level  []int8             `json:"level"`
-	Cp     []int16            `json:"cp"`
-	Gender int                `json:"gender"`
-	Xxs    bool               `json:"xxs"`
-	Xxl    bool               `json:"xxl"`
-	Pvp    map[string][]int16 `json:"pvp"`
+	Iv     []int8        `json:"iv"`
+	AtkIv  []int8        `json:"atk_iv"`
+	DefIv  []int8        `json:"def_iv"`
+	StaIv  []int8        `json:"sta_iv"`
+	Level  []int8        `json:"level"`
+	Cp     []int16       `json:"cp"`
+	Gender int           `json:"gender"`
+	Xxs    bool          `json:"xxs"`
+	Xxl    bool          `json:"xxl"`
+	Pvp    *ApiPvpFilter `json:"pvp"`
+}
+type ApiPvpFilter struct {
+	Little []int16 `json:"little"`
+	Great  []int16 `json:"great"`
+	Ultra  []int16 `json:"ultra"`
 }
 
 type PokemonLookupCacheItem struct {
@@ -56,7 +61,9 @@ type PokemonLookup struct {
 }
 
 type PokemonPvpLookup struct {
-	Pvp map[string]map[int16]int16
+	Little int16
+	Great  int16
+	Ultra  int16
 }
 
 var pokemonLookupCache *ttlcache.Cache[uint64, *PokemonLookupCacheItem]
@@ -128,12 +135,13 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 		return nil
 	}
 
-	pvpStore := make(map[string]map[int16]int16)
+	pvpStore := make(map[string]int16)
 	for key, value := range pvpResults {
-		pvpStore[key] = make(map[int16]int16)
+		var best int16 = 4096 // worst possible rank
+		// This code actually calculates best in a level cap, which is no longer strictly necessary
+		// But will leave in this form to allow easy change to per-cap again later
 
 		for _, levelCap := range config.Config.Pvp.LevelCaps {
-			var best int16 = 4096 // worst possible rank
 			for _, entry := range value {
 				// we don't exclude mega evolutions yet
 				if (int(entry.Cap) == levelCap || (entry.Capped && int(entry.Cap) <= levelCap)) &&
@@ -141,14 +149,23 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 					best = entry.Rank
 				}
 			}
-			if best != 4096 {
-				pvpStore[key][int16(levelCap)] = best
-			}
+		}
+		if best != 4096 {
+			pvpStore[key] = best
 		}
 	}
 
+	bestValue := func(leagueKey string) int16 {
+		if value, ok := pvpStore[leagueKey]; ok {
+			return value
+		}
+		return 4096
+	}
+
 	return &PokemonPvpLookup{
-		Pvp: pvpStore,
+		Little: bestValue("little"),
+		Great:  bestValue("great"),
+		Ultra:  bestValue("ultra"),
 	}
 }
 
@@ -167,7 +184,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
 		filterMatched := true // assume basic match is true unless any filter doesn't match
-		pvpMatched := false   // assume pvp match is false unless any filter matches
+		pvpMatched := false   // assume pvp match is true unless any filter matches
 
 		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
 			filterMatched = false
@@ -179,22 +196,16 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			filterMatched = false
 		}
 
-		if filter.Pvp != nil && pvpLookup != nil {
-
-		pvpLoop:
-			for key, value := range filter.Pvp {
-				if rankings, found := pvpLookup.Pvp[key]; found == false {
-					// Did not find this pvp league against the pokemon (try others)
-					continue
-				} else {
-
-					for _, ranking := range rankings {
-						if ranking >= value[0] && ranking <= value[1] {
-							pvpMatched = true
-							break pvpLoop
-						}
-					}
-				}
+		pvpFilter := filter.Pvp
+		if pvpFilter != nil && pvpLookup != nil {
+			if pvpFilter.Little != nil && (pvpLookup.Little >= pvpFilter.Little[0] && pvpLookup.Little <= pvpFilter.Little[1]) {
+				pvpMatched = true
+			}
+			if pvpFilter.Great != nil && (pvpLookup.Great >= pvpFilter.Great[0] && pvpLookup.Great <= pvpFilter.Great[1]) {
+				pvpMatched = true
+			}
+			if pvpFilter.Ultra != nil && (pvpLookup.Ultra >= pvpFilter.Ultra[0] && pvpLookup.Ultra <= pvpFilter.Ultra[1]) {
+				pvpMatched = true
 			}
 		}
 
