@@ -208,6 +208,8 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 				filterMatched = false
 			} else if filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) {
 				filterMatched = false
+			} else if filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) {
+				filterMatched = false
 			}
 		}
 
