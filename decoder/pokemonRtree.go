@@ -30,7 +30,7 @@ type ApiFilter struct {
 	StaIv      []int8               `json:"sta_iv"`
 	Level      []int8               `json:"level"`
 	Cp         []int16              `json:"cp"`
-	Gender     int                  `json:"gender"`
+	Gender     int8                 `json:"gender"`
 	Xxs        bool                 `json:"xxs"`
 	Xxl        bool                 `json:"xxl"`
 	Additional *ApiAdditionalFilter `json:"additional"`
@@ -209,6 +209,8 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			} else if filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) {
 				filterMatched = false
 			} else if filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) {
+				filterMatched = false
+			} else if filter.Gender != 0 && pokemonLookup.Gender != filter.Gender {
 				filterMatched = false
 			}
 		}
