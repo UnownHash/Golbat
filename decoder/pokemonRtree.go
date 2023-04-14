@@ -73,7 +73,7 @@ type PokemonPvpLookup struct {
 	Ultra  int16
 }
 
-var pokemonLookupCache *ttlcache.Cache[uint64, *PokemonLookupCacheItem]
+var pokemonLookupCache *ttlcache.Cache[uint64, PokemonLookupCacheItem]
 
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
@@ -85,9 +85,9 @@ func watchPokemonCache() {
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
 
-	pokemonLookupCache = ttlcache.New[uint64, *PokemonLookupCacheItem](
-		ttlcache.WithTTL[uint64, *PokemonLookupCacheItem](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[uint64, *PokemonLookupCacheItem](), // Pokemon will last 60 mins from when we first see them not last see them
+	pokemonLookupCache = ttlcache.New[uint64, PokemonLookupCacheItem](
+		ttlcache.WithTTL[uint64, PokemonLookupCacheItem](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, PokemonLookupCacheItem](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonLookupCache.Start()
 }
@@ -110,12 +110,10 @@ func addPokemonToTree(pokemon *Pokemon) {
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	var pokemonLookupCacheItem *PokemonLookupCacheItem
+	var pokemonLookupCacheItem PokemonLookupCacheItem
 
 	if c := pokemonLookupCache.Get(pokemonId); c != nil {
 		pokemonLookupCacheItem = c.Value()
-	} else {
-		pokemonLookupCacheItem = &PokemonLookupCacheItem{}
 	}
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
