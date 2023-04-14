@@ -79,13 +79,14 @@ var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
 func watchPokemonCache() {
+	pokemonLookupCache = make(map[uint64]PokemonLookupCacheItem)
+
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
 		r := v.Value()
 		removePokemonFromTree(&r)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
 
-	pokemonLookupCache = make(map[uint64]PokemonLookupCacheItem, 1000000)
 }
 
 func valueOrMinus1(n null.Int) int {
