@@ -42,8 +42,9 @@ type ApiPvpFilter struct {
 	Ultra  []int16 `json:"ultra"`
 }
 type ApiAdditionalFilter struct {
-	IncludeHundos bool `json:"include_hundoiv"`
-	IncludeNundos bool `json:"include_zeroid"`
+	IncludeEverything bool `json:"include_everything"`
+	IncludeHundos     bool `json:"include_hundoiv"`
+	IncludeNundos     bool `json:"include_zeroid"`
 }
 
 type PokemonLookupCacheItem struct {
@@ -198,18 +199,22 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 		pvpMatched := false // assume pvp match is true unless any filter matches
 		additionalMatch := false
 
-		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
-			filterMatched = false
-		} else if filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) {
-			filterMatched = false
-		} else if filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) {
-			filterMatched = false
-		} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
-			filterMatched = false
+		if filterMatched {
+			if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
+				filterMatched = false
+			} else if filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) {
+				filterMatched = false
+			} else if filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) {
+				filterMatched = false
+			} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
+				filterMatched = false
+			}
 		}
 
 		if filter.Additional != nil {
-			if filter.Additional.IncludeNundos && pokemonLookup.Sta == 0 && pokemonLookup.Atk == 0 && pokemonLookup.Def == 0 {
+			if filter.Additional.IncludeEverything {
+				additionalMatch = true
+			} else if filter.Additional.IncludeNundos && pokemonLookup.Sta == 0 && pokemonLookup.Atk == 0 && pokemonLookup.Def == 0 {
 				additionalMatch = true
 			} else if filter.Additional.IncludeHundos && pokemonLookup.Sta == 15 && pokemonLookup.Atk == 15 && pokemonLookup.Def == 15 {
 				additionalMatch = true
