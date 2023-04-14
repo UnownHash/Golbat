@@ -120,6 +120,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),
 		Sta:                int8(valueOrMinus1(pokemon.StaIv)),
 		Level:              int8(valueOrMinus1(pokemon.Level)),
+		Gender:             int8(valueOrMinus1(pokemon.Gender)),
 		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
 		Iv:                 int8(math.Round(pokemon.Iv.Float64)),
 		Size:               int8(valueOrMinus1(pokemon.Size)),
