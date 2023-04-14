@@ -24,21 +24,26 @@ type ApiRetrieve struct {
 	SpecificFilters map[string]ApiFilter `json:"filters"`
 }
 type ApiFilter struct {
-	Iv     []int8        `json:"iv"`
-	AtkIv  []int8        `json:"atk_iv"`
-	DefIv  []int8        `json:"def_iv"`
-	StaIv  []int8        `json:"sta_iv"`
-	Level  []int8        `json:"level"`
-	Cp     []int16       `json:"cp"`
-	Gender int           `json:"gender"`
-	Xxs    bool          `json:"xxs"`
-	Xxl    bool          `json:"xxl"`
-	Pvp    *ApiPvpFilter `json:"pvp"`
+	Iv         []int8               `json:"iv"`
+	AtkIv      []int8               `json:"atk_iv"`
+	DefIv      []int8               `json:"def_iv"`
+	StaIv      []int8               `json:"sta_iv"`
+	Level      []int8               `json:"level"`
+	Cp         []int16              `json:"cp"`
+	Gender     int                  `json:"gender"`
+	Xxs        bool                 `json:"xxs"`
+	Xxl        bool                 `json:"xxl"`
+	Additional *ApiAdditionalFilter `json:"additional"`
+	Pvp        *ApiPvpFilter        `json:"pvp"`
 }
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
 	Great  []int16 `json:"great"`
 	Ultra  []int16 `json:"ultra"`
+}
+type ApiAdditionalFilter struct {
+	IncludeHundos bool `json:"include_hundoiv"`
+	IncludeNundos bool `json:"include_zeroid"`
 }
 
 type PokemonLookupCacheItem struct {
@@ -188,8 +193,10 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 	pokemonExamined := 0
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
-		filterMatched := true // assume basic match is true unless any filter doesn't match
-		pvpMatched := false   // assume pvp match is true unless any filter matches
+		// start with filter true if we have any filter set (no filters no match)
+		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil
+		pvpMatched := false // assume pvp match is true unless any filter matches
+		additionalMatch := false
 
 		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) {
 			filterMatched = false
@@ -199,6 +206,14 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			filterMatched = false
 		} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
 			filterMatched = false
+		}
+
+		if filter.Additional != nil {
+			if filter.Additional.IncludeNundos && pokemonLookup.Sta == 0 && pokemonLookup.Atk == 0 && pokemonLookup.Def == 0 {
+				additionalMatch = true
+			} else if filter.Additional.IncludeHundos && pokemonLookup.Sta == 15 && pokemonLookup.Atk == 15 && pokemonLookup.Def == 15 {
+				additionalMatch = true
+			}
 		}
 
 		pvpFilter := filter.Pvp
@@ -214,7 +229,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			}
 		}
 
-		return filterMatched || pvpMatched
+		return filterMatched || pvpMatched || additionalMatch
 	}
 
 	pokemonTreeMutex.RLock()
