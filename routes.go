@@ -349,9 +349,7 @@ func Retrieve(c *gin.Context) {
 		return
 	}
 
-	start := time.Now()
 	res := decoder.GetPokemonInArea(requestBody)
-	log.Infof("Retrieve took %s", time.Since(start))
 	c.JSON(http.StatusAccepted, res)
 }
 

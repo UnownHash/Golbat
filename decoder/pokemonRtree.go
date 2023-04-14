@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 	"golbat/config"
 	"golbat/geo"
@@ -177,10 +178,14 @@ func removePokemonFromTree(pokemon *Pokemon) {
 }
 
 func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
+	start := time.Now()
+
 	min := retrieveParameters.Min
 	max := retrieveParameters.Max
 	filters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
+
+	pokemonExamined := 0
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
 		filterMatched := true // assume basic match is true unless any filter doesn't match
@@ -218,6 +223,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 
 	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 		func(min, max [2]float64, pokemonId uint64) bool {
+			pokemonExamined++
 			pokemonLookupItem := pokemonLookupCache.Get(pokemonId)
 			if pokemonLookupItem == nil {
 				// Did not find cached result, something amiss?
@@ -252,6 +258,8 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 
 	pokemonTreeMutex.RUnlock()
 
+	lockedTime := time.Since(start)
+
 	results := make([]*Pokemon, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
@@ -278,6 +286,8 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			results = append(results, &pokemon)
 		}
 	}
+
+	log.Infof("GetPokemonInArea - total time %s (locked time %s), %d scanned, %d returned", time.Since(start), lockedTime, pokemonExamined, len(results))
 
 	return results
 }
