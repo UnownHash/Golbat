@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -13,6 +12,7 @@ import (
 	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -281,8 +281,11 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			specificFilterMatched := false
 
 			if !globalFilterMatched && filters != nil {
-				formString := fmt.Sprintf("%d-%d", pokemonLookup.PokemonId, pokemonLookup.Form)
-				filter, found := filters[formString]
+				var formString strings.Builder
+				formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
+				formString.WriteByte('-')
+				formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
+				filter, found := filters[formString.String()]
 
 				if found {
 					specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
