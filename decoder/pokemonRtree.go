@@ -197,7 +197,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 
 	min := retrieveParameters.Min
 	max := retrieveParameters.Max
-	filters := retrieveParameters.SpecificFilters
+	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
 
 	pokemonExamined := 0
@@ -280,12 +280,12 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 			}
 			specificFilterMatched := false
 
-			if !globalFilterMatched && filters != nil {
+			if !globalFilterMatched && specificPokemonFilters != nil {
 				var formString strings.Builder
 				formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
 				formString.WriteByte('-')
 				formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
-				filter, found := filters[formString.String()]
+				filter, found := specificPokemonFilters[formString.String()]
 
 				if found {
 					specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
