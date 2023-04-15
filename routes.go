@@ -6,6 +6,8 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/gin-gonic/gin/render"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
@@ -357,6 +359,19 @@ func Retrieve(c *gin.Context) {
 
 	res := decoder.GetPokemonInArea(requestBody)
 	c.JSON(http.StatusAccepted, res)
+}
+
+func RetrieveMsgPack(c *gin.Context) {
+	var requestBody decoder.ApiRetrieve
+
+	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.GetPokemonInArea(requestBody)
+	c.Render(http.StatusAccepted, render.MsgPack{Data: res})
 }
 
 func QueryPokemon(c *gin.Context) {

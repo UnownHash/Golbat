@@ -196,6 +196,7 @@ func main() {
 	r.GET("/api/reload-nests", ReloadNests)
 
 	r.POST("/api/retrieve-test", Retrieve)
+	r.POST("/api/retrieve-test-msgpack", RetrieveMsgPack)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
