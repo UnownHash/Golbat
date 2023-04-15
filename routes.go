@@ -348,7 +348,7 @@ func ReloadNests(c *gin.Context) {
 	})
 }
 
-func Retrieve(c *gin.Context) {
+func PokemonScan(c *gin.Context) {
 	var requestBody decoder.ApiRetrieve
 
 	if err := c.BindJSON(&requestBody); err != nil {
@@ -361,7 +361,7 @@ func Retrieve(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-func RetrieveMsgPack(c *gin.Context) {
+func PokemonScanMsgPack(c *gin.Context) {
 	var requestBody decoder.ApiRetrieve
 
 	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
