@@ -2,8 +2,8 @@ port = 9001             # Listening port for golbat
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
-stats = false           # Enable creation of pokemon_timing and pokemon_history table (now recommended=false)
-in_memory = false       # Use in-memory storage for pokemon only
+pokemon_memory_only = false  # Use in-memory storage for pokemon only
+stats = false           # Enable/Disable pokemon stats history (this should normally be disabled - real time stats are calculated always)
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"

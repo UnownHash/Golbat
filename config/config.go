@@ -3,21 +3,22 @@ package config
 import "golbat/geo"
 
 type configDefinition struct {
-	Port      int        `koanf:"port"`
-	Webhooks  []webhook  `koanf:"webhooks"`
-	Database  database   `koanf:"database"`
-	Stats     bool       `koanf:"stats"`
-	Logging   logging    `koanf:"logging"`
-	Sentry    sentry     `koanf:"sentry"`
-	Pyroscope pyroscope  `koanf:"pyroscope"`
-	InMemory  bool       `koanf:"in_memory"`
-	Cleanup   cleanup    `koanf:"cleanup"`
-	RawBearer string     `koanf:"raw_bearer"`
-	ApiSecret string     `koanf:"api_secret"`
-	Pvp       pvp        `koanf:"pvp"`
-	Koji      koji       `koanf:"koji"`
-	Tuning    tuning     `koanf:"tuning"`
-	ScanRules []scanRule `koanf:"scan_rules"`
+	Port              int        `koanf:"port"`
+	Webhooks          []webhook  `koanf:"webhooks"`
+	Database          database   `koanf:"database"`
+	Stats             bool       `koanf:"stats"`
+	Logging           logging    `koanf:"logging"`
+	Sentry            sentry     `koanf:"sentry"`
+	Pyroscope         pyroscope  `koanf:"pyroscope"`
+	LegacyInMemory    bool       `koanf:"in_memory"`
+	PokemonMemoryOnly bool       `koanf:"pokemon_memory_only"`
+	Cleanup           cleanup    `koanf:"cleanup"`
+	RawBearer         string     `koanf:"raw_bearer"`
+	ApiSecret         string     `koanf:"api_secret"`
+	Pvp               pvp        `koanf:"pvp"`
+	Koji              koji       `koanf:"koji"`
+	Tuning            tuning     `koanf:"tuning"`
+	ScanRules         []scanRule `koanf:"scan_rules"`
 }
 
 type koji struct {

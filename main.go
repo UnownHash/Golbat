@@ -100,7 +100,7 @@ func main() {
 
 	decoder.SetKojiUrl(config.Config.Koji.Url, config.Config.Koji.BearerToken)
 
-	if config.Config.InMemory {
+	if config.Config.LegacyInMemory {
 		//sql.Register("sqlite3_settings",
 		//	&sqlite3.SQLiteDriver{
 		//		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
@@ -159,7 +159,7 @@ func main() {
 		log.Info("Extended timeout enabled")
 	}
 
-	if config.Config.InMemory {
+	if config.Config.LegacyInMemory {
 		StartInMemoryCleardown(inMemoryDb)
 	} else {
 		if config.Config.Cleanup.Pokemon == true {

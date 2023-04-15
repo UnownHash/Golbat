@@ -139,6 +139,9 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 			return &pokemon, nil
 		}
 	}
+	if config.Config.PokemonMemoryOnly {
+		return nil, nil
+	}
 	pokemon := Pokemon{}
 
 	err := db.PokemonDb.GetContext(ctx, &pokemon,
@@ -285,81 +288,84 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
-	if oldPokemon == nil {
-		pvpField, pvpValue := "", ""
-		if changePvpField {
-			pvpField, pvpValue = "pvp, ", ":pvp, "
-		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
-			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
-			"gender, form, cp, level, encounter_weather, weather, costume, weight, height, size,"+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
-			":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :encounter_weather, :weather, :costume,"+
-			":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
-			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
-			":seen_type)", pvpField, pvpValue), pokemon)
 
-		if err != nil {
-			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
-			log.Errorf("Full structure: %+v", pokemon)
-			return
-		}
+	if !config.Config.PokemonMemoryOnly {
+		if oldPokemon == nil {
+			pvpField, pvpValue := "", ""
+			if changePvpField {
+				pvpField, pvpValue = "pvp, ", ":pvp, "
+			}
+			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
+				"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
+				"gender, form, cp, level, encounter_weather, weather, costume, weight, height, size,"+
+				"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
+				"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
+				"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
+				":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :encounter_weather, :weather, :costume,"+
+				":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
+				":seen_type)", pvpField, pvpValue), pokemon)
 
-		_, _ = res, err
-	} else {
-		pvpUpdate := ""
-		if changePvpField {
-			pvpUpdate = "pvp = :pvp, "
-		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
-			"pokestop_id = :pokestop_id, "+
-			"spawn_id = :spawn_id, "+
-			"lat = :lat, "+
-			"lon = :lon, "+
-			"weight = :weight, "+
-			"height = :height, "+
-			"size = :size, "+
-			"expire_timestamp = :expire_timestamp, "+
-			"updated = :updated, "+
-			"pokemon_id = :pokemon_id, "+
-			"move_1 = :move_1, "+
-			"move_2 = :move_2, "+
-			"gender = :gender, "+
-			"cp = :cp, "+
-			"atk_iv = :atk_iv, "+
-			"def_iv = :def_iv, "+
-			"sta_iv = :sta_iv, "+
-			"iv_inactive = :iv_inactive,"+
-			"iv = :iv,"+
-			"form = :form, "+
-			"level = :level, "+
-			"encounter_weather = :encounter_weather, "+
-			"weather = :weather, "+
-			"costume = :costume, "+
-			"first_seen_timestamp = :first_seen_timestamp, "+
-			"changed = :changed, "+
-			"cell_id = :cell_id, "+
-			"expire_timestamp_verified = :expire_timestamp_verified, "+
-			"display_pokemon_id = :display_pokemon_id, "+
-			"is_ditto = :is_ditto, "+
-			"seen_type = :seen_type, "+
-			"shiny = :shiny, "+
-			"username = :username, "+
-			"%s"+
-			"is_event = :is_event "+
-			"WHERE id = :id", pvpUpdate), pokemon,
-		)
-		if err != nil {
-			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
-			log.Errorf("Full structure: %+v", pokemon)
-			return
-		}
-		rows, rowsErr := res.RowsAffected()
-		log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+			if err != nil {
+				log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+				log.Errorf("Full structure: %+v", pokemon)
+				return
+			}
 
-		_, _ = res, err
+			_, _ = res, err
+		} else {
+			pvpUpdate := ""
+			if changePvpField {
+				pvpUpdate = "pvp = :pvp, "
+			}
+			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
+				"pokestop_id = :pokestop_id, "+
+				"spawn_id = :spawn_id, "+
+				"lat = :lat, "+
+				"lon = :lon, "+
+				"weight = :weight, "+
+				"height = :height, "+
+				"size = :size, "+
+				"expire_timestamp = :expire_timestamp, "+
+				"updated = :updated, "+
+				"pokemon_id = :pokemon_id, "+
+				"move_1 = :move_1, "+
+				"move_2 = :move_2, "+
+				"gender = :gender, "+
+				"cp = :cp, "+
+				"atk_iv = :atk_iv, "+
+				"def_iv = :def_iv, "+
+				"sta_iv = :sta_iv, "+
+				"iv_inactive = :iv_inactive,"+
+				"iv = :iv,"+
+				"form = :form, "+
+				"level = :level, "+
+				"encounter_weather = :encounter_weather, "+
+				"weather = :weather, "+
+				"costume = :costume, "+
+				"first_seen_timestamp = :first_seen_timestamp, "+
+				"changed = :changed, "+
+				"cell_id = :cell_id, "+
+				"expire_timestamp_verified = :expire_timestamp_verified, "+
+				"display_pokemon_id = :display_pokemon_id, "+
+				"is_ditto = :is_ditto, "+
+				"seen_type = :seen_type, "+
+				"shiny = :shiny, "+
+				"username = :username, "+
+				"%s"+
+				"is_event = :is_event "+
+				"WHERE id = :id", pvpUpdate), pokemon,
+			)
+			if err != nil {
+				log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
+				log.Errorf("Full structure: %+v", pokemon)
+				return
+			}
+			rows, rowsErr := res.RowsAffected()
+			log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+
+			_, _ = res, err
+		}
 	}
 
 	// Update pokemon rtree
@@ -373,9 +379,6 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
-	//if changePvpField {
-	//	updatePokemonPvpLookup(pokemon, pvpResults)
-	//}
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
