@@ -200,6 +200,7 @@ func main() {
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
 
+	r.GET("/api/pokemon/id/:pokemon_id", GetOnePokemon)
 	r.POST("/api/pokemon/scan", PokemonScan)
 	r.POST("/api/pokemon/scan-msgpack", PokemonScanMsgPack)
 

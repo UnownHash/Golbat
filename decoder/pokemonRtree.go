@@ -344,3 +344,11 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 
 	return results
 }
+
+func GetOnePokemon(pokemonId uint64) *Pokemon {
+	if item := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); item != nil {
+		pokemon := item.Value()
+		return &pokemon
+	}
+	return nil
+}

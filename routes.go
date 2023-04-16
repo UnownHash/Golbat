@@ -5,17 +5,19 @@ import (
 	"database/sql"
 	b64 "encoding/base64"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/gin-gonic/gin/render"
-	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
 	"golbat/geo"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/gin-gonic/gin/render"
+	log "github.com/sirupsen/logrus"
 )
 
 type ProtoData struct {
@@ -359,6 +361,25 @@ func PokemonScan(c *gin.Context) {
 
 	res := decoder.GetPokemonInArea(requestBody)
 	c.JSON(http.StatusAccepted, res)
+}
+
+func GetOnePokemon(c *gin.Context) {
+	pokemonId, err := strconv.ParseUint(c.Param("pokemon_id"), 10, 64)
+	if err != nil {
+		log.Warnf("GET /pokemon/:pokemon_id/ Error during get pokemon %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	res := decoder.GetOnePokemon(uint64(pokemonId))
+
+	if res != nil {
+		c.JSON(http.StatusAccepted, map[string]interface{}{
+			"lat": res.Lat,
+			"lon": res.Lon,
+		})
+	} else {
+		c.Status(http.StatusNotFound)
+	}
 }
 
 func PokemonScanMsgPack(c *gin.Context) {
