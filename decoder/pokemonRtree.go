@@ -379,10 +379,8 @@ func GetAvailablePokemon() []*Available {
 		split := strings.Split(key, "-")
 		pokemonId, err := strconv.ParseUint(split[0], 10, 16)
 		if err == nil {
-			log.Infof("key: %s, split: %s", key, split)
 			form, err := strconv.ParseUint(split[1], 10, 32)
 			if err == nil {
-				log.Infof("key: %s, split: %s", key, split)
 				pkmn := &Available{
 					PokemonId: uint16(pokemonId),
 					Form:      uint32(form),
