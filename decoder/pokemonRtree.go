@@ -17,31 +17,31 @@ import (
 	"time"
 )
 
-type ApiRetrieve struct {
-	Min             geo.Location         `json:"min"`
-	Max             geo.Location         `json:"max"`
-	GlobalFilter    *ApiFilter           `json:"global"`
-	SpecificFilters map[string]ApiFilter `json:"filters"`
+type ApiPokemonRetrieve struct {
+	Min             geo.Location                `json:"min"`
+	Max             geo.Location                `json:"max"`
+	GlobalFilter    *ApiPokemonFilter           `json:"global"`
+	SpecificFilters map[string]ApiPokemonFilter `json:"filters"`
 }
-type ApiFilter struct {
-	Iv         []int8               `json:"iv"`
-	AtkIv      []int8               `json:"atk_iv"`
-	DefIv      []int8               `json:"def_iv"`
-	StaIv      []int8               `json:"sta_iv"`
-	Level      []int8               `json:"level"`
-	Cp         []int16              `json:"cp"`
-	Gender     int8                 `json:"gender"`
-	Xxs        bool                 `json:"xxs"`
-	Xxl        bool                 `json:"xxl"`
-	Additional *ApiAdditionalFilter `json:"additional"`
-	Pvp        *ApiPvpFilter        `json:"pvp"`
+type ApiPokemonFilter struct {
+	Iv         []int8                      `json:"iv"`
+	AtkIv      []int8                      `json:"atk_iv"`
+	DefIv      []int8                      `json:"def_iv"`
+	StaIv      []int8                      `json:"sta_iv"`
+	Level      []int8                      `json:"level"`
+	Cp         []int16                     `json:"cp"`
+	Gender     int8                        `json:"gender"`
+	Xxs        bool                        `json:"xxs"`
+	Xxl        bool                        `json:"xxl"`
+	Additional *ApiPokemonAdditionalFilter `json:"additional"`
+	Pvp        *ApiPvpFilter               `json:"pvp"`
 }
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
 	Great  []int16 `json:"great"`
 	Ultra  []int16 `json:"ultra"`
 }
-type ApiAdditionalFilter struct {
+type ApiPokemonAdditionalFilter struct {
 	IncludeEverything bool `json:"include_everything"`
 	IncludeHundos     bool `json:"include_hundoiv"`
 	IncludeNundos     bool `json:"include_zeroiv"`
@@ -75,11 +75,10 @@ type PokemonPvpLookup struct {
 }
 
 var pokemonLookupCache map[uint64]PokemonLookupCacheItem
-
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
-func watchPokemonCache() {
+func initPokemonRtree() {
 	pokemonLookupCache = make(map[uint64]PokemonLookupCacheItem)
 
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
@@ -192,7 +191,7 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
 }
 
-func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	start := time.Now()
 
 	min := retrieveParameters.Min
@@ -203,7 +202,7 @@ func GetPokemonInArea(retrieveParameters ApiRetrieve) []*Pokemon {
 	pokemonExamined := 0
 	pokemonSkipped := 0
 
-	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiFilter) bool {
+	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
 		// start with filter true if we have any filter set (no filters no match)
 		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0 || filter.Xxl || filter.Xxs
 		pvpMatched := false // assume pvp match is true unless any filter matches

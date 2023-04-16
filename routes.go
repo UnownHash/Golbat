@@ -349,7 +349,7 @@ func ReloadNests(c *gin.Context) {
 }
 
 func PokemonScan(c *gin.Context) {
-	var requestBody decoder.ApiRetrieve
+	var requestBody decoder.ApiPokemonRetrieve
 
 	if err := c.BindJSON(&requestBody); err != nil {
 		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
@@ -362,7 +362,7 @@ func PokemonScan(c *gin.Context) {
 }
 
 func PokemonScanMsgPack(c *gin.Context) {
-	var requestBody decoder.ApiRetrieve
+	var requestBody decoder.ApiPokemonRetrieve
 
 	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
 		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)

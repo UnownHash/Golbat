@@ -179,6 +179,11 @@ func main() {
 		StartStatsExpiry(db)
 	}
 
+	if config.Config.TestFortInMemory {
+		go decoder.LoadAllPokestops(dbDetails)
+		go decoder.LoadAllGyms(dbDetails)
+	}
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	if config.Config.Logging.Debug {

@@ -102,7 +102,8 @@ func initDataCache() {
 		ttlcache.WithDisableTouchOnHit[string, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonCache.Start()
-	watchPokemonCache()
+	initPokemonRtree()
+	initFortRtree()
 
 	incidentCache = ttlcache.New[string, Incident](
 		ttlcache.WithTTL[string, Incident](60 * time.Minute),

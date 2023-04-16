@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
@@ -124,6 +125,9 @@ func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	}
 
 	pokestopCache.Set(fortId, pokestop, ttlcache.DefaultTTL)
+	if config.Config.TestFortInMemory {
+		fortRtreeUpdatePokestopOnGet(&pokestop)
+	}
 	return &pokestop, nil
 }
 
