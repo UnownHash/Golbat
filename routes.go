@@ -382,6 +382,11 @@ func GetOnePokemon(c *gin.Context) {
 	}
 }
 
+func GetAvailablePokemon(c *gin.Context) {
+	res := decoder.GetAvailablePokemon()
+	c.JSON(http.StatusAccepted, res)
+}
+
 func PokemonScanMsgPack(c *gin.Context) {
 	var requestBody decoder.ApiPokemonRetrieve
 

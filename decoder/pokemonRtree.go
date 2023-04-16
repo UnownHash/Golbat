@@ -74,6 +74,12 @@ type PokemonPvpLookup struct {
 	Ultra  int16
 }
 
+type Available struct {
+	PokemonId uint16 `json:"id"`
+	Form      uint32 `json:"form"`
+	Count     uint16 `json:"count"`
+}
+
 var pokemonLookupCache map[uint64]PokemonLookupCacheItem
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
@@ -351,4 +357,40 @@ func GetOnePokemon(pokemonId uint64) *Pokemon {
 		return &pokemon
 	}
 	return nil
+}
+
+func GetAvailablePokemon() []*Available {
+	pkmnMap := make(map[string](uint16))
+	for _, pokemon := range pokemonCache.Items() {
+		pkmn := pokemon.Value()
+		var formString strings.Builder
+		formString.WriteString(strconv.Itoa(int(pkmn.PokemonId)))
+		formString.WriteByte('-')
+		formString.WriteString(strconv.Itoa(int(pkmn.Form.Int64)))
+		if _, ok := pkmnMap[formString.String()]; ok {
+			pkmnMap[formString.String()]++
+		} else {
+			pkmnMap[formString.String()] = 1
+		}
+	}
+
+	var available []*Available
+	for key, count := range pkmnMap {
+		split := strings.Split(key, "-")
+		pokemonId, err := strconv.ParseUint(split[0], 10, 16)
+		if err == nil {
+			log.Infof("key: %s, split: %s", key, split)
+			form, err := strconv.ParseUint(split[1], 10, 32)
+			if err == nil {
+				log.Infof("key: %s, split: %s", key, split)
+				pkmn := &Available{
+					PokemonId: uint16(pokemonId),
+					Form:      uint32(form),
+					Count:     count,
+				}
+				available = append(available, pkmn)
+			}
+		}
+	}
+	return available
 }
