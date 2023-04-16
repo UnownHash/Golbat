@@ -90,6 +90,17 @@ func initPokemonRtree() {
 
 }
 
+func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
+	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+
+	_, inMap := pokemonLookupCache[pokemonId]
+	if !inMap {
+		addPokemonToTree(pokemon)
+		// this pokemon won't be available for pvp searches
+		updatePokemonLookup(pokemon, false, nil)
+	}
+}
+
 func valueOrMinus1(n null.Int) int {
 	if n.Valid {
 		return int(n.Int64)
@@ -329,7 +340,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		}
 	}
 
-	log.Infof("GetPokemonInArea - total time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonStats, len(results))
+	log.Infof("GetPokemonInArea - total time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonSkipped, len(results))
 
 	return results
 }

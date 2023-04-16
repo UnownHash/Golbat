@@ -162,6 +162,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	if db.UsePokemonCache {
 		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
+	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
 }
 
