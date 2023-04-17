@@ -280,13 +280,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	var returnKeys []uint64
 
 	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	pokemonMatched := 0
 	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 		func(min, max [2]float64, pokemonId uint64) bool {
 			pokemonExamined++
-			if pokemonExamined > maxPokemon {
-				log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
-				return false
-			}
 
 			pokemonLookupItem, found := pokemonLookupCache[pokemonId]
 			if !found {
@@ -318,6 +315,11 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 
 			if globalFilterMatched || specificFilterMatched {
 				returnKeys = append(returnKeys, pokemonId)
+				pokemonMatched++
+				if pokemonMatched > maxPokemon {
+					log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
+					return false
+				}
 			}
 
 			return true // always continue
