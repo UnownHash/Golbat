@@ -34,6 +34,9 @@ func ReadConfig() {
 		Database: database{
 			MaxPool: 100,
 		},
+		Tuning: tuning{
+			MaxPokemonResults: 3000,
+		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))

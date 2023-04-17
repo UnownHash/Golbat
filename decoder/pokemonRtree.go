@@ -75,9 +75,9 @@ type PokemonPvpLookup struct {
 }
 
 type Available struct {
-	PokemonId uint16 `json:"id"`
-	Form      uint32 `json:"form"`
-	Count     uint16 `json:"count"`
+	PokemonId int16 `json:"id"`
+	Form      int16 `json:"form"`
+	Count     int   `json:"count"`
 }
 
 var pokemonLookupCache map[uint64]PokemonLookupCacheItem
@@ -277,9 +277,14 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 
 	var returnKeys []uint64
 
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
 	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 		func(min, max [2]float64, pokemonId uint64) bool {
 			pokemonExamined++
+			if pokemonExamined > maxPokemon {
+				return false
+			}
+
 			pokemonLookupItem, found := pokemonLookupCache[pokemonId]
 			if !found {
 				pokemonSkipped++
@@ -360,35 +365,28 @@ func GetOnePokemon(pokemonId uint64) *Pokemon {
 }
 
 func GetAvailablePokemon() []*Available {
-	pkmnMap := make(map[string](uint16))
-	for _, pokemon := range pokemonCache.Items() {
-		pkmn := pokemon.Value()
-		var formString strings.Builder
-		formString.WriteString(strconv.Itoa(int(pkmn.PokemonId)))
-		formString.WriteByte('-')
-		formString.WriteString(strconv.Itoa(int(pkmn.Form.Int64)))
-		if _, ok := pkmnMap[formString.String()]; ok {
-			pkmnMap[formString.String()]++
-		} else {
-			pkmnMap[formString.String()] = 1
-		}
+	type pokemonFormKey struct {
+		pokemonId int16
+		form      int16
 	}
+
+	pokemonTreeMutex.RLock()
+	pkmnMap := make(map[pokemonFormKey]int)
+	for _, pokemon := range pokemonLookupCache {
+		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
+	}
+	pokemonTreeMutex.RUnlock()
 
 	var available []*Available
 	for key, count := range pkmnMap {
-		split := strings.Split(key, "-")
-		pokemonId, err := strconv.ParseUint(split[0], 10, 16)
-		if err == nil {
-			form, err := strconv.ParseUint(split[1], 10, 32)
-			if err == nil {
-				pkmn := &Available{
-					PokemonId: uint16(pokemonId),
-					Form:      uint32(form),
-					Count:     count,
-				}
-				available = append(available, pkmn)
-			}
+
+		pkmn := &Available{
+			PokemonId: key.pokemonId,
+			Form:      key.form,
+			Count:     count,
 		}
+		available = append(available, pkmn)
 	}
+
 	return available
 }

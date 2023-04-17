@@ -86,7 +86,8 @@ type database struct {
 }
 
 type tuning struct {
-	ExtendedTimeout bool `koanf:"extended_timeout"`
+	ExtendedTimeout   bool `koanf:"extended_timeout"`
+	MaxPokemonResults int  `koanf:"max_pokemon_results"`
 }
 
 type scanRule struct {
