@@ -99,7 +99,9 @@ func initPokemonRtree() {
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
+	pokemonTreeMutex.RLock()
 	_, inMap := pokemonLookupCache[pokemonId]
+	pokemonTreeMutex.RUnlock()
 	if !inMap {
 		addPokemonToTree(pokemon)
 		// this pokemon won't be available for pvp searches
