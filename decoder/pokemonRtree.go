@@ -282,6 +282,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		func(min, max [2]float64, pokemonId uint64) bool {
 			pokemonExamined++
 			if pokemonExamined > maxPokemon {
+				log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
 				return false
 			}
 
