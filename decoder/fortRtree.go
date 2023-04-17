@@ -74,7 +74,9 @@ func LoadAllGyms(details db.DbDetails) {
 }
 
 func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
+	fortTreeMutex.RLock()
 	_, inMap := fortLookupCache[pokestop.Id]
+	fortTreeMutex.RUnlock()
 	if !inMap {
 		addPokestopToTree(pokestop)
 		// assumes lat,lon unchanged since ejected from cache, so do not add to rtree
@@ -83,7 +85,9 @@ func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
 }
 
 func fortRtreeUpdateGymOnGet(gym *Gym) {
+	fortTreeMutex.RLock()
 	_, inMap := fortLookupCache[gym.Id]
+	fortTreeMutex.RUnlock()
 	if !inMap {
 		addGymToTree(gym)
 		// assumes lat,lon unchanged since ejected from cache, so do not add to rtree
@@ -92,6 +96,7 @@ func fortRtreeUpdateGymOnGet(gym *Gym) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
+	fortTreeMutex.Lock()
 	fortLookupCache[pokestop.Id] = FortLookup{
 		IsGym: false,
 		Lure:  pokestop.LureId,
@@ -100,14 +105,17 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		//		QuestRewardType: pokestop.QuestRewardType,
 		//		QuestRewardId:   pokestop.QuestRewardId,
 	}
+	fortTreeMutex.Unlock()
 }
 
 func updateGymLookup(gym *Gym) {
+	fortTreeMutex.Lock()
 	fortLookupCache[gym.Id] = FortLookup{
 		IsGym:         true,
 		RaidLevel:     int8(gym.RaidLevel.ValueOrZero()),
 		RaidPokemonId: int16(gym.RaidPokemonId.ValueOrZero()),
 	}
+	fortTreeMutex.Unlock()
 }
 
 func addPokestopToTree(pokestop *Pokestop) {
