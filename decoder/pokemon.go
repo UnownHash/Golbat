@@ -401,65 +401,60 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	//	return v.ValueOrZero()
 	//}
 
-	if old == nil ||
-		old.PokemonId != new.PokemonId ||
-		old.Weather != new.Weather ||
-		old.Cp != new.Cp {
-		pokemonHook := map[string]interface{}{
-			"spawnpoint_id": func() string {
-				if !new.SpawnId.Valid {
-					return "None"
-				}
-				return strconv.FormatInt(new.SpawnId.ValueOrZero(), 16)
-			}(),
-			"pokestop_id": func() string {
-				if !new.PokestopId.Valid {
-					return "None"
-				} else {
-					return new.PokestopId.ValueOrZero()
-				}
-			}(),
-			"encounter_id":            new.Id,
-			"pokemon_id":              new.PokemonId,
-			"latitude":                new.Lat,
-			"longitude":               new.Lon,
-			"disappear_time":          new.ExpireTimestamp.ValueOrZero(),
-			"disappear_time_verified": new.ExpireTimestampVerified,
-			"first_seen":              new.FirstSeenTimestamp,
-			"last_modified_time":      new.Updated,
-			"gender":                  new.Gender,
-			"cp":                      new.Cp,
-			"form":                    new.Form,
-			"costume":                 new.Costume,
-			"individual_attack":       new.AtkIv,
-			"individual_defense":      new.DefIv,
-			"individual_stamina":      new.StaIv,
-			"pokemon_level":           new.Level,
-			"move_1":                  new.Move1,
-			"move_2":                  new.Move2,
-			"weight":                  new.Weight,
-			"size":                    new.Size,
-			"height":                  new.Height,
-			"weather":                 new.Weather,
-			"capture_1":               new.Capture1.ValueOrZero(),
-			"capture_2":               new.Capture2.ValueOrZero(),
-			"capture_3":               new.Capture3.ValueOrZero(),
-			"shiny":                   new.Shiny,
-			"username":                new.Username,
-			"display_pokemon_id":      new.DisplayPokemonId,
-			"is_event":                new.IsEvent,
-			"seen_type":               new.SeenType,
-			"pvp": func() interface{} {
-				if !new.Pvp.Valid {
-					return nil
-				} else {
-					return json.RawMessage(new.Pvp.ValueOrZero())
-				}
-			}(),
-		}
-
-		webhooks.AddMessage(webhooks.Pokemon, pokemonHook, areas)
+	pokemonHook := map[string]interface{}{
+		"spawnpoint_id": func() string {
+			if !new.SpawnId.Valid {
+				return "None"
+			}
+			return strconv.FormatInt(new.SpawnId.ValueOrZero(), 16)
+		}(),
+		"pokestop_id": func() string {
+			if !new.PokestopId.Valid {
+				return "None"
+			} else {
+				return new.PokestopId.ValueOrZero()
+			}
+		}(),
+		"encounter_id":            new.Id,
+		"pokemon_id":              new.PokemonId,
+		"latitude":                new.Lat,
+		"longitude":               new.Lon,
+		"disappear_time":          new.ExpireTimestamp.ValueOrZero(),
+		"disappear_time_verified": new.ExpireTimestampVerified,
+		"first_seen":              new.FirstSeenTimestamp,
+		"last_modified_time":      new.Updated,
+		"gender":                  new.Gender,
+		"cp":                      new.Cp,
+		"form":                    new.Form,
+		"costume":                 new.Costume,
+		"individual_attack":       new.AtkIv,
+		"individual_defense":      new.DefIv,
+		"individual_stamina":      new.StaIv,
+		"pokemon_level":           new.Level,
+		"move_1":                  new.Move1,
+		"move_2":                  new.Move2,
+		"weight":                  new.Weight,
+		"size":                    new.Size,
+		"height":                  new.Height,
+		"weather":                 new.Weather,
+		"capture_1":               new.Capture1.ValueOrZero(),
+		"capture_2":               new.Capture2.ValueOrZero(),
+		"capture_3":               new.Capture3.ValueOrZero(),
+		"shiny":                   new.Shiny,
+		"username":                new.Username,
+		"display_pokemon_id":      new.DisplayPokemonId,
+		"is_event":                new.IsEvent,
+		"seen_type":               new.SeenType,
+		"pvp": func() interface{} {
+			if !new.Pvp.Valid {
+				return nil
+			} else {
+				return json.RawMessage(new.Pvp.ValueOrZero())
+			}
+		}(),
 	}
+
+	webhooks.AddMessage(webhooks.Pokemon, pokemonHook, areas)
 }
 
 func (pokemon *Pokemon) isNewRecord() bool {
