@@ -20,6 +20,9 @@ import (
 type ApiPokemonRetrieve struct {
 	Min             geo.Location                `json:"min"`
 	Max             geo.Location                `json:"max"`
+	Center          geo.Location                `json:"center"`
+	Limit           int                         `json:"limit"`
+	SearchIds       []int16                     `json:"searchIds"`
 	GlobalFilter    *ApiPokemonFilter           `json:"global"`
 	SpecificFilters map[string]ApiPokemonFilter `json:"filters"`
 }
@@ -394,4 +397,43 @@ func GetAvailablePokemon() []*Available {
 	}
 
 	return available
+}
+
+func SearchPokemon(request ApiPokemonRetrieve) []*Pokemon {
+	start := time.Now()
+	results := make([]*Pokemon, 0, request.Limit)
+	pokemonMatched := 0
+
+	pokemonTreeMutex.Lock()
+	pokemonTree.Nearby(
+		func(min, max [2]float64, data uint64, item bool) float64 {
+			if item {
+				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
+					pokemon := pokemonCacheEntry.Value()
+					if request.SearchIds != nil && pokemonMatched < request.Limit {
+						found := false
+						for _, id := range request.SearchIds {
+							if pokemon.PokemonId == id {
+								found = true
+								break
+							}
+						}
+						if !found {
+							return 0
+						}
+						results = append(results, &pokemon)
+						pokemonMatched++
+					}
+				}
+			}
+			return 0
+		},
+		func(min, max [2]float64, data uint64, dist float64) bool {
+			return true
+		},
+	)
+	pokemonTreeMutex.Unlock()
+
+	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
+	return results
 }

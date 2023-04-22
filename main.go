@@ -191,9 +191,10 @@ func main() {
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
 
-	r.GET("/api/pokemon/id/:pokemon_id", GetOnePokemon)
-	r.GET("/api/pokemon/available", GetAvailablePokemon)
+	r.GET("/api/pokemon/id/:pokemon_id", PokemonOne)
+	r.GET("/api/pokemon/available", PokemonAvailable)
 	r.POST("/api/pokemon/scan", PokemonScan)
+	r.POST("/api/pokemon/search", PokemonSearch)
 	r.POST("/api/pokemon/scan-msgpack", PokemonScanMsgPack)
 
 	//router := mux.NewRouter().StrictSlash(true)
