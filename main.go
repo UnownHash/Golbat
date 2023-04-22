@@ -8,7 +8,6 @@ import (
 	"golbat/decoder"
 	"golbat/external"
 	"golbat/webhooks"
-	"io/ioutil"
 	"time"
 	_ "time/tzdata"
 
@@ -24,7 +23,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sqlx.DB
@@ -100,50 +98,43 @@ func main() {
 
 	decoder.SetKojiUrl(config.Config.Koji.Url, config.Config.Koji.BearerToken)
 
-	if config.Config.LegacyInMemory {
-		//sql.Register("sqlite3_settings",
-		//	&sqlite3.SQLiteDriver{
-		//		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-		//			conn.SetLimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 50000)
-		//			return nil
-		//		},
-		//	})
-		// Initialise in memory db
-		inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		inMemoryDb.SetMaxOpenConns(1)
-
-		pingErr = inMemoryDb.Ping()
-		if pingErr != nil {
-			log.Fatal(pingErr)
-			return
-		}
-
-		// Create database
-		content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
-
-		if fileErr != nil {
-			log.Fatal(err)
-		}
-
-		inMemoryDb.MustExec(string(content))
-
-		dbDetails = db2.DbDetails{
-			PokemonDb:       inMemoryDb,
-			UsePokemonCache: false,
-			GeneralDb:       db,
-		}
-	} else {
-		dbDetails = db2.DbDetails{
-			PokemonDb:       db,
-			UsePokemonCache: true,
-			GeneralDb:       db,
-		}
+	//if config.Config.LegacyInMemory {
+	//	// Initialise in memory db
+	//	inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
+	//	if err != nil {
+	//		log.Fatal(err)
+	//		return
+	//	}
+	//
+	//	inMemoryDb.SetMaxOpenConns(1)
+	//
+	//	pingErr = inMemoryDb.Ping()
+	//	if pingErr != nil {
+	//		log.Fatal(pingErr)
+	//		return
+	//	}
+	//
+	//	// Create database
+	//	content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
+	//
+	//	if fileErr != nil {
+	//		log.Fatal(err)
+	//	}
+	//
+	//	inMemoryDb.MustExec(string(content))
+	//
+	//	dbDetails = db2.DbDetails{
+	//		PokemonDb:       inMemoryDb,
+	//		UsePokemonCache: false,
+	//		GeneralDb:       db,
+	//	}
+	//} else {
+	dbDetails = db2.DbDetails{
+		PokemonDb:       db,
+		UsePokemonCache: true,
+		GeneralDb:       db,
 	}
+	//}
 
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()

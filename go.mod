@@ -16,7 +16,6 @@ require (
 	github.com/knadh/koanf/providers/file v0.1.0
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.0.0
-	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/paulmach/orb v0.9.0
 	github.com/pyroscope-io/client v0.7.0
