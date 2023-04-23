@@ -260,6 +260,8 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 			}
 			var column string
 			switch s := expert[match[4]:match[5]]; s {
+			case "":
+				column = "pokemon.Iv"
 			case "A":
 				column = "pokemon.Atk"
 			case "D":
