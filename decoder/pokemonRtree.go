@@ -278,6 +278,11 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
 
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxPokemon {
+		maxPokemon = retrieveParameters.Limit
+	}
+
 	pokemonExamined := 0
 	pokemonSkipped := 0
 
@@ -339,7 +344,6 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 		pokemonTreeMutex.RLock()
 		defer pokemonTreeMutex.RUnlock()
 
-		maxPokemon := config.Config.Tuning.MaxPokemonResults
 		pokemonMatched := 0
 		pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
