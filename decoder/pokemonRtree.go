@@ -432,22 +432,22 @@ func SearchPokemon(request ApiPokemonRetrieve) []*Pokemon {
 	pokemonTreeMutex.Lock()
 	pokemonTree.Nearby(
 		func(min, max [2]float64, data uint64, item bool) float64 {
-			if item {
-				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
-					pokemon := pokemonCacheEntry.Value()
-					if request.SearchIds != nil && pokemonMatched < request.Limit {
-						found := false
-						for _, id := range request.SearchIds {
-							if pokemon.PokemonId == id {
-								found = true
-								break
-							}
+			if item && pokemonMatched < request.Limit && request.SearchIds != nil {
+				pokemonLookupItem, inCache := pokemonLookupCache[data]
+				if inCache {
+					found := false
+					for _, id := range request.SearchIds {
+						if pokemonLookupItem.PokemonLookup.PokemonId == id {
+							found = true
+							break
 						}
-						if !found {
-							return 0
+					}
+					if found {
+						if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
+							pokemon := pokemonCacheEntry.Value()
+							results = append(results, &pokemon)
+							pokemonMatched++
 						}
-						results = append(results, &pokemon)
-						pokemonMatched++
 					}
 				}
 			}
