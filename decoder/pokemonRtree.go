@@ -17,15 +17,23 @@ import (
 	"time"
 )
 
-type ApiPokemonRetrieve struct {
+type ApiPokemonScan struct {
 	Min             geo.Location                `json:"min"`
 	Max             geo.Location                `json:"max"`
 	Center          geo.Location                `json:"center"`
 	Limit           int                         `json:"limit"`
-	SearchIds       []int16                     `json:"searchIds"`
 	GlobalFilter    *ApiPokemonFilter           `json:"global"`
 	SpecificFilters map[string]ApiPokemonFilter `json:"filters"`
 }
+
+type ApiPokemonSearch struct {
+	Min       geo.Location `json:"min"`
+	Max       geo.Location `json:"max"`
+	Center    geo.Location `json:"center"`
+	Limit     int          `json:"limit"`
+	SearchIds []int16      `json:"searchIds"`
+}
+
 type ApiPokemonFilter struct {
 	Iv         []int8                      `json:"iv"`
 	AtkIv      []int8                      `json:"atk_iv"`
@@ -213,7 +221,7 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
 }
 
-func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 	// Validate filters
 
 	validateFilter := func(filter *ApiPokemonFilter) bool {
@@ -457,7 +465,7 @@ func GetAvailablePokemon() []*Available {
 	return available
 }
 
-func SearchPokemon(request ApiPokemonRetrieve) []*Pokemon {
+func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
 	pokemonMatched := 0
