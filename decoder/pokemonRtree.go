@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 	"golbat/config"
@@ -91,12 +92,12 @@ type Available struct {
 	Count     int   `json:"count"`
 }
 
-var pokemonLookupCache map[uint64]PokemonLookupCacheItem
+var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
 func initPokemonRtree() {
-	pokemonLookupCache = make(map[uint64]PokemonLookupCacheItem)
+	pokemonLookupCache = xsync.NewIntegerMapOf[uint64, PokemonLookupCacheItem]()
 
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
 		r := v.Value()
@@ -110,9 +111,8 @@ func initPokemonRtree() {
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	pokemonTreeMutex.RLock()
-	_, inMap := pokemonLookupCache[pokemonId]
-	pokemonTreeMutex.RUnlock()
+	_, inMap := pokemonLookupCache.Load(pokemonId)
+
 	if !inMap {
 		addPokemonToTree(pokemon)
 		// this pokemon won't be available for pvp searches
@@ -130,9 +130,7 @@ func valueOrMinus1(n null.Int) int {
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	pokemonTreeMutex.RLock()
-	pokemonLookupCacheItem := pokemonLookupCache[pokemonId]
-	pokemonTreeMutex.RUnlock()
+	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
@@ -152,9 +150,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		pokemonLookupCacheItem.PokemonPvpLookup = calculatePokemonPvpLookup(pokemon, pvpResults)
 	}
 
-	pokemonTreeMutex.Lock()
-	pokemonLookupCache[pokemonId] = pokemonLookupCacheItem
-	pokemonTreeMutex.Unlock()
+	pokemonLookupCache.Store(pokemonId, pokemonLookupCacheItem)
 }
 
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
@@ -212,13 +208,14 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	beforeLen := pokemonTree.Len()
 	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	afterLen := pokemonTree.Len()
-	delete(pokemonLookupCache, pokemonId)
 	pokemonTreeMutex.Unlock()
+	pokemonLookupCache.Delete(pokemonId)
+
 	unexpected := ""
 	if beforeLen != afterLen+1 {
 		unexpected = " UNEXPECTED"
 	}
-	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
+	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, pokemonLookupCache.Size())
 }
 
 func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
@@ -340,16 +337,19 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	performScan := func() (returnKeys []uint64) {
-		pokemonTreeMutex.RLock()
-		defer pokemonTreeMutex.RUnlock()
+	pokemonTreeMutex.RLock()
+	pokemonTree2 := pokemonTree.Copy()
+	pokemonTreeMutex.RUnlock()
 
+	lockedTime := time.Since(start)
+
+	performScan := func() (returnKeys []uint64) {
 		pokemonMatched := 0
-		pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
+		pokemonTree2.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
 
-				pokemonLookupItem, found := pokemonLookupCache[pokemonId]
+				pokemonLookupItem, found := pokemonLookupCache.Load(pokemonId)
 				if !found {
 					pokemonSkipped++
 					// Did not find cached result, something amiss?
@@ -393,8 +393,6 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 	}
 
 	returnKeys := performScan()
-
-	lockedTime := time.Since(start)
 
 	results := make([]*Pokemon, 0, len(returnKeys))
 
@@ -444,14 +442,11 @@ func GetAvailablePokemon() []*Available {
 
 	start := time.Now()
 
-	pokemonTreeMutex.RLock()
 	pkmnMap := make(map[pokemonFormKey]int)
-	for _, pokemon := range pokemonLookupCache {
+	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
 		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
-	}
-	pokemonTreeMutex.RUnlock()
-
-	lockedTime := time.Since(start)
+		return true
+	})
 
 	var available []*Available
 	for key, count := range pkmnMap {
@@ -464,7 +459,7 @@ func GetAvailablePokemon() []*Available {
 		available = append(available, pkmn)
 	}
 
-	log.Infof("GetAvailablePokemon - total time %s (locked time %s)", time.Since(start), lockedTime)
+	log.Infof("GetAvailablePokemon - total time %s (locked time --)", time.Since(start))
 
 	return available
 }
@@ -474,11 +469,14 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	results := make([]*Pokemon, 0, request.Limit)
 	pokemonMatched := 0
 
-	pokemonTreeMutex.Lock()
-	pokemonTree.Nearby(
+	pokemonTreeMutex.RLock()
+	pokemonTree2 := pokemonTree.Copy()
+	pokemonTreeMutex.RUnlock()
+
+	pokemonTree2.Nearby(
 		func(min, max [2]float64, data uint64, item bool) float64 {
 			if item && pokemonMatched < request.Limit && request.SearchIds != nil {
-				pokemonLookupItem, inCache := pokemonLookupCache[data]
+				pokemonLookupItem, inCache := pokemonLookupCache.Load(data)
 				if inCache {
 					found := false
 					for _, id := range request.SearchIds {
@@ -502,7 +500,6 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 			return true
 		},
 	)
-	pokemonTreeMutex.Unlock()
 
 	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
 	return results
