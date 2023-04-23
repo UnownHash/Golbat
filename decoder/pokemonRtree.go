@@ -243,7 +243,7 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 		for i := 0; i < len(expert); {
 			match := filterTokenizer.FindStringSubmatchIndex(expert[i:])
 			if match == nil {
-				log.Debugf("Failed to transcode Pokemon expert filter: %s", expert)
+				log.Debugf("Failed to transcode Pokemon expert filter @ %d: %s", i, expert)
 				return nil
 			}
 			i = match[1]
