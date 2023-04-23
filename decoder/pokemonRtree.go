@@ -237,65 +237,72 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 	if out, ok := cache[expert]; ok {
 		return out
 	}
-	var builder strings.Builder
-	// we first transcode input filter into a compilable expr
-	for i := 0; ; {
-		match := filterTokenizer.FindStringSubmatchIndex(expert[i:])
-		if match == nil {
-			break
-		}
-		i = match[1]
-		if match[6] < 0 {
-			switch s := expert[match[2]:match[3]]; s {
-			case "(", ")", "!":
-				builder.WriteString(s)
-			case "|", ",":
-				builder.WriteString("||")
-			case "&":
-				builder.WriteString("&&")
+	out := func() *vm.Program {
+		var builder strings.Builder
+		// we first transcode input filter into a compilable expr
+		for i := 0; i < len(expert); {
+			match := filterTokenizer.FindStringSubmatchIndex(expert[i:])
+			if match == nil {
+				log.Debugf("Failed to transcode Pokemon expert filter: %s", expert)
+				return nil
 			}
-			continue
-		}
-		var column string
-		switch s := expert[match[4]:match[5]]; s {
-		case "A":
-			column = "pokemon.Atk"
-		case "D":
-			column = "pokemon.Def"
-		case "S":
-			column = "pokemon.Sta"
-		case "L":
-			column = "pokemon.Level"
-		case "X":
-			column = "pokemon.Size"
-		case "CP":
-			column = "pokemon.Cp"
-		case "GL":
-			column = "pvp.Great"
-		case "UL":
-			column = "pvp.Ultra"
-		case "LC":
-			column = "pvp.Little"
-		}
-		builder.WriteByte('(')
-		builder.WriteString(column)
-		if match[8] < 0 {
-			builder.WriteString("==")
-			builder.WriteString(expert[match[6]:match[7]])
-		} else {
-			builder.WriteString(">=")
-			builder.WriteString(expert[match[6]:match[7]])
-			builder.WriteString("&&")
+			i = match[1]
+			if match[6] < 0 {
+				switch s := expert[match[2]:match[3]]; s {
+				case "(", ")", "!":
+					builder.WriteString(s)
+				case "|", ",":
+					builder.WriteString("||")
+				case "&":
+					builder.WriteString("&&")
+				}
+				continue
+			}
+			var column string
+			switch s := expert[match[4]:match[5]]; s {
+			case "A":
+				column = "pokemon.Atk"
+			case "D":
+				column = "pokemon.Def"
+			case "S":
+				column = "pokemon.Sta"
+			case "L":
+				column = "pokemon.Level"
+			case "X":
+				column = "pokemon.Size"
+			case "CP":
+				column = "pokemon.Cp"
+			case "GL":
+				column = "pvp.Great"
+			case "UL":
+				column = "pvp.Ultra"
+			case "LC":
+				column = "pvp.Little"
+			}
+			builder.WriteByte('(')
 			builder.WriteString(column)
-			builder.WriteString("<=")
-			builder.WriteString(expert[match[8]:match[9]])
+			if match[8] < 0 {
+				builder.WriteString("==")
+				builder.WriteString(expert[match[6]:match[7]])
+			} else {
+				builder.WriteString(">=")
+				builder.WriteString(expert[match[6]:match[7]])
+				builder.WriteString("&&")
+				builder.WriteString(column)
+				builder.WriteString("<=")
+				builder.WriteString(expert[match[8]:match[9]])
+			}
+			builder.WriteByte(')')
 		}
-		builder.WriteByte(')')
-	}
-	out, err := expr.Compile(builder.String(), expr.Env(filterEnv{}), expr.AsBool())
-	if err != nil {
-		log.Debugf("Malformed Pokemon expert filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
-	}
+		if builder.Len() == 0 {
+			builder.WriteString("true")
+		}
+		out, err := expr.Compile(builder.String(), expr.Env(filterEnv{}), expr.AsBool())
+		if err != nil {
+			log.Debugf("Malformed Pokemon expert filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
+		}
+		return out
+	}()
 	cache[expert] = out
 	return out
 }
