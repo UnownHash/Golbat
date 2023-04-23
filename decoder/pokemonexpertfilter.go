@@ -42,6 +42,8 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 					builder.WriteString("||")
 				case "&":
 					builder.WriteString("&&")
+				default:
+					panic("You forgot to update this switch after changing the tokenizer regexp!")
 				}
 				continue
 			}
