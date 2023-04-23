@@ -3,30 +3,40 @@ package decoder
 import (
 	"context"
 	"encoding/json"
-	"github.com/UnownHash/gohbem"
 	"github.com/antonmedv/expr"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
 	"golbat/config"
 	"golbat/geo"
-	"gopkg.in/guregu/null.v4"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/UnownHash/gohbem"
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
+	"gopkg.in/guregu/null.v4"
 )
 
-type ApiPokemonRetrieve struct {
+type ApiPokemonScan struct {
 	Min             geo.Location                `json:"min"`
 	Max             geo.Location                `json:"max"`
 	Center          geo.Location                `json:"center"`
 	Limit           int                         `json:"limit"`
-	SearchIds       []int16                     `json:"searchIds"`
 	GlobalFilter    *ApiPokemonFilter           `json:"global"`
 	SpecificFilters map[string]ApiPokemonFilter `json:"filters"`
 }
+
+type ApiPokemonSearch struct {
+	Min       geo.Location `json:"min"`
+	Max       geo.Location `json:"max"`
+	Center    geo.Location `json:"center"`
+	Limit     int          `json:"limit"`
+	SearchIds []int16      `json:"searchIds"`
+}
+
 type ApiPokemonFilter struct {
 	Iv         []int8                      `json:"iv"`
 	AtkIv      []int8                      `json:"atk_iv"`
@@ -55,6 +65,11 @@ type ApiPokemonAdditionalFilter struct {
 type PokemonLookupCacheItem struct {
 	PokemonLookup    *PokemonLookup
 	PokemonPvpLookup *PokemonPvpLookup
+}
+
+type PokemonWithDistance struct {
+	Pokemon  *Pokemon
+	Distance float64
 }
 
 type PokemonLookup struct {
@@ -220,7 +235,56 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
 }
 
-func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
+	// Validate filters
+
+	validateFilter := func(filter *ApiPokemonFilter) bool {
+
+		if filter.StaIv != nil && len(filter.StaIv) != 2 {
+			return false
+		}
+		if filter.AtkIv != nil && len(filter.AtkIv) != 2 {
+			return false
+		}
+		if filter.DefIv != nil && len(filter.DefIv) != 2 {
+			return false
+		}
+		if filter.Iv != nil && len(filter.Iv) != 2 {
+			return false
+		}
+		if filter.Level != nil && len(filter.Level) != 2 {
+			return false
+		}
+		if filter.Cp != nil && len(filter.Cp) != 2 {
+			return false
+		}
+
+		if filter.Pvp != nil {
+			if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
+				return false
+			}
+			if filter.Pvp.Great != nil && len(filter.Pvp.Great) != 2 {
+				return false
+			}
+			if filter.Pvp.Ultra != nil && len(filter.Pvp.Ultra) != 2 {
+				return false
+			}
+		}
+		return true
+	}
+
+	if retrieveParameters.GlobalFilter != nil && !validateFilter(retrieveParameters.GlobalFilter) {
+		log.Errorf("GetPokemonInArea - Invalid global filter")
+		return nil
+	}
+
+	for _, filter := range retrieveParameters.SpecificFilters {
+		if !validateFilter(&filter) {
+			log.Errorf("GetPokemonInArea - Invalid specific filter")
+			return nil
+		}
+	}
+
 	start := time.Now()
 
 	min := retrieveParameters.Min
@@ -228,6 +292,11 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
 	expertCache := make(expertFilterCache)
+
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxPokemon {
+		maxPokemon = retrieveParameters.Limit
+	}
 
 	pokemonExamined := 0
 	pokemonSkipped := 0
@@ -262,7 +331,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 				filterMatched = false
 			} else if filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) {
 				filterMatched = false
-			} else if filter.DefIv != nil && (pokemonLookup.Def < filter.AtkIv[0] || pokemonLookup.Def > filter.AtkIv[1]) {
+			} else if filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv[0] || pokemonLookup.Def > filter.DefIv[1]) {
 				filterMatched = false
 			} else if filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) {
 				filterMatched = false
@@ -303,57 +372,59 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	pokemonTreeMutex.RLock()
+	performScan := func() (returnKeys []uint64) {
+		pokemonTreeMutex.RLock()
+		defer pokemonTreeMutex.RUnlock()
 
-	var returnKeys []uint64
+		pokemonMatched := 0
+		pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
+			func(min, max [2]float64, pokemonId uint64) bool {
+				pokemonExamined++
 
-	maxPokemon := config.Config.Tuning.MaxPokemonResults
-	pokemonMatched := 0
-	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
-		func(min, max [2]float64, pokemonId uint64) bool {
-			pokemonExamined++
-
-			pokemonLookupItem, found := pokemonLookupCache[pokemonId]
-			if !found {
-				pokemonSkipped++
-				// Did not find cached result, something amiss?
-				return true
-			}
-
-			pokemonLookup := pokemonLookupItem.PokemonLookup
-			pvpLookup := pokemonLookupItem.PokemonPvpLookup
-
-			globalFilterMatched := false
-			if globalFilter != nil {
-				globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
-			}
-			specificFilterMatched := false
-
-			if !globalFilterMatched && specificPokemonFilters != nil {
-				var formString strings.Builder
-				formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
-				formString.WriteByte('-')
-				formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
-				filter, found := specificPokemonFilters[formString.String()]
-
-				if found {
-					specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
+				pokemonLookupItem, found := pokemonLookupCache[pokemonId]
+				if !found {
+					pokemonSkipped++
+					// Did not find cached result, something amiss?
+					return true
 				}
-			}
 
-			if globalFilterMatched || specificFilterMatched {
-				returnKeys = append(returnKeys, pokemonId)
-				pokemonMatched++
-				if pokemonMatched > maxPokemon {
-					log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
-					return false
+				pokemonLookup := pokemonLookupItem.PokemonLookup
+				pvpLookup := pokemonLookupItem.PokemonPvpLookup
+
+				globalFilterMatched := false
+				if globalFilter != nil {
+					globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
 				}
-			}
+				specificFilterMatched := false
 
-			return true // always continue
-		})
+				if !globalFilterMatched && specificPokemonFilters != nil {
+					var formString strings.Builder
+					formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
+					formString.WriteByte('-')
+					formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
+					filter, found := specificPokemonFilters[formString.String()]
 
-	pokemonTreeMutex.RUnlock()
+					if found {
+						specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
+					}
+				}
+
+				if globalFilterMatched || specificFilterMatched {
+					returnKeys = append(returnKeys, pokemonId)
+					pokemonMatched++
+					if pokemonMatched > maxPokemon {
+						log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
+						return false
+					}
+				}
+
+				return true // always continue
+			})
+
+		return
+	}
+
+	returnKeys := performScan()
 
 	lockedTime := time.Since(start)
 
@@ -403,12 +474,16 @@ func GetAvailablePokemon() []*Available {
 		form      int16
 	}
 
+	start := time.Now()
+
 	pokemonTreeMutex.RLock()
 	pkmnMap := make(map[pokemonFormKey]int)
 	for _, pokemon := range pokemonLookupCache {
 		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
 	}
 	pokemonTreeMutex.RUnlock()
+
+	lockedTime := time.Since(start)
 
 	var available []*Available
 	for key, count := range pkmnMap {
@@ -421,44 +496,63 @@ func GetAvailablePokemon() []*Available {
 		available = append(available, pkmn)
 	}
 
+	log.Infof("GetAvailablePokemon - total time %s (locked time %s)", time.Since(start), lockedTime)
+
 	return available
 }
 
-func SearchPokemon(request ApiPokemonRetrieve) []*Pokemon {
+// haversine distance
+func haversine(lat1, lon1, lat2, lon2 float64) float64 {
+	// convert to radians
+	lat1 = lat1 * math.Pi / 180.0
+	lon1 = lon1 * math.Pi / 180.0
+	lat2 = lat2 * math.Pi / 180.0
+	lon2 = lon2 * math.Pi / 180.0
+
+	// haversine formula
+	dlon := lon2 - lon1
+	dlat := lat2 - lat1
+	a := math.Pow(math.Sin(dlat/2), 2) + math.Cos(lat1)*math.Cos(lat2)*math.Pow(math.Sin(dlon/2), 2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return c * 6371
+}
+
+func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
-	pokemonMatched := 0
 
 	pokemonTreeMutex.Lock()
-	pokemonTree.Nearby(
-		func(min, max [2]float64, data uint64, item bool) float64 {
-			if item && pokemonMatched < request.Limit && request.SearchIds != nil {
-				pokemonLookupItem, inCache := pokemonLookupCache[data]
-				if inCache {
-					found := false
-					for _, id := range request.SearchIds {
-						if pokemonLookupItem.PokemonLookup.PokemonId == id {
-							found = true
-							break
-						}
-					}
-					if found {
-						if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
-							pokemon := pokemonCacheEntry.Value()
-							results = append(results, &pokemon)
-							pokemonMatched++
-						}
-					}
-				}
-			}
-			return 0
-		},
-		func(min, max [2]float64, data uint64, dist float64) bool {
-			return true
-		},
-	)
-	pokemonTreeMutex.Unlock()
+	defer pokemonTreeMutex.Unlock()
 
+	distancePokemon := make([]PokemonWithDistance, 0, len(pokemonLookupCache))
+
+	for cacheId, pokemon := range pokemonLookupCache {
+		found := false
+		for _, id := range request.SearchIds {
+			if pokemon.PokemonLookup.PokemonId == id {
+				found = true
+				break
+			}
+		}
+		if found {
+			if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(cacheId, 10)); pokemonCacheEntry != nil {
+				pokemon := pokemonCacheEntry.Value()
+				distancePokemon = append(distancePokemon, PokemonWithDistance{
+					Pokemon:  &pokemon,
+					Distance: haversine(request.Center.Latitude, request.Center.Longitude, pokemon.Lat, pokemon.Lon),
+				})
+			}
+		}
+	}
+
+	sort.SliceStable(distancePokemon, func(i, j int) bool {
+		return distancePokemon[i].Distance < distancePokemon[j].Distance
+	})
+	for _, pokemon := range distancePokemon {
+		if len(results) <= request.Limit {
+			results = append(results, pokemon.Pokemon)
+		}
+	}
 	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
 	return results
 }
