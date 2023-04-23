@@ -17,6 +17,7 @@ func TestExpertFilter(t *testing.T) {
 		{"0-100", &defaultEnv, true},
 		{"!0", &defaultEnv, false},
 		{"a0-1,!a0", &defaultEnv, true},
+		{"(a0|a15)&d15&s14-15,0&l1,gl1,ul1,lc1", &defaultEnv, false},
 	}
 	expertCache := make(expertFilterCache)
 	for _, test := range tests {
