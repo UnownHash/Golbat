@@ -239,7 +239,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		return true
 	}
 
-	if !validateFilter(retrieveParameters.GlobalFilter) {
+	if retrieveParameters.GlobalFilter != nil && !validateFilter(retrieveParameters.GlobalFilter) {
 		log.Errorf("GetPokemonInArea - Invalid global filter")
 		return nil
 	}
