@@ -227,8 +227,8 @@ var filterTokenizer = regexp.MustCompile(
 var emptyPvp = PokemonPvpLookup{Little: -1, Great: -1, Ultra: -1}
 
 type filterEnv struct {
-	pokemon *PokemonLookup
-	pvp     *PokemonPvpLookup
+	Pokemon *PokemonLookup
+	Pvp     *PokemonPvpLookup
 }
 type expertFilterCache map[string]*vm.Program
 
@@ -261,25 +261,25 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 			var column string
 			switch s := expert[match[4]:match[5]]; s {
 			case "":
-				column = "pokemon.Iv"
+				column = "Pokemon.Iv"
 			case "A":
-				column = "pokemon.Atk"
+				column = "Pokemon.Atk"
 			case "D":
-				column = "pokemon.Def"
+				column = "Pokemon.Def"
 			case "S":
-				column = "pokemon.Sta"
+				column = "Pokemon.Sta"
 			case "L":
-				column = "pokemon.Level"
+				column = "Pokemon.Level"
 			case "X":
-				column = "pokemon.Size"
+				column = "Pokemon.Size"
 			case "CP":
-				column = "pokemon.Cp"
+				column = "Pokemon.Cp"
 			case "GL":
-				column = "pvp.Great"
+				column = "Pvp.Great"
 			case "UL":
-				column = "pvp.Ultra"
+				column = "Pvp.Ultra"
 			case "LC":
-				column = "pvp.Little"
+				column = "Pvp.Little"
 			}
 			builder.WriteByte('(')
 			builder.WriteString(column)
@@ -327,9 +327,9 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 			if compiled == nil {
 				return false
 			}
-			env := filterEnv{pokemon: pokemonLookup, pvp: pvpLookup}
-			if env.pvp == nil {
-				env.pvp = &emptyPvp
+			env := filterEnv{Pokemon: pokemonLookup, Pvp: pvpLookup}
+			if env.Pvp == nil {
+				env.Pvp = &emptyPvp
 			}
 			output, err := expr.Run(compiled, env)
 			if err != nil {
