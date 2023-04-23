@@ -360,6 +360,10 @@ func PokemonScan(c *gin.Context) {
 	}
 
 	res := decoder.GetPokemonInArea(requestBody)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
 	c.JSON(http.StatusAccepted, res)
 }
 

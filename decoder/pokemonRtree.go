@@ -214,6 +214,43 @@ func removePokemonFromTree(pokemon *Pokemon) {
 }
 
 func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
+	// Validate filters
+
+	validateFilter := func(filter *ApiPokemonFilter) bool {
+
+		if filter.StaIv != nil && len(filter.StaIv) != 2 {
+			return false
+		}
+		if filter.AtkIv != nil && len(filter.AtkIv) != 2 {
+			return false
+		}
+		if filter.DefIv != nil && len(filter.DefIv) != 2 {
+			return false
+		}
+		if filter.Iv != nil && len(filter.Iv) != 2 {
+			return false
+		}
+		if filter.Level != nil && len(filter.Level) != 2 {
+			return false
+		}
+		if filter.Cp != nil && len(filter.Cp) != 2 {
+			return false
+		}
+		return true
+	}
+
+	if !validateFilter(retrieveParameters.GlobalFilter) {
+		log.Errorf("GetPokemonInArea - Invalid global filter")
+		return nil
+	}
+
+	for _, filter := range retrieveParameters.SpecificFilters {
+		if !validateFilter(&filter) {
+			log.Errorf("GetPokemonInArea - Invalid specific filter")
+			return nil
+		}
+	}
+
 	start := time.Now()
 
 	min := retrieveParameters.Min
