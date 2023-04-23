@@ -294,7 +294,7 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 	}
 	out, err := expr.Compile(builder.String(), expr.Env(filterEnv{}), expr.AsBool())
 	if err != nil {
-		log.Debugf("Malformed Pokemon filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
+		log.Debugf("Malformed Pokemon expert filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
 	}
 	cache[expert] = out
 	return out
@@ -324,7 +324,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 			}
 			output, err := expr.Run(compiled, env)
 			if err != nil {
-				log.Warnf("Failed to run expert filter on Pokemon: %v %s", env, *filter.Expert)
+				log.Warnf("Failed to run expert filter %s on Pokemon %v: %s", *filter.Expert, env, err)
 				return false
 			}
 			return output.(bool)
