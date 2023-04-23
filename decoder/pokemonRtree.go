@@ -3,18 +3,20 @@ package decoder
 import (
 	"context"
 	"encoding/json"
-	"github.com/UnownHash/gohbem"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
 	"golbat/config"
 	"golbat/geo"
-	"gopkg.in/guregu/null.v4"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/UnownHash/gohbem"
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
+	"gopkg.in/guregu/null.v4"
 )
 
 type ApiPokemonScan struct {
@@ -61,6 +63,11 @@ type ApiPokemonAdditionalFilter struct {
 type PokemonLookupCacheItem struct {
 	PokemonLookup    *PokemonLookup
 	PokemonPvpLookup *PokemonPvpLookup
+}
+
+type PokemonWithDistance struct {
+	Pokemon  *Pokemon
+	Distance float64
 }
 
 type PokemonLookup struct {
@@ -469,41 +476,58 @@ func GetAvailablePokemon() []*Available {
 	return available
 }
 
+// haversine distance
+func haversine(lat1, lon1, lat2, lon2 float64) float64 {
+	// convert to radians
+	lat1 = lat1 * math.Pi / 180.0
+	lon1 = lon1 * math.Pi / 180.0
+	lat2 = lat2 * math.Pi / 180.0
+	lon2 = lon2 * math.Pi / 180.0
+
+	// haversine formula
+	dlon := lon2 - lon1
+	dlat := lat2 - lat1
+	a := math.Pow(math.Sin(dlat/2), 2) + math.Cos(lat1)*math.Cos(lat2)*math.Pow(math.Sin(dlon/2), 2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	return c * 6371
+}
+
 func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
-	pokemonMatched := 0
 
 	pokemonTreeMutex.Lock()
-	pokemonTree.Nearby(
-		func(min, max [2]float64, data uint64, item bool) float64 {
-			if item && pokemonMatched < request.Limit && request.SearchIds != nil {
-				pokemonLookupItem, inCache := pokemonLookupCache[data]
-				if inCache {
-					found := false
-					for _, id := range request.SearchIds {
-						if pokemonLookupItem.PokemonLookup.PokemonId == id {
-							found = true
-							break
-						}
-					}
-					if found {
-						if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
-							pokemon := pokemonCacheEntry.Value()
-							results = append(results, &pokemon)
-							pokemonMatched++
-						}
-					}
-				}
-			}
-			return 0
-		},
-		func(min, max [2]float64, data uint64, dist float64) bool {
-			return true
-		},
-	)
-	pokemonTreeMutex.Unlock()
+	defer pokemonTreeMutex.Unlock()
 
+	distancePokemon := make([]PokemonWithDistance, 0, len(pokemonLookupCache))
+
+	for cacheId, pokemon := range pokemonLookupCache {
+		found := false
+		for _, id := range request.SearchIds {
+			if pokemon.PokemonLookup.PokemonId == id {
+				found = true
+				break
+			}
+		}
+		if found {
+			if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(cacheId, 10)); pokemonCacheEntry != nil {
+				pokemon := pokemonCacheEntry.Value()
+				distancePokemon = append(distancePokemon, PokemonWithDistance{
+					Pokemon:  &pokemon,
+					Distance: haversine(request.Center.Latitude, request.Center.Longitude, pokemon.Lat, pokemon.Lon),
+				})
+			}
+		}
+	}
+
+	sort.SliceStable(distancePokemon, func(i, j int) bool {
+		return distancePokemon[i].Distance < distancePokemon[j].Distance
+	})
+	for _, pokemon := range distancePokemon {
+		if len(results) <= request.Limit {
+			results = append(results, pokemon.Pokemon)
+		}
+	}
 	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
 	return results
 }
