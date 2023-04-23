@@ -223,7 +223,7 @@ func removePokemonFromTree(pokemon *Pokemon) {
 }
 
 var filterTokenizer = regexp.MustCompile(
-	`^\s*([()|&!,]|([ADSLXG]?|CP|LC|[GU]L)\s*([0-9]+(?:\.[0-9]*)?)(?:\s*-\s*([0-9]+(?:\.[0-9]*)?))?)`)
+	`^\s*([()|&!,]|([ADSLXG]?|CP|LC|[GU]L)\s*([0-9]+(?:\.[0-9]*)?)(?:\s*-\s*([0-9]+(?:\.[0-9]*)?))?)\s*`)
 var emptyPvp = PokemonPvpLookup{Little: -1, Great: -1, Ultra: -1}
 
 type filterEnv struct {
