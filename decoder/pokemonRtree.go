@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"github.com/UnownHash/gohbem"
 	"github.com/antonmedv/expr"
-	"github.com/antonmedv/expr/vm"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -13,7 +12,6 @@ import (
 	"golbat/geo"
 	"gopkg.in/guregu/null.v4"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -220,95 +218,6 @@ func removePokemonFromTree(pokemon *Pokemon) {
 		unexpected = " UNEXPECTED"
 	}
 	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
-}
-
-var filterTokenizer = regexp.MustCompile(
-	`^\s*([()|&!,]|([ADSLXG]?|CP|LC|[GU]L)\s*([0-9]+(?:\.[0-9]*)?)(?:\s*-\s*([0-9]+(?:\.[0-9]*)?))?)\s*`)
-var emptyPvp = PokemonPvpLookup{Little: -1, Great: -1, Ultra: -1}
-
-type filterEnv struct {
-	Pokemon *PokemonLookup
-	Pvp     *PokemonPvpLookup
-}
-type expertFilterCache map[string]*vm.Program
-
-func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
-	expert = strings.ToUpper(expert)
-	if out, ok := cache[expert]; ok {
-		return out
-	}
-	out := func() *vm.Program {
-		var builder strings.Builder
-		// we first transcode input filter into a compilable expr
-		for i := 0; i < len(expert); {
-			match := filterTokenizer.FindStringSubmatchIndex(expert[i:])
-			if match == nil {
-				log.Infof("Failed to transcode Pokemon expert filter @ %d: %s", i, expert)
-				return nil
-			}
-			i = match[1]
-			if match[6] < 0 {
-				switch s := expert[match[2]:match[3]]; s {
-				case "(", ")", "!":
-					builder.WriteString(s)
-				case "|", ",":
-					builder.WriteString("||")
-				case "&":
-					builder.WriteString("&&")
-				}
-				continue
-			}
-			var column string
-			switch s := expert[match[4]:match[5]]; s {
-			case "":
-				column = "Pokemon.Iv"
-			case "A":
-				column = "Pokemon.Atk"
-			case "D":
-				column = "Pokemon.Def"
-			case "S":
-				column = "Pokemon.Sta"
-			case "L":
-				column = "Pokemon.Level"
-			case "X":
-				column = "Pokemon.Size"
-			case "CP":
-				column = "Pokemon.Cp"
-			case "GL":
-				column = "Pvp.Great"
-			case "UL":
-				column = "Pvp.Ultra"
-			case "LC":
-				column = "Pvp.Little"
-			default:
-				panic("You forgot to update this switch after changing the tokenizer regexp!")
-			}
-			builder.WriteByte('(')
-			builder.WriteString(column)
-			if match[8] < 0 {
-				builder.WriteString("==")
-				builder.WriteString(expert[match[6]:match[7]])
-			} else {
-				builder.WriteString(">=")
-				builder.WriteString(expert[match[6]:match[7]])
-				builder.WriteString("&&")
-				builder.WriteString(column)
-				builder.WriteString("<=")
-				builder.WriteString(expert[match[8]:match[9]])
-			}
-			builder.WriteByte(')')
-		}
-		if builder.Len() == 0 {
-			builder.WriteString("true")
-		}
-		out, err := expr.Compile(builder.String(), expr.Env(filterEnv{}), expr.AsBool())
-		if err != nil {
-			log.Infof("Malformed Pokemon expert filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
-		}
-		return out
-	}()
-	cache[expert] = out
-	return out
 }
 
 func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
