@@ -24,7 +24,7 @@ func TestExpertFilter(t *testing.T) {
 		t.Run(fmt.Sprintf("ExpertFilter %s", test.filter), func(t *testing.T) {
 			compiled := compilePokemonFilter(expertCache, test.filter)
 			if compiled == nil {
-				t.Errorf("Failed to compile 0-100")
+				t.Errorf("Failed to compile filter")
 				return
 			}
 			if output, err := expr.Run(compiled, test.env); err != nil || output.(bool) != test.expected {
