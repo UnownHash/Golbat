@@ -314,7 +314,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	max := retrieveParameters.Max
 	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
-	var expertCache expertFilterCache
+	expertCache := make(expertFilterCache)
 
 	pokemonExamined := 0
 	pokemonSkipped := 0
