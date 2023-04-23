@@ -280,6 +280,8 @@ func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
 				column = "Pvp.Ultra"
 			case "LC":
 				column = "Pvp.Little"
+			default:
+				panic("You forgot to update this switch after changing the tokenizer regexp!")
 			}
 			builder.WriteByte('(')
 			builder.WriteString(column)
