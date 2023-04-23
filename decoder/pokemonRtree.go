@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/UnownHash/gohbem"
+	"github.com/antonmedv/expr"
+	"github.com/antonmedv/expr/vm"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -11,6 +13,7 @@ import (
 	"golbat/geo"
 	"gopkg.in/guregu/null.v4"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +41,7 @@ type ApiPokemonFilter struct {
 	Xxl        bool                        `json:"xxl"`
 	Additional *ApiPokemonAdditionalFilter `json:"additional"`
 	Pvp        *ApiPvpFilter               `json:"pvp"`
+	Expert     *string                     `json:"expert"`
 }
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
@@ -136,8 +140,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Level:              int8(valueOrMinus1(pokemon.Level)),
 		Gender:             int8(valueOrMinus1(pokemon.Gender)),
 		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
-		Iv:                 int8(math.Round(pokemon.Iv.Float64)),
 		Size:               int8(valueOrMinus1(pokemon.Size)),
+		Iv: func() int8 {
+			if pokemon.Iv.Valid {
+				return int8(math.Round(pokemon.Iv.Float64))
+			}
+			return -1
+		}(),
 	}
 
 	if changePvp {
@@ -213,6 +222,84 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
 }
 
+var filterTokenizer = regexp.MustCompile(
+	`^\s*([()|&!,]|([ADSLXG]?|CP|LC|[GU]L)\s*([0-9]+(?:\.[0-9]*)?)(?:\s*-\s*([0-9]+(?:\.[0-9]*)?))?)`)
+var emptyPvp = PokemonPvpLookup{Little: -1, Great: -1, Ultra: -1}
+
+type filterEnv struct {
+	pokemon *PokemonLookup
+	pvp     *PokemonPvpLookup
+}
+type expertFilterCache map[string]*vm.Program
+
+func compilePokemonFilter(cache expertFilterCache, expert string) *vm.Program {
+	expert = strings.ToUpper(expert)
+	if out, ok := cache[expert]; ok {
+		return out
+	}
+	var builder strings.Builder
+	// we first transcode input filter into a compilable expr
+	for i := 0; ; {
+		match := filterTokenizer.FindStringSubmatchIndex(expert[i:])
+		if match == nil {
+			break
+		}
+		i = match[1]
+		if match[6] < 0 {
+			switch s := expert[match[2]:match[3]]; s {
+			case "(", ")", "!":
+				builder.WriteString(s)
+			case "|", ",":
+				builder.WriteString("||")
+			case "&":
+				builder.WriteString("&&")
+			}
+			continue
+		}
+		var column string
+		switch s := expert[match[4]:match[5]]; s {
+		case "A":
+			column = "pokemon.Atk"
+		case "D":
+			column = "pokemon.Def"
+		case "S":
+			column = "pokemon.Sta"
+		case "L":
+			column = "pokemon.Level"
+		case "X":
+			column = "pokemon.Size"
+		case "CP":
+			column = "pokemon.Cp"
+		case "GL":
+			column = "pvp.Great"
+		case "UL":
+			column = "pvp.Ultra"
+		case "LC":
+			column = "pvp.Little"
+		}
+		builder.WriteByte('(')
+		builder.WriteString(column)
+		if match[8] < 0 {
+			builder.WriteString("==")
+			builder.WriteString(expert[match[6]:match[7]])
+		} else {
+			builder.WriteString(">=")
+			builder.WriteString(expert[match[6]:match[7]])
+			builder.WriteString("&&")
+			builder.WriteString(column)
+			builder.WriteString("<=")
+			builder.WriteString(expert[match[8]:match[9]])
+		}
+		builder.WriteByte(')')
+	}
+	out, err := expr.Compile(builder.String(), expr.Env(filterEnv{}), expr.AsBool())
+	if err != nil {
+		log.Debugf("Malformed Pokemon filter: %s; Failed to compile %s: %s", expert, builder.String(), err)
+	}
+	cache[expert] = out
+	return out
+}
+
 func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	start := time.Now()
 
@@ -220,11 +307,29 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 	max := retrieveParameters.Max
 	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
+	var expertCache expertFilterCache
 
 	pokemonExamined := 0
 	pokemonSkipped := 0
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
+		if filter.Expert != nil {
+			compiled := compilePokemonFilter(expertCache, *filter.Expert)
+			if compiled == nil {
+				return false
+			}
+			env := filterEnv{pokemon: pokemonLookup, pvp: pvpLookup}
+			if env.pvp == nil {
+				env.pvp = &emptyPvp
+			}
+			output, err := expr.Run(compiled, env)
+			if err != nil {
+				log.Warnf("Failed to run expert filter on Pokemon: %v %s", env, *filter.Expert)
+				return false
+			}
+			return output.(bool)
+		}
+
 		// start with filter true if we have any filter set (no filters no match)
 		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0 || filter.Xxl || filter.Xxs
 		pvpMatched := false // assume pvp match is true unless any filter matches
