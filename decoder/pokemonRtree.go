@@ -278,57 +278,60 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	pokemonTreeMutex.RLock()
+	performScan := func() (returnKeys []uint64) {
+		pokemonTreeMutex.RLock()
+		defer pokemonTreeMutex.RUnlock()
 
-	var returnKeys []uint64
+		maxPokemon := config.Config.Tuning.MaxPokemonResults
+		pokemonMatched := 0
+		pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
+			func(min, max [2]float64, pokemonId uint64) bool {
+				pokemonExamined++
 
-	maxPokemon := config.Config.Tuning.MaxPokemonResults
-	pokemonMatched := 0
-	pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
-		func(min, max [2]float64, pokemonId uint64) bool {
-			pokemonExamined++
-
-			pokemonLookupItem, found := pokemonLookupCache[pokemonId]
-			if !found {
-				pokemonSkipped++
-				// Did not find cached result, something amiss?
-				return true
-			}
-
-			pokemonLookup := pokemonLookupItem.PokemonLookup
-			pvpLookup := pokemonLookupItem.PokemonPvpLookup
-
-			globalFilterMatched := false
-			if globalFilter != nil {
-				globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
-			}
-			specificFilterMatched := false
-
-			if !globalFilterMatched && specificPokemonFilters != nil {
-				var formString strings.Builder
-				formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
-				formString.WriteByte('-')
-				formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
-				filter, found := specificPokemonFilters[formString.String()]
-
-				if found {
-					specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
+				pokemonLookupItem, found := pokemonLookupCache[pokemonId]
+				if !found {
+					pokemonSkipped++
+					// Did not find cached result, something amiss?
+					return true
 				}
-			}
 
-			if globalFilterMatched || specificFilterMatched {
-				returnKeys = append(returnKeys, pokemonId)
-				pokemonMatched++
-				if pokemonMatched > maxPokemon {
-					log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
-					return false
+				pokemonLookup := pokemonLookupItem.PokemonLookup
+				pvpLookup := pokemonLookupItem.PokemonPvpLookup
+
+				globalFilterMatched := false
+				if globalFilter != nil {
+					globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
 				}
-			}
+				specificFilterMatched := false
 
-			return true // always continue
-		})
+				if !globalFilterMatched && specificPokemonFilters != nil {
+					var formString strings.Builder
+					formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
+					formString.WriteByte('-')
+					formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
+					filter, found := specificPokemonFilters[formString.String()]
 
-	pokemonTreeMutex.RUnlock()
+					if found {
+						specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
+					}
+				}
+
+				if globalFilterMatched || specificFilterMatched {
+					returnKeys = append(returnKeys, pokemonId)
+					pokemonMatched++
+					if pokemonMatched > maxPokemon {
+						log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
+						return false
+					}
+				}
+
+				return true // always continue
+			})
+
+		return
+	}
+
+	returnKeys := performScan()
 
 	lockedTime := time.Since(start)
 
