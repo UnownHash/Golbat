@@ -430,12 +430,16 @@ func GetAvailablePokemon() []*Available {
 		form      int16
 	}
 
+	start := time.Now()
+
 	pokemonTreeMutex.RLock()
 	pkmnMap := make(map[pokemonFormKey]int)
 	for _, pokemon := range pokemonLookupCache {
 		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
 	}
 	pokemonTreeMutex.RUnlock()
+
+	lockedTime := time.Since(start)
 
 	var available []*Available
 	for key, count := range pkmnMap {
@@ -447,6 +451,8 @@ func GetAvailablePokemon() []*Available {
 		}
 		available = append(available, pkmn)
 	}
+
+	log.Infof("GetAvailablePokemon - total time %s (locked time %s)", time.Since(start), lockedTime)
 
 	return available
 }
