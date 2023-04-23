@@ -236,6 +236,18 @@ func GetPokemonInArea(retrieveParameters ApiPokemonRetrieve) []*Pokemon {
 		if filter.Cp != nil && len(filter.Cp) != 2 {
 			return false
 		}
+
+		if filter.Pvp != nil {
+			if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
+				return false
+			}
+			if filter.Pvp.Great != nil && len(filter.Pvp.Great) != 2 {
+				return false
+			}
+			if filter.Pvp.Ultra != nil && len(filter.Pvp.Ultra) != 2 {
+				return false
+			}
+		}
 		return true
 	}
 
