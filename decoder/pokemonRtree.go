@@ -101,7 +101,6 @@ func initPokemonRtree() {
 
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
 		r := v.Value()
-		log.Infof("PokemonRtree - Cache expiry - removing pokemon %s", r.Id)
 		removePokemonFromTree(&r)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
@@ -195,8 +194,6 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 func addPokemonToTree(pokemon *Pokemon) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	log.Infof("PokemonRtree - add %d, lat %f lon %f", pokemonId, pokemon.Lat, pokemon.Lon)
-
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
@@ -211,11 +208,9 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	pokemonTreeMutex.Unlock()
 	pokemonLookupCache.Delete(pokemonId)
 
-	unexpected := ""
 	if beforeLen != afterLen+1 {
-		unexpected = " UNEXPECTED"
+		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, pokemonLookupCache.Size())
 	}
-	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, pokemonLookupCache.Size())
 }
 
 func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
@@ -381,7 +376,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {
-						log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
+						log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
 						return false
 					}
 				}
