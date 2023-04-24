@@ -586,7 +586,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessWeather {
 		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
 	}
-	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+	if scanParameters.ProcessCells && (scanParameters.ProcessGyms || scanParameters.ProcessPokestops) {
 		if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
 			decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
 		}
