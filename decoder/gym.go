@@ -484,7 +484,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 			"raid_pokemon_cp = :raid_pokemon_cp, "+
 			"raid_is_exclusive = :raid_is_exclusive, "+
 			"cell_id = :cell_id, "+
-			"deleted = :deleted, "+
+			"deleted = false, "+
 			"total_cp = :total_cp, "+
 			"raid_pokemon_gender = :raid_pokemon_gender, "+
 			"sponsor_id = :sponsor_id, "+
