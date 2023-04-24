@@ -574,6 +574,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
 	}
 
+	if scanParameters.ProcessCells {
+		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
+	}
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
 	}
@@ -583,9 +586,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessWeather {
 		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
 	}
-	if scanParameters.ProcessCells {
-		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
-
+	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
 			decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
 		}
