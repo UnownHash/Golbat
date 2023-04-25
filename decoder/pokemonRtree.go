@@ -464,34 +464,58 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	results := make([]*Pokemon, 0, request.Limit)
 	pokemonMatched := 0
 
+	if request.SearchIds == nil {
+		return nil
+	}
+
 	pokemonTreeMutex.RLock()
 	pokemonTree2 := pokemonTree.Copy()
 	pokemonTreeMutex.RUnlock()
 
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	if request.Limit > 0 && request.Limit < maxPokemon {
+		maxPokemon = request.Limit
+	}
+	pokemonSkipped := 0
+
+	maxDistance := float64(1000) // This should come from the request?
+
 	pokemonTree2.Nearby(
-		func(min, max [2]float64, data uint64, item bool) float64 {
-			if item && pokemonMatched < request.Limit && request.SearchIds != nil {
-				pokemonLookupItem, inCache := pokemonLookupCache.Load(data)
-				if inCache {
-					found := false
-					for _, id := range request.SearchIds {
-						if pokemonLookupItem.PokemonLookup.PokemonId == id {
-							found = true
-							break
-						}
-					}
-					if found {
-						if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(data, 10)); pokemonCacheEntry != nil {
-							pokemon := pokemonCacheEntry.Value()
-							results = append(results, &pokemon)
-							pokemonMatched++
-						}
+		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
+		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
+			pokemonLookupItem, inCache := pokemonLookupCache.Load(pokemonId)
+			if !inCache {
+				pokemonSkipped++
+				// Did not find cached result, something amiss?
+				return true
+			}
+
+			if dist > maxDistance {
+				log.Infof("SearchPokemon - result would exceed maximum distance (%f), stopping scan", maxDistance)
+				return false
+			}
+
+			found := false
+			for _, id := range request.SearchIds {
+				if pokemonLookupItem.PokemonLookup.PokemonId == id {
+					found = true
+					break
+				}
+			}
+
+			if found {
+				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); pokemonCacheEntry != nil {
+					pokemon := pokemonCacheEntry.Value()
+					results = append(results, &pokemon)
+					pokemonMatched++
+
+					if pokemonMatched > maxPokemon {
+						log.Infof("SearchPokemon - result would exceed maximum size (%d), stopping scan", maxPokemon)
+						return false
 					}
 				}
 			}
-			return 0
-		},
-		func(min, max [2]float64, data uint64, dist float64) bool {
+
 			return true
 		},
 	)
