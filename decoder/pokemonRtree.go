@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v2"
@@ -57,6 +56,48 @@ type ApiPokemonAdditionalFilter struct {
 	IncludeEverything bool `json:"include_everything"`
 	IncludeHundos     bool `json:"include_hundoiv"`
 	IncludeNundos     bool `json:"include_zeroiv"`
+}
+
+type ApiPokemonResult struct {
+	Id                      string                           `json:"id"`
+	PokestopId              null.String                      `json:"pokestop_id"`
+	SpawnId                 null.Int                         `json:"spawn_id"`
+	Lat                     float64                          `json:"lat"`
+	Lon                     float64                          `json:"lon"`
+	Weight                  null.Float                       `json:"weight"`
+	Size                    null.Int                         `db:"size" json:"size"`
+	Height                  null.Float                       `db:"height" json:"height"`
+	ExpireTimestamp         null.Int                         `db:"expire_timestamp" json:"expire_timestamp"`
+	Updated                 null.Int                         `db:"updated" json:"updated"`
+	PokemonId               int16                            `db:"pokemon_id" json:"pokemon_id"`
+	Move1                   null.Int                         `db:"move_1" json:"move_1"`
+	Move2                   null.Int                         `db:"move_2" json:"move_2"`
+	Gender                  null.Int                         `db:"gender" json:"gender"`
+	Cp                      null.Int                         `db:"cp" json:"cp"`
+	AtkIv                   null.Int                         `db:"atk_iv" json:"atk_iv"`
+	DefIv                   null.Int                         `db:"def_iv" json:"def_iv"`
+	StaIv                   null.Int                         `db:"sta_iv" json:"sta_iv"`
+	Iv                      null.Float                       `db:"iv" json:"iv"`
+	Form                    null.Int                         `db:"form" json:"form"`
+	Level                   null.Int                         `db:"level" json:"level"`
+	EncounterWeather        uint8                            `db:"encounter_weather" json:"encounter_weather"`
+	Weather                 null.Int                         `db:"weather" json:"weather"`
+	Costume                 null.Int                         `db:"costume" json:"costume"`
+	FirstSeenTimestamp      int64                            `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	Changed                 int64                            `db:"changed" json:"changed"`
+	CellId                  null.Int                         `db:"cell_id" json:"cell_id"`
+	ExpireTimestampVerified bool                             `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
+	DisplayPokemonId        null.Int                         `db:"display_pokemon_id" json:"display_pokemon_id"`
+	IsDitto                 bool                             `db:"is_ditto" json:"is_ditto"`
+	SeenType                null.String                      `db:"seen_type" json:"seen_type"`
+	Shiny                   null.Bool                        `db:"shiny" json:"shiny"`
+	Username                null.String                      `json:"username"`
+	Capture1                null.Float                       `json:"capture_1"`
+	Capture2                null.Float                       `json:"capture_2"`
+	Capture3                null.Float                       `json:"capture_3"`
+	Pvp                     map[string][]gohbem.PokemonEntry `json:"pvp"`
+	IsEvent                 int8                             `json:"is_event"`
+	Distance                float64                          `json:"distance,omitempty"`
 }
 
 type PokemonLookupCacheItem struct {
@@ -213,7 +254,7 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	}
 }
 
-func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	// Validate filters
 
 	validateFilter := func(filter *ApiPokemonFilter) bool {
@@ -389,30 +430,67 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 
 	returnKeys := performScan()
 
-	results := make([]*Pokemon, 0, len(returnKeys))
+	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
 		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
-			if ohbem != nil {
-				// Add ohbem data
-				pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
-					int(pokemon.Form.ValueOrZero()),
-					int(pokemon.Costume.ValueOrZero()),
-					int(pokemon.Gender.ValueOrZero()),
-					int(pokemon.AtkIv.ValueOrZero()),
-					int(pokemon.DefIv.ValueOrZero()),
-					int(pokemon.StaIv.ValueOrZero()),
-					float64(pokemon.Level.ValueOrZero()))
-
-				if err == nil {
-					pvpBytes, _ := json.Marshal(pvp)
-					pokemon.Pvp = null.StringFrom(string(pvpBytes))
-				}
+			apiPokemon := ApiPokemonResult{
+				Id:              pokemon.Id,
+				PokestopId:      pokemon.PokestopId,
+				SpawnId:         pokemon.SpawnId,
+				Lat:             pokemon.Lat,
+				Lon:             pokemon.Lon,
+				Weight:          pokemon.Weight,
+				Size:            pokemon.Size,
+				Height:          pokemon.Height,
+				ExpireTimestamp: pokemon.ExpireTimestamp,
+				Updated:         pokemon.Updated,
+				PokemonId:       pokemon.PokemonId,
+				Move1:           pokemon.Move1,
+				Move2:           pokemon.Move2,
+				Gender:          pokemon.Gender,
+				Cp:              pokemon.Cp,
+				AtkIv:           pokemon.AtkIv,
+				DefIv:           pokemon.DefIv,
+				StaIv:           pokemon.StaIv,
+				//not IvInactive
+				Iv:                      pokemon.Iv,
+				Form:                    pokemon.Form,
+				Level:                   pokemon.Level,
+				EncounterWeather:        pokemon.EncounterWeather, //? perhaps do not include
+				Weather:                 pokemon.Weather,
+				Costume:                 pokemon.Costume,
+				FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
+				Changed:                 pokemon.Changed,
+				CellId:                  pokemon.CellId,
+				ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
+				DisplayPokemonId:        pokemon.DisplayPokemonId,
+				IsDitto:                 pokemon.IsDitto,
+				SeenType:                pokemon.SeenType,
+				Shiny:                   pokemon.Shiny,
+				Username:                pokemon.Username,
+				Pvp: func() map[string][]gohbem.PokemonEntry {
+					if ohbem != nil {
+						pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+							int(pokemon.Form.ValueOrZero()),
+							int(pokemon.Costume.ValueOrZero()),
+							int(pokemon.Gender.ValueOrZero()),
+							int(pokemon.AtkIv.ValueOrZero()),
+							int(pokemon.DefIv.ValueOrZero()),
+							int(pokemon.StaIv.ValueOrZero()),
+							float64(pokemon.Level.ValueOrZero()))
+						if err != nil {
+							return nil
+						}
+						return pvp
+					}
+					return nil
+				}(),
 			}
 
-			results = append(results, &pokemon)
+			results = append(results, &apiPokemon)
 		}
 	}
 
