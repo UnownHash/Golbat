@@ -1,17 +1,16 @@
 name: publish
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push-image:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -23,6 +22,17 @@ jobs:
         run: go get .
       - name: Test with the Go CLI
         run: go test -v ./...
+
+  build-and-push-image:
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
       - name: Log in to the Container registry
         uses: docker/login-action@v2
         with:
