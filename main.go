@@ -303,14 +303,14 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 	var proxyRequestProto pogo.ProxyRequestProto
 
 	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
-		log.Fatalln("Failed to parse %s", err)
+		log.Fatalln("Failed to parse", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	var proxyResponseProto pogo.ProxyResponseProto
 
 	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
-		log.Fatalln("Failed to parse %s", err)
+		log.Fatalln("Failed to parse", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -334,7 +334,7 @@ func decodeGetFriendDetails(payload []byte) string {
 	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
 
 	if getFriendDetailsError != nil {
-		log.Fatalln("Failed to parse %s", getFriendDetailsError)
+		log.Fatalln("Failed to parse", getFriendDetailsError)
 		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
 	}
 
@@ -367,7 +367,7 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	searchPlayerOutError := proto.Unmarshal(payload, &searchPlayerOutProto)
 
 	if searchPlayerOutError != nil {
-		log.Fatalln("Failed to parse %s", searchPlayerOutError)
+		log.Fatalln("Failed to parse", searchPlayerOutError)
 		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
 	}
 
