@@ -150,12 +150,8 @@ func main() {
 		log.Info("Extended timeout enabled")
 	}
 
-	if config.Config.LegacyInMemory {
-		StartInMemoryCleardown(inMemoryDb)
-	} else {
-		if config.Config.Cleanup.Pokemon == true {
-			StartDatabaseArchiver(db)
-		}
+	if config.Config.Cleanup.Pokemon == true && !config.Config.PokemonMemoryOnly {
+		StartDatabaseArchiver(db)
 	}
 
 	if config.Config.Cleanup.Incidents == true {

@@ -10,7 +10,6 @@ type configDefinition struct {
 	Logging           logging    `koanf:"logging"`
 	Sentry            sentry     `koanf:"sentry"`
 	Pyroscope         pyroscope  `koanf:"pyroscope"`
-	LegacyInMemory    bool       `koanf:"in_memory"`
 	PokemonMemoryOnly bool       `koanf:"pokemon_memory_only"`
 	TestFortInMemory  bool       `koanf:"test_fort_in_memory"`
 	Cleanup           cleanup    `koanf:"cleanup"`
