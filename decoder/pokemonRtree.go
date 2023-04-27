@@ -7,6 +7,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
+	"golang.org/x/exp/slices"
 	"golbat/config"
 	"golbat/geo"
 	"gopkg.in/guregu/null.v4"
@@ -555,7 +556,7 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 		maxPokemon = request.Limit
 	}
 	pokemonSkipped := 0
-
+	pokemonScanned := 0
 	maxDistance := float64(1000) // This should come from the request?
 
 	pokemonTree2.Nearby(
@@ -568,18 +569,13 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 				return true
 			}
 
+			pokemonScanned++
 			if dist > maxDistance {
 				log.Infof("SearchPokemon - result would exceed maximum distance (%f), stopping scan", maxDistance)
 				return false
 			}
 
-			found := false
-			for _, id := range request.SearchIds {
-				if pokemonLookupItem.PokemonLookup.PokemonId == id {
-					found = true
-					break
-				}
-			}
+			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
 
 			if found {
 				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); pokemonCacheEntry != nil {
@@ -598,6 +594,6 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 		},
 	)
 
-	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
+	log.Infof("SearchPokemon - scanned %d pokemon, total time %s, %d returned", pokemonScanned, time.Since(start), len(results))
 	return results
 }
