@@ -149,7 +149,7 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 }
 
 func StartStatsExpiry(db *sqlx.DB) {
-	ticker := time.NewTicker(3 * time.Hour)
+	ticker := time.NewTicker(3*time.Hour + 7*time.Minute)
 	go func() {
 		for {
 			<-ticker.C
@@ -189,7 +189,7 @@ func StartStatsExpiry(db *sqlx.DB) {
 }
 
 func StartIncidentExpiry(db *sqlx.DB) {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(time.Hour + 11*time.Minute)
 	go func() {
 		for {
 			<-ticker.C
@@ -213,7 +213,7 @@ func StartIncidentExpiry(db *sqlx.DB) {
 }
 
 func StartQuestExpiry(db *sqlx.DB) {
-	ticker := time.NewTicker(time.Hour)
+	ticker := time.NewTicker(time.Hour + 1*time.Minute)
 	go func() {
 		for {
 			<-ticker.C

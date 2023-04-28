@@ -18,6 +18,7 @@ require (
 	github.com/knadh/koanf/v2 v2.0.1
 	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/paulmach/orb v0.9.0
+	github.com/puzpuzpuz/xsync/v2 v2.4.0
 	github.com/pyroscope-io/client v0.7.0
 	github.com/ringsaturn/tzf v0.13.0
 	github.com/ringsaturn/tzf-rel v0.0.2023-b

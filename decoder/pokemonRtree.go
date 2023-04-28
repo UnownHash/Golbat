@@ -2,22 +2,21 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/UnownHash/gohbem"
 	"github.com/antonmedv/expr"
+	"github.com/jellydator/ttlcache/v3"
+	"github.com/puzpuzpuz/xsync/v2"
+	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
+	"golang.org/x/exp/slices"
 	"golbat/config"
 	"golbat/geo"
+	"gopkg.in/guregu/null.v4"
 	"math"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/UnownHash/gohbem"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
-	"gopkg.in/guregu/null.v4"
 )
 
 type ApiPokemonScan struct {
@@ -62,14 +61,51 @@ type ApiPokemonAdditionalFilter struct {
 	IncludeNundos     bool `json:"include_zeroiv"`
 }
 
+type ApiPokemonResult struct {
+	Id                      string                           `json:"id"`
+	PokestopId              null.String                      `json:"pokestop_id"`
+	SpawnId                 null.Int                         `json:"spawn_id"`
+	Lat                     float64                          `json:"lat"`
+	Lon                     float64                          `json:"lon"`
+	Weight                  null.Float                       `json:"weight"`
+	Size                    null.Int                         `db:"size" json:"size"`
+	Height                  null.Float                       `db:"height" json:"height"`
+	ExpireTimestamp         null.Int                         `db:"expire_timestamp" json:"expire_timestamp"`
+	Updated                 null.Int                         `db:"updated" json:"updated"`
+	PokemonId               int16                            `db:"pokemon_id" json:"pokemon_id"`
+	Move1                   null.Int                         `db:"move_1" json:"move_1"`
+	Move2                   null.Int                         `db:"move_2" json:"move_2"`
+	Gender                  null.Int                         `db:"gender" json:"gender"`
+	Cp                      null.Int                         `db:"cp" json:"cp"`
+	AtkIv                   null.Int                         `db:"atk_iv" json:"atk_iv"`
+	DefIv                   null.Int                         `db:"def_iv" json:"def_iv"`
+	StaIv                   null.Int                         `db:"sta_iv" json:"sta_iv"`
+	Iv                      null.Float                       `db:"iv" json:"iv"`
+	Form                    null.Int                         `db:"form" json:"form"`
+	Level                   null.Int                         `db:"level" json:"level"`
+	EncounterWeather        uint8                            `db:"encounter_weather" json:"encounter_weather"`
+	Weather                 null.Int                         `db:"weather" json:"weather"`
+	Costume                 null.Int                         `db:"costume" json:"costume"`
+	FirstSeenTimestamp      int64                            `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	Changed                 int64                            `db:"changed" json:"changed"`
+	CellId                  null.Int                         `db:"cell_id" json:"cell_id"`
+	ExpireTimestampVerified bool                             `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
+	DisplayPokemonId        null.Int                         `db:"display_pokemon_id" json:"display_pokemon_id"`
+	IsDitto                 bool                             `db:"is_ditto" json:"is_ditto"`
+	SeenType                null.String                      `db:"seen_type" json:"seen_type"`
+	Shiny                   null.Bool                        `db:"shiny" json:"shiny"`
+	Username                null.String                      `json:"username"`
+	Capture1                null.Float                       `json:"capture_1"`
+	Capture2                null.Float                       `json:"capture_2"`
+	Capture3                null.Float                       `json:"capture_3"`
+	Pvp                     map[string][]gohbem.PokemonEntry `json:"pvp"`
+	IsEvent                 int8                             `json:"is_event"`
+	Distance                float64                          `json:"distance,omitempty"`
+}
+
 type PokemonLookupCacheItem struct {
 	PokemonLookup    *PokemonLookup
 	PokemonPvpLookup *PokemonPvpLookup
-}
-
-type PokemonWithDistance struct {
-	Pokemon  *Pokemon
-	Distance float64
 }
 
 type PokemonLookup struct {
@@ -100,16 +136,15 @@ type Available struct {
 	Count     int   `json:"count"`
 }
 
-var pokemonLookupCache map[uint64]PokemonLookupCacheItem
+var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
 func initPokemonRtree() {
-	pokemonLookupCache = make(map[uint64]PokemonLookupCacheItem)
+	pokemonLookupCache = xsync.NewIntegerMapOf[uint64, PokemonLookupCacheItem]()
 
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
 		r := v.Value()
-		log.Infof("PokemonRtree - Cache expiry - removing pokemon %s", r.Id)
 		removePokemonFromTree(&r)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
@@ -119,9 +154,8 @@ func initPokemonRtree() {
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	pokemonTreeMutex.RLock()
-	_, inMap := pokemonLookupCache[pokemonId]
-	pokemonTreeMutex.RUnlock()
+	_, inMap := pokemonLookupCache.Load(pokemonId)
+
 	if !inMap {
 		addPokemonToTree(pokemon)
 		// this pokemon won't be available for pvp searches
@@ -139,9 +173,7 @@ func valueOrMinus1(n null.Int) int {
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	pokemonTreeMutex.RLock()
-	pokemonLookupCacheItem := pokemonLookupCache[pokemonId]
-	pokemonTreeMutex.RUnlock()
+	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
@@ -166,9 +198,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		pokemonLookupCacheItem.PokemonPvpLookup = calculatePokemonPvpLookup(pokemon, pvpResults)
 	}
 
-	pokemonTreeMutex.Lock()
-	pokemonLookupCache[pokemonId] = pokemonLookupCacheItem
-	pokemonTreeMutex.Unlock()
+	pokemonLookupCache.Store(pokemonId, pokemonLookupCacheItem)
 }
 
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
@@ -213,8 +243,6 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 func addPokemonToTree(pokemon *Pokemon) {
 	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
 
-	log.Infof("PokemonRtree - add %d, lat %f lon %f", pokemonId, pokemon.Lat, pokemon.Lon)
-
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
@@ -226,16 +254,15 @@ func removePokemonFromTree(pokemon *Pokemon) {
 	beforeLen := pokemonTree.Len()
 	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	afterLen := pokemonTree.Len()
-	delete(pokemonLookupCache, pokemonId)
 	pokemonTreeMutex.Unlock()
-	unexpected := ""
+	pokemonLookupCache.Delete(pokemonId)
+
 	if beforeLen != afterLen+1 {
-		unexpected = " UNEXPECTED"
+		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, pokemonLookupCache.Size())
 	}
-	log.Infof("PokemonRtree - removing %d, lat %f lon %f size %d->%d%s Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, unexpected, len(pokemonLookupCache))
 }
 
-func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
+func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	// Validate filters
 
 	validateFilter := func(filter *ApiPokemonFilter) bool {
@@ -372,16 +399,19 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	performScan := func() (returnKeys []uint64) {
-		pokemonTreeMutex.RLock()
-		defer pokemonTreeMutex.RUnlock()
+	pokemonTreeMutex.RLock()
+	pokemonTree2 := pokemonTree.Copy()
+	pokemonTreeMutex.RUnlock()
 
+	lockedTime := time.Since(start)
+
+	performScan := func() (returnKeys []uint64) {
 		pokemonMatched := 0
-		pokemonTree.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
+		pokemonTree2.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
 
-				pokemonLookupItem, found := pokemonLookupCache[pokemonId]
+				pokemonLookupItem, found := pokemonLookupCache.Load(pokemonId)
 				if !found {
 					pokemonSkipped++
 					// Did not find cached result, something amiss?
@@ -413,7 +443,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {
-						log.Infof("GetPokemonInArea - result would exceed maximum size, stopping scan")
+						log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
 						return false
 					}
 				}
@@ -426,32 +456,67 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*Pokemon {
 
 	returnKeys := performScan()
 
-	lockedTime := time.Since(start)
-
-	results := make([]*Pokemon, 0, len(returnKeys))
+	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
 		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
-			if ohbem != nil {
-				// Add ohbem data
-				pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
-					int(pokemon.Form.ValueOrZero()),
-					int(pokemon.Costume.ValueOrZero()),
-					int(pokemon.Gender.ValueOrZero()),
-					int(pokemon.AtkIv.ValueOrZero()),
-					int(pokemon.DefIv.ValueOrZero()),
-					int(pokemon.StaIv.ValueOrZero()),
-					float64(pokemon.Level.ValueOrZero()))
-
-				if err == nil {
-					pvpBytes, _ := json.Marshal(pvp)
-					pokemon.Pvp = null.StringFrom(string(pvpBytes))
-				}
+			apiPokemon := ApiPokemonResult{
+				Id:              pokemon.Id,
+				PokestopId:      pokemon.PokestopId,
+				SpawnId:         pokemon.SpawnId,
+				Lat:             pokemon.Lat,
+				Lon:             pokemon.Lon,
+				Weight:          pokemon.Weight,
+				Size:            pokemon.Size,
+				Height:          pokemon.Height,
+				ExpireTimestamp: pokemon.ExpireTimestamp,
+				Updated:         pokemon.Updated,
+				PokemonId:       pokemon.PokemonId,
+				Move1:           pokemon.Move1,
+				Move2:           pokemon.Move2,
+				Gender:          pokemon.Gender,
+				Cp:              pokemon.Cp,
+				AtkIv:           pokemon.AtkIv,
+				DefIv:           pokemon.DefIv,
+				StaIv:           pokemon.StaIv,
+				//not IvInactive
+				Iv:                      pokemon.Iv,
+				Form:                    pokemon.Form,
+				Level:                   pokemon.Level,
+				EncounterWeather:        pokemon.EncounterWeather, //? perhaps do not include
+				Weather:                 pokemon.Weather,
+				Costume:                 pokemon.Costume,
+				FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
+				Changed:                 pokemon.Changed,
+				CellId:                  pokemon.CellId,
+				ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
+				DisplayPokemonId:        pokemon.DisplayPokemonId,
+				IsDitto:                 pokemon.IsDitto,
+				SeenType:                pokemon.SeenType,
+				Shiny:                   pokemon.Shiny,
+				Username:                pokemon.Username,
+				Pvp: func() map[string][]gohbem.PokemonEntry {
+					if ohbem != nil {
+						pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+							int(pokemon.Form.ValueOrZero()),
+							int(pokemon.Costume.ValueOrZero()),
+							int(pokemon.Gender.ValueOrZero()),
+							int(pokemon.AtkIv.ValueOrZero()),
+							int(pokemon.DefIv.ValueOrZero()),
+							int(pokemon.StaIv.ValueOrZero()),
+							float64(pokemon.Level.ValueOrZero()))
+						if err != nil {
+							return nil
+						}
+						return pvp
+					}
+					return nil
+				}(),
 			}
 
-			results = append(results, &pokemon)
+			results = append(results, &apiPokemon)
 		}
 	}
 
@@ -476,14 +541,11 @@ func GetAvailablePokemon() []*Available {
 
 	start := time.Now()
 
-	pokemonTreeMutex.RLock()
 	pkmnMap := make(map[pokemonFormKey]int)
-	for _, pokemon := range pokemonLookupCache {
+	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
 		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
-	}
-	pokemonTreeMutex.RUnlock()
-
-	lockedTime := time.Since(start)
+		return true
+	})
 
 	var available []*Available
 	for key, count := range pkmnMap {
@@ -496,63 +558,67 @@ func GetAvailablePokemon() []*Available {
 		available = append(available, pkmn)
 	}
 
-	log.Infof("GetAvailablePokemon - total time %s (locked time %s)", time.Since(start), lockedTime)
+	log.Infof("GetAvailablePokemon - total time %s (locked time --)", time.Since(start))
 
 	return available
-}
-
-// haversine distance
-func haversine(lat1, lon1, lat2, lon2 float64) float64 {
-	// convert to radians
-	lat1 = lat1 * math.Pi / 180.0
-	lon1 = lon1 * math.Pi / 180.0
-	lat2 = lat2 * math.Pi / 180.0
-	lon2 = lon2 * math.Pi / 180.0
-
-	// haversine formula
-	dlon := lon2 - lon1
-	dlat := lat2 - lat1
-	a := math.Pow(math.Sin(dlat/2), 2) + math.Cos(lat1)*math.Cos(lat2)*math.Pow(math.Sin(dlon/2), 2)
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-	return c * 6371
 }
 
 func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
+	pokemonMatched := 0
 
-	pokemonTreeMutex.Lock()
-	defer pokemonTreeMutex.Unlock()
-
-	distancePokemon := make([]PokemonWithDistance, 0, len(pokemonLookupCache))
-
-	for cacheId, pokemon := range pokemonLookupCache {
-		found := false
-		for _, id := range request.SearchIds {
-			if pokemon.PokemonLookup.PokemonId == id {
-				found = true
-				break
-			}
-		}
-		if found {
-			if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(cacheId, 10)); pokemonCacheEntry != nil {
-				pokemon := pokemonCacheEntry.Value()
-				distancePokemon = append(distancePokemon, PokemonWithDistance{
-					Pokemon:  &pokemon,
-					Distance: haversine(request.Center.Latitude, request.Center.Longitude, pokemon.Lat, pokemon.Lon),
-				})
-			}
-		}
+	if request.SearchIds == nil {
+		return nil
 	}
 
-	sort.SliceStable(distancePokemon, func(i, j int) bool {
-		return distancePokemon[i].Distance < distancePokemon[j].Distance
-	})
-	for _, pokemon := range distancePokemon {
-		if len(results) <= request.Limit {
-			results = append(results, pokemon.Pokemon)
-		}
+	pokemonTreeMutex.RLock()
+	pokemonTree2 := pokemonTree.Copy()
+	pokemonTreeMutex.RUnlock()
+
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	if request.Limit > 0 && request.Limit < maxPokemon {
+		maxPokemon = request.Limit
 	}
-	log.Infof("SearchPokemon - total time %s, %d returned", time.Since(start), len(results))
+	pokemonSkipped := 0
+	pokemonScanned := 0
+	maxDistance := float64(1000) // This should come from the request?
+
+	pokemonTree2.Nearby(
+		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
+		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
+			pokemonLookupItem, inCache := pokemonLookupCache.Load(pokemonId)
+			if !inCache {
+				pokemonSkipped++
+				// Did not find cached result, something amiss?
+				return true
+			}
+
+			pokemonScanned++
+			if dist > maxDistance {
+				log.Infof("SearchPokemon - result would exceed maximum distance (%f), stopping scan", maxDistance)
+				return false
+			}
+
+			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
+
+			if found {
+				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); pokemonCacheEntry != nil {
+					pokemon := pokemonCacheEntry.Value()
+					results = append(results, &pokemon)
+					pokemonMatched++
+
+					if pokemonMatched > maxPokemon {
+						log.Infof("SearchPokemon - result would exceed maximum size (%d), stopping scan", maxPokemon)
+						return false
+					}
+				}
+			}
+
+			return true
+		},
+	)
+
+	log.Infof("SearchPokemon - scanned %d pokemon, total time %s, %d returned", pokemonScanned, time.Since(start), len(results))
 	return results
 }
