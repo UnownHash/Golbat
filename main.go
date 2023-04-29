@@ -515,6 +515,9 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
+	if decodeOpenInvasionRequest.IncidentLookup == nil {
+		return "Invalid OpenInvasionCombatSessionProto received"
+	}
 
 	decodedOpenInvasionResponse := &pogo.OpenInvasionCombatSessionOutProto{}
 	if err := proto.Unmarshal(payload, decodedOpenInvasionResponse); err != nil {
