@@ -194,6 +194,7 @@ func main() {
 	r.POST("/api/query-pokemon", QueryPokemon)
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
+	r.GET("/health", GetHealth)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
