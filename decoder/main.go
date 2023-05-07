@@ -411,6 +411,9 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 				} else {
 					// if there are all gyms cleared we are done with gyms
 					gymsDone = true
+					for _, gymId := range gymIds {
+						gymCache.Delete(gymId)
+					}
 					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, gymIds)
 					CreateFortWebhooks(ctx, dbDetails, gymIds, GYM, REMOVAL)
 				}
@@ -432,6 +435,9 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 				} else {
 					// if there are all gyms cleared we are done with gyms
 					stopsDone = true
+					for _, stopId := range stopIds {
+						pokestopCache.Delete(stopId)
+					}
 					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, stopIds)
 					CreateFortWebhooks(ctx, dbDetails, stopIds, POKESTOP, REMOVAL)
 				}
