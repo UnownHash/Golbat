@@ -111,7 +111,7 @@ func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			"quest_rewards, quest_template, quest_title,"+
 			"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
 			"alternative_quest_conditions, alternative_quest_rewards,"+
-			"alternative_quest_template, alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id,"+
+			"alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,"+
 			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
