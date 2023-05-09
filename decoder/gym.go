@@ -41,7 +41,7 @@ type Gym struct {
 	RaidPokemonCp         null.Int    `db:"raid_pokemon_cp"`
 	RaidIsExclusive       null.Int    `db:"raid_is_exclusive"`
 	CellId                null.Int    `db:"cell_id"`
-	Deleted               int8        `db:"deleted"`
+	Deleted               bool        `db:"deleted"`
 	TotalCp               null.Int    `db:"total_cp"`
 	FirstSeenTimestamp    int64       `db:"first_seen_timestamp"`
 	RaidPokemonGender     null.Int    `db:"raid_pokemon_gender"`
@@ -225,6 +225,11 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 
 	gym.CellId = null.IntFrom(int64(cellId))
 
+	if gym.Deleted {
+		gym.Deleted = false
+		log.Warnf("Cleared Gym with id '%s' is found again in GMO, therefore un-deleted", gym.Id)
+	}
+
 	return gym
 }
 
@@ -265,6 +270,10 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	}
 	if !skipName {
 		gym.Name = null.StringFrom(fortData.Name)
+	}
+
+	if gym.Deleted {
+		log.Debugf("Cleared Gym with id '%s' is found again in GMF, therefore kept deleted", gym.Id)
 	}
 
 	return gym
