@@ -518,7 +518,7 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 	}
 	stop.Name = null.StringFrom(fortData.Name)
 	if stop.Deleted {
-		log.Warnf("Cleared Stop with id '%s' is found again in GMF, therefore kept deleted", stop.Id)
+		log.Debugf("Cleared Stop with id '%s' is found again in GMF, therefore kept deleted", stop.Id)
 	}
 	return stop
 }

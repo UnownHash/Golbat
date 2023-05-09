@@ -273,7 +273,7 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	}
 
 	if gym.Deleted {
-		log.Warnf("Cleared Gym with id '%s' is found again in GMF, therefore kept deleted", gym.Id)
+		log.Debugf("Cleared Gym with id '%s' is found again in GMF, therefore kept deleted", gym.Id)
 	}
 
 	return gym
