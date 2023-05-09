@@ -186,6 +186,7 @@ func main() {
 	r.POST("/api/query-pokemon", QueryPokemon)
 	r.POST("/api/reload-nests", ReloadNests)
 	r.GET("/api/reload-nests", ReloadNests)
+	r.GET("/health", GetHealth)
 
 	r.GET("/api/pokemon/id/:pokemon_id", PokemonOne)
 	r.GET("/api/pokemon/available", PokemonAvailable)
@@ -588,9 +589,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
-
-		if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-			decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+		if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+			if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
+				decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
+			}
 		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))

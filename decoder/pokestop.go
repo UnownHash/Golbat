@@ -112,7 +112,7 @@ func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			"quest_rewards, quest_template, quest_title,"+
 			"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
 			"alternative_quest_conditions, alternative_quest_rewards,"+
-			"alternative_quest_template, alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id,"+
+			"alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,"+
 			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
@@ -211,6 +211,10 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	}
 	stop.CellId = null.IntFrom(int64(cellId))
 
+	if stop.Deleted {
+		stop.Deleted = false
+		log.Warnf("Cleared Stop with id '%s' is found again in GMO, therefore un-deleted", stop.Id)
+	}
 	return stop
 }
 
@@ -517,7 +521,9 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 		stop.Url = null.StringFrom(fortData.Image[0].Url)
 	}
 	stop.Name = null.StringFrom(fortData.Name)
-
+	if stop.Deleted {
+		log.Debugf("Cleared Stop with id '%s' is found again in GMF, therefore kept deleted", stop.Id)
+	}
 	return stop
 }
 
@@ -680,7 +686,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"alternative_quest_title = :alternative_quest_title,"+
 				"cell_id = :cell_id,"+
 				"lure_id = :lure_id,"+
-				"deleted = false,"+
+				"deleted = :deleted,"+
 				"sponsor_id = :sponsor_id,"+
 				"partner_id = :partner_id,"+
 				"ar_scan_eligible = :ar_scan_eligible,"+
