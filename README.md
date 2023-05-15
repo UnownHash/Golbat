@@ -56,12 +56,12 @@ pokemon = false
 
 Here the main area would not process nearby pokemon. Messages arriving in 'scout' mode would have everything processed; and the default would not process any pokemon (so outside main area not delivered by the scout service)
 
-pokemon - any pokemon processing (disables spawnpoints also)
-wild_pokemon - process wild pokemon from GMO
-nearby_pokemon - process nearby pokemon from GMO
-weather - process weather in GMO
-gyms - process gyms in GMO
-pokestops - process pokestops in GMO
+pokemon - any pokemon processing (disables spawnpoints also)  
+wild_pokemon - process wild pokemon from GMO  
+nearby_pokemon - process nearby pokemon from GMO  
+weather - process weather in GMO  
+gyms - process gyms in GMO  
+pokestops - process pokestops in GMO  
 cells - process cell updates (disabling this also disables automatic fort clearance)
 
 # Optimising maria db
