@@ -43,8 +43,6 @@ type ApiPokemonFilter struct {
 	Level      []int8                      `json:"level"`
 	Cp         []int16                     `json:"cp"`
 	Gender     int8                        `json:"gender"`
-	Xxs        bool                        `json:"xxs"`
-	Xxl        bool                        `json:"xxl"`
 	Additional *ApiPokemonAdditionalFilter `json:"additional"`
 	Pvp        *ApiPvpFilter               `json:"pvp"`
 }
@@ -57,6 +55,8 @@ type ApiPokemonAdditionalFilter struct {
 	IncludeEverything bool `json:"include_everything"`
 	IncludeHundos     bool `json:"include_hundoiv"`
 	IncludeNundos     bool `json:"include_zeroiv"`
+	IncludeXxs        bool `json:"include_xxs"`
+	IncludeXxl        bool `json:"include_xxl"`
 }
 
 type ApiPokemonResult struct {
@@ -322,7 +322,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
 		// start with filter true if we have any filter set (no filters no match)
-		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0 || filter.Xxl || filter.Xxs
+		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0
 		pvpMatched := false // assume pvp match is true unless any filter matches
 		additionalMatch := false
 
@@ -341,10 +341,6 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				filterMatched = false
 			} else if filter.Gender != 0 && pokemonLookup.Gender != filter.Gender {
 				filterMatched = false
-			} else if filter.Xxl && pokemonLookup.Size != 5 {
-				filterMatched = false
-			} else if filter.Xxs && pokemonLookup.Size != 1 {
-				filterMatched = false
 			}
 		}
 
@@ -354,6 +350,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 			} else if filter.Additional.IncludeNundos && pokemonLookup.Sta == 0 && pokemonLookup.Atk == 0 && pokemonLookup.Def == 0 {
 				additionalMatch = true
 			} else if filter.Additional.IncludeHundos && pokemonLookup.Sta == 15 && pokemonLookup.Atk == 15 && pokemonLookup.Def == 15 {
+				additionalMatch = true
+			} else if filter.Additional.IncludeXxs && pokemonLookup.Size == 1 {
+				additionalMatch = true
+			} else if filter.Additional.IncludeXxl && pokemonLookup.Size == 5 {
 				additionalMatch = true
 			}
 		}
