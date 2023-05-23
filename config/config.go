@@ -18,6 +18,7 @@ type configDefinition struct {
 	Koji      koji       `koanf:"koji"`
 	Tuning    tuning     `koanf:"tuning"`
 	ScanRules []scanRule `koanf:"scan_rules"`
+	Ar_Quests bool       `koanf:"ar_quests"`
 }
 
 type koji struct {

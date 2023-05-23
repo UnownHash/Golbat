@@ -216,6 +216,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	processed := false
 	start := time.Now()
 	result := ""
+        ar_quests := config.Config.Ar_Quests
 
 	switch pogo.Method(method) {
 	case pogo.Method_METHOD_START_INCIDENT:
@@ -243,7 +244,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeDiskEncounter(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
-		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
+		result = decodeQuest(ctx, protoData.Data, &ar_quests)
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		break
@@ -277,7 +278,7 @@ func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
 }
 
 func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
-	if haveAr == nil {
+	if !*haveAr {
 		log.Infoln("Cannot determine AR quest - ignoring")
 		// We should either assume AR quest, or trace inventory like RDM probably
 		return "No AR quest info"
