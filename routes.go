@@ -270,16 +270,22 @@ type GolbatClearQuest struct {
 	Fence []ApiLocation `json:"fence"`
 }
 
-func ClearQuests(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ClearQuests: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
+func AuthRequired() gin.HandlerFunc {
+	return func(context *gin.Context) {
+		if config.Config.ApiSecret != "" {
+			authHeader := context.Request.Header.Get("X-Golbat-Secret")
+			if authHeader != config.Config.ApiSecret {
+				log.Errorf("Incorrect authorisation received (%s)", authHeader)
+				context.String(http.StatusUnauthorized, "Unauthorised")
+				context.Abort()
+				return
+			}
 		}
+		context.Next()
 	}
+}
 
+func ClearQuests(c *gin.Context) {
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
 		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
@@ -317,15 +323,6 @@ func ClearQuests(c *gin.Context) {
 }
 
 func ReloadGeojson(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ReloadGeojson: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	decoder.ReloadGeofenceAndClearStats()
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
@@ -334,15 +331,6 @@ func ReloadGeojson(c *gin.Context) {
 }
 
 func ReloadNests(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ReloadGeojson: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	decoder.ReloadNestsAndClearStats(dbDetails)
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
@@ -418,15 +406,6 @@ func PokemonScanMsgPack(c *gin.Context) {
 }
 
 func QueryPokemon(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("Query: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	data, err := c.GetRawData()
 	if err != nil {
 		return
@@ -556,15 +535,6 @@ func toJson(rows *sql.Rows) ([]byte, error) {
 }
 
 func GetQuestStatus(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("GetQuestStatus: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
 		log.Warnf("POST /api/quest-status/ Error during post area %v", err)
