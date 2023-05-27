@@ -8,7 +8,6 @@ import (
 	"golbat/decoder"
 	"golbat/external"
 	"golbat/webhooks"
-	"io/ioutil"
 	"time"
 	_ "time/tzdata"
 
@@ -24,7 +23,6 @@ import (
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sqlx.DB
@@ -100,50 +98,43 @@ func main() {
 
 	decoder.SetKojiUrl(config.Config.Koji.Url, config.Config.Koji.BearerToken)
 
-	if config.Config.InMemory {
-		//sql.Register("sqlite3_settings",
-		//	&sqlite3.SQLiteDriver{
-		//		ConnectHook: func(conn *sqlite3.SQLiteConn) error {
-		//			conn.SetLimit(sqlite3.SQLITE_LIMIT_EXPR_DEPTH, 50000)
-		//			return nil
-		//		},
-		//	})
-		// Initialise in memory db
-		inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
-		if err != nil {
-			log.Fatal(err)
-			return
-		}
-
-		inMemoryDb.SetMaxOpenConns(1)
-
-		pingErr = inMemoryDb.Ping()
-		if pingErr != nil {
-			log.Fatal(pingErr)
-			return
-		}
-
-		// Create database
-		content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
-
-		if fileErr != nil {
-			log.Fatal(err)
-		}
-
-		inMemoryDb.MustExec(string(content))
-
-		dbDetails = db2.DbDetails{
-			PokemonDb:       inMemoryDb,
-			UsePokemonCache: false,
-			GeneralDb:       db,
-		}
-	} else {
-		dbDetails = db2.DbDetails{
-			PokemonDb:       db,
-			UsePokemonCache: true,
-			GeneralDb:       db,
-		}
+	//if config.Config.LegacyInMemory {
+	//	// Initialise in memory db
+	//	inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
+	//	if err != nil {
+	//		log.Fatal(err)
+	//		return
+	//	}
+	//
+	//	inMemoryDb.SetMaxOpenConns(1)
+	//
+	//	pingErr = inMemoryDb.Ping()
+	//	if pingErr != nil {
+	//		log.Fatal(pingErr)
+	//		return
+	//	}
+	//
+	//	// Create database
+	//	content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
+	//
+	//	if fileErr != nil {
+	//		log.Fatal(err)
+	//	}
+	//
+	//	inMemoryDb.MustExec(string(content))
+	//
+	//	dbDetails = db2.DbDetails{
+	//		PokemonDb:       inMemoryDb,
+	//		UsePokemonCache: false,
+	//		GeneralDb:       db,
+	//	}
+	//} else {
+	dbDetails = db2.DbDetails{
+		PokemonDb:       db,
+		UsePokemonCache: true,
+		GeneralDb:       db,
 	}
+	//}
 
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
@@ -159,12 +150,8 @@ func main() {
 		log.Info("Extended timeout enabled")
 	}
 
-	if config.Config.InMemory {
-		StartInMemoryCleardown(inMemoryDb)
-	} else {
-		if config.Config.Cleanup.Pokemon == true {
-			StartDatabaseArchiver(db)
-		}
+	if config.Config.Cleanup.Pokemon == true && !config.Config.PokemonMemoryOnly {
+		StartDatabaseArchiver(db)
 	}
 
 	if config.Config.Cleanup.Incidents == true {
@@ -179,6 +166,11 @@ func main() {
 		StartStatsExpiry(db)
 	}
 
+	if config.Config.TestFortInMemory {
+		go decoder.LoadAllPokestops(dbDetails)
+		go decoder.LoadAllGyms(dbDetails)
+	}
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	if config.Config.Logging.Debug {
@@ -187,14 +179,22 @@ func main() {
 		r.Use(gin.Recovery())
 	}
 	r.POST("/raw", Raw)
-	r.POST("/api/clear-quests", ClearQuests)
-	r.POST("/api/quest-status", GetQuestStatus)
-	r.POST("/api/reload-geojson", ReloadGeojson)
-	r.GET("/api/reload-geojson", ReloadGeojson)
-	r.POST("/api/query-pokemon", QueryPokemon)
-	r.POST("/api/reload-nests", ReloadNests)
-	r.GET("/api/reload-nests", ReloadNests)
 	r.GET("/health", GetHealth)
+
+	apiGroup := r.Group("/api", AuthRequired())
+	apiGroup.POST("/clear-quests", ClearQuests)
+	apiGroup.POST("/quest-status", GetQuestStatus)
+	apiGroup.POST("/reload-geojson", ReloadGeojson)
+	apiGroup.GET("/reload-geojson", ReloadGeojson)
+	apiGroup.POST("/query-pokemon", QueryPokemon)
+	apiGroup.POST("/reload-nests", ReloadNests)
+	apiGroup.GET("/reload-nests", ReloadNests)
+
+	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
+	apiGroup.GET("/pokemon/available", PokemonAvailable)
+	apiGroup.POST("/pokemon/scan", PokemonScan)
+	apiGroup.POST("/pokemon/search", PokemonSearch)
+	apiGroup.POST("/pokemon/scan-msgpack", PokemonScanMsgPack)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
@@ -222,8 +222,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeStartIncident(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_INVASION_OPEN_COMBAT_SESSION:
-		result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
-		processed = true
+		if protoData.Request != nil {
+			result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
+			processed = true
+		}
 		break
 	case pogo.Method_METHOD_FORT_DETAILS:
 		result = decodeFortDetails(ctx, protoData.Data)
@@ -284,7 +286,7 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	}
 	decodedQuest := &pogo.FortSearchOutProto{}
 	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return "Parse failure"
 	}
 
@@ -302,14 +304,14 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 	var proxyRequestProto pogo.ProxyRequestProto
 
 	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
-		log.Fatalln("Failed to parse %s", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	var proxyResponseProto pogo.ProxyResponseProto
 
 	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
-		log.Fatalln("Failed to parse %s", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -333,7 +335,7 @@ func decodeGetFriendDetails(payload []byte) string {
 	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
 
 	if getFriendDetailsError != nil {
-		log.Fatalln("Failed to parse %s", getFriendDetailsError)
+		log.Errorf("Failed to parse %s", getFriendDetailsError)
 		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
 	}
 
@@ -366,7 +368,7 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	searchPlayerOutError := proto.Unmarshal(payload, &searchPlayerOutProto)
 
 	if searchPlayerOutError != nil {
-		log.Fatalln("Failed to parse %s", searchPlayerOutError)
+		log.Errorf("Failed to parse %s", searchPlayerOutError)
 		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
 	}
 
@@ -406,7 +408,7 @@ func decodePlayerPublicProfile(publicProfile []byte) (*pogo.PlayerPublicProfileP
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	decodedFort := &pogo.FortDetailsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -422,7 +424,7 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	decodedMapForts := &pogo.GetMapFortsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedMapForts); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -452,7 +454,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -467,7 +469,7 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -482,7 +484,7 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -498,7 +500,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 func decodeStartIncident(ctx context.Context, sDec []byte) string {
 	decodedIncident := &pogo.StartIncidentOutProto{}
 	if err := proto.Unmarshal(sDec, decodedIncident); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -515,13 +517,16 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 	decodeOpenInvasionRequest := &pogo.OpenInvasionCombatSessionProto{}
 
 	if err := proto.Unmarshal(request, decodeOpenInvasionRequest); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
+	}
+	if decodeOpenInvasionRequest.IncidentLookup == nil {
+		return "Invalid OpenInvasionCombatSessionProto received"
 	}
 
 	decodedOpenInvasionResponse := &pogo.OpenInvasionCombatSessionOutProto{}
 	if err := proto.Unmarshal(payload, decodedOpenInvasionResponse); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -538,7 +543,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
-		log.Fatalln("Failed to parse", err)
+		log.Errorf("Failed to parse %s", err)
 	}
 
 	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {

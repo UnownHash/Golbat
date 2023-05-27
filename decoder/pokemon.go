@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/UnownHash/gohbem"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -32,45 +33,45 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	Id                      string      `db:"id"`
-	PokestopId              null.String `db:"pokestop_id"`
-	SpawnId                 null.Int    `db:"spawn_id"`
-	Lat                     float64     `db:"lat"`
-	Lon                     float64     `db:"lon"`
-	Weight                  null.Float  `db:"weight"`
-	Size                    null.Int    `db:"size"`
-	Height                  null.Float  `db:"height"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
-	Updated                 null.Int    `db:"updated"`
-	PokemonId               int16       `db:"pokemon_id"`
-	Move1                   null.Int    `db:"move_1"`
-	Move2                   null.Int    `db:"move_2"`
-	Gender                  null.Int    `db:"gender"`
-	Cp                      null.Int    `db:"cp"`
-	AtkIv                   null.Int    `db:"atk_iv"`
-	DefIv                   null.Int    `db:"def_iv"`
-	StaIv                   null.Int    `db:"sta_iv"`
-	IvInactive              null.Int    `db:"iv_inactive"`
-	Iv                      null.Float  `db:"iv"`
-	Form                    null.Int    `db:"form"`
-	Level                   null.Int    `db:"level"`
-	EncounterWeather        uint8       `db:"encounter_weather"`
-	Weather                 null.Int    `db:"weather"`
-	Costume                 null.Int    `db:"costume"`
-	FirstSeenTimestamp      int64       `db:"first_seen_timestamp"`
-	Changed                 int64       `db:"changed"`
-	CellId                  null.Int    `db:"cell_id"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int    `db:"display_pokemon_id"`
-	IsDitto                 bool        `db:"is_ditto"`
-	SeenType                null.String `db:"seen_type"`
-	Shiny                   null.Bool   `db:"shiny"`
-	Username                null.String `db:"username"`
-	Capture1                null.Float  `db:"capture_1"`
-	Capture2                null.Float  `db:"capture_2"`
-	Capture3                null.Float  `db:"capture_3"`
-	Pvp                     null.String `db:"pvp"`
-	IsEvent                 int8        `db:"is_event"`
+	Id                      string      `db:"id" json:"id"`
+	PokestopId              null.String `db:"pokestop_id" json:"pokestop_id"`
+	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
+	Lat                     float64     `db:"lat" json:"lat"`
+	Lon                     float64     `db:"lon" json:"lon"`
+	Weight                  null.Float  `db:"weight" json:"weight"`
+	Size                    null.Int    `db:"size" json:"size"`
+	Height                  null.Float  `db:"height" json:"height"`
+	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
+	Updated                 null.Int    `db:"updated" json:"updated"`
+	PokemonId               int16       `db:"pokemon_id" json:"pokemon_id"`
+	Move1                   null.Int    `db:"move_1" json:"move_1"`
+	Move2                   null.Int    `db:"move_2" json:"move_2"`
+	Gender                  null.Int    `db:"gender" json:"gender"`
+	Cp                      null.Int    `db:"cp" json:"cp"`
+	AtkIv                   null.Int    `db:"atk_iv" json:"atk_iv"`
+	DefIv                   null.Int    `db:"def_iv" json:"def_iv"`
+	StaIv                   null.Int    `db:"sta_iv" json:"sta_iv"`
+	IvInactive              null.Int    `db:"iv_inactive" json:"iv_inactive"`
+	Iv                      null.Float  `db:"iv" json:"iv"`
+	Form                    null.Int    `db:"form" json:"form"`
+	Level                   null.Int    `db:"level" json:"level"`
+	EncounterWeather        uint8       `db:"encounter_weather" json:"encounter_weather"`
+	Weather                 null.Int    `db:"weather" json:"weather"`
+	Costume                 null.Int    `db:"costume" json:"costume"`
+	FirstSeenTimestamp      int64       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	Changed                 int64       `db:"changed" json:"changed"`
+	CellId                  null.Int    `db:"cell_id" json:"cell_id"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
+	DisplayPokemonId        null.Int    `db:"display_pokemon_id" json:"display_pokemon_id"`
+	IsDitto                 bool        `db:"is_ditto" json:"is_ditto"`
+	SeenType                null.String `db:"seen_type" json:"seen_type"`
+	Shiny                   null.Bool   `db:"shiny" json:"shiny"`
+	Username                null.String `db:"username" json:"username"`
+	Capture1                null.Float  `db:"capture_1" json:"capture_1"`
+	Capture2                null.Float  `db:"capture_2" json:"capture_2"`
+	Capture3                null.Float  `db:"capture_3" json:"capture_3"`
+	Pvp                     null.String `db:"pvp" json:"pvp"`
+	IsEvent                 int8        `db:"is_event" json:"is_event"`
 }
 
 const EncounterWeather_Invalid uint8 = 0xFF                  // invalid/unscanned
@@ -138,6 +139,9 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 			return &pokemon, nil
 		}
 	}
+	if config.Config.PokemonMemoryOnly {
+		return nil, nil
+	}
 	pokemon := Pokemon{}
 
 	err := db.PokemonDb.GetContext(ctx, &pokemon,
@@ -158,6 +162,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	if db.UsePokemonCache {
 		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
+	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
 }
 
@@ -250,6 +255,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	changePvpField := false
+	var pvpResults map[string][]gohbem.PokemonEntry
 	if ohbem != nil {
 		// Calculating PVP data
 		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
@@ -266,6 +272,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				pvpBytes, _ := json.Marshal(pvp)
 				pokemon.Pvp = null.StringFrom(string(pvpBytes))
 				changePvpField = true
+				pvpResults = pvp
 			}
 		}
 		if !pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.AtkIv.Valid) {
@@ -282,82 +289,98 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
-	if oldPokemon == nil {
-		pvpField, pvpValue := "", ""
-		if changePvpField {
-			pvpField, pvpValue = "pvp, ", ":pvp, "
-		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
-			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
-			"gender, form, cp, level, encounter_weather, weather, costume, weight, height, size,"+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-			"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
-			":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :encounter_weather, :weather, :costume,"+
-			":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
-			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
-			":seen_type)", pvpField, pvpValue), pokemon)
 
-		if err != nil {
-			log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
-			log.Errorf("Full structure: %+v", pokemon)
-			return
-		}
+	if !config.Config.PokemonMemoryOnly {
+		if oldPokemon == nil {
+			pvpField, pvpValue := "", ""
+			if changePvpField {
+				pvpField, pvpValue = "pvp, ", ":pvp, "
+			}
+			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
+				"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, iv_inactive, iv, move_1, move_2,"+
+				"gender, form, cp, level, encounter_weather, weather, costume, weight, height, size,"+
+				"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
+				"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
+				"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
+				":iv_inactive, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :encounter_weather, :weather, :costume,"+
+				":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
+				":seen_type)", pvpField, pvpValue), pokemon)
 
-		_, _ = res, err
-	} else {
-		pvpUpdate := ""
-		if changePvpField {
-			pvpUpdate = "pvp = :pvp, "
-		}
-		res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
-			"pokestop_id = :pokestop_id, "+
-			"spawn_id = :spawn_id, "+
-			"lat = :lat, "+
-			"lon = :lon, "+
-			"weight = :weight, "+
-			"height = :height, "+
-			"size = :size, "+
-			"expire_timestamp = :expire_timestamp, "+
-			"updated = :updated, "+
-			"pokemon_id = :pokemon_id, "+
-			"move_1 = :move_1, "+
-			"move_2 = :move_2, "+
-			"gender = :gender, "+
-			"cp = :cp, "+
-			"atk_iv = :atk_iv, "+
-			"def_iv = :def_iv, "+
-			"sta_iv = :sta_iv, "+
-			"iv_inactive = :iv_inactive,"+
-			"iv = :iv,"+
-			"form = :form, "+
-			"level = :level, "+
-			"encounter_weather = :encounter_weather, "+
-			"weather = :weather, "+
-			"costume = :costume, "+
-			"first_seen_timestamp = :first_seen_timestamp, "+
-			"changed = :changed, "+
-			"cell_id = :cell_id, "+
-			"expire_timestamp_verified = :expire_timestamp_verified, "+
-			"display_pokemon_id = :display_pokemon_id, "+
-			"is_ditto = :is_ditto, "+
-			"seen_type = :seen_type, "+
-			"shiny = :shiny, "+
-			"username = :username, "+
-			"%s"+
-			"is_event = :is_event "+
-			"WHERE id = :id", pvpUpdate), pokemon,
-		)
-		if err != nil {
-			log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
-			log.Errorf("Full structure: %+v", pokemon)
-			return
-		}
-		rows, rowsErr := res.RowsAffected()
-		log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+			if err != nil {
+				log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+				log.Errorf("Full structure: %+v", pokemon)
+				return
+			}
 
-		_, _ = res, err
+			_, _ = res, err
+		} else {
+			pvpUpdate := ""
+			if changePvpField {
+				pvpUpdate = "pvp = :pvp, "
+			}
+			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
+				"pokestop_id = :pokestop_id, "+
+				"spawn_id = :spawn_id, "+
+				"lat = :lat, "+
+				"lon = :lon, "+
+				"weight = :weight, "+
+				"height = :height, "+
+				"size = :size, "+
+				"expire_timestamp = :expire_timestamp, "+
+				"updated = :updated, "+
+				"pokemon_id = :pokemon_id, "+
+				"move_1 = :move_1, "+
+				"move_2 = :move_2, "+
+				"gender = :gender, "+
+				"cp = :cp, "+
+				"atk_iv = :atk_iv, "+
+				"def_iv = :def_iv, "+
+				"sta_iv = :sta_iv, "+
+				"iv_inactive = :iv_inactive,"+
+				"iv = :iv,"+
+				"form = :form, "+
+				"level = :level, "+
+				"encounter_weather = :encounter_weather, "+
+				"weather = :weather, "+
+				"costume = :costume, "+
+				"first_seen_timestamp = :first_seen_timestamp, "+
+				"changed = :changed, "+
+				"cell_id = :cell_id, "+
+				"expire_timestamp_verified = :expire_timestamp_verified, "+
+				"display_pokemon_id = :display_pokemon_id, "+
+				"is_ditto = :is_ditto, "+
+				"seen_type = :seen_type, "+
+				"shiny = :shiny, "+
+				"username = :username, "+
+				"%s"+
+				"is_event = :is_event "+
+				"WHERE id = :id", pvpUpdate), pokemon,
+			)
+			if err != nil {
+				log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
+				log.Errorf("Full structure: %+v", pokemon)
+				return
+			}
+			rows, rowsErr := res.RowsAffected()
+			log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+
+			_, _ = res, err
+		}
 	}
+
+	// Update pokemon rtree
+	if oldPokemon == nil {
+		addPokemonToTree(pokemon)
+	} else {
+		if pokemon.Lat != oldPokemon.Lat || pokemon.Lon != oldPokemon.Lon {
+			removePokemonFromTree(oldPokemon)
+			addPokemonToTree(pokemon)
+		}
+	}
+
+	updatePokemonLookup(pokemon, changePvpField, pvpResults)
+
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
@@ -366,14 +389,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		remaining := ttlcache.DefaultTTL
-		if pokemon.ExpireTimestampVerified {
-			timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
-			if timeLeft > 1 {
-				remaining = time.Duration(timeLeft) * time.Second
-			}
-		}
-		pokemonCache.Set(pokemon.Id, *pokemon, remaining)
+		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration())
 	}
 }
 
@@ -448,6 +464,17 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 
 func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
+}
+
+func (pokemon *Pokemon) remainingDuration() time.Duration {
+	remaining := ttlcache.DefaultTTL
+	if pokemon.ExpireTimestampVerified {
+		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+		if timeLeft > 1 {
+			remaining = time.Duration(timeLeft) * time.Second
+		}
+	}
+	return remaining
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) bool {
@@ -1137,7 +1164,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
-		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later")
+		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter)
 	savePokemonRecord(ctx, db, pokemon)

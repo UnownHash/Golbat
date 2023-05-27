@@ -4,17 +4,8 @@ FROM golang:1.20-alpine as build
 WORKDIR /go/src/app
 COPY . .
 
-RUN apk add --no-cache \
-    # Important: required for go-sqlite3
-    gcc \
-    # Required for Alpine
-    musl-dev
-
 RUN go mod download
-RUN CGO_ENABLED=1 \
-    go build \
-    -ldflags='-s -w -extldflags "-static"' \
-    -o /go/bin/golbat
+RUN CGO_ENABLED=0 go build -tags go_json -o /go/bin/golbat
 
 # Now copy it into our base image.
 FROM gcr.io/distroless/static-debian11 as runner

@@ -21,7 +21,7 @@ At this time this is likely to be mostly development discussion.
 
 ## Run in pm2
 
-1. `go build golbat`
+1. `make` 
 2. `pm2 start ./golbat --name golbat -o "/dev/null"`
 
 ## Run in docker

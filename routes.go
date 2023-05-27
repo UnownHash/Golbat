@@ -5,15 +5,19 @@ import (
 	"database/sql"
 	b64 "encoding/base64"
 	"encoding/json"
-	"github.com/gin-gonic/gin"
-	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
 	"golbat/geo"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/gin-gonic/gin/render"
+	log "github.com/sirupsen/logrus"
 )
 
 type ProtoData struct {
@@ -266,16 +270,22 @@ type GolbatClearQuest struct {
 	Fence []ApiLocation `json:"fence"`
 }
 
-func ClearQuests(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ClearQuests: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
+func AuthRequired() gin.HandlerFunc {
+	return func(context *gin.Context) {
+		if config.Config.ApiSecret != "" {
+			authHeader := context.Request.Header.Get("X-Golbat-Secret")
+			if authHeader != config.Config.ApiSecret {
+				log.Errorf("Incorrect authorisation received (%s)", authHeader)
+				context.String(http.StatusUnauthorized, "Unauthorised")
+				context.Abort()
+				return
+			}
 		}
+		context.Next()
 	}
+}
 
+func ClearQuests(c *gin.Context) {
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
 		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
@@ -313,15 +323,6 @@ func ClearQuests(c *gin.Context) {
 }
 
 func ReloadGeojson(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ReloadGeojson: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	decoder.ReloadGeofenceAndClearStats()
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
@@ -330,15 +331,6 @@ func ReloadGeojson(c *gin.Context) {
 }
 
 func ReloadNests(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("ReloadGeojson: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	decoder.ReloadNestsAndClearStats(dbDetails)
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
@@ -346,16 +338,74 @@ func ReloadNests(c *gin.Context) {
 	})
 }
 
-func QueryPokemon(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("Query: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
+func PokemonScan(c *gin.Context) {
+	var requestBody decoder.ApiPokemonScan
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
 	}
 
+	res := decoder.GetPokemonInArea(requestBody)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusAccepted, res)
+}
+
+func PokemonOne(c *gin.Context) {
+	pokemonId, err := strconv.ParseUint(c.Param("pokemon_id"), 10, 64)
+	if err != nil {
+		log.Warnf("GET /pokemon/:pokemon_id/ Error during get pokemon %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	res := decoder.GetOnePokemon(uint64(pokemonId))
+
+	if res != nil {
+		c.JSON(http.StatusAccepted, map[string]interface{}{
+			"lat": res.Lat,
+			"lon": res.Lon,
+		})
+	} else {
+		c.Status(http.StatusNotFound)
+	}
+}
+
+func PokemonAvailable(c *gin.Context) {
+	res := decoder.GetAvailablePokemon()
+	c.JSON(http.StatusAccepted, res)
+}
+
+func PokemonSearch(c *gin.Context) {
+	var requestBody decoder.ApiPokemonSearch
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /search/ Error during post search %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.SearchPokemon(requestBody)
+	c.JSON(http.StatusAccepted, res)
+}
+
+func PokemonScanMsgPack(c *gin.Context) {
+	var requestBody decoder.ApiPokemonScan
+
+	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.GetPokemonInArea(requestBody)
+	c.Render(http.StatusAccepted, render.MsgPack{Data: res})
+}
+
+func QueryPokemon(c *gin.Context) {
 	data, err := c.GetRawData()
 	if err != nil {
 		return
@@ -485,15 +535,6 @@ func toJson(rows *sql.Rows) ([]byte, error) {
 }
 
 func GetQuestStatus(c *gin.Context) {
-	authHeader := c.Request.Header.Get("X-Golbat-Secret")
-	if config.Config.ApiSecret != "" {
-		if authHeader != config.Config.ApiSecret {
-			log.Errorf("GetQuestStatus: Incorrect authorisation received (%s)", authHeader)
-			c.String(http.StatusUnauthorized, "Unauthorised")
-			return
-		}
-	}
-
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
 		log.Warnf("POST /api/quest-status/ Error during post area %v", err)

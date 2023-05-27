@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
@@ -121,6 +122,9 @@ func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, er
 	}
 
 	gymCache.Set(fortId, gym, ttlcache.DefaultTTL)
+	if config.Config.TestFortInMemory {
+		fortRtreeUpdateGymOnGet(&gym)
+	}
 	return &gym, nil
 }
 
