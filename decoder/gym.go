@@ -39,6 +39,7 @@ type Gym struct {
 	RaidPokemonMove1      null.Int    `db:"raid_pokemon_move_1"`
 	RaidPokemonMove2      null.Int    `db:"raid_pokemon_move_2"`
 	RaidPokemonForm       null.Int    `db:"raid_pokemon_form"`
+	RaidPokemonAlignment  null.Int    `db:"raid_pokemon_alignment"`
 	RaidPokemonCp         null.Int    `db:"raid_pokemon_cp"`
 	RaidIsExclusive       null.Int    `db:"raid_is_exclusive"`
 	CellId                null.Int    `db:"cell_id"`
@@ -110,8 +111,7 @@ func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, er
 		return &gym, nil
 	}
 	gym := Gym{}
-
-	err := db.GeneralDb.GetContext(ctx, &gym, "SELECT id, lat, lon, name, url,last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description FROM gym WHERE id = ?", fortId)
+	err := db.GeneralDb.GetContext(ctx, &gym, "SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description FROM gym WHERE id = ?", fortId)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -209,6 +209,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 			gym.RaidPokemonMove1 = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move1))
 			gym.RaidPokemonMove2 = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move2))
 			gym.RaidPokemonForm = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Form))
+			gym.RaidPokemonAlignment = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Alignment))
 			gym.RaidPokemonCp = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Cp))
 			gym.RaidPokemonGender = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Gender))
 			gym.RaidPokemonCostume = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Costume))
@@ -218,6 +219,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 			gym.RaidPokemonMove1 = null.IntFrom(0)
 			gym.RaidPokemonMove2 = null.IntFrom(0)
 			gym.RaidPokemonForm = null.IntFrom(0)
+			gym.RaidPokemonAlignment = null.IntFrom(0)
 			gym.RaidPokemonCp = null.IntFrom(0)
 			gym.RaidPokemonGender = null.IntFrom(0)
 			gym.RaidPokemonCostume = null.IntFrom(0)
@@ -305,6 +307,7 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.RaidPokemonMove1 != new.RaidPokemonMove1 ||
 		old.RaidPokemonMove2 != new.RaidPokemonMove2 ||
 		old.RaidPokemonForm != new.RaidPokemonForm ||
+		old.RaidPokemonAlignment != new.RaidPokemonAlignment ||
 		old.RaidPokemonCp != new.RaidPokemonCp ||
 		old.RaidIsExclusive != new.RaidIsExclusive ||
 		old.CellId != new.CellId ||
@@ -428,6 +431,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 				"cp":                     gym.RaidPokemonCp.ValueOrZero(),
 				"gender":                 gym.RaidPokemonGender.ValueOrZero(),
 				"form":                   gym.RaidPokemonForm.ValueOrZero(),
+				"alignment":              gym.RaidPokemonAlignment.ValueOrZero(),
 				"costume":                gym.RaidPokemonCostume.ValueOrZero(),
 				"evolution":              gym.RaidPokemonEvolution.ValueOrZero(),
 				"move_1":                 gym.RaidPokemonMove1.ValueOrZero(),
@@ -463,8 +467,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	//log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
 
 		if err != nil {
 			log.Errorf("insert gym: %s", err)
@@ -494,6 +498,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 			"raid_pokemon_move_1 = :raid_pokemon_move_1, "+
 			"raid_pokemon_move_2 = :raid_pokemon_move_2, "+
 			"raid_pokemon_form = :raid_pokemon_form, "+
+			"raid_pokemon_alignment = :raid_pokemon_alignment, "+
 			"raid_pokemon_cp = :raid_pokemon_cp, "+
 			"raid_is_exclusive = :raid_is_exclusive, "+
 			"cell_id = :cell_id, "+
