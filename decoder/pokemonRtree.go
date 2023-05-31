@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"github.com/UnownHash/gohbem"
+	"github.com/antonmedv/expr"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
@@ -45,6 +46,7 @@ type ApiPokemonFilter struct {
 	Gender     int8                        `json:"gender"`
 	Additional *ApiPokemonAdditionalFilter `json:"additional"`
 	Pvp        *ApiPvpFilter               `json:"pvp"`
+	Expert     *string                     `json:"expert"`
 }
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
@@ -183,8 +185,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Level:              int8(valueOrMinus1(pokemon.Level)),
 		Gender:             int8(valueOrMinus1(pokemon.Gender)),
 		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
-		Iv:                 int8(math.Round(pokemon.Iv.Float64)),
 		Size:               int8(valueOrMinus1(pokemon.Size)),
+		Iv: func() int8 {
+			if pokemon.Iv.Valid {
+				return int8(math.Round(pokemon.Iv.Float64))
+			}
+			return -1
+		}(),
 	}
 
 	if changePvp {
@@ -311,6 +318,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	max := retrieveParameters.Max
 	specificPokemonFilters := retrieveParameters.SpecificFilters
 	globalFilter := retrieveParameters.GlobalFilter
+	expertCache := make(expertFilterCache)
 
 	maxPokemon := config.Config.Tuning.MaxPokemonResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxPokemon {
@@ -321,6 +329,23 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	pokemonSkipped := 0
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
+		if filter.Expert != nil {
+			compiled := compilePokemonFilter(expertCache, *filter.Expert)
+			if compiled == nil {
+				return false
+			}
+			env := filterEnv{Pokemon: pokemonLookup, Pvp: pvpLookup}
+			if env.Pvp == nil {
+				env.Pvp = &emptyPvp
+			}
+			output, err := expr.Run(compiled, env)
+			if err != nil {
+				log.Warnf("Failed to run expert filter %s on Pokemon %v: %s", *filter.Expert, env, err)
+				return false
+			}
+			return output.(bool)
+		}
+
 		// start with filter true if we have any filter set (no filters no match)
 		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0
 		pvpMatched := false // assume pvp match is true unless any filter matches
