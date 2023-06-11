@@ -251,7 +251,7 @@ func Raw(c *gin.Context) {
 	}()
 
 	if latTarget != 0 && lonTarget != 0 && uuid != "" {
-		UpdateDeviceLocation(uuid, latTarget, lonTarget)
+		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")

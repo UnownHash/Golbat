@@ -186,7 +186,6 @@ func main() {
 	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
-	apiGroup.POST("/query-devices", GetDevices)
 	apiGroup.POST("/reload-nests", ReloadNests)
 	apiGroup.GET("/reload-nests", ReloadNests)
 
@@ -195,6 +194,8 @@ func main() {
 	apiGroup.POST("/pokemon/scan", PokemonScan)
 	apiGroup.POST("/pokemon/search", PokemonSearch)
 	apiGroup.POST("/pokemon/scan-msgpack", PokemonScanMsgPack)
+
+	apiGroup.GET("/devices/all", GetDevices)
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
