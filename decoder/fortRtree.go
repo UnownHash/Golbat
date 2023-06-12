@@ -46,7 +46,7 @@ func LoadAllPokestops(details db.DbDetails) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		getPokestopRecord(context.Background(), details, place.Id)
+		GetPokestopRecord(context.Background(), details, place.Id)
 	}
 	log.Infof("Loaded %d pokestops [finished]", count)
 }

@@ -596,18 +596,17 @@ func GetPokestopPositions(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-func GetQuestTitle(c *gin.Context) {
+func GetPokestop(c *gin.Context) {
 	fortId := c.Param("fort_id")
 
-	title, updated, err := decoder.GetQuestTitle(dbDetails, fortId)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pokestop, err := decoder.GetPokestopRecord(ctx, dbDetails, fortId)
+	cancel()
 	if err != nil {
 		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gin.H{
-		"title":   title,
-		"updated": updated,
-	})
+	c.JSON(http.StatusAccepted, pokestop)
 }

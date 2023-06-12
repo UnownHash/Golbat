@@ -535,7 +535,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	spawnpointId := mapPokemon.SpawnpointId
 
-	pokestop, _ := getPokestopRecord(ctx, db, spawnpointId)
+	pokestop, _ := GetPokestopRecord(ctx, db, spawnpointId)
 	if pokestop == nil {
 		// Unrecognised pokestop
 		return
@@ -607,7 +607,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		pokestop, _ := getPokestopRecord(ctx, db, pokestopId)
+		pokestop, _ := GetPokestopRecord(ctx, db, pokestopId)
 		if pokestop == nil {
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()

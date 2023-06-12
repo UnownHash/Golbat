@@ -185,7 +185,7 @@ func main() {
 	apiGroup.POST("/clear-quests", ClearQuests)
 	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
-	apiGroup.GET("/quest-title/:fort_id", GetQuestTitle)
+	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 	apiGroup.POST("/query-pokemon", QueryPokemon)
