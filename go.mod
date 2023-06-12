@@ -4,6 +4,7 @@ go 1.18
 
 require (
 	github.com/UnownHash/gohbem v0.10.1
+	github.com/antonmedv/expr v1.12.5
 	github.com/getsentry/sentry-go v0.21.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-sql-driver/mysql v1.7.1
@@ -32,7 +33,6 @@ require (
 )
 
 require (
-	github.com/antonmedv/expr v1.12.5 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
