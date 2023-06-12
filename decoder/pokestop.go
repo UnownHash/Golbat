@@ -805,3 +805,11 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	savePokestopRecord(ctx, db, pokestop)
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
+
+func GetPokestopPositions(details db.DbDetails, geofence geo.Geofence) ([]db.QuestLocation, error) {
+	return db.GetPokestopPositions(details, geofence)
+}
+
+func GetQuestTitle(details db.DbDetails, fortId string) (string, int64, error) {
+	return db.GetQuestTitle(details, fortId)
+}

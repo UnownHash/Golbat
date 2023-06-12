@@ -3,14 +3,16 @@ package db
 import (
 	"context"
 	"database/sql"
-	"github.com/jmoiron/sqlx"
 	"golbat/geo"
+
+	"github.com/jmoiron/sqlx"
+	"gopkg.in/guregu/null.v4"
 )
 
 type QuestLocation struct {
-	Id        string  `db:"id"`
-	Latitude  float64 `db:"lat"`
-	Longitude float64 `db:"lon"`
+	Id        string  `db:"id" json:"id"`
+	Latitude  float64 `db:"lat" json:"latitude"`
+	Longitude float64 `db:"lon" json:"longitude"`
 }
 
 type FortId struct {
@@ -21,6 +23,11 @@ type QuestStatus struct {
 	ArQuests   uint32 `db:"ar_quests" json:"ar_quests"`
 	NoArQuests uint32 `db:"no_ar_quests" json:"no_ar_quests"`
 	TotalStops uint32 `db:"total" json:"total"`
+}
+
+type QuestTitle struct {
+	Title     null.String `db:"alternative_quest_title"`
+	Timestamp null.Int    `db:"alternative_quest_timestamp"`
 }
 
 func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, error) {
@@ -125,4 +132,20 @@ func GetQuestStatus(db DbDetails, fence geo.Geofence) (QuestStatus, error) {
 	}
 
 	return areas, nil
+}
+
+func GetQuestTitle(db DbDetails, fortId string) (string, int64, error) {
+	questTitle := QuestTitle{}
+	err := db.GeneralDb.Get(&questTitle, "SELECT alternative_quest_title, alternative_quest_timestamp FROM pokestop "+
+		"WHERE id = ?", fortId)
+
+	if err == sql.ErrNoRows {
+		return "", 0, nil
+	}
+
+	if err != nil {
+		return "", 0, err
+	}
+
+	return questTitle.Title.ValueOrZero(), questTitle.Timestamp.ValueOrZero(), nil
 }

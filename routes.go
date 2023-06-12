@@ -576,3 +576,38 @@ func GetQuestStatus(c *gin.Context) {
 func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
+
+func GetPokestopPositions(c *gin.Context) {
+	var requestBody geo.Geofence
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res, err := decoder.GetPokestopPositions(dbDetails, requestBody)
+	if err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, res)
+}
+
+func GetQuestTitle(c *gin.Context) {
+	fortId := c.Param("fort_id")
+
+	title, updated, err := decoder.GetQuestTitle(dbDetails, fortId)
+	if err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"title":   title,
+		"updated": updated,
+	})
+}
