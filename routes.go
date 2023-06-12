@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	b64 "encoding/base64"
 	"encoding/json"
 	"golbat/config"
@@ -11,7 +10,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -252,6 +250,10 @@ func Raw(c *gin.Context) {
 		}
 	}()
 
+	if latTarget != 0 && lonTarget != 0 && uuid != "" {
+		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	//if err := json.NewEncoder(w).Encode(t); err != nil {
@@ -405,135 +407,6 @@ func PokemonScanMsgPack(c *gin.Context) {
 	c.Render(http.StatusAccepted, render.MsgPack{Data: res})
 }
 
-func QueryPokemon(c *gin.Context) {
-	data, err := c.GetRawData()
-	if err != nil {
-		return
-	}
-	query := string(data)
-	//if err := c.BindJSON(&query); err != nil {
-	//	return
-	//}
-
-	// This is bad
-
-	log.Infof("Perform query API: [%d] %s", len(query), query)
-	rows, err := dbDetails.PokemonDb.Query(query)
-	if err != nil {
-		log.Infof("Error executing query: %s", err)
-		c.String(http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	z, err2 := toJson(rows)
-	c.Data(http.StatusAccepted, "application/json", z)
-	_, _ = err, err2
-}
-
-func toJson(rows *sql.Rows) ([]byte, error) {
-	columnTypes, err := rows.ColumnTypes()
-
-	if err != nil {
-		return nil, err
-	}
-
-	count := len(columnTypes)
-	finalRows := []interface{}{}
-
-	for rows.Next() {
-
-		scanArgs := make([]interface{}, count)
-
-		for i, v := range columnTypes {
-			var dbType string
-			dbType = v.DatabaseTypeName()
-			if idx := strings.IndexByte(dbType, '('); idx >= 0 {
-				dbType = dbType[:idx]
-			}
-
-			switch dbType {
-			case "varchar", "text", "VARCHAR", "TEXT", "UUID", "TIMESTAMP":
-				scanArgs[i] = new(sql.NullString)
-				break
-			case "BOOL":
-				scanArgs[i] = new(sql.NullBool)
-				break
-			case "smallint", "INT", "INT4":
-				scanArgs[i] = new(sql.NullInt64)
-				break
-			case "float":
-				scanArgs[i] = new(sql.NullFloat64)
-				break
-			default:
-				scanArgs[i] = new(sql.NullString)
-			}
-		}
-
-		err := rows.Scan(scanArgs...)
-
-		if err != nil {
-			return nil, err
-		}
-
-		masterData := map[string]interface{}{}
-
-		for i, v := range columnTypes {
-
-			if z, ok := (scanArgs[i]).(*sql.NullBool); ok {
-				if z.Valid {
-					masterData[v.Name()] = z.Bool
-				} else {
-					masterData[v.Name()] = nil
-				}
-				continue
-			}
-
-			if z, ok := (scanArgs[i]).(*sql.NullString); ok {
-				if z.Valid {
-					masterData[v.Name()] = z.String
-				} else {
-					masterData[v.Name()] = nil
-				}
-				continue
-			}
-
-			if z, ok := (scanArgs[i]).(*sql.NullInt64); ok {
-				if z.Valid {
-					masterData[v.Name()] = z.Int64
-				} else {
-					masterData[v.Name()] = nil
-				}
-				continue
-			}
-
-			if z, ok := (scanArgs[i]).(*sql.NullFloat64); ok {
-				if z.Valid {
-					masterData[v.Name()] = z.Float64
-				} else {
-					masterData[v.Name()] = nil
-				}
-				continue
-			}
-
-			if z, ok := (scanArgs[i]).(*sql.NullInt32); ok {
-				if z.Valid {
-					masterData[v.Name()] = z.Int32
-				} else {
-					masterData[v.Name()] = nil
-				}
-				continue
-			}
-
-			masterData[v.Name()] = scanArgs[i]
-		}
-
-		finalRows = append(finalRows, masterData)
-	}
-
-	z, err := json.Marshal(finalRows)
-	return z, err
-}
-
 func GetQuestStatus(c *gin.Context) {
 	var golbatClearQuest GolbatClearQuest
 	if err := c.BindJSON(&golbatClearQuest); err != nil {
@@ -575,4 +448,8 @@ func GetQuestStatus(c *gin.Context) {
 // GetHealth provides unrestricted health status for monitoring tools
 func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}
+
+func GetDevices(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
