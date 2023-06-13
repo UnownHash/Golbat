@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/UnownHash/gohbem"
 	"github.com/antonmedv/expr"
+	"github.com/antonmedv/expr/vm"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
@@ -37,16 +38,17 @@ type ApiPokemonSearch struct {
 }
 
 type ApiPokemonFilter struct {
-	Iv         []int8                      `json:"iv"`
-	AtkIv      []int8                      `json:"atk_iv"`
-	DefIv      []int8                      `json:"def_iv"`
-	StaIv      []int8                      `json:"sta_iv"`
-	Level      []int8                      `json:"level"`
-	Cp         []int16                     `json:"cp"`
-	Gender     int8                        `json:"gender"`
-	Additional *ApiPokemonAdditionalFilter `json:"additional"`
-	Pvp        *ApiPvpFilter               `json:"pvp"`
-	Expert     *string                     `json:"expert"`
+	Iv             []int8                      `json:"iv"`
+	AtkIv          []int8                      `json:"atk_iv"`
+	DefIv          []int8                      `json:"def_iv"`
+	StaIv          []int8                      `json:"sta_iv"`
+	Level          []int8                      `json:"level"`
+	Cp             []int16                     `json:"cp"`
+	Gender         int8                        `json:"gender"`
+	Additional     *ApiPokemonAdditionalFilter `json:"additional"`
+	Pvp            *ApiPvpFilter               `json:"pvp"`
+	Expert         *string                     `json:"expert"`
+	compiledExpert **vm.Program
 }
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
@@ -330,7 +332,13 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 
 	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
 		if filter.Expert != nil {
-			compiled := compilePokemonFilter(expertCache, *filter.Expert)
+			var compiled *vm.Program
+			if filter.compiledExpert == nil {
+				compiled = compilePokemonFilter(expertCache, *filter.Expert)
+				filter.compiledExpert = &compiled
+			} else {
+				compiled = *filter.compiledExpert
+			}
 			if compiled == nil {
 				return false
 			}
