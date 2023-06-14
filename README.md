@@ -70,7 +70,6 @@ Extra configurations for PvP are available in the `pvp` section of the config fi
 ```toml
 # The level caps used in rankings, defaults to [50, 51]
 level_caps = [50, 51]
-# Whether little cup rules should be applied to the 500cp league, default to true
 ```
 
 # Optimising maria db
