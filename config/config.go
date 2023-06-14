@@ -46,7 +46,6 @@ type pvp struct {
 	IncludeHundosUnderCap bool   `koanf:"include_hundos_under_cap"`
 	LevelCaps             []int  `koanf:"level_caps"`
 	RankingComparator     string `koanf:"ranking_comparator"`
-	UseLittleCupRules     bool   `koanf:"use_little_cup_rules"`
 }
 
 type sentry struct {

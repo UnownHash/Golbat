@@ -138,7 +138,7 @@ func InitialiseOhbem() {
 		leagues := map[string]gohbem.League{
 			"little": {
 				Cap:            500,
-				LittleCupRules: config.Config.Pvp.UseLittleCupRules,
+				LittleCupRules: false,
 			},
 			"great": {
 				Cap:            1500,
