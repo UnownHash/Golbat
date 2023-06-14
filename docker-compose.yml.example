@@ -42,19 +42,6 @@ services:
 
       - GOLBAT.PVP.ENABLED=true
       - GOLBAT.PVP.INCLUDE_HUNDOS_UNDER_CAP=false
-      - GOLBAT.PVP.LEVEL_CAPS=50,51
-
-      - GOLBAT.PVP.LEAGUES.0.NAME=little
-      - GOLBAT.PVP.LEAGUES.0.CAP=500
-      - GOLBAT.PVP.LEAGUES.0.LITTLE=false
-
-      - GOLBAT.PVP.LEAGUES.1.NAME=great
-      - GOLBAT.PVP.LEAGUES.1.CAP=1500
-      - GOLBAT.PVP.LEAGUES.1.LITTLE=false
-
-      - GOLBAT.PVP.LEAGUES.2.NAME=ultra
-      - GOLBAT.PVP.LEAGUES.2.CAP=2500
-      - GOLBAT.PVP.LEAGUES.2.LITTLE=false
 
       - GOLBAT.WEBHOOKS.0.URL=http://localhost:4201
       - GOLBAT.WEBHOOKS.0.TYPES=pokemon,gym,invasion,quest,pokestop,raid

@@ -42,17 +42,10 @@ type webhook struct {
 }
 
 type pvp struct {
-	Enabled               bool         `koanf:"enabled"`
-	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
-	LevelCaps             []int        `koanf:"level_caps"`
-	Leagues               []pvpLeagues `koanf:"leagues"`
-	RankingComparator     string       `koanf:"ranking_comparator"`
-}
-
-type pvpLeagues struct {
-	Name           string `koanf:"name"`
-	Cap            int    `koanf:"cap"`
-	LittleCupRules bool   `koanf:"little"`
+	Enabled               bool   `koanf:"enabled"`
+	IncludeHundosUnderCap bool   `koanf:"include_hundos_under_cap"`
+	LevelCaps             []int  `koanf:"level_caps"`
+	RankingComparator     string `koanf:"ranking_comparator"`
 }
 
 type sentry struct {
