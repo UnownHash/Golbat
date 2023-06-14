@@ -1,8 +1,11 @@
 package main
 
 import (
-	"github.com/puzpuzpuz/xsync/v2"
 	"time"
+
+	"github.com/go-co-op/gocron"
+	"github.com/puzpuzpuz/xsync/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 type DeviceLocation struct {
@@ -10,6 +13,12 @@ type DeviceLocation struct {
 	Longitude   float64
 	LastUpdate  int64
 	ScanContext string
+}
+
+func init() {
+	s := gocron.NewScheduler(time.UTC)
+	s.Every(1).Hour().Do(clearOldDevices)
+	s.StartAsync()
 }
 
 var deviceLocation = xsync.NewMapOf[DeviceLocation]()
@@ -42,4 +51,15 @@ func GetAllDevices() map[string]ApiDeviceLocation {
 		return true
 	})
 	return locations
+}
+
+func clearOldDevices() {
+	log.Infof("[DEVICES] Clearing devices not seen in the last 24hr, current count: %d", deviceLocation.Size())
+	deviceLocation.Range(func(key string, value DeviceLocation) bool {
+		if time.Now().Unix()-value.LastUpdate > 60*60*24 {
+			deviceLocation.Delete(key)
+		}
+		return true
+	})
+	log.Infof("[DEVICES] Cleared old devices, new count: %d", deviceLocation.Size())
 }
