@@ -29,7 +29,8 @@ func ReadConfig() {
 			SaveLogs: false,
 		},
 		Cleanup: cleanup{
-			StatsDays: 7,
+			StatsDays:   7,
+			DeviceHours: 24,
 		},
 		Database: database{
 			MaxPool: 100,

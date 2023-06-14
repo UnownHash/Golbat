@@ -1,11 +1,10 @@
 package main
 
 import (
+	"golbat/config"
 	"time"
 
-	"github.com/go-co-op/gocron"
-	"github.com/puzpuzpuz/xsync/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 type DeviceLocation struct {
@@ -15,21 +14,15 @@ type DeviceLocation struct {
 	ScanContext string
 }
 
-func init() {
-	s := gocron.NewScheduler(time.UTC)
-	s.Every(1).Hour().Do(clearOldDevices)
-	s.StartAsync()
-}
-
-var deviceLocation = xsync.NewMapOf[DeviceLocation]()
+var deviceLocation *ttlcache.Cache[string, DeviceLocation]
 
 func UpdateDeviceLocation(deviceId string, lat, lon float64, scanContext string) {
-	deviceLocation.Store(deviceId, DeviceLocation{
+	deviceLocation.Set(deviceId, DeviceLocation{
 		Latitude:    lat,
 		Longitude:   lon,
 		LastUpdate:  time.Now().Unix(),
 		ScanContext: scanContext,
-	})
+	}, time.Hour*time.Duration(config.Config.Cleanup.DeviceHours))
 }
 
 type ApiDeviceLocation struct {
@@ -41,25 +34,14 @@ type ApiDeviceLocation struct {
 
 func GetAllDevices() map[string]ApiDeviceLocation {
 	locations := map[string]ApiDeviceLocation{}
-	deviceLocation.Range(func(key string, value DeviceLocation) bool {
-		locations[key] = ApiDeviceLocation{
-			Latitude:    value.Latitude,
-			Longitude:   value.Longitude,
-			LastUpdate:  value.LastUpdate,
-			ScanContext: value.ScanContext,
+	for _, key := range deviceLocation.Items() {
+		deviceLocation := key.Value()
+		locations[key.Key()] = ApiDeviceLocation{
+			Latitude:    deviceLocation.Latitude,
+			Longitude:   deviceLocation.Longitude,
+			LastUpdate:  deviceLocation.LastUpdate,
+			ScanContext: deviceLocation.ScanContext,
 		}
-		return true
-	})
+	}
 	return locations
-}
-
-func clearOldDevices() {
-	log.Infof("[DEVICES] Clearing devices not seen in the last 24hr, current count: %d", deviceLocation.Size())
-	deviceLocation.Range(func(key string, value DeviceLocation) bool {
-		if time.Now().Unix()-value.LastUpdate > 60*60*24 {
-			deviceLocation.Delete(key)
-		}
-		return true
-	})
-	log.Infof("[DEVICES] Cleared old devices, new count: %d", deviceLocation.Size())
 }
