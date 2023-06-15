@@ -16,7 +16,7 @@ type DeviceLocation struct {
 
 var deviceLocation *ttlcache.Cache[string, DeviceLocation]
 
-func init() {
+func InitDeviceCache() {
 	deviceLocation = ttlcache.New[string, DeviceLocation](
 		ttlcache.WithTTL[string, DeviceLocation](time.Hour * time.Duration(config.Config.Cleanup.DeviceHours)),
 	)
