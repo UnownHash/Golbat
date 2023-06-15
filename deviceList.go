@@ -16,6 +16,13 @@ type DeviceLocation struct {
 
 var deviceLocation *ttlcache.Cache[string, DeviceLocation]
 
+func init() {
+	deviceLocation = ttlcache.New[string, DeviceLocation](
+		ttlcache.WithTTL[string, DeviceLocation](time.Hour * time.Duration(config.Config.Cleanup.DeviceHours)),
+	)
+	go deviceLocation.Start()
+}
+
 func UpdateDeviceLocation(deviceId string, lat, lon float64, scanContext string) {
 	deviceLocation.Set(deviceId, DeviceLocation{
 		Latitude:    lat,
