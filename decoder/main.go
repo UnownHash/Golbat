@@ -208,7 +208,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
-			pokestop, err := getPokestopRecord(ctx, db, fortId) // should check error
+			pokestop, err := GetPokestopRecord(ctx, db, fortId) // should check error
 			if err != nil {
 				log.Errorf("getPokestopRecord: %s", err)
 				pokestopMutex.Unlock()

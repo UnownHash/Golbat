@@ -102,7 +102,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	}
 	if fortType == POKESTOP {
 		for _, id := range ids {
-			stop, err := getPokestopRecord(ctx, dbDetails, id)
+			stop, err := GetPokestopRecord(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}

@@ -450,6 +450,40 @@ func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
+func GetPokestopPositions(c *gin.Context) {
+	var requestBody geo.Geofence
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res, err := decoder.GetPokestopPositions(dbDetails, requestBody)
+	if err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, res)
+}
+
+func GetPokestop(c *gin.Context) {
+	fortId := c.Param("fort_id")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pokestop, err := decoder.GetPokestopRecord(ctx, dbDetails, fortId)
+	cancel()
+	if err != nil {
+		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, pokestop)
+}
+
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
