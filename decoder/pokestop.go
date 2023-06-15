@@ -22,42 +22,42 @@ import (
 // Pokestop struct.
 // REMINDER! Keep hasChangesPokestop updated after making changes
 type Pokestop struct {
-	Id                         string      `db:"id"`
-	Lat                        float64     `db:"lat"`
-	Lon                        float64     `db:"lon"`
-	Name                       null.String `db:"name"`
-	Url                        null.String `db:"url"`
-	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp"`
-	Updated                    int64       `db:"updated"`
-	Enabled                    null.Bool   `db:"enabled"`
-	QuestType                  null.Int    `db:"quest_type"`
-	QuestTimestamp             null.Int    `db:"quest_timestamp"`
-	QuestTarget                null.Int    `db:"quest_target"`
-	QuestConditions            null.String `db:"quest_conditions"`
-	QuestRewards               null.String `db:"quest_rewards"`
-	QuestTemplate              null.String `db:"quest_template"`
-	QuestTitle                 null.String `db:"quest_title"`
-	QuestExpiry                null.Int    `db:"quest_expiry"`
-	CellId                     null.Int    `db:"cell_id"`
-	Deleted                    bool        `db:"deleted"`
-	LureId                     int16       `db:"lure_id"`
-	FirstSeenTimestamp         int16       `db:"first_seen_timestamp"`
-	SponsorId                  null.Int    `db:"sponsor_id"`
-	PartnerId                  null.String `db:"partner_id"`
-	ArScanEligible             null.Int    `db:"ar_scan_eligible"` // is an 8
-	PowerUpLevel               null.Int    `db:"power_up_level"`
-	PowerUpPoints              null.Int    `db:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `db:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target"`
-	AlternativeQuestConditions null.String `db:"alternative_quest_conditions"`
-	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards"`
-	AlternativeQuestTemplate   null.String `db:"alternative_quest_template"`
-	AlternativeQuestTitle      null.String `db:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry"`
-	Description                null.String `db:"description"`
+	Id                         string      `db:"id" json:"id"`
+	Lat                        float64     `db:"lat" json:"lat"`
+	Lon                        float64     `db:"lon" json:"lon"`
+	Name                       null.String `db:"name" json:"name"`
+	Url                        null.String `db:"url" json:"url"`
+	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
+	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
+	Updated                    int64       `db:"updated" json:"updated"`
+	Enabled                    null.Bool   `db:"enabled" json:"enabled"`
+	QuestType                  null.Int    `db:"quest_type" json:"quest_type"`
+	QuestTimestamp             null.Int    `db:"quest_timestamp" json:"quest_timestamp"`
+	QuestTarget                null.Int    `db:"quest_target" json:"quest_target"`
+	QuestConditions            null.String `db:"quest_conditions" json:"quest_conditions"`
+	QuestRewards               null.String `db:"quest_rewards" json:"quest_rewards"`
+	QuestTemplate              null.String `db:"quest_template" json:"quest_template"`
+	QuestTitle                 null.String `db:"quest_title" json:"quest_title"`
+	QuestExpiry                null.Int    `db:"quest_expiry" json:"quest_expiry"`
+	CellId                     null.Int    `db:"cell_id" json:"cell_id"`
+	Deleted                    bool        `db:"deleted" json:"deleted"`
+	LureId                     int16       `db:"lure_id" json:"lure_id"`
+	FirstSeenTimestamp         int16       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	SponsorId                  null.Int    `db:"sponsor_id" json:"sponsor_id"`
+	PartnerId                  null.String `db:"partner_id" json:"partner_id"`
+	ArScanEligible             null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
+	PowerUpLevel               null.Int    `db:"power_up_level" json:"power_up_level"`
+	PowerUpPoints              null.Int    `db:"power_up_points" json:"power_up_points"`
+	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
+	AlternativeQuestType       null.Int    `db:"alternative_quest_type" json:"alternative_quest_type"`
+	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
+	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target" json:"alternative_quest_target"`
+	AlternativeQuestConditions null.String `db:"alternative_quest_conditions" json:"alternative_quest_conditions"`
+	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards" json:"alternative_quest_rewards"`
+	AlternativeQuestTemplate   null.String `db:"alternative_quest_template" json:"alternative_quest_template"`
+	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
+	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
+	Description                null.String `db:"description" json:"description"`
 
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
@@ -99,7 +99,7 @@ type Pokestop struct {
 
 }
 
-func getPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
+func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
@@ -621,7 +621,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 }
 
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
-	oldPokestop, _ := getPokestopRecord(ctx, db, pokestop.Id)
+	oldPokestop, _ := GetPokestopRecord(ctx, db, pokestop.Id)
 	now := time.Now().Unix()
 	if oldPokestop != nil && !hasChangesPokestop(oldPokestop, pokestop) {
 		if oldPokestop.Updated > now-900 {
@@ -725,7 +725,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := getPokestopRecord(ctx, db, fort.Id) // should check error
+	pokestop, err := GetPokestopRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -750,7 +750,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := getPokestopRecord(ctx, db, quest.FortId)
+	pokestop, err := GetPokestopRecord(ctx, db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -791,7 +791,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := getPokestopRecord(ctx, db, mapFort.Id)
+	pokestop, err := GetPokestopRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -804,4 +804,8 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
 	savePokestopRecord(ctx, db, pokestop)
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
+}
+
+func GetPokestopPositions(details db.DbDetails, geofence geo.Geofence) ([]db.QuestLocation, error) {
+	return db.GetPokestopPositions(details, geofence)
 }

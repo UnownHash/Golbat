@@ -185,6 +185,8 @@ func main() {
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.POST("/clear-quests", ClearQuests)
 	apiGroup.POST("/quest-status", GetQuestStatus)
+	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
+	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 	apiGroup.POST("/reload-nests", ReloadNests)

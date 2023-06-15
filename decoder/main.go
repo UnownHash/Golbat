@@ -131,21 +131,23 @@ func initDataCache() {
 func InitialiseOhbem() {
 	if config.Config.Pvp.Enabled {
 		log.Info("Initialising Ohbem for PVP")
-		if len(config.Config.Pvp.Leagues) == 0 {
-			log.Errorf("PVP leagues not configured")
-			return
-		}
 		if len(config.Config.Pvp.LevelCaps) == 0 {
 			log.Errorf("PVP level caps not configured")
 			return
 		}
-		leagues := make(map[string]gohbem.League)
-
-		for _, league := range config.Config.Pvp.Leagues {
-			leagues[league.Name] = gohbem.League{
-				Cap:            league.Cap,
-				LittleCupRules: league.LittleCupRules,
-			}
+		leagues := map[string]gohbem.League{
+			"little": {
+				Cap:            500,
+				LittleCupRules: false,
+			},
+			"great": {
+				Cap:            1500,
+				LittleCupRules: false,
+			},
+			"ultra": {
+				Cap:            2500,
+				LittleCupRules: false,
+			},
 		}
 
 		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
@@ -206,7 +208,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
-			pokestop, err := getPokestopRecord(ctx, db, fortId) // should check error
+			pokestop, err := GetPokestopRecord(ctx, db, fortId) // should check error
 			if err != nil {
 				log.Errorf("getPokestopRecord: %s", err)
 				pokestopMutex.Unlock()
