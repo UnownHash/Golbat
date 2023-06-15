@@ -31,7 +31,7 @@ const kojiCacheFilename = "cache/koji_geofence.json"
 // const nestFilename = "geojson/nests.json"
 
 func SetKojiUrl(geofenceUrl string, bearerToken string) {
-	log.Print("Setting Koji Info " + geofenceUrl + " " + bearerToken + "")
+	log.Print("Setting Koji Info "+geofenceUrl+"with bearer token:"+bearerToken != "")
 	kojiUrl = geofenceUrl
 	kojiBearerToken = bearerToken
 }

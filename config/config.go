@@ -27,11 +27,12 @@ type koji struct {
 }
 
 type cleanup struct {
-	Pokemon   bool `koanf:"pokemon"`
-	Quests    bool `koanf:"quests"`
-	Incidents bool `koanf:"incidents"`
-	Stats     bool `koanf:"stats"`
-	StatsDays int  `koanf:"stats_days"`
+	Pokemon     bool `koanf:"pokemon"`
+	Quests      bool `koanf:"quests"`
+	Incidents   bool `koanf:"incidents"`
+	Stats       bool `koanf:"stats"`
+	StatsDays   int  `koanf:"stats_days"`
+	DeviceHours int  `koanf:"device_hours"`
 }
 
 type webhook struct {
