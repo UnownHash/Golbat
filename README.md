@@ -64,6 +64,14 @@ gyms - process gyms in GMO
 pokestops - process pokestops in GMO  
 cells - process cell updates (disabling this also disables automatic fort clearance)
 
+# PvP
+Extra configurations for PvP are available in the `pvp` section of the config file.
+
+```toml
+# The level caps used in rankings, defaults to [50, 51]
+level_caps = [50, 51]
+```
+
 # Optimising maria db
 
 These options can help you quite significantly with performance.

@@ -29,13 +29,17 @@ func ReadConfig() {
 			SaveLogs: false,
 		},
 		Cleanup: cleanup{
-			StatsDays: 7,
+			StatsDays:   7,
+			DeviceHours: 24,
 		},
 		Database: database{
 			MaxPool: 100,
 		},
 		Tuning: tuning{
 			MaxPokemonResults: 3000,
+		},
+		Pvp: pvp{
+			LevelCaps: []int{50, 51},
 		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
@@ -52,10 +56,6 @@ func ReadConfig() {
 
 		if strings.HasPrefix(key, "webhooks") {
 			parseEnvVarToSlice("webhooks", key, value, currentMap)
-
-			return "", nil
-		} else if strings.HasPrefix(key, "pvp.leagues") {
-			parseEnvVarToSlice("pvp.leagues", key, value, currentMap)
 
 			return "", nil
 		} else if strings.HasPrefix(key, "scan_rules") {

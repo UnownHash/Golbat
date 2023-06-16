@@ -15,6 +15,7 @@ incidents = true        # Remove incidents after expiry
 quests = true           # Remove quests after expiry
 stats = true            # Enable/Disable stats history
 stats_days = 7          # Remove entries from ["pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats" after x days
+device_hours = 24       # Remove devices from in memory after not seen for x hours
 
 [logging]
 debug = false
@@ -30,22 +31,6 @@ db = ""
 [pvp]
 enabled = true
 include_hundos_under_cap = false
-level_caps = [50, 51]
-
-[[pvp.leagues]]
-name = "little"
-cap = 500
-little = false
-
-[[pvp.leagues]]
-name = "great"
-cap = 1500
-little = false
-
-[[pvp.leagues]]
-name = "ultra"
-cap = 2500
-little = false
 
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array

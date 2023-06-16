@@ -3,14 +3,15 @@ package db
 import (
 	"context"
 	"database/sql"
-	"github.com/jmoiron/sqlx"
 	"golbat/geo"
+
+	"github.com/jmoiron/sqlx"
 )
 
 type QuestLocation struct {
-	Id        string  `db:"id"`
-	Latitude  float64 `db:"lat"`
-	Longitude float64 `db:"lon"`
+	Id        string  `db:"id" json:"id"`
+	Latitude  float64 `db:"lat" json:"latitude"`
+	Longitude float64 `db:"lon" json:"longitude"`
 }
 
 type FortId struct {

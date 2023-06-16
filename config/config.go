@@ -27,11 +27,12 @@ type koji struct {
 }
 
 type cleanup struct {
-	Pokemon   bool `koanf:"pokemon"`
-	Quests    bool `koanf:"quests"`
-	Incidents bool `koanf:"incidents"`
-	Stats     bool `koanf:"stats"`
-	StatsDays int  `koanf:"stats_days"`
+	Pokemon     bool `koanf:"pokemon"`
+	Quests      bool `koanf:"quests"`
+	Incidents   bool `koanf:"incidents"`
+	Stats       bool `koanf:"stats"`
+	StatsDays   int  `koanf:"stats_days"`
+	DeviceHours int  `koanf:"device_hours"`
 }
 
 type webhook struct {
@@ -42,17 +43,10 @@ type webhook struct {
 }
 
 type pvp struct {
-	Enabled               bool         `koanf:"enabled"`
-	IncludeHundosUnderCap bool         `koanf:"include_hundos_under_cap"`
-	LevelCaps             []int        `koanf:"level_caps"`
-	Leagues               []pvpLeagues `koanf:"leagues"`
-	RankingComparator     string       `koanf:"ranking_comparator"`
-}
-
-type pvpLeagues struct {
-	Name           string `koanf:"name"`
-	Cap            int    `koanf:"cap"`
-	LittleCupRules bool   `koanf:"little"`
+	Enabled               bool   `koanf:"enabled"`
+	IncludeHundosUnderCap bool   `koanf:"include_hundos_under_cap"`
+	LevelCaps             []int  `koanf:"level_caps"`
+	RankingComparator     string `koanf:"ranking_comparator"`
 }
 
 type sentry struct {
