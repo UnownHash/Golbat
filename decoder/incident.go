@@ -229,11 +229,16 @@ func (incident *Incident) updateFromOpenInvasionCombatSessionOut(protoRes *pogo.
 			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
 		}
 	}
+	incident.Confirmed = true
 }
 
 func (incident *Incident) updateFromStartIncidentOut(proto *pogo.StartIncidentOutProto) {
 	incident.Character = int16(proto.GetIncident().GetStep()[0].GetPokestopDialogue().GetDialogueLine()[0].GetCharacter())
-	incident.Confirmed = true
+	if incident.Character == int16(pogo.EnumWrapper_CHARACTER_GIOVANNI) ||
+		incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_MALE) ||
+		incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_FEMALE) {
+		incident.Confirmed = true
+	}
 	incident.StartTime = int64(proto.Incident.GetCompletionDisplay().GetIncidentStartMs() / 1000)
 	incident.ExpirationTime = int64(proto.Incident.GetCompletionDisplay().GetIncidentExpirationMs() / 1000)
 }
