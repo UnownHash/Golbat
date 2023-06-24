@@ -30,7 +30,8 @@ Decode full details (IV etc) of a pokemon at a lure
 
 `Method_METHOD_FORT_SEARCH`
 
-Decode details of quest type and rewards
+Decode details of quest type and rewards. This requires
+the `have_ar` parameter in the raw to be present.
 
 `Method_METHOD_INVASION_OPEN_COMBAT_SESSION`
 
