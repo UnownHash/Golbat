@@ -351,14 +351,8 @@ func decodeGetFriendDetails(payload []byte) string {
 
 	for _, friend := range getFriendDetailsOutProto.GetFriend() {
 		player := friend.GetPlayer()
-		publicData, publicDataErr := decodePlayerPublicProfile(player.GetPublicData())
 
-		if publicDataErr != nil {
-			failures++
-			continue
-		}
-
-		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, "", player.GetPlayerId())
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, "", player.GetPlayerId())
 		if updatePlayerError != nil {
 			failures++
 		}
@@ -388,25 +382,12 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	}
 
 	player := searchPlayerOutProto.GetPlayer()
-	publicData, publicDataError := decodePlayerPublicProfile(player.GetPublicData())
-
-	if publicDataError != nil {
-		return fmt.Sprintf("Failed to parse %s", publicDataError)
-	}
-
-	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, searchPlayerProto.GetFriendCode(), "")
+	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, searchPlayerProto.GetFriendCode(), "")
 	if updatePlayerError != nil {
 		return fmt.Sprintf("Failed update player %s", updatePlayerError)
 	}
 
 	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
-}
-
-func decodePlayerPublicProfile(publicProfile []byte) (*pogo.PlayerPublicProfileProto, error) {
-	var publicData pogo.PlayerPublicProfileProto
-	publicDataErr := proto.Unmarshal(publicProfile, &publicData)
-
-	return &publicData, publicDataErr
 }
 
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
