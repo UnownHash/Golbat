@@ -3,8 +3,8 @@ module golbat
 go 1.18
 
 require (
-	github.com/antonmedv/expr v1.12.5
 	github.com/UnownHash/gohbem v0.11.3
+	github.com/antonmedv/expr v1.12.5
 	github.com/getsentry/sentry-go v0.21.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-sql-driver/mysql v1.7.1
