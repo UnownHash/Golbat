@@ -329,24 +329,22 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 }
 
 type GymDetailsWebhook struct {
-	Id                    string  `json:"id"`
-	Name                  string  `json:"name"`
-	Url                   string  `json:"url"`
-	Latitude              float64 `json:"latitude"`
-	Longitude             float64 `json:"longitude"`
-	Team                  int64   `json:"team"`
-	GuardPokemonId        int64   `json:"guard_pokemon_id"`
-	SlotsAvailable        int64   `json:"slots_available"`
-	ExRaidEligible        int64   `json:"ex_raid_eligible"`
-	InBattle              bool    `json:"in_battle"`
-	SponsorId             int64   `json:"sponsor_id"`
-	PartnerId             int64   `json:"partner_id"`
-	PowerUpPoints         int64   `json:"power_up_points"`
-	PowerUpLevel          int64   `json:"power_up_level"`
-	PowerUpEndTimestamp   int64   `json:"power_up_end_timestamp"`
-	ArScanEligible        int64   `json:"ar_scan_eligible"`
-	LobbyPlayerCount      int32   `json:"lobby_player_count"`
-	LobbyJoinEndTimestamp int64   `json:"lobby_join_end_timestamp"`
+	Id                  string  `json:"id"`
+	Name                string  `json:"name"`
+	Url                 string  `json:"url"`
+	Latitude            float64 `json:"latitude"`
+	Longitude           float64 `json:"longitude"`
+	Team                int64   `json:"team"`
+	GuardPokemonId      int64   `json:"guard_pokemon_id"`
+	SlotsAvailable      int64   `json:"slots_available"`
+	ExRaidEligible      int64   `json:"ex_raid_eligible"`
+	InBattle            bool    `json:"in_battle"`
+	SponsorId           int64   `json:"sponsor_id"`
+	PartnerId           int64   `json:"partner_id"`
+	PowerUpPoints       int64   `json:"power_up_points"`
+	PowerUpLevel        int64   `json:"power_up_level"`
+	PowerUpEndTimestamp int64   `json:"power_up_end_timestamp"`
+	ArScanEligible      int64   `json:"ar_scan_eligible"`
 
 	//"id": id,
 	//"name": name ?? "Unknown",
