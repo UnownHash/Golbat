@@ -267,6 +267,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
+	case pogo.Method_METHOD_GET_RAID_LOBBY_COUNTER:
+		result = decodeGetRaidLobbyCounter(ctx, protoData.Data)
+		processed = true
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
@@ -434,6 +437,32 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
 	}
 	return "No forts updated"
+}
+
+func decodeGetRaidLobbyCounter(ctx context.Context, sDec []byte) string {
+	decodedRaidLobbyCounter := &pogo.GetRaidLobbyCounterOutProto{}
+	if err := proto.Unmarshal(sDec, decodedRaidLobbyCounter); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedRaidLobbyCounter.Result != pogo.GetRaidLobbyCounterOutProto_SUCCESS {
+		return fmt.Sprintf(`GetRaidLobbyCounterOutProto: Ignored non-success value %d:%s`,
+			decodedRaidLobbyCounter.Result,
+			pogo.GetRaidLobbyCounterOutProto_Result_name[int32(decodedRaidLobbyCounter.Result)])
+	}
+
+	processedLobbies := 0
+	for _, lobby := range decodedRaidLobbyCounter.RaidLobbyPlayerCount {
+		if decoder.CreateGymLobbyPlayerCountWebhooks(ctx, dbDetails, lobby) {
+			processedLobbies += 1
+		}
+	}
+
+	if processedLobbies > 0 {
+		return fmt.Sprintf("Updated %d lobbies", processedLobbies)
+	}
+	return "No lobbies updated"
 }
 
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {

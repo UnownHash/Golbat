@@ -27,6 +27,7 @@ var webhookCollections map[string]*WebhookList
 
 const GymDetails = "gym_details"
 const Raid = "raid"
+const RaidLobby = "raid_lobby"
 const Pokemon = "pokemon"
 const Quest = "quest"
 const Pokestop = "pokestop"

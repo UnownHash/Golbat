@@ -329,22 +329,24 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 }
 
 type GymDetailsWebhook struct {
-	Id                  string  `json:"id"`
-	Name                string  `json:"name"`
-	Url                 string  `json:"url"`
-	Latitude            float64 `json:"latitude"`
-	Longitude           float64 `json:"longitude"`
-	Team                int64   `json:"team"`
-	GuardPokemonId      int64   `json:"guard_pokemon_id"`
-	SlotsAvailable      int64   `json:"slots_available"`
-	ExRaidEligible      int64   `json:"ex_raid_eligible"`
-	InBattle            bool    `json:"in_battle"`
-	SponsorId           int64   `json:"sponsor_id"`
-	PartnerId           int64   `json:"partner_id"`
-	PowerUpPoints       int64   `json:"power_up_points"`
-	PowerUpLevel        int64   `json:"power_up_level"`
-	PowerUpEndTimestamp int64   `json:"power_up_end_timestamp"`
-	ArScanEligible      int64   `json:"ar_scan_eligible"`
+	Id                    string  `json:"id"`
+	Name                  string  `json:"name"`
+	Url                   string  `json:"url"`
+	Latitude              float64 `json:"latitude"`
+	Longitude             float64 `json:"longitude"`
+	Team                  int64   `json:"team"`
+	GuardPokemonId        int64   `json:"guard_pokemon_id"`
+	SlotsAvailable        int64   `json:"slots_available"`
+	ExRaidEligible        int64   `json:"ex_raid_eligible"`
+	InBattle              bool    `json:"in_battle"`
+	SponsorId             int64   `json:"sponsor_id"`
+	PartnerId             int64   `json:"partner_id"`
+	PowerUpPoints         int64   `json:"power_up_points"`
+	PowerUpLevel          int64   `json:"power_up_level"`
+	PowerUpEndTimestamp   int64   `json:"power_up_end_timestamp"`
+	ArScanEligible        int64   `json:"ar_scan_eligible"`
+	LobbyPlayerCount      int32   `json:"lobby_player_count"`
+	LobbyJoinEndTimestamp int64   `json:"lobby_join_end_timestamp"`
 
 	//"id": id,
 	//"name": name ?? "Unknown",
@@ -374,30 +376,45 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	}
 }
 
+func makeGymWebhook(gym *Gym) *GymDetailsWebhook {
+	return &GymDetailsWebhook{
+		Id:             gym.Id,
+		Name:           gym.Name.ValueOrZero(),
+		Url:            gym.Url.ValueOrZero(),
+		Latitude:       gym.Lat,
+		Longitude:      gym.Lon,
+		Team:           gym.TeamId.ValueOrZero(),
+		GuardPokemonId: gym.GuardingPokemonId.ValueOrZero(),
+		SlotsAvailable: func() int64 {
+			if gym.AvailableSlots.Valid {
+				return gym.AvailableSlots.Int64
+			} else {
+				return 6
+			}
+		}(),
+		ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
+		InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+	}
+}
+
+func CreateGymLobbyPlayerCountWebhooks(ctx context.Context, db db.DbDetails, lobby *pogo.RaidLobbyPlayerCountProto) bool {
+	gym, _ := getGymRecord(ctx, db, lobby.GymId)
+	if gym == nil { // skip reporting for unseen gyms
+		return false
+	}
+	gymDetails := makeGymWebhook(gym)
+	gymDetails.LobbyPlayerCount = lobby.PlayerCount
+	gymDetails.LobbyJoinEndTimestamp = lobby.LobbyJoinUntilMs
+	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+	webhooks.AddMessage(webhooks.RaidLobby, gymDetails, areas)
+	return true
+}
+
 func createGymWebhooks(oldGym *Gym, gym *Gym) {
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
-		gymDetails := GymDetailsWebhook{
-			Id:             gym.Id,
-			Name:           gym.Name.ValueOrZero(),
-			Url:            gym.Url.ValueOrZero(),
-			Latitude:       gym.Lat,
-			Longitude:      gym.Lon,
-			Team:           gym.TeamId.ValueOrZero(),
-			GuardPokemonId: gym.GuardingPokemonId.ValueOrZero(),
-			SlotsAvailable: func() int64 {
-				if gym.AvailableSlots.Valid {
-					return gym.AvailableSlots.Int64
-				} else {
-					return 6
-				}
-			}(),
-			ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
-			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
-		}
-
-		webhooks.AddMessage(webhooks.GymDetails, gymDetails, areas)
+		webhooks.AddMessage(webhooks.GymDetails, makeGymWebhook(gym), areas)
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
