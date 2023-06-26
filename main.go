@@ -449,7 +449,7 @@ func decodeGetRaidLobbyCounter(ctx context.Context, sDec []byte) string {
 	if decodedRaidLobbyCounter.Result != pogo.GetRaidLobbyCounterOutProto_SUCCESS {
 		return fmt.Sprintf(`GetRaidLobbyCounterOutProto: Ignored non-success value %d:%s`,
 			decodedRaidLobbyCounter.Result,
-			pogo.GetRaidLobbyCounterOutProto_Result_name[int32(decodedRaidLobbyCounter.Result)])
+			decodedRaidLobbyCounter.Result.String())
 	}
 
 	processedLobbies := 0
