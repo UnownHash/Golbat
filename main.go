@@ -454,7 +454,7 @@ func decodeGetRaidLobbyCounter(ctx context.Context, sDec []byte) string {
 
 	processedLobbies := 0
 	for _, lobby := range decodedRaidLobbyCounter.RaidLobbyPlayerCount {
-		if decoder.CreateGymLobbyPlayerCountWebhooks(ctx, dbDetails, lobby) {
+		if decoder.CreateRaidLobbyPlayerCountWebhooks(ctx, dbDetails, lobby) {
 			processedLobbies += 1
 		}
 	}

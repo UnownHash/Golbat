@@ -376,37 +376,54 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	}
 }
 
-func makeGymWebhook(gym *Gym) *GymDetailsWebhook {
-	return &GymDetailsWebhook{
-		Id:             gym.Id,
-		Name:           gym.Name.ValueOrZero(),
-		Url:            gym.Url.ValueOrZero(),
-		Latitude:       gym.Lat,
-		Longitude:      gym.Lon,
-		Team:           gym.TeamId.ValueOrZero(),
-		GuardPokemonId: gym.GuardingPokemonId.ValueOrZero(),
-		SlotsAvailable: func() int64 {
-			if gym.AvailableSlots.Valid {
-				return gym.AvailableSlots.Int64
+func makeRaidWebhook(gym *Gym) map[string]interface{} {
+	return map[string]interface{}{
+		"gym_id": gym.Id,
+		"gym_name": func() string {
+			if !gym.Name.Valid {
+				return "Unknown"
 			} else {
-				return 6
+				return gym.Name.String
 			}
 		}(),
-		ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
-		InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+		"gym_url":                gym.Url.ValueOrZero(),
+		"latitude":               gym.Lat,
+		"longitude":              gym.Lon,
+		"team_id":                gym.TeamId.ValueOrZero(),
+		"spawn":                  gym.RaidSpawnTimestamp.ValueOrZero(),
+		"start":                  gym.RaidBattleTimestamp.ValueOrZero(),
+		"end":                    gym.RaidEndTimestamp.ValueOrZero(),
+		"level":                  gym.RaidLevel.ValueOrZero(),
+		"pokemon_id":             gym.RaidPokemonId.ValueOrZero(),
+		"cp":                     gym.RaidPokemonCp.ValueOrZero(),
+		"gender":                 gym.RaidPokemonGender.ValueOrZero(),
+		"form":                   gym.RaidPokemonForm.ValueOrZero(),
+		"alignment":              gym.RaidPokemonAlignment.ValueOrZero(),
+		"costume":                gym.RaidPokemonCostume.ValueOrZero(),
+		"evolution":              gym.RaidPokemonEvolution.ValueOrZero(),
+		"move_1":                 gym.RaidPokemonMove1.ValueOrZero(),
+		"move_2":                 gym.RaidPokemonMove2.ValueOrZero(),
+		"ex_raid_eligible":       gym.ExRaidEligible.ValueOrZero(),
+		"is_exclusive":           gym.RaidIsExclusive.ValueOrZero(),
+		"sponsor_id":             gym.SponsorId.ValueOrZero(),
+		"partner_id":             gym.PartnerId.ValueOrZero(),
+		"power_up_points":        gym.PowerUpPoints.ValueOrZero(),
+		"power_up_level":         gym.PowerUpLevel.ValueOrZero(),
+		"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
+		"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
 	}
 }
 
-func CreateGymLobbyPlayerCountWebhooks(ctx context.Context, db db.DbDetails, lobby *pogo.RaidLobbyPlayerCountProto) bool {
+func CreateRaidLobbyPlayerCountWebhooks(ctx context.Context, db db.DbDetails, lobby *pogo.RaidLobbyPlayerCountProto) bool {
 	gym, _ := getGymRecord(ctx, db, lobby.GymId)
 	if gym == nil { // skip reporting for unseen gyms
 		return false
 	}
-	gymDetails := makeGymWebhook(gym)
-	gymDetails.LobbyPlayerCount = lobby.PlayerCount
-	gymDetails.LobbyJoinEndTimestamp = lobby.LobbyJoinUntilMs
+	payload := makeRaidWebhook(gym)
+	payload["lobby_player_count"] = lobby.PlayerCount
+	payload["lobby_join_end_timestamp"] = lobby.LobbyJoinUntilMs
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
-	webhooks.AddMessage(webhooks.RaidLobby, gymDetails, areas)
+	webhooks.AddMessage(webhooks.Raid, payload, areas)
 	return true
 }
 
@@ -414,7 +431,24 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
-		webhooks.AddMessage(webhooks.GymDetails, makeGymWebhook(gym), areas)
+		webhooks.AddMessage(webhooks.GymDetails, GymDetailsWebhook{
+			Id:             gym.Id,
+			Name:           gym.Name.ValueOrZero(),
+			Url:            gym.Url.ValueOrZero(),
+			Latitude:       gym.Lat,
+			Longitude:      gym.Lon,
+			Team:           gym.TeamId.ValueOrZero(),
+			GuardPokemonId: gym.GuardingPokemonId.ValueOrZero(),
+			SlotsAvailable: func() int64 {
+				if gym.AvailableSlots.Valid {
+					return gym.AvailableSlots.Int64
+				} else {
+					return 6
+				}
+			}(),
+			ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
+			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+		}, areas)
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
@@ -427,43 +461,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 
 		if (raidBattleTime > now && gym.RaidLevel.ValueOrZero() > 0) ||
 			(raidEndTime > now && gym.RaidPokemonId.ValueOrZero() > 0) {
-			raidHook := map[string]interface{}{
-				"gym_id": gym.Id,
-				"gym_name": func() string {
-					if !gym.Name.Valid {
-						return "Unknown"
-					} else {
-						return gym.Name.String
-					}
-				}(),
-				"gym_url":                gym.Url.ValueOrZero(),
-				"latitude":               gym.Lat,
-				"longitude":              gym.Lon,
-				"team_id":                gym.TeamId.ValueOrZero(),
-				"spawn":                  gym.RaidSpawnTimestamp.ValueOrZero(),
-				"start":                  gym.RaidBattleTimestamp.ValueOrZero(),
-				"end":                    gym.RaidEndTimestamp.ValueOrZero(),
-				"level":                  gym.RaidLevel.ValueOrZero(),
-				"pokemon_id":             gym.RaidPokemonId.ValueOrZero(),
-				"cp":                     gym.RaidPokemonCp.ValueOrZero(),
-				"gender":                 gym.RaidPokemonGender.ValueOrZero(),
-				"form":                   gym.RaidPokemonForm.ValueOrZero(),
-				"alignment":              gym.RaidPokemonAlignment.ValueOrZero(),
-				"costume":                gym.RaidPokemonCostume.ValueOrZero(),
-				"evolution":              gym.RaidPokemonEvolution.ValueOrZero(),
-				"move_1":                 gym.RaidPokemonMove1.ValueOrZero(),
-				"move_2":                 gym.RaidPokemonMove2.ValueOrZero(),
-				"ex_raid_eligible":       gym.ExRaidEligible.ValueOrZero(),
-				"is_exclusive":           gym.RaidIsExclusive.ValueOrZero(),
-				"sponsor_id":             gym.SponsorId.ValueOrZero(),
-				"partner_id":             gym.PartnerId.ValueOrZero(),
-				"power_up_points":        gym.PowerUpPoints.ValueOrZero(),
-				"power_up_level":         gym.PowerUpLevel.ValueOrZero(),
-				"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
-				"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
-			}
-
-			webhooks.AddMessage(webhooks.Raid, raidHook, areas)
+			webhooks.AddMessage(webhooks.Raid, makeRaidWebhook(gym), areas)
 		}
 	}
 
