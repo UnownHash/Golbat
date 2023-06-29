@@ -56,6 +56,8 @@ type Gym struct {
 	PowerUpPoints         null.Int    `db:"power_up_points"`
 	PowerUpEndTimestamp   null.Int    `db:"power_up_end_timestamp"`
 	Description           null.String `db:"description"`
+	LobbyPlayerCount      int32
+	LobbyJoinEndMs        int64
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -374,8 +376,8 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	}
 }
 
-func makeRaidWebhook(gym *Gym) map[string]interface{} {
-	return map[string]interface{}{
+func makeRaidWebhook(gym *Gym) (payload map[string]interface{}) {
+	payload = map[string]interface{}{
 		"gym_id": gym.Id,
 		"gym_name": func() string {
 			if !gym.Name.Valid {
@@ -410,16 +412,31 @@ func makeRaidWebhook(gym *Gym) map[string]interface{} {
 		"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
 		"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
 	}
+	if gym.LobbyPlayerCount > 0 {
+		payload["lobby_player_count"] = gym.LobbyPlayerCount
+		payload["lobby_join_end_ms"] = gym.LobbyJoinEndMs
+	}
+	return
 }
 
 func CreateRaidLobbyPlayerCountWebhooks(ctx context.Context, db db.DbDetails, lobby *pogo.RaidLobbyPlayerCountProto) bool {
+	gymMutex, _ := gymStripedMutex.GetLock(lobby.GymId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
 	gym, _ := getGymRecord(ctx, db, lobby.GymId)
 	if gym == nil { // skip reporting for unseen gyms
 		return false
 	}
+	if gym.LobbyPlayerCount == lobby.PlayerCount &&
+		(lobby.PlayerCount == 0 || gym.LobbyJoinEndMs == lobby.LobbyJoinUntilMs) {
+		// skip unchanged lobbies or empty lobby updates
+		return false
+	}
+	gym.LobbyPlayerCount = lobby.PlayerCount
+	gym.LobbyJoinEndMs = lobby.LobbyJoinUntilMs
+	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	payload := makeRaidWebhook(gym)
-	payload["lobby_player_count"] = lobby.PlayerCount
-	payload["lobby_join_end_timestamp"] = lobby.LobbyJoinUntilMs
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	webhooks.AddMessage(webhooks.Raid, payload, areas)
 	return true

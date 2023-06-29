@@ -459,10 +459,8 @@ func decodeGetRaidLobbyCounter(ctx context.Context, sDec []byte) string {
 		}
 	}
 
-	if processedLobbies > 0 {
-		return fmt.Sprintf("Updated %d lobbies", processedLobbies)
-	}
-	return "No lobbies updated"
+	return fmt.Sprintf("Updated %d/%d lobbies",
+		processedLobbies, len(decodedRaidLobbyCounter.RaidLobbyPlayerCount))
 }
 
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
