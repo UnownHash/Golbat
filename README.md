@@ -72,6 +72,10 @@ Extra configurations for PvP are available in the `pvp` section of the config fi
 level_caps = [50, 51]
 ```
 
+# Game objects supported support
+
+The file [protos.md](protos.md) contains a list of the protos that are decoded by Golbat
+
 # Optimising maria db
 
 These options can help you quite significantly with performance.
@@ -91,7 +95,6 @@ innodb_purge_threads = 10
 # Some people receommend at least 1 per gb, so could be increased above
 innodb_buffer_pool_instances = 8
 
-
 # allow big sorts, in memory temp tables
 max_heap_table_size=256M
 
@@ -109,4 +112,8 @@ innodb_io_capacity_max=2000
 
 # Trust disk system at the expense of recovery
 innodb_doublewrite = 0
+
+# Efficiently use ibdata
+innodb_undo_log_truncate = 1
+innodb_undo_tablespaces = 4
 ```
