@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package raw_receiver;
+
+// Interface exported by the server.
+service RawProto {
+  rpc SubmitRawProto (RawProtoRequest) returns (RawProtoResponse) {}
+}
+
+message RawProtoRequest {
+  string device_id = 1;
+  string username = 2;
+
+  int32 trainer_level = 3;
+  float lat_target = 4;
+  float lon_target = 5;
+  int64 timestamp = 6;
+  optional bool have_ar = 7;
+  repeated Content contents = 8;
+  optional string scan_context = 9;
+}
+
+message Content  {
+  bytes response_payload = 1;
+  optional bytes request_payload = 2;
+  int32 method = 3;
+  optional bool have_ar = 4;
+}
+
+message RawProtoResponse {
+  string message = 1;
+}

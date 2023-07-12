@@ -7,7 +7,10 @@ import (
 	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/external"
+	pb "golbat/grpc"
 	"golbat/webhooks"
+	"google.golang.org/grpc"
+	"net"
 	"time"
 	_ "time/tzdata"
 
@@ -172,6 +175,20 @@ func main() {
 		go decoder.LoadAllGyms(dbDetails)
 	}
 
+	// Start the GRPC receiver
+
+	lis, err := net.Listen("tcp", ":50051")
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+	s := grpc.NewServer()
+	pb.RegisterRawProtoServer(s, &grpcServer{})
+	log.Printf("grpc server listening at %v", lis.Addr())
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+
+	// Start the web server.
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	if config.Config.Logging.Debug {
