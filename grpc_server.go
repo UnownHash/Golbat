@@ -4,6 +4,7 @@ import (
 	"context"
 	"golbat/config"
 	pb "golbat/grpc"
+	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"time"
 )
 
