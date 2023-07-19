@@ -4,6 +4,7 @@ import "golbat/geo"
 
 type configDefinition struct {
 	Port              int        `koanf:"port"`
+	GrpcPort          int        `koanf:"grpc_port"`
 	Webhooks          []webhook  `koanf:"webhooks"`
 	Database          database   `koanf:"database"`
 	Stats             bool       `koanf:"stats"`

@@ -177,15 +177,18 @@ func main() {
 
 	// Start the GRPC receiver
 
-	lis, err := net.Listen("tcp", ":50051")
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterRawProtoServer(s, &grpcServer{})
-	log.Printf("grpc server listening at %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+	if config.Config.GrpcPort > 0 {
+		log.Infof("Starting GRPC server on port %d", config.Config.GrpcPort)
+		lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Config.GrpcPort))
+		if err != nil {
+			log.Fatalf("failed to listen: %v", err)
+		}
+		s := grpc.NewServer()
+		pb.RegisterRawProtoServer(s, &grpcServer{})
+		log.Printf("grpc server listening at %v", lis.Addr())
+		if err := s.Serve(lis); err != nil {
+			log.Fatalf("failed to serve: %v", err)
+		}
 	}
 
 	// Start the web server.
