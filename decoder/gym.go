@@ -261,7 +261,9 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		gym.Url = null.StringFrom(gymData.Url)
 	}
 	gym.Name = null.StringFrom(gymData.Name)
-	gym.Description = null.StringFrom(gymData.Description)
+	if gymData.Description != "" {
+		gym.Description = null.StringFrom(gymData.Description)
+	}
 
 	return gym
 }
