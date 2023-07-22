@@ -7,6 +7,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
+	"net/url"
 )
 
 type Location struct {
@@ -150,7 +151,20 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		}
 		if !(old.ImageUrl == nil && new.ImageUrl == nil) &&
 			(old.ImageUrl == nil || new.ImageUrl == nil || *old.ImageUrl != *new.ImageUrl) {
-			editTypes = append(editTypes, "image_url")
+			var newPath, oldPath string
+			newUrl, err := url.Parse(*new.ImageUrl)
+			if err == nil && newUrl != nil {
+				newPath = newUrl.Path
+			}
+			if old.ImageUrl != nil {
+				oldUrl, err2 := url.Parse(*old.ImageUrl)
+				if err2 == nil && oldUrl != nil {
+					oldPath = oldUrl.Path
+				}
+			}
+			if oldPath != newPath {
+				editTypes = append(editTypes, "image_url")
+			}
 		}
 		if !floatAlmostEqual(old.Location.Latitude, new.Location.Latitude, floatTolerance) ||
 			!floatAlmostEqual(old.Location.Longitude, new.Location.Longitude, floatTolerance) {
