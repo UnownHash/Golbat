@@ -162,7 +162,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		}
 
 		// Check if ImageUrl has changed
-		if old.ImageUrl != nil && new.ImageUrl != nil && old.ImageUrl != new.ImageUrl {
+		if old.ImageUrl != nil && new.ImageUrl != nil && *old.ImageUrl != *new.ImageUrl {
 			oldPath := getPathFromURL(*old.ImageUrl)
 			newPath := getPathFromURL(*new.ImageUrl)
 			if oldPath != newPath {
