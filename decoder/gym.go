@@ -411,10 +411,8 @@ func makeRaidWebhook(gym *Gym) (payload map[string]interface{}) {
 		"power_up_level":         gym.PowerUpLevel.ValueOrZero(),
 		"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
 		"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
-	}
-	if gym.LobbyPlayerCount > 0 {
-		payload["lobby_player_count"] = gym.LobbyPlayerCount
-		payload["lobby_join_end_ms"] = gym.LobbyJoinEndMs
+		"lobby_player_count":     gym.LobbyPlayerCount,
+		"lobby_join_end_ms":      gym.LobbyJoinEndMs,
 	}
 	return
 }
