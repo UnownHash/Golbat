@@ -71,6 +71,12 @@ func init() {
 	initLiveStats()
 }
 
+type gohbemLogger struct{}
+
+func (cl *gohbemLogger) Print(message string) {
+	log.Info("Gohbem - ", message)
+}
+
 func initDataCache() {
 	pokestopCache = ttlcache.New[string, Pokestop](
 		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
@@ -150,8 +156,10 @@ func InitialiseOhbem() {
 			},
 		}
 
+		gohbemLogger := &gohbemLogger{}
+
 		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
-			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap}
+			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap, Logger: gohbemLogger}
 		switch config.Config.Pvp.RankingComparator {
 		case "prefer_higher_cp":
 			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
