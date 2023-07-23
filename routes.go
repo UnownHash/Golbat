@@ -75,7 +75,7 @@ func Raw(c *gin.Context) {
 	pogodroidHeader := r.Header.Get("origin")
 	userAgent := r.Header.Get("User-Agent")
 
-	log.Infof("Raw: Received data from %s", body)
+	//log.Infof("Raw: Received data from %s", body)
 	//log.Infof("User agent is %s", userAgent)
 
 	if pogodroidHeader != "" {
