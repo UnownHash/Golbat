@@ -498,7 +498,12 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 		stop.Url = null.StringFrom(fortData.ImageUrl[0])
 	}
 	stop.Name = null.StringFrom(fortData.Name)
-	stop.Description = null.StringFrom(fortData.Description)
+
+	if fortData.Description == "" {
+		stop.Description = null.NewString("", false)
+	} else {
+		stop.Description = null.StringFrom(fortData.Description)
+	}
 
 	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
