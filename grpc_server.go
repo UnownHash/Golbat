@@ -5,6 +5,7 @@ import (
 	"golbat/config"
 	pb "golbat/grpc"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
+	"google.golang.org/grpc/metadata"
 	"time"
 )
 
@@ -14,14 +15,14 @@ type grpcServer struct {
 }
 
 func (s *grpcServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoRequest) (*pb.RawProtoResponse, error) {
+	// Check for authorisation
+	if config.Config.RawBearer != "" {
+		md, _ := metadata.FromIncomingContext(ctx)
 
-	//authHeader := r.Header.Get("Authorization")
-	//if config.Config.RawBearer != "" {
-	//	if authHeader != "Bearer "+config.Config.RawBearer {
-	//		log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
-	//		return
-	//	}
-	//}
+		if auth := md.Get("authorization"); len(auth) == 0 || auth[0] != config.Config.RawBearer {
+			return &pb.RawProtoResponse{Message: "Incorrect authorisation received"}, nil
+		}
+	}
 
 	uuid := in.DeviceId
 	account := in.Username
