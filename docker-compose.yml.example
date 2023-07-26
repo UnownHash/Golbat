@@ -21,7 +21,7 @@ services:
       - GOLBAT.API_SECRET=golbat
 
       - GOLBAT.STATS=false
-      - GOLBAT.IN_MEMORY=false
+      - GOLBAT.POKEMON_MEMORY_ONLY=false
 
       - GOLBAT.KOJI.URL=http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}
       - GOLBAT.KOJI.BEARER_TOKEN=secret
