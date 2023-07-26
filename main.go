@@ -7,7 +7,10 @@ import (
 	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/external"
+	pb "golbat/grpc"
 	"golbat/webhooks"
+	"google.golang.org/grpc"
+	"net"
 	"time"
 	_ "time/tzdata"
 
@@ -172,6 +175,25 @@ func main() {
 		go decoder.LoadAllGyms(dbDetails)
 	}
 
+	// Start the GRPC receiver
+
+	if config.Config.GrpcPort > 0 {
+		log.Infof("Starting GRPC server on port %d", config.Config.GrpcPort)
+		go func() {
+			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Config.GrpcPort))
+			if err != nil {
+				log.Fatalf("failed to listen: %v", err)
+			}
+			s := grpc.NewServer()
+			pb.RegisterRawProtoServer(s, &grpcServer{})
+			log.Printf("grpc server listening at %v", lis.Addr())
+			if err := s.Serve(lis); err != nil {
+				log.Fatalf("failed to serve: %v", err)
+			}
+		}()
+	}
+
+	// Start the web server.
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	if config.Config.Logging.Debug {
@@ -351,14 +373,8 @@ func decodeGetFriendDetails(payload []byte) string {
 
 	for _, friend := range getFriendDetailsOutProto.GetFriend() {
 		player := friend.GetPlayer()
-		publicData, publicDataErr := decodePlayerPublicProfile(player.GetPublicData())
 
-		if publicDataErr != nil {
-			failures++
-			continue
-		}
-
-		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, "", player.GetPlayerId())
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, "", player.GetPlayerId())
 		if updatePlayerError != nil {
 			failures++
 		}
@@ -388,25 +404,12 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	}
 
 	player := searchPlayerOutProto.GetPlayer()
-	publicData, publicDataError := decodePlayerPublicProfile(player.GetPublicData())
-
-	if publicDataError != nil {
-		return fmt.Sprintf("Failed to parse %s", publicDataError)
-	}
-
-	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, publicData, searchPlayerProto.GetFriendCode(), "")
+	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, searchPlayerProto.GetFriendCode(), "")
 	if updatePlayerError != nil {
 		return fmt.Sprintf("Failed update player %s", updatePlayerError)
 	}
 
 	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
-}
-
-func decodePlayerPublicProfile(publicProfile []byte) (*pogo.PlayerPublicProfileProto, error) {
-	var publicData pogo.PlayerPublicProfileProto
-	publicDataErr := proto.Unmarshal(publicProfile, &publicData)
-
-	return &publicData, publicDataErr
 }
 
 func decodeFortDetails(ctx context.Context, sDec []byte) string {

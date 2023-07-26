@@ -310,6 +310,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
+				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
 				return
 			}
 
@@ -360,12 +361,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
+				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
+
 				return
 			}
 			rows, rowsErr := res.RowsAffected()
 			log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
-
-			_, _ = res, err
 		}
 	}
 
