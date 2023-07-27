@@ -14,6 +14,7 @@ type ScanParameters struct {
 	ProcessPokestops bool
 	ProcessGyms      bool
 	ProcessCells     bool
+	ProcessLobbies   bool
 }
 
 func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters {
@@ -59,6 +60,7 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 			ProcessWeather:   defaultTrue(rule.ProcessWeather),
 			ProcessPokestops: defaultTrue(rule.ProcessPokestops),
 			ProcessGyms:      defaultTrue(rule.ProcessGyms),
+			ProcessLobbies:   defaultTrue(rule.ProcessLobbies),
 		}
 	}
 
@@ -70,5 +72,6 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 		ProcessWeather:   true,
 		ProcessGyms:      true,
 		ProcessPokestops: true,
+		ProcessLobbies:   true,
 	}
 }

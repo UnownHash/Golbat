@@ -290,7 +290,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_RAID_LOBBY_COUNTER:
-		result = decodeGetRaidLobbyCounter(ctx, protoData.Data)
+		if getScanParameters(protoData).ProcessLobbies {
+			result = decodeGetRaidLobbyCounter(ctx, protoData.Data)
+		}
 		processed = true
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
