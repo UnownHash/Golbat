@@ -155,6 +155,10 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 }
 
 func UpdateRouteRecordWithSharedRouteProto(db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
+	routeMutex, _ := routeStripedMutex.GetLock(sharedRouteProto.GetId())
+	routeMutex.Lock()
+	defer routeMutex.Unlock()
+
 	route, err := getRouteRecord(db, sharedRouteProto.GetId())
 	if err != nil {
 		return err

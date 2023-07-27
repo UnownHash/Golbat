@@ -62,6 +62,7 @@ var incidentStripedMutex = stripedmutex.New(128)
 var pokemonStripedMutex = stripedmutex.New(1024)
 var weatherStripedMutex = stripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
+var routeStripedMutex = stripedmutex.New(128)
 
 var s2CellLookup = sync.Map{}
 
