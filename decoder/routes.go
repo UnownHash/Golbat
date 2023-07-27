@@ -11,21 +11,25 @@ import (
 )
 
 type Route struct {
-	Id               string `db:"id"`
-	Name             string `db:"name"`
-	Description      string `db:"description"`
-	DistanceMeters   int64  `db:"distance_meters"`
-	DurationSeconds  int64  `db:"duration_seconds"`
-	EndPoi           string `db:"end_poi"`
-	Image            string `db:"image"`
-	ImageBorderColor string `db:"image_border_color"`
-	Reversible       bool   `db:"reversible"`
-	StartPoi         string `db:"start_poi"`
-	Tags             string `db:"tags"`
-	Type             int8   `db:"type"`
-	Updated          int64  `db:"updated"`
-	Version          int64  `db:"version"`
-	Waypoints        string `db:"waypoints"`
+	Id               string  `db:"id"`
+	Name             string  `db:"name"`
+	Description      string  `db:"description"`
+	DistanceMeters   int64   `db:"distance_meters"`
+	DurationSeconds  int64   `db:"duration_seconds"`
+	EndFortId        string  `db:"end_fort_id"`
+	EndLat           float64 `db:"end_lat"`
+	EndLon           float64 `db:"end_lon"`
+	Image            string  `db:"image"`
+	ImageBorderColor string  `db:"image_border_color"`
+	Reversible       bool    `db:"reversible"`
+	StartFortId      string  `db:"start_fort_id"`
+	StartLat         float64 `db:"start_lat"`
+	StartLon         float64 `db:"start_lon"`
+	Tags             string  `db:"tags"`
+	Type             int8    `db:"type"`
+	Updated          int64   `db:"updated"`
+	Version          int64   `db:"version"`
+	Waypoints        string  `db:"waypoints"`
 }
 
 func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
@@ -60,11 +64,15 @@ func hasChangesRoute(old *Route, new *Route) bool {
 		old.Description != new.Description ||
 		old.DistanceMeters != new.DistanceMeters ||
 		old.DurationSeconds != new.DurationSeconds ||
-		old.EndPoi != new.EndPoi ||
+		old.EndFortId != new.EndFortId ||
+		!floatAlmostEqual(old.EndLat, new.EndLat, floatTolerance) ||
+		!floatAlmostEqual(old.EndLon, new.EndLon, floatTolerance) ||
 		old.Image != new.Image ||
 		old.ImageBorderColor != new.ImageBorderColor ||
 		old.Reversible != new.Reversible ||
-		old.StartPoi != new.StartPoi ||
+		old.StartFortId != new.StartFortId ||
+		!floatAlmostEqual(old.StartLat, new.StartLat, floatTolerance) ||
+		!floatAlmostEqual(old.StartLon, new.StartLon, floatTolerance) ||
 		old.Tags != new.Tags ||
 		old.Type != new.Type ||
 		old.Updated != new.Updated ||
@@ -84,17 +92,19 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			`
 			INSERT INTO route (
 			  id, name, description, distance_meters, 
-			  duration_seconds, end_poi, image, 
-			  image_border_color, reversible, 
-			  start_poi, tags, type, updated, version, 
+			  duration_seconds, end_fort_id, end_lat, 
+			  end_lon, image, image_border_color, 
+			  reversible, start_fort_id, start_lat, 
+			  start_lon, tags, type, updated, version, 
 			  waypoints
-			) 
-			VALUES 
+			)
+			VALUES
 			  (
 				:id, :name, :description, :distance_meters, 
-				:duration_seconds, :end_poi, :image, 
-				:image_border_color, :reversible, 
-				:start_poi, :tags, :type, :updated, 
+				:duration_seconds, :end_fort_id, 
+				:end_lat, :end_lon, :image, :image_border_color, 
+				:reversible, :start_fort_id, :start_lat, 
+				:start_lon, :tags, :type, :updated, 
 				:version, :waypoints
 			  )
 			`,
@@ -112,11 +122,15 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 				description = :description,
 				distance_meters = :distance_meters,
 				duration_seconds = :duration_seconds,
-				end_poi = :end_poi,
+				end_fort_id = :end_fort_id,
+				end_lat = :end_lat,
+				end_lon = :end_lon,
 				image = :image,
 				image_border_color = :image_border_color,
 				reversible = :reversible,
-				start_poi = :start_poi,
+				start_fort_id = :start_fort_id,
+				start_lat = :start_lat,
+				start_lon = :start_lon,
 				tags = :tags,
 				type = :type,
 				updated = :updated,
@@ -140,11 +154,15 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.Description = sharedRouteProto.GetDescription()
 	route.DistanceMeters = sharedRouteProto.GetRouteDistanceMeters()
 	route.DurationSeconds = sharedRouteProto.GetRouteDurationSeconds()
-	route.EndPoi = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()
+	route.EndFortId = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()
+	route.EndLat = sharedRouteProto.GetEndPoi().GetAnchor().GetLatDegrees()
+	route.EndLon = sharedRouteProto.GetEndPoi().GetAnchor().GetLngDegrees()
 	route.Image = sharedRouteProto.GetImage().GetImageUrl()
 	route.ImageBorderColor = sharedRouteProto.GetImage().GetBorderColorHex()
 	route.Reversible = sharedRouteProto.GetReversible()
-	route.StartPoi = sharedRouteProto.GetStartPoi().GetAnchor().GetFortId()
+	route.StartFortId = sharedRouteProto.GetStartPoi().GetAnchor().GetFortId()
+	route.StartLat = sharedRouteProto.GetStartPoi().GetAnchor().GetLatDegrees()
+	route.StartLon = sharedRouteProto.GetStartPoi().GetAnchor().GetLngDegrees()
 	tags, _ := json.Marshal(sharedRouteProto.GetTags())
 	route.Tags = string(tags)
 	route.Type = int8(sharedRouteProto.GetType())
