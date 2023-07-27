@@ -19,6 +19,7 @@ import (
 )
 
 type ProtoData struct {
+	Method      int
 	Data        []byte
 	Request     []byte
 	HaveAr      *bool
