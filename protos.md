@@ -43,6 +43,10 @@ requires the proto request to be present in the raw.
 
 - Provides confirmation of a real or decoy Giovanni
 
+`Method_METHOD_GET_ROUTES`
+
+- Decode routes
+
 # Social actions
 
 - The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto will be
