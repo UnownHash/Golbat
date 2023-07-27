@@ -12,7 +12,7 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-[go 1.20](https://go.dev/doc/install)
+[go 1.21](https://go.dev/doc/install)
 
 # Instructions
 
@@ -112,7 +112,13 @@ innodb_io_capacity_max=2000
 
 # Trust disk system at the expense of recovery
 innodb_doublewrite = 0
+```
 
+These last two options prevent your ibdata1 file from growing continuously
+and space not being re-used.  If you have this problem you can add these but
+be aware this requires recreation of ibdata.
+
+```toml
 # Efficiently use ibdata
 innodb_undo_log_truncate = 1
 innodb_undo_tablespaces = 4

@@ -8,6 +8,7 @@ import (
 	"golbat/pogo"
 	"golbat/webhooks"
 	"net/url"
+	"strings"
 )
 
 type Location struct {
@@ -141,31 +142,36 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	} else if change == EDIT {
 		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
 		var editTypes []string
-		if !(old.Name == nil && new.Name == nil) &&
-			(old.Name == nil || new.Name == nil || *old.Name != *new.Name) {
+
+		// Check if Name has changed
+		if old.Name == nil {
+			if new.Name != nil && *new.Name != "" {
+				editTypes = append(editTypes, "name")
+			}
+		} else if new.Name != nil && *old.Name != *new.Name {
 			editTypes = append(editTypes, "name")
 		}
-		if !(old.Description == nil && new.Description == nil) &&
-			(old.Description == nil || new.Description == nil || *old.Description != *new.Description) {
+
+		// Check if Description has changed
+		if old.Description == nil {
+			if new.Description != nil && *new.Description != "" {
+				editTypes = append(editTypes, "description")
+			}
+		} else if new.Description != nil && *old.Description != *new.Description {
 			editTypes = append(editTypes, "description")
 		}
-		if !(old.ImageUrl == nil && new.ImageUrl == nil) &&
-			(old.ImageUrl == nil || new.ImageUrl == nil || *old.ImageUrl != *new.ImageUrl) {
-			var newPath, oldPath string
-			newUrl, err := url.Parse(*new.ImageUrl)
-			if err == nil && newUrl != nil {
-				newPath = newUrl.Path
-			}
-			if old.ImageUrl != nil {
-				oldUrl, err2 := url.Parse(*old.ImageUrl)
-				if err2 == nil && oldUrl != nil {
-					oldPath = oldUrl.Path
-				}
-			}
+
+		// Check if ImageUrl has changed
+		if old.ImageUrl != nil && new.ImageUrl != nil && *old.ImageUrl != *new.ImageUrl {
+			oldPath := getPathFromURL(*old.ImageUrl)
+			newPath := getPathFromURL(*new.ImageUrl)
 			if oldPath != newPath {
 				editTypes = append(editTypes, "image_url")
 			}
+		} else if (old.ImageUrl == nil || *old.ImageUrl == "") && new.ImageUrl != nil && *new.ImageUrl != "" {
+			editTypes = append(editTypes, "image_url")
 		}
+		// Check if location has changed
 		if !floatAlmostEqual(old.Location.Latitude, new.Location.Latitude, floatTolerance) ||
 			!floatAlmostEqual(old.Location.Longitude, new.Location.Longitude, floatTolerance) {
 			editTypes = append(editTypes, "location")
@@ -182,6 +188,13 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	}
 }
 
+func getPathFromURL(u string) string {
+	parsedURL, err := url.Parse(u)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(parsedURL.Path, "/")
+}
 func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
 	// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
 	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, mapFort)

@@ -52,6 +52,7 @@ var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache *ttlcache.Cache[string, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
+var routeCache *ttlcache.Cache[string, Route]
 var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
@@ -61,6 +62,7 @@ var incidentStripedMutex = stripedmutex.New(128)
 var pokemonStripedMutex = stripedmutex.New(1024)
 var weatherStripedMutex = stripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
+var routeStripedMutex = stripedmutex.New(128)
 
 var s2CellLookup = sync.Map{}
 
@@ -132,6 +134,11 @@ func initDataCache() {
 		ttlcache.WithDisableTouchOnHit[string, *pogo.GetMapFortsOutProto_FortProto](),
 	)
 	go getMapFortsCache.Start()
+
+	routeCache = ttlcache.New[string, Route](
+		ttlcache.WithTTL[string, Route](60 * time.Minute),
+	)
+	go routeCache.Start()
 }
 
 func InitialiseOhbem() {

@@ -31,121 +31,99 @@ const databaseDeleteChunkSize = 500
 func StartDatabaseArchiver(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Minute)
 
-	if config.Config.Stats {
-		go func() {
+	go func() {
+		for {
+			<-ticker.C
+			log.Infof("DB - Archive of pokemon table - starting")
+			start := time.Now()
+
+			var resultCounter int64
+			var result sql.Result
+			var err error
+
+			start = time.Now()
+
 			for {
-				<-ticker.C
-				start := time.Now()
+				pokemonId := []PokemonIdToDelete{}
+				err = db.Select(&pokemonId,
+					fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT %d;", databaseDeleteChunkSize))
+				if err != nil {
+					log.Errorf("DB - Archive of pokemon table (expire time verified) select error [after %d rows] %s", resultCounter, err)
+					break
+				}
 
-				var result sql.Result
-				var err error
+				if len(pokemonId) == 0 {
+					break
+				}
 
-				result, err = db.Exec("call createStatsAndArchive();")
+				var ids []string
+				for i := 0; i < len(pokemonId); i++ {
+					ids = append(ids, pokemonId[i].Id)
+				}
 
-				elapsed := time.Since(start)
+				query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
+				query = db.Rebind(query)
+
+				result, err = db.Exec(query, args...)
 
 				if err != nil {
-					log.Errorf("DB - Archive of pokemon table error %s", err)
+					log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
+					break
 				} else {
 					rows, _ := result.RowsAffected()
-					log.Infof("DB - Archive of pokemon table took %s (%d rows)", elapsed, rows)
+					resultCounter += rows
+					if rows < databaseDeleteChunkSize {
+						elapsed := time.Since(start)
+						log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, resultCounter)
+						break
+					}
 				}
 			}
-		}()
-	} else {
-		go func() {
+
+			log.Infof("DB - Archive of pokemon table - starting second phase (unverified timestamps)")
+
+			resultCounter = 0
+			start = time.Now()
+
 			for {
-				<-ticker.C
-				log.Infof("DB - Archive of pokemon table - starting")
-				start := time.Now()
-
-				var resultCounter int64
-				var result sql.Result
-				var err error
-
-				start = time.Now()
-
-				for {
-					pokemonId := []PokemonIdToDelete{}
-					err = db.Select(&pokemonId,
-						fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < UNIX_TIMESTAMP() AND expire_timestamp_verified = 1 LIMIT %d;", databaseDeleteChunkSize))
-					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (expire time verified) select error [after %d rows] %s", resultCounter, err)
-						break
-					}
-
-					if len(pokemonId) == 0 {
-						break
-					}
-
-					var ids []string
-					for i := 0; i < len(pokemonId); i++ {
-						ids = append(ids, pokemonId[i].Id)
-					}
-
-					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
-					query = db.Rebind(query)
-
-					result, err = db.Exec(query, args...)
-
-					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (expire time verified) error [after %d rows] %s", resultCounter, err)
-						break
-					} else {
-						rows, _ := result.RowsAffected()
-						resultCounter += rows
-						if rows < databaseDeleteChunkSize {
-							elapsed := time.Since(start)
-							log.Infof("DB - Archive of pokemon table (verified timestamps) took %s (%d rows)", elapsed, resultCounter)
-							break
-						}
-					}
+				pokemonId := []PokemonIdToDelete{}
+				err = db.Select(&pokemonId,
+					fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) AND expire_timestamp_verified = 0 LIMIT %d;", databaseDeleteChunkSize))
+				if err != nil {
+					log.Errorf("DB - Archive of pokemon table (unverified timestamps) select error [after %d rows] %s", resultCounter, err)
+					break
 				}
 
-				log.Infof("DB - Archive of pokemon table - starting second phase (unverified timestamps)")
+				if len(pokemonId) == 0 {
+					break
+				}
 
-				resultCounter = 0
-				start = time.Now()
+				var ids []string
+				for i := 0; i < len(pokemonId); i++ {
+					ids = append(ids, pokemonId[i].Id)
+				}
 
-				for {
-					pokemonId := []PokemonIdToDelete{}
-					err = db.Select(&pokemonId,
-						fmt.Sprintf("SELECT id FROM pokemon WHERE expire_timestamp < (UNIX_TIMESTAMP() - 2400) AND expire_timestamp_verified = 0 LIMIT %d;", databaseDeleteChunkSize))
-					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (unverified timestamps) select error [after %d rows] %s", resultCounter, err)
+				query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
+				query = db.Rebind(query)
+
+				result, err = db.Exec(query, args...)
+
+				if err != nil {
+					log.Errorf("DB - Archive of pokemon table (unverified timestamps) error [after %d rows] %s", resultCounter, err)
+					break
+				} else {
+					rows, _ := result.RowsAffected()
+					resultCounter += rows
+					if rows < databaseDeleteChunkSize {
+						elapsed := time.Since(start)
+						log.Infof("DB - Archive of pokemon table (unverified timestamps) took %s (%d rows)", elapsed, resultCounter)
 						break
-					}
-
-					if len(pokemonId) == 0 {
-						break
-					}
-
-					var ids []string
-					for i := 0; i < len(pokemonId); i++ {
-						ids = append(ids, pokemonId[i].Id)
-					}
-
-					query, args, _ := sqlx.In("DELETE FROM pokemon WHERE id IN (?);", ids)
-					query = db.Rebind(query)
-
-					result, err = db.Exec(query, args...)
-
-					if err != nil {
-						log.Errorf("DB - Archive of pokemon table (unverified timestamps) error [after %d rows] %s", resultCounter, err)
-						break
-					} else {
-						rows, _ := result.RowsAffected()
-						resultCounter += rows
-						if rows < databaseDeleteChunkSize {
-							elapsed := time.Since(start)
-							log.Infof("DB - Archive of pokemon table (unverified timestamps) took %s (%d rows)", elapsed, resultCounter)
-							break
-						}
 					}
 				}
 			}
-		}()
-	}
+		}
+	}()
+
 }
 
 func StartStatsExpiry(db *sqlx.DB) {
@@ -267,36 +245,6 @@ func StartQuestExpiry(db *sqlx.DB) {
 
 			elapsed := time.Since(start)
 			log.Infof("DB - Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
-		}
-	}()
-}
-
-func StartInMemoryCleardown(db *sqlx.DB) {
-	ticker := time.NewTicker(time.Minute)
-	go func() {
-		for {
-			<-ticker.C
-			start := time.Now()
-
-			var result sql.Result
-			var err error
-
-			unix := time.Now().Unix()
-
-			result, err = db.Exec(
-				fmt.Sprintf("DELETE FROM pokemon WHERE expire_timestamp < %d;",
-					unix-5*60))
-
-			elapsed := time.Since(start)
-
-			if err != nil {
-				log.Errorf("DB - Archive of pokemon table error %s", err)
-				return
-			}
-
-			rows, _ := result.RowsAffected()
-			log.Infof("DB - Cleardown of in-memory pokemon table took %s (%d rows)", elapsed, rows)
-
 		}
 	}()
 }
