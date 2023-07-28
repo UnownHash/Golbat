@@ -17,12 +17,14 @@ type Route struct {
 	DistanceMeters   int64   `db:"distance_meters"`
 	DurationSeconds  int64   `db:"duration_seconds"`
 	EndFortId        string  `db:"end_fort_id"`
+	EndImage         string  `db:"end_image"`
 	EndLat           float64 `db:"end_lat"`
 	EndLon           float64 `db:"end_lon"`
 	Image            string  `db:"image"`
 	ImageBorderColor string  `db:"image_border_color"`
 	Reversible       bool    `db:"reversible"`
 	StartFortId      string  `db:"start_fort_id"`
+	StartImage       string  `db:"start_image"`
 	StartLat         float64 `db:"start_lat"`
 	StartLon         float64 `db:"start_lon"`
 	Tags             string  `db:"tags"`
@@ -92,18 +94,19 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			`
 			INSERT INTO route (
 			  id, name, description, distance_meters, 
-			  duration_seconds, end_fort_id, end_lat, 
-			  end_lon, image, image_border_color, 
-			  reversible, start_fort_id, start_lat, 
-			  start_lon, tags, type, updated, version, 
-			  waypoints
+			  duration_seconds, end_fort_id, end_image, 
+			  end_lat, end_lon, image, image_border_color, 
+			  reversible, start_fort_id, start_image, 
+			  start_lat, start_lon, tags, type, 
+			  updated, version, waypoints
 			)
 			VALUES
 			  (
 				:id, :name, :description, :distance_meters, 
 				:duration_seconds, :end_fort_id, 
-				:end_lat, :end_lon, :image, :image_border_color, 
-				:reversible, :start_fort_id, :start_lat, 
+				:end_image, :end_lat, :end_lon, :image, 
+				:image_border_color, :reversible, 
+				:start_fort_id, :start_image, :start_lat, 
 				:start_lon, :tags, :type, :updated, 
 				:version, :waypoints
 			  )
@@ -123,12 +126,14 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 				distance_meters = :distance_meters,
 				duration_seconds = :duration_seconds,
 				end_fort_id = :end_fort_id,
+				end_image = :end_image,
 				end_lat = :end_lat,
 				end_lon = :end_lon,
 				image = :image,
 				image_border_color = :image_border_color,
 				reversible = :reversible,
 				start_fort_id = :start_fort_id,
+				start_image = :start_image,
 				start_lat = :start_lat,
 				start_lon = :start_lon,
 				tags = :tags,
@@ -155,12 +160,14 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.DistanceMeters = sharedRouteProto.GetRouteDistanceMeters()
 	route.DurationSeconds = sharedRouteProto.GetRouteDurationSeconds()
 	route.EndFortId = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()
+	route.EndImage = sharedRouteProto.GetEndPoi().GetImageUrl()
 	route.EndLat = sharedRouteProto.GetEndPoi().GetAnchor().GetLatDegrees()
 	route.EndLon = sharedRouteProto.GetEndPoi().GetAnchor().GetLngDegrees()
 	route.Image = sharedRouteProto.GetImage().GetImageUrl()
 	route.ImageBorderColor = sharedRouteProto.GetImage().GetBorderColorHex()
 	route.Reversible = sharedRouteProto.GetReversible()
 	route.StartFortId = sharedRouteProto.GetStartPoi().GetAnchor().GetFortId()
+	route.StartImage = sharedRouteProto.GetStartPoi().GetImageUrl()
 	route.StartLat = sharedRouteProto.GetStartPoi().GetAnchor().GetLatDegrees()
 	route.StartLon = sharedRouteProto.GetStartPoi().GetAnchor().GetLngDegrees()
 	tags, _ := json.Marshal(sharedRouteProto.GetTags())
