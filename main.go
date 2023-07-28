@@ -479,6 +479,7 @@ func decodeGetRoutes(payload []byte) string {
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
 				decodeErrors++
+				log.Errorf("Failed to decode route %s", decodeError)
 			} else {
 				decodeSuccesses++
 			}
