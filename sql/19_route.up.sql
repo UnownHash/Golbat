@@ -1,8 +1,8 @@
 CREATE TABLE `route`
 (
     `id`                 varchar(35)         NOT NULL,
-    `name`               varchar(100)        NOT NULL,
-    `description`        varchar(200)        NOT NULL,
+    `name`               varchar(50)         NOT NULL,
+    `description`        varchar(255)        NOT NULL,
     `distance_meters`    int unsigned        NOT NULL,
     `duration_seconds`   int unsigned        NOT NULL,
     `start_fort_id`      varchar(35)         NOT NULL,
