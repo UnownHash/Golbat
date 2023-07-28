@@ -21,7 +21,9 @@ CREATE TABLE `route`
     `updated`            int unsigned        NOT NULL,
     `version`            int unsigned        NOT NULL,
     `waypoints`          text                NOT NULL,
-    PRIMARY KEY (`id`)
+    PRIMARY KEY (`id`),
+    KEY `ix_coords_start` (`start_lat`, `start_lon`),
+    KEY `ix_coords_end` (`end_lat`, `end_lon`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_unicode_ci;
