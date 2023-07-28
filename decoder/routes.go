@@ -27,7 +27,7 @@ type Route struct {
 	StartImage       string  `db:"start_image"`
 	StartLat         float64 `db:"start_lat"`
 	StartLon         float64 `db:"start_lon"`
-	Tags             string  `db:"tags"`
+	Tags             *string `db:"tags"`
 	Type             int8    `db:"type"`
 	Updated          int64   `db:"updated"`
 	Version          int64   `db:"version"`
@@ -170,13 +170,17 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.StartImage = sharedRouteProto.GetStartPoi().GetImageUrl()
 	route.StartLat = sharedRouteProto.GetStartPoi().GetAnchor().GetLatDegrees()
 	route.StartLon = sharedRouteProto.GetStartPoi().GetAnchor().GetLngDegrees()
-	tags, _ := json.Marshal(sharedRouteProto.GetTags())
-	route.Tags = string(tags)
 	route.Type = int8(sharedRouteProto.GetType())
 	route.Updated = time.Now().Unix()
 	route.Version = sharedRouteProto.GetVersion()
 	waypoints, _ := json.Marshal(sharedRouteProto.GetWaypoints())
 	route.Waypoints = string(waypoints)
+
+	if len(sharedRouteProto.GetTags()) > 0 {
+		tags, _ := json.Marshal(sharedRouteProto.GetTags())
+		stringTags := string(tags)
+		route.Tags = &stringTags
+	}
 }
 
 func UpdateRouteRecordWithSharedRouteProto(db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
