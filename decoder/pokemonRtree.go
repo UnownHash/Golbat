@@ -19,11 +19,14 @@ import (
 )
 
 type ApiPokemonScan struct {
-	Min             geo.Location                `json:"min"`
-	Max             geo.Location                `json:"max"`
-	Center          geo.Location                `json:"center"`
-	Limit           int                         `json:"limit"`
-	GlobalFilter    *ApiPokemonFilter           `json:"global"`
+	Min        geo.Location          `json:"min"`
+	Max        geo.Location          `json:"max"`
+	Center     geo.Location          `json:"center"`
+	Limit      int                   `json:"limit"`
+	DnfFilters []ApiPokemonDnfFilter `json:"dnf"`
+	// Deprecated: use DnfFilters instead
+	GlobalFilter *ApiPokemonFilter `json:"global"`
+	// Deprecated: use DnfFilters instead
 	SpecificFilters map[string]ApiPokemonFilter `json:"filters"`
 }
 
@@ -35,6 +38,7 @@ type ApiPokemonSearch struct {
 	SearchIds []int16      `json:"searchIds"`
 }
 
+// Deprecated: use ApiPokemonDnfFilter instead
 type ApiPokemonFilter struct {
 	Iv         []int8                      `json:"iv"`
 	AtkIv      []int8                      `json:"atk_iv"`
@@ -51,12 +55,27 @@ type ApiPvpFilter struct {
 	Great  []int16 `json:"great"`
 	Ultra  []int16 `json:"ultra"`
 }
+
+// Deprecated: hacky shit bye bye
 type ApiPokemonAdditionalFilter struct {
 	IncludeEverything bool `json:"include_everything"`
 	IncludeHundos     bool `json:"include_hundoiv"`
 	IncludeNundos     bool `json:"include_zeroiv"`
 	IncludeXxs        bool `json:"include_xxs"`
 	IncludeXxl        bool `json:"include_xxl"`
+}
+
+type ApiPokemonDnfFilter struct {
+	Pokemon []string      `json:"pokemon"`
+	Iv      []int8        `json:"iv"`
+	AtkIv   []int8        `json:"atk_iv"`
+	DefIv   []int8        `json:"def_iv"`
+	StaIv   []int8        `json:"sta_iv"`
+	Level   []int8        `json:"level"`
+	Cp      []int16       `json:"cp"`
+	Gender  int8          `json:"gender"`
+	Size    int8          `json:"size"`
+	Pvp     *ApiPvpFilter `json:"pvp"`
 }
 
 type ApiPokemonResult struct {
@@ -305,6 +324,54 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 		}
 	}
 
+	var dnfFilters map[string][]*ApiPokemonDnfFilter
+	if retrieveParameters.DnfFilters != nil && !func() bool {
+		dnfFilters = make(map[string][]*ApiPokemonDnfFilter)
+		for _, filter := range retrieveParameters.DnfFilters {
+			if filter.StaIv != nil && len(filter.StaIv) != 2 {
+				return false
+			}
+			if filter.AtkIv != nil && len(filter.AtkIv) != 2 {
+				return false
+			}
+			if filter.DefIv != nil && len(filter.DefIv) != 2 {
+				return false
+			}
+			if filter.Iv != nil && len(filter.Iv) != 2 {
+				return false
+			}
+			if filter.Level != nil && len(filter.Level) != 2 {
+				return false
+			}
+			if filter.Cp != nil && len(filter.Cp) != 2 {
+				return false
+			}
+
+			if filter.Pvp != nil {
+				if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
+					return false
+				}
+				if filter.Pvp.Great != nil && len(filter.Pvp.Great) != 2 {
+					return false
+				}
+				if filter.Pvp.Ultra != nil && len(filter.Pvp.Ultra) != 2 {
+					return false
+				}
+			}
+			if len(filter.Pokemon) > 0 {
+				for _, pokemon := range filter.Pokemon {
+					dnfFilters[pokemon] = append(dnfFilters[pokemon], &filter)
+				}
+			} else {
+				dnfFilters[""] = append(dnfFilters[""], &filter)
+			}
+		}
+		return true
+	}() {
+		log.Errorf("GetPokemonInArea - Invalid dnf filter")
+		return nil
+	}
+
 	start := time.Now()
 
 	min := retrieveParameters.Min
@@ -373,6 +440,25 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 
 		return filterMatched || pvpMatched || additionalMatch
 	}
+	isPokemonDnfMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonDnfFilter) bool {
+		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) ||
+			filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) ||
+			filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) ||
+			filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv[0] || pokemonLookup.Def > filter.DefIv[1]) ||
+			filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) ||
+			filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) ||
+			filter.Gender != 0 && pokemonLookup.Gender != filter.Gender ||
+			filter.Size != 0 && pokemonLookup.Size != filter.Size {
+			return false
+		}
+		pvpFilter := filter.Pvp
+		if pvpFilter != nil && pvpLookup != nil && (pvpFilter.Little != nil && (pvpLookup.Little < pvpFilter.Little[0] || pvpLookup.Little > pvpFilter.Little[1]) ||
+			pvpFilter.Great != nil && (pvpLookup.Great < pvpFilter.Great[0] || pvpLookup.Great > pvpFilter.Great[1]) ||
+			pvpFilter.Ultra != nil && (pvpLookup.Ultra < pvpFilter.Ultra[0] || pvpLookup.Ultra > pvpFilter.Ultra[1])) {
+			return false
+		}
+		return true
+	}
 
 	pokemonTreeMutex.RLock()
 	pokemonTree2 := pokemonTree.Copy()
@@ -397,21 +483,40 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				pvpLookup := pokemonLookupItem.PokemonPvpLookup
 
 				matched := false
-				shouldUseGlobal := true
-				if specificPokemonFilters != nil {
+				if dnfFilters != nil {
 					var formString strings.Builder
 					formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
 					formString.WriteByte('-')
 					formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
-					filter, found := specificPokemonFilters[formString.String()]
-
-					if found {
-						matched = isPokemonMatch(pokemonLookup, pvpLookup, &filter)
-						shouldUseGlobal = false
+					filters, found := dnfFilters[formString.String()]
+					if !found {
+						filters = dnfFilters[""]
 					}
-				}
-				if shouldUseGlobal && globalFilter != nil {
-					matched = isPokemonMatch(pokemonLookup, pvpLookup, globalFilter)
+					matched = func() bool {
+						for _, filter := range filters {
+							if isPokemonDnfMatch(pokemonLookup, pvpLookup, filter) {
+								return true
+							}
+						}
+						return false
+					}()
+				} else {
+					shouldUseGlobal := true
+					if specificPokemonFilters != nil {
+						var formString strings.Builder
+						formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
+						formString.WriteByte('-')
+						formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
+						filter, found := specificPokemonFilters[formString.String()]
+
+						if found {
+							matched = isPokemonMatch(pokemonLookup, pvpLookup, &filter)
+							shouldUseGlobal = false
+						}
+					}
+					if shouldUseGlobal && globalFilter != nil {
+						matched = isPokemonMatch(pokemonLookup, pvpLookup, globalFilter)
+					}
 				}
 
 				if matched {
