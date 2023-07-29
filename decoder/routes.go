@@ -7,31 +7,32 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"golbat/db"
 	"golbat/pogo"
+	"gopkg.in/guregu/null.v4"
 	"time"
 )
 
 type Route struct {
-	Id               string  `db:"id"`
-	Name             string  `db:"name"`
-	Description      string  `db:"description"`
-	DistanceMeters   int64   `db:"distance_meters"`
-	DurationSeconds  int64   `db:"duration_seconds"`
-	EndFortId        string  `db:"end_fort_id"`
-	EndImage         string  `db:"end_image"`
-	EndLat           float64 `db:"end_lat"`
-	EndLon           float64 `db:"end_lon"`
-	Image            string  `db:"image"`
-	ImageBorderColor string  `db:"image_border_color"`
-	Reversible       bool    `db:"reversible"`
-	StartFortId      string  `db:"start_fort_id"`
-	StartImage       string  `db:"start_image"`
-	StartLat         float64 `db:"start_lat"`
-	StartLon         float64 `db:"start_lon"`
-	Tags             *string `db:"tags"`
-	Type             int8    `db:"type"`
-	Updated          int64   `db:"updated"`
-	Version          int64   `db:"version"`
-	Waypoints        string  `db:"waypoints"`
+	Id               string      `db:"id"`
+	Name             string      `db:"name"`
+	Description      string      `db:"description"`
+	DistanceMeters   int64       `db:"distance_meters"`
+	DurationSeconds  int64       `db:"duration_seconds"`
+	EndFortId        string      `db:"end_fort_id"`
+	EndImage         string      `db:"end_image"`
+	EndLat           float64     `db:"end_lat"`
+	EndLon           float64     `db:"end_lon"`
+	Image            string      `db:"image"`
+	ImageBorderColor string      `db:"image_border_color"`
+	Reversible       bool        `db:"reversible"`
+	StartFortId      string      `db:"start_fort_id"`
+	StartImage       string      `db:"start_image"`
+	StartLat         float64     `db:"start_lat"`
+	StartLon         float64     `db:"start_lon"`
+	Tags             null.String `db:"tags"`
+	Type             int8        `db:"type"`
+	Updated          int64       `db:"updated"`
+	Version          int64       `db:"version"`
+	Waypoints        string      `db:"waypoints"`
 }
 
 func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
@@ -178,8 +179,7 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 
 	if len(sharedRouteProto.GetTags()) > 0 {
 		tags, _ := json.Marshal(sharedRouteProto.GetTags())
-		stringTags := string(tags)
-		route.Tags = &stringTags
+		route.Tags = null.StringFrom(string(tags))
 	}
 }
 
