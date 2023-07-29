@@ -478,11 +478,11 @@ func decodeGetRoutes(payload []byte) string {
 		for _, route := range routeMapCell.GetRoute() {
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
-				if _, isAlreadyIn := decodeErrors[route.Id]; !isAlreadyIn {
+				if decodeErrors[route.Id] != true {
 					decodeErrors[route.Id] = true
 				}
 				log.Errorf("Failed to decode route %s", decodeError)
-			} else if _, isAlreadyIn := decodeSuccesses[route.Id]; !isAlreadyIn {
+			} else if decodeSuccesses[route.Id] != true {
 				decodeSuccesses[route.Id] = true
 			}
 		}
