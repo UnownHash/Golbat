@@ -78,7 +78,6 @@ func hasChangesRoute(old *Route, new *Route) bool {
 		!floatAlmostEqual(old.StartLon, new.StartLon, floatTolerance) ||
 		old.Tags != new.Tags ||
 		old.Type != new.Type ||
-		old.Updated != new.Updated ||
 		old.Version != new.Version ||
 		old.Waypoints != new.Waypoints
 }
