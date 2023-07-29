@@ -19,11 +19,11 @@ import (
 )
 
 type ApiPokemonScan struct {
-	Min        geo.Location          `json:"min"`
-	Max        geo.Location          `json:"max"`
-	Center     geo.Location          `json:"center"`
-	Limit      int                   `json:"limit"`
-	DnfFilters []ApiPokemonDnfFilter `json:"dnf"`
+	Min        geo.Location           `json:"min"`
+	Max        geo.Location           `json:"max"`
+	Center     geo.Location           `json:"center"`
+	Limit      int                    `json:"limit"`
+	DnfFilters []*ApiPokemonDnfFilter `json:"dnf"`
 	// Deprecated: use DnfFilters instead
 	GlobalFilter *ApiPokemonFilter `json:"global"`
 	// Deprecated: use DnfFilters instead
@@ -360,10 +360,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 			}
 			if len(filter.Pokemon) > 0 {
 				for _, pokemon := range filter.Pokemon {
-					dnfFilters[pokemon] = append(dnfFilters[pokemon], &filter)
+					dnfFilters[pokemon] = append(dnfFilters[pokemon], filter)
 				}
 			} else {
-				dnfFilters[""] = append(dnfFilters[""], &filter)
+				dnfFilters[""] = append(dnfFilters[""], filter)
 			}
 		}
 		return true
