@@ -320,7 +320,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	pokemonExamined := 0
 	pokemonSkipped := 0
 
-	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter ApiPokemonFilter) bool {
+	isPokemonMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonFilter) bool {
 		// start with filter true if we have any filter set (no filters no match)
 		filterMatched := filter.Iv != nil || filter.StaIv != nil || filter.AtkIv != nil || filter.DefIv != nil || filter.Level != nil || filter.Cp != nil || filter.Gender != 0
 		pvpMatched := false // assume pvp match is true unless any filter matches
@@ -396,13 +396,9 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				pokemonLookup := pokemonLookupItem.PokemonLookup
 				pvpLookup := pokemonLookupItem.PokemonPvpLookup
 
-				globalFilterMatched := false
-				if globalFilter != nil {
-					globalFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, *globalFilter)
-				}
-				specificFilterMatched := false
-
-				if !globalFilterMatched && specificPokemonFilters != nil {
+				matched := false
+				shouldUseGlobal := true
+				if specificPokemonFilters != nil {
 					var formString strings.Builder
 					formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
 					formString.WriteByte('-')
@@ -410,11 +406,15 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 					filter, found := specificPokemonFilters[formString.String()]
 
 					if found {
-						specificFilterMatched = isPokemonMatch(pokemonLookup, pvpLookup, filter)
+						matched = isPokemonMatch(pokemonLookup, pvpLookup, &filter)
+						shouldUseGlobal = false
 					}
 				}
+				if shouldUseGlobal && globalFilter != nil {
+					matched = isPokemonMatch(pokemonLookup, pvpLookup, globalFilter)
+				}
 
-				if globalFilterMatched || specificFilterMatched {
+				if matched {
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {
