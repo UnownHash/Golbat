@@ -471,25 +471,27 @@ func decodeGetRoutes(payload []byte) string {
 		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
 	}
 
-	decodeSuccesses := 0
-	decodeErrors := 0
+	decodeSuccesses := map[string]bool{}
+	decodeErrors := map[string]bool{}
 
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
-				decodeErrors++
+				if _, isAlreadyIn := decodeErrors[route.Id]; !isAlreadyIn {
+					decodeErrors[route.Id] = true
+				}
 				log.Errorf("Failed to decode route %s", decodeError)
-			} else {
-				decodeSuccesses++
+			} else if _, isAlreadyIn := decodeSuccesses[route.Id]; !isAlreadyIn {
+				decodeSuccesses[route.Id] = true
 			}
 		}
 	}
 
 	return fmt.Sprintf(
 		"Decoded %d routes, failed to decode %d routes, from %d cells",
-		decodeSuccesses,
-		decodeErrors,
+		len(decodeSuccesses),
+		len(decodeErrors),
 		len(getRoutesOutProto.GetRouteMapCell()),
 	)
 }
