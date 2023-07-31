@@ -161,20 +161,21 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.DurationSeconds = sharedRouteProto.GetRouteDurationSeconds()
 	route.EndFortId = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()
 	route.EndImage = sharedRouteProto.GetEndPoi().GetImageUrl()
-	route.EndLat = sharedRouteProto.GetEndPoi().GetAnchor().GetLatDegrees()
-	route.EndLon = sharedRouteProto.GetEndPoi().GetAnchor().GetLngDegrees()
+	waypoints := sharedRouteProto.GetWaypoints()
+	route.EndLat = waypoints[len(waypoints)-1].LatDegrees
+	route.EndLon = waypoints[len(waypoints)-1].LngDegrees
 	route.Image = sharedRouteProto.GetImage().GetImageUrl()
 	route.ImageBorderColor = sharedRouteProto.GetImage().GetBorderColorHex()
 	route.Reversible = sharedRouteProto.GetReversible()
 	route.StartFortId = sharedRouteProto.GetStartPoi().GetAnchor().GetFortId()
 	route.StartImage = sharedRouteProto.GetStartPoi().GetImageUrl()
-	route.StartLat = sharedRouteProto.GetStartPoi().GetAnchor().GetLatDegrees()
-	route.StartLon = sharedRouteProto.GetStartPoi().GetAnchor().GetLngDegrees()
+	route.StartLat = waypoints[0].LatDegrees
+	route.StartLon = waypoints[0].LngDegrees
 	route.Type = int8(sharedRouteProto.GetType())
 	route.Updated = time.Now().Unix()
 	route.Version = sharedRouteProto.GetVersion()
-	waypoints, _ := json.Marshal(sharedRouteProto.GetWaypoints())
-	route.Waypoints = string(waypoints)
+	waypointsJson, _ := json.Marshal(waypoints)
+	route.Waypoints = string(waypointsJson)
 
 	if len(sharedRouteProto.GetTags()) > 0 {
 		tags, _ := json.Marshal(sharedRouteProto.GetTags())
