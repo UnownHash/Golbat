@@ -39,7 +39,7 @@ include_hundos_under_cap = false
 [[webhooks]]
 url = "http://localhost:4201"
 # types if specified can be...
-# types = ["pokemon", "gym", "invasion", "quest", "pokestop", "raid"]
+# types = ["pokemon", "gym_details", "invasion", "quest", "pokestop", "raid", "weather", "fort_update"]
 
 #[[webhooks]]
 #url = "http://localhost:4202"
