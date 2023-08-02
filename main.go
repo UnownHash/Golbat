@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"golbat/config"
 	db2 "golbat/db"
@@ -11,6 +12,7 @@ import (
 	"golbat/webhooks"
 	"google.golang.org/grpc"
 	"net"
+	"strings"
 	"time"
 	_ "time/tzdata"
 
@@ -289,6 +291,17 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
+	case pogo.Method_METHOD_GET_CONTEST_DATA:
+		// Request helps, but can be decoded without it
+		result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
+		processed = true
+		break
+	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
+		// Request is essential to decode this
+		if protoData.Request != nil {
+			result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
+		}
+		break
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
@@ -605,4 +618,112 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
+}
+
+func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
+	var decodedContestData pogo.GetContestDataOutProto
+	if err := proto.Unmarshal(data, &decodedContestData); err != nil {
+		log.Errorf("Failed to parse GetContestDataOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
+	}
+
+	if decodedContestData.ContestIncident == nil || len(decodedContestData.ContestIncident.Contests) == 0 {
+		return "No contests found"
+	}
+
+	var fortId string
+	var decodedContestDataRequest pogo.GetContestDataProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedContestDataRequest); err != nil {
+			log.Errorf("Failed to parse GetContestDataProto %s", err)
+			return fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
+		}
+		fortId = decodedContestDataRequest.FortId
+	} else {
+		fortId = getFortIdFromContest(decodedContestData.ContestIncident.Contests[0].ContestId)
+	}
+
+	if fortId == "" {
+		return "No fortId found"
+	}
+
+	if len(decodedContestData.ContestIncident.Contests) > 1 {
+		log.Errorf("More than one contest found")
+		return fmt.Sprintf("More than one contest found in %s", fortId)
+	}
+
+	contest := decodedContestData.ContestIncident.Contests[0]
+
+	log.Infof("Contest %s Pokemon %s", fortId, contest.GetFocus().GetPokemon().GetPokedexId())
+	rankingStandard := contest.GetMetric().GetRankingStandard()
+	pokemonMetric := contest.GetMetric().Metric
+
+	startTime := contest.GetSchedule().GetContestCycle().GetStartTimeMs()
+	endTime := contest.GetSchedule().GetContestCycle().GetEndTimeMs()
+
+	log.Infof("Contest %s Ranking %s Metric %s Start %d End %d", fortId, rankingStandard, pokemonMetric, startTime, endTime)
+
+	return ""
+}
+
+func getFortIdFromContest(id string) string {
+	return strings.Split(id, "-")[0]
+}
+
+func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
+	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeContestEntryOutProto
+	if err := proto.Unmarshal(data, &decodedPokemonSizeContestEntry); err != nil {
+		log.Errorf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+	}
+
+	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeContestEntryOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetPokemonSizeContestEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
+	}
+
+	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeContestEntryProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedPokemonSizeContestEntryRequest); err != nil {
+			log.Errorf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+			return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+		}
+	}
+
+	fortId := getFortIdFromContest(decodedPokemonSizeContestEntryRequest.GetContestId())
+
+	type contestEntry struct {
+		Rank      int     `json:"rank"`
+		Score     float64 `json:"score"`
+		PokemonId int     `json:"pokemon_id"`
+		Form      int     `json:"form"`
+		Costume   int     `json:"costume"`
+		Gender    int     `json:"gender"`
+	}
+	type contestJson struct {
+		TotalEntries   int            `json:"total_entries"`
+		ContestEntries []contestEntry `json:"contest_entries"`
+	}
+
+	j := contestJson{}
+	j.TotalEntries = int(decodedPokemonSizeContestEntry.TotalEntries)
+
+	for _, entry := range decodedPokemonSizeContestEntry.GetContestEntries() {
+		rank := entry.GetRank()
+		if rank > 3 {
+			break
+		}
+		j.ContestEntries = append(j.ContestEntries, contestEntry{
+			Rank:      int(rank),
+			Score:     entry.GetScore(),
+			PokemonId: int(entry.GetPokedexId()),
+			Form:      int(entry.GetPokemonDisplay().Form),
+			Costume:   int(entry.GetPokemonDisplay().Costume),
+			Gender:    int(entry.GetPokemonDisplay().Gender),
+		})
+
+	}
+	jsonString, _ := json.Marshal(j)
+	log.Infof("Contest %s Entry %s", fortId, jsonString)
+
+	return ""
 }
