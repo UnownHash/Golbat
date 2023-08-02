@@ -289,6 +289,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
+	case pogo.Method_METHOD_GET_ROUTES:
+		result = decodeGetRoutes(protoData.Data)
+		processed = true
 	default:
 		log.Debugf("Did not process hook type %s", pogo.Method(method))
 	}
@@ -456,6 +459,41 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
 	}
 	return "No forts updated"
+}
+
+func decodeGetRoutes(payload []byte) string {
+	getRoutesOutProto := &pogo.GetRoutesOutProto{}
+	if err := proto.Unmarshal(payload, getRoutesOutProto); err != nil {
+		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
+	}
+
+	if getRoutesOutProto.Status != pogo.GetRoutesOutProto_SUCCESS {
+		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
+	}
+
+	decodeSuccesses := map[string]bool{}
+	decodeErrors := map[string]bool{}
+
+	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
+		for _, route := range routeMapCell.GetRoute() {
+			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
+			if decodeError != nil {
+				if decodeErrors[route.Id] != true {
+					decodeErrors[route.Id] = true
+				}
+				log.Errorf("Failed to decode route %s", decodeError)
+			} else if decodeSuccesses[route.Id] != true {
+				decodeSuccesses[route.Id] = true
+			}
+		}
+	}
+
+	return fmt.Sprintf(
+		"Decoded %d routes, failed to decode %d routes, from %d cells",
+		len(decodeSuccesses),
+		len(decodeErrors),
+		len(getRoutesOutProto.GetRouteMapCell()),
+	)
 }
 
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
