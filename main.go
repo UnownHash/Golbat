@@ -476,6 +476,9 @@ func decodeGetRoutes(payload []byte) string {
 
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
+			if route.RouteSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
+				continue
+			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
 				if decodeErrors[route.Id] != true {
