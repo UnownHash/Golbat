@@ -47,6 +47,15 @@ requires the proto request to be present in the raw.
 
 - Decode routes
 
+`Method_METHOD_GET_CONTEST_DATA`
+
+- Decode contest high level data: pokemon, ranking method, end time
+
+`METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY`
+
+- Decode top 3 player scores for a contest. This requires the proto request
+to be present in the raw.
+
 # Social actions
 
 - The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto will be
