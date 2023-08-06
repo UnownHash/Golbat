@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"golbat/config"
 	db2 "golbat/db"
@@ -12,7 +11,6 @@ import (
 	"golbat/webhooks"
 	"google.golang.org/grpc"
 	"net"
-	"strings"
 	"time"
 	_ "time/tzdata"
 
@@ -303,16 +301,17 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		// Request is essential to decode this
 		if protoData.Request != nil {
 			result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
+			processed = true
 		}
 		break
 	default:
-		log.Debugf("Did not process hook type %s", pogo.Method(method))
+		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
-
+	elapsed := time.Since(start)
 	if processed == true {
-		elapsed := time.Since(start)
-
 		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
+	} else {
+		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, "**Did not process**")
 	}
 }
 
@@ -665,47 +664,14 @@ func decodeGetContestData(ctx context.Context, request []byte, data []byte) stri
 		return fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
 	}
 
-	if decodedContestData.ContestIncident == nil || len(decodedContestData.ContestIncident.Contests) == 0 {
-		return "No contests found"
-	}
-
-	var fortId string
 	var decodedContestDataRequest pogo.GetContestDataProto
 	if request != nil {
 		if err := proto.Unmarshal(request, &decodedContestDataRequest); err != nil {
 			log.Errorf("Failed to parse GetContestDataProto %s", err)
 			return fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
 		}
-		fortId = decodedContestDataRequest.FortId
-	} else {
-		fortId = getFortIdFromContest(decodedContestData.ContestIncident.Contests[0].ContestId)
 	}
-
-	if fortId == "" {
-		return "No fortId found"
-	}
-
-	if len(decodedContestData.ContestIncident.Contests) > 1 {
-		log.Errorf("More than one contest found")
-		return fmt.Sprintf("More than one contest found in %s", fortId)
-	}
-
-	contest := decodedContestData.ContestIncident.Contests[0]
-
-	log.Infof("Contest %s Pokemon %s", fortId, contest.GetFocus().GetPokemon().GetPokedexId())
-	rankingStandard := contest.GetMetric().GetRankingStandard()
-	pokemonMetric := contest.GetMetric().Metric
-
-	startTime := contest.GetSchedule().GetContestCycle().GetStartTimeMs()
-	endTime := contest.GetSchedule().GetContestCycle().GetEndTimeMs()
-
-	log.Infof("Contest %s Ranking %s Metric %s Start %d End %d", fortId, rankingStandard, pokemonMetric, startTime, endTime)
-
-	return ""
-}
-
-func getFortIdFromContest(id string) string {
-	return strings.Split(id, "-")[0]
+	return decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
 }
 
 func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
@@ -727,41 +693,5 @@ func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data 
 		}
 	}
 
-	fortId := getFortIdFromContest(decodedPokemonSizeContestEntryRequest.GetContestId())
-
-	type contestEntry struct {
-		Rank      int     `json:"rank"`
-		Score     float64 `json:"score"`
-		PokemonId int     `json:"pokemon_id"`
-		Form      int     `json:"form"`
-		Costume   int     `json:"costume"`
-		Gender    int     `json:"gender"`
-	}
-	type contestJson struct {
-		TotalEntries   int            `json:"total_entries"`
-		ContestEntries []contestEntry `json:"contest_entries"`
-	}
-
-	j := contestJson{}
-	j.TotalEntries = int(decodedPokemonSizeContestEntry.TotalEntries)
-
-	for _, entry := range decodedPokemonSizeContestEntry.GetContestEntries() {
-		rank := entry.GetRank()
-		if rank > 3 {
-			break
-		}
-		j.ContestEntries = append(j.ContestEntries, contestEntry{
-			Rank:      int(rank),
-			Score:     entry.GetScore(),
-			PokemonId: int(entry.GetPokedexId()),
-			Form:      int(entry.GetPokemonDisplay().Form),
-			Costume:   int(entry.GetPokemonDisplay().Costume),
-			Gender:    int(entry.GetPokemonDisplay().Gender),
-		})
-
-	}
-	jsonString, _ := json.Marshal(j)
-	log.Infof("Contest %s Entry %s", fortId, jsonString)
-
-	return ""
+	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
 }
