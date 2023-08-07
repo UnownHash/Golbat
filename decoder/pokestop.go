@@ -566,7 +566,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          false,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
@@ -592,7 +592,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          true,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
