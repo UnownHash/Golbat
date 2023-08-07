@@ -611,12 +611,12 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"type":             stop.AlternativeQuestType,
 			"target":           stop.AlternativeQuestTarget,
 			"template":         stop.AlternativeQuestTemplate,
-			"title":            stop.AlternativeQuestTarget,
+			"title":            stop.AlternativeQuestTitle,
 			"conditions":       json.RawMessage(stop.AlternativeQuestConditions.ValueOrZero()),
 			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          false,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
@@ -637,12 +637,12 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"type":             stop.QuestType,
 			"target":           stop.QuestTarget,
 			"template":         stop.QuestTemplate,
-			"title":            stop.QuestTarget,
+			"title":            stop.QuestTitle,
 			"conditions":       json.RawMessage(stop.QuestConditions.ValueOrZero()),
 			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          true,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
