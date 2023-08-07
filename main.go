@@ -240,6 +240,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	}
 
 	processed := false
+	ignore := false
 	start := time.Now()
 	result := ""
 
@@ -274,11 +275,13 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
+		ignore = true
 		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
+		ignore = true
 		break
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
-		// ignore
+		ignore = true
 		break
 	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
@@ -307,11 +310,13 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
-	elapsed := time.Since(start)
-	if processed == true {
-		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
-	} else {
-		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, "**Did not process**")
+	if !ignore {
+		elapsed := time.Since(start)
+		if processed == true {
+			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
+		} else {
+			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, "**Did not process**")
+		}
 	}
 }
 
