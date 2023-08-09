@@ -25,6 +25,9 @@ func ReadConfig() (configDefinition, error) {
 			MutexProfileFraction: 5,
 			BlockProfileRate:     5,
 		},
+		Prometheus: prometheus{
+			BucketSize: []float64{.00005, .000075, .0001, .00025, .0005, .00075, .001, .0025, .005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10},
+		},
 		Logging: logging{
 			Debug:      false,
 			SaveLogs:   false,

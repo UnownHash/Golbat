@@ -13,6 +13,7 @@ type configDefinition struct {
 	Logging           logging    `koanf:"logging"`
 	Sentry            sentry     `koanf:"sentry"`
 	Pyroscope         pyroscope  `koanf:"pyroscope"`
+	Prometheus        prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly bool       `koanf:"pokemon_memory_only"`
 	TestFortInMemory  bool       `koanf:"test_fort_in_memory"`
 	Cleanup           cleanup    `koanf:"cleanup"`
@@ -75,6 +76,12 @@ type pyroscope struct {
 	Logger               bool   `koanf:"logger"`
 	MutexProfileFraction int    `koanf:"mutex_profile_fraction"`
 	BlockProfileRate     int    `koanf:"block_profile_rate"`
+}
+
+type prometheus struct {
+	Enabled    bool      `koanf:"enabled"`
+	Token      string    `koanf:"token"`
+	BucketSize []float64 `koanf:"bucket_size"`
 }
 
 type logging struct {

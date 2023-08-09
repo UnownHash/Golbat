@@ -7,6 +7,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/external"
 	"golbat/pogo"
 	"golbat/webhooks"
 	"gopkg.in/guregu/null.v4"
@@ -148,6 +149,7 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 		}
 		areas := MatchStatsGeofence(weather.Latitude, weather.Longitude)
 		webhooksSender.AddMessage(webhooks.Weather, weatherHook, areas)
+		external.UpdateWeatherCount(areas, weather.GameplayCondition.ValueOrZero())
 	}
 }
 

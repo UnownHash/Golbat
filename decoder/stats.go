@@ -5,6 +5,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"golbat/external"
 	"golbat/geo"
 	"os"
 	"sync"
@@ -246,10 +247,16 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 
 			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
 				countStats.count[new.PokemonId]++
+				external.PokemonCountNew.WithLabelValues(area.Parent).Inc()
+				if new.ExpireTimestampVerified {
+					external.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
+				}
 			}
 			if new.Cp.Valid {
 				countStats.ivCount[new.PokemonId]++
+				external.PokemonCountIv.WithLabelValues(area.Parent).Inc()
 				if new.Shiny.ValueOrZero() {
+					external.PokemonCountShiny.WithLabelValues(area.Parent).Inc()
 					countStats.shiny[new.PokemonId]++
 				}
 				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
@@ -257,10 +264,18 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 					def := new.DefIv.ValueOrZero()
 					sta := new.StaIv.ValueOrZero()
 					if atk == 15 && def == 15 && sta == 15 {
+						external.PokemonCountHundo.WithLabelValues(area.Parent).Inc()
 						countStats.hundos[new.PokemonId]++
+						if new.Shiny.ValueOrZero() {
+							external.PokemonCountShundo.WithLabelValues(area.Parent).Inc()
+						}
 					}
 					if atk == 0 && def == 0 && sta == 0 {
+						external.PokemonCountNundo.WithLabelValues(area.Parent).Inc()
 						countStats.nundos[new.PokemonId]++
+						if new.Shiny.ValueOrZero() {
+							external.PokemonCountSnundo.WithLabelValues(area.Parent).Inc()
+						}
 					}
 				}
 			}
@@ -279,6 +294,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 			if bucket >= 0 {
 				areaStats.tthBucket[bucket]++
 			}
+
+			external.PokemonStatsResetCount.WithLabelValues(area.Parent).Add(float64(statsResetCountIncr))
+
 			areaStats.monsIv += monsIvIncr
 			areaStats.monsSeen += monsSeenIncr
 			areaStats.verifiedEnc += verifiedEncIncr
