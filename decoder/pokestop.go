@@ -58,7 +58,10 @@ type Pokestop struct {
 	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
 	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
 	Description                null.String `db:"description" json:"description"`
-
+	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
+	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
+	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
+	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -169,7 +172,11 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 		old.AlternativeQuestExpiry != new.AlternativeQuestExpiry ||
 		old.Description != new.Description ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
+		old.ShowcaseRankingStandard != new.ShowcaseRankingStandard ||
+		old.ShowcasePokemon != new.ShowcasePokemon ||
+		old.ShowcaseRankings != new.ShowcaseRankings ||
+		old.ShowcaseExpiry != new.ShowcaseExpiry
 }
 
 var LureTime int64 = 1800
@@ -532,6 +539,49 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 	return stop
 }
 
+func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.ContestProto) {
+	stop.ShowcaseRankingStandard = null.IntFrom(int64(contest.GetMetric().GetRankingStandard()))
+	stop.ShowcaseExpiry = null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
+	stop.ShowcasePokemon = null.IntFrom(int64(contest.GetFocus().GetPokemon().GetPokedexId()))
+}
+
+func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeContestEntryOutProto) {
+	type contestEntry struct {
+		Rank      int     `json:"rank"`
+		Score     float64 `json:"score"`
+		PokemonId int     `json:"pokemon_id"`
+		Form      int     `json:"form"`
+		Costume   int     `json:"costume"`
+		Gender    int     `json:"gender"`
+	}
+	type contestJson struct {
+		TotalEntries   int            `json:"total_entries"`
+		LastUpdate     int64          `json:"last_update"`
+		ContestEntries []contestEntry `json:"contest_entries"`
+	}
+
+	j := contestJson{LastUpdate: time.Now().Unix()}
+	j.TotalEntries = int(contestData.TotalEntries)
+
+	for _, entry := range contestData.GetContestEntries() {
+		rank := entry.GetRank()
+		if rank > 3 {
+			break
+		}
+		j.ContestEntries = append(j.ContestEntries, contestEntry{
+			Rank:      int(rank),
+			Score:     entry.GetScore(),
+			PokemonId: int(entry.GetPokedexId()),
+			Form:      int(entry.GetPokemonDisplay().Form),
+			Costume:   int(entry.GetPokemonDisplay().Costume),
+			Gender:    int(entry.GetPokemonDisplay().Gender),
+		})
+
+	}
+	jsonString, _ := json.Marshal(j)
+	stop.ShowcaseRankings = null.StringFrom(string(jsonString))
+}
+
 func createPokestopFortWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	fort := InitWebHookFortFromPokestop(stop)
 	oldFort := InitWebHookFortFromPokestop(oldStop)
@@ -566,7 +616,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          false,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
@@ -592,7 +642,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.Valid,
+			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          true,
 		}
 		webhooks.AddMessage(webhooks.Quest, questHook, areas)
@@ -609,16 +659,26 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 					return "Unknown"
 				}
 			}(),
-			"url":                    stop.Url.ValueOrZero(),
-			"lure_expiration":        stop.LureExpireTimestamp.ValueOrZero(),
-			"last_modified":          stop.LastModifiedTimestamp.ValueOrZero(),
-			"enabled":                stop.Enabled.ValueOrZero(),
-			"lure_id":                stop.LureId,
-			"ar_scan_eligible":       stop.ArScanEligible.ValueOrZero(),
-			"power_up_level":         stop.PowerUpLevel.ValueOrZero(),
-			"power_up_points":        stop.PowerUpPoints.ValueOrZero(),
-			"power_up_end_timestamp": stop.PowerUpPoints.ValueOrZero(),
-			"updated":                stop.Updated,
+			"url":                       stop.Url.ValueOrZero(),
+			"lure_expiration":           stop.LureExpireTimestamp.ValueOrZero(),
+			"last_modified":             stop.LastModifiedTimestamp.ValueOrZero(),
+			"enabled":                   stop.Enabled.ValueOrZero(),
+			"lure_id":                   stop.LureId,
+			"ar_scan_eligible":          stop.ArScanEligible.ValueOrZero(),
+			"power_up_level":            stop.PowerUpLevel.ValueOrZero(),
+			"power_up_points":           stop.PowerUpPoints.ValueOrZero(),
+			"power_up_end_timestamp":    stop.PowerUpPoints.ValueOrZero(),
+			"updated":                   stop.Updated,
+			"showcase_pokemon_id":       stop.ShowcasePokemon,
+			"showcase_ranking_standard": stop.ShowcaseRankingStandard,
+			"showcase_expiry":           stop.ShowcaseExpiry,
+			"showcase_rankings": func() interface{} {
+				if !stop.ShowcaseRankings.Valid {
+					return nil
+				} else {
+					return json.RawMessage(stop.ShowcaseRankings.ValueOrZero())
+				}
+			}(),
 		}
 
 		webhooks.AddMessage(webhooks.Pokestop, pokestopHook, areas)
@@ -647,7 +707,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,"+
 				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
 				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
-				"quest_expiry, alternative_quest_expiry, description)"+
+				"quest_expiry, alternative_quest_expiry, description,"+
+				"showcase_pokemon_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
+				")"+
 				"VALUES ("+
 				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
 				":quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,"+
@@ -656,7 +718,8 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
 				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
 				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
-				":quest_expiry, :alternative_quest_expiry, :description )",
+				":quest_expiry, :alternative_quest_expiry, :description,"+
+				":showcase_pokemon_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
 			pokestop)
 
 		if err != nil {
@@ -700,7 +763,11 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"power_up_end_timestamp = :power_up_end_timestamp,"+
 				"quest_expiry = :quest_expiry,"+
 				"alternative_quest_expiry = :alternative_quest_expiry,"+
-				"description = :description"+
+				"description = :description,"+
+				"showcase_pokemon_id = :showcase_pokemon_id,"+
+				"showcase_ranking_standard = :showcase_ranking_standard,"+
+				"showcase_expiry = :showcase_expiry,"+
+				"showcase_rankings = :showcase_rankings"+
 				" WHERE id = :id",
 			pokestop,
 		)
@@ -813,4 +880,76 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 
 func GetPokestopPositions(details db.DbDetails, geofence geo.Geofence) ([]db.QuestLocation, error) {
 	return db.GetPokestopPositions(details, geofence)
+}
+
+func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request *pogo.GetContestDataProto, contestData *pogo.GetContestDataOutProto) string {
+	if contestData.ContestIncident == nil || len(contestData.ContestIncident.Contests) == 0 {
+		return "No contests found"
+	}
+
+	var fortId string
+	if request != nil {
+		fortId = request.FortId
+	} else {
+		fortId = getFortIdFromContest(contestData.ContestIncident.Contests[0].ContestId)
+	}
+
+	if fortId == "" {
+		return "No fortId found"
+	}
+
+	if len(contestData.ContestIncident.Contests) > 1 {
+		log.Errorf("More than one contest found")
+		return fmt.Sprintf("More than one contest found in %s", fortId)
+	}
+
+	contest := contestData.ContestIncident.Contests[0]
+
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
+	pokestopMutex.Lock()
+	defer pokestopMutex.Unlock()
+
+	pokestop, err := GetPokestopRecord(ctx, db, fortId)
+	if err != nil {
+		log.Printf("Get pokestop %s", err)
+		return "Error getting pokestop"
+	}
+
+	if pokestop == nil {
+		log.Infof("Contest data for pokestop %s not found", fortId)
+		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
+	}
+
+	pokestop.updatePokestopFromGetContestDataOutProto(contest)
+	savePokestopRecord(ctx, db, pokestop)
+
+	return fmt.Sprintf("Contest %s", fortId)
+}
+
+func getFortIdFromContest(id string) string {
+	return strings.Split(id, "-")[0]
+}
+
+func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeContestEntryProto, contestData *pogo.GetPokemonSizeContestEntryOutProto) string {
+	fortId := getFortIdFromContest(request.GetContestId())
+
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
+	pokestopMutex.Lock()
+	defer pokestopMutex.Unlock()
+
+	pokestop, err := GetPokestopRecord(ctx, db, fortId)
+	if err != nil {
+		log.Printf("Get pokestop %s", err)
+		return "Error getting pokestop"
+	}
+
+	if pokestop == nil {
+		log.Infof("Contest data for pokestop %s not found", fortId)
+		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
+	}
+
+	pokestop.updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData)
+	savePokestopRecord(ctx, db, pokestop)
+
+	return fmt.Sprintf("Contest Detail %s", fortId)
 }
