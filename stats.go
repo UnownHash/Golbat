@@ -248,33 +248,3 @@ func StartQuestExpiry(db *sqlx.DB) {
 		}
 	}()
 }
-
-func StartInMemoryCleardown(db *sqlx.DB) {
-	ticker := time.NewTicker(time.Minute)
-	go func() {
-		for {
-			<-ticker.C
-			start := time.Now()
-
-			var result sql.Result
-			var err error
-
-			unix := time.Now().Unix()
-
-			result, err = db.Exec(
-				fmt.Sprintf("DELETE FROM pokemon WHERE expire_timestamp < %d;",
-					unix-5*60))
-
-			elapsed := time.Since(start)
-
-			if err != nil {
-				log.Errorf("DB - Archive of pokemon table error %s", err)
-				return
-			}
-
-			rows, _ := result.RowsAffected()
-			log.Infof("DB - Cleardown of in-memory pokemon table took %s (%d rows)", elapsed, rows)
-
-		}
-	}()
-}

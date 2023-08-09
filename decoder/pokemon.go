@@ -1152,11 +1152,3 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 
 	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
-
-const stats_seenWild string = "seen_wild"
-const stats_seenStop string = "seen_stop"
-const stats_seenCell string = "seen_cell"
-const stats_statsReset string = "stats_reset"
-const stats_encounter string = "encounter"
-const stats_seenLure string = "seen_lure"
-const stats_lureEncounter string = "lure_encounter"
