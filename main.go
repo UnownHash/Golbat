@@ -88,6 +88,7 @@ func main() {
 		return
 	}
 
+	db.SetConnMaxLifetime(time.Minute * 3) // Recommended by go mysql driver
 	db.SetMaxOpenConns(config.Config.Database.MaxPool)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxIdleTime(time.Minute)
