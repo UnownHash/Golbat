@@ -240,6 +240,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	}
 
 	processed := false
+	ignore := false
 	start := time.Now()
 	result := ""
 
@@ -274,11 +275,13 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
+		ignore = true
 		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
+		ignore = true
 		break
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
-		// ignore
+		ignore = true
 		break
 	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
@@ -289,14 +292,31 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
+	case pogo.Method_METHOD_GET_ROUTES:
+		result = decodeGetRoutes(protoData.Data)
+		processed = true
+	case pogo.Method_METHOD_GET_CONTEST_DATA:
+		// Request helps, but can be decoded without it
+		result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
+		processed = true
+		break
+	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
+		// Request is essential to decode this
+		if protoData.Request != nil {
+			result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
+			processed = true
+		}
+		break
 	default:
-		log.Debugf("Did not process hook type %s", pogo.Method(method))
+		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
-
-	if processed == true {
+	if !ignore {
 		elapsed := time.Since(start)
-
-		log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
+		if processed == true {
+			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
+		} else {
+			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, "**Did not process**")
+		}
 	}
 }
 
@@ -458,6 +478,41 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	return "No forts updated"
 }
 
+func decodeGetRoutes(payload []byte) string {
+	getRoutesOutProto := &pogo.GetRoutesOutProto{}
+	if err := proto.Unmarshal(payload, getRoutesOutProto); err != nil {
+		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
+	}
+
+	if getRoutesOutProto.Status != pogo.GetRoutesOutProto_SUCCESS {
+		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
+	}
+
+	decodeSuccesses := map[string]bool{}
+	decodeErrors := map[string]bool{}
+
+	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
+		for _, route := range routeMapCell.GetRoute() {
+			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
+			if decodeError != nil {
+				if decodeErrors[route.Id] != true {
+					decodeErrors[route.Id] = true
+				}
+				log.Errorf("Failed to decode route %s", decodeError)
+			} else if decodeSuccesses[route.Id] != true {
+				decodeSuccesses[route.Id] = true
+			}
+		}
+	}
+
+	return fmt.Sprintf(
+		"Decoded %d routes, failed to decode %d routes, from %d cells",
+		len(decodeSuccesses),
+		len(decodeErrors),
+		len(getRoutesOutProto.GetRouteMapCell()),
+	)
+}
+
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
@@ -605,4 +660,43 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
+}
+
+func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
+	var decodedContestData pogo.GetContestDataOutProto
+	if err := proto.Unmarshal(data, &decodedContestData); err != nil {
+		log.Errorf("Failed to parse GetContestDataOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
+	}
+
+	var decodedContestDataRequest pogo.GetContestDataProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedContestDataRequest); err != nil {
+			log.Errorf("Failed to parse GetContestDataProto %s", err)
+			return fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
+		}
+	}
+	return decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
+}
+
+func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
+	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeContestEntryOutProto
+	if err := proto.Unmarshal(data, &decodedPokemonSizeContestEntry); err != nil {
+		log.Errorf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+	}
+
+	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeContestEntryOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetPokemonSizeContestEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
+	}
+
+	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeContestEntryProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedPokemonSizeContestEntryRequest); err != nil {
+			log.Errorf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+			return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+		}
+	}
+
+	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
 }
