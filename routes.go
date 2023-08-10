@@ -345,7 +345,7 @@ func PokemonScan(c *gin.Context) {
 	var requestBody decoder.ApiPokemonScan
 
 	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		log.Warnf("POST /api/pokemon/scan/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -361,7 +361,7 @@ func PokemonScan(c *gin.Context) {
 func PokemonOne(c *gin.Context) {
 	pokemonId, err := strconv.ParseUint(c.Param("pokemon_id"), 10, 64)
 	if err != nil {
-		log.Warnf("GET /pokemon/:pokemon_id/ Error during get pokemon %v", err)
+		log.Warnf("GET /api/pokemon/:pokemon_id/ Error during get pokemon %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -386,7 +386,7 @@ func PokemonSearch(c *gin.Context) {
 	var requestBody decoder.ApiPokemonSearch
 
 	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /search/ Error during post search %v", err)
+		log.Warnf("POST /api/search/ Error during post search %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -399,7 +399,7 @@ func PokemonScanMsgPack(c *gin.Context) {
 	var requestBody decoder.ApiPokemonScan
 
 	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
-		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		log.Warnf("POST /api/pokemon/scan-msgpack/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -455,14 +455,14 @@ func GetPokestopPositions(c *gin.Context) {
 	var requestBody geo.Geofence
 
 	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
 	res, err := decoder.GetPokestopPositions(dbDetails, requestBody)
 	if err != nil {
-		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -477,7 +477,7 @@ func GetPokestop(c *gin.Context) {
 	pokestop, err := decoder.GetPokestopRecord(ctx, dbDetails, fortId)
 	cancel()
 	if err != nil {
-		log.Warnf("POST /retrieve/ Error during post retrieve %v", err)
+		log.Warnf("GET /api/pokestop/id/:fort_id/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
