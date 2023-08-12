@@ -452,7 +452,8 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 			return false
 		}
 		pvpFilter := filter.Pvp
-		if pvpFilter != nil && pvpLookup != nil && (pvpFilter.Little != nil && (pvpLookup.Little < pvpFilter.Little[0] || pvpLookup.Little > pvpFilter.Little[1]) ||
+		if pvpFilter != nil && (pvpLookup == nil ||
+			pvpFilter.Little != nil && (pvpLookup.Little < pvpFilter.Little[0] || pvpLookup.Little > pvpFilter.Little[1]) ||
 			pvpFilter.Great != nil && (pvpLookup.Great < pvpFilter.Great[0] || pvpLookup.Great > pvpFilter.Great[1]) ||
 			pvpFilter.Ultra != nil && (pvpLookup.Ultra < pvpFilter.Ultra[0] || pvpLookup.Ultra > pvpFilter.Ultra[1])) {
 			return false
