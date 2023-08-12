@@ -324,9 +324,12 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 		}
 	}
 
-	var dnfFilters map[string][]*ApiPokemonDnfFilter
+	var dnfFilters map[int64][]*ApiPokemonDnfFilter
+	compactPokemonForm := func(pokemon int64, form int64) int64 {
+		return pokemon<<32 | form // this is always safe since it is int32 in protos
+	}
 	if retrieveParameters.DnfFilters != nil && !func() bool {
-		dnfFilters = make(map[string][]*ApiPokemonDnfFilter)
+		dnfFilters = make(map[int64][]*ApiPokemonDnfFilter)
 		for _, filter := range retrieveParameters.DnfFilters {
 			if filter.StaIv != nil && len(filter.StaIv) != 2 {
 				return false
@@ -359,11 +362,20 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				}
 			}
 			if len(filter.Pokemon) > 0 {
-				for _, pokemon := range filter.Pokemon {
-					dnfFilters[pokemon] = append(dnfFilters[pokemon], filter)
+				for _, keyString := range filter.Pokemon {
+					splits := strings.SplitN(keyString, "-", 2)
+					id := int64(0)
+					if len(splits) == 2 {
+						if pokemon, err := strconv.ParseInt(splits[0], 10, 32); err == nil {
+							if form, err := strconv.ParseInt(splits[0], 10, 32); err == nil {
+								id = compactPokemonForm(pokemon, form)
+							}
+						}
+					}
+					dnfFilters[id] = append(dnfFilters[id], filter)
 				}
 			} else {
-				dnfFilters[""] = append(dnfFilters[""], filter)
+				dnfFilters[0] = append(dnfFilters[0], filter)
 			}
 		}
 		return true
@@ -485,13 +497,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 
 				matched := false
 				if dnfFilters != nil {
-					var formString strings.Builder
-					formString.WriteString(strconv.Itoa(int(pokemonLookup.PokemonId)))
-					formString.WriteByte('-')
-					formString.WriteString(strconv.Itoa(int(pokemonLookup.Form)))
-					filters, found := dnfFilters[formString.String()]
+					filters, found := dnfFilters[compactPokemonForm(
+						int64(pokemonLookup.PokemonId), int64(pokemonLookup.Form))]
 					if !found {
-						filters = dnfFilters[""]
+						filters = dnfFilters[0]
 					}
 					matched = func() bool {
 						for _, filter := range filters {
