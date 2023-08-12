@@ -367,7 +367,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 					id := int64(0)
 					if len(splits) == 2 {
 						if pokemon, err := strconv.ParseInt(splits[0], 10, 32); err == nil {
-							if form, err := strconv.ParseInt(splits[0], 10, 32); err == nil {
+							if form, err := strconv.ParseInt(splits[1], 10, 32); err == nil {
 								id = compactPokemonForm(pokemon, form)
 							}
 						}
