@@ -218,8 +218,8 @@ func main() {
 	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
+	apiGroup.POST("/pokemon/v2/scan", PokemonScan2)
 	apiGroup.POST("/pokemon/search", PokemonSearch)
-	apiGroup.POST("/pokemon/scan-msgpack", PokemonScanMsgPack)
 
 	apiGroup.GET("/devices/all", GetDevices)
 
