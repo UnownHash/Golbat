@@ -522,41 +522,49 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 }
 
 func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
-	var dnfFilters map[int64][]*ApiPokemonDnfFilter
+	dnfFilters := make(map[int64][]*ApiPokemonDnfFilter)
 	compactPokemonForm := func(pokemon int64, form int64) int64 {
 		return pokemon<<32 | form // this is always safe since it is int32 in protos
 	}
-	if retrieveParameters.DnfFilters != nil && !func() bool {
-		dnfFilters = make(map[int64][]*ApiPokemonDnfFilter)
+	if retrieveParameters.DnfFilters != nil {
 		for _, filter := range retrieveParameters.DnfFilters {
 			if filter.StaIv != nil && len(filter.StaIv) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid StaIv filter")
+				return nil
 			}
 			if filter.AtkIv != nil && len(filter.AtkIv) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid AtkIv filter")
+				return nil
 			}
 			if filter.DefIv != nil && len(filter.DefIv) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid DefIv filter")
+				return nil
 			}
 			if filter.Iv != nil && len(filter.Iv) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid Iv filter")
+				return nil
 			}
 			if filter.Level != nil && len(filter.Level) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid Level filter")
+				return nil
 			}
 			if filter.Cp != nil && len(filter.Cp) != 2 {
-				return false
+				log.Errorf("GetPokemonInArea2 - Invalid Cp filter")
+				return nil
 			}
 
 			if filter.Pvp != nil {
 				if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
-					return false
+					log.Errorf("GetPokemonInArea2 - Invalid Pvp.Little filter")
+					return nil
 				}
 				if filter.Pvp.Great != nil && len(filter.Pvp.Great) != 2 {
-					return false
+					log.Errorf("GetPokemonInArea2 - Invalid Pvp.Great filter")
+					return nil
 				}
 				if filter.Pvp.Ultra != nil && len(filter.Pvp.Ultra) != 2 {
-					return false
+					log.Errorf("GetPokemonInArea2 - Invalid Pvp.Ultra filter")
+					return nil
 				}
 			}
 			if len(filter.Pokemon) > 0 {
@@ -576,10 +584,6 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 				dnfFilters[0] = append(dnfFilters[0], filter)
 			}
 		}
-		return true
-	}() {
-		log.Errorf("GetPokemonInArea - Invalid dnf filter")
-		return nil
 	}
 
 	start := time.Now()
@@ -638,8 +642,6 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 				pokemonLookup := pokemonLookupItem.PokemonLookup
 				pvpLookup := pokemonLookupItem.PokemonPvpLookup
 
-				matched := false
-
 				filters, found := dnfFilters[compactPokemonForm(
 					int64(pokemonLookup.PokemonId), int64(pokemonLookup.Form))]
 				if !found {
@@ -648,17 +650,13 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 
 				for x := 0; x < len(filters); x++ {
 					if isPokemonDnfMatch(pokemonLookup, pvpLookup, filters[x]) {
-						matched = true
+						returnKeys = append(returnKeys, pokemonId)
+						pokemonMatched++
+						if pokemonMatched > maxPokemon {
+							log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
+							return false
+						}
 						break
-					}
-				}
-
-				if matched {
-					returnKeys = append(returnKeys, pokemonId)
-					pokemonMatched++
-					if pokemonMatched > maxPokemon {
-						log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
-						return false
 					}
 				}
 
