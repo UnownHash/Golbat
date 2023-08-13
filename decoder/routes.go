@@ -86,7 +86,10 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 	oldRoute, _ := getRouteRecord(db, route.Id)
 
 	if oldRoute != nil && !hasChangesRoute(oldRoute, route) {
-		return nil
+		if oldRoute.Updated > time.Now().Unix()-900 {
+			// if a route is unchanged, but we did see it again after 15 minutes, then save again
+			return nil
+		}
 	}
 
 	if oldRoute == nil {
