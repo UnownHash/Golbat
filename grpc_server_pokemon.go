@@ -16,7 +16,7 @@ type grpcPokemonServer struct {
 
 func (s *grpcPokemonServer) Search(ctx context.Context, in *pb.PokemonSearchRequest) (*pb.PokemonSearchResponse, error) {
 	// Check for authorisation
-	if config.Config.RawBearer != "" {
+	if config.Config.ApiSecret != "" {
 		md, _ := metadata.FromIncomingContext(ctx)
 
 		if auth := md.Get("authorization"); len(auth) == 0 || auth[0] != config.Config.ApiSecret {
