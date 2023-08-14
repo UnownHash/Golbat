@@ -68,6 +68,7 @@ type Player struct {
 	TinyPokemonCaught  null.Int    `db:"tiny_pokemon_caught"`
 	JumboPokemonCaught null.Int    `db:"jumbo_pokemon_caught"`
 	Vivillon           null.Int    `db:"vivillon"`
+	MaxSizeFirstPlace  null.Int    `db:"showcase_max_size_first_place"`
 	DexGen1            null.Int    `db:"dex_gen1"`
 	DexGen2            null.Int    `db:"dex_gen2"`
 	DexGen3            null.Int    `db:"dex_gen3"`
@@ -77,6 +78,7 @@ type Player struct {
 	DexGen7            null.Int    `db:"dex_gen7"`
 	DexGen8            null.Int    `db:"dex_gen8"`
 	DexGen8A           null.Int    `db:"dex_gen8a"`
+	DexGen9            null.Int    `db:"dex_gen9"`
 	CaughtNormal       null.Int    `db:"caught_normal"`
 	CaughtFighting     null.Int    `db:"caught_fighting"`
 	CaughtFlying       null.Int    `db:"caught_flying"`
@@ -168,18 +170,16 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	pogo.HoloBadgeType_BADGE_WAYFARER:                     "WayfarerAgreements",
 	pogo.HoloBadgeType_BADGE_TOTAL_MEGA_EVOS:              "MegaEvos",
 	pogo.HoloBadgeType_BADGE_UNIQUE_MEGA_EVOS:             "UniqueMegaEvos",
-	//pogo.HoloBadgeType_DEPRECATED_0:                       "71",
-	//pogo.HoloBadgeType_BADGE_ROUTE_ACCEPTED:               "72",
-	pogo.HoloBadgeType_BADGE_TRAINERS_REFERRED: "TrainersReferred",
+	pogo.HoloBadgeType_BADGE_TRAINERS_REFERRED:            "TrainersReferred",
 	//pogo.HoloBadgeType_BADGE_POKESTOPS_SCANNED:            "74",
-	pogo.HoloBadgeType_BADGE_RAID_BATTLE_STAT: "RaidAchievements",
-	//pogo.HoloBadgeType_BADGE_TOTAL_ROUTE_PLAY:             "77",
-	//pogo.HoloBadgeType_BADGE_UNIQUE_ROUTE_PLAY:            "78",
-	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN8A: "DexGen8A",
-	pogo.HoloBadgeType_BADGE_CAPTURE_SMALL_POKEMON: "TinyPokemonCaught",
-	pogo.HoloBadgeType_BADGE_CAPTURE_LARGE_POKEMON: "JumboPokemonCaught",
-	pogo.HoloBadgeType_BADGE_MINI_COLLECTION:       "CollectionsDone",
-	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:   "Vivillon",
+	pogo.HoloBadgeType_BADGE_RAID_BATTLE_STAT:         "RaidAchievements",
+	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN8A:    "DexGen8A",
+	pogo.HoloBadgeType_BADGE_CAPTURE_SMALL_POKEMON:    "TinyPokemonCaught",
+	pogo.HoloBadgeType_BADGE_CAPTURE_LARGE_POKEMON:    "JumboPokemonCaught",
+	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN9:     "DexGen9",
+	pogo.HoloBadgeType_BADGE_MINI_COLLECTION:          "CollectionsDone",
+	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:      "Vivillon",
+	pogo.HoloBadgeType_BADGE_MAX_SIZE_FIRST_PLACE_WIN: "MaxSizeFirstPlace",
 }
 
 func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCode string) (*Player, error) {
@@ -290,6 +290,7 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 		old.TinyPokemonCaught != new.TinyPokemonCaught ||
 		old.JumboPokemonCaught != new.JumboPokemonCaught ||
 		old.Vivillon != new.Vivillon ||
+		old.MaxSizeFirstPlace != new.MaxSizeFirstPlace ||
 		old.DexGen1 != new.DexGen1 ||
 		old.DexGen2 != new.DexGen2 ||
 		old.DexGen3 != new.DexGen3 ||
@@ -299,6 +300,7 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 		old.DexGen7 != new.DexGen7 ||
 		old.DexGen8 != new.DexGen8 ||
 		old.DexGen8A != new.DexGen8A ||
+		old.DexGen9 != new.DexGen9 ||
 		old.CaughtNormal != new.CaughtNormal ||
 		old.CaughtFighting != new.CaughtFighting ||
 		old.CaughtFlying != new.CaughtFlying ||
@@ -341,8 +343,8 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 								unique_mega_evos, unique_raid_bosses, unique_unown, seven_day_streaks, trade_km, raids_with_friends,
 								caught_at_lure, wayfarer_agreements, trainers_referred, raid_achievements, xl_karps, xs_rats,
 								pikachu_caught, league_great_won, league_ultra_won, league_master_won, tiny_pokemon_caught,
-								jumbo_pokemon_caught, vivillon, dex_gen1, dex_gen2, dex_gen3, dex_gen4, dex_gen5, dex_gen6,
-								dex_gen7, dex_gen8, dex_gen8a, caught_normal, caught_fighting, caught_flying, caught_poison,
+								jumbo_pokemon_caught, vivillon, showcase_max_size_first_place, dex_gen1, dex_gen2, dex_gen3, dex_gen4, dex_gen5, dex_gen6,
+								dex_gen7, dex_gen8, dex_gen8a, dex_gen9, caught_normal, caught_fighting, caught_flying, caught_poison,
 								caught_ground, caught_rock, caught_bug, caught_ghost, caught_steel, caught_fire, caught_water,
 								caught_grass, caught_electric, caught_psychic, caught_ice, caught_dragon, caught_dark, caught_fairy)
 			VALUES (:name, :friendship_id, :friend_code, :last_seen, :team, :level, :xp, :battles_won, :km_walked, :caught_pokemon, :gbl_rank, :gbl_rating,
@@ -352,8 +354,8 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 					:unique_mega_evos, :unique_raid_bosses, :unique_unown, :seven_day_streaks, :trade_km, :raids_with_friends,
 					:caught_at_lure, :wayfarer_agreements, :trainers_referred, :raid_achievements, :xl_karps, :xs_rats,
 					:pikachu_caught, :league_great_won, :league_ultra_won, :league_master_won, :tiny_pokemon_caught,
-					:jumbo_pokemon_caught, :vivillon, :dex_gen1, :dex_gen2, :dex_gen3, :dex_gen4, :dex_gen5, :dex_gen6, :dex_gen7,
-					:dex_gen8, :dex_gen8a, :caught_normal, :caught_fighting, :caught_flying, :caught_poison, :caught_ground,
+					:jumbo_pokemon_caught, :vivillon, :showcase_max_size_first_place, :dex_gen1, :dex_gen2, :dex_gen3, :dex_gen4, :dex_gen5, :dex_gen6, :dex_gen7,
+					:dex_gen8, :dex_gen8a, :dex_gen9, :caught_normal, :caught_fighting, :caught_flying, :caught_poison, :caught_ground,
 					:caught_rock, :caught_bug, :caught_ghost, :caught_steel, :caught_fire, :caught_water, :caught_grass,
 					:caught_electric, :caught_psychic, :caught_ice, :caught_dragon, :caught_dark, :caught_fairy)
 			`,
@@ -417,6 +419,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 				tiny_pokemon_caught = :tiny_pokemon_caught, 
 				jumbo_pokemon_caught = :jumbo_pokemon_caught, 
 				vivillon = :vivillon, 
+				showcase_max_size_first_place = :showcase_max_size_first_place,
 				dex_gen1 = :dex_gen1, 
 				dex_gen2 = :dex_gen2, 
 				dex_gen3 = :dex_gen3, 
@@ -426,6 +429,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 				dex_gen7 = :dex_gen7, 
 				dex_gen8 = :dex_gen8, 
 				dex_gen8a = :dex_gen8a, 
+				dex_gen9 = :dex_gen9,
 				caught_normal = :caught_normal, 
 				caught_fighting = :caught_fighting, 
 				caught_flying = :caught_flying, 
