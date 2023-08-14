@@ -12,7 +12,7 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-[go 1.20](https://go.dev/doc/install)
+[go 1.21](https://go.dev/doc/install)
 
 # Instructions
 
