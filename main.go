@@ -186,7 +186,8 @@ func main() {
 				log.Fatalf("failed to listen: %v", err)
 			}
 			s := grpc.NewServer()
-			pb.RegisterRawProtoServer(s, &grpcServer{})
+			pb.RegisterRawProtoServer(s, &grpcRawServer{})
+			pb.RegisterPokemonServer(s, &grpcPokemonServer{})
 			log.Printf("grpc server listening at %v", lis.Addr())
 			if err := s.Serve(lis); err != nil {
 				log.Fatalf("failed to serve: %v", err)

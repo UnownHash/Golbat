@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package pokemon_api;
+
+// Interface exported by the server.
+service Pokemon {
+  rpc Search (PokemonSearchRequest) returns (PokemonSearchResponse) {}
+}
+
+message PokemonSearchRequest {
+  float min_lat = 1;
+  float min_lon = 2;
+  float max_lat = 3;
+  float max_lon = 4;
+  int32 limit = 6;
+  repeated PokemonDnf filters = 7;
+}
+
+message PokemonDnf  {
+  optional PokemonId pokemon = 1;
+  optional RangeMinMax Iv       =2;
+  optional RangeMinMax AtkIv     =3;
+  optional RangeMinMax DefIv     =4;
+  optional RangeMinMax StaIv   =5;
+  optional RangeMinMax Level =6;
+  optional RangeMinMax Cp     =7;
+  optional int32 Gender   =8;
+  optional RangeMinMax PvpLittleRanking =9;
+  optional RangeMinMax PvpGreatRanking = 10;
+  optional RangeMinMax PvpUltraRanking = 11;
+}
+
+message PokemonId {
+  int32 id = 1;
+  optional int32 form = 2;
+}
+
+message RangeMinMax {
+  optional int32 min = 1;
+  optional int32 max = 2;
+}
+
+message PokemonSearchResponse {
+  int64 results = 1;
+}
