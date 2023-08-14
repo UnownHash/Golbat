@@ -2,8 +2,6 @@ module golbat
 
 go 1.21
 
-toolchain go1.21.0
-
 require (
 	github.com/UnownHash/gohbem v0.11.3
 	github.com/getsentry/sentry-go v0.23.0
