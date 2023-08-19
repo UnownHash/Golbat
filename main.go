@@ -29,7 +29,6 @@ import (
 )
 
 var db *sqlx.DB
-var inMemoryDb *sqlx.DB
 var dbDetails db2.DbDetails
 
 func main() {
