@@ -644,11 +644,13 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 		panic(err)
 	}
 
-	if timestampMs == 0 && pokemon.ExpireTimestamp.Valid {
-		// Unknown server timestamp (eg from an encounter), only proceed if we don't have a valid timestamp
-		return
-	} else {
-		timestampMs = time.Now().UnixMilli() // Use current timestamp, accepting that this may be inaccurate
+	if timestampMs == 0 {
+		if pokemon.ExpireTimestamp.Valid {
+			// Unknown server timestamp (eg from an encounter), only proceed if we don't have a valid timestamp
+			return
+		} else {
+			timestampMs = time.Now().UnixMilli() // Use current timestamp, accepting that this may be inaccurate
+		}
 	}
 
 	pokemon.SpawnId = null.IntFrom(spawnId)
