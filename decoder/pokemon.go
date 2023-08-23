@@ -644,9 +644,13 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 		panic(err)
 	}
 
+	log.Infof("Encounter [START] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
+
 	if timestampMs == 0 {
 		if pokemon.ExpireTimestamp.Valid {
 			// Unknown server timestamp (eg from an encounter), only proceed if we don't have a valid timestamp
+			log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
+
 			return
 		} else {
 			timestampMs = time.Now().UnixMilli() // Use current timestamp, accepting that this may be inaccurate
@@ -672,6 +676,8 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 	} else {
 		pokemon.setUnknownTimestamp()
 	}
+
+	log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp() {
