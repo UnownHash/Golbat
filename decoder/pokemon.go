@@ -677,7 +677,7 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 		pokemon.setUnknownTimestamp()
 	}
 
-	log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
+	log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v Spawnpoint data: %+v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp, spawnPoint)
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp() {
