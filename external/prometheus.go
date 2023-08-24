@@ -143,13 +143,15 @@ var (
 		},
 		[]string{"area"},
 	)
-	PokemonCountShiny = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pokemon_count_shiny",
-			Help: "Total Shiny count",
-		},
-		[]string{"area"},
-	)
+	/*
+		PokemonCountShiny = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pokemon_count_shiny",
+				Help: "Total Shiny count",
+			},
+			[]string{"area"},
+		)
+	*/
 	PokemonCountHundo = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "pokemon_count_hundo",
@@ -252,7 +254,7 @@ func InitPrometheus(r *gin.Engine) {
 
 			PokemonStatsResetCount,
 
-			PokemonCountNew, PokemonCountIv, PokemonCountShiny, PokemonCountHundo, PokemonCountNundo,
+			PokemonCountNew, PokemonCountIv, PokemonCountHundo, PokemonCountNundo,
 			PokemonCountShundo, PokemonCountSnundo,
 
 			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount, GymCount, WeatherCount,
@@ -268,16 +270,16 @@ func UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp 
 		return
 	}
 
-	VerifiedPokemonTTL.WithLabelValues(area.Parent, seenTypeStr).Add(float64(remainingTtlMin))
-	VerifiedPokemonTTLCounter.WithLabelValues(area.Parent, seenTypeStr).Inc()
+	VerifiedPokemonTTL.WithLabelValues(area.String(), seenTypeStr).Add(float64(remainingTtlMin))
+	VerifiedPokemonTTLCounter.WithLabelValues(area.String(), seenTypeStr).Inc()
 }
 
 func UpdateGymCount(areas []geo.AreaName) {
 	processed := make(map[string]bool)
 	for _, area := range areas {
-		if !processed[area.Parent] {
-			GymCount.WithLabelValues(area.Parent).Inc()
-			processed[area.Parent] = true
+		if !processed[area.String()] {
+			GymCount.WithLabelValues(area.String()).Inc()
+			processed[area.String()] = true
 		}
 	}
 }
@@ -285,9 +287,9 @@ func UpdateGymCount(areas []geo.AreaName) {
 func UpdateRaidCount(areas []geo.AreaName, raidLevel int64) {
 	processed := make(map[string]bool)
 	for _, area := range areas {
-		if !processed[area.Parent] {
-			RaidCount.WithLabelValues(area.Parent, strconv.FormatInt(raidLevel, 10)).Inc()
-			processed[area.Parent] = true
+		if !processed[area.String()] {
+			RaidCount.WithLabelValues(area.String(), strconv.FormatInt(raidLevel, 10)).Inc()
+			processed[area.String()] = true
 		}
 	}
 }
@@ -295,9 +297,9 @@ func UpdateRaidCount(areas []geo.AreaName, raidLevel int64) {
 func UpdateFortCount(areas []geo.AreaName, fortType string, changeType string) {
 	processed := make(map[string]bool)
 	for _, area := range areas {
-		if !processed[area.Parent] {
-			FortCount.WithLabelValues(area.Parent, fortType, changeType).Inc()
-			processed[area.Parent] = true
+		if !processed[area.String()] {
+			FortCount.WithLabelValues(area.String(), fortType, changeType).Inc()
+			processed[area.String()] = true
 		}
 	}
 }
@@ -305,9 +307,9 @@ func UpdateFortCount(areas []geo.AreaName, fortType string, changeType string) {
 func UpdateIncidentCount(areas []geo.AreaName) {
 	processed := make(map[string]bool)
 	for _, area := range areas {
-		if !processed[area.Parent] {
-			IncidentCount.WithLabelValues(area.Parent).Inc()
-			processed[area.Parent] = true
+		if !processed[area.String()] {
+			IncidentCount.WithLabelValues(area.String()).Inc()
+			processed[area.String()] = true
 		}
 	}
 }
@@ -320,9 +322,9 @@ func UpdateWeatherCount(areas []geo.AreaName, gameplayCondition int64) {
 
 	processed := make(map[string]bool)
 	for _, area := range areas {
-		if !processed[area.Parent] {
-			WeatherCount.WithLabelValues(area.Parent, gameplayConditionStr).Inc()
-			processed[area.Parent] = true
+		if !processed[area.String()] {
+			WeatherCount.WithLabelValues(area.String(), gameplayConditionStr).Inc()
+			processed[area.String()] = true
 		}
 	}
 }
