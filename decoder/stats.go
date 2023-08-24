@@ -262,16 +262,10 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 					if atk == 15 && def == 15 && sta == 15 {
 						external.PokemonCountHundo.WithLabelValues(area.Parent).Inc()
 						countStats.hundos[new.PokemonId]++
-						if new.Shiny.ValueOrZero() {
-							external.PokemonCountShundo.WithLabelValues(area.Parent).Inc()
-						}
 					}
 					if atk == 0 && def == 0 && sta == 0 {
 						external.PokemonCountNundo.WithLabelValues(area.Parent).Inc()
 						countStats.nundos[new.PokemonId]++
-						if new.Shiny.ValueOrZero() {
-							external.PokemonCountSnundo.WithLabelValues(area.Parent).Inc()
-						}
 					}
 				}
 			}

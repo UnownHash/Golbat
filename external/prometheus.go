@@ -151,6 +151,20 @@ var (
 			},
 			[]string{"area"},
 		)
+		PokemonCountShundo = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pokemon_count_shundo",
+				Help: "Total Shundo count",
+			},
+			[]string{"area"},
+		)
+		PokemonCountSnundo = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "pokemon_count_snundo",
+				Help: "Total Snundo count",
+			},
+			[]string{"area"},
+		)
 	*/
 	PokemonCountHundo = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -163,20 +177,6 @@ var (
 		prometheus.CounterOpts{
 			Name: "pokemon_count_nundo",
 			Help: "Total Nundo count",
-		},
-		[]string{"area"},
-	)
-	PokemonCountShundo = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pokemon_count_shundo",
-			Help: "Total Shundo count",
-		},
-		[]string{"area"},
-	)
-	PokemonCountSnundo = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "pokemon_count_snundo",
-			Help: "Total Snundo count",
 		},
 		[]string{"area"},
 	)
@@ -255,7 +255,6 @@ func InitPrometheus(r *gin.Engine) {
 			PokemonStatsResetCount,
 
 			PokemonCountNew, PokemonCountIv, PokemonCountHundo, PokemonCountNundo,
-			PokemonCountShundo, PokemonCountSnundo,
 
 			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount, GymCount, WeatherCount,
 		)
