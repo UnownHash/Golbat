@@ -20,7 +20,6 @@ services:
       - GOLBAT.RAW_BEARER=
       - GOLBAT.API_SECRET=golbat
 
-      - GOLBAT.STATS=false
       - GOLBAT.POKEMON_MEMORY_ONLY=false
 
       - GOLBAT.KOJI.URL=http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}
@@ -33,7 +32,7 @@ services:
       - GOLBAT.CLEANUP.STATS_DAYS=7
 
       - GOLBAT.LOGGING.DEBUG=false
-      - GOLBAT.LOGGING.SAVE.LOGS=true
+      - GOLBAT.LOGGING.SAVE_LOGS=true
 
       - GOLBAT.DATABASE.USER=
       - GOLBAT.DATABASE.PASSWORD=
