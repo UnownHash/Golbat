@@ -17,10 +17,10 @@ func SetupLogger(logLevel log.Level, fileLoggingEnabled bool) {
 	lumberjackLogger = &lumberjack.Logger{
 		// Log file absolute path, os agnostic
 		Filename:   filepath.ToSlash("logs/golbat.log"),
-		MaxSize:    50, // MB
-		MaxBackups: config.Config.Logging.LogHistory,
-		MaxAge:     30,   // days
-		Compress:   true, // disabled by default
+		MaxSize:    config.Config.Logging.MaxSize, // MB
+		MaxBackups: config.Config.Logging.MaxBackups,
+		MaxAge:     config.Config.Logging.MaxAge,   // days
+		Compress:   config.Config.Logging.Compress, // disabled by default
 	}
 
 	var output io.Writer

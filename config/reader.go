@@ -27,7 +27,10 @@ func ReadConfig() {
 		},
 		Logging: logging{
 			SaveLogs:   false,
-			LogHistory: 10,
+			MaxSize:    50,
+			MaxBackups: 10,
+			MaxAge:     30,
+			Compress:   true,
 		},
 		Cleanup: cleanup{
 			StatsDays:   7,
