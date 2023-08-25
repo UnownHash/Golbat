@@ -20,6 +20,7 @@ device_hours = 24       # Remove devices from in memory after not seen for x hou
 [logging]
 debug = false
 save_logs = true
+log_history = 10
 
 [database]
 user = ""

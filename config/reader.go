@@ -26,7 +26,8 @@ func ReadConfig() {
 			BlockProfileRate:     5,
 		},
 		Logging: logging{
-			SaveLogs: false,
+			SaveLogs:   false,
+			LogHistory: 10,
 		},
 		Cleanup: cleanup{
 			StatsDays:   7,

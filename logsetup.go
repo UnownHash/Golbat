@@ -4,6 +4,7 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
+	"golbat/config"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ func SetupLogger(logLevel log.Level, fileLoggingEnabled bool) {
 		// Log file absolute path, os agnostic
 		Filename:   filepath.ToSlash("logs/golbat.log"),
 		MaxSize:    50, // MB
-		MaxBackups: 10,
+		MaxBackups: config.Config.Logging.LogHistory,
 		MaxAge:     30,   // days
 		Compress:   true, // disabled by default
 	}
