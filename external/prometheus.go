@@ -204,13 +204,6 @@ var (
 		},
 		[]string{"area", "level"},
 	)
-	GymCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "gym_count",
-			Help: "Total number of newly discovered gyms",
-		},
-		[]string{"area"},
-	)
 	FortCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "fort_count",
@@ -221,7 +214,7 @@ var (
 	IncidentCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "incident_count",
-			Help: "Total number of incidents",
+			Help: "Total number of incidents updates",
 		},
 		[]string{"area"},
 	)
@@ -256,7 +249,7 @@ func InitPrometheus(r *gin.Engine) {
 
 			PokemonCountNew, PokemonCountIv, PokemonCountHundo, PokemonCountNundo,
 
-			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount, GymCount, WeatherCount,
+			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount, WeatherCount,
 		)
 	}
 }
@@ -271,16 +264,6 @@ func UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp 
 
 	VerifiedPokemonTTL.WithLabelValues(area.String(), seenTypeStr).Add(float64(remainingTtlMin))
 	VerifiedPokemonTTLCounter.WithLabelValues(area.String(), seenTypeStr).Inc()
-}
-
-func UpdateGymCount(areas []geo.AreaName) {
-	processed := make(map[string]bool)
-	for _, area := range areas {
-		if !processed[area.String()] {
-			GymCount.WithLabelValues(area.String()).Inc()
-			processed[area.String()] = true
-		}
-	}
 }
 
 func UpdateRaidCount(areas []geo.AreaName, raidLevel int64) {
