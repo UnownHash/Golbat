@@ -183,7 +183,7 @@ var (
 	VerifiedPokemonTTL = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "verified_pokemon_ttl",
-			Help: "Verified Pokemon count by type",
+			Help: "Verified Pokemon count by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
 		},
 		[]string{"area", "type", "above30"},
 	)
@@ -191,7 +191,7 @@ var (
 	VerifiedPokemonTTLCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "verified_pokemon_ttl_counter",
-			Help: "Verified Pokemon count by type counter",
+			Help: "Verified Pokemon counter by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
 		},
 		[]string{"area", "type", "above30"},
 	)
