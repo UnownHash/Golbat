@@ -5,15 +5,17 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/geo"
+	pb "golbat/grpc"
+	"math"
 	"strconv"
 	"time"
 )
 
 type ApiPokemonScan2 struct {
-	Min        geo.Location           `json:"min"`
-	Max        geo.Location           `json:"max"`
-	Limit      int                    `json:"limit"`
-	DnfFilters []*ApiPokemonDnfFilter `json:"filters"`
+	Min        geo.Location          `json:"min"`
+	Max        geo.Location          `json:"max"`
+	Limit      int                   `json:"limit"`
+	DnfFilters []ApiPokemonDnfFilter `json:"filters"`
 }
 
 type ApiPokemonDnfFilter struct {
@@ -46,13 +48,13 @@ type ApiPokemonDnfMinMax8 struct {
 	Max int8 `json:"max"`
 }
 
-func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
+func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 	type dnfFilterLookup struct {
 		pokemon int16
 		form    int16
 	}
 
-	dnfFilters := make(map[dnfFilterLookup][]*ApiPokemonDnfFilter)
+	dnfFilters := make(map[dnfFilterLookup][]ApiPokemonDnfFilter)
 
 	for _, filter := range retrieveParameters.DnfFilters {
 		if len(filter.Pokemon) > 0 {
@@ -159,7 +161,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 				}
 
 				for x := 0; x < len(filters); x++ {
-					if isPokemonDnfMatch(pokemonLookup, pvpLookup, filters[x]) {
+					if isPokemonDnfMatch(pokemonLookup, pvpLookup, &filters[x]) {
 						matched = true
 						break
 					}
@@ -180,10 +182,17 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 		return
 	}
 
-	returnKeys := performScan()
+	results := performScan()
+	log.Infof("GetPokemonInAreaV2 - scan time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonSkipped, len(results))
 
+	return results
+}
+
+func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
+	returnKeys := internalGetPokemonInArea2(retrieveParameters)
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
+	start := time.Now()
 	for _, key := range returnKeys {
 		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
@@ -246,7 +255,184 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 		}
 	}
 
-	log.Infof("GetPokemonInArea - total time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonSkipped, len(results))
+	log.Infof("GetPokemonInAreaV2 - result buffer time %s, %d added", time.Since(start), len(results))
+
+	return results
+}
+
+func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.PokemonDetails {
+	// Build consistent api request
+
+	apiRequest := ApiPokemonScan2{
+		Min: geo.Location{
+			Latitude:  float64(retrieveParameters.MinLat),
+			Longitude: float64(retrieveParameters.MinLon),
+		},
+		Max: geo.Location{
+			Latitude:  float64(retrieveParameters.MaxLat),
+			Longitude: float64(retrieveParameters.MaxLon),
+		},
+		Limit: int(retrieveParameters.Limit),
+	}
+	var dnfFilters []ApiPokemonDnfFilter
+
+	convertToMinMax8 := func(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax8 {
+		if minmax == nil {
+			return nil
+		}
+		var minV int8 = 0
+		var maxV int8 = math.MaxInt8
+		if minmax.Min != nil {
+			minV = int8(*minmax.Min)
+		}
+		if minmax.Max != nil {
+			maxV = int8(*minmax.Min)
+		}
+
+		return &ApiPokemonDnfMinMax8{
+			Min: minV,
+			Max: maxV,
+		}
+	}
+
+	convertToMinMax16 := func(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
+		if minmax == nil {
+			return nil
+		}
+		var minV int16 = 0
+		var maxV int16 = math.MaxInt16
+		if minmax.Min != nil {
+			minV = int16(*minmax.Min)
+		}
+		if minmax.Max != nil {
+			maxV = int16(*minmax.Min)
+		}
+
+		return &ApiPokemonDnfMinMax{
+			Min: minV,
+			Max: maxV,
+		}
+	}
+
+	for _, filter := range retrieveParameters.Filters {
+		dnfFilter := ApiPokemonDnfFilter{
+			Pokemon: func() []ApiPokemonDnfId {
+				var pokemonRes []ApiPokemonDnfId
+				for _, pokemon := range filter.Pokemon {
+					pokemonRes = append(pokemonRes, ApiPokemonDnfId{
+						Pokemon: func() int16 {
+							if pokemon.Id == nil {
+								return 0
+							}
+							return int16(*pokemon.Id)
+						}(),
+						Form: func() *int16 {
+							if pokemon.Form != nil {
+								form := int16(*pokemon.Form)
+								return &form
+							}
+							return nil
+						}(),
+					})
+				}
+
+				return pokemonRes
+			}(),
+			Iv:    convertToMinMax8(filter.Iv),
+			AtkIv: convertToMinMax8(filter.AtkIv),
+			DefIv: convertToMinMax8(filter.DefIv),
+			StaIv: convertToMinMax8(filter.StaIv),
+			Level: convertToMinMax8(filter.Level),
+			Cp:    convertToMinMax16(filter.Cp),
+			Size: func() int8 {
+				if filter.Size == nil {
+					return 0
+				}
+				return int8(*filter.Size)
+			}(),
+			Gender: func() int8 {
+				if filter.Gender == nil {
+					return 0
+				}
+				return int8(*filter.Gender)
+			}(),
+			Little: convertToMinMax16(filter.PvpLittleRanking),
+			Great:  convertToMinMax16(filter.PvpGreatRanking),
+			Ultra:  convertToMinMax16(filter.PvpUltraRanking),
+		}
+
+		dnfFilters = append(dnfFilters, dnfFilter)
+	}
+	apiRequest.DnfFilters = dnfFilters
+
+	returnKeys := internalGetPokemonInArea2(apiRequest)
+	results := make([]*pb.PokemonDetails, 0, len(returnKeys))
+
+	start := time.Now()
+	for _, key := range returnKeys {
+		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
+			pokemon := pokemonCacheEntry.Value()
+
+			apiPokemon := pb.PokemonDetails{
+				Id:         pokemon.Id,
+				PokestopId: pokemon.PokestopId.Ptr(),
+				SpawnId:    pokemon.SpawnId.Ptr(),
+				Lat:        pokemon.Lat,
+				Lon:        pokemon.Lon,
+				/* TODO:
+				Weight:          pokemon.Weight,
+				Size:            pokemon.Size,
+				Height:          pokemon.Height,
+				ExpireTimestamp: pokemon.ExpireTimestamp,
+				Updated:         pokemon.Updated,
+				PokemonId:       pokemon.PokemonId,
+				Move1:           pokemon.Move1,
+				Move2:           pokemon.Move2,
+				Gender:          pokemon.Gender,
+				Cp:              pokemon.Cp,
+				AtkIv:           pokemon.AtkIv,
+				DefIv:           pokemon.DefIv,
+				StaIv:           pokemon.StaIv,
+				//not IvInactive
+				Iv:                      pokemon.Iv,
+				Form:                    pokemon.Form,
+				Level:                   pokemon.Level,
+				EncounterWeather:        pokemon.EncounterWeather, //? perhaps do not include
+				Weather:                 pokemon.Weather,
+				Costume:                 pokemon.Costume,
+				FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
+				Changed:                 pokemon.Changed,
+				CellId:                  pokemon.CellId,
+				ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
+				DisplayPokemonId:        pokemon.DisplayPokemonId,
+				IsDitto:                 pokemon.IsDitto,
+				SeenType:                pokemon.SeenType,
+				Shiny:                   pokemon.Shiny,
+				Username:                pokemon.Username,
+				Pvp: func() map[string][]gohbem.PokemonEntry {
+					if ohbem != nil {
+						pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+							int(pokemon.Form.ValueOrZero()),
+							int(pokemon.Costume.ValueOrZero()),
+							int(pokemon.Gender.ValueOrZero()),
+							int(pokemon.AtkIv.ValueOrZero()),
+							int(pokemon.DefIv.ValueOrZero()),
+							int(pokemon.StaIv.ValueOrZero()),
+							float64(pokemon.Level.ValueOrZero()))
+						if err != nil {
+							return nil
+						}
+						return pvp
+					}
+					return nil
+				}(),*/
+			}
+
+			results = append(results, &apiPokemon)
+		}
+	}
+
+	log.Infof("GetPokemonInAreaV2 - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return results
 }

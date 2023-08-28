@@ -6,10 +6,10 @@ package pokemon_api;
 
 // Interface exported by the server.
 service Pokemon {
-  rpc Search (PokemonSearchRequest) returns (PokemonSearchResponse) {}
+  rpc Search (PokemonScanRequest) returns (PokemonScanResponse) {}
 }
 
-message PokemonSearchRequest {
+message PokemonScanRequest {
   float min_lat = 1;
   float min_lon = 2;
   float max_lat = 3;
@@ -19,7 +19,7 @@ message PokemonSearchRequest {
 }
 
 message PokemonDnf  {
-  optional PokemonId pokemon = 1;
+  repeated PokemonId pokemon = 1;
   optional RangeMinMax Iv       =2;
   optional RangeMinMax AtkIv     =3;
   optional RangeMinMax DefIv     =4;
@@ -27,13 +27,14 @@ message PokemonDnf  {
   optional RangeMinMax Level =6;
   optional RangeMinMax Cp     =7;
   optional int32 Gender   =8;
-  optional RangeMinMax PvpLittleRanking =9;
-  optional RangeMinMax PvpGreatRanking = 10;
-  optional RangeMinMax PvpUltraRanking = 11;
+  optional int32 Size = 9;
+  optional RangeMinMax PvpLittleRanking =10;
+  optional RangeMinMax PvpGreatRanking = 11;
+  optional RangeMinMax PvpUltraRanking = 12;
 }
 
 message PokemonId {
-  int32 id = 1;
+  optional int32 id = 1;
   optional int32 form = 2;
 }
 
@@ -42,7 +43,7 @@ message RangeMinMax {
   optional int32 max = 2;
 }
 
-message PokemonSearchResponse {
+message PokemonScanResponse {
   enum Status {
     UNSET = 0;
     SUCCESS = 200;
@@ -57,8 +58,8 @@ message PokemonDetails {
   string id = 1;
   optional string pokestop_id = 2;
   optional int64 spawn_id = 3;
-  optional float lat = 4;
-  optional float lon = 5;
+   double lat = 4;
+   double lon = 5;
   optional float weight = 6;
   optional int32 size = 7;
   optional float height = 8;

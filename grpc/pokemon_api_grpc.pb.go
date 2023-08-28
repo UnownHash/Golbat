@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type PokemonClient interface {
-	Search(ctx context.Context, in *PokemonSearchRequest, opts ...grpc.CallOption) (*PokemonSearchResponse, error)
+	Search(ctx context.Context, in *PokemonScanRequest, opts ...grpc.CallOption) (*PokemonScanResponse, error)
 }
 
 type pokemonClient struct {
@@ -33,8 +33,8 @@ func NewPokemonClient(cc grpc.ClientConnInterface) PokemonClient {
 	return &pokemonClient{cc}
 }
 
-func (c *pokemonClient) Search(ctx context.Context, in *PokemonSearchRequest, opts ...grpc.CallOption) (*PokemonSearchResponse, error) {
-	out := new(PokemonSearchResponse)
+func (c *pokemonClient) Search(ctx context.Context, in *PokemonScanRequest, opts ...grpc.CallOption) (*PokemonScanResponse, error) {
+	out := new(PokemonScanResponse)
 	err := c.cc.Invoke(ctx, "/pokemon_api.Pokemon/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -46,7 +46,7 @@ func (c *pokemonClient) Search(ctx context.Context, in *PokemonSearchRequest, op
 // All implementations must embed UnimplementedPokemonServer
 // for forward compatibility
 type PokemonServer interface {
-	Search(context.Context, *PokemonSearchRequest) (*PokemonSearchResponse, error)
+	Search(context.Context, *PokemonScanRequest) (*PokemonScanResponse, error)
 	mustEmbedUnimplementedPokemonServer()
 }
 
@@ -54,7 +54,7 @@ type PokemonServer interface {
 type UnimplementedPokemonServer struct {
 }
 
-func (UnimplementedPokemonServer) Search(context.Context, *PokemonSearchRequest) (*PokemonSearchResponse, error) {
+func (UnimplementedPokemonServer) Search(context.Context, *PokemonScanRequest) (*PokemonScanResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedPokemonServer) mustEmbedUnimplementedPokemonServer() {}
@@ -71,7 +71,7 @@ func RegisterPokemonServer(s grpc.ServiceRegistrar, srv PokemonServer) {
 }
 
 func _Pokemon_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PokemonSearchRequest)
+	in := new(PokemonScanRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func _Pokemon_Search_Handler(srv interface{}, ctx context.Context, dec func(inte
 		FullMethod: "/pokemon_api.Pokemon/Search",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PokemonServer).Search(ctx, req.(*PokemonSearchRequest))
+		return srv.(PokemonServer).Search(ctx, req.(*PokemonScanRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
