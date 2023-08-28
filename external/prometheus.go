@@ -185,7 +185,7 @@ var (
 			Name: "verified_pokemon_ttl",
 			Help: "Verified Pokemon count by type",
 		},
-		[]string{"area", "type"},
+		[]string{"area", "type", "above30"},
 	)
 
 	VerifiedPokemonTTLCounter = prometheus.NewCounterVec(
@@ -193,7 +193,7 @@ var (
 			Name: "verified_pokemon_ttl_counter",
 			Help: "Verified Pokemon count by type counter",
 		},
-		[]string{"area", "type"},
+		[]string{"area", "type", "above30"},
 	)
 
 	RaidCount = prometheus.NewCounterVec(
@@ -249,13 +249,20 @@ func InitPrometheus(r *gin.Engine) {
 func UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int) {
 	remainingTtlMin := (expireTimestamp.ValueOrZero() - time.Now().Unix()) / 60
 	var seenTypeStr = seenType.String
+	above30 := "0"
 
 	if remainingTtlMin < 0 {
 		return
 	}
 
-	VerifiedPokemonTTL.WithLabelValues(area.String(), seenTypeStr).Add(float64(remainingTtlMin))
-	VerifiedPokemonTTLCounter.WithLabelValues(area.String(), seenTypeStr).Inc()
+	// set above30 when TTL is over 30 minutes
+	// depending on the route times can be unreliable
+	if remainingTtlMin > 30 {
+		above30 = "1"
+	}
+
+	VerifiedPokemonTTL.WithLabelValues(area.String(), seenTypeStr, above30).Add(float64(remainingTtlMin))
+	VerifiedPokemonTTLCounter.WithLabelValues(area.String(), seenTypeStr, above30).Inc()
 }
 
 func UpdateRaidCount(areas []geo.AreaName, raidLevel int64) {
