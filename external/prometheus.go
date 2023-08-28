@@ -7,7 +7,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/geo"
-	"golbat/pogo"
 	"gopkg.in/guregu/null.v4"
 	"strconv"
 	"time"
@@ -218,13 +217,6 @@ var (
 		},
 		[]string{"area"},
 	)
-	WeatherCount = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "weather_count",
-			Help: "Total number of weather updates by gameplay condition",
-		},
-		[]string{"area", "gameplay_condition"},
-	)
 )
 
 func InitPrometheus(r *gin.Engine) {
@@ -249,7 +241,7 @@ func InitPrometheus(r *gin.Engine) {
 
 			PokemonCountNew, PokemonCountIv, PokemonCountHundo, PokemonCountNundo,
 
-			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount, WeatherCount,
+			VerifiedPokemonTTL, VerifiedPokemonTTLCounter, RaidCount, FortCount, IncidentCount,
 		)
 	}
 }
@@ -291,21 +283,6 @@ func UpdateIncidentCount(areas []geo.AreaName) {
 	for _, area := range areas {
 		if !processed[area.String()] {
 			IncidentCount.WithLabelValues(area.String()).Inc()
-			processed[area.String()] = true
-		}
-	}
-}
-
-func UpdateWeatherCount(areas []geo.AreaName, gameplayCondition int64) {
-	gameplayConditionStr := "UNKNOWN"
-	if _, ok := pogo.GameplayWeatherProto_WeatherCondition_name[int32(gameplayCondition)]; ok {
-		gameplayConditionStr = pogo.GameplayWeatherProto_WeatherCondition_name[int32(gameplayCondition)]
-	}
-
-	processed := make(map[string]bool)
-	for _, area := range areas {
-		if !processed[area.String()] {
-			WeatherCount.WithLabelValues(area.String(), gameplayConditionStr).Inc()
 			processed[area.String()] = true
 		}
 	}
