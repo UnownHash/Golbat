@@ -53,6 +53,7 @@ type ApiPokemonFilter struct {
 	Additional *ApiPokemonAdditionalFilter `json:"additional"`
 	Pvp        *ApiPvpFilter               `json:"pvp"`
 }
+
 type ApiPvpFilter struct {
 	Little []int16 `json:"little"`
 	Great  []int16 `json:"great"`
@@ -68,16 +69,33 @@ type ApiPokemonAdditionalFilter struct {
 }
 
 type ApiPokemonDnfFilter struct {
-	Pokemon []string      `json:"pokemon"`
-	Iv      []int8        `json:"iv"`
-	AtkIv   []int8        `json:"atk_iv"`
-	DefIv   []int8        `json:"def_iv"`
-	StaIv   []int8        `json:"sta_iv"`
-	Level   []int8        `json:"level"`
-	Cp      []int16       `json:"cp"`
-	Gender  int8          `json:"gender"`
-	Size    int8          `json:"size"`
-	Pvp     *ApiPvpFilter `json:"pvp"`
+	Pokemon []ApiPokemonDnfId     `json:"pokemon"`
+	Iv      *ApiPokemonDnfMinMax8 `json:"iv"`
+	AtkIv   *ApiPokemonDnfMinMax8 `json:"atk_iv"`
+	DefIv   *ApiPokemonDnfMinMax8 `json:"def_iv"`
+	StaIv   *ApiPokemonDnfMinMax8 `json:"sta_iv"`
+	Level   *ApiPokemonDnfMinMax8 `json:"level"`
+	Cp      *ApiPokemonDnfMinMax  `json:"cp"`
+	Gender  int8                  `json:"gender"`
+	Size    int8                  `json:"size"`
+	Little  *ApiPokemonDnfMinMax  `json:"pvp_little"`
+	Great   *ApiPokemonDnfMinMax  `json:"pvp_great"`
+	Ultra   *ApiPokemonDnfMinMax  `json:"pvp_ultra"`
+}
+
+type ApiPokemonDnfId struct {
+	Pokemon int16  `json:"id"`
+	Form    *int16 `json:"form"`
+}
+
+type ApiPokemonDnfMinMax struct {
+	Min int16 `json:"min"`
+	Max int16 `json:"max"`
+}
+
+type ApiPokemonDnfMinMax8 struct {
+	Min int8 `json:"min"`
+	Max int8 `json:"max"`
 }
 
 type ApiPokemonResult struct {
@@ -522,70 +540,43 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 }
 
 func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
-	var dnfFilters map[int64][]*ApiPokemonDnfFilter
-	compactPokemonForm := func(pokemon int64, form int64) int64 {
-		return pokemon<<32 | form // this is always safe since it is int32 in protos
+	type dnfFilterLookup struct {
+		pokemon int16
+		form    int16
 	}
-	if retrieveParameters.DnfFilters != nil && !func() bool {
-		dnfFilters = make(map[int64][]*ApiPokemonDnfFilter)
-		for _, filter := range retrieveParameters.DnfFilters {
-			if filter.StaIv != nil && len(filter.StaIv) != 2 {
-				return false
-			}
-			if filter.AtkIv != nil && len(filter.AtkIv) != 2 {
-				return false
-			}
-			if filter.DefIv != nil && len(filter.DefIv) != 2 {
-				return false
-			}
-			if filter.Iv != nil && len(filter.Iv) != 2 {
-				return false
-			}
-			if filter.Level != nil && len(filter.Level) != 2 {
-				return false
-			}
-			if filter.Cp != nil && len(filter.Cp) != 2 {
-				return false
-			}
 
-			if filter.Pvp != nil {
-				if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
-					return false
+	dnfFilters := make(map[dnfFilterLookup][]*ApiPokemonDnfFilter)
+
+	for _, filter := range retrieveParameters.DnfFilters {
+		if len(filter.Pokemon) > 0 {
+			for _, keyString := range filter.Pokemon {
+				var pokemonId int16 = -1
+				if keyString.Pokemon == 0 {
+					pokemonId = -1
 				}
-				if filter.Pvp.Great != nil && len(filter.Pvp.Great) != 2 {
-					return false
+				var formId int16 = -1
+				if keyString.Form != nil {
+					formId = *keyString.Form
 				}
-				if filter.Pvp.Ultra != nil && len(filter.Pvp.Ultra) != 2 {
-					return false
+				key := dnfFilterLookup{
+					pokemon: pokemonId,
+					form:    formId,
 				}
+				dnfFilters[key] = append(dnfFilters[key], filter)
 			}
-			if len(filter.Pokemon) > 0 {
-				for _, keyString := range filter.Pokemon {
-					splits := strings.SplitN(keyString, "-", 2)
-					id := int64(0)
-					if len(splits) == 2 {
-						if pokemon, err := strconv.ParseInt(splits[0], 10, 32); err == nil {
-							if form, err := strconv.ParseInt(splits[1], 10, 32); err == nil {
-								id = compactPokemonForm(pokemon, form)
-							}
-						}
-					}
-					dnfFilters[id] = append(dnfFilters[id], filter)
-				}
-			} else {
-				dnfFilters[0] = append(dnfFilters[0], filter)
+		} else {
+			key := dnfFilterLookup{
+				pokemon: -1,
+				form:    -1,
 			}
+			dnfFilters[key] = append(dnfFilters[key], filter)
 		}
-		return true
-	}() {
-		log.Errorf("GetPokemonInArea - Invalid dnf filter")
-		return nil
 	}
 
 	start := time.Now()
 
-	min := retrieveParameters.Min
-	max := retrieveParameters.Max
+	minLocation := retrieveParameters.Min
+	maxLocation := retrieveParameters.Max
 
 	maxPokemon := config.Config.Tuning.MaxPokemonResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxPokemon {
@@ -596,21 +587,21 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	pokemonSkipped := 0
 
 	isPokemonDnfMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonDnfFilter) bool {
-		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv[0] || pokemonLookup.Iv > filter.Iv[1]) ||
-			filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv[0] || pokemonLookup.Sta > filter.StaIv[1]) ||
-			filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv[0] || pokemonLookup.Atk > filter.AtkIv[1]) ||
-			filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv[0] || pokemonLookup.Def > filter.DefIv[1]) ||
-			filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) ||
-			filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) ||
+		if filter.Iv != nil && (pokemonLookup.Iv < filter.Iv.Min || pokemonLookup.Iv > filter.Iv.Max) ||
+			filter.StaIv != nil && (pokemonLookup.Sta < filter.StaIv.Min || pokemonLookup.Sta > filter.StaIv.Max) ||
+			filter.AtkIv != nil && (pokemonLookup.Atk < filter.AtkIv.Min || pokemonLookup.Atk > filter.AtkIv.Max) ||
+			filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv.Min || pokemonLookup.Def > filter.DefIv.Max) ||
+			filter.Level != nil && (pokemonLookup.Level < filter.Level.Min || pokemonLookup.Level > filter.Level.Max) ||
+			filter.Cp != nil && (pokemonLookup.Cp < filter.Cp.Min || pokemonLookup.Cp > filter.Cp.Max) ||
 			filter.Gender != 0 && pokemonLookup.Gender != filter.Gender ||
 			filter.Size != 0 && pokemonLookup.Size != filter.Size {
 			return false
 		}
-		pvpFilter := filter.Pvp
-		if pvpFilter != nil && (pvpLookup == nil ||
-			pvpFilter.Little != nil && (pvpLookup.Little < pvpFilter.Little[0] || pvpLookup.Little > pvpFilter.Little[1]) ||
-			pvpFilter.Great != nil && (pvpLookup.Great < pvpFilter.Great[0] || pvpLookup.Great > pvpFilter.Great[1]) ||
-			pvpFilter.Ultra != nil && (pvpLookup.Ultra < pvpFilter.Ultra[0] || pvpLookup.Ultra > pvpFilter.Ultra[1])) {
+
+		if pvpLookup == nil ||
+			filter.Little != nil && (pvpLookup.Little < filter.Little.Min || pvpLookup.Little > filter.Little.Max) ||
+			filter.Great != nil && (pvpLookup.Great < filter.Great.Min || pvpLookup.Great > filter.Great.Max) ||
+			filter.Ultra != nil && (pvpLookup.Ultra < filter.Ultra.Min || pvpLookup.Ultra > filter.Ultra.Max) {
 			return false
 		}
 		return true
@@ -624,7 +615,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 
 	performScan := func() (returnKeys []uint64) {
 		pokemonMatched := 0
-		pokemonTree2.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
+		pokemonTree2.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
 
@@ -640,10 +631,24 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 
 				matched := false
 
-				filters, found := dnfFilters[compactPokemonForm(
-					int64(pokemonLookup.PokemonId), int64(pokemonLookup.Form))]
+				filters, found := dnfFilters[dnfFilterLookup{
+					pokemon: pokemonLookup.PokemonId,
+					form:    pokemonLookup.Form}]
+
 				if !found {
-					filters = dnfFilters[0]
+					filters, found = dnfFilters[dnfFilterLookup{
+						pokemon: pokemonLookup.PokemonId,
+						form:    -1}]
+
+					if !found {
+						filters, found = dnfFilters[dnfFilterLookup{
+							pokemon: -1,
+							form:    -1}]
+
+						if !found {
+							return true
+						}
+					}
 				}
 
 				for x := 0; x < len(filters); x++ {
