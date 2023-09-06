@@ -7,6 +7,7 @@ import (
 	"golbat/config"
 	"golbat/decoder"
 	"golbat/geo"
+	"golbat/pogo"
 	"io"
 	"net/http"
 	"strconv"
@@ -36,6 +37,30 @@ type InboundRawData struct {
 	Request    string
 	Method     int
 	HaveAr     *bool
+}
+
+func questsHeldHasARTask(quests_held any) *bool {
+	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
+
+	quests_held_list, ok := quests_held.([]any)
+	if !ok {
+		log.Errorf("Raw: unexpected quests_held type in data: %T", quests_held)
+		return nil
+	}
+	for _, quest_id := range quests_held_list {
+		if quest_id_f, ok := quest_id.(float64); ok {
+			if int64(quest_id_f) == ar_quest_id {
+				res := true
+				return &res
+			}
+			continue
+		}
+		// quest_id is not float64? Treat the whole thing as unknown.
+		log.Errorf("Raw: unexpected quest_id type in quests_held: %T", quest_id)
+		return nil
+	}
+	res := false
+	return &res
 }
 
 func Raw(c *gin.Context) {
@@ -85,13 +110,24 @@ func Raw(c *gin.Context) {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
+				if latTarget == 0 && lonTarget == 0 {
+					lat := entry["lat"]
+					lng := entry["lng"]
+					if lat != nil && lng != nil {
+						lat_f, _ := lat.(float64)
+						lng_f, _ := lng.(float64)
+						if lat_f != 0 && lng_f != 0 {
+							latTarget = lat_f
+							lonTarget = lng_f
+						}
+					}
+				}
 				protoData = append(protoData, InboundRawData{
 					Base64Data: entry["payload"].(string),
 					Method:     int(entry["type"].(float64)),
 					HaveAr: func() *bool {
-						if v := entry["have_ar"]; v != nil {
-							res := v.(bool)
-							return &res
+						if v := entry["quests_held"]; v != nil {
+							return questsHeldHasARTask(v)
 						}
 						return nil
 					}(),
