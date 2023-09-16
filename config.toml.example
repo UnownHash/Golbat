@@ -4,7 +4,6 @@ raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
 pokemon_memory_only = false  # Use in-memory storage for pokemon only
-stats = false           # Enable/Disable pokemon stats history (this should normally be disabled - real time stats are calculated always)
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
@@ -21,6 +20,10 @@ device_hours = 24       # Remove devices from in memory after not seen for x hou
 [logging]
 debug = false
 save_logs = true
+max_size = 50           # Size in MB
+max_backups = 10        # Amount of files to keep
+max_age = 30            # Day(s) to keep files
+compress = true         # Compress to gz archive
 
 [database]
 user = ""

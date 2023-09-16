@@ -507,15 +507,11 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
-	encounterId := strconv.FormatUint(wildPokemon.EncounterId, 10)
 	switch pokemon.SeenType.ValueOrZero() {
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
-		updateStats(ctx, db, encounterId, stats_seenWild)
 	}
-	if pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs) {
-		updateStats(ctx, db, pokemon.Id, stats_statsReset)
-	}
+	_ = pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
 	pokemon.repopulateStatsIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -532,7 +528,6 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	encounterId := strconv.FormatUint(mapPokemon.EncounterId, 10)
 	pokemon.Id = encounterId
-	updateStats(ctx, db, encounterId, stats_seenLure)
 
 	spawnpointId := mapPokemon.SpawnpointId
 
@@ -548,9 +543,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
 
 	if mapPokemon.PokemonDisplay != nil {
-		if pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay) {
-			updateStats(ctx, db, pokemon.Id, stats_statsReset)
-		}
+		_ = pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
 		pokemon.repopulateStatsIfNeeded(ctx, db)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
@@ -580,22 +573,11 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
-	encounterId := strconv.FormatUint(nearbyPokemon.EncounterId, 10)
 	pokestopId := nearbyPokemon.FortId
 	pokemonId := int16(nearbyPokemon.PokedexNumber)
-	if pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay) {
-		updateStats(ctx, db, pokemon.Id, stats_statsReset)
-	}
+	_ = pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay)
 	pokemon.repopulateStatsIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
-
-	if pokemon.isNewRecord() {
-		if pokestopId == "" {
-			updateStats(ctx, db, encounterId, stats_seenCell)
-		} else {
-			updateStats(ctx, db, encounterId, stats_seenStop)
-		}
-	}
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -945,7 +927,6 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.Username = null.StringFrom(username)
 
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
-	updateStats(ctx, db, pokemon.Id, stats_encounter)
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
@@ -965,7 +946,6 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	}
 
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
-	updateStats(ctx, db, pokemon.Id, stats_lureEncounter)
 }
 
 func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
@@ -1171,42 +1151,4 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	savePokemonRecord(ctx, db, pokemon)
 
 	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
-}
-
-const stats_seenWild string = "seen_wild"
-const stats_seenStop string = "seen_stop"
-const stats_seenCell string = "seen_cell"
-const stats_statsReset string = "stats_reset"
-const stats_encounter string = "encounter"
-const stats_seenLure string = "seen_lure"
-const stats_lureEncounter string = "lure_encounter"
-
-func updateStats(ctx context.Context, db db.DbDetails, id string, event string) {
-	if config.Config.Stats == false {
-		return
-	}
-
-	var sqlCommand string
-
-	if event == stats_encounter {
-		sqlCommand = "INSERT INTO pokemon_timing (id, seen_wild, first_encounter, last_encounter) " +
-			"VALUES (?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), UNIX_TIMESTAMP()) " +
-			"ON DUPLICATE KEY UPDATE " +
-			"first_encounter = COALESCE(first_encounter, VALUES(first_encounter))," +
-			"last_encounter = VALUES(last_encounter)," +
-			"seen_wild = COALESCE(seen_wild, first_encounter)"
-	} else {
-		sqlCommand = fmt.Sprintf("INSERT INTO pokemon_timing (id, %[1]s)"+
-			"VALUES (?, UNIX_TIMESTAMP())"+
-			"ON DUPLICATE KEY UPDATE "+
-			"%[1]s=COALESCE(%[1]s, VALUES(%[1]s))", event)
-	}
-
-	log.Debugf("Updating pokemon timing: [%s] %s", id, event)
-	_, err := db.GeneralDb.ExecContext(ctx, sqlCommand, id)
-
-	if err != nil {
-		log.Errorf("update pokemon timing: [%s] %s", id, err)
-		return
-	}
 }

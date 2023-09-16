@@ -29,7 +29,6 @@ import (
 )
 
 var db *sqlx.DB
-var inMemoryDb *sqlx.DB
 var dbDetails db2.DbDetails
 
 func main() {
@@ -46,7 +45,14 @@ func main() {
 	if config.Config.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
-	SetupLogger(logLevel, config.Config.Logging.SaveLogs)
+	SetupLogger(
+		logLevel,
+		config.Config.Logging.SaveLogs,
+		config.Config.Logging.MaxSize,
+		config.Config.Logging.MaxAge,
+		config.Config.Logging.MaxBackups,
+		config.Config.Logging.Compress,
+	)
 
 	log.Infof("Golbat starting")
 
@@ -494,6 +500,10 @@ func decodeGetRoutes(payload []byte) string {
 
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
+			if route.RouteSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
+				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", route.RouteSubmissionStatus.String())
+				continue
+			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
 				if decodeErrors[route.Id] != true {

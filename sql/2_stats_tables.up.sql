@@ -48,28 +48,7 @@ CREATE TABLE `pokemon_timing` (
 create procedure createStatsAndArchive()
 begin
     drop temporary table if exists old;
-    create temporary table old engine = memory
-    as (select id from pokemon where expire_timestamp < (UNIX_TIMESTAMP() - 3600));
-
-    insert into pokemon_history (id, location, pokemon_id, cp, atk_iv, def_iv, sta_iv, form, level, weather,
-                                 costume, cell_id, expire_timestamp, expire_timestamp_verified, display_pokemon_id,
-                                 seen_type, shiny, seen_wild, seen_stop, seen_cell, seen_lure,
-                                 first_encounter, stats_reset, last_encounter, lure_encounter)
-        select pokemon.id, POINT(lat,lon) as location, pokemon_id, cp, atk_iv, def_iv, sta_iv, form, level, weather,
-               costume, cell_id, expire_timestamp, expire_timestamp_verified, display_pokemon_id,
-               seen_type, shiny, seen_wild, seen_stop, seen_cell, seen_lure,
-               first_encounter, stats_reset, last_encounter, lure_encounter
-        from pokemon
-                 join old on old.id = pokemon.id
-                 left join pokemon_timing on pokemon.id = pokemon_timing.id;
-
-    delete pokemon from pokemon
-            join old on pokemon.id = old.id;
-
-    delete pokemon_timing from pokemon_timing
-        join old on pokemon_timing.id = old.id;
-
-    drop temporary table old;
+    /* removed */
 end;
 
 
