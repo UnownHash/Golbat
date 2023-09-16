@@ -66,8 +66,12 @@ type pyroscope struct {
 }
 
 type logging struct {
-	Debug    bool `koanf:"debug"`
-	SaveLogs bool `koanf:"save_logs" default:"true"`
+	Debug      bool `koanf:"debug"`
+	SaveLogs   bool `koanf:"save_logs"`
+	MaxSize    int  `koanf:"max_size"`
+	MaxBackups int  `koanf:"max_backups"`
+	MaxAge     int  `koanf:"max_age"`
+	Compress   bool `koanf:"compress"`
 }
 
 type database struct {

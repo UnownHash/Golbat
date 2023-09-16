@@ -20,6 +20,10 @@ device_hours = 24       # Remove devices from in memory after not seen for x hou
 [logging]
 debug = false
 save_logs = true
+max_size = 50           # Size in MB
+max_backups = 10        # Amount of files to keep
+max_age = 30            # Day(s) to keep files
+compress = true         # Compress to gz archive
 
 [database]
 user = ""
