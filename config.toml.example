@@ -42,7 +42,8 @@ include_hundos_under_cap = false
 [[webhooks]]
 url = "http://localhost:4201"
 # types if specified can be...
-# types = ["pokemon", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update"]
+# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update"]
+# "pokemon" includes both with ivs and without. "pokemon_iv" will only be encountered pokemon. "pokemon_no_iv" may be nearby pokemon that have not been encountered (yet).
 
 #[[webhooks]]
 #url = "http://localhost:4202"

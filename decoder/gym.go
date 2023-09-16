@@ -402,7 +402,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
 		}
 
-		webhooks.AddMessage(webhooks.GymDetails, gymDetails, areas)
+		webhooksSender.AddMessage(webhooks.GymDetails, gymDetails, areas)
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
@@ -451,7 +451,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 				"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
 			}
 
-			webhooks.AddMessage(webhooks.Raid, raidHook, areas)
+			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
 		}
 	}
 

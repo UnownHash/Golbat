@@ -11,6 +11,8 @@ import (
 	"golbat/webhooks"
 	"google.golang.org/grpc"
 	"net"
+	"net/http"
+	"sync"
 	"time"
 	_ "time/tzdata"
 
@@ -32,7 +34,20 @@ var db *sqlx.DB
 var dbDetails db2.DbDetails
 
 func main() {
-	config.ReadConfig()
+	var wg sync.WaitGroup
+	ctx, cancelFn := context.WithCancel(context.Background())
+	defer cancelFn()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		watchForShutdown(ctx, cancelFn)
+	}()
+
+	cfg, err := config.ReadConfig()
+	if err != nil {
+		panic(err)
+	}
 
 	logLevel := log.InfoLevel
 
@@ -42,31 +57,37 @@ func main() {
 	external.InitSentry()
 	external.InitPyroscope()
 
-	if config.Config.Logging.Debug == true {
+	if cfg.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
 	SetupLogger(
 		logLevel,
-		config.Config.Logging.SaveLogs,
-		config.Config.Logging.MaxSize,
-		config.Config.Logging.MaxAge,
-		config.Config.Logging.MaxBackups,
-		config.Config.Logging.Compress,
+		cfg.Logging.SaveLogs,
+		cfg.Logging.MaxSize,
+		cfg.Logging.MaxAge,
+		cfg.Logging.MaxBackups,
+		cfg.Logging.Compress,
 	)
+
+	webhooksSender, err := webhooks.NewWebhooksSender(cfg)
+	if err != nil {
+		log.Fatalf("failed to setup webhooks sender: %s", err)
+	}
+	decoder.SetWebhooksSender(webhooksSender)
 
 	log.Infof("Golbat starting")
 
 	// Capture connection properties.
-	cfg := mysql.Config{
-		User:                 config.Config.Database.User,     //"root",     //os.Getenv("DBUSER"),
-		Passwd:               config.Config.Database.Password, //"transmit", //os.Getenv("DBPASS"),
+	mysqlConfig := mysql.Config{
+		User:                 cfg.Database.User,     //"root",     //os.Getenv("DBUSER"),
+		Passwd:               cfg.Database.Password, //"transmit", //os.Getenv("DBPASS"),
 		Net:                  "tcp",
-		Addr:                 config.Config.Database.Addr,
-		DBName:               config.Config.Database.Db,
+		Addr:                 cfg.Database.Addr,
+		DBName:               cfg.Database.Db,
 		AllowNativePasswords: true,
 	}
 
-	dbConnectionString := cfg.FormatDSN()
+	dbConnectionString := mysqlConfig.FormatDSN()
 	driver := "mysql"
 
 	log.Infof("Starting migration")
@@ -84,7 +105,7 @@ func main() {
 		return
 	}
 
-	log.Infof("Opening database for processing, max pool = %d", config.Config.Database.MaxPool)
+	log.Infof("Opening database for processing, max pool = %d", cfg.Database.MaxPool)
 
 	// Get a database handle.
 
@@ -95,7 +116,7 @@ func main() {
 	}
 
 	db.SetConnMaxLifetime(time.Minute * 3) // Recommended by go mysql driver
-	db.SetMaxOpenConns(config.Config.Database.MaxPool)
+	db.SetMaxOpenConns(cfg.Database.MaxPool)
 	db.SetMaxIdleConns(10)
 	db.SetConnMaxIdleTime(time.Minute)
 
@@ -106,9 +127,9 @@ func main() {
 	}
 	log.Infoln("Connected to database")
 
-	decoder.SetKojiUrl(config.Config.Koji.Url, config.Config.Koji.BearerToken)
+	decoder.SetKojiUrl(cfg.Koji.Url, cfg.Koji.BearerToken)
 
-	//if config.Config.LegacyInMemory {
+	//if cfg.LegacyInMemory {
 	//	// Initialise in memory db
 	//	inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
 	//	if err != nil {
@@ -151,43 +172,53 @@ func main() {
 	decoder.LoadNests(dbDetails)
 	InitDeviceCache()
 
+	wg.Add(1)
+	go func() {
+		defer cancelFn()
+		defer wg.Done()
+
+		err := webhooksSender.Run(ctx)
+		if err != nil {
+			log.Errorf("failed to start webhooks sender: %s", err)
+		}
+	}()
+
 	log.Infoln("Golbat started")
-	webhooks.StartSender()
 
 	StartDbUsageStatsLogger(db)
 	decoder.StartStatsWriter(db)
 
-	if config.Config.Tuning.ExtendedTimeout {
+	if cfg.Tuning.ExtendedTimeout {
 		log.Info("Extended timeout enabled")
 	}
 
-	if config.Config.Cleanup.Pokemon == true && !config.Config.PokemonMemoryOnly {
+	if cfg.Cleanup.Pokemon == true && !cfg.PokemonMemoryOnly {
 		StartDatabaseArchiver(db)
 	}
 
-	if config.Config.Cleanup.Incidents == true {
+	if cfg.Cleanup.Incidents == true {
 		StartIncidentExpiry(db)
 	}
 
-	if config.Config.Cleanup.Quests == true {
+	if cfg.Cleanup.Quests == true {
 		StartQuestExpiry(db)
 	}
 
-	if config.Config.Cleanup.Stats == true {
+	if cfg.Cleanup.Stats == true {
 		StartStatsExpiry(db)
 	}
 
-	if config.Config.TestFortInMemory {
+	if cfg.TestFortInMemory {
 		go decoder.LoadAllPokestops(dbDetails)
 		go decoder.LoadAllGyms(dbDetails)
 	}
 
 	// Start the GRPC receiver
 
-	if config.Config.GrpcPort > 0 {
-		log.Infof("Starting GRPC server on port %d", config.Config.GrpcPort)
+	if cfg.GrpcPort > 0 {
+		log.Infof("Starting GRPC server on port %d", cfg.GrpcPort)
 		go func() {
-			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Config.GrpcPort))
+			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GrpcPort))
 			if err != nil {
 				log.Fatalf("failed to listen: %v", err)
 			}
@@ -204,7 +235,7 @@ func main() {
 	// Start the web server.
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	if config.Config.Logging.Debug {
+	if cfg.Logging.Debug {
 		r.Use(ginlogrus.Logger(log.StandardLogger()))
 	} else {
 		r.Use(gin.Recovery())
@@ -232,12 +263,52 @@ func main() {
 
 	//router := mux.NewRouter().StrictSlash(true)
 	//router.HandleFunc("/raw", Raw)
-	addr := fmt.Sprintf(":%d", config.Config.Port)
-	//log.Fatal(http.ListenAndServe(addr, router)) // addr is in form :9001
-	err = r.Run(addr)
-	if err != nil {
-		log.Fatal(err)
+
+	srv := &http.Server{
+		Addr:    fmt.Sprintf(":%d", cfg.Port),
+		Handler: r,
 	}
+
+	wg.Add(1)
+	go func() {
+		defer cancelFn()
+		defer wg.Done()
+
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Errorf("Failed to listen and start http server: %s", err)
+		}
+	}()
+
+	// wait for shutdown to be signaled in some way. This can be from a failure
+	// to start the webhook sender, failure to start the http server, and/or
+	// watchForShutdown() saying it is time to shutdown. (watchForShutdown() on unix
+	// waits for a SIGINT or SIGTERM)
+	<-ctx.Done()
+
+	log.Info("Starting shutdown...")
+
+	// So now we attempt to shutdown the http server, telling it to wait for open requests to
+	// finish for 5 seconds before just pulling the plug.
+	shutdownCtx, shutdownCancelFn := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancelFn()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		if err == context.DeadlineExceeded {
+			log.Warn("Graceful shutdown timed out, exiting.")
+		} else {
+			log.Errorf("Error during http server shutdown: %s", err)
+		}
+	}
+
+	// wait for other started goroutines to cleanup and exit before we flush the
+	// webhooks and exit the program.
+	log.Info("http server is shutdown, waiting for other go routines to exit...")
+	wg.Wait()
+
+	log.Info("go routines have exited, flushing webhooks now...")
+	webhooksSender.Flush()
+
+	log.Info("Golbat exiting!")
 }
 
 func decode(ctx context.Context, method int, protoData *ProtoData) {
