@@ -26,6 +26,7 @@ func ReadConfig() {
 			BlockProfileRate:     5,
 		},
 		Logging: logging{
+			Debug:      false,
 			SaveLogs:   false,
 			MaxSize:    50,
 			MaxBackups: 10,
