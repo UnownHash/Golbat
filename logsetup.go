@@ -4,7 +4,6 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/natefinch/lumberjack.v2"
-	"golbat/config"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,15 +11,15 @@ import (
 
 var lumberjackLogger *lumberjack.Logger
 
-func SetupLogger(logLevel log.Level, fileLoggingEnabled bool) {
+func SetupLogger(logLevel log.Level, fileLoggingEnabled bool, maxSize, maxAge, maxBackups int, compress bool) {
 
 	lumberjackLogger = &lumberjack.Logger{
 		// Log file absolute path, os agnostic
 		Filename:   filepath.ToSlash("logs/golbat.log"),
-		MaxSize:    config.Config.Logging.MaxSize, // MB
-		MaxBackups: config.Config.Logging.MaxBackups,
-		MaxAge:     config.Config.Logging.MaxAge,   // days
-		Compress:   config.Config.Logging.Compress, // disabled by default
+		MaxSize:    maxSize, // MB
+		MaxBackups: maxBackups,
+		MaxAge:     maxAge,   // days
+		Compress:   compress, // disabled by default
 	}
 
 	var output io.Writer
