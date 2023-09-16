@@ -193,6 +193,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	stop.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
 	stop.PowerUpLevel, stop.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
 
+	// lasModifiedMs is also modified when incident happens
 	lastModifiedTimestamp := fortData.LastModifiedMs / 1000
 	stop.LastModifiedTimestamp = null.IntFrom(lastModifiedTimestamp)
 
@@ -200,13 +201,18 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		lureId := int16(fortData.ActiveFortModifier[0])
 		if lureId >= 501 && lureId <= 510 {
 			lureEnd := lastModifiedTimestamp + LureTime
+			oldLureEnd := stop.LureExpireTimestamp.ValueOrZero()
 			if stop.LureId != lureId {
 				stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				stop.LureId = lureId
 			} else {
 				now := time.Now().Unix()
-				if now > (lureEnd + 30) { // wait some time after lure end before a restart in case of timing issue
-					// If a lure needs to be restarted
+				// wait some time after lure end before a restart in case of timing issue
+				if now > oldLureEnd+30 {
+					for now > lureEnd {
+						lureEnd += LureTime
+					}
+					// lure needs to be restarted
 					stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				}
 			}
@@ -515,7 +521,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
 		lureId := int16(fortData.Modifier[0].ModifierType)
-		lureExpiry := int64(fortData.Modifier[0].ExpirationTimeMs / 1000)
+		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000
 
 		stop.LureId = lureId
 		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
