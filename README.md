@@ -70,6 +70,9 @@ Extra configurations for PvP are available in the `pvp` section of the config fi
 ```toml
 # The level caps used in rankings, defaults to [50, 51]
 level_caps = [50, 51]
+
+# Gohbem uses tied rankings by default (1,1,3,4). Use the following config option to eliminate tied rankings (1,2,3,4,5) and align to external PvP Calculators like GO Stadium and PvP IVs
+ranking_comparator = "prefer_higher_cp"
 ```
 
 # Game objects supported support

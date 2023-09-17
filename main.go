@@ -45,7 +45,14 @@ func main() {
 	if config.Config.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
-	SetupLogger(logLevel, config.Config.Logging.SaveLogs)
+	SetupLogger(
+		logLevel,
+		config.Config.Logging.SaveLogs,
+		config.Config.Logging.MaxSize,
+		config.Config.Logging.MaxAge,
+		config.Config.Logging.MaxBackups,
+		config.Config.Logging.Compress,
+	)
 
 	log.Infof("Golbat starting")
 
