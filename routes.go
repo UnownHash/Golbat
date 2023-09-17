@@ -50,7 +50,7 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
 	if err != nil {
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
