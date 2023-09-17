@@ -75,8 +75,8 @@ type ApiPokemonDnfFilter struct {
 	StaIv   []int8        `json:"sta_iv"`
 	Level   []int8        `json:"level"`
 	Cp      []int16       `json:"cp"`
-	Gender  int8          `json:"gender"`
-	Size    int8          `json:"size"`
+	Gender  []int8        `json:"gender"`
+	Size    []int8        `json:"size"`
 	Pvp     *ApiPvpFilter `json:"pvp"`
 }
 
@@ -557,6 +557,14 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 				log.Errorf("GetPokemonInArea2 - Invalid Cp filter")
 				return nil
 			}
+			if filter.Gender != nil && len(filter.Gender) != 2 {
+				log.Errorf("GetPokemonInArea2 - Invalid Cp filter")
+				return nil
+			}
+			if filter.Size != nil && len(filter.Size) != 2 {
+				log.Errorf("GetPokemonInArea2 - Invalid Cp filter")
+				return nil
+			}
 
 			if filter.Pvp != nil {
 				if filter.Pvp.Little != nil && len(filter.Pvp.Little) != 2 {
@@ -611,8 +619,8 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 			filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv[0] || pokemonLookup.Def > filter.DefIv[1]) ||
 			filter.Level != nil && (pokemonLookup.Level < filter.Level[0] || pokemonLookup.Level > filter.Level[1]) ||
 			filter.Cp != nil && (pokemonLookup.Cp < filter.Cp[0] || pokemonLookup.Cp > filter.Cp[1]) ||
-			filter.Gender != 0 && pokemonLookup.Gender != filter.Gender ||
-			filter.Size != 0 && pokemonLookup.Size != filter.Size {
+			filter.Gender != nil && (pokemonLookup.Gender < filter.Gender[0] || pokemonLookup.Gender > filter.Gender[1]) ||
+			filter.Size != nil && (pokemonLookup.Size < filter.Size[0] || pokemonLookup.Size > filter.Size[1]) {
 			return false
 		}
 		pvpFilter := filter.Pvp
@@ -658,7 +666,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 						returnKeys = append(returnKeys, pokemonId)
 						pokemonMatched++
 						if pokemonMatched > maxPokemon {
-							log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
+							log.Infof("GetPokemonInArea2 - result would exceed maximum size (%d), stopping scan", maxPokemon)
 							return false
 						}
 						break
@@ -737,7 +745,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 		}
 	}
 
-	log.Infof("GetPokemonInArea - total time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonSkipped, len(results))
+	log.Infof("GetPokemonInArea2 - total time %s (locked time %s), %d scanned, %d skipped, %d returned", time.Since(start), lockedTime, pokemonExamined, pokemonSkipped, len(results))
 
 	return results
 }
