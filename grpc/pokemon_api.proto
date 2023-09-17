@@ -19,18 +19,18 @@ message PokemonScanRequest {
 }
 
 message PokemonDnf  {
-  repeated PokemonId pokemon = 1;
-  optional RangeMinMax Iv       =2;
-  optional RangeMinMax AtkIv     =3;
-  optional RangeMinMax DefIv     =4;
-  optional RangeMinMax StaIv   =5;
-  optional RangeMinMax Level =6;
-  optional RangeMinMax Cp     =7;
-  optional int32 Gender   =8;
-  optional int32 Size = 9;
-  optional RangeMinMax PvpLittleRanking =10;
-  optional RangeMinMax PvpGreatRanking = 11;
-  optional RangeMinMax PvpUltraRanking = 12;
+  repeated PokemonId pokemon            = 1;
+  optional RangeMinMax Iv               = 2;
+  optional RangeMinMax AtkIv            = 3;
+  optional RangeMinMax DefIv            = 4;
+  optional RangeMinMax StaIv            = 5;
+  optional RangeMinMax Level            = 6;
+  optional RangeMinMax Cp               = 7;
+  optional RangeMinMax Gender           = 8;
+  optional RangeMinMax Size             = 9;
+  optional RangeMinMax PvpLittleRanking = 10;
+  optional RangeMinMax PvpGreatRanking  = 11;
+  optional RangeMinMax PvpUltraRanking  = 12;
 }
 
 message PokemonId {

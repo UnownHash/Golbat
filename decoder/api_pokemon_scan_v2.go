@@ -26,8 +26,8 @@ type ApiPokemonDnfFilter struct {
 	StaIv   *ApiPokemonDnfMinMax8 `json:"sta_iv"`
 	Level   *ApiPokemonDnfMinMax8 `json:"level"`
 	Cp      *ApiPokemonDnfMinMax  `json:"cp"`
-	Gender  int8                  `json:"gender"`
-	Size    int8                  `json:"size"`
+	Gender  *ApiPokemonDnfMinMax8 `json:"gender"`
+	Size    *ApiPokemonDnfMinMax8 `json:"size"`
 	Little  *ApiPokemonDnfMinMax  `json:"pvp_little"`
 	Great   *ApiPokemonDnfMinMax  `json:"pvp_great"`
 	Ultra   *ApiPokemonDnfMinMax  `json:"pvp_ultra"`
@@ -102,8 +102,8 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 			filter.DefIv != nil && (pokemonLookup.Def < filter.DefIv.Min || pokemonLookup.Def > filter.DefIv.Max) ||
 			filter.Level != nil && (pokemonLookup.Level < filter.Level.Min || pokemonLookup.Level > filter.Level.Max) ||
 			filter.Cp != nil && (pokemonLookup.Cp < filter.Cp.Min || pokemonLookup.Cp > filter.Cp.Max) ||
-			filter.Gender != 0 && pokemonLookup.Gender != filter.Gender ||
-			filter.Size != 0 && pokemonLookup.Size != filter.Size {
+			filter.Gender != nil && (pokemonLookup.Gender < filter.Gender.Min || pokemonLookup.Gender > filter.Gender.Max) ||
+			filter.Size != nil && (pokemonLookup.Size < filter.Size.Min || pokemonLookup.Size > filter.Size.Max) {
 			return false
 		}
 
@@ -338,24 +338,14 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 
 				return pokemonRes
 			}(),
-			Iv:    convertToMinMax8(filter.Iv),
-			AtkIv: convertToMinMax8(filter.AtkIv),
-			DefIv: convertToMinMax8(filter.DefIv),
-			StaIv: convertToMinMax8(filter.StaIv),
-			Level: convertToMinMax8(filter.Level),
-			Cp:    convertToMinMax16(filter.Cp),
-			Size: func() int8 {
-				if filter.Size == nil {
-					return 0
-				}
-				return int8(*filter.Size)
-			}(),
-			Gender: func() int8 {
-				if filter.Gender == nil {
-					return 0
-				}
-				return int8(*filter.Gender)
-			}(),
+			Iv:     convertToMinMax8(filter.Iv),
+			AtkIv:  convertToMinMax8(filter.AtkIv),
+			DefIv:  convertToMinMax8(filter.DefIv),
+			StaIv:  convertToMinMax8(filter.StaIv),
+			Level:  convertToMinMax8(filter.Level),
+			Cp:     convertToMinMax16(filter.Cp),
+			Size:   convertToMinMax8(filter.Size),
+			Gender: convertToMinMax8(filter.Gender),
 			Little: convertToMinMax16(filter.PvpLittleRanking),
 			Great:  convertToMinMax16(filter.PvpGreatRanking),
 			Ultra:  convertToMinMax16(filter.PvpUltraRanking),
