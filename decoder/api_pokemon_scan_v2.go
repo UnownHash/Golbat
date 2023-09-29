@@ -59,8 +59,8 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 	for _, filter := range retrieveParameters.DnfFilters {
 		if len(filter.Pokemon) > 0 {
 			for _, keyString := range filter.Pokemon {
-				var pokemonId int16 = -1
-				if keyString.Pokemon == 0 {
+				pokemonId := keyString.Pokemon
+				if pokemonId == 0 {
 					pokemonId = -1
 				}
 				var formId int16 = -1
