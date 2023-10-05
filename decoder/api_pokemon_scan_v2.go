@@ -107,10 +107,9 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 			return false
 		}
 
-		if pvpLookup == nil ||
-			filter.Little != nil && (pvpLookup.Little < filter.Little.Min || pvpLookup.Little > filter.Little.Max) ||
-			filter.Great != nil && (pvpLookup.Great < filter.Great.Min || pvpLookup.Great > filter.Great.Max) ||
-			filter.Ultra != nil && (pvpLookup.Ultra < filter.Ultra.Min || pvpLookup.Ultra > filter.Ultra.Max) {
+		if filter.Little != nil && (pvpLookup == nil || pvpLookup.Little < filter.Little.Min || pvpLookup.Little > filter.Little.Max) ||
+			filter.Great != nil && (pvpLookup == nil || pvpLookup.Great < filter.Great.Min || pvpLookup.Great > filter.Great.Max) ||
+			filter.Ultra != nil && (pvpLookup == nil || pvpLookup.Ultra < filter.Ultra.Min || pvpLookup.Ultra > filter.Ultra.Max) {
 			return false
 		}
 		return true
