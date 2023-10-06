@@ -192,7 +192,8 @@ func main() {
 				log.Fatalf("failed to listen: %v", err)
 			}
 			s := grpc.NewServer()
-			pb.RegisterRawProtoServer(s, &grpcServer{})
+			pb.RegisterRawProtoServer(s, &grpcRawServer{})
+			pb.RegisterPokemonServer(s, &grpcPokemonServer{})
 			log.Printf("grpc server listening at %v", lis.Addr())
 			if err := s.Serve(lis); err != nil {
 				log.Fatalf("failed to serve: %v", err)
@@ -224,8 +225,8 @@ func main() {
 	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
+	apiGroup.POST("/pokemon/v2/scan", PokemonScan2)
 	apiGroup.POST("/pokemon/search", PokemonSearch)
-	apiGroup.POST("/pokemon/scan-msgpack", PokemonScanMsgPack)
 
 	apiGroup.GET("/devices/all", GetDevices)
 
