@@ -147,7 +147,7 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 			"updated":              weather.Updated,
 		}
 		areas := MatchStatsGeofence(weather.Latitude, weather.Longitude)
-		webhooks.AddMessage(webhooks.Weather, weatherHook, areas)
+		webhooksSender.AddMessage(webhooks.Weather, weatherHook, areas)
 	}
 }
 

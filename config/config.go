@@ -1,11 +1,14 @@
 package config
 
-import "golbat/geo"
+import (
+	"golbat/geo"
+	"time"
+)
 
 type configDefinition struct {
 	Port              int        `koanf:"port"`
 	GrpcPort          int        `koanf:"grpc_port"`
-	Webhooks          []webhook  `koanf:"webhooks"`
+	Webhooks          []Webhook  `koanf:"webhooks"`
 	Database          database   `koanf:"database"`
 	Logging           logging    `koanf:"logging"`
 	Sentry            sentry     `koanf:"sentry"`
@@ -19,6 +22,15 @@ type configDefinition struct {
 	Koji              koji       `koanf:"koji"`
 	Tuning            tuning     `koanf:"tuning"`
 	ScanRules         []scanRule `koanf:"scan_rules"`
+}
+
+func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
+	// not currently configurable.
+	return time.Second
+}
+
+func (configDefinition configDefinition) GetWebhooks() []Webhook {
+	return configDefinition.Webhooks
 }
 
 type koji struct {
@@ -35,7 +47,7 @@ type cleanup struct {
 	DeviceHours int  `koanf:"device_hours"`
 }
 
-type webhook struct {
+type Webhook struct {
 	Url       string         `koanf:"url"`
 	Types     []string       `koanf:"types"`
 	Areas     []string       `koanf:"areas"`
