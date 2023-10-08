@@ -625,7 +625,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          false,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook, areas)
+		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 
 	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
@@ -651,7 +651,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          true,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook, areas)
+		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
 		pokestopHook := map[string]interface{}{
@@ -687,7 +687,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			}(),
 		}
 
-		webhooks.AddMessage(webhooks.Pokestop, pokestopHook, areas)
+		webhooksSender.AddMessage(webhooks.Pokestop, pokestopHook, areas)
 	}
 }
 

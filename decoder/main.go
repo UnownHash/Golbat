@@ -9,7 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
+	"golbat/webhooks"
 	"math"
 	"strconv"
 	"sync"
@@ -44,6 +46,11 @@ type RawClientWeatherData struct {
 	Data *pogo.ClientWeatherProto
 }
 
+type webhooksSenderInterface interface {
+	AddMessage(whType webhooks.WebhookType, message any, areas []geo.AreaName)
+}
+
+var webhooksSender webhooksSenderInterface
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
@@ -534,4 +541,8 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 	saveIncidentRecord(ctx, db, incident)
 	incidentMutex.Unlock()
 	return ""
+}
+
+func SetWebhooksSender(whSender webhooksSenderInterface) {
+	webhooksSender = whSender
 }

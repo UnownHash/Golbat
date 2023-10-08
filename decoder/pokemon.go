@@ -459,7 +459,11 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 			}(),
 		}
 
-		webhooks.AddMessage(webhooks.Pokemon, pokemonHook, areas)
+		if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
+			webhooksSender.AddMessage(webhooks.PokemonIV, pokemonHook, areas)
+		} else {
+			webhooksSender.AddMessage(webhooks.PokemonNoIV, pokemonHook, areas)
+		}
 	}
 }
 

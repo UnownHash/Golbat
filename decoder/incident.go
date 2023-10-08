@@ -194,7 +194,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			}
 		}
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
-		webhooks.AddMessage(webhooks.Invasion, incidentHook, areas)
+		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
 	}
 }
 

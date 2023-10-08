@@ -13,7 +13,7 @@ import (
 
 var k = koanf.New(".")
 
-func ReadConfig() {
+func ReadConfig() (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
 		Sentry: sentry{
@@ -78,8 +78,7 @@ func ReadConfig() {
 
 	unmarshalError := k.Unmarshal("", &Config)
 	if unmarshalError != nil {
-		panic(fmt.Errorf("failed to Unmarshal config: %w", unmarshalError))
-		return
+		return Config, fmt.Errorf("failed to Unmarshal config: %w", unmarshalError)
 	}
 
 	// translate webhook areas to array of geo.AreaName struct
@@ -93,6 +92,8 @@ func ReadConfig() {
 		rule := &Config.ScanRules[i]
 		rule.AreaNames = splitIntoAreaAndFenceName(rule.Areas)
 	}
+
+	return Config, nil
 }
 
 func parseEnvVarToSlice(sliceName string, key string, value string, currentMap map[string]interface{}) {
