@@ -192,9 +192,15 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	start := time.Now()
+	startUnix := start.Unix()
+
 	for _, key := range returnKeys {
 		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
+
+			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
+				continue
+			}
 
 			apiPokemon := ApiPokemonResult{
 				Id:              pokemon.Id,
@@ -358,9 +364,15 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 	results := make([]*pb.PokemonDetails, 0, len(returnKeys))
 
 	start := time.Now()
+	startUnix := start.Unix()
+
 	for _, key := range returnKeys {
 		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
+
+			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
+				continue
+			}
 
 			apiPokemon := pb.PokemonDetails{
 				Id:         pokemon.Id,

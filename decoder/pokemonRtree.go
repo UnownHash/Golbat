@@ -92,7 +92,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
 		Iv: func() int8 {
 			if pokemon.Iv.Valid {
-				return int8(math.Round(pokemon.Iv.Float64))
+				return int8(math.Floor(pokemon.Iv.Float64))
 			}
 			return -1
 		}(),
