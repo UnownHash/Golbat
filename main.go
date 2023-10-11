@@ -703,8 +703,15 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newClientWeather []decoder.RawClientWeatherData
 	var newMapCells []uint64
+	var cellsToBeCleaned []uint64
 
 	for _, mapCell := range decodedGmo.MapCell {
+		if isCellNotEmpty(mapCell) {
+			newMapCells = append(newMapCells, mapCell.S2CellId)
+			if cellContainsForts(mapCell) {
+				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
+			}
+		}
 		timestampMs := uint64(mapCell.AsOfTimeMs)
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort})
@@ -713,7 +720,6 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
 			}
 		}
-		newMapCells = append(newMapCells, mapCell.S2CellId)
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
 		}
@@ -737,12 +743,22 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 		if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
-			if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-				decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
-			}
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				decoder.ClearRemovedForts(ctx, dbDetails, cellsToBeCleaned)
+			}()
 		}
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
+}
+
+func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
+	return len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
+}
+
+func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
+	return len(mapCell.Fort) > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {

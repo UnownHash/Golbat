@@ -424,7 +424,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 		var gymsDone = false
 		gymIds, errGyms := db.FindOldGyms(ctx, dbDetails, int64(cellId))
 		if errGyms != nil {
-			log.Errorf("Unable to clear old gyms: %s", errGyms)
+			log.Errorf("ClearRemovedForts - Unable to clear old gyms: %s", errGyms)
 		} else {
 			if gymIds == nil {
 				// if there is no gym to clear we are done with gyms
@@ -433,14 +433,14 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 				// we need to clear removed gyms (not seen for 60 minutes)
 				errGyms2 := db.ClearOldGyms(ctx, dbDetails, gymIds)
 				if errGyms2 != nil {
-					log.Errorf("Unable to clear old gyms '%v': %s", gymIds, errGyms2)
+					log.Errorf("ClearRemovedForts - Unable to clear old gyms '%v': %s", gymIds, errGyms2)
 				} else {
 					// if there are all gyms cleared we are done with gyms
 					gymsDone = true
 					for _, gymId := range gymIds {
 						gymCache.Delete(gymId)
 					}
-					log.Infof("Cleared old Gym(s) in cell %d: %v", cellId, gymIds)
+					log.Infof("ClearRemovedForts - Cleared old Gym(s) in cell %d: %v", cellId, gymIds)
 					CreateFortWebhooks(ctx, dbDetails, gymIds, GYM, REMOVAL)
 				}
 			}
@@ -448,7 +448,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 		var stopsDone = false
 		stopIds, stopsErr := db.FindOldPokestops(ctx, dbDetails, int64(cellId))
 		if stopsErr != nil {
-			log.Errorf("Unable to clear old stops: %s", stopsErr)
+			log.Errorf("ClearRemovedForts - Unable to clear old stops: %s", stopsErr)
 		} else {
 			if stopIds == nil {
 				// iff there is no stop to clear we update stops
@@ -457,14 +457,14 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 				// we need to clear removed stops (not seen for 60 minutes)
 				stopsErr2 := db.ClearOldPokestops(ctx, dbDetails, stopIds)
 				if stopsErr2 != nil {
-					log.Errorf("Unable to clear old stops '%v': %s", stopIds, stopsErr2)
+					log.Errorf("ClearRemovedForts - Unable to clear old stops '%v': %s", stopIds, stopsErr2)
 				} else {
 					// if there are all gyms cleared we are done with gyms
 					stopsDone = true
 					for _, stopId := range stopIds {
 						pokestopCache.Delete(stopId)
 					}
-					log.Infof("Cleared old Stop(s) in cell %d: %v", cellId, stopIds)
+					log.Infof("ClearRemovedForts - Cleared old Stop(s) in cell %d: %v", cellId, stopIds)
 					CreateFortWebhooks(ctx, dbDetails, stopIds, POKESTOP, REMOVAL)
 				}
 			}
