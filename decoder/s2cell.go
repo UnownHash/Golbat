@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"gopkg.in/guregu/null.v4"
@@ -73,4 +74,36 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	for _, cellId := range outputCellIds {
 		s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
 	}
+}
+
+type EmptyCellTracker struct {
+	Data *xsync.MapOf[uint64, int]
+}
+
+func NewEmptyCellTracker() *EmptyCellTracker {
+	return &EmptyCellTracker{
+		Data: xsync.NewIntegerMapOf[uint64, int](),
+	}
+}
+
+func (tracker *EmptyCellTracker) IncreaseCount(cellId uint64) {
+	tracker.Data.Compute(cellId, func(oldValue int, loaded bool) (newValue int, delete bool) {
+		if loaded {
+			return oldValue + 1, false
+		} else {
+			return 1, false
+		}
+	})
+}
+
+func (tracker *EmptyCellTracker) ResetCount(cellId uint64) {
+	tracker.Data.Delete(cellId)
+}
+
+func (tracker *EmptyCellTracker) ShouldConsiderEmpty(cellId uint64) bool {
+	count, exists := tracker.Data.Load(cellId)
+	if !exists {
+		return false
+	}
+	return count >= 5
 }

@@ -32,6 +32,7 @@ import (
 
 var db *sqlx.DB
 var dbDetails db2.DbDetails
+var emptyCellTracker = decoder.NewEmptyCellTracker()
 
 func main() {
 	var wg sync.WaitGroup
@@ -703,8 +704,54 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newClientWeather []decoder.RawClientWeatherData
 	var newMapCells []uint64
+	var cellsToBeCleaned []uint64
 
 	for _, mapCell := range decodedGmo.MapCell {
+		// Track empty cells
+		if isCellEmpty(mapCell) {
+			emptyCellTracker.IncreaseCount(mapCell.S2CellId)
+			if emptyCellTracker.ShouldConsiderEmpty(mapCell.S2CellId) {
+				newMapCells = append(newMapCells, mapCell.S2CellId)
+				continue
+			} else {
+				if mapCell.S2CellId == 5122508642045657088 { // Porsche
+					log.Infof("FORTCHECK - Found empty cell 'Porsche'")
+				}
+				if mapCell.S2CellId == 5122513823923699712 { // Mural Panda
+					log.Infof("FORTCHECK - Found empty cell 'Mural Panda'")
+
+				}
+			}
+		} else {
+			emptyCellTracker.ResetCount(mapCell.S2CellId)
+			newMapCells = append(newMapCells, mapCell.S2CellId)
+			if cellContainsForts(mapCell) {
+				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
+			}
+		}
+		if mapCell.S2CellId == 5122508642045657088 { // Porsche
+			log.Infof("FORTCHECK - Found %d forts in Cell 'Porsche'", len(mapCell.Fort))
+			forts := [3]string{"e438cbe5cb9141d394f5fa38ba625793.16", "4e61d4fb1f6ef7d07a71784d00000000.16", "c1ce7552bd7d3c56b96eec8db12e16b9.16"}
+			var toCompare []string
+			for _, fort := range mapCell.Fort {
+				toCompare = append(toCompare, fort.FortId)
+			}
+			if len(forts) != len(toCompare) {
+				log.Errorf("FORTCHECK - length differs by %d", len(forts)-len(toCompare))
+			}
+		}
+		if mapCell.S2CellId == 5122513823923699712 { // Mural Panda
+			log.Infof("FORTCHECK - Found %d forts in Cell 'Mural Panda'", len(mapCell.Fort))
+			forts := [11]string{"0851ce8528f340b7a844db910214a838.16", "1a40df1237cb3f3d968c6c3e049662fd.16", "1db0293d9c3b3415a8e61fd8945c6702.16", "3bd17347c54242e8b13d1b0244e1cb8b.16", "5e43fe87009a3a769c62d7c6f6acc0e4.16", "8b41eef243ed3540bfee364a766e5697.16", "a3dbb9c8941f4cf4bc3624a0ac812dc3.16", "aa4e864869004137a6ba933a48f7f21d.16", "ba21f9aa413d4ee2ad9a85f5552f204d.16", "ef41cbc317aa49e09f5c43f65adc4fc2.16", "fe4f57e0e6ff37319e6bad0f5a45b626.16"}
+			var toCompare []string
+			for _, fort := range mapCell.Fort {
+				toCompare = append(toCompare, fort.FortId)
+			}
+			if len(forts) != len(toCompare) {
+				log.Errorf("FORTCHECK - length differs by %d", len(forts)-len(toCompare))
+			}
+		}
+
 		timestampMs := uint64(mapCell.AsOfTimeMs)
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort})
@@ -713,7 +760,6 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
 			}
 		}
-		newMapCells = append(newMapCells, mapCell.S2CellId)
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
 		}
@@ -737,12 +783,23 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 		if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
-			if !(len(newMapPokemon) == 0 && len(newNearbyPokemon) == 0 && len(newForts) == 0) {
-				decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
-			}
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				decoder.ClearRemovedForts(ctx, dbDetails, cellsToBeCleaned)
+			}()
 		}
+
 	}
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", len(decodedGmo.MapCell), len(newForts), len(newWildPokemon), len(newNearbyPokemon))
+}
+
+func isCellEmpty(mapCell *pogo.ClientMapCellProto) bool {
+	return len(mapCell.Fort) == 0 && len(mapCell.WildPokemon) == 0 && len(mapCell.NearbyPokemon) == 0 && len(mapCell.CatchablePokemon) == 0
+}
+
+func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
+	return len(mapCell.Fort) > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
