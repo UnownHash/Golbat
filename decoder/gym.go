@@ -404,7 +404,6 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 		}
 
 		webhooksSender.AddMessage(webhooks.GymDetails, gymDetails, areas)
-		external.UpdateGymCount(areas)
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
