@@ -11,8 +11,8 @@ import (
 	"golbat/webhooks"
 	"google.golang.org/grpc"
 	"net"
-	"strings"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 	_ "time/tzdata"
@@ -439,12 +439,6 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 		return res
 	}
 
-	haveArStr := "NoAR"
-	if *haveAr {
-		haveArStr = "AR"
-	}
-
-	external.DecodeQuest.WithLabelValues("ok", haveArStr).Inc()
 	return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
 
 }
