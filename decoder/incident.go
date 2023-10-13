@@ -6,6 +6,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
+	"golbat/external"
 	"golbat/pogo"
 	"golbat/webhooks"
 	null "gopkg.in/guregu/null.v4"
@@ -195,6 +196,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		}
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
+		external.UpdateIncidentCount(areas)
 	}
 }
 

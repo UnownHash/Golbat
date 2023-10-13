@@ -5,6 +5,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	"golbat/external"
 	"golbat/geo"
 	"os"
 	"sync"
@@ -246,20 +247,24 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 
 			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
 				countStats.count[new.PokemonId]++
+				external.PokemonCountNew.WithLabelValues(area.String()).Inc()
+				if new.ExpireTimestampVerified {
+					external.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
+				}
 			}
 			if new.Cp.Valid {
 				countStats.ivCount[new.PokemonId]++
-				if new.Shiny.ValueOrZero() {
-					countStats.shiny[new.PokemonId]++
-				}
+				external.PokemonCountIv.WithLabelValues(area.String()).Inc()
 				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
 					atk := new.AtkIv.ValueOrZero()
 					def := new.DefIv.ValueOrZero()
 					sta := new.StaIv.ValueOrZero()
 					if atk == 15 && def == 15 && sta == 15 {
+						external.PokemonCountHundo.WithLabelValues(area.String()).Inc()
 						countStats.hundos[new.PokemonId]++
 					}
 					if atk == 0 && def == 0 && sta == 0 {
+						external.PokemonCountNundo.WithLabelValues(area.String()).Inc()
 						countStats.nundos[new.PokemonId]++
 					}
 				}
@@ -279,6 +284,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 			if bucket >= 0 {
 				areaStats.tthBucket[bucket]++
 			}
+
+			external.PokemonStatsResetCount.WithLabelValues(area.String()).Add(float64(statsResetCountIncr))
+
 			areaStats.monsIv += monsIvIncr
 			areaStats.monsSeen += monsSeenIncr
 			areaStats.verifiedEnc += verifiedEncIncr

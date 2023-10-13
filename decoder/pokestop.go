@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/db"
+	"golbat/external"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
@@ -821,9 +822,16 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 
 func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
+		external.DecodeQuest.WithLabelValues("error", "no_quest").Inc()
 		return "No quest"
 	}
 
+	haveArStr := "NoAR"
+	if haveAr {
+		haveArStr = "AR"
+	}
+
+	external.DecodeQuest.WithLabelValues("ok", haveArStr).Inc()
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()

@@ -36,6 +36,10 @@ db = ""
 enabled = true
 include_hundos_under_cap = false
 
+# you can enable prometheus by uncommenting this section
+#[prometheus]
+#enabled = true
+
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array
 
