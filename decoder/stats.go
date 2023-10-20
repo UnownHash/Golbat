@@ -253,6 +253,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 				}
 			}
 			if new.Cp.Valid {
+				if new.Shiny.ValueOrZero() {
+					countStats.shiny[new.PokemonId]++
+				}
 				countStats.ivCount[new.PokemonId]++
 				external.PokemonCountIv.WithLabelValues(area.String()).Inc()
 				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
