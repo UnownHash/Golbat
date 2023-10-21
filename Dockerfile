@@ -4,7 +4,7 @@ FROM golang:1.21-alpine as build
 WORKDIR /go/src/app
 COPY . .
 
-RUN go mod download
+RUN if [ ! -f vendor/modules.txt ]; then go mod download; fi
 RUN CGO_ENABLED=0 go build -tags go_json -o /go/bin/golbat
 RUN mkdir /empty-dir
 
