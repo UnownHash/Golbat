@@ -5,19 +5,20 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
+
 	"golbat/config"
 	"golbat/db"
-	"golbat/external"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
 	"golbat/util"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
-	"strings"
-	"time"
 )
 
 // Pokestop struct.
@@ -822,7 +823,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 
 func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
 	if quest.ChallengeQuest == nil {
-		external.DecodeQuest.WithLabelValues("error", "no_quest").Inc()
+		statsCollector.IncDecodeQuest("error", "no_quest")
 		return "No quest"
 	}
 
@@ -831,7 +832,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 		haveArStr = "AR"
 	}
 
-	external.DecodeQuest.WithLabelValues("ok", haveArStr).Inc()
+	statsCollector.IncDecodeQuest("ok", haveArStr)
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()

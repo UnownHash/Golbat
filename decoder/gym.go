@@ -4,16 +4,17 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
+
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
+
 	"golbat/config"
 	"golbat/db"
-	"golbat/external"
 	"golbat/pogo"
 	"golbat/util"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
-	"time"
 )
 
 // Gym struct.
@@ -453,7 +454,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
-			external.UpdateRaidCount(areas, gym.RaidLevel.ValueOrZero())
+			statsCollector.UpdateRaidCount(areas, gym.RaidLevel.ValueOrZero())
 		}
 	}
 

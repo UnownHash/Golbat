@@ -3,21 +3,23 @@ package decoder
 import (
 	"context"
 	"fmt"
-	"github.com/UnownHash/gohbem"
-	"github.com/jellydator/ttlcache/v3"
-	stripedmutex "github.com/nmvalera/striped-mutex"
-	log "github.com/sirupsen/logrus"
-	"golbat/config"
-	"golbat/db"
-	"golbat/geo"
-	"golbat/pogo"
-	"golbat/webhooks"
 	"math"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/UnownHash/gohbem"
+	"github.com/jellydator/ttlcache/v3"
+	stripedmutex "github.com/nmvalera/striped-mutex"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
+
+	"golbat/config"
+	"golbat/db"
+	"golbat/geo"
+	"golbat/pogo"
+	"golbat/stats_collector"
+	"golbat/webhooks"
 )
 
 type RawFortData struct {
@@ -51,6 +53,7 @@ type webhooksSenderInterface interface {
 }
 
 var webhooksSender webhooksSenderInterface
+var statsCollector stats_collector.StatsCollector
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var weatherCache *ttlcache.Cache[int64, Weather]
@@ -545,4 +548,8 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 
 func SetWebhooksSender(whSender webhooksSenderInterface) {
 	webhooksSender = whSender
+}
+
+func SetStatsCollector(collector stats_collector.StatsCollector) {
+	statsCollector = collector
 }
