@@ -33,14 +33,15 @@ type pokemonTimings struct {
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
 
-const maxPokemonNo = 1000
+// max dex id
+const maxPokemonNo = 1050
 
 type areaPokemonCountDetail struct {
-	hundos  [maxPokemonNo]int
-	nundos  [maxPokemonNo]int
-	shiny   [maxPokemonNo]int
-	count   [maxPokemonNo]int
-	ivCount [maxPokemonNo]int
+	hundos  [maxPokemonNo + 1]int
+	nundos  [maxPokemonNo + 1]int
+	shiny   [maxPokemonNo + 1]int
+	count   [maxPokemonNo + 1]int
+	ivCount [maxPokemonNo + 1]int
 }
 
 var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
