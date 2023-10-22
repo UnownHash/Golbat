@@ -366,7 +366,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
-		result = decodeDiskEncounter(ctx, protoData.Data)
+		result = decodeDiskEncounter(ctx, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
 		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
@@ -679,7 +679,7 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
-func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
+func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
@@ -695,7 +695,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	}
 
 	statsCollector.IncDecodeDiskEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
 func decodeStartIncident(ctx context.Context, sDec []byte) string {

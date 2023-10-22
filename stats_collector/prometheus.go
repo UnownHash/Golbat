@@ -11,15 +11,14 @@ import (
 	"golbat/geo"
 )
 
-
 var (
 	ns = "golbat"
 
 	rawRequests = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "raw_requests",
-			Help: "Total number of requests received by raw endpoint",
+			Name:      "raw_requests",
+			Help:      "Total number of requests received by raw endpoint",
 		},
 		[]string{"status", "message"},
 	)
@@ -27,112 +26,112 @@ var (
 	decodeMethods = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_methods",
-			Help: "Total number of decoded methods",
+			Name:      "decode_methods",
+			Help:      "Total number of decoded methods",
 		},
 		[]string{"status", "message", "method"},
 	)
 	decodeFortDetails = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_fort_details",
-			Help: "Total number of decoded: FortDetails",
+			Name:      "decode_fort_details",
+			Help:      "Total number of decoded: FortDetails",
 		},
 		[]string{"status", "message"},
 	)
 	decodeGetMapForts = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_get_map_forts",
-			Help: "Total number of decoded: GMF",
+			Name:      "decode_get_map_forts",
+			Help:      "Total number of decoded: GMF",
 		},
 		[]string{"status", "message"},
 	)
 	decodeGetGymInfo = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_get_gym_info",
-			Help: "Total number of decoded: GetGymInfo",
+			Name:      "decode_get_gym_info",
+			Help:      "Total number of decoded: GetGymInfo",
 		},
 		[]string{"status", "message"},
 	)
 	decodeEncounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_encounter",
-			Help: "Total number of decoded: Encounter",
+			Name:      "decode_encounter",
+			Help:      "Total number of decoded: Encounter",
 		},
 		[]string{"status", "message"},
 	)
 	decodeDiskEncounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_disk_encounter",
-			Help: "Total number of decoded DiskEncounter",
+			Name:      "decode_disk_encounter",
+			Help:      "Total number of decoded DiskEncounter",
 		},
 		[]string{"status", "message"},
 	)
 	decodeQuest = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_quest",
-			Help: "Total number of decoded: Quests",
+			Name:      "decode_quest",
+			Help:      "Total number of decoded: Quests",
 		},
 		[]string{"status", "message"},
 	)
 	decodeSocialActionWithRequest = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_social_action_with_request",
-			Help: "Total number of decoded: SocialActionWithRequest",
+			Name:      "decode_social_action_with_request",
+			Help:      "Total number of decoded: SocialActionWithRequest",
 		},
 		[]string{"status", "message"},
 	)
 	decodeGetFriendDetails = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_get_friend_details",
-			Help: "Total number of decoded: GetFriendDetails",
+			Name:      "decode_get_friend_details",
+			Help:      "Total number of decoded: GetFriendDetails",
 		},
 		[]string{"status", "message"},
 	)
 	decodeSearchPlayer = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_search_player",
-			Help: "Total number of decoded: SearchPlayer",
+			Name:      "decode_search_player",
+			Help:      "Total number of decoded: SearchPlayer",
 		},
 		[]string{"status", "message"},
 	)
 	decodeGMO = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_gmo",
-			Help: "Total number of decoded: GMO",
+			Name:      "decode_gmo",
+			Help:      "Total number of decoded: GMO",
 		},
 		[]string{"status", "message"},
 	)
 	decodeGMOType = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_gmo_type",
-			Help: "Total number of decoded: GMO sub-cat",
+			Name:      "decode_gmo_type",
+			Help:      "Total number of decoded: GMO sub-cat",
 		},
 		[]string{"type"},
 	)
 	decodeStartIncident = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_start_incident",
-			Help: "Total number of decoded: StartIncident",
+			Name:      "decode_start_incident",
+			Help:      "Total number of decoded: StartIncident",
 		},
 		[]string{"status", "message"},
 	)
 	decodeOpenInvasion = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "decode_open_invasion",
-			Help: "Total number of decoded: OpenInvasion",
+			Name:      "decode_open_invasion",
+			Help:      "Total number of decoded: OpenInvasion",
 		},
 		[]string{"status", "message"},
 	)
@@ -140,8 +139,8 @@ var (
 	pokemonStatsResetCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "pokemon_stats_reset_count",
-			Help: "Total number of stats reset",
+			Name:      "pokemon_stats_reset_count",
+			Help:      "Total number of stats reset",
 		},
 		[]string{"area"},
 	)
@@ -149,58 +148,62 @@ var (
 	pokemonCountNew = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "pokemon_count_new",
-			Help: "Total new Pokemon count",
+			Name:      "pokemon_count_new",
+			Help:      "Total new Pokemon count",
 		},
 		[]string{"area"},
 	)
 	pokemonCountIv = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "pokemon_count_iv",
-			Help: "Total Pokemon with IV",
+			Name:      "pokemon_count_iv",
+			Help:      "Total Pokemon with IV",
 		},
 		[]string{"area"},
 	)
-	/*
-		pokemonCountShiny = prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: ns,
-				Name: "pokemon_count_shiny",
-				Help: "Total Shiny count",
-			},
-			[]string{"area"},
-		)
-		pokemonCountShundo = prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: ns,
-				Name: "pokemon_count_shundo",
-				Help: "Total Shundo count",
-			},
-			[]string{"area"},
-		)
-		pokemonCountSnundo = prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Namespace: ns,
-				Name: "pokemon_count_snundo",
-				Help: "Total Snundo count",
-			},
-			[]string{"area"},
-		)
-	*/
+	pokemonCountShiny = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "pokemon_count_shiny",
+			Help:      "Total Shiny count by pokemon dex id",
+		},
+		[]string{"pokemon_id", "form_id"},
+	)
+	pokemonCountNonShiny = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "pokemon_count_non_shiny",
+			Help:      "Total Non-Shiny count by pokemon dex id",
+		},
+		[]string{"pokemon_id", "form_id"},
+	)
+	pokemonCountShundo = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "pokemon_count_shundo",
+			Help:      "Total Shundo count",
+		},
+	)
+	pokemonCountSnundo = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "pokemon_count_snundo",
+			Help:      "Total Snundo count",
+		},
+	)
 	pokemonCountHundo = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "pokemon_count_hundo",
-			Help: "Total Hundo count",
+			Name:      "pokemon_count_hundo",
+			Help:      "Total Hundo count",
 		},
 		[]string{"area"},
 	)
 	pokemonCountNundo = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "pokemon_count_nundo",
-			Help: "Total Nundo count",
+			Name:      "pokemon_count_nundo",
+			Help:      "Total Nundo count",
 		},
 		[]string{"area"},
 	)
@@ -208,8 +211,8 @@ var (
 	verifiedPokemonTTL = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "verified_pokemon_ttl",
-			Help: "Verified Pokemon count by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
+			Name:      "verified_pokemon_ttl",
+			Help:      "Verified Pokemon count by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
 		},
 		[]string{"area", "type", "above30"},
 	)
@@ -217,8 +220,8 @@ var (
 	verifiedPokemonTTLCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "verified_pokemon_ttl_counter",
-			Help: "Verified Pokemon counter by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
+			Name:      "verified_pokemon_ttl_counter",
+			Help:      "Verified Pokemon counter by area, type and with a flag stating if a Pokemon had TTL over 30 minutes",
 		},
 		[]string{"area", "type", "above30"},
 	)
@@ -226,26 +229,34 @@ var (
 	raidCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "raid_count",
-			Help: "Total number of created raids",
+			Name:      "raid_count",
+			Help:      "Total number of created raids",
 		},
 		[]string{"area", "level"},
 	)
 	fortCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "fort_count",
-			Help: "Total number of forts additions, removals and updates",
+			Name:      "fort_count",
+			Help:      "Total number of forts additions, removals and updates",
 		},
 		[]string{"area", "type", "change"},
 	)
 	incidentCount = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
-			Name: "incident_count",
-			Help: "Total number of incidents updates",
+			Name:      "incident_count",
+			Help:      "Total number of incidents updates",
 		},
 		[]string{"area"},
+	)
+	duplicateEncounters = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "duplicate_encounters",
+			Help:      "Total number of duplicate encounters",
+		},
+		[]string{"sameacct"},
 	)
 )
 
@@ -326,19 +337,21 @@ func (col *promCollector) IncPokemonCountIv(area string) {
 	pokemonCountIv.WithLabelValues(area).Inc()
 }
 
-/*
-func (col *promCollector) IncPokemonCountShiny(area string) {
-	pokemonCountShiny.WithLabelValues(area).Inc()
+func (col *promCollector) IncPokemonCountShiny(pokemonId, formId string) {
+	pokemonCountShiny.WithLabelValues(pokemonId, formId).Inc()
 }
 
-func (col *promCollector) IncPokemonCountShundo(area string) {
-	pokemonCountShundo.WithLabelValues(area).Inc()
+func (col *promCollector) IncPokemonCountNonShiny(pokemonId, formId string) {
+	pokemonCountNonShiny.WithLabelValues(pokemonId, formId).Inc()
 }
 
-func (col *promCollector) IncPokemonCountSnundo(area string) {
-	pokemonCountSnundo.WithLabelValues(area).Inc()
+func (col *promCollector) IncPokemonCountShundo() {
+	pokemonCountShundo.Inc()
 }
-*/
+
+func (col *promCollector) IncPokemonCountSnundo() {
+	pokemonCountSnundo.Inc()
+}
 
 func (col *promCollector) IncPokemonCountHundo(area string) {
 	pokemonCountHundo.WithLabelValues(area).Inc()
@@ -401,6 +414,16 @@ func (col *promCollector) UpdateIncidentCount(areas []geo.AreaName) {
 	}
 }
 
+func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
+	var v string
+	if sameAccount {
+		v = "y"
+	} else {
+		v = "n"
+	}
+	duplicateEncounters.WithLabelValues(v).Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -410,8 +433,10 @@ func initPrometheus() {
 		pokemonStatsResetCount,
 
 		pokemonCountNew, pokemonCountIv, pokemonCountHundo, pokemonCountNundo,
+		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
+		duplicateEncounters,
 	)
 }
 

@@ -29,17 +29,17 @@ type StatsCollector interface {
 	AddPokemonStatsResetCount(area string, val float64)
 	IncPokemonCountNew(area string)
 	IncPokemonCountIv(area string)
-	/*
-		IncPokemonCountShiny(area string)
-		IncPokemonCountShundo(area string)
-		IncPokemonCountSnundo(area string)
-	*/
+	IncPokemonCountShiny(pokemonId, formId string)
+	IncPokemonCountNonShiny(pokemonId, formId string)
+	IncPokemonCountShundo()
+	IncPokemonCountSnundo()
 	IncPokemonCountHundo(area string)
 	IncPokemonCountNundo(area string)
 	UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int)
 	UpdateRaidCount(areas []geo.AreaName, raidLevel int64)
 	UpdateFortCount(areas []geo.AreaName, fortType string, changeType string)
 	UpdateIncidentCount(areas []geo.AreaName)
+	IncDuplicateEncounters(sameAccount bool)
 }
 
 type Config interface {

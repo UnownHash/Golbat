@@ -1,15 +1,17 @@
 package decoder
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/encounter_cache"
 	"golbat/geo"
 )
 
@@ -27,11 +29,6 @@ type areaStatsCount struct {
 	verifiedReEncSecTotal int64
 }
 
-type pokemonTimings struct {
-	firstWild      int64
-	firstEncounter int64
-}
-
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
 
 // max dex id
@@ -45,17 +42,16 @@ type areaPokemonCountDetail struct {
 	ivCount [maxPokemonNo + 1]int
 }
 
-var pokemonTimingCache *ttlcache.Cache[string, pokemonTimings]
+// a cache indexed by encounterId (Pokemon.Id)
+var encounterCache *encounter_cache.EncounterCache
 
 var pokemonStats = make(map[geo.AreaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
 
 func initLiveStats() {
-	pokemonTimingCache = ttlcache.New[string, pokemonTimings](
-		ttlcache.WithTTL[string, pokemonTimings](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, pokemonTimings](),
-	)
-	go pokemonTimingCache.Start()
+	encounterCache = encounter_cache.NewEncounterCache(60 * time.Minute)
+	// TODO: fix later to shutdown cleanly, if we care.
+	go encounterCache.Run(context.Background())
 }
 
 func LoadStatsGeofences() {
@@ -108,18 +104,82 @@ func ReloadGeofenceAndClearStats() {
 	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear count
 }
 
-func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
-	var areas []geo.AreaName
+// update stats for an encounterId
+func updateEncounterStats(pokemon *Pokemon) {
+	// We should only be called from encounters. It's important to do so,
+	// so that the 'DuplicateEncounters' stats below are correct.
+	// And double check that we have IVs, anyway.
+	if !(pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid) {
+		return
+	}
 
-	if len(areaNames) == 0 {
+	// Keep track of encounter Id -> account username. Count shinies
+	// for the same encounter Ids, but only if an account has not seen
+	// it before. We'll ignore things like re-rolls.
+
+	username := pokemon.Username.ValueOrZero()
+	if username == "" {
+		username = "<NoUsername>"
+	}
+
+	encounterCacheVal := encounterCache.GetOrCreate(pokemon.Id)
+	isNewEncounter := encounterCacheVal.NumAccountsSeen() == 0
+
+	if encounterCacheVal.SetAccountSeen(pokemon.Username.ValueOrZero()) {
+		// account has already seen this encounter Id
+		statsCollector.IncDuplicateEncounters(true)
+		return
+	}
+
+	if !isNewEncounter {
+		// at least one other account has already seen this
+		// encounter. This is the first time for this account.
+		statsCollector.IncDuplicateEncounters(false)
+	}
+
+	encounterCache.Put(pokemon.Id, encounterCacheVal, pokemon.remainingDuration())
+
+	pokemonIdStr := strconv.Itoa(int(pokemon.PokemonId))
+	var formIdStr string
+	if pokemon.Form.Valid {
+		formIdStr = strconv.Itoa(int(pokemon.Form.ValueOrZero()))
+	}
+
+	if pokemon.Shiny.ValueOrZero() {
+		func() {
+			areaName := geo.AreaName{Parent: "world", Name: "world"}
+
+			pokemonStatsLock.Lock()
+			defer pokemonStatsLock.Unlock()
+
+			countStats := pokemonCount[areaName]
+			if countStats == nil {
+				countStats = &areaPokemonCountDetail{}
+				pokemonCount[areaName] = countStats
+			}
+			countStats.shiny[pokemon.PokemonId]++
+		}()
+
+		statsCollector.IncPokemonCountShiny(pokemonIdStr, formIdStr)
+		if pokemon.AtkIv.Int64 == 15 && pokemon.DefIv.Int64 == 15 && pokemon.StaIv.Int64 == 15 {
+			statsCollector.IncPokemonCountShundo()
+		} else if pokemon.AtkIv.Int64 == 0 && pokemon.DefIv.Int64 == 0 && pokemon.StaIv.Int64 == 0 {
+			statsCollector.IncPokemonCountSnundo()
+		}
+	} else {
+		// send non-shinies also, so that we can compute odds.
+		statsCollector.IncPokemonCountNonShiny(pokemonIdStr, formIdStr)
+	}
+}
+
+func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
+	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
 				Parent: "world",
 				Name:   "world",
 			},
 		}
-	} else {
-		areas = areaNames
 	}
 
 	// General stats
@@ -135,30 +195,11 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 	verifiedReEncounterIncr := 0
 	verifiedReEncSecTotalIncr := int64(0)
 
-	var pokemonTiming *pokemonTimings
+	var encounterCacheVal *encounter_cache.Value
 
-	populatePokemonTiming := func() {
-		if pokemonTiming == nil {
-			pokemonTimingEntry := pokemonTimingCache.Get(new.Id)
-			if pokemonTimingEntry != nil {
-				p := pokemonTimingEntry.Value()
-				pokemonTiming = &p
-				return
-			}
-		}
-		pokemonTiming = &pokemonTimings{}
-	}
-
-	updatePokemonTiming := func() {
-		if pokemonTiming != nil {
-			remaining := ttlcache.DefaultTTL
-			if new.ExpireTimestampVerified {
-				timeLeft := 60 + new.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
-				if timeLeft > 1 {
-					remaining = time.Duration(timeLeft) * time.Second
-				}
-			}
-			pokemonTimingCache.Set(new.Id, *pokemonTiming, remaining)
+	populateEncounterCacheVal := func() {
+		if encounterCacheVal == nil {
+			encounterCacheVal = encounterCache.GetOrCreate(new.Id)
 		}
 	}
 
@@ -173,9 +214,11 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 			// New pokemon, or transition from cell or nearby stop
 
 			if currentSeenType == SeenType_Wild {
-				// transition to wild for the first time
-				pokemonTiming = &pokemonTimings{firstWild: new.Updated.ValueOrZero()}
-				updatePokemonTiming()
+				// transition to wild for the first time..
+				populateEncounterCacheVal()
+				encounterCacheVal.FirstEncounter = 0
+				encounterCacheVal.FirstWild = new.Updated.ValueOrZero()
+				// This will be put into the cache later.
 			}
 
 			if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
@@ -185,15 +228,13 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 		}
 
 		if currentSeenType == SeenType_Encounter {
-			populatePokemonTiming()
-
-			if pokemonTiming.firstEncounter == 0 {
+			populateEncounterCacheVal()
+			if encounterCacheVal.FirstEncounter == 0 {
 				// This is first encounter
-				pokemonTiming.firstEncounter = new.Updated.ValueOrZero()
-				updatePokemonTiming()
+				encounterCacheVal.FirstEncounter = new.Updated.ValueOrZero()
 
-				if pokemonTiming.firstWild > 0 {
-					timeToEncounter = pokemonTiming.firstEncounter - pokemonTiming.firstWild
+				if encounterCacheVal.FirstWild > 0 {
+					timeToEncounter = encounterCacheVal.FirstEncounter - encounterCacheVal.FirstWild
 				}
 
 				monsIvIncr = 1
@@ -220,6 +261,11 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 		}
 	}
 
+	// If we have a cache entry, it means we updated it. So now let's store it.
+	if encounterCacheVal != nil {
+		encounterCache.Put(new.Id, encounterCacheVal, new.remainingDuration())
+	}
+
 	if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
 		(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
 			new.PokemonId != old.PokemonId) {
@@ -229,8 +275,23 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 
 	locked := false
 
+	var isHundo bool
+	var isNundo bool
+
+	if new.Cp.Valid && new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
+		atk := new.AtkIv.ValueOrZero()
+		def := new.DefIv.ValueOrZero()
+		sta := new.StaIv.ValueOrZero()
+		if atk == 15 && def == 15 && sta == 15 {
+			isHundo = true
+		} else if atk == 0 && def == 0 && sta == 0 {
+			isNundo = true
+		}
+	}
+
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
+		fullAreaName := area.String()
 
 		// Count stats
 
@@ -249,29 +310,20 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 
 			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
 				countStats.count[new.PokemonId]++
-				statsCollector.IncPokemonCountNew(area.String())
+				statsCollector.IncPokemonCountNew(fullAreaName)
 				if new.ExpireTimestampVerified {
 					statsCollector.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
 				}
 			}
 			if new.Cp.Valid {
-				if new.Shiny.ValueOrZero() {
-					countStats.shiny[new.PokemonId]++
-				}
 				countStats.ivCount[new.PokemonId]++
-				statsCollector.IncPokemonCountIv(area.String())
-				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
-					atk := new.AtkIv.ValueOrZero()
-					def := new.DefIv.ValueOrZero()
-					sta := new.StaIv.ValueOrZero()
-					if atk == 15 && def == 15 && sta == 15 {
-						statsCollector.IncPokemonCountHundo(area.String())
-						countStats.hundos[new.PokemonId]++
-					}
-					if atk == 0 && def == 0 && sta == 0 {
-						statsCollector.IncPokemonCountNundo(area.String())
-						countStats.nundos[new.PokemonId]++
-					}
+				statsCollector.IncPokemonCountIv(fullAreaName)
+				if isHundo {
+					statsCollector.IncPokemonCountHundo(fullAreaName)
+					countStats.hundos[new.PokemonId]++
+				} else if isNundo {
+					statsCollector.IncPokemonCountNundo(fullAreaName)
+					countStats.nundos[new.PokemonId]++
 				}
 			}
 		}
@@ -290,7 +342,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 				areaStats.tthBucket[bucket]++
 			}
 
-			statsCollector.AddPokemonStatsResetCount(area.String(), float64(statsResetCountIncr))
+			statsCollector.AddPokemonStatsResetCount(fullAreaName, float64(statsResetCountIncr))
 
 			areaStats.monsIv += monsIvIncr
 			areaStats.monsSeen += monsSeenIncr
@@ -496,5 +548,4 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		updateStatsCount("pokemon_nundo_stats", nundoRows)
 		updateStatsCount("pokemon_shiny_stats", shinyRows)
 	}()
-
 }
