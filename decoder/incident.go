@@ -3,14 +3,15 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	null "gopkg.in/guregu/null.v4"
+
 	"golbat/db"
-	"golbat/external"
 	"golbat/pogo"
 	"golbat/webhooks"
-	null "gopkg.in/guregu/null.v4"
-	"time"
 )
 
 // Incident struct.
@@ -196,7 +197,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		}
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
-		external.UpdateIncidentCount(areas)
+		statsCollector.UpdateIncidentCount(areas)
 	}
 }
 

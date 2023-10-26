@@ -3,13 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"golbat/config"
-	db2 "golbat/db"
-	"golbat/decoder"
-	"golbat/external"
-	pb "golbat/grpc"
-	"golbat/webhooks"
-	"google.golang.org/grpc"
 	"net"
 	"net/http"
 	"strings"
@@ -17,22 +10,30 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"github.com/gin-gonic/gin"
+	"github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/mysql"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
+	"golbat/config"
+	db2 "golbat/db"
+	"golbat/decoder"
+	"golbat/external"
+	pb "golbat/grpc"
 	"golbat/pogo"
-
-	"github.com/gin-gonic/gin"
-	"github.com/go-sql-driver/mysql"
-	_ "github.com/golang-migrate/migrate/v4/database/mysql"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"golbat/stats_collector"
+	"golbat/webhooks"
 )
 
 var db *sqlx.DB
 var dbDetails db2.DbDetails
+var statsCollector stats_collector.StatsCollector
 
 func main() {
 	var wg sync.WaitGroup
@@ -236,7 +237,11 @@ func main() {
 	// Start the web server.
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
-	external.InitPrometheus(r) // init prometheus if enabled
+
+	// choose the statsCollector we will use.
+	statsCollector = stats_collector.GetStatsCollector(cfg, r)
+	// tell the decoder the stats collector to use
+	decoder.SetStatsCollector(statsCollector)
 
 	if cfg.Logging.Debug {
 		r.Use(ginlogrus.Logger(log.StandardLogger()))
@@ -326,7 +331,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	}
 
 	if method != int(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION) && protoData.Level < 30 {
-		external.DecodeMethods.WithLabelValues("error", "low_level", getMethodName(method, true)).Inc()
+		statsCollector.IncDecodeMethods("error", "low_level", getMethodName(method, true))
 		log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, pogo.Method(method))
 		return
 	}
@@ -405,11 +410,11 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	if !ignore {
 		elapsed := time.Since(start)
 		if processed == true {
-			external.DecodeMethods.WithLabelValues("ok", "", getMethodName(method, true)).Inc()
+			statsCollector.IncDecodeMethods("ok", "", getMethodName(method, true))
 			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
 		} else {
 			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, "**Did not process**")
-			external.DecodeMethods.WithLabelValues("unprocessed", "", getMethodName(method, true)).Inc()
+			statsCollector.IncDecodeMethods("unprocessed", "", getMethodName(method, true))
 		}
 	}
 }
@@ -420,7 +425,7 @@ func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
 
 func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	if haveAr == nil {
-		external.DecodeQuest.WithLabelValues("error", "missing_ar_info").Inc()
+		statsCollector.IncDecodeQuest("error", "missing_ar_info")
 		log.Infoln("Cannot determine AR quest - ignoring")
 		// We should either assume AR quest, or trace inventory like RDM probably
 		return "No AR quest info"
@@ -428,12 +433,12 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	decodedQuest := &pogo.FortSearchOutProto{}
 	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeQuest.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeQuest("error", "parse")
 		return "Parse failure"
 	}
 
 	if decodedQuest.Result != pogo.FortSearchOutProto_SUCCESS {
-		external.DecodeQuest.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeQuest("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.Result,
 			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.Result)])
 		return res
@@ -448,7 +453,7 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 
 	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeSocialActionWithRequest.WithLabelValues("error", "request_parse").Inc()
+		statsCollector.IncDecodeSocialActionWithRequest("error", "request_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
@@ -456,26 +461,26 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 
 	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeSocialActionWithRequest.WithLabelValues("error", "response_parse").Inc()
+		statsCollector.IncDecodeSocialActionWithRequest("error", "response_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
-		external.DecodeSocialActionWithRequest.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeSocialActionWithRequest("error", "non_success")
 		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
 	}
 
 	switch pogo.SocialAction(proxyRequestProto.GetAction()) {
 	case pogo.SocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
-		external.DecodeSocialActionWithRequest.WithLabelValues("ok", "list_friend_status").Inc()
+		statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
 		return decodeGetFriendDetails(proxyResponseProto.Payload)
 	case pogo.SocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
-		external.DecodeSocialActionWithRequest.WithLabelValues("ok", "search_player").Inc()
+		statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
 		return decodeSearchPlayer(proxyRequestProto, proxyResponseProto.Payload)
 
 	}
 
-	external.DecodeSocialActionWithRequest.WithLabelValues("ok", "unknown").Inc()
+	statsCollector.IncDecodeSocialActionWithRequest("ok", "unknown")
 	return fmt.Sprintf("Did not process %s", pogo.SocialAction(proxyRequestProto.GetAction()).String())
 }
 
@@ -484,13 +489,13 @@ func decodeGetFriendDetails(payload []byte) string {
 	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
 
 	if getFriendDetailsError != nil {
-		external.DecodeGetFriendDetails.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeGetFriendDetails("error", "parse")
 		log.Errorf("Failed to parse %s", getFriendDetailsError)
 		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
 	}
 
 	if getFriendDetailsOutProto.GetResult() != pogo.GetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
-		external.DecodeGetFriendDetails.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeGetFriendDetails("error", "non_success")
 		return fmt.Sprintf("unsuccessful get friends details")
 	}
 
@@ -505,7 +510,7 @@ func decodeGetFriendDetails(payload []byte) string {
 		}
 	}
 
-	external.DecodeGetFriendDetails.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeGetFriendDetails("ok", "")
 	return fmt.Sprintf("%d players decoded on %d", len(getFriendDetailsOutProto.GetFriend())-failures, len(getFriendDetailsOutProto.GetFriend()))
 }
 
@@ -515,12 +520,12 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 
 	if searchPlayerOutError != nil {
 		log.Errorf("Failed to parse %s", searchPlayerOutError)
-		external.DecodeSearchPlayer.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeSearchPlayer("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
 	}
 
 	if searchPlayerOutProto.GetResult() != pogo.SearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
-		external.DecodeSearchPlayer.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeSearchPlayer("error", "non_success")
 		return fmt.Sprintf("unsuccessful search player response")
 	}
 
@@ -528,18 +533,18 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	searchPlayerError := proto.Unmarshal(proxyRequestProto.GetPayload(), &searchPlayerProto)
 
 	if searchPlayerError != nil || searchPlayerProto.GetFriendCode() == "" {
-		external.DecodeSearchPlayer.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeSearchPlayer("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", searchPlayerError)
 	}
 
 	player := searchPlayerOutProto.GetPlayer()
 	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, searchPlayerProto.GetFriendCode(), "")
 	if updatePlayerError != nil {
-		external.DecodeSearchPlayer.WithLabelValues("error", "update").Inc()
+		statsCollector.IncDecodeSearchPlayer("error", "update")
 		return fmt.Sprintf("Failed update player %s", updatePlayerError)
 	}
 
-	external.DecodeSearchPlayer.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeSearchPlayer("ok", "")
 	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
 }
 
@@ -547,20 +552,20 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	decodedFort := &pogo.FortDetailsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeFortDetails.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeFortDetails("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
-		external.DecodeFortDetails.WithLabelValues("ok", "pokestop").Inc()
+		statsCollector.IncDecodeFortDetails("ok", "pokestop")
 		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	case pogo.FortType_GYM:
-		external.DecodeFortDetails.WithLabelValues("ok", "gym").Inc()
+		statsCollector.IncDecodeFortDetails("ok", "gym")
 		return decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	}
 
-	external.DecodeFortDetails.WithLabelValues("ok", "unknown").Inc()
+	statsCollector.IncDecodeFortDetails("ok", "unknown")
 	return "Unknown fort type"
 }
 
@@ -568,18 +573,18 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	decodedMapForts := &pogo.GetMapFortsOutProto{}
 	if err := proto.Unmarshal(sDec, decodedMapForts); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeGetMapForts.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeGetMapForts("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedMapForts.Status != pogo.GetMapFortsOutProto_SUCCESS {
-		external.DecodeGetMapForts.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeGetMapForts("error", "non_success")
 		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.Status,
 			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.Status)])
 		return res
 	}
 
-	external.DecodeGetMapForts.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeGetMapForts("ok", "")
 	var outputString string
 	processedForts := 0
 
@@ -640,18 +645,18 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeGetGymInfo.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeGetGymInfo("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedGymInfo.Result != pogo.GymGetInfoOutProto_SUCCESS {
-		external.DecodeGetGymInfo.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeGetGymInfo("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.Result,
 			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
 		return res
 	}
 
-	external.DecodeGetGymInfo.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeGetGymInfo("ok", "")
 	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
@@ -659,18 +664,18 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeEncounter.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
-		external.DecodeEncounter.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeEncounter("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
 
-	external.DecodeEncounter.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeEncounter("ok", "")
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
@@ -678,18 +683,18 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte) string {
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeDiskEncounter.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeDiskEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedEncounterInfo.Result != pogo.DiskEncounterOutProto_SUCCESS {
-		external.DecodeDiskEncounter.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeDiskEncounter("error", "non_success")
 		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Result,
 			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.Result)])
 		return res
 	}
 
-	external.DecodeDiskEncounter.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeDiskEncounter("ok", "")
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo)
 }
 
@@ -697,18 +702,18 @@ func decodeStartIncident(ctx context.Context, sDec []byte) string {
 	decodedIncident := &pogo.StartIncidentOutProto{}
 	if err := proto.Unmarshal(sDec, decodedIncident); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeStartIncident.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeStartIncident("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedIncident.Status != pogo.StartIncidentOutProto_SUCCESS {
-		external.DecodeStartIncident.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeStartIncident("error", "non_success")
 		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.Status,
 			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.Status)])
 		return res
 	}
 
-	external.DecodeStartIncident.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeStartIncident("ok", "")
 	return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
 }
 
@@ -717,7 +722,7 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 
 	if err := proto.Unmarshal(request, decodeOpenInvasionRequest); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeOpenInvasion.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeOpenInvasion("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 	if decodeOpenInvasionRequest.IncidentLookup == nil {
@@ -727,18 +732,18 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 	decodedOpenInvasionResponse := &pogo.OpenInvasionCombatSessionOutProto{}
 	if err := proto.Unmarshal(payload, decodedOpenInvasionResponse); err != nil {
 		log.Errorf("Failed to parse %s", err)
-		external.DecodeOpenInvasion.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeOpenInvasion("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedOpenInvasionResponse.Status != pogo.InvasionStatus_SUCCESS {
-		external.DecodeOpenInvasion.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeOpenInvasion("error", "non_success")
 		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.Status,
 			pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.Status)])
 		return res
 	}
 
-	external.DecodeOpenInvasion.WithLabelValues("ok", "").Inc()
+	statsCollector.IncDecodeOpenInvasion("ok", "")
 	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
 }
 
@@ -746,12 +751,12 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
 	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
-		external.DecodeGMO.WithLabelValues("error", "parse").Inc()
+		statsCollector.IncDecodeGMO("error", "parse")
 		log.Errorf("Failed to parse %s", err)
 	}
 
 	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
-		external.DecodeGMO.WithLabelValues("error", "non_success").Inc()
+		statsCollector.IncDecodeGMO("error", "non_success")
 		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.Status,
 			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.Status)])
 		return res
@@ -818,13 +823,13 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	newClientWeatherLen := len(newClientWeather)
 	newMapCellsLen := len(newMapCells)
 
-	external.DecodeGMO.WithLabelValues("ok", "").Inc()
-	external.DecodeGMOType.WithLabelValues("fort").Add(float64(newFortsLen))
-	external.DecodeGMOType.WithLabelValues("wild_pokemon").Add(float64(newWildPokemonLen))
-	external.DecodeGMOType.WithLabelValues("nearby_pokemon").Add(float64(newNearbyPokemonLen))
-	external.DecodeGMOType.WithLabelValues("map_pokemon").Add(float64(newMapPokemonLen))
-	external.DecodeGMOType.WithLabelValues("weather").Add(float64(newClientWeatherLen))
-	external.DecodeGMOType.WithLabelValues("cell").Add(float64(newMapCellsLen))
+	statsCollector.IncDecodeGMO("ok", "")
+	statsCollector.AddDecodeGMOType("fort", float64(newFortsLen))
+	statsCollector.AddDecodeGMOType("wild_pokemon", float64(newWildPokemonLen))
+	statsCollector.AddDecodeGMOType("nearby_pokemon", float64(newNearbyPokemonLen))
+	statsCollector.AddDecodeGMOType("map_pokemon", float64(newMapPokemonLen))
+	statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
+	statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
 
 	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", newMapCellsLen, newFortsLen, newWildPokemonLen, newNearbyPokemonLen)
 }
