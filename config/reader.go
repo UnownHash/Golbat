@@ -2,15 +2,13 @@ package config
 
 import (
 	"fmt"
-	"strconv"
-	"strings"
-
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
-
 	"golbat/geo"
+	"strconv"
+	"strings"
 )
 
 var k = koanf.New(".")
@@ -27,7 +25,7 @@ func ReadConfig() (configDefinition, error) {
 			MutexProfileFraction: 5,
 			BlockProfileRate:     5,
 		},
-		Prometheus: Prometheus{
+		Prometheus: prometheus{
 			BucketSize: []float64{.00005, .000075, .0001, .00025, .0005, .00075, .001, .0025, .005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10},
 		},
 		Logging: logging{

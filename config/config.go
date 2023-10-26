@@ -1,9 +1,8 @@
 package config
 
 import (
-	"time"
-
 	"golbat/geo"
+	"time"
 )
 
 type configDefinition struct {
@@ -14,7 +13,7 @@ type configDefinition struct {
 	Logging           logging    `koanf:"logging"`
 	Sentry            sentry     `koanf:"sentry"`
 	Pyroscope         pyroscope  `koanf:"pyroscope"`
-	Prometheus        Prometheus `koanf:"prometheus"`
+	Prometheus        prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly bool       `koanf:"pokemon_memory_only"`
 	TestFortInMemory  bool       `koanf:"test_fort_in_memory"`
 	Cleanup           cleanup    `koanf:"cleanup"`
@@ -33,10 +32,6 @@ func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
 
 func (configDefinition configDefinition) GetWebhooks() []Webhook {
 	return configDefinition.Webhooks
-}
-
-func (configDefinition configDefinition) GetPrometheus() Prometheus {
-	return configDefinition.Prometheus
 }
 
 type koji struct {
@@ -83,7 +78,7 @@ type pyroscope struct {
 	BlockProfileRate     int    `koanf:"block_profile_rate"`
 }
 
-type Prometheus struct {
+type prometheus struct {
 	Enabled    bool      `koanf:"enabled"`
 	Token      string    `koanf:"token"`
 	BucketSize []float64 `koanf:"bucket_size"`
