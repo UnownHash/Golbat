@@ -4,11 +4,6 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/json"
-	"golbat/config"
-	"golbat/decoder"
-	"golbat/external"
-	"golbat/geo"
-	"golbat/pogo"
 	"io"
 	"net/http"
 	"strconv"
@@ -16,6 +11,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/config"
+	"golbat/decoder"
+	"golbat/geo"
+	"golbat/pogo"
 )
 
 type ProtoData struct {
@@ -69,7 +69,7 @@ func Raw(c *gin.Context) {
 	authHeader := r.Header.Get("Authorization")
 	if config.Config.RawBearer != "" {
 		if authHeader != "Bearer "+config.Config.RawBearer {
-			external.RawRequests.WithLabelValues("error", "auth").Inc()
+			statsCollector.IncRawRequests("error", "auth")
 			log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
 			return
 		}
@@ -77,12 +77,12 @@ func Raw(c *gin.Context) {
 
 	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
 	if err != nil {
-		external.RawRequests.WithLabelValues("error", "io_error").Inc()
+		statsCollector.IncRawRequests("error", "io_error")
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
 	}
 	if err := r.Body.Close(); err != nil {
-		external.RawRequests.WithLabelValues("error", "io_close_error").Inc()
+		statsCollector.IncRawRequests("error", "io_close_error")
 		log.Errorf("Raw: Error (2) during HTTP receive %s", err)
 		return
 	}
@@ -244,7 +244,7 @@ func Raw(c *gin.Context) {
 	}
 
 	if decodeError == true {
-		external.RawRequests.WithLabelValues("error", "decode").Inc()
+		statsCollector.IncRawRequests("error", "decode")
 		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
 
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -294,7 +294,7 @@ func Raw(c *gin.Context) {
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
-	external.RawRequests.WithLabelValues("ok", "").Inc()
+	statsCollector.IncRawRequests("ok", "")
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	//if err := json.NewEncoder(w).Encode(t); err != nil {

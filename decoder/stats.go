@@ -2,14 +2,15 @@ package decoder
 
 import (
 	"fmt"
-	"github.com/jellydator/ttlcache/v3"
-	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
-	"golbat/external"
-	"golbat/geo"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
+
+	"golbat/geo"
 )
 
 type areaStatsCount struct {
@@ -248,9 +249,9 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 
 			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
 				countStats.count[new.PokemonId]++
-				external.PokemonCountNew.WithLabelValues(area.String()).Inc()
+				statsCollector.IncPokemonCountNew(area.String())
 				if new.ExpireTimestampVerified {
-					external.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
+					statsCollector.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
 				}
 			}
 			if new.Cp.Valid {
@@ -258,17 +259,17 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 					countStats.shiny[new.PokemonId]++
 				}
 				countStats.ivCount[new.PokemonId]++
-				external.PokemonCountIv.WithLabelValues(area.String()).Inc()
+				statsCollector.IncPokemonCountIv(area.String())
 				if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
 					atk := new.AtkIv.ValueOrZero()
 					def := new.DefIv.ValueOrZero()
 					sta := new.StaIv.ValueOrZero()
 					if atk == 15 && def == 15 && sta == 15 {
-						external.PokemonCountHundo.WithLabelValues(area.String()).Inc()
+						statsCollector.IncPokemonCountHundo(area.String())
 						countStats.hundos[new.PokemonId]++
 					}
 					if atk == 0 && def == 0 && sta == 0 {
-						external.PokemonCountNundo.WithLabelValues(area.String()).Inc()
+						statsCollector.IncPokemonCountNundo(area.String())
 						countStats.nundos[new.PokemonId]++
 					}
 				}
@@ -289,7 +290,7 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areaNames []geo.AreaName) {
 				areaStats.tthBucket[bucket]++
 			}
 
-			external.PokemonStatsResetCount.WithLabelValues(area.String()).Add(float64(statsResetCountIncr))
+			statsCollector.AddPokemonStatsResetCount(area.String(), float64(statsResetCountIncr))
 
 			areaStats.monsIv += monsIvIncr
 			areaStats.monsSeen += monsSeenIncr
