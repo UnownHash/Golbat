@@ -17,6 +17,7 @@ services:
     environment:
       # refer to config.toml.example and README for explanations
       - GOLBAT.PORT=9001
+      - GOLBAT.GRPC_PORT=50001
       - GOLBAT.RAW_BEARER=
       - GOLBAT.API_SECRET=golbat
 
@@ -30,6 +31,7 @@ services:
       - GOLBAT.CLEANUP.QUESTS=true
       - GOLBAT.CLEANUP.STATS=true
       - GOLBAT.CLEANUP.STATS_DAYS=7
+      - GOLBAT.CLEANUP.DEVICE_HOURS=24
 
       - GOLBAT.LOGGING.DEBUG=false
       - GOLBAT.LOGGING.SAVE_LOGS=true
@@ -45,6 +47,8 @@ services:
 
       - GOLBAT.PVP.ENABLED=true
       - GOLBAT.PVP.INCLUDE_HUNDOS_UNDER_CAP=false
+
+      - GOLBAT.PROMETHEUS.ENABLED=false
 
       - GOLBAT.WEBHOOKS.0.URL=http://localhost:4201
       - GOLBAT.WEBHOOKS.0.TYPES=pokemon,gym,invasion,quest,pokestop,raid
