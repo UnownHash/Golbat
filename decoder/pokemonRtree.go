@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 	"golbat/config"
+	"golbat/pogo"
 	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
@@ -81,8 +82,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
-		PokemonId:          pokemon.PokemonId,
-		Form:               int16(pokemon.Form.ValueOrZero()),
+		PokemonId: pokemon.PokemonId,
+		Form: func() int16 {
+			if pokemon.PokemonId == int16(pogo.HoloPokemonId_DITTO) {
+				return 0
+			}
+			return int16(pokemon.Form.ValueOrZero())
+		}(),
 		HasEncounterValues: pokemon.Move1.Valid,
 		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),
