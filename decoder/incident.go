@@ -35,9 +35,9 @@ type Incident struct {
 }
 
 type webhookLineup struct {
-	slot      uint8    `json:"slot"`
-	pokemonId null.Int `json:"pokemon_id"`
-	form      null.Int `json:"form"`
+	Slot      uint8    `json:"slot"`
+	PokemonId null.Int `json:"pokemon_id"`
+	Form      null.Int `json:"form"`
 }
 
 //->   `id` varchar(35) NOT NULL,
@@ -144,7 +144,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 }
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *Incident, incident *Incident) {
-	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
+	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character || oldIncident.Confirmed != incident.Confirmed || oldIncident.Slot1PokemonId != incident.Slot1PokemonId) {
 		stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
 		if stop == nil {
 			stop = &Pokestop{}
@@ -179,19 +179,19 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		if incident.Slot1PokemonId.Valid {
 			incidentHook["lineup"] = []webhookLineup{
 				{
-					slot:      1,
-					pokemonId: incident.Slot1PokemonId,
-					form:      incident.Slot1Form,
+					Slot:      1,
+					PokemonId: incident.Slot1PokemonId,
+					Form:      incident.Slot1Form,
 				},
 				{
-					slot:      2,
-					pokemonId: incident.Slot2PokemonId,
-					form:      incident.Slot2Form,
+					Slot:      2,
+					PokemonId: incident.Slot2PokemonId,
+					Form:      incident.Slot2Form,
 				},
 				{
-					slot:      3,
-					pokemonId: incident.Slot3PokemonId,
-					form:      incident.Slot3Form,
+					Slot:      3,
+					PokemonId: incident.Slot3PokemonId,
+					Form:      incident.Slot3Form,
 				},
 			}
 		}
