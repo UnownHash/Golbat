@@ -10,9 +10,9 @@ import (
 
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 
 	"golbat/config"
 	"golbat/db"
@@ -211,7 +211,7 @@ func floatAlmostEqual(a, b, tolerance float64) bool {
 	return math.Abs(a-b) < tolerance
 }
 
-func nullFloatAlmostEqual(a, b null.Float, tolerance float64) bool {
+func nullFloatAlmostEqual(a, b null.Float64, tolerance float64) bool {
 	if a.Valid {
 		return b.Valid && math.Abs(a.Float64-b.Float64) < tolerance
 	} else {

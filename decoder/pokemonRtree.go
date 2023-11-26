@@ -4,11 +4,11 @@ import (
 	"context"
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	"github.com/puzpuzpuz/xsync/v2"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 	"golbat/config"
-	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
 	"sync"
@@ -68,7 +68,7 @@ func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	}
 }
 
-func valueOrMinus1(n null.Int) int {
+func valueOrMinus1(n null.Int64) int {
 	if n.Valid {
 		return int(n.Int64)
 	}

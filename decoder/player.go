@@ -3,10 +3,10 @@ package decoder
 import (
 	"database/sql"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"reflect"
 	"strconv"
 	"time"
@@ -16,87 +16,87 @@ import (
 // REMINDER! Keep hasChangesPlayer updated after making changes
 type Player struct {
 	// Name is the primary key
-	Name               string      `db:"name"`
-	FriendshipId       null.String `db:"friendship_id"`
-	LastSeen           int64       `db:"last_seen"`
-	FriendCode         null.String `db:"friend_code"`
-	Team               null.Int    `db:"team"`
-	Level              null.Int    `db:"level"`
-	Xp                 null.Int    `db:"xp"`
-	BattlesWon         null.Int    `db:"battles_won"`
-	KmWalked           null.Float  `db:"km_walked"`
-	CaughtPokemon      null.Int    `db:"caught_pokemon"`
-	GblRank            null.Int    `db:"gbl_rank"`
-	GblRating          null.Int    `db:"gbl_rating"`
-	EventBadges        null.String `db:"event_badges"`
-	StopsSpun          null.Int    `db:"stops_spun"`
-	Evolved            null.Int    `db:"evolved"`
-	Hatched            null.Int    `db:"hatched"`
-	Quests             null.Int    `db:"quests"`
-	Trades             null.Int    `db:"trades"`
-	Photobombs         null.Int    `db:"photobombs"`
-	Purified           null.Int    `db:"purified"`
-	GruntsDefeated     null.Int    `db:"grunts_defeated"`
-	GymBattlesWon      null.Int    `db:"gym_battles_won"`
-	NormalRaidsWon     null.Int    `db:"normal_raids_won"`
-	LegendaryRaidsWon  null.Int    `db:"legendary_raids_won"`
-	TrainingsWon       null.Int    `db:"trainings_won"`
-	BerriesFed         null.Int    `db:"berries_fed"`
-	HoursDefended      null.Int    `db:"hours_defended"`
-	BestFriends        null.Int    `db:"best_friends"`
-	BestBuddies        null.Int    `db:"best_buddies"`
-	GiovanniDefeated   null.Int    `db:"giovanni_defeated"`
-	MegaEvos           null.Int    `db:"mega_evos"`
-	CollectionsDone    null.Int    `db:"collections_done"`
-	UniqueStopsSpun    null.Int    `db:"unique_stops_spun"`
-	UniqueMegaEvos     null.Int    `db:"unique_mega_evos"`
-	UniqueRaidBosses   null.Int    `db:"unique_raid_bosses"`
-	UniqueUnown        null.Int    `db:"unique_unown"`
-	SevenDayStreaks    null.Int    `db:"seven_day_streaks"`
-	TradeKm            null.Int    `db:"trade_km"`
-	RaidsWithFriends   null.Int    `db:"raids_with_friends"`
-	CaughtAtLure       null.Int    `db:"caught_at_lure"`
-	WayfarerAgreements null.Int    `db:"wayfarer_agreements"`
-	TrainersReferred   null.Int    `db:"trainers_referred"`
-	RaidAchievements   null.Int    `db:"raid_achievements"`
-	XlKarps            null.Int    `db:"xl_karps"`
-	XsRats             null.Int    `db:"xs_rats"`
-	PikachuCaught      null.Int    `db:"pikachu_caught"`
-	LeagueGreatWon     null.Int    `db:"league_great_won"`
-	LeagueUltraWon     null.Int    `db:"league_ultra_won"`
-	LeagueMasterWon    null.Int    `db:"league_master_won"`
-	TinyPokemonCaught  null.Int    `db:"tiny_pokemon_caught"`
-	JumboPokemonCaught null.Int    `db:"jumbo_pokemon_caught"`
-	Vivillon           null.Int    `db:"vivillon"`
-	MaxSizeFirstPlace  null.Int    `db:"showcase_max_size_first_place"`
-	DexGen1            null.Int    `db:"dex_gen1"`
-	DexGen2            null.Int    `db:"dex_gen2"`
-	DexGen3            null.Int    `db:"dex_gen3"`
-	DexGen4            null.Int    `db:"dex_gen4"`
-	DexGen5            null.Int    `db:"dex_gen5"`
-	DexGen6            null.Int    `db:"dex_gen6"`
-	DexGen7            null.Int    `db:"dex_gen7"`
-	DexGen8            null.Int    `db:"dex_gen8"`
-	DexGen8A           null.Int    `db:"dex_gen8a"`
-	DexGen9            null.Int    `db:"dex_gen9"`
-	CaughtNormal       null.Int    `db:"caught_normal"`
-	CaughtFighting     null.Int    `db:"caught_fighting"`
-	CaughtFlying       null.Int    `db:"caught_flying"`
-	CaughtPoison       null.Int    `db:"caught_poison"`
-	CaughtGround       null.Int    `db:"caught_ground"`
-	CaughtRock         null.Int    `db:"caught_rock"`
-	CaughtBug          null.Int    `db:"caught_bug"`
-	CaughtGhost        null.Int    `db:"caught_ghost"`
-	CaughtSteel        null.Int    `db:"caught_steel"`
-	CaughtFire         null.Int    `db:"caught_fire"`
-	CaughtWater        null.Int    `db:"caught_water"`
-	CaughtGrass        null.Int    `db:"caught_grass"`
-	CaughtElectric     null.Int    `db:"caught_electric"`
-	CaughtPsychic      null.Int    `db:"caught_psychic"`
-	CaughtIce          null.Int    `db:"caught_ice"`
-	CaughtDragon       null.Int    `db:"caught_dragon"`
-	CaughtDark         null.Int    `db:"caught_dark"`
-	CaughtFairy        null.Int    `db:"caught_fairy"`
+	Name               string       `db:"name"`
+	FriendshipId       null.String  `db:"friendship_id"`
+	LastSeen           int64        `db:"last_seen"`
+	FriendCode         null.String  `db:"friend_code"`
+	Team               null.Int64   `db:"team"`
+	Level              null.Int64   `db:"level"`
+	Xp                 null.Int64   `db:"xp"`
+	BattlesWon         null.Int64   `db:"battles_won"`
+	KmWalked           null.Float64 `db:"km_walked"`
+	CaughtPokemon      null.Int64   `db:"caught_pokemon"`
+	GblRank            null.Int64   `db:"gbl_rank"`
+	GblRating          null.Int64   `db:"gbl_rating"`
+	EventBadges        null.String  `db:"event_badges"`
+	StopsSpun          null.Int64   `db:"stops_spun"`
+	Evolved            null.Int64   `db:"evolved"`
+	Hatched            null.Int64   `db:"hatched"`
+	Quests             null.Int64   `db:"quests"`
+	Trades             null.Int64   `db:"trades"`
+	Photobombs         null.Int64   `db:"photobombs"`
+	Purified           null.Int64   `db:"purified"`
+	GruntsDefeated     null.Int64   `db:"grunts_defeated"`
+	GymBattlesWon      null.Int64   `db:"gym_battles_won"`
+	NormalRaidsWon     null.Int64   `db:"normal_raids_won"`
+	LegendaryRaidsWon  null.Int64   `db:"legendary_raids_won"`
+	TrainingsWon       null.Int64   `db:"trainings_won"`
+	BerriesFed         null.Int64   `db:"berries_fed"`
+	HoursDefended      null.Int64   `db:"hours_defended"`
+	BestFriends        null.Int64   `db:"best_friends"`
+	BestBuddies        null.Int64   `db:"best_buddies"`
+	GiovanniDefeated   null.Int64   `db:"giovanni_defeated"`
+	MegaEvos           null.Int64   `db:"mega_evos"`
+	CollectionsDone    null.Int64   `db:"collections_done"`
+	UniqueStopsSpun    null.Int64   `db:"unique_stops_spun"`
+	UniqueMegaEvos     null.Int64   `db:"unique_mega_evos"`
+	UniqueRaidBosses   null.Int64   `db:"unique_raid_bosses"`
+	UniqueUnown        null.Int64   `db:"unique_unown"`
+	SevenDayStreaks    null.Int64   `db:"seven_day_streaks"`
+	TradeKm            null.Int64   `db:"trade_km"`
+	RaidsWithFriends   null.Int64   `db:"raids_with_friends"`
+	CaughtAtLure       null.Int64   `db:"caught_at_lure"`
+	WayfarerAgreements null.Int64   `db:"wayfarer_agreements"`
+	TrainersReferred   null.Int64   `db:"trainers_referred"`
+	RaidAchievements   null.Int64   `db:"raid_achievements"`
+	XlKarps            null.Int64   `db:"xl_karps"`
+	XsRats             null.Int64   `db:"xs_rats"`
+	PikachuCaught      null.Int64   `db:"pikachu_caught"`
+	LeagueGreatWon     null.Int64   `db:"league_great_won"`
+	LeagueUltraWon     null.Int64   `db:"league_ultra_won"`
+	LeagueMasterWon    null.Int64   `db:"league_master_won"`
+	TinyPokemonCaught  null.Int64   `db:"tiny_pokemon_caught"`
+	JumboPokemonCaught null.Int64   `db:"jumbo_pokemon_caught"`
+	Vivillon           null.Int64   `db:"vivillon"`
+	MaxSizeFirstPlace  null.Int64   `db:"showcase_max_size_first_place"`
+	DexGen1            null.Int64   `db:"dex_gen1"`
+	DexGen2            null.Int64   `db:"dex_gen2"`
+	DexGen3            null.Int64   `db:"dex_gen3"`
+	DexGen4            null.Int64   `db:"dex_gen4"`
+	DexGen5            null.Int64   `db:"dex_gen5"`
+	DexGen6            null.Int64   `db:"dex_gen6"`
+	DexGen7            null.Int64   `db:"dex_gen7"`
+	DexGen8            null.Int64   `db:"dex_gen8"`
+	DexGen8A           null.Int64   `db:"dex_gen8a"`
+	DexGen9            null.Int64   `db:"dex_gen9"`
+	CaughtNormal       null.Int64   `db:"caught_normal"`
+	CaughtFighting     null.Int64   `db:"caught_fighting"`
+	CaughtFlying       null.Int64   `db:"caught_flying"`
+	CaughtPoison       null.Int64   `db:"caught_poison"`
+	CaughtGround       null.Int64   `db:"caught_ground"`
+	CaughtRock         null.Int64   `db:"caught_rock"`
+	CaughtBug          null.Int64   `db:"caught_bug"`
+	CaughtGhost        null.Int64   `db:"caught_ghost"`
+	CaughtSteel        null.Int64   `db:"caught_steel"`
+	CaughtFire         null.Int64   `db:"caught_fire"`
+	CaughtWater        null.Int64   `db:"caught_water"`
+	CaughtGrass        null.Int64   `db:"caught_grass"`
+	CaughtElectric     null.Int64   `db:"caught_electric"`
+	CaughtPsychic      null.Int64   `db:"caught_psychic"`
+	CaughtIce          null.Int64   `db:"caught_ice"`
+	CaughtDragon       null.Int64   `db:"caught_dragon"`
+	CaughtDark         null.Int64   `db:"caught_dark"`
+	CaughtFairy        null.Int64   `db:"caught_fairy"`
 }
 
 var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
@@ -462,14 +462,14 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 
 func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicProfileProto) {
 	player.Name = publicProfile.GetName()
-	player.Team = null.IntFrom(int64(publicProfile.GetTeam()))
-	player.Level = null.IntFrom(int64(publicProfile.GetLevel()))
-	player.Xp = null.IntFrom(publicProfile.GetExperience())
-	player.BattlesWon = null.IntFrom(int64(publicProfile.GetBattlesWon()))
-	player.KmWalked = null.FloatFrom(float64(publicProfile.GetKmWalked()))
-	player.CaughtPokemon = null.IntFrom(int64(publicProfile.GetCaughtPokemon()))
-	player.GblRank = null.IntFrom(int64(publicProfile.GetCombatRank()))
-	player.GblRating = null.IntFrom(int64(publicProfile.GetCombatRating()))
+	player.Team = null.Int64From(int64(publicProfile.GetTeam()))
+	player.Level = null.Int64From(int64(publicProfile.GetLevel()))
+	player.Xp = null.Int64From(publicProfile.GetExperience())
+	player.BattlesWon = null.Int64From(int64(publicProfile.GetBattlesWon()))
+	player.KmWalked = null.Float64From(float64(publicProfile.GetKmWalked()))
+	player.CaughtPokemon = null.Int64From(int64(publicProfile.GetCaughtPokemon()))
+	player.GblRank = null.Int64From(int64(publicProfile.GetCombatRank()))
+	player.GblRating = null.Int64From(int64(publicProfile.GetCombatRating()))
 
 	eventBadges := ""
 
@@ -491,7 +491,7 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 			continue
 		}
 
-		newValue := null.IntFrom(int64(badge.GetCurrentValue()))
+		newValue := null.Int64From(int64(badge.GetCurrentValue()))
 
 		field := reflect.ValueOf(player).Elem().FieldByName(playerKey)
 		if field.IsValid() && field.CanSet() {

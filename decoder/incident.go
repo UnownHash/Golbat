@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
-	null "gopkg.in/guregu/null.v4"
 
 	"golbat/db"
 	"golbat/pogo"
@@ -17,27 +17,27 @@ import (
 // Incident struct.
 // REMINDER! Keep hasChangesIncident updated after making changes
 type Incident struct {
-	Id             string   `db:"id"`
-	PokestopId     string   `db:"pokestop_id"`
-	StartTime      int64    `db:"start"`
-	ExpirationTime int64    `db:"expiration"`
-	DisplayType    int16    `db:"display_type"`
-	Style          int16    `db:"style"`
-	Character      int16    `db:"character"`
-	Updated        int64    `db:"updated"`
-	Confirmed      bool     `db:"confirmed"`
-	Slot1PokemonId null.Int `db:"slot_1_pokemon_id"`
-	Slot1Form      null.Int `db:"slot_1_form"`
-	Slot2PokemonId null.Int `db:"slot_2_pokemon_id"`
-	Slot2Form      null.Int `db:"slot_2_form"`
-	Slot3PokemonId null.Int `db:"slot_3_pokemon_id"`
-	Slot3Form      null.Int `db:"slot_3_form"`
+	Id             string     `db:"id"`
+	PokestopId     string     `db:"pokestop_id"`
+	StartTime      int64      `db:"start"`
+	ExpirationTime int64      `db:"expiration"`
+	DisplayType    int16      `db:"display_type"`
+	Style          int16      `db:"style"`
+	Character      int16      `db:"character"`
+	Updated        int64      `db:"updated"`
+	Confirmed      bool       `db:"confirmed"`
+	Slot1PokemonId null.Int64 `db:"slot_1_pokemon_id"`
+	Slot1Form      null.Int64 `db:"slot_1_form"`
+	Slot2PokemonId null.Int64 `db:"slot_2_pokemon_id"`
+	Slot2Form      null.Int64 `db:"slot_2_form"`
+	Slot3PokemonId null.Int64 `db:"slot_3_pokemon_id"`
+	Slot3Form      null.Int64 `db:"slot_3_form"`
 }
 
 type webhookLineup struct {
-	Slot      uint8    `json:"slot"`
-	PokemonId null.Int `json:"pokemon_id"`
-	Form      null.Int `json:"form"`
+	Slot      uint8      `json:"slot"`
+	PokemonId null.Int64 `json:"pokemon_id"`
+	Form      null.Int64 `json:"form"`
 }
 
 //->   `id` varchar(35) NOT NULL,
@@ -221,15 +221,15 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 }
 
 func (incident *Incident) updateFromOpenInvasionCombatSessionOut(protoRes *pogo.OpenInvasionCombatSessionOutProto) {
-	incident.Slot1PokemonId = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
-	incident.Slot1Form = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
+	incident.Slot1PokemonId = null.NewInt64(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
+	incident.Slot1Form = null.NewInt64(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
 	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
 		if i == 0 {
-			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+			incident.Slot2PokemonId = null.NewInt64(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot2Form = null.NewInt64(int64(pokemon.PokemonDisplay.Form.Number()), true)
 		} else if i == 1 {
-			incident.Slot3PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+			incident.Slot3PokemonId = null.NewInt64(int64(pokemon.PokedexId.Number()), true)
+			incident.Slot3Form = null.NewInt64(int64(pokemon.PokemonDisplay.Form.Number()), true)
 		}
 	}
 	incident.Confirmed = true

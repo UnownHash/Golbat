@@ -5,31 +5,31 @@ import (
 	"database/sql"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
 )
 
 // Weather struct.
 // REMINDER! Keep hasChangesWeather updated after making changes
 type Weather struct {
-	Id                 int64     `db:"id"`
-	Latitude           float64   `db:"latitude"`
-	Longitude          float64   `db:"longitude"`
-	Level              null.Int  `db:"level"`
-	GameplayCondition  null.Int  `db:"gameplay_condition"`
-	WindDirection      null.Int  `db:"wind_direction"`
-	CloudLevel         null.Int  `db:"cloud_level"`
-	RainLevel          null.Int  `db:"rain_level"`
-	WindLevel          null.Int  `db:"wind_level"`
-	SnowLevel          null.Int  `db:"snow_level"`
-	FogLevel           null.Int  `db:"fog_level"`
-	SpecialEffectLevel null.Int  `db:"special_effect_level"`
-	Severity           null.Int  `db:"severity"`
-	WarnWeather        null.Bool `db:"warn_weather"`
-	Updated            int64     `db:"updated"`
+	Id                 int64      `db:"id"`
+	Latitude           float64    `db:"latitude"`
+	Longitude          float64    `db:"longitude"`
+	Level              null.Int64 `db:"level"`
+	GameplayCondition  null.Int64 `db:"gameplay_condition"`
+	WindDirection      null.Int64 `db:"wind_direction"`
+	CloudLevel         null.Int64 `db:"cloud_level"`
+	RainLevel          null.Int64 `db:"rain_level"`
+	WindLevel          null.Int64 `db:"wind_level"`
+	SnowLevel          null.Int64 `db:"snow_level"`
+	FogLevel           null.Int64 `db:"fog_level"`
+	SpecialEffectLevel null.Int64 `db:"special_effect_level"`
+	Severity           null.Int64 `db:"severity"`
+	WarnWeather        null.Bool  `db:"warn_weather"`
+	Updated            int64      `db:"updated"`
 }
 
 // CREATE TABLE `weather` (
@@ -82,17 +82,17 @@ func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.
 	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
 	weather.Latitude = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 	weather.Longitude = s2cell.CapBound().RectBound().Center().Lng.Degrees()
-	weather.Level = null.IntFrom(int64(s2cell.Level()))
-	weather.GameplayCondition = null.IntFrom(int64(clientWeather.GameplayWeather.GameplayCondition))
-	weather.WindDirection = null.IntFrom(int64(clientWeather.DisplayWeather.WindDirection))
-	weather.CloudLevel = null.IntFrom(int64(clientWeather.DisplayWeather.CloudLevel))
-	weather.RainLevel = null.IntFrom(int64(clientWeather.DisplayWeather.RainLevel))
-	weather.WindLevel = null.IntFrom(int64(clientWeather.DisplayWeather.WindLevel))
-	weather.SnowLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SnowLevel))
-	weather.FogLevel = null.IntFrom(int64(clientWeather.DisplayWeather.FogLevel))
-	weather.SpecialEffectLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SpecialEffectLevel))
+	weather.Level = null.Int64From(int64(s2cell.Level()))
+	weather.GameplayCondition = null.Int64From(int64(clientWeather.GameplayWeather.GameplayCondition))
+	weather.WindDirection = null.Int64From(int64(clientWeather.DisplayWeather.WindDirection))
+	weather.CloudLevel = null.Int64From(int64(clientWeather.DisplayWeather.CloudLevel))
+	weather.RainLevel = null.Int64From(int64(clientWeather.DisplayWeather.RainLevel))
+	weather.WindLevel = null.Int64From(int64(clientWeather.DisplayWeather.WindLevel))
+	weather.SnowLevel = null.Int64From(int64(clientWeather.DisplayWeather.SnowLevel))
+	weather.FogLevel = null.Int64From(int64(clientWeather.DisplayWeather.FogLevel))
+	weather.SpecialEffectLevel = null.Int64From(int64(clientWeather.DisplayWeather.SpecialEffectLevel))
 	for _, alert := range clientWeather.Alerts {
-		weather.Severity = null.IntFrom(int64(alert.Severity))
+		weather.Severity = null.Int64From(int64(alert.Severity))
 		weather.WarnWeather = null.BoolFrom(alert.WarnWeather)
 	}
 	return weather

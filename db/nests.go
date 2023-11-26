@@ -1,6 +1,8 @@
 package db
 
-import "gopkg.in/guregu/null.v4"
+import (
+	"github.com/lenisko/null/v10"
+)
 
 type Nest struct {
 	Id      int         `db:"nest_id"`

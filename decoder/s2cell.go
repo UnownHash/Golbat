@@ -4,18 +4,18 @@ import (
 	"context"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
-	"gopkg.in/guregu/null.v4"
 	"time"
 )
 
 type S2Cell struct {
-	Id        uint64   `db:"id"`
-	Latitude  float64  `db:"center_lat"`
-	Longitude float64  `db:"center_lon"`
-	Level     null.Int `db:"level"`
-	Updated   int64    `db:"updated"`
+	Id        uint64     `db:"id"`
+	Latitude  float64    `db:"center_lat"`
+	Longitude float64    `db:"center_lon"`
+	Level     null.Int64 `db:"level"`
+	Updated   int64      `db:"updated"`
 }
 
 // CREATE TABLE `weather` (
@@ -46,7 +46,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 			s2Cell.Id = cellId
 			s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
 			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
-			s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
+			s2Cell.Level = null.Int64From(int64(mapS2Cell.Level()))
 		}
 		s2Cell.Updated = now
 

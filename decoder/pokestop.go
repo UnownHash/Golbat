@@ -5,12 +5,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/lenisko/null/v10"
 	"strings"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 
 	"golbat/config"
 	"golbat/db"
@@ -29,40 +29,40 @@ type Pokestop struct {
 	Lon                        float64     `db:"lon" json:"lon"`
 	Name                       null.String `db:"name" json:"name"`
 	Url                        null.String `db:"url" json:"url"`
-	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
+	LureExpireTimestamp        null.Int64  `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
+	LastModifiedTimestamp      null.Int64  `db:"last_modified_timestamp" json:"last_modified_timestamp"`
 	Updated                    int64       `db:"updated" json:"updated"`
 	Enabled                    null.Bool   `db:"enabled" json:"enabled"`
-	QuestType                  null.Int    `db:"quest_type" json:"quest_type"`
-	QuestTimestamp             null.Int    `db:"quest_timestamp" json:"quest_timestamp"`
-	QuestTarget                null.Int    `db:"quest_target" json:"quest_target"`
+	QuestType                  null.Int64  `db:"quest_type" json:"quest_type"`
+	QuestTimestamp             null.Int64  `db:"quest_timestamp" json:"quest_timestamp"`
+	QuestTarget                null.Int64  `db:"quest_target" json:"quest_target"`
 	QuestConditions            null.String `db:"quest_conditions" json:"quest_conditions"`
 	QuestRewards               null.String `db:"quest_rewards" json:"quest_rewards"`
 	QuestTemplate              null.String `db:"quest_template" json:"quest_template"`
 	QuestTitle                 null.String `db:"quest_title" json:"quest_title"`
-	QuestExpiry                null.Int    `db:"quest_expiry" json:"quest_expiry"`
-	CellId                     null.Int    `db:"cell_id" json:"cell_id"`
+	QuestExpiry                null.Int64  `db:"quest_expiry" json:"quest_expiry"`
+	CellId                     null.Int64  `db:"cell_id" json:"cell_id"`
 	Deleted                    bool        `db:"deleted" json:"deleted"`
 	LureId                     int16       `db:"lure_id" json:"lure_id"`
 	FirstSeenTimestamp         int16       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
-	SponsorId                  null.Int    `db:"sponsor_id" json:"sponsor_id"`
+	SponsorId                  null.Int64  `db:"sponsor_id" json:"sponsor_id"`
 	PartnerId                  null.String `db:"partner_id" json:"partner_id"`
-	ArScanEligible             null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
-	PowerUpLevel               null.Int    `db:"power_up_level" json:"power_up_level"`
-	PowerUpPoints              null.Int    `db:"power_up_points" json:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `db:"alternative_quest_type" json:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target" json:"alternative_quest_target"`
+	ArScanEligible             null.Int64  `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
+	PowerUpLevel               null.Int64  `db:"power_up_level" json:"power_up_level"`
+	PowerUpPoints              null.Int64  `db:"power_up_points" json:"power_up_points"`
+	PowerUpEndTimestamp        null.Int64  `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
+	AlternativeQuestType       null.Int64  `db:"alternative_quest_type" json:"alternative_quest_type"`
+	AlternativeQuestTimestamp  null.Int64  `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
+	AlternativeQuestTarget     null.Int64  `db:"alternative_quest_target" json:"alternative_quest_target"`
 	AlternativeQuestConditions null.String `db:"alternative_quest_conditions" json:"alternative_quest_conditions"`
 	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards" json:"alternative_quest_rewards"`
 	AlternativeQuestTemplate   null.String `db:"alternative_quest_template" json:"alternative_quest_template"`
 	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
+	AlternativeQuestExpiry     null.Int64  `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
 	Description                null.String `db:"description" json:"description"`
-	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
-	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
-	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
+	ShowcasePokemon            null.Int64  `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
+	ShowcaseRankingStandard    null.Int64  `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
+	ShowcaseExpiry             null.Int64  `db:"showcase_expiry" json:"showcase_expiry"`
 	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
@@ -189,15 +189,15 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	stop.Lon = fortData.Longitude
 
 	stop.PartnerId = null.NewString(fortData.PartnerId, fortData.PartnerId != "")
-	stop.SponsorId = null.IntFrom(int64(fortData.Sponsor))
+	stop.SponsorId = null.Int64From(int64(fortData.Sponsor))
 	stop.Enabled = null.BoolFrom(fortData.Enabled)
-	stop.ArScanEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
-	stop.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
+	stop.ArScanEligible = null.Int64From(util.BoolToInt[int64](fortData.IsArScanEligible))
+	stop.PowerUpPoints = null.Int64From(int64(fortData.PowerUpProgressPoints))
 	stop.PowerUpLevel, stop.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
 
 	// lasModifiedMs is also modified when incident happens
 	lastModifiedTimestamp := fortData.LastModifiedMs / 1000
-	stop.LastModifiedTimestamp = null.IntFrom(lastModifiedTimestamp)
+	stop.LastModifiedTimestamp = null.Int64From(lastModifiedTimestamp)
 
 	if len(fortData.ActiveFortModifier) > 0 {
 		lureId := int16(fortData.ActiveFortModifier[0])
@@ -205,7 +205,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 			lureEnd := lastModifiedTimestamp + LureTime
 			oldLureEnd := stop.LureExpireTimestamp.ValueOrZero()
 			if stop.LureId != lureId {
-				stop.LureExpireTimestamp = null.IntFrom(lureEnd)
+				stop.LureExpireTimestamp = null.Int64From(lureEnd)
 				stop.LureId = lureId
 			} else {
 				now := time.Now().Unix()
@@ -215,7 +215,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 						lureEnd += LureTime
 					}
 					// lure needs to be restarted
-					stop.LureExpireTimestamp = null.IntFrom(lureEnd)
+					stop.LureExpireTimestamp = null.Int64From(lureEnd)
 				}
 			}
 		}
@@ -224,7 +224,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	if fortData.ImageUrl != "" {
 		stop.Url = null.StringFrom(fortData.ImageUrl)
 	}
-	stop.CellId = null.IntFrom(int64(cellId))
+	stop.CellId = null.Int64From(int64(cellId))
 
 	if stop.Deleted {
 		stop.Deleted = false
@@ -465,7 +465,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	questRewards, _ := json.Marshal(rewards)
 	questTimestamp := time.Now().Unix()
 
-	questExpiry := null.NewInt(0, false)
+	questExpiry := null.NewInt64(0, false)
 
 	stopTimezone := tz.SearchTimezone(stop.Lat, stop.Lon)
 	if stopTimezone != "" {
@@ -476,31 +476,31 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			year, month, day := time.Now().In(loc).Date()
 			t := time.Date(year, month, day, 0, 0, 0, 0, loc).AddDate(0, 0, 1)
 			unixTime := t.Unix()
-			questExpiry = null.IntFrom(unixTime)
+			questExpiry = null.Int64From(unixTime)
 		}
 	}
 
 	if questExpiry.Valid == false {
-		questExpiry = null.IntFrom(time.Now().Unix() + 24*60*60) // Set expiry to 24 hours from now
+		questExpiry = null.Int64From(time.Now().Unix() + 24*60*60) // Set expiry to 24 hours from now
 	}
 
 	if !haveAr {
-		stop.AlternativeQuestType = null.IntFrom(questType)
-		stop.AlternativeQuestTarget = null.IntFrom(questTarget)
+		stop.AlternativeQuestType = null.Int64From(questType)
+		stop.AlternativeQuestTarget = null.Int64From(questTarget)
 		stop.AlternativeQuestTemplate = null.StringFrom(questTemplate)
 		stop.AlternativeQuestTitle = null.StringFrom(questTitle)
 		stop.AlternativeQuestConditions = null.StringFrom(string(questConditions))
 		stop.AlternativeQuestRewards = null.StringFrom(string(questRewards))
-		stop.AlternativeQuestTimestamp = null.IntFrom(questTimestamp)
+		stop.AlternativeQuestTimestamp = null.Int64From(questTimestamp)
 		stop.AlternativeQuestExpiry = questExpiry
 	} else {
-		stop.QuestType = null.IntFrom(questType)
-		stop.QuestTarget = null.IntFrom(questTarget)
+		stop.QuestType = null.Int64From(questType)
+		stop.QuestTarget = null.Int64From(questTarget)
 		stop.QuestTemplate = null.StringFrom(questTemplate)
 		stop.QuestTitle = null.StringFrom(questTitle)
 		stop.QuestConditions = null.StringFrom(string(questConditions))
 		stop.QuestRewards = null.StringFrom(string(questRewards))
-		stop.QuestTimestamp = null.IntFrom(questTimestamp)
+		stop.QuestTimestamp = null.Int64From(questTimestamp)
 		stop.QuestExpiry = questExpiry
 	}
 }
@@ -526,7 +526,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000
 
 		stop.LureId = lureId
-		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
+		stop.LureExpireTimestamp = null.Int64From(lureExpiry)
 	}
 
 	return stop
@@ -548,9 +548,9 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 }
 
 func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.ContestProto) {
-	stop.ShowcaseRankingStandard = null.IntFrom(int64(contest.GetMetric().GetRankingStandard()))
-	stop.ShowcaseExpiry = null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
-	stop.ShowcasePokemon = null.IntFrom(int64(contest.GetFocus().GetPokemon().GetPokedexId()))
+	stop.ShowcaseRankingStandard = null.Int64From(int64(contest.GetMetric().GetRankingStandard()))
+	stop.ShowcaseExpiry = null.Int64From(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
+	stop.ShowcasePokemon = null.Int64From(int64(contest.GetFocus().GetPokemon().GetPokedexId()))
 }
 
 func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeContestEntryOutProto) {

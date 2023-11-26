@@ -2,10 +2,10 @@ package decoder
 
 import (
 	"github.com/UnownHash/gohbem"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/geo"
-	"gopkg.in/guregu/null.v4"
 	"strconv"
 	"strings"
 	"time"
@@ -16,40 +16,40 @@ import (
 type ApiPokemonResult struct {
 	Id                      string                           `json:"id"`
 	PokestopId              null.String                      `json:"pokestop_id"`
-	SpawnId                 null.Int                         `json:"spawn_id"`
+	SpawnId                 null.Int64                       `json:"spawn_id"`
 	Lat                     float64                          `json:"lat"`
 	Lon                     float64                          `json:"lon"`
-	Weight                  null.Float                       `json:"weight"`
-	Size                    null.Int                         `json:"size"`
-	Height                  null.Float                       `json:"height"`
-	ExpireTimestamp         null.Int                         `json:"expire_timestamp"`
-	Updated                 null.Int                         `json:"updated"`
+	Weight                  null.Float64                     `json:"weight"`
+	Size                    null.Int64                       `json:"size"`
+	Height                  null.Float64                     `json:"height"`
+	ExpireTimestamp         null.Int64                       `json:"expire_timestamp"`
+	Updated                 null.Int64                       `json:"updated"`
 	PokemonId               int16                            `json:"pokemon_id"`
-	Move1                   null.Int                         `json:"move_1"`
-	Move2                   null.Int                         `json:"move_2"`
-	Gender                  null.Int                         `json:"gender"`
-	Cp                      null.Int                         `json:"cp"`
-	AtkIv                   null.Int                         `json:"atk_iv"`
-	DefIv                   null.Int                         `json:"def_iv"`
-	StaIv                   null.Int                         `json:"sta_iv"`
-	Iv                      null.Float                       `json:"iv"`
-	Form                    null.Int                         `json:"form"`
-	Level                   null.Int                         `json:"level"`
+	Move1                   null.Int64                       `json:"move_1"`
+	Move2                   null.Int64                       `json:"move_2"`
+	Gender                  null.Int64                       `json:"gender"`
+	Cp                      null.Int64                       `json:"cp"`
+	AtkIv                   null.Int64                       `json:"atk_iv"`
+	DefIv                   null.Int64                       `json:"def_iv"`
+	StaIv                   null.Int64                       `json:"sta_iv"`
+	Iv                      null.Float64                     `json:"iv"`
+	Form                    null.Int64                       `json:"form"`
+	Level                   null.Int64                       `json:"level"`
 	EncounterWeather        uint8                            `json:"encounter_weather"`
-	Weather                 null.Int                         `json:"weather"`
-	Costume                 null.Int                         `json:"costume"`
+	Weather                 null.Int64                       `json:"weather"`
+	Costume                 null.Int64                       `json:"costume"`
 	FirstSeenTimestamp      int64                            `json:"first_seen_timestamp"`
 	Changed                 int64                            `json:"changed"`
-	CellId                  null.Int                         `json:"cell_id"`
+	CellId                  null.Int64                       `json:"cell_id"`
 	ExpireTimestampVerified bool                             `json:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int                         `json:"display_pokemon_id"`
+	DisplayPokemonId        null.Int64                       `json:"display_pokemon_id"`
 	IsDitto                 bool                             `json:"is_ditto"`
 	SeenType                null.String                      `json:"seen_type"`
 	Shiny                   null.Bool                        `json:"shiny"`
 	Username                null.String                      `json:"username"`
-	Capture1                null.Float                       `json:"capture_1"`
-	Capture2                null.Float                       `json:"capture_2"`
-	Capture3                null.Float                       `json:"capture_3"`
+	Capture1                null.Float64                     `json:"capture_1"`
+	Capture2                null.Float64                     `json:"capture_2"`
+	Capture3                null.Float64                     `json:"capture_3"`
 	Pvp                     map[string][]gohbem.PokemonEntry `json:"pvp"`
 	IsEvent                 int8                             `json:"is_event"`
 	Distance                float64                          `json:"distance,omitempty"`

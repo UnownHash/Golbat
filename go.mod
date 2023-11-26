@@ -18,6 +18,7 @@ require (
 	github.com/knadh/koanf/providers/file v0.1.0
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.0.1
+	github.com/lenisko/null/v10 v10.0.0-20231126225832-096d676c0d3c
 	github.com/nmvalera/striped-mutex v0.1.0
 	github.com/paulmach/orb v0.10.0
 	github.com/prometheus/client_golang v1.17.0
@@ -29,7 +30,6 @@ require (
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
 	google.golang.org/grpc v1.57.0
 	google.golang.org/protobuf v1.31.0
-	gopkg.in/guregu/null.v4 v4.0.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 

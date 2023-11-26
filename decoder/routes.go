@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"time"
 )
 

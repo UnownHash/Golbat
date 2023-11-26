@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"strconv"
 	"time"
 )
@@ -15,12 +15,12 @@ import (
 // Spawnpoint struct.
 // REMINDER! Keep hasChangesSpawnpoint updated after making changes
 type Spawnpoint struct {
-	Id         int64    `db:"id"`
-	Lat        float64  `db:"lat"`
-	Lon        float64  `db:"lon"`
-	Updated    int64    `db:"updated"`
-	LastSeen   int64    `db:"last_seen"`
-	DespawnSec null.Int `db:"despawn_sec"`
+	Id         int64      `db:"id"`
+	Lat        float64    `db:"lat"`
+	Lon        float64    `db:"lon"`
+	Updated    int64      `db:"updated"`
+	LastSeen   int64      `db:"last_seen"`
+	DespawnSec null.Int64 `db:"despawn_sec"`
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -105,7 +105,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			Id:         spawnId,
 			Lat:        wildPokemon.Latitude,
 			Lon:        wildPokemon.Longitude,
-			DespawnSec: null.IntFrom(int64(secondOfHour)),
+			DespawnSec: null.Int64From(int64(secondOfHour)),
 		}
 		spawnpointUpdate(ctx, db, &spawnpoint)
 	} else {

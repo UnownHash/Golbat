@@ -3,8 +3,8 @@ package stats_collector
 import (
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
+	"github.com/lenisko/null/v10"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 
 	"golbat/config"
 	"golbat/geo"
@@ -36,7 +36,7 @@ type StatsCollector interface {
 	*/
 	IncPokemonCountHundo(area string)
 	IncPokemonCountNundo(area string)
-	UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int)
+	UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int64)
 	UpdateRaidCount(areas []geo.AreaName, raidLevel int64)
 	UpdateFortCount(areas []geo.AreaName, fortType string, changeType string)
 	UpdateIncidentCount(areas []geo.AreaName)

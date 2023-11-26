@@ -1,12 +1,12 @@
 package stats_collector
 
 import (
+	"github.com/lenisko/null/v10"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/guregu/null.v4"
 
 	"golbat/geo"
 )
@@ -216,6 +216,47 @@ var (
 		},
 		[]string{"area"},
 	)
+	gyms = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "gyms",
+			Help: "Current gyms grouped by team, in_battle",
+		},
+		[]string{"team", "in_battle"},
+	)
+	incidents = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "incidents",
+			Help: "Current incidents grouped by kind, confirmed",
+		},
+		[]string{"kind", "confirmed"},
+	)
+	pokemons = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "pokemons",
+			Help: "Current Pokemons",
+		},
+		[]string{"hasIv"},
+	)
+	lures = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "lures",
+			Help: "Current lures grouped by type",
+		},
+		[]string{"type"},
+	)
+	quests = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "quests",
+			Help: "Current quests",
+		},
+	)
+	raids = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "raids",
+			Help: "Current raids grouped by level",
+		},
+		[]string{"level"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -224,7 +265,7 @@ type promCollector struct {
 }
 
 func (col *promCollector) IncRawRequests(status, message string) {
-	rawRequests.WithLabelValues("error", "auth").Inc()
+	rawRequests.WithLabelValues(status, message).Inc()
 }
 
 func (col *promCollector) IncDecodeMethods(status, message, method string) {
@@ -317,7 +358,7 @@ func (col *promCollector) IncPokemonCountNundo(area string) {
 	pokemonCountNundo.WithLabelValues(area).Inc()
 }
 
-func (col *promCollector) UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int) {
+func (col *promCollector) UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int64) {
 	remainingTtlMin := (expireTimestamp.ValueOrZero() - time.Now().Unix()) / 60
 	var seenTypeStr = seenType.String
 	above30 := "0"
@@ -381,6 +422,8 @@ func initPrometheus() {
 		pokemonCountNew, pokemonCountIv, pokemonCountHundo, pokemonCountNundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
+
+		gyms, incidents, pokemons, lures, quests, raids,
 	)
 }
 
