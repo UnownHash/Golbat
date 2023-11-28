@@ -57,7 +57,7 @@ type Webhook struct {
 	Url       string            `koanf:"url"`
 	Types     []string          `koanf:"types"`
 	Areas     []string          `koanf:"areas"`
-	Headers   string            `koanf:"headers"`
+	Headers   []string          `koanf:"headers"`
 	HeaderMap map[string]string `koanf:"-"`
 	AreaNames []geo.AreaName    `koanf:"-"`
 }
