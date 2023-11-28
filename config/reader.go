@@ -9,7 +9,6 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
-	"github.com/sirupsen/logrus"
 
 	"golbat/geo"
 )
@@ -140,7 +139,7 @@ func splitIntoHeaderMap(rawHeader string) map[string]string {
 		if len(split) == 2 {
 			headerMap[split[0]] = split[1]
 		} else {
-			logrus.Errorf("Invalid header: %s", header)
+			fmt.Println(fmt.Errorf("invalid header: %s", header))
 		}
 	}
 	return headerMap
