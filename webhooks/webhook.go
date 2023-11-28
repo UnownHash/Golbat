@@ -68,6 +68,7 @@ type webhook struct {
 	url         string
 	areaNames   []geo.AreaName
 	typesWanted []WebhookType
+	headerMap   map[string]string
 	httpClient  *http.Client
 }
 
@@ -119,6 +120,9 @@ func (wh *webhook) sendCollection(collection webhookCollection) error {
 	req.Header.Set("X-Golbat", "hey!")
 	req.Header.Set("Content-Type", "application/json")
 
+	for key, value := range wh.headerMap {
+		req.Header.Set(key, value)
+	}
 	resp, err := wh.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to send webhook to %s: %s", wh.url, err)
@@ -171,5 +175,6 @@ func webhookFromConfigWebhook(configWh config.Webhook) (*webhook, error) {
 		typesWanted: typesWanted,
 		areaNames:   configWh.AreaNames,
 		httpClient:  &http.Client{},
+		headerMap:   configWh.HeaderMap,
 	}, nil
 }
