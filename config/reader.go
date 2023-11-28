@@ -90,6 +90,7 @@ func ReadConfig() (configDefinition, error) {
 	for i := 0; i < len(Config.Webhooks); i++ {
 		hook := &Config.Webhooks[i]
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
+		hook.HeaderMap = splitIntoHeaderMap(hook.Headers)
 	}
 
 	// translate scan areas to array of geo.AreaName struct
@@ -129,4 +130,17 @@ func splitIntoAreaAndFenceName(areaNames []string) (areas []geo.AreaName) {
 		}
 	}
 	return
+}
+
+func splitIntoHeaderMap(rawHeader []string) map[string]string {
+	headerMap := make(map[string]string)
+	for _, header := range rawHeader {
+		split := strings.Split(header, ":")
+		if len(split) == 2 {
+			headerMap[split[0]] = split[1]
+		} else {
+			fmt.Println(fmt.Errorf("invalid header: %s", header))
+		}
+	}
+	return headerMap
 }
