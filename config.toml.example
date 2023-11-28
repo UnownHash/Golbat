@@ -52,6 +52,7 @@ url = "http://localhost:4201"
 #[[webhooks]]
 #url = "http://localhost:4202"
 #types = ["raid"]
+#headers = ["X-Poracle-Secret:abc", "Other-Header:def"]
 
 #[[webhooks]]
 #url = "http://localhost:4202"
