@@ -5,19 +5,21 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
+	"strconv"
+	"time"
+
 	"github.com/UnownHash/gohbem"
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
+
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
-	"math"
-	"strconv"
-	"time"
 )
 
 // Pokemon struct.
@@ -558,9 +560,11 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.Username = null.StringFrom(username)
 	}
 
-	if mapPokemon.ExpirationTimeMs > 0 {
+	if mapPokemon.ExpirationTimeMs > 0 && !pokemon.ExpireTimestampVerified {
 		pokemon.ExpireTimestamp = null.IntFrom(mapPokemon.ExpirationTimeMs / 1000)
 		pokemon.ExpireTimestampVerified = true
+		// if we have cached an encounter for this pokemon, update the TTL.
+		encounterCache.UpdateTTL(pokemon.Id, pokemon.remainingDuration())
 	} else {
 		pokemon.ExpireTimestampVerified = false
 	}
@@ -680,7 +684,9 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto) {
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+	pokemon.Username = null.StringFrom(username)
+	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -919,7 +925,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -927,27 +933,12 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 		pokemon.CellId = null.IntFrom(int64(cellID))
 	}
 
-	pokemon.Shiny = null.BoolFrom(encounterData.Pokemon.Pokemon.PokemonDisplay.Shiny)
-	pokemon.Username = null.StringFrom(username)
-
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 }
 
-func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto) {
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
 	pokemon.IsEvent = 0
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon)
-
-	if encounterData.Pokemon.PokemonDisplay.Shiny {
-		pokemon.Shiny = null.BoolFrom(true)
-		pokemon.Username = null.StringFrom("AccountShiny")
-	} else {
-		if !pokemon.Shiny.Valid {
-			pokemon.Shiny = null.BoolFrom(false)
-		}
-		if !pokemon.Username.Valid {
-			pokemon.Username = null.StringFrom("Account")
-		}
-	}
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
 }
@@ -1125,11 +1116,14 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username)
 	savePokemonRecord(ctx, db, pokemon)
+	// updateEncounterStats() should only be called for encounters, and called
+	// even if we have the pokemon record already.
+	updateEncounterStats(pokemon)
 
 	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
-func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto) string {
+func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto, username string) string {
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
@@ -1151,8 +1145,11 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
-	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter)
+	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
 	savePokemonRecord(ctx, db, pokemon)
+	// updateEncounterStats() should only be called for encounters, and called
+	// even if we have the pokemon record already.
+	updateEncounterStats(pokemon)
 
 	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
