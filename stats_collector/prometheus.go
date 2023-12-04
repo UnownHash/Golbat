@@ -266,7 +266,7 @@ type promCollector struct {
 }
 
 func (col *promCollector) IncRawRequests(status, message string) {
-	rawRequests.WithLabelValues("error", "auth").Inc()
+	rawRequests.WithLabelValues(status, message).Inc()
 }
 
 func (col *promCollector) IncDecodeMethods(status, message, method string) {
