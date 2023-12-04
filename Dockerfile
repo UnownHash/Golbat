@@ -2,7 +2,7 @@
 FROM golang:1.21-alpine as build
 
 WORKDIR /go/src/app
-COPY go.mod go.sum .
+COPY go.mod go.sum ./
 RUN if [ ! -f vendor/modules.txt ]; then go mod download; fi
 
 COPY . .
