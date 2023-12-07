@@ -252,6 +252,7 @@ func main() {
 	r.GET("/health", GetHealth)
 
 	apiGroup := r.Group("/api", AuthRequired())
+	apiGroup.GET("/health", GetHealth)
 	apiGroup.POST("/clear-quests", ClearQuests)
 	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
