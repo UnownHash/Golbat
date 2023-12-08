@@ -153,6 +153,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", encounterId)
 
+	statsCollector.IncDbQuery("select pokemon", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -309,6 +310,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
 				":seen_type)", pvpField, pvpValue), pokemon)
 
+			statsCollector.IncDbQuery("insert pokemon", err)
 			if err != nil {
 				log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
@@ -360,6 +362,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"is_event = :is_event "+
 				"WHERE id = :id", pvpUpdate), pokemon,
 			)
+			statsCollector.IncDbQuery("update pokemon", err)
 			if err != nil {
 				log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)

@@ -1,6 +1,7 @@
 package stats_collector
 
 import (
+	"database/sql"
 	"strconv"
 	"sync"
 	"time"
@@ -258,6 +259,14 @@ var (
 		},
 		[]string{"sameacct"},
 	)
+	dbQueries = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "database_queries",
+			Help:      "Total number of database queries by query and status",
+		},
+		[]string{"query", "status"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -424,6 +433,17 @@ func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
 	duplicateEncounters.WithLabelValues(v).Inc()
 }
 
+func (col *promCollector) IncDbQuery(query string, err error) {
+	var status string
+
+	if err != nil && err != sql.ErrNoRows {
+		status = "error"
+	} else {
+		status = "success"
+	}
+	dbQueries.WithLabelValues(query, status).Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -436,7 +456,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
-		duplicateEncounters,
+		duplicateEncounters, dbQueries,
 	)
 }
 

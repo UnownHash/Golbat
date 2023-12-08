@@ -169,6 +169,21 @@ func main() {
 	}
 	//}
 
+	// Create the web server.
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	if cfg.Logging.Debug {
+		r.Use(ginlogrus.Logger(log.StandardLogger()))
+	} else {
+		r.Use(gin.Recovery())
+	}
+
+	// choose the statsCollector we will use.
+	statsCollector = stats_collector.GetStatsCollector(cfg, r)
+	// tell the decoder the stats collector to use
+	decoder.SetStatsCollector(statsCollector)
+	db2.SetStatsCollector(statsCollector)
+
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
 	decoder.LoadNests(dbDetails)
@@ -234,20 +249,6 @@ func main() {
 		}()
 	}
 
-	// Start the web server.
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.New()
-
-	// choose the statsCollector we will use.
-	statsCollector = stats_collector.GetStatsCollector(cfg, r)
-	// tell the decoder the stats collector to use
-	decoder.SetStatsCollector(statsCollector)
-
-	if cfg.Logging.Debug {
-		r.Use(ginlogrus.Logger(log.StandardLogger()))
-	} else {
-		r.Use(gin.Recovery())
-	}
 	r.POST("/raw", Raw)
 	r.GET("/health", GetHealth)
 
@@ -270,14 +271,12 @@ func main() {
 
 	apiGroup.GET("/devices/all", GetDevices)
 
-	//router := mux.NewRouter().StrictSlash(true)
-	//router.HandleFunc("/raw", Raw)
-
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: r,
 	}
 
+	// Start the server in a goroutine, as it will block until told to shutdown.
 	wg.Add(1)
 	go func() {
 		defer cancelFn()

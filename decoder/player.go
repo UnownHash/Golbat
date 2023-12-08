@@ -2,14 +2,15 @@ package decoder
 
 import (
 	"database/sql"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"reflect"
 	"strconv"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 // Player struct. Name is the primary key.
@@ -198,6 +199,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		`,
 		name,
 	)
+	statsCollector.IncDbQuery("select player_name", err)
 	if err == sql.ErrNoRows {
 		if friendshipId != "" {
 			err = db.GeneralDb.Get(&player,
@@ -208,6 +210,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`,
 				friendshipId,
 			)
+			statsCollector.IncDbQuery("select player_friendship_id", err)
 		} else if friendCode != "" {
 			err = db.GeneralDb.Get(&player,
 				`
@@ -217,6 +220,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`,
 				friendCode,
 			)
+			statsCollector.IncDbQuery("select player_friend_code", err)
 		}
 
 		if err == sql.ErrNoRows {
@@ -362,6 +366,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 			player,
 		)
 
+		statsCollector.IncDbQuery("insert player", err)
 		if err != nil {
 			log.Errorf("insert player error: %s", err)
 			return
@@ -452,6 +457,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 			player,
 		)
 
+		statsCollector.IncDbQuery("update player", err)
 		if err != nil {
 			log.Errorf("Update player error %s", err)
 		}

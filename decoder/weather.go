@@ -3,12 +3,13 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"github.com/golang/geo/s2"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
+
+	"github.com/golang/geo/s2"
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -61,6 +62,7 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 
 	err := db.GeneralDb.GetContext(ctx, &weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
 
+	statsCollector.IncDbQuery("select weather", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -167,6 +169,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 				":wind_level, :snow_level, :fog_level, :special_effect_level, :severity, :warn_weather, "+
 				"UNIX_TIMESTAMP())",
 			weather)
+		statsCollector.IncDbQuery("insert weather", err)
 		if err != nil {
 			log.Errorf("insert weather: %s", err)
 			return
@@ -190,6 +193,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 			"updated = UNIX_TIMESTAMP() "+
 			"WHERE id = :id",
 			weather)
+		statsCollector.IncDbQuery("update weather", err)
 		if err != nil {
 			log.Errorf("update weather: %s", err)
 			return

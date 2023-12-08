@@ -61,6 +61,7 @@ func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) 
 		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form "+
 			"FROM incident "+
 			"WHERE incident.id = ? ", incidentId)
+	statsCollector.IncDbQuery("select incident", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -114,7 +115,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 			log.Errorf("insert incident: %s", err)
 			return
 		}
-
+		statsCollector.IncDbQuery("insert incident", err)
 		_, _ = res, err
 	} else {
 		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
@@ -133,6 +134,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 			"slot_3_form = :slot_3_form "+
 			"WHERE id = :id", incident,
 		)
+		statsCollector.IncDbQuery("update incident", err)
 		if err != nil {
 			log.Errorf("Update incident %s", err)
 		}

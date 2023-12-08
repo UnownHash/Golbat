@@ -40,6 +40,7 @@ type StatsCollector interface {
 	UpdateFortCount(areas []geo.AreaName, fortType string, changeType string)
 	UpdateIncidentCount(areas []geo.AreaName)
 	IncDuplicateEncounters(sameAccount bool)
+	IncDbQuery(query string, err error)
 }
 
 type Config interface {
