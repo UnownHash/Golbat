@@ -33,6 +33,7 @@ func GetPokestopPositions(db DbDetails, fence geo.Geofence) ([]QuestLocation, er
 		"and ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON(("+fence.ToPolygonString()+"))'), point(lat,lon))",
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude)
 
+	statsCollector.IncDbQuery("select pokestop-positions", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -67,14 +68,17 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence geo.Geofence) (sql.Re
 		"alternative_quest_expiry = NULL " +
 		"WHERE lat > ? and lon > ? and lat < ? and lon < ? and enabled = 1 " +
 		"and ST_CONTAINS(ST_GEOMFROMTEXT('POLYGON((" + fence.ToPolygonString() + "))'), point(lat,lon))"
-	return db.GeneralDb.ExecContext(ctx, query,
+	res, err := db.GeneralDb.ExecContext(ctx, query,
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude)
+	statsCollector.IncDbQuery("remove quests", err)
+	return res, err
 }
 
 func FindOldPokestops(ctx context.Context, db DbDetails, cellId int64) ([]string, error) {
 	fortIds := []FortId{}
 	err := db.GeneralDb.SelectContext(ctx, &fortIds,
 		"SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND updated < UNIX_TIMESTAMP() - 3600;", cellId)
+	statsCollector.IncDbQuery("select old-pokestops", err)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +99,7 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) erro
 	query = db.GeneralDb.Rebind(query)
 
 	_, err := db.GeneralDb.ExecContext(ctx, query, args...)
+	statsCollector.IncDbQuery("clear old-pokestops", err)
 	if err != nil {
 		return err
 	}
@@ -117,6 +122,7 @@ func GetQuestStatus(db DbDetails, fence geo.Geofence) (QuestStatus, error) {
 		bbox.MinimumLatitude, bbox.MinimumLongitude, bbox.MaximumLatitude, bbox.MaximumLongitude,
 	)
 
+	statsCollector.IncDbQuery("select quest-status", err)
 	if err == sql.ErrNoRows {
 		return areas, nil
 	}

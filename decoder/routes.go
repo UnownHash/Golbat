@@ -4,11 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/jellydator/ttlcache/v3"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	"gopkg.in/guregu/null.v4"
 )
 
 type Route struct {
@@ -51,6 +52,7 @@ func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
 		`,
 		id,
 	)
+	statsCollector.IncDbQuery("select route", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -117,6 +119,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			route,
 		)
 
+		statsCollector.IncDbQuery("insert route", err)
 		if err != nil {
 			return fmt.Errorf("insert route error: %w", err)
 		}
@@ -148,6 +151,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			route,
 		)
 
+		statsCollector.IncDbQuery("update route", err)
 		if err != nil {
 			return fmt.Errorf("update route error %w", err)
 		}

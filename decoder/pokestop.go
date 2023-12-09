@@ -122,10 +122,10 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
+	statsCollector.IncDbQuery("select pokestop", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -769,6 +769,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				":showcase_pokemon_form_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
 			pokestop)
 
+		statsCollector.IncDbQuery("insert pokestop", err)
 		if err != nil {
 			log.Errorf("insert pokestop: %s", err)
 			return
@@ -819,6 +820,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				" WHERE id = :id",
 			pokestop,
 		)
+		statsCollector.IncDbQuery("update pokestop", err)
 		if err != nil {
 			log.Errorf("update pokestop: %s", err)
 			return

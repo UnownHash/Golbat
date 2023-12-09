@@ -40,6 +40,7 @@ func (col *noopCollector) UpdateRaidCount([]geo.AreaName, int64)                
 func (col *noopCollector) UpdateFortCount([]geo.AreaName, string, string)        {}
 func (col *noopCollector) UpdateIncidentCount([]geo.AreaName)                    {}
 func (col *noopCollector) IncDuplicateEncounters(sameAccount bool)               {}
+func (col *noopCollector) IncDbQuery(query string, err error)                    {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}
