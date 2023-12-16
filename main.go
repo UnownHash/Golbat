@@ -184,6 +184,11 @@ func main() {
 	decoder.SetStatsCollector(statsCollector)
 	db2.SetStatsCollector(statsCollector)
 
+	// collect live stats when prometheus and liveStats are enabled
+	if cfg.Prometheus.Enabled && cfg.Prometheus.LiveStats {
+		go db2.PromLiveStatsUpdater(dbDetails, cfg.Prometheus.LiveStatsSleep)
+	}
+
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
 	decoder.LoadNests(dbDetails)
