@@ -302,17 +302,6 @@ func Raw(c *gin.Context) {
 	//}
 }
 
-/* Should really be in a separate file, move later */
-
-type ApiLocation struct {
-	Latitude  float64 `json:"lat"`
-	Longitude float64 `json:"lon"`
-}
-
-type GolbatClearQuest struct {
-	Fence []ApiLocation `json:"fence"`
-}
-
 func AuthRequired() gin.HandlerFunc {
 	return func(context *gin.Context) {
 		if config.Config.ApiSecret != "" {
@@ -329,28 +318,12 @@ func AuthRequired() gin.HandlerFunc {
 }
 
 func ClearQuests(c *gin.Context) {
-	var golbatClearQuest GolbatClearQuest
-	if err := c.BindJSON(&golbatClearQuest); err != nil {
+	fence, err := geo.NormaliseFenceRequest(c)
+
+	if err != nil {
 		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
-	}
-
-	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence)+1)
-	for _, loc := range golbatClearQuest.Fence {
-		locations = append(locations, geo.Location{
-			Latitude:  loc.Latitude,
-			Longitude: loc.Longitude,
-		})
-	}
-
-	// Ensure the fence is closed
-	if locations[0] != locations[len(locations)-1] {
-		locations = append(locations, locations[0])
-	}
-
-	fence := geo.Geofence{
-		Fence: locations,
 	}
 
 	go func() {
@@ -453,36 +426,12 @@ func PokemonSearch(c *gin.Context) {
 }
 
 func GetQuestStatus(c *gin.Context) {
-	var golbatClearQuest GolbatClearQuest
-	if err := c.BindJSON(&golbatClearQuest); err != nil {
+	fence, err := geo.NormaliseFenceRequest(c)
+
+	if err != nil {
 		log.Warnf("POST /api/quest-status/ Error during post area %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
-	}
-
-	if len(golbatClearQuest.Fence) == 0 {
-		c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"status": "error",
-			"data":   nil,
-		})
-		return
-	}
-
-	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence))
-	for _, loc := range golbatClearQuest.Fence {
-		locations = append(locations, geo.Location{
-			Latitude:  loc.Latitude,
-			Longitude: loc.Longitude,
-		})
-	}
-
-	// Ensure the fence is closed
-	if locations[0] != locations[len(locations)-1] {
-		locations = append(locations, locations[0])
-	}
-
-	fence := geo.Geofence{
-		Fence: locations,
 	}
 
 	questStatus := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
@@ -496,22 +445,21 @@ func GetHealth(c *gin.Context) {
 }
 
 func GetPokestopPositions(c *gin.Context) {
-	var requestBody geo.Geofence
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
+	fence, err := geo.NormaliseFenceRequest(c)
+	if err != nil {
+		log.Warnf("POST /api/pokestop-positions/ Error during post area %v %v", err, fence)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	res, err := decoder.GetPokestopPositions(dbDetails, requestBody)
+	response, err := decoder.GetPokestopPositions(dbDetails, fence)
 	if err != nil {
 		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, res)
+	c.JSON(http.StatusAccepted, response)
 }
 
 func GetPokestop(c *gin.Context) {

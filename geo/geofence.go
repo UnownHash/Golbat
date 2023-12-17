@@ -2,11 +2,15 @@ package geo
 
 import (
 	"fmt"
+	"io"
+	"math"
+
+	"github.com/gin-gonic/gin"
+	"github.com/goccy/go-json"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/paulmach/orb/planar"
 	"github.com/tidwall/rtree"
-	"math"
 )
 
 type AreaName struct {
@@ -37,6 +41,10 @@ func (an *AreaName) String() string {
 
 type Geofence struct {
 	Fence []Location
+}
+
+type GeofenceApi struct {
+	Fence []ApiLocation `json:"fence"`
 }
 
 type BoundingBox struct {
@@ -268,4 +276,48 @@ func MatchGeofences(featureCollection *geojson.FeatureCollection, lat, lon float
 	}
 
 	return
+}
+
+func (fence *Geofence) toFeature() *geojson.Feature {
+	var ring orb.Ring
+	for _, loc := range fence.Fence {
+		ring = append(ring, orb.Point{loc.Longitude, loc.Latitude})
+	}
+	polygon := orb.Polygon{ring}
+
+	return geojson.NewFeature(polygon)
+}
+
+func (fence *GeofenceApi) toGeofence() *Geofence {
+	var locations []Location
+	for _, loc := range fence.Fence {
+		locations = append(locations, loc.ToLocation())
+	}
+
+	return &Geofence{Fence: locations}
+}
+
+func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	geometry, err := geojson.UnmarshalGeometry(bodyBytes)
+	if err == nil {
+		return geojson.NewFeature(geometry.Geometry()), nil
+	}
+
+	feature, err := geojson.UnmarshalFeature(bodyBytes)
+	if err == nil {
+		return feature, nil
+	}
+
+	var golbatFance *GeofenceApi
+	err = json.Unmarshal(bodyBytes, &golbatFance)
+	if err == nil {
+		return golbatFance.toGeofence().toFeature(), err
+	}
+
+	return nil, err
 }
