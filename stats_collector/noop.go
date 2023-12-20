@@ -39,8 +39,15 @@ func (col *noopCollector) UpdateVerifiedTtl(geo.AreaName, null.String, null.Int)
 func (col *noopCollector) UpdateRaidCount([]geo.AreaName, int64)                 {}
 func (col *noopCollector) UpdateFortCount([]geo.AreaName, string, string)        {}
 func (col *noopCollector) UpdateIncidentCount([]geo.AreaName)                    {}
-func (col *noopCollector) IncDuplicateEncounters(sameAccount bool)               {}
-func (col *noopCollector) IncDbQuery(query string, err error)                    {}
+func (col *noopCollector) IncDuplicateEncounters(bool)                           {}
+func (col *noopCollector) IncDbQuery(string, error)                              {}
+func (col *noopCollector) SetGyms(int8, bool, float64)                           {}
+func (col *noopCollector) SetRaids(int64, float64)                               {}
+func (col *noopCollector) SetIncidents(int8, bool, float64)                      {}
+func (col *noopCollector) SetLures(int32, float64)                               {}
+func (col *noopCollector) SetQuests(float64, float64)                            {}
+func (col *noopCollector) IncPokemons(bool, null.String)                         {}
+func (col *noopCollector) DecPokemons(bool, null.String)                         {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}

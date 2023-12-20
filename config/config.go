@@ -86,9 +86,11 @@ type pyroscope struct {
 }
 
 type Prometheus struct {
-	Enabled    bool      `koanf:"enabled"`
-	Token      string    `koanf:"token"`
-	BucketSize []float64 `koanf:"bucket_size"`
+	Enabled        bool      `koanf:"enabled"`
+	Token          string    `koanf:"token"`
+	BucketSize     []float64 `koanf:"bucket_size"`
+	LiveStats      bool      `koanf:"live_stats"`
+	LiveStatsSleep int       `koanf:"live_stats_sleep"`
 }
 
 type logging struct {

@@ -4,10 +4,9 @@ import (
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
-
 	"golbat/config"
 	"golbat/geo"
+	"gopkg.in/guregu/null.v4"
 )
 
 type StatsCollector interface {
@@ -41,6 +40,13 @@ type StatsCollector interface {
 	UpdateIncidentCount(areas []geo.AreaName)
 	IncDuplicateEncounters(sameAccount bool)
 	IncDbQuery(query string, err error)
+	SetGyms(teamId int8, inBattle bool, count float64)
+	SetRaids(level int64, count float64)
+	SetIncidents(kind int8, confirmed bool, count float64)
+	SetLures(lureId int32, count float64)
+	SetQuests(ar float64, noAr float64)
+	IncPokemons(hasIv bool, seenType null.String)
+	DecPokemons(hasIv bool, seenType null.String)
 }
 
 type Config interface {

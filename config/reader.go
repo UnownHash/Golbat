@@ -28,7 +28,8 @@ func ReadConfig() (configDefinition, error) {
 			BlockProfileRate:     5,
 		},
 		Prometheus: Prometheus{
-			BucketSize: []float64{.00005, .000075, .0001, .00025, .0005, .00075, .001, .0025, .005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10},
+			BucketSize:     []float64{.00005, .000075, .0001, .00025, .0005, .00075, .001, .0025, .005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10},
+			LiveStatsSleep: 120,
 		},
 		Logging: logging{
 			Debug:      false,

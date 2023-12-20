@@ -2,6 +2,7 @@ package stats_collector
 
 import (
 	"database/sql"
+	"golbat/util"
 	"strconv"
 	"sync"
 	"time"
@@ -267,6 +268,56 @@ var (
 		},
 		[]string{"query", "status"},
 	)
+
+	// query updated stats
+	gyms = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "gyms",
+			Help:      "Current gyms grouped by team, in_battle",
+		},
+		[]string{"team", "in_battle"},
+	)
+	incidents = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "incidents",
+			Help:      "Current incidents grouped by kind, confirmed",
+		},
+		[]string{"kind", "confirmed"},
+	)
+	pokemons = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "pokemons",
+			Help:      "Current Pokemons grouped by has_iv, seen_type",
+		},
+		[]string{"has_iv", "seen_type"},
+	)
+	lures = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "lures",
+			Help:      "Current lures grouped by type",
+		},
+		[]string{"type"},
+	)
+	quests = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "quests",
+			Help:      "Current quests",
+		},
+		[]string{"ar"},
+	)
+	raids = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "raids",
+			Help:      "Current raids grouped by level",
+		},
+		[]string{"level"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -426,9 +477,9 @@ func (col *promCollector) UpdateIncidentCount(areas []geo.AreaName) {
 func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
 	var v string
 	if sameAccount {
-		v = "y"
+		v = "1"
 	} else {
-		v = "n"
+		v = "0"
 	}
 	duplicateEncounters.WithLabelValues(v).Inc()
 }
@@ -444,6 +495,75 @@ func (col *promCollector) IncDbQuery(query string, err error) {
 	dbQueries.WithLabelValues(query, status).Inc()
 }
 
+func (col *promCollector) SetGyms(teamId int8, inBattle bool, count float64) {
+	var inBattleStr string
+	teamIdString := "Unown"
+
+	if name, ok := util.TeamIdToName[teamId]; ok {
+		teamIdString = name
+	}
+
+	if inBattle {
+		inBattleStr = "1"
+	} else {
+		inBattleStr = "0"
+	}
+	gyms.WithLabelValues(teamIdString, inBattleStr).Set(count)
+}
+
+func (col *promCollector) SetRaids(level int64, count float64) {
+	raids.WithLabelValues(strconv.FormatInt(level, 10)).Set(count)
+}
+
+func (col *promCollector) SetIncidents(kind int8, confirmed bool, count float64) {
+	var confirmedStr string
+	kindStr := "Unown"
+
+	if name, ok := util.IncidentTypeToName[kind]; ok {
+		kindStr = name
+	}
+
+	if confirmed {
+		confirmedStr = "1"
+	} else {
+		confirmedStr = "0"
+	}
+
+	incidents.WithLabelValues(kindStr, confirmedStr).Set(count)
+}
+
+func (col *promCollector) SetLures(lureId int32, count float64) {
+	lureStr := "Unown"
+	if name, ok := util.LureIdToName[lureId]; ok {
+		lureStr = name
+	}
+
+	lures.WithLabelValues(lureStr).Set(count)
+}
+
+func (col *promCollector) SetQuests(ar float64, noAr float64) {
+	quests.WithLabelValues("1").Set(ar)
+	quests.WithLabelValues("0").Set(noAr)
+}
+
+func (col *promCollector) IncPokemons(hasIv bool, seenType null.String) {
+	hasIvStr := "1"
+	if !hasIv {
+		hasIvStr = "0"
+	}
+
+	pokemons.WithLabelValues(hasIvStr, seenType.ValueOrZero()).Inc()
+}
+
+func (col *promCollector) DecPokemons(hasIv bool, seenType null.String) {
+	hasIvStr := "1"
+	if !hasIv {
+		hasIvStr = "0"
+	}
+
+	pokemons.WithLabelValues(hasIvStr, seenType.ValueOrZero()).Dec()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -457,6 +577,8 @@ func initPrometheus() {
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
 		duplicateEncounters, dbQueries,
+
+		gyms, incidents, pokemons, lures, quests, raids,
 	)
 }
 
