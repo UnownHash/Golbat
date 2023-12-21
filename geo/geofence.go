@@ -279,19 +279,18 @@ func MatchGeofences(featureCollection *geojson.FeatureCollection, lat, lon float
 }
 
 func (fence *Geofence) toFeature() *geojson.Feature {
-	var ring orb.Ring
-	for _, loc := range fence.Fence {
-		ring = append(ring, orb.Point{loc.Longitude, loc.Latitude})
+	ring := make(orb.Ring, len(fence.Fence))
+	for i, loc := range fence.Fence {
+		ring[i] = orb.Point{loc.Longitude, loc.Latitude}
 	}
-	polygon := orb.Polygon{ring}
 
-	return geojson.NewFeature(polygon)
+	return geojson.NewFeature(orb.Polygon{ring})
 }
 
 func (fence *GeofenceApi) toGeofence() *Geofence {
-	var locations []Location
-	for _, loc := range fence.Fence {
-		locations = append(locations, loc.ToLocation())
+	locations := make([]Location, len(fence.Fence))
+	for i, loc := range fence.Fence {
+		locations[i] = loc.ToLocation()
 	}
 
 	return &Geofence{Fence: locations}
