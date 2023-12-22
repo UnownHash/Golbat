@@ -24,9 +24,11 @@ import (
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
+	"golbat/device_tracker"
 	"golbat/external"
 	pb "golbat/grpc"
 	"golbat/pogo"
+	"golbat/raw_decoder"
 	"golbat/stats_collector"
 	"golbat/webhooks"
 )
@@ -70,12 +72,6 @@ func main() {
 		cfg.Logging.MaxBackups,
 		cfg.Logging.Compress,
 	)
-
-	webhooksSender, err := webhooks.NewWebhooksSender(cfg)
-	if err != nil {
-		log.Fatalf("failed to setup webhooks sender: %s", err)
-	}
-	decoder.SetWebhooksSender(webhooksSender)
 
 	log.Infof("Golbat starting")
 
@@ -192,8 +188,28 @@ func main() {
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
 	decoder.LoadNests(dbDetails)
-	InitDeviceCache()
 
+	{
+		timeout := 5 * time.Second
+		if cfg.Tuning.ExtendedTimeout {
+			timeout = 30 * time.Second
+		}
+		rawProtoDecoder = raw_decoder.NewRawDecoder(timeout)
+	}
+
+	deviceTracker = device_tracker.NewDeviceTracker(cfg.Cleanup.DeviceHours)
+	wg.Add(1)
+	go func() {
+		defer cancelFn()
+		defer wg.Done()
+		deviceTracker.Run(ctx)
+	}()
+
+	webhooksSender, err := webhooks.NewWebhooksSender(cfg)
+	if err != nil {
+		log.Fatalf("failed to setup webhooks sender: %s", err)
+	}
+	decoder.SetWebhooksSender(webhooksSender)
 	wg.Add(1)
 	go func() {
 		defer cancelFn()
@@ -324,8 +340,33 @@ func main() {
 	log.Info("Golbat exiting!")
 }
 
-func decode(ctx context.Context, method int, protoData *ProtoData) {
-	getMethodName := func(method int, trimString bool) string {
+type decodeProtoMethod struct {
+	Decode   func(context.Context, *raw_decoder.Proto) (bool, string)
+	MinLevel int
+}
+
+var decodeMethods = map[pogo.Method]*decodeProtoMethod{
+	pogo.Method_METHOD_START_INCIDENT:                                &decodeProtoMethod{decodeStartIncident, 30},
+	pogo.Method_METHOD_INVASION_OPEN_COMBAT_SESSION:                  &decodeProtoMethod{decodeOpenInvasion, 30},
+	pogo.Method_METHOD_FORT_DETAILS:                                  &decodeProtoMethod{decodeFortDetails, 30},
+	pogo.Method_METHOD_GET_MAP_OBJECTS:                               &decodeProtoMethod{decodeGMO, 0},
+	pogo.Method_METHOD_GYM_GET_INFO:                                  &decodeProtoMethod{decodeGetGymInfo, 10},
+	pogo.Method_METHOD_ENCOUNTER:                                     &decodeProtoMethod{decodeEncounter, 30},
+	pogo.Method_METHOD_DISK_ENCOUNTER:                                &decodeProtoMethod{decodeDiskEncounter, 30},
+	pogo.Method_METHOD_FORT_SEARCH:                                   &decodeProtoMethod{decodeFortSearch, 10},
+	pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION): &decodeProtoMethod{decodeSocialAction, 0},
+	pogo.Method_METHOD_GET_MAP_FORTS:                                 &decodeProtoMethod{decodeGetMapForts, 10},
+	pogo.Method_METHOD_GET_ROUTES:                                    &decodeProtoMethod{decodeGetRoutes, 30},
+	pogo.Method_METHOD_GET_CONTEST_DATA:                              &decodeProtoMethod{decodeGetContestData, 10},
+	pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:                &decodeProtoMethod{decodeGetPokemonSizeContestEntry, 10},
+	// ignores
+	pogo.Method_METHOD_GET_PLAYER:              nil,
+	pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:  nil,
+	pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE: nil,
+}
+
+func decode(ctx context.Context, protoData *raw_decoder.Proto) {
+	getMethodName := func(method pogo.Method, trimString bool) string {
 		if val, ok := pogo.Method_name[int32(method)]; ok {
 			if trimString && strings.HasPrefix(val, "METHOD_") {
 				return strings.TrimPrefix(val, "METHOD_")
@@ -335,83 +376,28 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		return fmt.Sprintf("#%d", method)
 	}
 
-	if method != int(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION) && protoData.Level < 30 {
-		statsCollector.IncDecodeMethods("error", "low_level", getMethodName(method, true))
-		log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, pogo.Method(method))
-		return
-	}
-
 	processed := false
 	ignore := false
 	start := time.Now()
 	result := ""
 
-	switch pogo.Method(method) {
-	case pogo.Method_METHOD_START_INCIDENT:
-		result = decodeStartIncident(ctx, protoData.Data)
-		processed = true
-	case pogo.Method_METHOD_INVASION_OPEN_COMBAT_SESSION:
-		if protoData.Request != nil {
-			result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
-			processed = true
+	method := pogo.Method(protoData.Method)
+	decodeMethod, ok := decodeMethods[method]
+	if ok {
+		if decodeMethod == nil {
+			// completely ignore
+			return
 		}
-		break
-	case pogo.Method_METHOD_FORT_DETAILS:
-		result = decodeFortDetails(ctx, protoData.Data)
-		processed = true
-	case pogo.Method_METHOD_GET_MAP_OBJECTS:
-		result = decodeGMO(ctx, protoData, getScanParameters(protoData))
-		processed = true
-	case pogo.Method_METHOD_GYM_GET_INFO:
-		result = decodeGetGymInfo(ctx, protoData.Data)
-		processed = true
-	case pogo.Method_METHOD_ENCOUNTER:
-		if getScanParameters(protoData).ProcessPokemon {
-			result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+		if protoData.Level < decodeMethod.MinLevel {
+			statsCollector.IncDecodeMethods("error", "low_level", getMethodName(method, true))
+			log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, method)
+			return
 		}
-		processed = true
-	case pogo.Method_METHOD_DISK_ENCOUNTER:
-		result = decodeDiskEncounter(ctx, protoData.Data, protoData.Account)
-		processed = true
-	case pogo.Method_METHOD_FORT_SEARCH:
-		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
-		processed = true
-	case pogo.Method_METHOD_GET_PLAYER:
-		ignore = true
-		break
-	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
-		ignore = true
-		break
-	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
-		ignore = true
-		break
-	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
-		if protoData.Request != nil {
-			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
-			processed = true
-		}
-		break
-	case pogo.Method_METHOD_GET_MAP_FORTS:
-		result = decodeGetMapForts(ctx, protoData.Data)
-		processed = true
-	case pogo.Method_METHOD_GET_ROUTES:
-		result = decodeGetRoutes(protoData.Data)
-		processed = true
-	case pogo.Method_METHOD_GET_CONTEST_DATA:
-		// Request helps, but can be decoded without it
-		result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
-		processed = true
-		break
-	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
-		// Request is essential to decode this
-		if protoData.Request != nil {
-			result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
-			processed = true
-		}
-		break
-	default:
-		log.Debugf("Did not know hook type %s", pogo.Method(method))
+		processed, result = decodeMethod.Decode(ctx, protoData)
+	} else {
+		log.Debugf("Did not know hook type %s", method)
 	}
+
 	if !ignore {
 		elapsed := time.Since(start)
 		if processed == true {
@@ -424,69 +410,77 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	}
 }
 
-func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
+func getScanParameters(protoData *raw_decoder.Proto) decoder.ScanParameters {
 	return decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 }
 
-func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
+func decodeFortSearch(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
+	haveAr := protoData.HaveAr
+
 	if haveAr == nil {
 		statsCollector.IncDecodeQuest("error", "missing_ar_info")
 		log.Infoln("Cannot determine AR quest - ignoring")
 		// We should either assume AR quest, or trace inventory like RDM probably
-		return "No AR quest info"
+		return true, "No AR quest info"
 	}
 	decodedQuest := &pogo.FortSearchOutProto{}
-	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
+	if err := proto.Unmarshal(response, decodedQuest); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeQuest("error", "parse")
-		return "Parse failure"
+		return true, "Parse failure"
 	}
 
 	if decodedQuest.Result != pogo.FortSearchOutProto_SUCCESS {
 		statsCollector.IncDecodeQuest("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.Result,
 			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.Result)])
-		return res
+		return true, res
 	}
 
-	return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
-
+	return true, decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
 }
 
-func decodeSocialActionWithRequest(request []byte, payload []byte) string {
+func decodeSocialAction(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	request := protoData.RequestProtoBytes()
+	if request == nil {
+		return false, "no request"
+	}
+	response := protoData.ResponseProtoBytes()
+
 	var proxyRequestProto pogo.ProxyRequestProto
 
 	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeSocialActionWithRequest("error", "request_parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	var proxyResponseProto pogo.ProxyResponseProto
 
-	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
+	if err := proto.Unmarshal(response, &proxyResponseProto); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeSocialActionWithRequest("error", "response_parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
 		statsCollector.IncDecodeSocialActionWithRequest("error", "non_success")
-		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
+		return true, fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
 	}
 
 	switch pogo.SocialAction(proxyRequestProto.GetAction()) {
 	case pogo.SocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
-		return decodeGetFriendDetails(proxyResponseProto.Payload)
+		return true, decodeGetFriendDetails(proxyResponseProto.Payload)
 	case pogo.SocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
-		return decodeSearchPlayer(proxyRequestProto, proxyResponseProto.Payload)
+		return true, decodeSearchPlayer(proxyRequestProto, proxyResponseProto.Payload)
 
 	}
 
 	statsCollector.IncDecodeSocialActionWithRequest("ok", "unknown")
-	return fmt.Sprintf("Did not process %s", pogo.SocialAction(proxyRequestProto.GetAction()).String())
+	return true, fmt.Sprintf("Did not process %s", pogo.SocialAction(proxyRequestProto.GetAction()).String())
 }
 
 func decodeGetFriendDetails(payload []byte) string {
@@ -553,40 +547,42 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
 }
 
-func decodeFortDetails(ctx context.Context, sDec []byte) string {
+func decodeFortDetails(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
 	decodedFort := &pogo.FortDetailsOutProto{}
-	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
+	if err := proto.Unmarshal(response, decodedFort); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeFortDetails("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	switch decodedFort.FortType {
 	case pogo.FortType_CHECKPOINT:
 		statsCollector.IncDecodeFortDetails("ok", "pokestop")
-		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
+		return true, decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	case pogo.FortType_GYM:
 		statsCollector.IncDecodeFortDetails("ok", "gym")
-		return decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
+		return true, decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
 	}
 
 	statsCollector.IncDecodeFortDetails("ok", "unknown")
-	return "Unknown fort type"
+	return true, "Unknown fort type"
 }
 
-func decodeGetMapForts(ctx context.Context, sDec []byte) string {
+func decodeGetMapForts(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
 	decodedMapForts := &pogo.GetMapFortsOutProto{}
-	if err := proto.Unmarshal(sDec, decodedMapForts); err != nil {
+	if err := proto.Unmarshal(response, decodedMapForts); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeGetMapForts("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedMapForts.Status != pogo.GetMapFortsOutProto_SUCCESS {
 		statsCollector.IncDecodeGetMapForts("error", "non_success")
 		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.Status,
 			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.Status)])
-		return res
+		return true, res
 	}
 
 	statsCollector.IncDecodeGetMapForts("ok", "")
@@ -602,19 +598,20 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	}
 
 	if processedForts > 0 {
-		return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
+		return true, fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
 	}
-	return "No forts updated"
+	return true, "No forts updated"
 }
 
-func decodeGetRoutes(payload []byte) string {
+func decodeGetRoutes(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
 	getRoutesOutProto := &pogo.GetRoutesOutProto{}
-	if err := proto.Unmarshal(payload, getRoutesOutProto); err != nil {
-		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
+	if err := proto.Unmarshal(response, getRoutesOutProto); err != nil {
+		return true, fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
 	}
 
 	if getRoutesOutProto.Status != pogo.GetRoutesOutProto_SUCCESS {
-		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
+		return true, fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
 	}
 
 	decodeSuccesses := map[string]bool{}
@@ -638,7 +635,7 @@ func decodeGetRoutes(payload []byte) string {
 		}
 	}
 
-	return fmt.Sprintf(
+	return true, fmt.Sprintf(
 		"Decoded %d routes, failed to decode %d routes, from %d cells",
 		len(decodeSuccesses),
 		len(decodeErrors),
@@ -646,125 +643,143 @@ func decodeGetRoutes(payload []byte) string {
 	)
 }
 
-func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
+func decodeGetGymInfo(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
-	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
+	if err := proto.Unmarshal(response, decodedGymInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeGetGymInfo("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedGymInfo.Result != pogo.GymGetInfoOutProto_SUCCESS {
 		statsCollector.IncDecodeGetGymInfo("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.Result,
 			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
-		return res
+		return true, res
 	}
 
 	statsCollector.IncDecodeGetGymInfo("ok", "")
-	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
+	return true, decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
-func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
+func decodeEncounter(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	if !getScanParameters(protoData).ProcessPokemon {
+		return true, ""
+	}
+	response := protoData.ResponseProtoBytes()
+	username := protoData.Account
+
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
-	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+	if err := proto.Unmarshal(response, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeEncounter("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
 		statsCollector.IncDecodeEncounter("error", "non_success")
 		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
-		return res
+		return true, res
 	}
 
 	statsCollector.IncDecodeEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return true, decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
-func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
-	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
-	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+func decodeDiskEncounter(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	response := protoData.ResponseProtoBytes()
+	encounterProto := &pogo.DiskEncounterOutProto{}
+	if err := proto.Unmarshal(response, encounterProto); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedEncounterInfo.Result != pogo.DiskEncounterOutProto_SUCCESS {
+	if encounterProto.Result != pogo.DiskEncounterOutProto_SUCCESS {
 		statsCollector.IncDecodeDiskEncounter("error", "non_success")
-		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Result,
-			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.Result)])
-		return res
+		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, encounterProto.Result,
+			pogo.DiskEncounterOutProto_Result_name[int32(encounterProto.Result)])
+		return true, res
 	}
 
 	statsCollector.IncDecodeDiskEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return true, decoder.UpdatePokemonRecordWithDiskEncounterProto(
+		ctx, dbDetails, encounterProto, protoData.Account,
+	)
 }
 
-func decodeStartIncident(ctx context.Context, sDec []byte) string {
+func decodeStartIncident(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	sDec := protoData.ResponseProtoBytes()
 	decodedIncident := &pogo.StartIncidentOutProto{}
 	if err := proto.Unmarshal(sDec, decodedIncident); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeStartIncident("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedIncident.Status != pogo.StartIncidentOutProto_SUCCESS {
 		statsCollector.IncDecodeStartIncident("error", "non_success")
 		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.Status,
 			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.Status)])
-		return res
+		return true, res
 	}
 
 	statsCollector.IncDecodeStartIncident("ok", "")
-	return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
+	return true, decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
 }
 
-func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) string {
+func decodeOpenInvasion(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	request := protoData.RequestProtoBytes()
+	if request == nil {
+		return false, ""
+	}
+	response := protoData.ResponseProtoBytes()
+
 	decodeOpenInvasionRequest := &pogo.OpenInvasionCombatSessionProto{}
 
 	if err := proto.Unmarshal(request, decodeOpenInvasionRequest); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeOpenInvasion("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 	if decodeOpenInvasionRequest.IncidentLookup == nil {
-		return "Invalid OpenInvasionCombatSessionProto received"
+		return true, "Invalid OpenInvasionCombatSessionProto received"
 	}
 
 	decodedOpenInvasionResponse := &pogo.OpenInvasionCombatSessionOutProto{}
-	if err := proto.Unmarshal(payload, decodedOpenInvasionResponse); err != nil {
+	if err := proto.Unmarshal(response, decodedOpenInvasionResponse); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeOpenInvasion("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedOpenInvasionResponse.Status != pogo.InvasionStatus_SUCCESS {
 		statsCollector.IncDecodeOpenInvasion("error", "non_success")
 		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.Status,
 			pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.Status)])
-		return res
+		return true, res
 	}
 
 	statsCollector.IncDecodeOpenInvasion("ok", "")
-	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
+	return true, decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
 }
 
-func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
+func decodeGMO(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	scanParameters := getScanParameters(protoData)
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
-
-	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
+	if err := proto.Unmarshal(protoData.ResponseProtoBytes(), decodedGmo); err != nil {
 		statsCollector.IncDecodeGMO("error", "parse")
 		log.Errorf("Failed to parse %s", err)
+		return true, fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
 		statsCollector.IncDecodeGMO("error", "non_success")
 		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.Status,
 			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.Status)])
-		return res
+		return true, res
 	}
 
 	var newForts []decoder.RawFortData
@@ -836,7 +851,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
 	statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
 
-	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", newMapCellsLen, newFortsLen, newWildPokemonLen, newNearbyPokemonLen)
+	return true, fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", newMapCellsLen, newFortsLen, newWildPokemonLen, newNearbyPokemonLen)
 }
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
@@ -847,41 +862,52 @@ func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
 	return len(mapCell.Fort) > 0
 }
 
-func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
+func decodeGetContestData(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	// Request helps, but can be decoded without it
+	request := protoData.RequestProtoBytes()
+	response := protoData.ResponseProtoBytes()
 	var decodedContestData pogo.GetContestDataOutProto
-	if err := proto.Unmarshal(data, &decodedContestData); err != nil {
+
+	if err := proto.Unmarshal(response, &decodedContestData); err != nil {
 		log.Errorf("Failed to parse GetContestDataOutProto %s", err)
-		return fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
+		return true, fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
 	}
 
 	var decodedContestDataRequest pogo.GetContestDataProto
 	if request != nil {
 		if err := proto.Unmarshal(request, &decodedContestDataRequest); err != nil {
 			log.Errorf("Failed to parse GetContestDataProto %s", err)
-			return fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
+			return true, fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
 		}
 	}
-	return decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
+	return true, decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
 }
 
-func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
+func decodeGetPokemonSizeContestEntry(ctx context.Context, protoData *raw_decoder.Proto) (bool, string) {
+	// Request is essential to decode this
+	request := protoData.RequestProtoBytes()
+	if request == nil {
+		return false, "no request"
+	}
+	response := protoData.ResponseProtoBytes()
+
 	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeContestEntryOutProto
-	if err := proto.Unmarshal(data, &decodedPokemonSizeContestEntry); err != nil {
+	if err := proto.Unmarshal(response, &decodedPokemonSizeContestEntry); err != nil {
 		log.Errorf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
-		return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+		return true, fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
 	}
 
 	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeContestEntryOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetPokemonSizeContestEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
+		return true, fmt.Sprintf("Ignored GetPokemonSizeContestEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
 	}
 
 	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeContestEntryProto
 	if request != nil {
 		if err := proto.Unmarshal(request, &decodedPokemonSizeContestEntryRequest); err != nil {
 			log.Errorf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
-			return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+			return true, fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
 		}
 	}
 
-	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
+	return true, decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
 }

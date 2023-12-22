@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	b64 "encoding/base64"
-	"encoding/json"
 	"io"
 	"net/http"
 	"strconv"
@@ -14,53 +12,13 @@ import (
 
 	"golbat/config"
 	"golbat/decoder"
+	"golbat/device_tracker"
 	"golbat/geo"
-	"golbat/pogo"
+	"golbat/raw_decoder"
 )
 
-type ProtoData struct {
-	Method      int
-	Data        []byte
-	Request     []byte
-	HaveAr      *bool
-	Account     string
-	Level       int
-	Uuid        string
-	ScanContext string
-	Lat         float64
-	Lon         float64
-}
-
-type InboundRawData struct {
-	Base64Data string
-	Request    string
-	Method     int
-	HaveAr     *bool
-}
-
-func questsHeldHasARTask(quests_held any) *bool {
-	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
-
-	quests_held_list, ok := quests_held.([]any)
-	if !ok {
-		log.Errorf("Raw: unexpected quests_held type in data: %T", quests_held)
-		return nil
-	}
-	for _, quest_id := range quests_held_list {
-		if quest_id_f, ok := quest_id.(float64); ok {
-			if int64(quest_id_f) == ar_quest_id {
-				res := true
-				return &res
-			}
-			continue
-		}
-		// quest_id is not float64? Treat the whole thing as unknown.
-		log.Errorf("Raw: unexpected quest_id type in quests_held: %T", quest_id)
-		return nil
-	}
-	res := false
-	return &res
-}
+var rawProtoDecoder raw_decoder.RawDecoder
+var deviceTracker device_tracker.DeviceTracker
 
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
@@ -87,212 +45,20 @@ func Raw(c *gin.Context) {
 		return
 	}
 
-	decodeError := false
-	uuid := ""
-	account := ""
-	level := 30
-	scanContext := ""
-	var latTarget, lonTarget float64
-	var globalHaveAr *bool
-	var protoData []InboundRawData
-
-	// Objective is to normalise incoming proto data. Unfortunately each provider seems
-	// to be just different enough that this ends up being a little bit more of a mess
-	// than I would like
-
-	pogodroidHeader := r.Header.Get("origin")
-	userAgent := r.Header.Get("User-Agent")
-
-	//log.Infof("Raw: Received data from %s", body)
-	//log.Infof("User agent is %s", userAgent)
-
-	if pogodroidHeader != "" {
-		var raw []map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
-			decodeError = true
-		} else {
-			for _, entry := range raw {
-				if latTarget == 0 && lonTarget == 0 {
-					lat := entry["lat"]
-					lng := entry["lng"]
-					if lat != nil && lng != nil {
-						lat_f, _ := lat.(float64)
-						lng_f, _ := lng.(float64)
-						if lat_f != 0 && lng_f != 0 {
-							latTarget = lat_f
-							lonTarget = lng_f
-						}
-					}
-				}
-				protoData = append(protoData, InboundRawData{
-					Base64Data: entry["payload"].(string),
-					Method:     int(entry["type"].(float64)),
-					HaveAr: func() *bool {
-						if v := entry["quests_held"]; v != nil {
-							return questsHeldHasARTask(v)
-						}
-						return nil
-					}(),
-				})
-			}
-		}
-		uuid = pogodroidHeader
-		account = "Pogodroid"
-	} else {
-		var raw map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
-			decodeError = true
-		} else {
-			if v := raw["have_ar"]; v != nil {
-				res, ok := v.(bool)
-				if ok {
-					globalHaveAr = &res
-				}
-			}
-			if v := raw["uuid"]; v != nil {
-				uuid, _ = v.(string)
-			}
-			if v := raw["username"]; v != nil {
-				account, _ = v.(string)
-			}
-			if v := raw["trainerlvl"]; v != nil {
-				lvl, ok := v.(float64)
-				if ok {
-					level = int(lvl)
-				}
-			}
-			if v := raw["scan_context"]; v != nil {
-				scanContext, _ = v.(string)
-			}
-
-			if v := raw["lat_target"]; v != nil {
-				latTarget, _ = v.(float64)
-			}
-
-			if v := raw["lon_target"]; v != nil {
-				lonTarget, _ = v.(float64)
-			}
-
-			contents, ok := raw["contents"].([]interface{})
-			if !ok {
-				decodeError = true
-
-			} else {
-
-				decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
-					if v := data[key1]; v != nil {
-						return v
-					}
-					if v := data[key2]; v != nil {
-						return v
-					}
-					return nil
-				}
-
-				for _, v := range contents {
-					entry := v.(map[string]interface{})
-					// Try to decode the payload automatically without requiring any knowledge of the
-					// provider type
-
-					b64data := decodeAlternate(entry, "data", "payload")
-					method := decodeAlternate(entry, "method", "type")
-					request := entry["request"]
-					haveAr := entry["have_ar"]
-
-					if method == nil || b64data == nil {
-						log.Errorf("Error decoding raw")
-						continue
-					}
-					inboundRawData := InboundRawData{
-						Base64Data: func() string {
-							if res, ok := b64data.(string); ok {
-								return res
-							}
-							return ""
-						}(),
-						Method: func() int {
-							if res, ok := method.(float64); ok {
-								return int(res)
-							}
-
-							return 0
-						}(),
-						Request: func() string {
-							if request != nil {
-								res, ok := request.(string)
-								if ok {
-									return res
-								}
-							}
-							return ""
-						}(),
-						HaveAr: func() *bool {
-							if haveAr != nil {
-								res, ok := haveAr.(bool)
-								if ok {
-									return &res
-								}
-							}
-							return nil
-						}(),
-					}
-
-					protoData = append(protoData, inboundRawData)
-				}
-			}
-		}
-	}
-
-	if decodeError == true {
+	protoData, err := rawProtoDecoder.GetProtoDataFromHTTP(r.Header, body)
+	if err != nil {
 		statsCollector.IncRawRequests("error", "decode")
-		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
-
+		userAgent := r.Header.Get("User-Agent")
+		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s, err: %s", userAgent, body, err)
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		return
 	}
 
 	// Process each proto in a packet in sequence, but in a go-routine
-	go func() {
-		timeout := 5 * time.Second
-		if config.Config.Tuning.ExtendedTimeout {
-			timeout = 30 * time.Second
-		}
+	go rawProtoDecoder.Decode(context.Background(), protoData, decode)
 
-		for _, entry := range protoData {
-			method := entry.Method
-			payload := entry.Base64Data
-			request := entry.Request
-
-			haveAr := globalHaveAr
-			if entry.HaveAr != nil {
-				haveAr = entry.HaveAr
-			}
-
-			protoData := ProtoData{
-				Account:     account,
-				Level:       level,
-				HaveAr:      haveAr,
-				Uuid:        uuid,
-				Lat:         latTarget,
-				Lon:         lonTarget,
-				ScanContext: scanContext,
-			}
-			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
-			if request != "" {
-				protoData.Request, _ = b64.StdEncoding.DecodeString(request)
-			}
-
-			// provide independent cancellation contexts for each proto decode
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			decode(ctx, method, &protoData)
-			cancel()
-		}
-	}()
-
-	if latTarget != 0 && lonTarget != 0 && uuid != "" {
-		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
-	}
+	deviceTracker.UpdateDeviceLocation(protoData.Uuid, protoData.Lat(), protoData.Lon(), protoData.ScanContext)
 
 	statsCollector.IncRawRequests("ok", "")
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -530,5 +296,5 @@ func GetPokestop(c *gin.Context) {
 }
 
 func GetDevices(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
+	c.JSON(http.StatusOK, gin.H{"devices": deviceTracker.GetAllDevices()})
 }

@@ -4,9 +4,9 @@ import (
 	"context"
 	"golbat/config"
 	pb "golbat/grpc"
+
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/metadata"
-	"time"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -24,59 +24,11 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		}
 	}
 
-	uuid := in.DeviceId
-	account := in.Username
-	level := int(in.TrainerLevel)
-	scanContext := ""
-	if in.ScanContext != nil {
-		scanContext = *in.ScanContext
-	}
-
-	latTarget, lonTarget := float64(in.LatTarget), float64(in.LonTarget)
-	globalHaveAr := in.HaveAr
-	var protoData []ProtoData
-
-	for _, v := range in.Contents {
-
-		inboundRawData := ProtoData{
-			Method:      int(v.Method),
-			Account:     account,
-			Level:       level,
-			ScanContext: scanContext,
-			Lat:         latTarget,
-			Lon:         lonTarget,
-			Data:        v.ResponsePayload,
-			Request:     v.RequestPayload,
-			Uuid:        uuid,
-			HaveAr: func() *bool {
-				if v.HaveAr != nil {
-					return v.HaveAr
-				}
-				return globalHaveAr
-			}(),
-		}
-
-		protoData = append(protoData, inboundRawData)
-	}
-
+	protoData := rawProtoDecoder.GetProtoDataFromGRPC(in)
 	// Process each proto in a packet in sequence, but in a go-routine
-	go func() {
-		timeout := 5 * time.Second
-		if config.Config.Tuning.ExtendedTimeout {
-			timeout = 30 * time.Second
-		}
+	go rawProtoDecoder.Decode(context.Background(), protoData, decode)
 
-		for _, entry := range protoData {
-			// provide independent cancellation contexts for each proto decode
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			decode(ctx, entry.Method, &entry)
-			cancel()
-		}
-	}()
-
-	if latTarget != 0 && lonTarget != 0 && uuid != "" {
-		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
-	}
+	deviceTracker.UpdateDeviceLocation(protoData.Uuid, protoData.Lat(), protoData.Lon(), protoData.ScanContext)
 
 	return &pb.RawProtoResponse{Message: "Processed"}, nil
 }
