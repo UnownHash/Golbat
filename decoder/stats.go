@@ -30,6 +30,7 @@ type areaStatsCount struct {
 }
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
+var raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail)
 
 // max dex id
 const maxPokemonNo = 1050
@@ -42,11 +43,17 @@ type areaPokemonCountDetail struct {
 	ivCount [maxPokemonNo + 1]int
 }
 
+type areaRaidCountDetail struct {
+	count [maxPokemonNo + 1]int
+}
+
 // a cache indexed by encounterId (Pokemon.Id)
 var encounterCache *encounter_cache.EncounterCache
 
 var pokemonStats = make(map[geo.AreaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
+
+var raidStatsLock sync.Mutex
 
 func initLiveStats() {
 	encounterCache = encounter_cache.NewEncounterCache(60 * time.Minute)
@@ -86,6 +93,14 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		for {
 			<-t3.C
 			logNestCount()
+		}
+	}()
+
+	t4 := time.NewTicker(10 * time.Minute)
+	go func() {
+		for {
+			<-t4.C
+			logRaidStats(statsDb)
 		}
 	}()
 }
@@ -365,6 +380,50 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	}
 }
 
+func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
+	if len(areas) == 0 {
+		areas = []geo.AreaName{
+			{
+				Parent: "world",
+				Name:   "world",
+			},
+		}
+	}
+
+	locked := false
+
+	// Loop though all areas
+	for i := 0; i < len(areas); i++ {
+		area := areas[i]
+
+		// Check if RaidSpawnTimestamp has changed, then we can assume raid has disappeared or new raid started.
+		if old == nil || old.RaidSpawnTimestamp != new.RaidSpawnTimestamp {
+
+			if !locked {
+				raidStatsLock.Lock()
+				locked = true
+			}
+
+			countStats := raidCount[area]
+			if countStats == nil {
+				countStats = make(map[int64]areaRaidCountDetail)
+				raidCount[area] = countStats
+			}
+
+			// Raid has started or is active.
+			if new.RaidPokemonId.Int64 != 0 {
+				var countRaids = raidCount[area][new.RaidLevel.Int64]
+				countRaids.count[new.RaidPokemonId.Int64]++
+				raidCount[area][new.RaidLevel.Int64] = countRaids
+			}
+		}
+	}
+
+	if locked {
+		raidStatsLock.Unlock()
+	}
+}
+
 type pokemonStatsDbRow struct {
 	DateTime              int64  `db:"datetime"`
 	Area                  string `db:"area"`
@@ -548,4 +607,62 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		updateStatsCount("pokemon_nundo_stats", nundoRows)
 		updateStatsCount("pokemon_shiny_stats", shinyRows)
 	}()
+}
+
+type raidStatsDbRow struct {
+	Date      string `db:"date"`
+	Area      string `db:"area"`
+	Fence     string `db:"fence"`
+	Level     int64  `db:"level"`
+	PokemonId int    `db:"pokemon_id"`
+	Count     int    `db:"count"`
+}
+
+func logRaidStats(statsDb *sqlx.DB) {
+	raidStatsLock.Lock()
+	log.Infof("STATS: Write raid stats")
+
+	currentStats := raidCount
+	raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail) // clear stats
+	raidStatsLock.Unlock()
+
+	go func() {
+		var rows []raidStatsDbRow
+
+		t := time.Now().In(time.Local)
+		midnightString := t.Format("2006-01-02")
+
+		for area, stats := range currentStats {
+			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, count int) {
+				*rows = append(*rows, raidStatsDbRow{
+					Date:      midnightString,
+					Area:      area.Parent,
+					Fence:     area.Name,
+					Level:     level,
+					PokemonId: pokemonId,
+					Count:     count,
+				})
+			}
+
+			for level := range stats {
+				for pokemonId, count := range stats[level].count {
+					if count > 0 {
+						addRows(&rows, level, pokemonId, count)
+					}
+				}
+			}
+		}
+
+		if len(rows) > 0 {
+			_, err := statsDb.NamedExec(
+				"INSERT INTO raid_stats "+
+					"(date, area, fence, level, pokemon_id, `count`)"+
+					" VALUES (:date, :area, :fence, :level, :pokemon_id, :count)"+
+					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", rows)
+			if err != nil {
+				log.Errorf("Error inserting raid_stats: %v", err)
+			}
+		}
+	}()
+
 }
