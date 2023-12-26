@@ -2,18 +2,20 @@ package config
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+
 	"github.com/knadh/koanf/parsers/toml"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
+
 	"golbat/geo"
-	"strconv"
-	"strings"
 )
 
 var k = koanf.New(".")
 
-func ReadConfig() {
+func ReadConfig() (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
 		Sentry: sentry{
@@ -25,8 +27,17 @@ func ReadConfig() {
 			MutexProfileFraction: 5,
 			BlockProfileRate:     5,
 		},
+		Prometheus: Prometheus{
+			BucketSize:     []float64{.00005, .000075, .0001, .00025, .0005, .00075, .001, .0025, .005, .01, .05, .1, .25, .5, 1, 2.5, 5, 10},
+			LiveStatsSleep: 120,
+		},
 		Logging: logging{
-			SaveLogs: false,
+			Debug:      false,
+			SaveLogs:   false,
+			MaxSize:    50,
+			MaxBackups: 10,
+			MaxAge:     30,
+			Compress:   true,
 		},
 		Cleanup: cleanup{
 			StatsDays:   7,
@@ -73,14 +84,14 @@ func ReadConfig() {
 
 	unmarshalError := k.Unmarshal("", &Config)
 	if unmarshalError != nil {
-		panic(fmt.Errorf("failed to Unmarshal config: %w", unmarshalError))
-		return
+		return Config, fmt.Errorf("failed to Unmarshal config: %w", unmarshalError)
 	}
 
 	// translate webhook areas to array of geo.AreaName struct
 	for i := 0; i < len(Config.Webhooks); i++ {
 		hook := &Config.Webhooks[i]
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
+		hook.HeaderMap = splitIntoHeaderMap(hook.Headers)
 	}
 
 	// translate scan areas to array of geo.AreaName struct
@@ -88,6 +99,8 @@ func ReadConfig() {
 		rule := &Config.ScanRules[i]
 		rule.AreaNames = splitIntoAreaAndFenceName(rule.Areas)
 	}
+
+	return Config, nil
 }
 
 func parseEnvVarToSlice(sliceName string, key string, value string, currentMap map[string]interface{}) {
@@ -118,4 +131,17 @@ func splitIntoAreaAndFenceName(areaNames []string) (areas []geo.AreaName) {
 		}
 	}
 	return
+}
+
+func splitIntoHeaderMap(rawHeader []string) map[string]string {
+	headerMap := make(map[string]string)
+	for _, header := range rawHeader {
+		split := strings.Split(header, ":")
+		if len(split) == 2 {
+			headerMap[split[0]] = split[1]
+		} else {
+			fmt.Println(fmt.Errorf("invalid header: %s", header))
+		}
+	}
+	return headerMap
 }

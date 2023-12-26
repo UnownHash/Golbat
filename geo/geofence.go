@@ -14,6 +14,27 @@ type AreaName struct {
 	Name   string
 }
 
+func (an *AreaName) String() string {
+	parent := an.Parent != ""
+	name := an.Name != ""
+
+	if name && !parent {
+		return an.Name
+	}
+	if parent && !name {
+		return an.Parent
+	}
+	if parent && name {
+		if an.Parent == an.Name {
+			return an.Name
+		}
+		if an.Parent != an.Name {
+			return an.Parent + "/" + an.Name
+		}
+	}
+	return "unown"
+}
+
 type Geofence struct {
 	Fence []Location
 }

@@ -2,12 +2,13 @@ package decoder
 
 import (
 	"context"
+	"golbat/db"
+	"time"
+
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"golbat/db"
 	"gopkg.in/guregu/null.v4"
-	"time"
 )
 
 type S2Cell struct {
@@ -64,6 +65,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 		ON DUPLICATE KEY UPDATE updated=VALUES(updated)
 	`, outputCellIds)
 
+	statsCollector.IncDbQuery("insert s2cell", err)
 	if err != nil {
 		log.Errorf("saveS2CellRecords: %s", err)
 		return

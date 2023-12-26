@@ -4,18 +4,18 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/json"
-	"golbat/config"
-	"golbat/decoder"
-	"golbat/geo"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/gin-gonic/gin/render"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/config"
+	"golbat/decoder"
+	"golbat/geo"
+	"golbat/pogo"
 )
 
 type ProtoData struct {
@@ -38,6 +38,30 @@ type InboundRawData struct {
 	HaveAr     *bool
 }
 
+func questsHeldHasARTask(quests_held any) *bool {
+	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
+
+	quests_held_list, ok := quests_held.([]any)
+	if !ok {
+		log.Errorf("Raw: unexpected quests_held type in data: %T", quests_held)
+		return nil
+	}
+	for _, quest_id := range quests_held_list {
+		if quest_id_f, ok := quest_id.(float64); ok {
+			if int64(quest_id_f) == ar_quest_id {
+				res := true
+				return &res
+			}
+			continue
+		}
+		// quest_id is not float64? Treat the whole thing as unknown.
+		log.Errorf("Raw: unexpected quest_id type in quests_held: %T", quest_id)
+		return nil
+	}
+	res := false
+	return &res
+}
+
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	var r *http.Request = c.Request
@@ -45,17 +69,20 @@ func Raw(c *gin.Context) {
 	authHeader := r.Header.Get("Authorization")
 	if config.Config.RawBearer != "" {
 		if authHeader != "Bearer "+config.Config.RawBearer {
+			statsCollector.IncRawRequests("error", "auth")
 			log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
 			return
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
 	if err != nil {
+		statsCollector.IncRawRequests("error", "io_error")
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
 	}
 	if err := r.Body.Close(); err != nil {
+		statsCollector.IncRawRequests("error", "io_close_error")
 		log.Errorf("Raw: Error (2) during HTTP receive %s", err)
 		return
 	}
@@ -85,13 +112,24 @@ func Raw(c *gin.Context) {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
+				if latTarget == 0 && lonTarget == 0 {
+					lat := entry["lat"]
+					lng := entry["lng"]
+					if lat != nil && lng != nil {
+						lat_f, _ := lat.(float64)
+						lng_f, _ := lng.(float64)
+						if lat_f != 0 && lng_f != 0 {
+							latTarget = lat_f
+							lonTarget = lng_f
+						}
+					}
+				}
 				protoData = append(protoData, InboundRawData{
 					Base64Data: entry["payload"].(string),
 					Method:     int(entry["type"].(float64)),
 					HaveAr: func() *bool {
-						if v := entry["have_ar"]; v != nil {
-							res := v.(bool)
-							return &res
+						if v := entry["quests_held"]; v != nil {
+							return questsHeldHasARTask(v)
 						}
 						return nil
 					}(),
@@ -206,6 +244,7 @@ func Raw(c *gin.Context) {
 	}
 
 	if decodeError == true {
+		statsCollector.IncRawRequests("error", "decode")
 		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
 
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -255,6 +294,7 @@ func Raw(c *gin.Context) {
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
+	statsCollector.IncRawRequests("ok", "")
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	//if err := json.NewEncoder(w).Encode(t); err != nil {
@@ -358,6 +398,23 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
+func PokemonScan2(c *gin.Context) {
+	var requestBody decoder.ApiPokemonScan2
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /api/pokemon/scan/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.GetPokemonInArea2(requestBody)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusAccepted, res)
+}
+
 func PokemonOne(c *gin.Context) {
 	pokemonId, err := strconv.ParseUint(c.Param("pokemon_id"), 10, 64)
 	if err != nil {
@@ -393,19 +450,6 @@ func PokemonSearch(c *gin.Context) {
 
 	res := decoder.SearchPokemon(requestBody)
 	c.JSON(http.StatusAccepted, res)
-}
-
-func PokemonScanMsgPack(c *gin.Context) {
-	var requestBody decoder.ApiPokemonScan
-
-	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
-		log.Warnf("POST /api/pokemon/scan-msgpack/ Error during post retrieve %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	res := decoder.GetPokemonInArea(requestBody)
-	c.Render(http.StatusAccepted, render.MsgPack{Data: res})
 }
 
 func GetQuestStatus(c *gin.Context) {
