@@ -866,14 +866,14 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 }
 
 func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
-	if quest.ChallengeQuest == nil {
-		statsCollector.IncDecodeQuest("error", "no_quest")
-		return "No quest"
-	}
-
 	haveArStr := "NoAR"
 	if haveAr {
 		haveArStr = "AR"
+	}
+
+	if quest.ChallengeQuest == nil {
+		statsCollector.IncDecodeQuest("error", "no_quest")
+		return fmt.Sprintf("%s %s Blank quest", quest.FortId, haveArStr)
 	}
 
 	statsCollector.IncDecodeQuest("ok", haveArStr)
