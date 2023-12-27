@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 
 	"golbat/config"
 	"golbat/db"
-	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
 	"golbat/util"
@@ -895,7 +895,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	return fmt.Sprintf("%s", quest.FortId)
 }
 
-func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence geo.Geofence) {
+func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
 	res, err := db.RemoveQuests(ctx, dbDetails, geofence)
 	if err != nil {
 		log.Errorf("ClearQuest: Error removing quests: %s", err)
@@ -906,7 +906,7 @@ func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geof
 	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
 }
 
-func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence geo.Geofence) db.QuestStatus {
+func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Feature) db.QuestStatus {
 	res, err := db.GetQuestStatus(dbDetails, geofence)
 	if err != nil {
 		log.Errorf("QuestStatus: Error retrieving quests: %s", err)
@@ -935,7 +935,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
 
-func GetPokestopPositions(details db.DbDetails, geofence geo.Geofence) ([]db.QuestLocation, error) {
+func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
 	return db.GetPokestopPositions(details, geofence)
 }
 

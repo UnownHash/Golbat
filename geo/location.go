@@ -7,6 +7,11 @@ type Location struct {
 	Longitude float64
 }
 
+type ApiLocation struct {
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lon"`
+}
+
 func (l Location) Tuple() (float64, float64) {
 	return l.Latitude, l.Longitude
 }
@@ -30,4 +35,8 @@ func SplitRoute(route []Location, parts int) [][]Location {
 	routes = append(routes, route[startSplit:])
 
 	return routes
+}
+
+func (l ApiLocation) ToLocation() Location {
+	return Location{l.Latitude, l.Longitude}
 }
