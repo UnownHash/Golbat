@@ -53,12 +53,6 @@ func main() {
 
 	logLevel := log.InfoLevel
 
-	// Both Sentry & Pyroscope are optional and off by default. Read more:
-	// https://docs.sentry.io/platforms/go
-	// https://pyroscope.io/docs/golang
-	external.InitSentry()
-	external.InitPyroscope()
-
 	if cfg.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
@@ -71,13 +65,19 @@ func main() {
 		cfg.Logging.Compress,
 	)
 
+	log.Infof("Golbat starting")
+
+	// Both Sentry & Pyroscope are optional and off by default. Read more:
+	// https://docs.sentry.io/platforms/go
+	// https://pyroscope.io/docs/golang
+	external.InitSentry()
+	external.InitPyroscope()
+
 	webhooksSender, err := webhooks.NewWebhooksSender(cfg)
 	if err != nil {
 		log.Fatalf("failed to setup webhooks sender: %s", err)
 	}
 	decoder.SetWebhooksSender(webhooksSender)
-
-	log.Infof("Golbat starting")
 
 	// Capture connection properties.
 	mysqlConfig := mysql.Config{
