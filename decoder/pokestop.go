@@ -239,7 +239,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 
 	if questProto.ChallengeQuest == nil {
 		log.Debugf("Received blank quest")
-		return "Black quest"
+		return "Blank quest"
 	}
 	questData := questProto.ChallengeQuest.Quest
 	questTitle := questProto.ChallengeQuest.QuestDisplay.Title
