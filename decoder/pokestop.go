@@ -235,11 +235,11 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	return stop
 }
 
-func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) {
+func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) string {
 
 	if questProto.ChallengeQuest == nil {
 		log.Debugf("Received blank quest")
-		return
+		return "Black quest"
 	}
 	questData := questProto.ChallengeQuest.Quest
 	questTitle := questProto.ChallengeQuest.QuestDisplay.Title
@@ -505,6 +505,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.QuestTimestamp = null.IntFrom(questTimestamp)
 		stop.QuestExpiry = questExpiry
 	}
+
+	return questTitle
 }
 
 func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDetailsOutProto) *Pokestop {
@@ -888,11 +890,11 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	if pokestop == nil {
 		pokestop = &Pokestop{}
 	}
-	pokestop.updatePokestopFromQuestProto(quest, haveAr)
+	questTitle := pokestop.updatePokestopFromQuestProto(quest, haveAr)
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
-	return fmt.Sprintf("%s", quest.FortId)
+	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
 }
 
 func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence geo.Geofence) {
