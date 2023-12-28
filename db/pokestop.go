@@ -4,9 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	log "github.com/sirupsen/logrus"
-	"time"
-
 	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/orb/geojson"
 )
@@ -52,7 +49,6 @@ func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation
 }
 
 func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (int64, error) {
-	started := time.Now()
 	const updateChunkSize = 500
 
 	//goland:noinspection GoPreferNilSlice
@@ -133,10 +129,6 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (in
 		removedQuestsCount += rowsAffected
 	}
 
-	log.Infof(
-		"RemoveQuests for fence inside %f,%f,%f,%f bbox took %s",
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon(), time.Since(started),
-	)
 	statsCollector.IncDbQuery("remove quests", err)
 	return removedQuestsCount, err
 }
