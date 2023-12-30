@@ -109,6 +109,7 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
+		log.Debugf("GetPokestopRecord %s (from cache)", fortId)
 		return &pokestop, nil
 	}
 	pokestop := Pokestop{}
@@ -122,6 +123,8 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
+	log.Debugf("GetPokestopRecord %s (from db)", fortId)
+
 	statsCollector.IncDbQuery("select pokestop", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
