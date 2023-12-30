@@ -772,8 +772,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop)
 
 		statsCollector.IncDbQuery("insert pokestop", err)
+		log.Debugf("Insert pokestop %s", pokestop.Id)
 		if err != nil {
-			log.Errorf("insert pokestop: %s", err)
+			log.Errorf("insert pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res
@@ -823,8 +824,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop,
 		)
 		statsCollector.IncDbQuery("update pokestop", err)
+		log.Debugf("Update pokestop %s", pokestop.Id)
 		if err != nil {
-			log.Errorf("update pokestop: %s", err)
+			log.Errorf("update pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res
