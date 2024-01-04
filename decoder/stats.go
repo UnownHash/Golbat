@@ -31,9 +31,12 @@ type areaStatsCount struct {
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
 var raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail)
+var invasionCount = make(map[geo.AreaName]*areaInvasionCountDetail)
 
 // max dex id
 const maxPokemonNo = 1050
+
+const maxInvasionCharacter = 523
 
 type areaPokemonCountDetail struct {
 	hundos  [maxPokemonNo + 1]int
@@ -47,13 +50,17 @@ type areaRaidCountDetail struct {
 	count [maxPokemonNo + 1]int
 }
 
+type areaInvasionCountDetail struct {
+	count [maxInvasionCharacter + 1]int
+}
+
 // a cache indexed by encounterId (Pokemon.Id)
 var encounterCache *encounter_cache.EncounterCache
 
 var pokemonStats = make(map[geo.AreaName]areaStatsCount)
 var pokemonStatsLock sync.Mutex
-
 var raidStatsLock sync.Mutex
+var incidentStatsLock sync.Mutex
 
 func initLiveStats() {
 	encounterCache = encounter_cache.NewEncounterCache(60 * time.Minute)
@@ -101,6 +108,14 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		for {
 			<-t4.C
 			logRaidStats(statsDb)
+		}
+	}()
+
+	t5 := time.NewTicker(15 * time.Minute)
+	go func() {
+		for {
+			<-t5.C
+			logInvasionStats(statsDb)
 		}
 	}()
 }
@@ -424,6 +439,48 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 	}
 }
 
+func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
+	if len(areas) == 0 {
+		areas = []geo.AreaName{
+			{
+				Parent: "world",
+				Name:   "world",
+			},
+		}
+	}
+
+	locked := false
+
+	// Loop though all areas
+	for i := 0; i < len(areas); i++ {
+		area := areas[i]
+
+		// Check if StartTime has changed, then we can assume a new Incident has appeared.
+		if old == nil || old.StartTime != new.StartTime {
+
+			if !locked {
+				incidentStatsLock.Lock()
+				locked = true
+			}
+
+			invasionStats := invasionCount[area]
+			if invasionStats == nil {
+				invasionStats = &areaInvasionCountDetail{}
+				invasionCount[area] = invasionStats
+			}
+
+			// Exclude Kecleon, Showcases and other UNSET characters for invasionStats.
+			if new.Character != 0 {
+				invasionStats.count[new.Character]++
+			}
+		}
+	}
+
+	if locked {
+		incidentStatsLock.Unlock()
+	}
+}
+
 type pokemonStatsDbRow struct {
 	DateTime              int64  `db:"datetime"`
 	Area                  string `db:"area"`
@@ -664,5 +721,57 @@ func logRaidStats(statsDb *sqlx.DB) {
 			}
 		}
 	}()
+}
 
+type invasionStatsDbRow struct {
+	Date      string `db:"date"`
+	Area      string `db:"area"`
+	Fence     string `db:"fence"`
+	Character int    `db:"character"`
+	Count     int    `db:"count"`
+}
+
+func logInvasionStats(statsDb *sqlx.DB) {
+	incidentStatsLock.Lock()
+	log.Infof("STATS: Write invasion stats")
+
+	currentStats := invasionCount
+	invasionCount = make(map[geo.AreaName]*areaInvasionCountDetail) // clear stats
+	incidentStatsLock.Unlock()
+
+	go func() {
+		var rows []invasionStatsDbRow
+
+		t := time.Now().In(time.Local)
+		midnightString := t.Format("2006-01-02")
+
+		for area, stats := range currentStats {
+			addRows := func(rows *[]invasionStatsDbRow, character int, count int) {
+				*rows = append(*rows, invasionStatsDbRow{
+					Date:      midnightString,
+					Area:      area.Parent,
+					Fence:     area.Name,
+					Character: character,
+					Count:     count,
+				})
+			}
+
+			for character, count := range stats.count {
+				if count > 0 {
+					addRows(&rows, character, count)
+				}
+			}
+		}
+
+		if len(rows) > 0 {
+			_, err := statsDb.NamedExec(
+				"INSERT INTO invasion_stats "+
+					"(date, area, fence, `character`, `count`)"+
+					" VALUES (:date, :area, :fence, :character, :count)"+
+					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", rows)
+			if err != nil {
+				log.Errorf("Error inserting invasion_stats: %v", err)
+			}
+		}
+	}()
 }
