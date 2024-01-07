@@ -942,7 +942,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, 0)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
