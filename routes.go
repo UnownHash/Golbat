@@ -326,12 +326,13 @@ func ClearQuests(c *gin.Context) {
 		return
 	}
 
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-		decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
-	}()
+	log.Debugf("Clear quests %+v", fence)
+	startTime := time.Now()
+	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
+	log.Infof("Clear quest took %s", time.Since(startTime))
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",

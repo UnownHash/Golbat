@@ -109,6 +109,7 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
+		//log.Debugf("GetPokestopRecord %s (from cache)", fortId)
 		return &pokestop, nil
 	}
 	pokestop := Pokestop{}
@@ -122,6 +123,8 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
 			"FROM pokestop "+
 			"WHERE pokestop.id = ? ", fortId)
+	//log.Debugf("GetPokestopRecord %s (from db)", fortId)
+
 	statsCollector.IncDbQuery("select pokestop", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -772,8 +775,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop)
 
 		statsCollector.IncDbQuery("insert pokestop", err)
+		//log.Debugf("Insert pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
-			log.Errorf("insert pokestop: %s", err)
+			log.Errorf("insert pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res
@@ -823,8 +827,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop,
 		)
 		statsCollector.IncDbQuery("update pokestop", err)
+		//log.Debugf("Update pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
-			log.Errorf("update pokestop: %s", err)
+			log.Errorf("update pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
 	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/orb/geojson"
 )
@@ -62,11 +63,14 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (in
 		return removedQuestsCount, err
 	}
 
+	idQueryString := "SELECT `id` FROM `pokestop` " +
+		"WHERE lat >= ? and lon >= ? and lat <= ? and lon <= ? and enabled = 1 " +
+		"AND ST_CONTAINS(ST_GeomFromGeoJSON('" + string(bytes) + "', 2, 0), POINT(lon, lat))"
+
+	//log.Debugf("Clear quests query: %s", idQueryString)
+
 	// collect allIdsToUpdate
-	err = db.GeneralDb.Select(&allIdsToUpdate,
-		"SELECT `id` FROM `pokestop` "+
-			"WHERE lat >= ? and lon >= ? and lat <= ? and lon <= ? and enabled = 1 "+
-			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
+	err = db.GeneralDb.Select(&allIdsToUpdate, idQueryString,
 		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon(),
 	)
 
