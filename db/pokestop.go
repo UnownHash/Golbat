@@ -7,7 +7,6 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/orb/geojson"
-	log "github.com/sirupsen/logrus"
 )
 
 type QuestLocation struct {
@@ -68,7 +67,7 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (in
 		"WHERE lat >= ? and lon >= ? and lat <= ? and lon <= ? and enabled = 1 " +
 		"AND ST_CONTAINS(ST_GeomFromGeoJSON('" + string(bytes) + "', 2, 0), POINT(lon, lat))"
 
-	log.Debugf("Clear quests query: %s", idQueryString)
+	//log.Debugf("Clear quests query: %s", idQueryString)
 
 	// collect allIdsToUpdate
 	err = db.GeneralDb.Select(&allIdsToUpdate, idQueryString,

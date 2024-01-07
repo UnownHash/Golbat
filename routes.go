@@ -332,7 +332,7 @@ func ClearQuests(c *gin.Context) {
 	log.Debugf("Clear quests %+v", fence)
 	startTime := time.Now()
 	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
-	log.Debugf("Clear quest took %s", time.Since(startTime))
+	log.Infof("Clear quest took %s", time.Since(startTime))
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
