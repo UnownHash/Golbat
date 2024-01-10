@@ -11,3 +11,9 @@ ALTER TABLE `invasion_stats`
     CHANGE `grunt_type` `character` SMALLINT UNSIGNED NOT NULL,
     DROP PRIMARY KEY,
     ADD PRIMARY KEY (`date`, area, fence, `character`);
+
+ALTER TABLE `quest_stats`
+    ADD COLUMN fence varchar(40) NOT NULL DEFAULT '' AFTER `date`,
+    ADD COLUMN area varchar(40) NOT NULL DEFAULT '' AFTER `date`,
+    DROP PRIMARY KEY,
+    ADD PRIMARY KEY (`date`, area, fence, reward_type, pokemon_id, item_id);
