@@ -34,12 +34,17 @@ var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
 // max dex id
 const maxPokemonNo = 1050
 
+type shinyChecks struct {
+	shiny int
+	total int
+}
+
 type areaPokemonCountDetail struct {
-	hundos  [maxPokemonNo + 1]int
-	nundos  [maxPokemonNo + 1]int
-	shiny   [maxPokemonNo + 1]int
-	count   [maxPokemonNo + 1]int
-	ivCount [maxPokemonNo + 1]int
+	hundos      [maxPokemonNo + 1]int
+	nundos      [maxPokemonNo + 1]int
+	shinyChecks [maxPokemonNo + 1]shinyChecks
+	count       [maxPokemonNo + 1]int
+	ivCount     [maxPokemonNo + 1]int
 }
 
 // a cache indexed by encounterId (Pokemon.Id)
@@ -145,21 +150,26 @@ func updateEncounterStats(pokemon *Pokemon) {
 		formIdStr = strconv.Itoa(int(pokemon.Form.ValueOrZero()))
 	}
 
+	// For the DB
+	func() {
+		areaName := geo.AreaName{Parent: "world", Name: "world"}
+
+		pokemonStatsLock.Lock()
+		defer pokemonStatsLock.Unlock()
+
+		countStats := pokemonCount[areaName]
+		if countStats == nil {
+			countStats = &areaPokemonCountDetail{}
+			pokemonCount[areaName] = countStats
+		}
+		countStats.shinyChecks[pokemon.PokemonId].total++
+		if pokemon.Shiny.ValueOrZero() {
+			countStats.shinyChecks[pokemon.PokemonId].shiny++
+		}
+	}()
+
+	// Prometheus
 	if pokemon.Shiny.ValueOrZero() {
-		func() {
-			areaName := geo.AreaName{Parent: "world", Name: "world"}
-
-			pokemonStatsLock.Lock()
-			defer pokemonStatsLock.Unlock()
-
-			countStats := pokemonCount[areaName]
-			if countStats == nil {
-				countStats = &areaPokemonCountDetail{}
-				pokemonCount[areaName] = countStats
-			}
-			countStats.shiny[pokemon.PokemonId]++
-		}()
-
 		statsCollector.IncPokemonCountShiny(pokemonIdStr, formIdStr)
 		if pokemon.AtkIv.Int64 == 15 && pokemon.DefIv.Int64 == 15 && pokemon.StaIv.Int64 == 15 {
 			statsCollector.IncPokemonCountShundo()
@@ -458,6 +468,15 @@ type pokemonCountDbRow struct {
 	Count     int    `db:"count"`
 }
 
+type pokemonShinyCountDbRow struct {
+	Date      string `db:"date"`
+	Area      string `db:"area"`
+	Fence     string `db:"fence"`
+	PokemonId int    `db:"pokemon_id"`
+	Count     int    `db:"count"`
+	Total     int    `db:"total"`
+}
+
 func logPokemonCount(statsDb *sqlx.DB) {
 
 	log.Infof("STATS: Update pokemon count tables")
@@ -469,7 +488,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 	go func() {
 		var hundoRows []pokemonCountDbRow
-		var shinyRows []pokemonCountDbRow
+		var shinyRows []pokemonShinyCountDbRow
 		var nundoRows []pokemonCountDbRow
 		var ivRows []pokemonCountDbRow
 		var allRows []pokemonCountDbRow
@@ -508,9 +527,16 @@ func logPokemonCount(statsDb *sqlx.DB) {
 					addRows(&nundoRows, pokemonId, count)
 				}
 			}
-			for pokemonId, count := range stats.shiny {
-				if count > 0 {
-					addRows(&shinyRows, pokemonId, count)
+			for pokemonId, checks := range stats.shinyChecks {
+				if checks.total > 0 {
+					shinyRows = append(shinyRows, pokemonShinyCountDbRow{
+						Date:      midnightString,
+						Area:      area.Parent,
+						Fence:     area.Name,
+						PokemonId: pokemonId,
+						Count:     checks.shiny,
+						Total:     checks.total,
+					})
 				}
 			}
 		}
@@ -542,10 +568,36 @@ func logPokemonCount(statsDb *sqlx.DB) {
 				}
 			}
 		}
+
 		updateStatsCount("pokemon_stats", allRows)
 		updateStatsCount("pokemon_iv_stats", ivRows)
 		updateStatsCount("pokemon_hundo_stats", hundoRows)
 		updateStatsCount("pokemon_nundo_stats", nundoRows)
-		updateStatsCount("pokemon_shiny_stats", shinyRows)
+
+		if rows := shinyRows; len(rows) > 0 {
+			chunkSize := 100
+
+			for i := 0; i < len(rows); i += chunkSize {
+				end := i + chunkSize
+
+				// necessary check to avoid slicing beyond
+				// slice capacity
+				if end > len(rows) {
+					end = len(rows)
+				}
+
+				rowsToWrite := rows[i:end]
+
+				_, err := statsDb.NamedExec(
+					"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, `count`, total)"+
+						" VALUES (:date, :area, :fence, :pokemon_id, :count, :total)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
+					rowsToWrite,
+				)
+				if err != nil {
+					log.Errorf("Error inserting pokemon_shiny_stats: %v", err)
+				}
+			}
+		}
 	}()
 }
