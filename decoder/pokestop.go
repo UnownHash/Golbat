@@ -62,6 +62,7 @@ type Pokestop struct {
 	Description                null.String `db:"description" json:"description"`
 	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
 	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
+	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
 	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
 	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
 	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
@@ -182,6 +183,7 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 		old.ShowcaseRankingStandard != new.ShowcaseRankingStandard ||
 		old.ShowcasePokemon != new.ShowcasePokemon ||
 		old.ShowcasePokemonForm != new.ShowcasePokemonForm ||
+		old.ShowcasePokemonType != new.ShowcasePokemonType ||
 		old.ShowcaseRankings != new.ShowcaseRankings ||
 		old.ShowcaseExpiry != new.ShowcaseExpiry
 }
@@ -562,6 +564,7 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	// Focus does not populate. We can only store 1 atm, so this just grabs the first
 	// if there is one and falls back to Focus if Focuses is empty, just in case.
 	var focussedPokemon *pogo.ContestPokemonFocusProto
+	var focussedPokemonType *pogo.ContestFocusProto
 
 	if focuses := contest.GetFocuses(); len(focuses) > 0 {
 		var numPokemon int
@@ -572,6 +575,12 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 					focussedPokemon = pok
 				}
 				numPokemon++
+			}
+
+			if pokType := focus.GetType(); pokType != nil {
+				if focussedPokemonType == nil {
+					focussedPokemonType = focus
+				}
 			}
 		}
 		if l := len(focuses); l > 1 {
@@ -593,6 +602,12 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 		} else {
 			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
 		}
+	}
+
+	if focussedPokemonType == nil {
+		stop.ShowcasePokemonType = null.IntFromPtr(nil)
+	} else {
+		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType_1()))
 	}
 }
 
@@ -722,6 +737,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"updated":                   stop.Updated,
 			"showcase_pokemon_id":       stop.ShowcasePokemon,
 			"showcase_pokemon_form_id":  stop.ShowcasePokemonForm,
+			"showcase_pokemon_type_id":  stop.ShowcasePokemonType,
 			"showcase_ranking_standard": stop.ShowcaseRankingStandard,
 			"showcase_expiry":           stop.ShowcaseExpiry,
 			"showcase_rankings": func() interface{} {
@@ -760,7 +776,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
 				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
 				"quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id,"+
-				"showcase_pokemon_form_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
+				"showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
 				")"+
 				"VALUES ("+
 				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
@@ -771,7 +787,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
 				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
 				":quest_expiry, :alternative_quest_expiry, :description, :showcase_pokemon_id,"+
-				":showcase_pokemon_form_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
+				":showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
 			pokestop)
 
 		statsCollector.IncDbQuery("insert pokestop", err)
@@ -820,6 +836,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"description = :description,"+
 				"showcase_pokemon_id = :showcase_pokemon_id,"+
 				"showcase_pokemon_form_id = :showcase_pokemon_form_id,"+
+				"showcase_pokemon_type_id = :showcase_pokemon_type_id,"+
 				"showcase_ranking_standard = :showcase_ranking_standard,"+
 				"showcase_expiry = :showcase_expiry,"+
 				"showcase_rankings = :showcase_rankings"+
