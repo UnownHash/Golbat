@@ -986,7 +986,6 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 
 	contest := contestData.ContestIncident.Contests[0]
 
-	fmt.Printf("################################################### contest: %+v\n", contest)
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
@@ -1030,7 +1029,6 @@ func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
 	}
 
-	fmt.Println("------------------------------------------------")
 	pokestop.updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData)
 	savePokestopRecord(ctx, db, pokestop)
 
