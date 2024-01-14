@@ -592,22 +592,22 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 		focussedPokemon = contest.GetFocus().GetPokemon()
 	}
 
-	if focussedPokemon == nil && focussedPokemonType == nil {
+	if focussedPokemon == nil {
 		stop.ShowcasePokemon = null.IntFromPtr(nil)
 		stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+	} else {
+		stop.ShowcasePokemon = null.IntFrom(int64(focussedPokemon.GetPokedexId()))
+		if focussedPokemon.RequireFormToMatch {
+			stop.ShowcasePokemonForm = null.IntFrom(int64(focussedPokemon.GetPokemonDisplay().GetForm()))
+		} else {
+			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+		}
+	}
+
+	if focussedPokemonType == nil {
 		stop.ShowcasePokemonType = null.IntFromPtr(nil)
 	} else {
-		if focussedPokemon != nil {
-			stop.ShowcasePokemon = null.IntFrom(int64(focussedPokemon.GetPokedexId()))
-
-			if focussedPokemon.RequireFormToMatch {
-				stop.ShowcasePokemonForm = null.IntFrom(int64(focussedPokemon.GetPokemonDisplay().GetForm()))
-			}
-		}
-
-		if focussedPokemonType != nil {
-			stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType_1()))
-		}
+		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType_1()))
 	}
 }
 
@@ -986,6 +986,7 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 
 	contest := contestData.ContestIncident.Contests[0]
 
+	fmt.Printf("################################################### contest: %+v\n", contest)
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
@@ -1029,6 +1030,7 @@ func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
 	}
 
+	fmt.Println("------------------------------------------------")
 	pokestop.updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData)
 	savePokestopRecord(ctx, db, pokestop)
 
