@@ -487,7 +487,7 @@ func (pokemon *Pokemon) remainingDuration() time.Duration {
 	return remaining
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) bool {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, isGenderConfirmed bool) bool {
 	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
@@ -495,7 +495,7 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.Lon = wildPokemon.Longitude
 
 	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
-	return pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	return pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay, isGenderConfirmed)
 }
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -520,7 +520,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 	}
-	_ = pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
+	_ = pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, false)
 	pokemon.repopulateStatsIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -552,7 +552,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
 
 	if mapPokemon.PokemonDisplay != nil {
-		_ = pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
+		_ = pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay, false)
 		pokemon.repopulateStatsIfNeeded(ctx, db)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
@@ -586,7 +586,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.IsEvent = 0
 	pokestopId := nearbyPokemon.FortId
 	pokemonId := int16(nearbyPokemon.PokedexNumber)
-	_ = pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay)
+	_ = pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay, false)
 	pokemon.repopulateStatsIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
 
@@ -927,7 +927,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000, true)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
@@ -946,7 +946,7 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
+func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto, isGenderConfirmed bool) bool {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
@@ -984,7 +984,9 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if pokemon.isNewRecord() || !pokemon.IsDitto {
 		pokemon.PokemonId = pokemonId
 	}
-	pokemon.Gender = null.IntFrom(int64(display.Gender))
+	if isGenderConfirmed {
+		pokemon.Gender = null.IntFrom(int64(display.Gender))
+	}
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
 	return pokemon.setWeather(int64(display.WeatherBoostedCondition))
