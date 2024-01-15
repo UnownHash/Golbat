@@ -510,7 +510,7 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
 		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
 		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
+		// pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
 		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
 }
 
