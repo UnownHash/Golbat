@@ -567,7 +567,8 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	// Focus does not populate. We can only store 1 atm, so this just grabs the first
 	// if there is one and falls back to Focus if Focuses is empty, just in case.
 	var focussedPokemon *pogo.ContestPokemonFocusProto
-	var focussedPokemonType *pogo.ContestFocusProto
+	var focussedPokemonType *pogo.ContestPokemonTypeFocusProto
+	var focussedBuddy *pogo.ContestBuddyFocusProto
 
 	if focuses := contest.GetFocuses(); len(focuses) > 0 {
 		var numPokemon int
@@ -582,7 +583,12 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 
 			if pokType := focus.GetType(); pokType != nil {
 				if focussedPokemonType == nil {
-					focussedPokemonType = focus
+					focussedPokemonType = pokType
+				}
+			}
+			if buddy := focus.GetBuddy(); buddy != nil {
+				if focussedBuddy == nil {
+					focussedBuddy = buddy
 				}
 			}
 		}
@@ -593,6 +599,8 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 		}
 	} else {
 		focussedPokemon = contest.GetFocus().GetPokemon()
+		focussedPokemonType = contest.GetFocus().GetType()
+		focussedBuddy = contest.GetFocus().GetBuddy()
 	}
 
 	if focussedPokemon == nil {
@@ -610,8 +618,14 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	if focussedPokemonType == nil {
 		stop.ShowcasePokemonType = null.IntFromPtr(nil)
 	} else {
-		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType1()))
+		//TODO there is also a Type2 in the Proto
+		type2 := int64(focussedPokemonType.GetPokemonType2())
+		if type2 != 0 {
+			log.Warnf("SHOWCASE: Stop: '%s' with Focussed Pokemon Type 2: %d", stop.Id, type2)
+		}
+		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetPokemonType1()))
 	}
+	//TODO add logic for buddy
 }
 
 func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
