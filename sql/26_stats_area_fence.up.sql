@@ -17,3 +17,11 @@ ALTER TABLE `quest_stats`
     ADD COLUMN area varchar(40) NOT NULL DEFAULT '' AFTER `date`,
     DROP PRIMARY KEY,
     ADD PRIMARY KEY (`date`, area, fence, reward_type, pokemon_id, item_id);
+
+ALTER TABLE pokemon_iv_stats
+    MODIFY area varchar(40) NOT NULL DEFAULT '' AFTER `date`,
+    MODIFY fence varchar(40) NOT NULL DEFAULT '' AFTER area;
+
+ALTER TABLE pokemon_hundo_stats
+    MODIFY area varchar(40) NOT NULL DEFAULT '' AFTER `date`,
+    MODIFY fence varchar(40) NOT NULL DEFAULT '' AFTER area;
