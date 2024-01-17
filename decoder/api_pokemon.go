@@ -49,11 +49,12 @@ func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 // Pokemon search
 
 type ApiPokemonSearch struct {
-	Min       geo.Location `json:"min"`
-	Max       geo.Location `json:"max"`
-	Center    geo.Location `json:"center"`
-	Limit     int          `json:"limit"`
-	SearchIds []int16      `json:"searchIds"`
+	Min         geo.Location `json:"min"`
+	Max         geo.Location `json:"max"`
+	Center      geo.Location `json:"center"`
+	Limit       int          `json:"limit"`
+	SearchIds   []int16      `json:"searchIds"`
+	MaxDistance float64      `json:"maxDistance"`
 }
 
 func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
@@ -75,7 +76,10 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	}
 	pokemonSkipped := 0
 	pokemonScanned := 0
-	maxDistance := float64(1000) // This should come from the request?
+	maxDistance := request.MaxDistance
+	if maxDistance == 0 {
+		maxDistance = float64(1000)
+	}
 
 	pokemonTree2.Nearby(
 		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
