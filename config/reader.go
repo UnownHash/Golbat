@@ -48,7 +48,7 @@ func ReadConfig() (configDefinition, error) {
 		},
 		Tuning: tuning{
 			MaxPokemonResults:  3000,
-			MaxPokemonDistance: 500,
+			MaxPokemonDistance: 100,
 		},
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
