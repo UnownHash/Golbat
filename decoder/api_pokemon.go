@@ -77,8 +77,8 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	pokemonSkipped := 0
 	pokemonScanned := 0
 	maxDistance := request.MaxDistance
-	if maxDistance == 0 {
-		maxDistance = float64(1000)
+	if maxDistance == 0 || maxDistance > config.Config.Tuning.MaxDistance {
+		maxDistance = config.Config.Tuning.MaxDistance
 	}
 
 	pokemonTree2.Nearby(
