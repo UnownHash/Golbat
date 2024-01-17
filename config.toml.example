@@ -59,6 +59,6 @@ url = "http://localhost:4201"
 #areas = ["London/*", "*/Harrow", "Harrow"]
 
 [tuning]
-max_distance = 500          # Maximum distance in meters for nearby pokemon
+max_pokemon_distance = 500  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
 extended_timeout = false

@@ -1,13 +1,14 @@
 package decoder
 
 import (
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
 	"golbat/config"
 	"golbat/geo"
+	"math"
 	"slices"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type ApiPokemonAvailableResult struct {
@@ -15,6 +16,8 @@ type ApiPokemonAvailableResult struct {
 	Form      int16 `json:"form"`
 	Count     int   `json:"count"`
 }
+
+const earthRadiusKm = 6371
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 	type pokemonFormKey struct {
@@ -57,6 +60,10 @@ type ApiPokemonSearch struct {
 	MaxDistance float64      `json:"maxDistance"`
 }
 
+func toRadians(deg float64) float64 {
+	return deg * math.Pi / 180
+}
+
 func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
@@ -77,12 +84,25 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	pokemonSkipped := 0
 	pokemonScanned := 0
 	maxDistance := request.MaxDistance
-	if maxDistance == 0 || maxDistance > config.Config.Tuning.MaxDistance {
-		maxDistance = config.Config.Tuning.MaxDistance
+	if maxDistance == 0 || maxDistance > config.Config.Tuning.MaxPokemonDistance {
+		maxDistance = config.Config.Tuning.MaxPokemonDistance
 	}
+	center := request.Center
 
 	pokemonTree2.Nearby(
-		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
+		func(min, max [2]float64, data uint64, item bool) float64 {
+			lat1Rad := toRadians(min[1])
+			lat2Rad := toRadians(center.Latitude)
+			deltaLat := toRadians(center.Latitude - min[1])
+			deltaLon := toRadians(center.Longitude - min[0])
+
+			a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
+				math.Cos(lat1Rad)*math.Cos(lat2Rad)*
+					math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
+			c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+			return earthRadiusKm * c
+		},
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
 			pokemonLookupItem, inCache := pokemonLookupCache.Load(pokemonId)
 			if !inCache {
@@ -92,6 +112,7 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 			}
 
 			pokemonScanned++
+
 			if dist > maxDistance {
 				log.Infof("SearchPokemon - result would exceed maximum distance (%f), stopping scan", maxDistance)
 				return false
