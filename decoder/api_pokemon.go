@@ -3,7 +3,6 @@ package decoder
 import (
 	"golbat/config"
 	"golbat/geo"
-	"math"
 	"slices"
 	"strconv"
 	"time"
@@ -61,10 +60,6 @@ type ApiPokemonSearch struct {
 	MaxDistance float64      `json:"maxDistance"`
 }
 
-func toRadians(deg float64) float64 {
-	return deg * math.Pi / 180
-}
-
 func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
@@ -89,20 +84,8 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 		maxDistance = config.Config.Tuning.MaxPokemonDistance
 	}
 
-	center := [2]float64{request.Center.Longitude, request.Center.Latitude}
 	pokemonTree2.Nearby(
-		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, func(min [2]float64, max [2]float64, data uint64) float64 {
-			lat1Rad := toRadians(min[1])
-			lat2Rad := toRadians(center[1])
-			deltaLat := toRadians(center[1] - min[1])
-			deltaLon := toRadians(center[0] - min[0])
-
-			a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
-				math.Cos(lat1Rad)*math.Cos(lat2Rad)*
-					math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
-			c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-			return earthRadiusKm * c
-		}),
+		rtree.BoxDist[float64, uint64]([2]float64{request.Min.Longitude, request.Min.Latitude}, [2]float64{request.Max.Longitude, request.Max.Latitude}, nil),
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
 			pokemonLookupItem, inCache := pokemonLookupCache.Load(pokemonId)
 			if !inCache {
