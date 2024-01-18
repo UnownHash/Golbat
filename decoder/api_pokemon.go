@@ -17,8 +17,6 @@ type ApiPokemonAvailableResult struct {
 	Count     int   `json:"count"`
 }
 
-const earthRadiusKm = 6371
-
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 	type pokemonFormKey struct {
 		pokemonId int16
