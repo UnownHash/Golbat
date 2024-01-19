@@ -54,12 +54,11 @@ func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 // Pokemon search
 
 type ApiPokemonSearch struct {
-	Min         geo.Location `json:"min"`
-	Max         geo.Location `json:"max"`
-	Center      geo.Location `json:"center"`
-	Limit       int          `json:"limit"`
-	SearchIds   []int16      `json:"searchIds"`
-	MaxDistance float64      `json:"maxDistance"`
+	Min       geo.Location `json:"min"`
+	Max       geo.Location `json:"max"`
+	Center    geo.Location `json:"center"`
+	Limit     int          `json:"limit"`
+	SearchIds []int16      `json:"searchIds"`
 }
 
 func calculateHypotenuse(a, b float64) float64 {
