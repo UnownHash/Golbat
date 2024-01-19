@@ -956,8 +956,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			oldId = pokemon.PokemonId
 		}
 		if oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
-			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
-			pokemon.Gender != null.IntFrom(int64(display.Gender)) {
+			pokemon.Costume != null.IntFrom(int64(display.Costume)) {
 			log.Debugf("Pokemon %s changed from (%d,%d,%d,%d) to (%d,%d,%d,%d)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender)
@@ -984,7 +983,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if pokemon.isNewRecord() || !pokemon.IsDitto {
 		pokemon.PokemonId = pokemonId
 	}
-	if isGenderConfirmed {
+	if isGenderConfirmed || !pokemon.Gender.Valid {
 		pokemon.Gender = null.IntFrom(int64(display.Gender))
 	}
 	pokemon.Form = null.IntFrom(int64(display.Form))
