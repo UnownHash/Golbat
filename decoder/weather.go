@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
@@ -63,7 +64,8 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 	err := db.GeneralDb.GetContext(ctx, &weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
 
 	statsCollector.IncDbQuery("select weather", err)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Errorf("WEATHER: No weather found for id: %d", weatherId)
 		return nil, nil
 	}
 
@@ -76,7 +78,15 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 }
 
 func findWeatherRecordByLatLon(ctx context.Context, db db.DbDetails, lat float64, lon float64) (*Weather, error) {
-	return getWeatherRecord(ctx, db, int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10)))
+	cellId := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10))
+	weather, err := getWeatherRecord(ctx, db, cellId)
+	if err != nil {
+		log.Errorf("WEATHER: Error on lookup for ID '%d' at location: %f, %f", cellId, lat, lon)
+	}
+	if weather == nil {
+		log.Errorf("WEATHER: No weather entry for ID '%d' at location: %f, %f", cellId, lat, lon)
+	}
+	return weather, err
 }
 
 func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) *Weather {
