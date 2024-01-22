@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -115,19 +116,21 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	}
 	pokestop := Pokestop{}
 	err := db.GeneralDb.GetContext(ctx, &pokestop,
-		"SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,"+
-			"pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,"+
-			"quest_rewards, quest_template, quest_title,"+
-			"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
-			"alternative_quest_conditions, alternative_quest_rewards,"+
-			"alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,"+
-			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
-			"FROM pokestop "+
-			"WHERE pokestop.id = ? ", fortId)
+		`SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,
+			pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,
+			quest_rewards, quest_template, quest_title,
+			alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
+			alternative_quest_conditions, alternative_quest_rewards,
+			alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,
+			ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
+			quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id, showcase_pokemon_form_id,
+			showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
+			FROM pokestop
+			WHERE pokestop.id = ? `, fortId)
 	//log.Debugf("GetPokestopRecord %s (from db)", fortId)
 
 	statsCollector.IncDbQuery("select pokestop", err)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
