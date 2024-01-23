@@ -1,14 +1,19 @@
 package decoder
 
 import (
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
+	"fmt"
 	"golbat/config"
 	"golbat/geo"
+	"math"
 	"slices"
 	"strconv"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
 )
+
+const earthRadiusKm = 6371
 
 type ApiPokemonAvailableResult struct {
 	PokemonId int16 `json:"id"`
@@ -56,13 +61,38 @@ type ApiPokemonSearch struct {
 	SearchIds []int16      `json:"searchIds"`
 }
 
-func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
+func calculateHypotenuse(a, b float64) float64 {
+	return math.Sqrt(a*a + b*b)
+}
+
+func toRadians(deg float64) float64 {
+	return deg * math.Pi / 180
+}
+
+func haversine(start, end geo.Location) float64 {
+	lat1Rad := toRadians(start.Latitude)
+	lat2Rad := toRadians(end.Latitude)
+	deltaLat := toRadians(end.Latitude - start.Latitude)
+	deltaLon := toRadians(end.Longitude - start.Longitude)
+
+	a := math.Sin(deltaLat/2)*math.Sin(deltaLat/2) +
+		math.Cos(lat1Rad)*math.Cos(lat2Rad)*
+			math.Sin(deltaLon/2)*math.Sin(deltaLon/2)
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return earthRadiusKm * c
+}
+
+func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 	start := time.Now()
 	results := make([]*Pokemon, 0, request.Limit)
 	pokemonMatched := 0
 
 	if request.SearchIds == nil {
-		return nil
+		return nil, fmt.Errorf("SearchPokemon - no search ids provided")
+	}
+	if haversine(request.Min, request.Max) > config.Config.Tuning.MaxPokemonDistance {
+		return nil, fmt.Errorf("SearchPokemon - the distance between max and min points is greater than the configurable max distance")
 	}
 
 	pokemonTreeMutex.RLock()
@@ -75,8 +105,10 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	}
 	pokemonSkipped := 0
 	pokemonScanned := 0
-	maxDistance := float64(1000) // This should come from the request?
-
+	maxDistance := calculateHypotenuse(request.Max.Longitude-request.Min.Longitude, request.Max.Latitude-request.Min.Latitude) / 2
+	if maxDistance == 0 {
+		maxDistance = 10
+	}
 	pokemonTree2.Nearby(
 		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
@@ -113,7 +145,7 @@ func SearchPokemon(request ApiPokemonSearch) []*Pokemon {
 	)
 
 	log.Infof("SearchPokemon - scanned %d pokemon, total time %s, %d returned", pokemonScanned, time.Since(start), len(results))
-	return results
+	return results, nil
 }
 
 // Get one result

@@ -31,7 +31,6 @@ password = ""
 address = "127.0.0.1:3306"
 db = ""
 
-
 [pvp]
 enabled = true
 include_hundos_under_cap = false
@@ -58,3 +57,8 @@ url = "http://localhost:4201"
 #url = "http://localhost:4202"
 #types = ["raid"]
 #areas = ["London/*", "*/Harrow", "Harrow"]
+
+[tuning]
+max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
+max_pokemon_results = 3000  # Maximum number of pokemon to return
+extended_timeout = false

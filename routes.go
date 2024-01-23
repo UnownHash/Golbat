@@ -422,7 +422,12 @@ func PokemonSearch(c *gin.Context) {
 		return
 	}
 
-	res := decoder.SearchPokemon(requestBody)
+	res, err := decoder.SearchPokemon(requestBody)
+	if err != nil {
+		log.Warnf("POST /api/search/ Error during post search %v", err)
+		c.Status(http.StatusBadRequest)
+		return
+	}
 	c.JSON(http.StatusAccepted, res)
 }
 
