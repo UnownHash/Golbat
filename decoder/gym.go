@@ -464,9 +464,6 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(ctx, db, gym.Id)
 
-	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
-	updateRaidStats(oldGym, gym, areas)
-
 	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
 		if oldGym.Updated > now-900 {
@@ -539,6 +536,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	createGymWebhooks(oldGym, gym)
 	createGymFortWebhooks(oldGym, gym)
+
+	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+	updateRaidStats(oldGym, gym, areas)
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
