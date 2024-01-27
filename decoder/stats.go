@@ -438,10 +438,8 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
 
-		if new.RaidSpawnTimestamp.ValueOrZero() > 0 &&
-			(old == nil || old.RaidLevel != new.RaidLevel ||
-				old.RaidPokemonId != new.RaidPokemonId ||
-				old.RaidSpawnTimestamp != new.RaidSpawnTimestamp) {
+		// Raid has started/is active.
+		if new.RaidPokemonId.ValueOrZero() > 0 {
 
 			if !locked {
 				raidStatsLock.Lock()
@@ -454,8 +452,8 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 				raidCount[area] = countStats
 			}
 
-			// Raid has started or is active.
-			if new.RaidPokemonId.ValueOrZero() > 0 {
+			// Check if Raid has started/is active or RaidEndTimestamp has changed (Back-to-back raids)
+			if old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp {
 				var countRaids = raidCount[area][new.RaidLevel.ValueOrZero()]
 				countRaids.count[new.RaidPokemonId.ValueOrZero()]++
 				raidCount[area][new.RaidLevel.ValueOrZero()] = countRaids
