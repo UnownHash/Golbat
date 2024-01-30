@@ -1,0 +1,4 @@
+replace null.String string
+replace null.Bool bool
+replace null.Float float64
+replace null.Int int

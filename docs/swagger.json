@@ -1,0 +1,438 @@
+{
+    "swagger": "2.0",
+    "info": {
+        "contact": {}
+    },
+    "paths": {
+        "/api/clear-quests": {
+            "post": {
+                "description": "Clear Quests in given Fence",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quest"
+                ],
+                "summary": "Clear Quests",
+                "parameters": [
+                    {
+                        "description": "Fence",
+                        "name": "fence",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/geojson.Feature"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "schema": {
+                            "$ref": "#/definitions/main.Response"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/pokemon/v2/scan": {
+            "post": {
+                "description": "Scan Pokemon for given request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "pokemon"
+                ],
+                "summary": "Pokemon Scan V2",
+                "parameters": [
+                    {
+                        "description": "Pokemon Scan2",
+                        "name": "scan",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/decoder.ApiPokemonScan2"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/decoder.ApiPokemonResult"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/quest-status": {
+            "post": {
+                "description": "Get Status of Quests in given Fence",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "quest"
+                ],
+                "summary": "Quests Status",
+                "parameters": [
+                    {
+                        "description": "Fence",
+                        "name": "fence",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/geojson.Feature"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "ok",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/db.QuestStatus"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "db.QuestStatus": {
+            "type": "object",
+            "properties": {
+                "ar_quests": {
+                    "type": "integer"
+                },
+                "no_ar_quests": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "decoder.ApiPokemonDnfFilter": {
+            "type": "object",
+            "properties": {
+                "atk_iv": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "cp": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax"
+                },
+                "def_iv": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "gender": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "iv": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "level": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "pokemon": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/decoder.ApiPokemonDnfId"
+                    }
+                },
+                "pvp_great": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax"
+                },
+                "pvp_little": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax"
+                },
+                "pvp_ultra": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax"
+                },
+                "size": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                },
+                "sta_iv": {
+                    "$ref": "#/definitions/decoder.ApiPokemonDnfMinMax8"
+                }
+            }
+        },
+        "decoder.ApiPokemonDnfId": {
+            "type": "object",
+            "properties": {
+                "form": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "decoder.ApiPokemonDnfMinMax": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "integer"
+                },
+                "min": {
+                    "type": "integer"
+                }
+            }
+        },
+        "decoder.ApiPokemonDnfMinMax8": {
+            "type": "object",
+            "properties": {
+                "max": {
+                    "type": "integer"
+                },
+                "min": {
+                    "type": "integer"
+                }
+            }
+        },
+        "decoder.ApiPokemonResult": {
+            "type": "object",
+            "properties": {
+                "atk_iv": {
+                    "type": "integer"
+                },
+                "capture_1": {
+                    "type": "number"
+                },
+                "capture_2": {
+                    "type": "number"
+                },
+                "capture_3": {
+                    "type": "number"
+                },
+                "cell_id": {
+                    "type": "integer"
+                },
+                "changed": {
+                    "type": "integer"
+                },
+                "costume": {
+                    "type": "integer"
+                },
+                "cp": {
+                    "type": "integer"
+                },
+                "def_iv": {
+                    "type": "integer"
+                },
+                "display_pokemon_id": {
+                    "type": "integer"
+                },
+                "distance": {
+                    "type": "number"
+                },
+                "encounter_weather": {
+                    "type": "integer"
+                },
+                "expire_timestamp": {
+                    "type": "integer"
+                },
+                "expire_timestamp_verified": {
+                    "type": "boolean"
+                },
+                "first_seen_timestamp": {
+                    "type": "integer"
+                },
+                "form": {
+                    "type": "integer"
+                },
+                "gender": {
+                    "type": "integer"
+                },
+                "height": {
+                    "type": "number"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_ditto": {
+                    "type": "boolean"
+                },
+                "is_event": {
+                    "type": "integer"
+                },
+                "iv": {
+                    "type": "number"
+                },
+                "lat": {
+                    "type": "number"
+                },
+                "level": {
+                    "type": "integer"
+                },
+                "lon": {
+                    "type": "number"
+                },
+                "move_1": {
+                    "type": "integer"
+                },
+                "move_2": {
+                    "type": "integer"
+                },
+                "pokemon_id": {
+                    "type": "integer"
+                },
+                "pokestop_id": {
+                    "type": "string"
+                },
+                "pvp": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/definitions/gohbem.PokemonEntry"
+                        }
+                    }
+                },
+                "seen_type": {
+                    "type": "string"
+                },
+                "shiny": {
+                    "type": "boolean"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "spawn_id": {
+                    "type": "integer"
+                },
+                "sta_iv": {
+                    "type": "integer"
+                },
+                "updated": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                },
+                "weather": {
+                    "type": "integer"
+                },
+                "weight": {
+                    "type": "number"
+                }
+            }
+        },
+        "decoder.ApiPokemonScan2": {
+            "type": "object",
+            "properties": {
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/decoder.ApiPokemonDnfFilter"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "max": {
+                    "$ref": "#/definitions/geo.Location"
+                },
+                "min": {
+                    "$ref": "#/definitions/geo.Location"
+                }
+            }
+        },
+        "geo.Location": {
+            "type": "object",
+            "properties": {
+                "latitude": {
+                    "type": "number"
+                },
+                "longitude": {
+                    "type": "number"
+                }
+            }
+        },
+        "geojson.Feature": {
+            "type": "object",
+            "properties": {
+                "bbox": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "geometry": {},
+                "id": {},
+                "properties": {
+                    "$ref": "#/definitions/geojson.Properties"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "geojson.Properties": {
+            "type": "object",
+            "additionalProperties": true
+        },
+        "gohbem.PokemonEntry": {
+            "type": "object",
+            "properties": {
+                "cap": {
+                    "type": "number"
+                },
+                "capped": {
+                    "type": "boolean"
+                },
+                "cp": {
+                    "type": "integer"
+                },
+                "evolution": {
+                    "type": "integer"
+                },
+                "form": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "number"
+                },
+                "percentage": {
+                    "type": "number"
+                },
+                "pokemon": {
+                    "type": "integer"
+                },
+                "rank": {
+                    "type": "integer"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "main.Response": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "ok"
+                }
+            }
+        }
+    }
+}
