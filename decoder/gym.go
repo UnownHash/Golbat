@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -20,44 +21,45 @@ import (
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	Id                    string      `db:"id"`
-	Lat                   float64     `db:"lat"`
-	Lon                   float64     `db:"lon"`
-	Name                  null.String `db:"name"`
-	Url                   null.String `db:"url"`
-	LastModifiedTimestamp null.Int    `db:"last_modified_timestamp"`
-	RaidEndTimestamp      null.Int    `db:"raid_end_timestamp"`
-	RaidSpawnTimestamp    null.Int    `db:"raid_spawn_timestamp"`
-	RaidBattleTimestamp   null.Int    `db:"raid_battle_timestamp"`
-	Updated               int64       `db:"updated"`
-	RaidPokemonId         null.Int    `db:"raid_pokemon_id"`
-	GuardingPokemonId     null.Int    `db:"guarding_pokemon_id"`
-	AvailableSlots        null.Int    `db:"available_slots"`
-	TeamId                null.Int    `db:"team_id"`
-	RaidLevel             null.Int    `db:"raid_level"`
-	Enabled               null.Int    `db:"enabled"`
-	ExRaidEligible        null.Int    `db:"ex_raid_eligible"`
-	InBattle              null.Int    `db:"in_battle"`
-	RaidPokemonMove1      null.Int    `db:"raid_pokemon_move_1"`
-	RaidPokemonMove2      null.Int    `db:"raid_pokemon_move_2"`
-	RaidPokemonForm       null.Int    `db:"raid_pokemon_form"`
-	RaidPokemonAlignment  null.Int    `db:"raid_pokemon_alignment"`
-	RaidPokemonCp         null.Int    `db:"raid_pokemon_cp"`
-	RaidIsExclusive       null.Int    `db:"raid_is_exclusive"`
-	CellId                null.Int    `db:"cell_id"`
-	Deleted               bool        `db:"deleted"`
-	TotalCp               null.Int    `db:"total_cp"`
-	FirstSeenTimestamp    int64       `db:"first_seen_timestamp"`
-	RaidPokemonGender     null.Int    `db:"raid_pokemon_gender"`
-	SponsorId             null.Int    `db:"sponsor_id"`
-	PartnerId             null.String `db:"partner_id"`
-	RaidPokemonCostume    null.Int    `db:"raid_pokemon_costume"`
-	RaidPokemonEvolution  null.Int    `db:"raid_pokemon_evolution"`
-	ArScanEligible        null.Int    `db:"ar_scan_eligible"`
-	PowerUpLevel          null.Int    `db:"power_up_level"`
-	PowerUpPoints         null.Int    `db:"power_up_points"`
-	PowerUpEndTimestamp   null.Int    `db:"power_up_end_timestamp"`
-	Description           null.String `db:"description"`
+	Id                     string      `db:"id"`
+	Lat                    float64     `db:"lat"`
+	Lon                    float64     `db:"lon"`
+	Name                   null.String `db:"name"`
+	Url                    null.String `db:"url"`
+	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp"`
+	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp"`
+	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp"`
+	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp"`
+	Updated                int64       `db:"updated"`
+	RaidPokemonId          null.Int    `db:"raid_pokemon_id"`
+	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id"`
+	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display"`
+	AvailableSlots         null.Int    `db:"available_slots"`
+	TeamId                 null.Int    `db:"team_id"`
+	RaidLevel              null.Int    `db:"raid_level"`
+	Enabled                null.Int    `db:"enabled"`
+	ExRaidEligible         null.Int    `db:"ex_raid_eligible"`
+	InBattle               null.Int    `db:"in_battle"`
+	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1"`
+	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2"`
+	RaidPokemonForm        null.Int    `db:"raid_pokemon_form"`
+	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment"`
+	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp"`
+	RaidIsExclusive        null.Int    `db:"raid_is_exclusive"`
+	CellId                 null.Int    `db:"cell_id"`
+	Deleted                bool        `db:"deleted"`
+	TotalCp                null.Int    `db:"total_cp"`
+	FirstSeenTimestamp     int64       `db:"first_seen_timestamp"`
+	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender"`
+	SponsorId              null.Int    `db:"sponsor_id"`
+	PartnerId              null.String `db:"partner_id"`
+	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume"`
+	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution"`
+	ArScanEligible         null.Int    `db:"ar_scan_eligible"`
+	PowerUpLevel           null.Int    `db:"power_up_level"`
+	PowerUpPoints          null.Int    `db:"power_up_points"`
+	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
+	Description            null.String `db:"description"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -156,11 +158,32 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 }
 
 func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
+	type pokemonDisplay struct {
+		Form          int  `json:"form"`
+		Costume       int  `json:"costume"`
+		Gender        int  `json:"gender"`
+		Shiny         bool `json:"shiny"`
+		TempEvolution int  `json:"temp_evolution"`
+		Alignment     int  `json:"alignment"`
+		Badge         int  `json:"badge"`
+		LocationCard  int  `json:"location_card"`
+	}
 	gym.Id = fortData.FortId
 	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
 	gym.Lon = fortData.Longitude //fmt.Sprintf("%f", fortData.Longitude)
 	gym.Enabled = null.IntFrom(util.BoolToInt[int64](fortData.Enabled))
 	gym.GuardingPokemonId = null.IntFrom(int64(fortData.GuardPokemonId))
+	display, _ := json.Marshal(pokemonDisplay{
+		Form:          int(fortData.GuardPokemonDisplay.Form),
+		Costume:       int(fortData.GuardPokemonDisplay.Costume),
+		Gender:        int(fortData.GuardPokemonDisplay.Gender),
+		Shiny:         fortData.GuardPokemonDisplay.Shiny,
+		TempEvolution: int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
+		Alignment:     int(fortData.GuardPokemonDisplay.Alignment),
+		Badge:         int(fortData.GuardPokemonDisplay.PokemonBadge),
+		LocationCard:  int(fortData.GuardPokemonDisplay.LocationCard.LocationCard),
+	})
+	gym.GuardingPokemonDisplay = null.StringFrom(string(display))
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
 	if fortData.GymDisplay != nil {
 		gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
