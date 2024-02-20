@@ -610,11 +610,11 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	if focussedPokemonType == nil {
 		stop.ShowcasePokemonType = null.IntFromPtr(nil)
 	} else {
-		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType_1()))
+		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType1()))
 	}
 }
 
-func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeContestEntryOutProto) {
+func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
 	type contestEntry struct {
 		Rank      int     `json:"rank"`
 		Score     float64 `json:"score"`
@@ -1014,7 +1014,7 @@ func getFortIdFromContest(id string) string {
 	return strings.Split(id, "-")[0]
 }
 
-func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeContestEntryProto, contestData *pogo.GetPokemonSizeContestEntryOutProto) string {
+func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
 	fortId := getFortIdFromContest(request.GetContestId())
 
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)

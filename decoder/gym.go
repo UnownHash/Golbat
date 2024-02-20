@@ -229,7 +229,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 			gym.RaidPokemonEvolution = null.IntFrom(0)
 		}
 
-		gym.RaidIsExclusive = null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
+		gym.RaidIsExclusive = null.IntFrom(0) //null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
 	}
 
 	gym.CellId = null.IntFrom(int64(cellId))

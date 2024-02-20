@@ -2,11 +2,12 @@ package decoder
 
 import (
 	"database/sql"
-	"golbat/db"
-	"golbat/pogo"
 	"reflect"
 	"strconv"
 	"time"
+
+	"golbat/db"
+	"golbat/pogo"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -510,7 +511,7 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 	}
 }
 
-func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.PlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
+func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.InternalPlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
 	player, err := getPlayerRecord(db, playerSummary.GetCodename(), friendshipId, friendCode)
 	if err != nil {
 		return err
