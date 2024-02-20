@@ -635,7 +635,7 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 			}
 		}
 		if l := len(focuses); l > 1 {
-			log.Warnf("pokestop '%s' contains %d focus entries (%d pokemon): using the first pokemon found",
+			log.Warnf("SHOWCASE: pokestop '%s' contains %d focus entries (%d pokemon): using the first pokemon found",
 				stop.Id, l, numPokemon,
 			)
 		}
