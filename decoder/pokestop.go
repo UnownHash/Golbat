@@ -569,6 +569,13 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	var focussedPokemon *pogo.ContestPokemonFocusProto
 	var focussedPokemonType *pogo.ContestPokemonTypeFocusProto
 	var focussedBuddy *pogo.ContestBuddyFocusProto
+	var focussedPokemonAlignment *pogo.ContestPokemonAlignmentFocusProto
+	var focussedPokemonClass *pogo.ContestPokemonClassFocusProto
+	var focussedPokemonFamily *pogo.ContestPokemonFamilyFocusProto
+	var focussedGeneration *pogo.ContestGenerationFocusProto
+	var focussedHatched *pogo.ContestHatchedFocusProto
+	var focussedMega *pogo.ContestTemporaryEvolutionFocusProto
+	var focussedShiny *pogo.ContestShinyFocusProto
 
 	if focuses := contest.GetFocuses(); len(focuses) > 0 {
 		var numPokemon int
@@ -591,6 +598,41 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 					focussedBuddy = buddy
 				}
 			}
+			if alignment := focus.GetAlignment(); alignment != nil {
+				if focussedPokemonAlignment == nil {
+					focussedPokemonAlignment = alignment
+				}
+			}
+			if pokemonClass := focus.GetPokemonClass(); pokemonClass != nil {
+				if focussedPokemonClass == nil {
+					focussedPokemonClass = pokemonClass
+				}
+			}
+			if pokemonFamily := focus.GetPokemonFamily(); pokemonFamily != nil {
+				if focussedPokemonFamily == nil {
+					focussedPokemonFamily = pokemonFamily
+				}
+			}
+			if generation := focus.GetGeneration(); generation != nil {
+				if focussedGeneration == nil {
+					focussedGeneration = generation
+				}
+			}
+			if hatched := focus.GetHatched(); hatched != nil {
+				if focussedHatched == nil {
+					focussedHatched = hatched
+				}
+			}
+			if mega := focus.GetMega(); mega != nil {
+				if focussedMega == nil {
+					focussedMega = mega
+				}
+			}
+			if shiny := focus.GetShiny(); shiny != nil {
+				if focussedShiny == nil {
+					focussedShiny = shiny
+				}
+			}
 		}
 		if l := len(focuses); l > 1 {
 			log.Warnf("pokestop '%s' contains %d focus entries (%d pokemon): using the first pokemon found",
@@ -598,9 +640,18 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 			)
 		}
 	} else {
-		focussedPokemon = contest.GetFocus().GetPokemon()
-		focussedPokemonType = contest.GetFocus().GetType()
-		focussedBuddy = contest.GetFocus().GetBuddy()
+		log.Warnf("SHOWCASE: old contest.GetFocus used")
+		focus := contest.GetFocus()
+		focussedPokemon = focus.GetPokemon()
+		focussedPokemonType = focus.GetType()
+		focussedBuddy = focus.GetBuddy()
+		focussedPokemonAlignment = focus.GetAlignment()
+		focussedPokemonClass = focus.GetPokemonClass()
+		focussedPokemonFamily = focus.GetPokemonFamily()
+		focussedGeneration = focus.GetGeneration()
+		focussedHatched = focus.GetHatched()
+		focussedMega = focus.GetMega()
+		focussedShiny = focus.GetShiny()
 	}
 
 	if focussedPokemon == nil {
@@ -625,7 +676,37 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 		}
 		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetPokemonType1()))
 	}
-	//TODO add logic for buddy
+	//TODO add logic for new focuses
+	if focussedBuddy != nil {
+		minLevel := focussedBuddy.GetMinBuddyLevel() // level 0-5
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Buddy: %s", stop.Id, minLevel.String())
+	}
+	if focussedPokemonAlignment != nil {
+		alignment := focussedPokemonAlignment.GetRequiredAlignment() // unset, purified, shadow
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Pokemon Alignment: %s", stop.Id, alignment.String())
+	}
+	if focussedPokemonClass != nil {
+		requiredClass := focussedPokemonClass.GetRequiredClass() // normal, legendary, mythic, ultra beast
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Pokemon Class: %s", stop.Id, requiredClass.String())
+	}
+	if focussedPokemonFamily != nil {
+		requiredFamily := focussedPokemonFamily.GetRequiredFamily() // family pikachu, zubat e.g.
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Pokemon Family: %s", stop.Id, requiredFamily.String())
+	}
+	if focussedGeneration != nil {
+		generation := focussedGeneration.GetPokemonGeneration() // gen 1 - 9
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Pokemon Generation: %s", stop.Id, generation.String())
+	}
+	if focussedHatched != nil {
+		hatched := focussedHatched.GetRequireToBeHatched() // true , false
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Hatched: %t", stop.Id, hatched)
+	}
+	if focussedMega != nil {
+		restriction := focussedMega.GetRestriction()              // MEGA, NOT_TEMP_EVO
+		evolution := focussedMega.GetTemporaryEvolutionRequired() // MEGA, MEGA_X, MEGA_Y, PRIMAL
+		log.Infof("SHOWCASE: Stop: '%s' with Focussed Mega: %s %s", stop.Id, restriction.String(), evolution.String())
+	}
+
 }
 
 func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
