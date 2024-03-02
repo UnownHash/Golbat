@@ -1,15 +1,15 @@
 alter table `pokemon_area_stats`
     modify `area` varchar(255),
-    modify `geofence` varchar(255);
+    modify `fence` varchar(255);
 alter table `pokemon_iv_stats`
     modify `area` varchar(255),
-    modify `geofence` varchar(255);
+    modify `fence` varchar(255);
 alter table `pokemon_hundo_stats`
     modify `area` varchar(255),
-    modify `geofence` varchar(255);
+    modify `fence` varchar(255);
 alter table `pokemon_shiny_stats`
     modify `area` varchar(255),
-    modify `geofence` varchar(255);
+    modify `fence` varchar(255);
 alter table `pokemon_nundo_stats`
     modify `area` varchar(255),
-    modify `geofence` varchar(255);
+    modify `fence` varchar(255);
