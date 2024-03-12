@@ -439,7 +439,7 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 		area := areas[i]
 
 		// Raid has started/is active.
-		if new.RaidPokemonId.ValueOrZero() > 0 {
+		if new.RaidPokemonId.ValueOrZero() > 0 && (old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
 			if !locked {
 				raidStatsLock.Lock()
