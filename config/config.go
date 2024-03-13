@@ -114,6 +114,7 @@ type tuning struct {
 	ExtendedTimeout    bool    `koanf:"extended_timeout"`
 	MaxPokemonResults  int     `koanf:"max_pokemon_results"`
 	MaxPokemonDistance float64 `koanf:"max_pokemon_distance"`
+	ProfileRoutes      bool    `koanf:"profile_routes"`
 }
 
 type scanRule struct {

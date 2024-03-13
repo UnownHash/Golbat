@@ -278,28 +278,31 @@ func main() {
 	apiGroup.GET("/devices/all", GetDevices)
 
 	debugGroup := r.Group("/debug")
-	pprofGroup := debugGroup.Group("/pprof", AuthRequired())
-	pprofGroup.GET("/cmdline", func(c *gin.Context) {
-		pprof.Cmdline(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/heap", func(c *gin.Context) {
-		pprof.Index(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/block", func(c *gin.Context) {
-		pprof.Index(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/mutex", func(c *gin.Context) {
-		pprof.Index(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/trace", func(c *gin.Context) {
-		pprof.Trace(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/profile", func(c *gin.Context) {
-		pprof.Profile(c.Writer, c.Request)
-	})
-	pprofGroup.GET("/symbol", func(c *gin.Context) {
-		pprof.Symbol(c.Writer, c.Request)
-	})
+
+	if cfg.Tuning.ProfileRoutes {
+		pprofGroup := debugGroup.Group("/pprof", AuthRequired())
+		pprofGroup.GET("/cmdline", func(c *gin.Context) {
+			pprof.Cmdline(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/heap", func(c *gin.Context) {
+			pprof.Index(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/block", func(c *gin.Context) {
+			pprof.Index(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/mutex", func(c *gin.Context) {
+			pprof.Index(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/trace", func(c *gin.Context) {
+			pprof.Trace(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/profile", func(c *gin.Context) {
+			pprof.Profile(c.Writer, c.Request)
+		})
+		pprofGroup.GET("/symbol", func(c *gin.Context) {
+			pprof.Symbol(c.Writer, c.Request)
+		})
+	}
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
