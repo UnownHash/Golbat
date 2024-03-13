@@ -14,7 +14,7 @@ pokemon = true          # Keep pokemon table is kept nice and short
 incidents = true        # Remove incidents after expiry
 quests = true           # Remove quests after expiry
 stats = true            # Enable/Disable stats history
-stats_days = 7          # Remove entries from ["pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats" after x days
+stats_days = 7          # Remove entries from "pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats", "invasion_stats", "quest_stats", "raid_stats" after x days
 device_hours = 24       # Remove devices from in memory after not seen for x hours
 
 [logging]

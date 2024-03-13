@@ -143,6 +143,14 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	incidentCache.Set(incident.Id, *incident, ttlcache.DefaultTTL)
 	createIncidentWebhooks(ctx, db, oldIncident, incident)
+
+	stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
+	if stop == nil {
+		stop = &Pokestop{}
+	}
+
+	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
+	updateIncidentStats(oldIncident, incident, areas)
 }
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *Incident, incident *Incident) {
