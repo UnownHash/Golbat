@@ -278,7 +278,7 @@ func main() {
 	apiGroup.GET("/devices/all", GetDevices)
 
 	debugGroup := r.Group("/debug")
-	pprofGroup := debugGroup.Group("/pprof")
+	pprofGroup := debugGroup.Group("/pprof", AuthRequired())
 	pprofGroup.GET("/cmdline", func(c *gin.Context) {
 		pprof.Cmdline(c.Writer, c.Request)
 	})
