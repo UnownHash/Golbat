@@ -919,6 +919,10 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
+
+	areas := MatchStatsGeofence(pokestop.Lat, pokestop.Lon)
+	updateQuestStats(pokestop, haveAr, areas)
+
 	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
 }
 
