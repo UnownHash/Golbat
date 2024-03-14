@@ -1,6 +1,6 @@
 module golbat
 
-go 1.21
+go 1.22
 
 require (
 	github.com/Depado/ginprom v1.8.0
