@@ -388,7 +388,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
-	createPokemonWebhooks(oldPokemon, pokemon, areas)
+	createPokemonWebhooks(ctx, db, oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
 	updatePokemonNests(oldPokemon, pokemon)
 
@@ -399,7 +399,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 }
 
-func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	//nullString := func (v null.Int) interface{} {
 	//	if !v.Valid {
 	//		return "null"
@@ -423,6 +423,18 @@ func createPokemonWebhooks(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 					return "None"
 				} else {
 					return new.PokestopId.ValueOrZero()
+				}
+			}(),
+			"pokestop_name": func() *string {
+				if !new.PokestopId.Valid {
+					return nil
+				} else {
+					pokestop, _ := GetPokestopRecord(ctx, db, new.PokestopId.String)
+					name := "Unknown"
+					if pokestop != nil {
+						name = pokestop.Name.ValueOrZero()
+					}
+					return &name
 				}
 			}(),
 			"encounter_id":            new.Id,
