@@ -10,11 +10,11 @@ import (
 )
 
 // server is used to implement helloworld.GreeterServer.
-type grpcServer struct {
+type grpcRawServer struct {
 	pb.UnimplementedRawProtoServer
 }
 
-func (s *grpcServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoRequest) (*pb.RawProtoResponse, error) {
+func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoRequest) (*pb.RawProtoResponse, error) {
 	// Check for authorisation
 	if config.Config.RawBearer != "" {
 		md, _ := metadata.FromIncomingContext(ctx)

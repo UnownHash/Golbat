@@ -14,6 +14,7 @@ func LoadNests(db DbDetails) ([]Nest, error) {
 	fortIds := []Nest{}
 	err := db.GeneralDb.Select(&fortIds,
 		"SELECT nest_id, lat, lon, name, st_astext(polygon) as polygon_astext FROM nests WHERE active = 1")
+	statsCollector.IncDbQuery("select nest-polygons", err)
 	if err != nil {
 		return nil, err
 	}

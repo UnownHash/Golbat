@@ -3,13 +3,14 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"strconv"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 // Spawnpoint struct.
@@ -46,6 +47,7 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 
 	err := db.GeneralDb.GetContext(ctx, &spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
 
+	statsCollector.IncDbQuery("select spawnpoint", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -144,6 +146,7 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		"last_seen=VALUES(last_seen),"+
 		"despawn_sec=VALUES(despawn_sec)", spawnpoint)
 
+	statsCollector.IncDbQuery("insert spawnpoint", err)
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
 		return
@@ -168,6 +171,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
 			"SET last_seen=? "+
 			"WHERE id = ? ", now, spawnpointId)
+		statsCollector.IncDbQuery("update spawnpoint", err)
 		if err != nil {
 			log.Printf("Error updating spawnpoint last seen %s", err)
 			return

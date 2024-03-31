@@ -3,13 +3,15 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"time"
+
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	null "gopkg.in/guregu/null.v4"
+
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
-	null "gopkg.in/guregu/null.v4"
-	"time"
 )
 
 // Incident struct.
@@ -33,9 +35,9 @@ type Incident struct {
 }
 
 type webhookLineup struct {
-	slot      uint8    `json:"slot"`
-	pokemonId null.Int `json:"pokemon_id"`
-	form      null.Int `json:"form"`
+	Slot      uint8    `json:"slot"`
+	PokemonId null.Int `json:"pokemon_id"`
+	Form      null.Int `json:"form"`
 }
 
 //->   `id` varchar(35) NOT NULL,
@@ -59,6 +61,7 @@ func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) 
 		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form "+
 			"FROM incident "+
 			"WHERE incident.id = ? ", incidentId)
+	statsCollector.IncDbQuery("select incident", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -112,7 +115,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 			log.Errorf("insert incident: %s", err)
 			return
 		}
-
+		statsCollector.IncDbQuery("insert incident", err)
 		_, _ = res, err
 	} else {
 		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
@@ -131,6 +134,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 			"slot_3_form = :slot_3_form "+
 			"WHERE id = :id", incident,
 		)
+		statsCollector.IncDbQuery("update incident", err)
 		if err != nil {
 			log.Errorf("Update incident %s", err)
 		}
@@ -139,10 +143,18 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	incidentCache.Set(incident.Id, *incident, ttlcache.DefaultTTL)
 	createIncidentWebhooks(ctx, db, oldIncident, incident)
+
+	stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
+	if stop == nil {
+		stop = &Pokestop{}
+	}
+
+	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
+	updateIncidentStats(oldIncident, incident, areas)
 }
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *Incident, incident *Incident) {
-	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character) {
+	if oldIncident == nil || (oldIncident.ExpirationTime != incident.ExpirationTime || oldIncident.Character != incident.Character || oldIncident.Confirmed != incident.Confirmed || oldIncident.Slot1PokemonId != incident.Slot1PokemonId) {
 		stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
 		if stop == nil {
 			stop = &Pokestop{}
@@ -177,24 +189,25 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 		if incident.Slot1PokemonId.Valid {
 			incidentHook["lineup"] = []webhookLineup{
 				{
-					slot:      1,
-					pokemonId: incident.Slot1PokemonId,
-					form:      incident.Slot1Form,
+					Slot:      1,
+					PokemonId: incident.Slot1PokemonId,
+					Form:      incident.Slot1Form,
 				},
 				{
-					slot:      2,
-					pokemonId: incident.Slot2PokemonId,
-					form:      incident.Slot2Form,
+					Slot:      2,
+					PokemonId: incident.Slot2PokemonId,
+					Form:      incident.Slot2Form,
 				},
 				{
-					slot:      3,
-					pokemonId: incident.Slot3PokemonId,
-					form:      incident.Slot3Form,
+					Slot:      3,
+					PokemonId: incident.Slot3PokemonId,
+					Form:      incident.Slot3Form,
 				},
 			}
 		}
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
-		webhooks.AddMessage(webhooks.Invasion, incidentHook, areas)
+		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
+		statsCollector.UpdateIncidentCount(areas)
 	}
 }
 

@@ -4,19 +4,22 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
+
 	"golbat/config"
 	"golbat/db"
-	"golbat/geo"
 	"golbat/pogo"
 	"golbat/tz"
 	"golbat/util"
 	"golbat/webhooks"
-	"gopkg.in/guregu/null.v4"
-	"strings"
-	"time"
 )
 
 // Pokestop struct.
@@ -59,6 +62,8 @@ type Pokestop struct {
 	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
 	Description                null.String `db:"description" json:"description"`
 	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
+	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
+	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
 	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
 	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
 	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
@@ -106,23 +111,28 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
 		pokestop := stop.Value()
+		//log.Debugf("GetPokestopRecord %s (from cache)", fortId)
 		return &pokestop, nil
 	}
 	pokestop := Pokestop{}
 	err := db.GeneralDb.GetContext(ctx, &pokestop,
-		"SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,"+
-			"pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,"+
-			"quest_rewards, quest_template, quest_title,"+
-			"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
-			"alternative_quest_conditions, alternative_quest_rewards,"+
-			"alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,"+
-			"ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp, quest_expiry, alternative_quest_expiry, description "+
-			"FROM pokestop "+
-			"WHERE pokestop.id = ? ", fortId)
-	if err == sql.ErrNoRows {
+		`SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,
+			pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,
+			quest_rewards, quest_template, quest_title,
+			alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
+			alternative_quest_conditions, alternative_quest_rewards,
+			alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,
+			ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
+			quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id, showcase_pokemon_form_id,
+			showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
+			FROM pokestop
+			WHERE pokestop.id = ? `, fortId)
+	//log.Debugf("GetPokestopRecord %s (from db)", fortId)
+
+	statsCollector.IncDbQuery("select pokestop", err)
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +185,8 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
 		old.ShowcaseRankingStandard != new.ShowcaseRankingStandard ||
 		old.ShowcasePokemon != new.ShowcasePokemon ||
+		old.ShowcasePokemonForm != new.ShowcasePokemonForm ||
+		old.ShowcasePokemonType != new.ShowcasePokemonType ||
 		old.ShowcaseRankings != new.ShowcaseRankings ||
 		old.ShowcaseExpiry != new.ShowcaseExpiry
 }
@@ -193,6 +205,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	stop.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
 	stop.PowerUpLevel, stop.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
 
+	// lasModifiedMs is also modified when incident happens
 	lastModifiedTimestamp := fortData.LastModifiedMs / 1000
 	stop.LastModifiedTimestamp = null.IntFrom(lastModifiedTimestamp)
 
@@ -200,13 +213,18 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		lureId := int16(fortData.ActiveFortModifier[0])
 		if lureId >= 501 && lureId <= 510 {
 			lureEnd := lastModifiedTimestamp + LureTime
+			oldLureEnd := stop.LureExpireTimestamp.ValueOrZero()
 			if stop.LureId != lureId {
 				stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				stop.LureId = lureId
 			} else {
 				now := time.Now().Unix()
-				if now > (lureEnd + 30) { // wait some time after lure end before a restart in case of timing issue
-					// If a lure needs to be restarted
+				// wait some time after lure end before a restart in case of timing issue
+				if now > oldLureEnd+30 {
+					for now > lureEnd {
+						lureEnd += LureTime
+					}
+					// lure needs to be restarted
 					stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				}
 			}
@@ -225,11 +243,11 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	return stop
 }
 
-func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) {
+func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) string {
 
 	if questProto.ChallengeQuest == nil {
 		log.Debugf("Received blank quest")
-		return
+		return "Blank quest"
 	}
 	questData := questProto.ChallengeQuest.Quest
 	questTitle := questProto.ChallengeQuest.QuestDisplay.Title
@@ -495,6 +513,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.QuestTimestamp = null.IntFrom(questTimestamp)
 		stop.QuestExpiry = questExpiry
 	}
+
+	return questTitle
 }
 
 func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDetailsOutProto) *Pokestop {
@@ -515,7 +535,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
 		lureId := int16(fortData.Modifier[0].ModifierType)
-		lureExpiry := int64(fortData.Modifier[0].ExpirationTimeMs / 1000)
+		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000
 
 		stop.LureId = lureId
 		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
@@ -542,10 +562,59 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.ContestProto) {
 	stop.ShowcaseRankingStandard = null.IntFrom(int64(contest.GetMetric().GetRankingStandard()))
 	stop.ShowcaseExpiry = null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
-	stop.ShowcasePokemon = null.IntFrom(int64(contest.GetFocus().GetPokemon().GetPokedexId()))
+
+	// Focuses is used now and populates the new 'RequireFormToMatch' field, which
+	// Focus does not populate. We can only store 1 atm, so this just grabs the first
+	// if there is one and falls back to Focus if Focuses is empty, just in case.
+	var focussedPokemon *pogo.ContestPokemonFocusProto
+	var focussedPokemonType *pogo.ContestFocusProto
+
+	if focuses := contest.GetFocuses(); len(focuses) > 0 {
+		var numPokemon int
+
+		for _, focus := range focuses {
+			if pok := focus.GetPokemon(); pok != nil {
+				if focussedPokemon == nil {
+					focussedPokemon = pok
+				}
+				numPokemon++
+			}
+
+			if pokType := focus.GetType(); pokType != nil {
+				if focussedPokemonType == nil {
+					focussedPokemonType = focus
+				}
+			}
+		}
+		if l := len(focuses); l > 1 {
+			log.Warnf("pokestop '%s' contains %d focus entries (%d pokemon): using the first pokemon found",
+				stop.Id, l, numPokemon,
+			)
+		}
+	} else {
+		focussedPokemon = contest.GetFocus().GetPokemon()
+	}
+
+	if focussedPokemon == nil {
+		stop.ShowcasePokemon = null.IntFromPtr(nil)
+		stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+	} else {
+		stop.ShowcasePokemon = null.IntFrom(int64(focussedPokemon.GetPokedexId()))
+		if focussedPokemon.RequireFormToMatch {
+			stop.ShowcasePokemonForm = null.IntFrom(int64(focussedPokemon.GetPokemonDisplay().GetForm()))
+		} else {
+			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+		}
+	}
+
+	if focussedPokemonType == nil {
+		stop.ShowcasePokemonType = null.IntFromPtr(nil)
+	} else {
+		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType1()))
+	}
 }
 
-func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeContestEntryOutProto) {
+func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
 	type contestEntry struct {
 		Rank      int     `json:"rank"`
 		Score     float64 `json:"score"`
@@ -619,7 +688,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          false,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook, areas)
+		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 
 	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
@@ -645,7 +714,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"pokestop_url":     stop.Url.ValueOrZero(),
 			"with_ar":          true,
 		}
-		webhooks.AddMessage(webhooks.Quest, questHook, areas)
+		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
 		pokestopHook := map[string]interface{}{
@@ -670,6 +739,8 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"power_up_end_timestamp":    stop.PowerUpPoints.ValueOrZero(),
 			"updated":                   stop.Updated,
 			"showcase_pokemon_id":       stop.ShowcasePokemon,
+			"showcase_pokemon_form_id":  stop.ShowcasePokemonForm,
+			"showcase_pokemon_type_id":  stop.ShowcasePokemonType,
 			"showcase_ranking_standard": stop.ShowcaseRankingStandard,
 			"showcase_expiry":           stop.ShowcaseExpiry,
 			"showcase_rankings": func() interface{} {
@@ -681,7 +752,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			}(),
 		}
 
-		webhooks.AddMessage(webhooks.Pokestop, pokestopHook, areas)
+		webhooksSender.AddMessage(webhooks.Pokestop, pokestopHook, areas)
 	}
 }
 
@@ -707,8 +778,8 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,"+
 				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
 				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
-				"quest_expiry, alternative_quest_expiry, description,"+
-				"showcase_pokemon_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
+				"quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id,"+
+				"showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
 				")"+
 				"VALUES ("+
 				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
@@ -718,12 +789,14 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
 				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
 				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
-				":quest_expiry, :alternative_quest_expiry, :description,"+
-				":showcase_pokemon_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
+				":quest_expiry, :alternative_quest_expiry, :description, :showcase_pokemon_id,"+
+				":showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
 			pokestop)
 
+		statsCollector.IncDbQuery("insert pokestop", err)
+		//log.Debugf("Insert pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
-			log.Errorf("insert pokestop: %s", err)
+			log.Errorf("insert pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res
@@ -765,14 +838,18 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				"alternative_quest_expiry = :alternative_quest_expiry,"+
 				"description = :description,"+
 				"showcase_pokemon_id = :showcase_pokemon_id,"+
+				"showcase_pokemon_form_id = :showcase_pokemon_form_id,"+
+				"showcase_pokemon_type_id = :showcase_pokemon_type_id,"+
 				"showcase_ranking_standard = :showcase_ranking_standard,"+
 				"showcase_expiry = :showcase_expiry,"+
 				"showcase_rankings = :showcase_rankings"+
 				" WHERE id = :id",
 			pokestop,
 		)
+		statsCollector.IncDbQuery("update pokestop", err)
+		//log.Debugf("Update pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
-			log.Errorf("update pokestop: %s", err)
+			log.Errorf("update pokestop %s: %s", pokestop.Id, err)
 			return
 		}
 		_ = res
@@ -814,10 +891,17 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 }
 
 func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
-	if quest.ChallengeQuest == nil {
-		return "No quest"
+	haveArStr := "NoAR"
+	if haveAr {
+		haveArStr = "AR"
 	}
 
+	if quest.ChallengeQuest == nil {
+		statsCollector.IncDecodeQuest("error", "no_quest")
+		return fmt.Sprintf("%s %s Blank quest", quest.FortId, haveArStr)
+	}
+
+	statsCollector.IncDecodeQuest("ok", haveArStr)
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
@@ -831,25 +915,29 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	if pokestop == nil {
 		pokestop = &Pokestop{}
 	}
-	pokestop.updatePokestopFromQuestProto(quest, haveAr)
+	questTitle := pokestop.updatePokestopFromQuestProto(quest, haveAr)
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
-	return fmt.Sprintf("%s", quest.FortId)
+
+	areas := MatchStatsGeofence(pokestop.Lat, pokestop.Lon)
+	updateQuestStats(pokestop, haveAr, areas)
+
+	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
 }
 
-func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence geo.Geofence) {
-	res, err := db.RemoveQuests(ctx, dbDetails, geofence)
+func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
+	started := time.Now()
+	rows, err := db.RemoveQuests(ctx, dbDetails, geofence)
 	if err != nil {
 		log.Errorf("ClearQuest: Error removing quests: %s", err)
 		return
 	}
 	ClearPokestopCache()
-	rows, _ := res.RowsAffected()
-	log.Infof("ClearQuest: Removed quests from %d pokestops", rows)
+	log.Infof("ClearQuest: Removed quests from %d pokestops in %s", rows, time.Since(started))
 }
 
-func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence geo.Geofence) db.QuestStatus {
+func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Feature) db.QuestStatus {
 	res, err := db.GetQuestStatus(dbDetails, geofence)
 	if err != nil {
 		log.Errorf("QuestStatus: Error retrieving quests: %s", err)
@@ -878,7 +966,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
 
-func GetPokestopPositions(details db.DbDetails, geofence geo.Geofence) ([]db.QuestLocation, error) {
+func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
 	return db.GetPokestopPositions(details, geofence)
 }
 
@@ -930,7 +1018,7 @@ func getFortIdFromContest(id string) string {
 	return strings.Split(id, "-")[0]
 }
 
-func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeContestEntryProto, contestData *pogo.GetPokemonSizeContestEntryOutProto) string {
+func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
 	fortId := getFortIdFromContest(request.GetContestId())
 
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)

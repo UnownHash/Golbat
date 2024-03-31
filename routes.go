@@ -4,18 +4,18 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/json"
-	"golbat/config"
-	"golbat/decoder"
-	"golbat/geo"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gin-gonic/gin/binding"
-	"github.com/gin-gonic/gin/render"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/config"
+	"golbat/decoder"
+	"golbat/geo"
+	"golbat/pogo"
 )
 
 type ProtoData struct {
@@ -38,6 +38,30 @@ type InboundRawData struct {
 	HaveAr     *bool
 }
 
+func questsHeldHasARTask(quests_held any) *bool {
+	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
+
+	quests_held_list, ok := quests_held.([]any)
+	if !ok {
+		log.Errorf("Raw: unexpected quests_held type in data: %T", quests_held)
+		return nil
+	}
+	for _, quest_id := range quests_held_list {
+		if quest_id_f, ok := quest_id.(float64); ok {
+			if int64(quest_id_f) == ar_quest_id {
+				res := true
+				return &res
+			}
+			continue
+		}
+		// quest_id is not float64? Treat the whole thing as unknown.
+		log.Errorf("Raw: unexpected quest_id type in quests_held: %T", quest_id)
+		return nil
+	}
+	res := false
+	return &res
+}
+
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	var r *http.Request = c.Request
@@ -45,17 +69,20 @@ func Raw(c *gin.Context) {
 	authHeader := r.Header.Get("Authorization")
 	if config.Config.RawBearer != "" {
 		if authHeader != "Bearer "+config.Config.RawBearer {
+			statsCollector.IncRawRequests("error", "auth")
 			log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
 			return
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1048576))
+	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
 	if err != nil {
+		statsCollector.IncRawRequests("error", "io_error")
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
 		return
 	}
 	if err := r.Body.Close(); err != nil {
+		statsCollector.IncRawRequests("error", "io_close_error")
 		log.Errorf("Raw: Error (2) during HTTP receive %s", err)
 		return
 	}
@@ -85,13 +112,24 @@ func Raw(c *gin.Context) {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
+				if latTarget == 0 && lonTarget == 0 {
+					lat := entry["lat"]
+					lng := entry["lng"]
+					if lat != nil && lng != nil {
+						lat_f, _ := lat.(float64)
+						lng_f, _ := lng.(float64)
+						if lat_f != 0 && lng_f != 0 {
+							latTarget = lat_f
+							lonTarget = lng_f
+						}
+					}
+				}
 				protoData = append(protoData, InboundRawData{
 					Base64Data: entry["payload"].(string),
 					Method:     int(entry["type"].(float64)),
 					HaveAr: func() *bool {
-						if v := entry["have_ar"]; v != nil {
-							res := v.(bool)
-							return &res
+						if v := entry["quests_held"]; v != nil {
+							return questsHeldHasARTask(v)
 						}
 						return nil
 					}(),
@@ -206,6 +244,7 @@ func Raw(c *gin.Context) {
 	}
 
 	if decodeError == true {
+		statsCollector.IncRawRequests("error", "decode")
 		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
 
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
@@ -255,22 +294,12 @@ func Raw(c *gin.Context) {
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
+	statsCollector.IncRawRequests("ok", "")
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
 	//if err := json.NewEncoder(w).Encode(t); err != nil {
 	//	panic(err)
 	//}
-}
-
-/* Should really be in a separate file, move later */
-
-type ApiLocation struct {
-	Latitude  float64 `json:"lat"`
-	Longitude float64 `json:"lon"`
-}
-
-type GolbatClearQuest struct {
-	Fence []ApiLocation `json:"fence"`
 }
 
 func AuthRequired() gin.HandlerFunc {
@@ -289,36 +318,21 @@ func AuthRequired() gin.HandlerFunc {
 }
 
 func ClearQuests(c *gin.Context) {
-	var golbatClearQuest GolbatClearQuest
-	if err := c.BindJSON(&golbatClearQuest); err != nil {
+	fence, err := geo.NormaliseFenceRequest(c)
+
+	if err != nil {
 		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence)+1)
-	for _, loc := range golbatClearQuest.Fence {
-		locations = append(locations, geo.Location{
-			Latitude:  loc.Latitude,
-			Longitude: loc.Longitude,
-		})
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	// Ensure the fence is closed
-	if locations[0] != locations[len(locations)-1] {
-		locations = append(locations, locations[0])
-	}
-
-	fence := geo.Geofence{
-		Fence: locations,
-	}
-
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
-	}()
+	log.Debugf("Clear quests %+v", fence)
+	startTime := time.Now()
+	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
+	log.Infof("Clear quest took %s", time.Since(startTime))
 
 	c.JSON(http.StatusAccepted, map[string]interface{}{
 		"status": "ok",
@@ -351,6 +365,23 @@ func PokemonScan(c *gin.Context) {
 	}
 
 	res := decoder.GetPokemonInArea(requestBody)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusAccepted, res)
+}
+
+func PokemonScan2(c *gin.Context) {
+	var requestBody decoder.ApiPokemonScan2
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /api/pokemon/scan/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.GetPokemonInArea2(requestBody)
 	if res == nil {
 		c.Status(http.StatusInternalServerError)
 		return
@@ -391,54 +422,22 @@ func PokemonSearch(c *gin.Context) {
 		return
 	}
 
-	res := decoder.SearchPokemon(requestBody)
+	res, err := decoder.SearchPokemon(requestBody)
+	if err != nil {
+		log.Warnf("POST /api/search/ Error during post search %v", err)
+		c.Status(http.StatusBadRequest)
+		return
+	}
 	c.JSON(http.StatusAccepted, res)
 }
 
-func PokemonScanMsgPack(c *gin.Context) {
-	var requestBody decoder.ApiPokemonScan
-
-	if err := c.MustBindWith(&requestBody, binding.MsgPack); err != nil {
-		log.Warnf("POST /api/pokemon/scan-msgpack/ Error during post retrieve %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	res := decoder.GetPokemonInArea(requestBody)
-	c.Render(http.StatusAccepted, render.MsgPack{Data: res})
-}
-
 func GetQuestStatus(c *gin.Context) {
-	var golbatClearQuest GolbatClearQuest
-	if err := c.BindJSON(&golbatClearQuest); err != nil {
+	fence, err := geo.NormaliseFenceRequest(c)
+
+	if err != nil {
 		log.Warnf("POST /api/quest-status/ Error during post area %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
-	}
-
-	if len(golbatClearQuest.Fence) == 0 {
-		c.JSON(http.StatusBadRequest, map[string]interface{}{
-			"status": "error",
-			"data":   nil,
-		})
-		return
-	}
-
-	locations := make([]geo.Location, 0, len(golbatClearQuest.Fence))
-	for _, loc := range golbatClearQuest.Fence {
-		locations = append(locations, geo.Location{
-			Latitude:  loc.Latitude,
-			Longitude: loc.Longitude,
-		})
-	}
-
-	// Ensure the fence is closed
-	if locations[0] != locations[len(locations)-1] {
-		locations = append(locations, locations[0])
-	}
-
-	fence := geo.Geofence{
-		Fence: locations,
 	}
 
 	questStatus := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
@@ -452,22 +451,21 @@ func GetHealth(c *gin.Context) {
 }
 
 func GetPokestopPositions(c *gin.Context) {
-	var requestBody geo.Geofence
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
+	fence, err := geo.NormaliseFenceRequest(c)
+	if err != nil {
+		log.Warnf("POST /api/pokestop-positions/ Error during post area %v %v", err, fence)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	res, err := decoder.GetPokestopPositions(dbDetails, requestBody)
+	response, err := decoder.GetPokestopPositions(dbDetails, fence)
 	if err != nil {
 		log.Warnf("POST /api/pokestop-positions/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, res)
+	c.JSON(http.StatusAccepted, response)
 }
 
 func GetPokestop(c *gin.Context) {

@@ -4,11 +4,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/jellydator/ttlcache/v3"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
+	"golbat/util"
 	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 type Route struct {
@@ -51,6 +54,7 @@ func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
 		`,
 		id,
 	)
+	statsCollector.IncDbQuery("select route", err)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	} else if err != nil {
@@ -117,6 +121,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			route,
 		)
 
+		statsCollector.IncDbQuery("insert route", err)
 		if err != nil {
 			return fmt.Errorf("insert route error: %w", err)
 		}
@@ -148,6 +153,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			route,
 		)
 
+		statsCollector.IncDbQuery("update route", err)
 		if err != nil {
 			return fmt.Errorf("update route error %w", err)
 		}
@@ -160,6 +166,15 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
 	route.Name = sharedRouteProto.GetName()
 	route.Description = sharedRouteProto.GetDescription()
+	// NOTE: Some descriptions have more than 255 runes, which won't fit in our
+	// varchar(255).
+	if truncateStr, truncated := util.TruncateUTF8(route.Description, 255); truncated {
+		log.Warnf("truncating description for route id '%s'. Orig description: %s",
+			route.Id,
+			route.Description,
+		)
+		route.Description = truncateStr
+	}
 	route.DistanceMeters = sharedRouteProto.GetRouteDistanceMeters()
 	route.DurationSeconds = sharedRouteProto.GetRouteDurationSeconds()
 	route.EndFortId = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()

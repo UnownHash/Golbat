@@ -14,12 +14,16 @@ pokemon = true          # Keep pokemon table is kept nice and short
 incidents = true        # Remove incidents after expiry
 quests = true           # Remove quests after expiry
 stats = true            # Enable/Disable stats history
-stats_days = 7          # Remove entries from ["pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats" after x days
+stats_days = 7          # Remove entries from "pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats", "invasion_stats", "quest_stats", "raid_stats" after x days
 device_hours = 24       # Remove devices from in memory after not seen for x hours
 
 [logging]
 debug = false
 save_logs = true
+max_size = 50           # Size in MB
+max_backups = 10        # Amount of files to keep
+max_age = 30            # Day(s) to keep files
+compress = true         # Compress to gz archive
 
 [database]
 user = ""
@@ -27,10 +31,13 @@ password = ""
 address = "127.0.0.1:3306"
 db = ""
 
-
 [pvp]
 enabled = true
 include_hundos_under_cap = false
+
+# you can enable prometheus by uncommenting this section
+#[prometheus]
+#enabled = true
 
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array
@@ -38,13 +45,20 @@ include_hundos_under_cap = false
 [[webhooks]]
 url = "http://localhost:4201"
 # types if specified can be...
-# types = ["pokemon", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update"]
+# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update"]
+# "pokemon" includes both with ivs and without. "pokemon_iv" will only be encountered pokemon. "pokemon_no_iv" may be nearby pokemon that have not been encountered (yet).
 
 #[[webhooks]]
 #url = "http://localhost:4202"
 #types = ["raid"]
+#headers = ["X-Poracle-Secret:abc", "Other-Header:def"]
 
 #[[webhooks]]
 #url = "http://localhost:4202"
 #types = ["raid"]
 #areas = ["London/*", "*/Harrow", "Harrow"]
+
+[tuning]
+max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
+max_pokemon_results = 3000  # Maximum number of pokemon to return
+extended_timeout = false

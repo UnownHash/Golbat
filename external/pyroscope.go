@@ -1,11 +1,12 @@
 package external
 
 import (
-	"github.com/pyroscope-io/client/pyroscope"
-	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"os"
 	"runtime"
+
+	"github.com/grafana/pyroscope-go"
+	log "github.com/sirupsen/logrus"
 )
 
 func InitPyroscope() {

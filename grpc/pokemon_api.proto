@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package pokemon_api;
+
+// Interface exported by the server.
+service Pokemon {
+  rpc Search (PokemonScanRequest) returns (PokemonScanResponse) {}
+}
+
+message PokemonScanRequest {
+  float min_lat = 1;
+  float min_lon = 2;
+  float max_lat = 3;
+  float max_lon = 4;
+  int32 limit = 6;
+  repeated PokemonDnf filters = 7;
+}
+
+message PokemonDnf  {
+  repeated PokemonId pokemon            = 1;
+  optional RangeMinMax Iv               = 2;
+  optional RangeMinMax AtkIv            = 3;
+  optional RangeMinMax DefIv            = 4;
+  optional RangeMinMax StaIv            = 5;
+  optional RangeMinMax Level            = 6;
+  optional RangeMinMax Cp               = 7;
+  optional RangeMinMax Gender           = 8;
+  optional RangeMinMax Size             = 9;
+  optional RangeMinMax PvpLittleRanking = 10;
+  optional RangeMinMax PvpGreatRanking  = 11;
+  optional RangeMinMax PvpUltraRanking  = 12;
+}
+
+message PokemonId {
+  optional int32 id = 1;
+  optional int32 form = 2;
+}
+
+message RangeMinMax {
+  optional int32 min = 1;
+  optional int32 max = 2;
+}
+
+message PokemonScanResponse {
+  enum Status {
+    UNSET = 0;
+    SUCCESS = 200;
+  }
+  Status status = 1;
+  repeated PokemonDetails pokemon = 2;
+}
+
+
+
+message PokemonDetails {
+  string id = 1;
+  optional string pokestop_id = 2;
+  optional int64 spawn_id = 3;
+   double lat = 4;
+   double lon = 5;
+  optional float weight = 6;
+  optional int32 size = 7;
+  optional float height = 8;
+  optional int32 expire_timestamp = 9;
+  optional int32 updated = 10;
+  optional int32 pokemon_id = 11;
+  optional int32 move_1 = 12;
+  optional int32 move_2 = 13;
+  optional int32 gender = 14;
+  optional int32 cp = 15;
+  optional int32 atk_iv = 16;
+  optional int32 def_iv = 17;
+  optional int32 sta_iv = 18;
+  optional float iv = 19;
+  optional int32 form = 20;
+  optional int32 level = 21;
+  optional int32 encounter_weather = 22;
+  optional int32 weather = 23;
+  optional int32 costume = 24;
+  optional int64 first_seen_timestamp = 25;
+  optional int32 changed = 26;
+  optional int64 cell_id = 27;
+  bool expire_timestamp_verified = 28;
+  optional int32 display_pokemon_id = 29;
+  optional bool is_ditto = 30;
+  optional string seen_type = 31;
+  optional bool shiny = 32;
+  optional string username = 33;
+  optional float capture_1 = 34;
+  optional float capture_2 = 35;
+  optional float capture_3 = 36;
+  optional string pvp = 37;
+  optional float distance = 38;
+}

@@ -1,15 +1,20 @@
 package config
 
-import "golbat/geo"
+import (
+	"time"
+
+	"golbat/geo"
+)
 
 type configDefinition struct {
 	Port              int        `koanf:"port"`
 	GrpcPort          int        `koanf:"grpc_port"`
-	Webhooks          []webhook  `koanf:"webhooks"`
+	Webhooks          []Webhook  `koanf:"webhooks"`
 	Database          database   `koanf:"database"`
 	Logging           logging    `koanf:"logging"`
 	Sentry            sentry     `koanf:"sentry"`
 	Pyroscope         pyroscope  `koanf:"pyroscope"`
+	Prometheus        Prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly bool       `koanf:"pokemon_memory_only"`
 	TestFortInMemory  bool       `koanf:"test_fort_in_memory"`
 	Cleanup           cleanup    `koanf:"cleanup"`
@@ -19,6 +24,19 @@ type configDefinition struct {
 	Koji              koji       `koanf:"koji"`
 	Tuning            tuning     `koanf:"tuning"`
 	ScanRules         []scanRule `koanf:"scan_rules"`
+}
+
+func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
+	// not currently configurable.
+	return time.Second
+}
+
+func (configDefinition configDefinition) GetWebhooks() []Webhook {
+	return configDefinition.Webhooks
+}
+
+func (configDefinition configDefinition) GetPrometheus() Prometheus {
+	return configDefinition.Prometheus
 }
 
 type koji struct {
@@ -35,11 +53,13 @@ type cleanup struct {
 	DeviceHours int  `koanf:"device_hours"`
 }
 
-type webhook struct {
-	Url       string         `koanf:"url"`
-	Types     []string       `koanf:"types"`
-	Areas     []string       `koanf:"areas"`
-	AreaNames []geo.AreaName `koanf:"-"`
+type Webhook struct {
+	Url       string            `koanf:"url"`
+	Types     []string          `koanf:"types"`
+	Areas     []string          `koanf:"areas"`
+	Headers   []string          `koanf:"headers"`
+	HeaderMap map[string]string `koanf:"-"`
+	AreaNames []geo.AreaName    `koanf:"-"`
 }
 
 type pvp struct {
@@ -65,9 +85,21 @@ type pyroscope struct {
 	BlockProfileRate     int    `koanf:"block_profile_rate"`
 }
 
+type Prometheus struct {
+	Enabled        bool      `koanf:"enabled"`
+	Token          string    `koanf:"token"`
+	BucketSize     []float64 `koanf:"bucket_size"`
+	LiveStats      bool      `koanf:"live_stats"`
+	LiveStatsSleep int       `koanf:"live_stats_sleep"`
+}
+
 type logging struct {
-	Debug    bool `koanf:"debug"`
-	SaveLogs bool `koanf:"save_logs" default:"true"`
+	Debug      bool `koanf:"debug"`
+	SaveLogs   bool `koanf:"save_logs"`
+	MaxSize    int  `koanf:"max_size"`
+	MaxBackups int  `koanf:"max_backups"`
+	MaxAge     int  `koanf:"max_age"`
+	Compress   bool `koanf:"compress"`
 }
 
 type database struct {
@@ -79,8 +111,9 @@ type database struct {
 }
 
 type tuning struct {
-	ExtendedTimeout   bool `koanf:"extended_timeout"`
-	MaxPokemonResults int  `koanf:"max_pokemon_results"`
+	ExtendedTimeout    bool    `koanf:"extended_timeout"`
+	MaxPokemonResults  int     `koanf:"max_pokemon_results"`
+	MaxPokemonDistance float64 `koanf:"max_pokemon_distance"`
 }
 
 type scanRule struct {
