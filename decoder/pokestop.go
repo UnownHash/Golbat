@@ -653,7 +653,12 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			TempEvolution: int(entry.GetPokemonDisplay().CurrentTempEvolution),
 			Alignment:     int(entry.GetPokemonDisplay().Alignment),
 			Badge:         int(entry.GetPokemonDisplay().PokemonBadge),
-			LocationCard:  int(entry.GetPokemonDisplay().LocationCard.LocationCard),
+			LocationCard: int(func() pogo.LocationCard {
+				if entry.GetPokemonDisplay().LocationCard == nil {
+					return 0
+				}
+				return entry.GetPokemonDisplay().LocationCard.LocationCard
+			}()),
 		})
 
 	}
