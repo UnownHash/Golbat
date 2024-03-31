@@ -53,12 +53,6 @@ func main() {
 
 	logLevel := log.InfoLevel
 
-	// Both Sentry & Pyroscope are optional and off by default. Read more:
-	// https://docs.sentry.io/platforms/go
-	// https://pyroscope.io/docs/golang
-	external.InitSentry()
-	external.InitPyroscope()
-
 	if cfg.Logging.Debug == true {
 		logLevel = log.DebugLevel
 	}
@@ -71,13 +65,19 @@ func main() {
 		cfg.Logging.Compress,
 	)
 
+	log.Infof("Golbat starting")
+
+	// Both Sentry & Pyroscope are optional and off by default. Read more:
+	// https://docs.sentry.io/platforms/go
+	// https://pyroscope.io/docs/golang
+	external.InitSentry()
+	external.InitPyroscope()
+
 	webhooksSender, err := webhooks.NewWebhooksSender(cfg)
 	if err != nil {
 		log.Fatalf("failed to setup webhooks sender: %s", err)
 	}
 	decoder.SetWebhooksSender(webhooksSender)
-
-	log.Infof("Golbat starting")
 
 	// Capture connection properties.
 	mysqlConfig := mysql.Config{
@@ -335,7 +335,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		return fmt.Sprintf("#%d", method)
 	}
 
-	if method != int(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION) && protoData.Level < 30 {
+	if method != int(pogo.InternalPlatformClientAction_INTERNAL_PROXY_SOCIAL_ACTION) && protoData.Level < 30 {
 		statsCollector.IncDecodeMethods("error", "low_level", getMethodName(method, true))
 		log.Debugf("Insufficient Level %d Did not process hook type %s", protoData.Level, pogo.Method(method))
 		return
@@ -385,7 +385,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
 		ignore = true
 		break
-	case pogo.Method(pogo.ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION):
+	case pogo.Method(pogo.InternalPlatformClientAction_INTERNAL_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
 			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
 			processed = true
@@ -475,22 +475,22 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
 	}
 
-	switch pogo.SocialAction(proxyRequestProto.GetAction()) {
-	case pogo.SocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
+	switch pogo.InternalSocialAction(proxyRequestProto.GetAction()) {
+	case pogo.InternalSocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
 		return decodeGetFriendDetails(proxyResponseProto.Payload)
-	case pogo.SocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
+	case pogo.InternalSocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
-		return decodeSearchPlayer(proxyRequestProto, proxyResponseProto.Payload)
+		return decodeSearchPlayer(&proxyRequestProto, proxyResponseProto.Payload)
 
 	}
 
 	statsCollector.IncDecodeSocialActionWithRequest("ok", "unknown")
-	return fmt.Sprintf("Did not process %s", pogo.SocialAction(proxyRequestProto.GetAction()).String())
+	return fmt.Sprintf("Did not process %s", pogo.InternalSocialAction(proxyRequestProto.GetAction()).String())
 }
 
 func decodeGetFriendDetails(payload []byte) string {
-	var getFriendDetailsOutProto pogo.GetFriendDetailsOutProto
+	var getFriendDetailsOutProto pogo.InternalGetFriendDetailsOutProto
 	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
 
 	if getFriendDetailsError != nil {
@@ -499,7 +499,7 @@ func decodeGetFriendDetails(payload []byte) string {
 		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
 	}
 
-	if getFriendDetailsOutProto.GetResult() != pogo.GetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
+	if getFriendDetailsOutProto.GetResult() != pogo.InternalGetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
 		statsCollector.IncDecodeGetFriendDetails("error", "non_success")
 		return fmt.Sprintf("unsuccessful get friends details")
 	}
@@ -519,8 +519,8 @@ func decodeGetFriendDetails(payload []byte) string {
 	return fmt.Sprintf("%d players decoded on %d", len(getFriendDetailsOutProto.GetFriend())-failures, len(getFriendDetailsOutProto.GetFriend()))
 }
 
-func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte) string {
-	var searchPlayerOutProto pogo.SearchPlayerOutProto
+func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byte) string {
+	var searchPlayerOutProto pogo.InternalSearchPlayerOutProto
 	searchPlayerOutError := proto.Unmarshal(payload, &searchPlayerOutProto)
 
 	if searchPlayerOutError != nil {
@@ -529,12 +529,12 @@ func decodeSearchPlayer(proxyRequestProto pogo.ProxyRequestProto, payload []byte
 		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
 	}
 
-	if searchPlayerOutProto.GetResult() != pogo.SearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
+	if searchPlayerOutProto.GetResult() != pogo.InternalSearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
 		statsCollector.IncDecodeSearchPlayer("error", "non_success")
 		return fmt.Sprintf("unsuccessful search player response")
 	}
 
-	var searchPlayerProto pogo.SearchPlayerProto
+	var searchPlayerProto pogo.InternalSearchPlayerProto
 	searchPlayerError := proto.Unmarshal(proxyRequestProto.GetPayload(), &searchPlayerProto)
 
 	if searchPlayerError != nil || searchPlayerProto.GetFriendCode() == "" {
@@ -865,21 +865,21 @@ func decodeGetContestData(ctx context.Context, request []byte, data []byte) stri
 }
 
 func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
-	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeContestEntryOutProto
+	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeLeaderboardEntryOutProto
 	if err := proto.Unmarshal(data, &decodedPokemonSizeContestEntry); err != nil {
-		log.Errorf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
-		return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryOutProto %s", err)
+		log.Errorf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
 	}
 
-	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeContestEntryOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetPokemonSizeContestEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
+	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetPokemonSizeLeaderboardEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
 	}
 
-	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeContestEntryProto
+	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeLeaderboardEntryProto
 	if request != nil {
 		if err := proto.Unmarshal(request, &decodedPokemonSizeContestEntryRequest); err != nil {
-			log.Errorf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
-			return fmt.Sprintf("Failed to parse GetPokemonSizeContestEntryProto %s", err)
+			log.Errorf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
+			return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
 		}
 	}
 

@@ -147,7 +147,7 @@ func StartStatsExpiry(db *sqlx.DB) {
 				log.Infof("DB - Cleanup of pokemon_area_stats table took %s (%d rows)", elapsed, rows)
 			}
 
-			tables := []string{"pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats"}
+			tables := []string{"pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats", "invasion_stats", "quest_stats", "raid_stats"}
 
 			for _, table := range tables {
 				start = time.Now()

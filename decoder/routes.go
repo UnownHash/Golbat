@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/util"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -164,6 +166,15 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
 	route.Name = sharedRouteProto.GetName()
 	route.Description = sharedRouteProto.GetDescription()
+	// NOTE: Some descriptions have more than 255 runes, which won't fit in our
+	// varchar(255).
+	if truncateStr, truncated := util.TruncateUTF8(route.Description, 255); truncated {
+		log.Warnf("truncating description for route id '%s'. Orig description: %s",
+			route.Id,
+			route.Description,
+		)
+		route.Description = truncateStr
+	}
 	route.DistanceMeters = sharedRouteProto.GetRouteDistanceMeters()
 	route.DurationSeconds = sharedRouteProto.GetRouteDurationSeconds()
 	route.EndFortId = sharedRouteProto.GetEndPoi().GetAnchor().GetFortId()

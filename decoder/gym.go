@@ -229,7 +229,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 			gym.RaidPokemonEvolution = null.IntFrom(0)
 		}
 
-		gym.RaidIsExclusive = null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
+		gym.RaidIsExclusive = null.IntFrom(0) //null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
 	}
 
 	gym.CellId = null.IntFrom(int64(cellId))
@@ -536,6 +536,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	createGymWebhooks(oldGym, gym)
 	createGymFortWebhooks(oldGym, gym)
+
+	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+	updateRaidStats(oldGym, gym, areas)
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
