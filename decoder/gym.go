@@ -181,7 +181,12 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		TempEvolution: int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
 		Alignment:     int(fortData.GuardPokemonDisplay.Alignment),
 		Badge:         int(fortData.GuardPokemonDisplay.PokemonBadge),
-		LocationCard:  int(fortData.GuardPokemonDisplay.LocationCard.LocationCard),
+		LocationCard: int(func() pogo.LocationCard {
+			if fortData.GuardPokemonDisplay.LocationCard == nil {
+				return 0
+			}
+			return fortData.GuardPokemonDisplay.LocationCard.LocationCard
+		}()),
 	})
 	gym.GuardingPokemonDisplay = null.StringFrom(string(display))
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
