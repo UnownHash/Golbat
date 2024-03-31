@@ -62,3 +62,4 @@ url = "http://localhost:4201"
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
 extended_timeout = false
+profile_routes = false
