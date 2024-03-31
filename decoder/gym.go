@@ -173,22 +173,26 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	gym.Lon = fortData.Longitude //fmt.Sprintf("%f", fortData.Longitude)
 	gym.Enabled = null.IntFrom(util.BoolToInt[int64](fortData.Enabled))
 	gym.GuardingPokemonId = null.IntFrom(int64(fortData.GuardPokemonId))
-	display, _ := json.Marshal(pokemonDisplay{
-		Form:          int(fortData.GuardPokemonDisplay.Form),
-		Costume:       int(fortData.GuardPokemonDisplay.Costume),
-		Gender:        int(fortData.GuardPokemonDisplay.Gender),
-		Shiny:         fortData.GuardPokemonDisplay.Shiny,
-		TempEvolution: int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
-		Alignment:     int(fortData.GuardPokemonDisplay.Alignment),
-		Badge:         int(fortData.GuardPokemonDisplay.PokemonBadge),
-		LocationCard: int(func() pogo.LocationCard {
-			if fortData.GuardPokemonDisplay.LocationCard == nil {
-				return 0
-			}
-			return fortData.GuardPokemonDisplay.LocationCard.LocationCard
-		}()),
-	})
-	gym.GuardingPokemonDisplay = null.StringFrom(string(display))
+	if fortData.GuardPokemonDisplay == nil {
+		gym.GuardingPokemonDisplay = null.NewString("", false)
+	} else {
+		display, _ := json.Marshal(pokemonDisplay{
+			Form:          int(fortData.GuardPokemonDisplay.Form),
+			Costume:       int(fortData.GuardPokemonDisplay.Costume),
+			Gender:        int(fortData.GuardPokemonDisplay.Gender),
+			Shiny:         fortData.GuardPokemonDisplay.Shiny,
+			TempEvolution: int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
+			Alignment:     int(fortData.GuardPokemonDisplay.Alignment),
+			Badge:         int(fortData.GuardPokemonDisplay.PokemonBadge),
+			LocationCard: int(func() pogo.LocationCard {
+				if fortData.GuardPokemonDisplay.LocationCard == nil {
+					return 0
+				}
+				return fortData.GuardPokemonDisplay.LocationCard.LocationCard
+			}()),
+		})
+		gym.GuardingPokemonDisplay = null.StringFrom(string(display))
+	}
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
 	if fortData.GymDisplay != nil {
 		gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
