@@ -476,8 +476,6 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
   } else {
     webhooksSender.AddMessage(webhooks.PokemonNoIV, pokemonHook, areas)
   }
-
-	webhooks.AddMessage(webhooks.Pokemon, pokemonHook, areas)
 }
 
 func (pokemon *Pokemon) isNewRecord() bool {
