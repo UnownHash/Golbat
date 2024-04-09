@@ -946,6 +946,15 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 	return res
 }
 
+func GetPokestopsWithMissingQuests(dbDetails db.DbDetails, geofence *geojson.Feature) []db.QuestLocation {
+	res, err := db.GetPokestopsWithMissingQuests(dbDetails, geofence)
+	if err != nil {
+		log.Errorf("QuestStatus: Error retrieving missing quests: %s", err)
+		return []db.QuestLocation{}
+	}
+	return res
+}
+
 func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.Id)
 	pokestopMutex.Lock()

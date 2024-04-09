@@ -198,3 +198,34 @@ func GetQuestStatus(db DbDetails, fence *geojson.Feature) (QuestStatus, error) {
 
 	return status, nil
 }
+
+func GetPokestopsWithMissingQuests(db DbDetails, fence *geojson.Feature) ([]QuestLocation, error) {
+	bbox := fence.Geometry.Bound()
+	bytes, err := fence.MarshalJSON()
+	if err != nil {
+		statsCollector.IncDbQuery("missing quests", err)
+		return nil, err
+	}
+	areas := []QuestLocation{}
+	err = db.GeneralDb.Select(&areas, `
+	SELECT id, lat, lon 
+	FROM pokestop 
+	WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 AND quest_type IS NULL
+		AND ST_CONTAINS(ST_GeomFromGeoJSON('`+string(bytes)+`', 2, 0), POINT(lon, lat))
+	UNION
+	SELECT id, lat, lon 
+	FROM pokestop 
+	WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 AND alternative_quest_type IS NULL
+		AND ST_CONTAINS(ST_GeomFromGeoJSON('`+string(bytes)+`', 2, 0), POINT(lon, lat))
+	`, bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon(), bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
+
+	statsCollector.IncDbQuery("missing quests", err)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return areas, nil
+}
