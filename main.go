@@ -192,7 +192,6 @@ func main() {
 
 	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
-	decoder.LoadNests(dbDetails)
 	InitDeviceCache()
 
 	wg.Add(1)
@@ -266,8 +265,6 @@ func main() {
 	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
-	apiGroup.POST("/reload-nests", ReloadNests)
-	apiGroup.GET("/reload-nests", ReloadNests)
 
 	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
 	apiGroup.GET("/pokemon/available", PokemonAvailable)

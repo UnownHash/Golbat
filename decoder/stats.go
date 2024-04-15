@@ -109,14 +109,6 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t3 := time.NewTicker(15 * time.Minute)
-	go func() {
-		for {
-			<-t3.C
-			logNestCount()
-		}
-	}()
-
 	t4 := time.NewTicker(10 * time.Minute)
 	go func() {
 		for {
@@ -440,7 +432,7 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 
 		// Check if Raid has started/is active or RaidEndTimestamp has changed (Back-to-back raids)
 		if new.RaidPokemonId.ValueOrZero() > 0 &&
-		(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
+			(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
 			if !locked {
 				raidStatsLock.Lock()
