@@ -583,7 +583,7 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 
 			if item.Info.PokemonID != 0 {
 				countQuests.pokemonCount[item.Info.PokemonID]++
-			} else if item.Info.ItemID != 0 {
+			} else if item.Info.ItemID != 0 || item.Info.Amount != 0 { // update stats when itemId or amount (per type) is >0
 				if countQuests.itemDetails[item.Info.ItemID] == nil {
 					countQuests.itemDetails[item.Info.ItemID] = make(map[int]int)
 				}
