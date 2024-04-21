@@ -66,7 +66,7 @@ type areaInvasionCountDetail struct {
 type areaQuestCountDetail struct {
 	count        int
 	pokemonCount [maxPokemonNo + 1]int
-	itemCount    [maxItemNo + 1]int
+	itemDetails  [maxItemNo + 1]map[int]int // for each itemId[amount] keep a count
 }
 
 // a cache indexed by encounterId (Pokemon.Id)
@@ -529,6 +529,7 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 		Info struct {
 			PokemonID int `json:"pokemon_id"`
 			ItemID    int `json:"item_id"`
+			Amount    int `json:"amount"`
 		} `json:"info"`
 		Type int `json:"type"`
 	}
@@ -583,7 +584,10 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 			if item.Info.PokemonID != 0 {
 				countQuests.pokemonCount[item.Info.PokemonID]++
 			} else if item.Info.ItemID != 0 {
-				countQuests.itemCount[item.Info.ItemID]++
+				if countQuests.itemDetails[item.Info.ItemID] == nil {
+					countQuests.itemDetails[item.Info.ItemID] = make(map[int]int)
+				}
+				countQuests.itemDetails[item.Info.ItemID][item.Info.Amount]++
 			} else {
 				countQuests.count++
 			}
@@ -954,6 +958,7 @@ type questStatsDbRow struct {
 	RewardType int    `db:"reward_type"`
 	PokemonId  int    `db:"pokemon_id"`
 	ItemId     int    `db:"item_id"`
+	ItemAmount int    `db:"item_amount"`
 	Count      int    `db:"count"`
 }
 
@@ -972,7 +977,7 @@ func logQuestStats(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]questStatsDbRow, reward_type int, pokemon_id int, item_id int, count int) {
+			addRows := func(rows *[]questStatsDbRow, reward_type int, pokemon_id int, item_id int, item_amount int, count int) {
 				*rows = append(*rows, questStatsDbRow{
 					Date:       midnightString,
 					Area:       area.Parent,
@@ -980,6 +985,7 @@ func logQuestStats(statsDb *sqlx.DB) {
 					RewardType: reward_type,
 					PokemonId:  pokemon_id,
 					ItemId:     item_id,
+					ItemAmount: item_amount,
 					Count:      count,
 				})
 			}
@@ -988,21 +994,22 @@ func logQuestStats(statsDb *sqlx.DB) {
 
 				// If count is higher then 0, then we can assume pokemonId & itemId has not been used.
 				if stats[reward_type].count > 0 {
-					addRows(&rows, reward_type, 0, 0, stats[reward_type].count)
+					addRows(&rows, reward_type, 0, 0, 0, stats[reward_type].count)
 				} else {
 
 					for pokemonId, count := range stats[reward_type].pokemonCount {
 						if count > 0 {
-							addRows(&rows, reward_type, pokemonId, 0, count)
+							addRows(&rows, reward_type, pokemonId, 0, 0, count)
 						}
 					}
 
-					for itemId, count := range stats[reward_type].itemCount {
-						if count > 0 {
-							addRows(&rows, reward_type, 0, itemId, count)
+					for itemId, amounts := range stats[reward_type].itemDetails {
+						for itemAmount, count := range amounts {
+							if count > 0 {
+								addRows(&rows, reward_type, 0, itemId, itemAmount, count)
+							}
 						}
 					}
-
 				}
 			}
 		}
@@ -1016,8 +1023,8 @@ func logQuestStats(statsDb *sqlx.DB) {
 			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO quest_stats "+
-					"(date, area, fence, reward_type, pokemon_id, item_id, `count`) "+
-					"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :count) "+
+					"(date, area, fence, reward_type, pokemon_id, item_id, item_amount, `count`) "+
+					"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :item_amount, :count) "+
 					"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
 				batchRows,
 			)
