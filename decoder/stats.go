@@ -40,6 +40,8 @@ const maxPokemonNo = 1050
 const maxInvasionCharacter = 523
 const maxItemNo = 1614
 
+const batchInsertSize = 200
+
 type shinyChecks struct {
 	shiny int
 	total int
@@ -233,11 +235,16 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
-				Parent: "world",
-				Name:   "world",
+				Parent: "unmatched",
+				Name:   "unmatched",
 			},
 		}
 	}
+
+	areas = append(areas, geo.AreaName{
+		Parent: "world",
+		Name:   "world",
+	})
 
 	// General stats
 
@@ -426,11 +433,16 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
-				Parent: "world",
-				Name:   "world",
+				Parent: "unmatched",
+				Name:   "unmatched",
 			},
 		}
 	}
+
+	areas = append(areas, geo.AreaName{
+		Parent: "world",
+		Name:   "world",
+	})
 
 	locked := false
 
@@ -440,7 +452,7 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 
 		// Check if Raid has started/is active or RaidEndTimestamp has changed (Back-to-back raids)
 		if new.RaidPokemonId.ValueOrZero() > 0 &&
-		(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
+			(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
 			if !locked {
 				raidStatsLock.Lock()
@@ -468,11 +480,16 @@ func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
-				Parent: "world",
-				Name:   "world",
+				Parent: "unmatched",
+				Name:   "unmatched",
 			},
 		}
 	}
+
+	areas = append(areas, geo.AreaName{
+		Parent: "world",
+		Name:   "world",
+	})
 
 	locked := false
 
@@ -519,10 +536,28 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
-				Parent: "world",
-				Name:   "world",
+				Parent: "unmatched",
+				Name:   "unmatched",
 			},
 		}
+	}
+
+	areas = append(areas, geo.AreaName{
+		Parent: "world",
+		Name:   "world",
+	})
+
+	var err error
+	var data areaQuestCount
+	if !haveAr {
+		err = json.Unmarshal([]byte(pokestop.AlternativeQuestRewards.String), &data)
+	} else {
+		err = json.Unmarshal([]byte(pokestop.QuestRewards.String), &data)
+	}
+
+	if err != nil {
+		log.Errorf("updateQuestStats - couldn't unpack pokestop data for %s", pokestop.Id)
+		return
 	}
 
 	locked := false
@@ -540,13 +575,6 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 		if countStats == nil {
 			countStats = make(map[int]areaQuestCountDetail)
 			questCount[area] = countStats
-		}
-
-		var data areaQuestCount
-		if !haveAr {
-			json.Unmarshal([]byte(pokestop.AlternativeQuestRewards.String), &data)
-		} else {
-			json.Unmarshal([]byte(pokestop.QuestRewards.String), &data)
 		}
 
 		for _, item := range data {
@@ -770,7 +798,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		updateStatsCount("pokemon_nundo_stats", nundoRows)
 
 		if rows := shinyRows; len(rows) > 0 {
-			chunkSize := 100
+			chunkSize := batchInsertSize
 
 			for i := 0; i < len(rows); i += chunkSize {
 				end := i + chunkSize
@@ -841,12 +869,18 @@ func logRaidStats(statsDb *sqlx.DB) {
 			}
 		}
 
-		if len(rows) > 0 {
+		for i := 0; i < len(rows); i += batchInsertSize {
+			end := i + batchInsertSize
+			if end > len(rows) {
+				end = len(rows)
+			}
+
+			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO raid_stats "+
 					"(date, area, fence, level, pokemon_id, `count`)"+
 					" VALUES (:date, :area, :fence, :level, :pokemon_id, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", rows)
+					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)
 			}
@@ -894,12 +928,18 @@ func logInvasionStats(statsDb *sqlx.DB) {
 			}
 		}
 
-		if len(rows) > 0 {
+		for i := 0; i < len(rows); i += batchInsertSize {
+			end := i + batchInsertSize
+			if end > len(rows) {
+				end = len(rows)
+			}
+
+			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO invasion_stats "+
 					"(date, area, fence, `character`, `count`)"+
 					" VALUES (:date, :area, :fence, :character, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", rows)
+					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting invasion_stats: %v", err)
 			}
@@ -967,12 +1007,20 @@ func logQuestStats(statsDb *sqlx.DB) {
 			}
 		}
 
-		if len(rows) > 0 {
+		for i := 0; i < len(rows); i += batchInsertSize {
+			end := i + batchInsertSize
+			if end > len(rows) {
+				end = len(rows)
+			}
+
+			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO quest_stats "+
-					"(date, area, fence, reward_type, pokemon_id, item_id, `count`)"+
-					" VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", rows)
+					"(date, area, fence, reward_type, pokemon_id, item_id, `count`) "+
+					"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :count) "+
+					"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
+				batchRows,
+			)
 			if err != nil {
 				log.Errorf("Error inserting quest_stats: %v", err)
 			}
