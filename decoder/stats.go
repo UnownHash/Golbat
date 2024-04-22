@@ -64,9 +64,9 @@ type areaInvasionCountDetail struct {
 }
 
 type areaQuestCountDetail struct {
-	count        int
-	pokemonCount [maxPokemonNo + 1]map[int]int // for each pokemonId[megaCount] keep a count
-	itemDetails  [maxItemNo + 1]map[int]int    // for each itemId[amount] keep a count
+	count          int
+	pokemonDetails [maxPokemonNo + 1]map[int]int // for each pokemonId[megaCount] keep a count
+	itemDetails    [maxItemNo + 1]map[int]int    // for each itemId[amount] keep a count
 }
 
 // a cache indexed by encounterId (Pokemon.Id)
@@ -582,10 +582,10 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 			var countQuests = questCount[area][item.Type]
 
 			if item.Info.PokemonID != 0 { // update stats with pokemonId and amount
-				if countQuests.pokemonCount[item.Info.PokemonID] == nil {
-					countQuests.pokemonCount[item.Info.PokemonID] = make(map[int]int)
+				if countQuests.pokemonDetails[item.Info.PokemonID] == nil {
+					countQuests.pokemonDetails[item.Info.PokemonID] = make(map[int]int)
 				}
-				countQuests.pokemonCount[item.Info.PokemonID][item.Info.Amount]++
+				countQuests.pokemonDetails[item.Info.PokemonID][item.Info.Amount]++
 			} else if item.Info.ItemID != 0 || item.Info.Amount != 0 { // update stats when itemId or amount (per type) is >0
 				if countQuests.itemDetails[item.Info.ItemID] == nil {
 					countQuests.itemDetails[item.Info.ItemID] = make(map[int]int)
@@ -1000,7 +1000,7 @@ func logQuestStats(statsDb *sqlx.DB) {
 					addRows(&rows, reward_type, 0, 0, 0, stats[reward_type].count)
 				} else {
 
-					for pokemonId, amounts := range stats[reward_type].pokemonCount {
+					for pokemonId, amounts := range stats[reward_type].pokemonDetails {
 						for megaEnergyAmount, count := range amounts {
 							if count > 0 {
 								addRows(&rows, reward_type, pokemonId, 0, megaEnergyAmount, count)
