@@ -159,14 +159,15 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 
 func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
 	type pokemonDisplay struct {
-		Form          int  `json:"form"`
-		Costume       int  `json:"costume"`
-		Gender        int  `json:"gender"`
-		Shiny         bool `json:"shiny"`
-		TempEvolution int  `json:"temp_evolution"`
-		Alignment     int  `json:"alignment"`
-		Badge         int  `json:"badge"`
-		LocationCard  int  `json:"location_card"`
+		Form                  int   `json:"form"`
+		Costume               int   `json:"costume"`
+		Gender                int   `json:"gender"`
+		Shiny                 bool  `json:"shiny"`
+		TempEvolution         int   `json:"temp_evolution"`
+		TempEvolutionFinishMs int64 `json:"temp_evolution_finish_ms"`
+		Alignment             int   `json:"alignment"`
+		Badge                 int   `json:"badge"`
+		LocationCard          int   `json:"location_card"`
 	}
 	gym.Id = fortData.FortId
 	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
@@ -177,13 +178,14 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		gym.GuardingPokemonDisplay = null.NewString("", false)
 	} else {
 		display, _ := json.Marshal(pokemonDisplay{
-			Form:          int(fortData.GuardPokemonDisplay.Form),
-			Costume:       int(fortData.GuardPokemonDisplay.Costume),
-			Gender:        int(fortData.GuardPokemonDisplay.Gender),
-			Shiny:         fortData.GuardPokemonDisplay.Shiny,
-			TempEvolution: int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
-			Alignment:     int(fortData.GuardPokemonDisplay.Alignment),
-			Badge:         int(fortData.GuardPokemonDisplay.PokemonBadge),
+			Form:                  int(fortData.GuardPokemonDisplay.Form),
+			Costume:               int(fortData.GuardPokemonDisplay.Costume),
+			Gender:                int(fortData.GuardPokemonDisplay.Gender),
+			Shiny:                 fortData.GuardPokemonDisplay.Shiny,
+			TempEvolution:         int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
+			TempEvolutionFinishMs: fortData.GuardPokemonDisplay.TemporaryEvolutionFinishMs,
+			Alignment:             int(fortData.GuardPokemonDisplay.Alignment),
+			Badge:                 int(fortData.GuardPokemonDisplay.PokemonBadge),
 			LocationCard: int(func() pogo.LocationCard {
 				if fortData.GuardPokemonDisplay.LocationCard == nil {
 					return 0
