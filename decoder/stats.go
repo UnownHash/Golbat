@@ -111,14 +111,6 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t3 := time.NewTicker(15 * time.Minute)
-	go func() {
-		for {
-			<-t3.C
-			logNestCount()
-		}
-	}()
-
 	t4 := time.NewTicker(10 * time.Minute)
 	go func() {
 		for {

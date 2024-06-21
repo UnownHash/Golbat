@@ -390,7 +390,6 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(ctx, db, oldPokemon, pokemon, areas)
 	updatePokemonStats(oldPokemon, pokemon, areas)
-	updatePokemonNests(oldPokemon, pokemon)
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
