@@ -431,10 +431,23 @@ func GetQuestStatus(c *gin.Context) {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-
 	questStatus := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
 
 	c.JSON(http.StatusOK, &questStatus)
+}
+
+func GetPokestopsWithMissingQuests(c *gin.Context) {
+	fence, err := geo.NormaliseFenceRequest(c)
+
+	if err != nil {
+		log.Warnf("POST /api/pokestops-with-missing-quests/ Error during post area %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	pokestops := decoder.GetPokestopsWithMissingQuests(dbDetails, fence)
+
+	c.JSON(http.StatusOK, &pokestops)
+
 }
 
 // GetHealth provides unrestricted health status for monitoring tools
