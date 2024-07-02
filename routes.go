@@ -347,14 +347,6 @@ func ReloadGeojson(c *gin.Context) {
 	})
 }
 
-func ReloadNests(c *gin.Context) {
-	decoder.ReloadNestsAndClearStats(dbDetails)
-
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
-}
-
 func PokemonScan(c *gin.Context) {
 	var requestBody decoder.ApiPokemonScan
 
