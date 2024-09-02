@@ -27,6 +27,11 @@ type RawFortData struct {
 	Data *pogo.PokemonFortProto
 }
 
+type RawStationData struct {
+	Cell uint64
+	Data *pogo.StationProto
+}
+
 type RawWildPokemonData struct {
 	Cell      uint64
 	Data      *pogo.WildPokemonProto
@@ -56,6 +61,7 @@ var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
+var stationCache *ttlcache.Cache[string, Station]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
@@ -68,6 +74,7 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
+var stationStripedMutex = stripedmutex.New(128)
 var incidentStripedMutex = stripedmutex.New(128)
 var pokemonStripedMutex = stripedmutex.New(1024)
 var weatherStripedMutex = stripedmutex.New(128)
@@ -99,6 +106,11 @@ func initDataCache() {
 		ttlcache.WithTTL[string, Gym](60 * time.Minute),
 	)
 	go gymCache.Start()
+
+	stationCache = ttlcache.New[string, Station](
+		ttlcache.WithTTL[string, Station](60 * time.Minute),
+	)
+	go stationCache.Start()
 
 	weatherCache = ttlcache.New[int64, Weather](
 		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
@@ -295,6 +307,26 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			saveGymRecord(ctx, db, gym)
 			gymMutex.Unlock()
 		}
+	}
+}
+
+func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
+	for _, stationProto := range p {
+		stationId := stationProto.Data.Id
+		stationMutex, _ := stationStripedMutex.GetLock(stationId)
+		stationMutex.Lock()
+		station, err := getStationRecord(ctx, db, stationId)
+		if err != nil {
+			log.Errorf("getStationRecord: %s", err)
+			stationMutex.Unlock()
+			continue
+		}
+		if station == nil {
+			station = &Station{}
+		}
+		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
+		saveStationRecord(ctx, db, station)
+		stationMutex.Unlock()
 	}
 }
 

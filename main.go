@@ -795,6 +795,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 
 	var newForts []decoder.RawFortData
+	var newStations []decoder.RawStationData
 	var newWildPokemon []decoder.RawWildPokemonData
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
 	var newMapPokemon []decoder.RawMapPokemonData
@@ -823,6 +824,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		for _, mon := range mapCell.NearbyPokemon {
 			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon})
 		}
+		for _, station := range mapCell.Stations {
+			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
+		}
 	}
 	for _, clientWeather := range decodedGmo.ClientWeather {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
@@ -837,6 +841,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessWeather {
 		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
 	}
+	if scanParameters.ProcessStations {
+		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
+	}
+
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 		if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
@@ -849,6 +857,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 
 	newFortsLen := len(newForts)
+	newStationsLen := len(newStations)
 	newWildPokemonLen := len(newWildPokemon)
 	newNearbyPokemonLen := len(newNearbyPokemon)
 	newMapPokemonLen := len(newMapPokemon)
@@ -857,13 +866,14 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 	statsCollector.IncDecodeGMO("ok", "")
 	statsCollector.AddDecodeGMOType("fort", float64(newFortsLen))
+	statsCollector.AddDecodeGMOType("station", float64(newStationsLen))
 	statsCollector.AddDecodeGMOType("wild_pokemon", float64(newWildPokemonLen))
 	statsCollector.AddDecodeGMOType("nearby_pokemon", float64(newNearbyPokemonLen))
 	statsCollector.AddDecodeGMOType("map_pokemon", float64(newMapPokemonLen))
 	statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
 	statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
 
-	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", newMapCellsLen, newFortsLen, newWildPokemonLen, newNearbyPokemonLen)
+	return fmt.Sprintf("%d cells containing %d forts %d stations %d mon %d nearby", newMapCellsLen, newFortsLen, newStationsLen, newWildPokemonLen, newNearbyPokemonLen)
 }
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
