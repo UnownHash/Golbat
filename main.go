@@ -647,8 +647,10 @@ func decodeGetRoutes(payload []byte) string {
 
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
-			if route.RouteSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
-				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", route.RouteSubmissionStatus.String())
+			//TODO we need to check the repeated field, for now access last element
+			routeSubmissionStatus := route.RouteSubmissionStatus[len(route.RouteSubmissionStatus)-1]
+			if routeSubmissionStatus != nil && routeSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
+				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", routeSubmissionStatus.String())
 				continue
 			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
