@@ -3,7 +3,9 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"golbat/db"
 	"golbat/pogo"
 	"time"
@@ -24,6 +26,7 @@ type Station struct {
 	CooldownComplete  int64   `db:"cooldown_complete"`
 	IsBattleAvailable bool    `db:"is_battle_available"`
 	IsInactive        bool    `db:"is_inactive"`
+	Updated           int64   `db:"updated"`
 
 	BattleLevel            null.Int `db:"battle_level"`
 	BattlePokemonId        null.Int `db:"battle_pokemon_id"`
@@ -31,7 +34,9 @@ type Station struct {
 	BattlePokemonCostume   null.Int `db:"battle_pokemon_costume"`
 	BattlePokemonGender    null.Int `db:"battle_pokemon_gender"`
 	BattlePokemonAlignment null.Int `db:"battle_pokemon_alignment"`
-	Updated                int64    `db:"updated"`
+
+	TotalStationedPokemon null.Int    `db:"total_stationed_pokemon"`
+	StationedPokemon      null.String `db:"stationed_pokemon"`
 }
 
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
@@ -43,7 +48,7 @@ func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*
 	station := Station{}
 	err := db.GeneralDb.GetContext(ctx, &station,
 		`
-			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, battle_level, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, updated			       
+			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, total_stationed_pokemon, stationed_pokemon
 			FROM station WHERE id = ?
 		`, stationId)
 	statsCollector.IncDbQuery("select station", err)
@@ -74,8 +79,8 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	if oldStation == nil {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			`
-			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, battle_level, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, updated)
-			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:battle_level,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:updated)
+			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, total_stationed_pokemon, stationed_pokemon)
+			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:total_stationed_pokemon,:stationed_pokemon)
 			`, station)
 
 		statsCollector.IncDbQuery("insert station", err)
@@ -97,13 +102,15 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 			    cooldown_complete = :cooldown_complete,
 			    is_battle_available = :is_battle_available,
 			    is_inactive = :is_inactive,
+			    updated = :updated,
 			    battle_level = :battle_level,
 			    battle_pokemon_id = :battle_pokemon_id,
 			    battle_pokemon_form = :battle_pokemon_form,
 			    battle_pokemon_costume = :battle_pokemon_costume,
 			    battle_pokemon_gender = :battle_pokemon_gender,
 			    battle_pokemon_alignment = :battle_pokemon_alignment,
-			    updated = :updated
+				total_stationed_pokemon = :total_stationed_pokemon,
+				stationed_pokemon = :stationed_pokemon
 			WHERE id = :id
 		`, station,
 		)
@@ -159,6 +166,54 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 	}
 	station.CellId = int64(cellId)
 	return station
+}
+
+func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
+	type stationedPokemonDetail struct {
+		PokemonId int `json:"pokemon_id"`
+		Form      int `json:"form"`
+		Costume   int `json:"costume"`
+		Gender    int `json:"gender"`
+		BreadMode int `json:"bread_mode"`
+	}
+
+	var stationedPokemon []stationedPokemonDetail
+	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
+		pokemon := stationedPokemonDetails.Pokemon
+		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
+			PokemonId: int(pokemon.PokemonId),
+			Form:      int(pokemon.PokemonDisplay.Form),
+			Costume:   int(pokemon.PokemonDisplay.Costume),
+			Gender:    int(pokemon.PokemonDisplay.Gender),
+			BreadMode: int(pokemon.PokemonDisplay.BreadModeEnum),
+		})
+	}
+	jsonString, _ := json.Marshal(stationedPokemon)
+	station.StationedPokemon = null.StringFrom(string(jsonString))
+	station.TotalStationedPokemon = null.IntFrom(int64(stationProto.TotalNumStationedPokemon))
+	return station
+}
+
+func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
+	stationId := request.StationId
+	stationMutex, _ := stationStripedMutex.GetLock(stationId)
+	stationMutex.Lock()
+	defer stationMutex.Unlock()
+
+	station, err := getStationRecord(ctx, db, stationId)
+	if err != nil {
+		log.Printf("Get station %s", err)
+		return "Error getting station"
+	}
+
+	if station == nil {
+		log.Infof("Stationed pokemon details for station %s not found", stationId)
+		return fmt.Sprintf("Stationed pokemon details for station %s not found", stationId)
+	}
+
+	station.updateFromGetStationedPokemonDetailsOutProto(stationDetails)
+	saveStationRecord(ctx, db, station)
+	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
 func createStationWebhooks(oldStation *Station, station *Station) {

@@ -434,6 +434,11 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			processed = true
 		}
 		break
+	case pogo.Method_METHOD_GET_STATION_DETAILS:
+		// Request is essential to decode this
+		result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
+		processed = true
+
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -921,4 +926,26 @@ func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data 
 	}
 
 	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
+}
+
+func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) string {
+	var decodedGetStationDetails pogo.GetStationedPokemonDetailsOutProto
+	if err := proto.Unmarshal(data, &decodedGetStationDetails); err != nil {
+		log.Errorf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
+	}
+
+	if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
+	}
+
+	var decodedGetStationDetailsRequest pogo.GetStationedPokemonDetailsProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedGetStationDetailsRequest); err != nil {
+			log.Errorf("Failed to parse GetStationedPokemonDetailsProto %s", err)
+			return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsProto %s", err)
+		}
+	}
+
+	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
 }
