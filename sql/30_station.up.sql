@@ -11,6 +11,8 @@ CREATE TABLE `station` (
  `is_inactive`              TINYINT UNSIGNED NOT NULL,
  `updated`                  INT UNSIGNED NOT NULL,
  `battle_level`             TINYINT UNSIGNED DEFAULT NULL,
+ `battle_start`             INT UNSIGNED,
+ `battle_end`               INT UNSIGNED,
  `battle_pokemon_id`        SMALLINT unsigned,
  `battle_pokemon_form`      SMALLINT unsigned,
  `battle_pokemon_costume`   SMALLINT unsigned,

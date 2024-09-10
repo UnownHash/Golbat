@@ -935,16 +935,19 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 		return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
 	}
 
-	if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
-	}
-
 	var decodedGetStationDetailsRequest pogo.GetStationedPokemonDetailsProto
 	if request != nil {
 		if err := proto.Unmarshal(request, &decodedGetStationDetailsRequest); err != nil {
 			log.Errorf("Failed to parse GetStationedPokemonDetailsProto %s", err)
 			return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsProto %s", err)
 		}
+	}
+
+	if decodedGetStationDetails.Result == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
+		// station without stationed pokemon found, therefore we need to reset the columns
+		return decoder.ResetStationedPokemonWithStationDetailsNotFound(ctx, dbDetails, &decodedGetStationDetailsRequest)
+	} else if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
 	}
 
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
