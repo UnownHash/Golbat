@@ -699,6 +699,9 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 }
 
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+	if proto.IndividualAttack <= 10 && proto.IndividualDefense <= 10 && proto.IndividualStamina <= 10 {
+		return // suspect tainted account. skip parsing encounter
+	}
 	pokemon.Username = null.StringFrom(username)
 	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
