@@ -163,7 +163,13 @@ func hasChangesStation(old *Station, new *Station) bool {
 
 func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
 	station.Id = stationProto.Id
-	station.Name = stationProto.Name
+	// Trim Name if it's longer than 256 characters
+	if len(stationProto.Name) > 256 {
+		station.Name = stationProto.Name[:256]
+		log.Warnf("Station name: %s is too long. Trimmed it to 256 characters.", stationProto.Name)
+	} else {
+		station.Name = stationProto.Name
+	}
 	station.Lat = stationProto.Lat
 	station.Lon = stationProto.Lng
 	station.StartTime = stationProto.StartTimeMs / 1000
