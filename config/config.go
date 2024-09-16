@@ -128,6 +128,7 @@ type scanRule struct {
 	ProcessCells     *bool          `koanf:"cells"`
 	ProcessPokestops *bool          `koanf:"pokestops"`
 	ProcessGyms      *bool          `koanf:"gyms"`
+	ProcessStations  *bool          `koanf:"stations"`
 }
 
 var Config configDefinition

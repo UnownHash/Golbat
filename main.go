@@ -434,6 +434,11 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			processed = true
 		}
 		break
+	case pogo.Method_METHOD_GET_STATION_DETAILS:
+		// Request is essential to decode this
+		result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
+		processed = true
+
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -647,8 +652,10 @@ func decodeGetRoutes(payload []byte) string {
 
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
-			if route.RouteSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
-				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", route.RouteSubmissionStatus.String())
+			//TODO we need to check the repeated field, for now access last element
+			routeSubmissionStatus := route.RouteSubmissionStatus[len(route.RouteSubmissionStatus)-1]
+			if routeSubmissionStatus != nil && routeSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
+				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", routeSubmissionStatus.String())
 				continue
 			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
@@ -793,6 +800,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 
 	var newForts []decoder.RawFortData
+	var newStations []decoder.RawStationData
 	var newWildPokemon []decoder.RawWildPokemonData
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
 	var newMapPokemon []decoder.RawMapPokemonData
@@ -821,6 +829,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		for _, mon := range mapCell.NearbyPokemon {
 			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon})
 		}
+		for _, station := range mapCell.Stations {
+			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
+		}
 	}
 	for _, clientWeather := range decodedGmo.ClientWeather {
 		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
@@ -835,6 +846,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessWeather {
 		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
 	}
+	if scanParameters.ProcessStations {
+		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
+	}
+
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 		if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
@@ -847,6 +862,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 
 	newFortsLen := len(newForts)
+	newStationsLen := len(newStations)
 	newWildPokemonLen := len(newWildPokemon)
 	newNearbyPokemonLen := len(newNearbyPokemon)
 	newMapPokemonLen := len(newMapPokemon)
@@ -855,13 +871,14 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 	statsCollector.IncDecodeGMO("ok", "")
 	statsCollector.AddDecodeGMOType("fort", float64(newFortsLen))
+	statsCollector.AddDecodeGMOType("station", float64(newStationsLen))
 	statsCollector.AddDecodeGMOType("wild_pokemon", float64(newWildPokemonLen))
 	statsCollector.AddDecodeGMOType("nearby_pokemon", float64(newNearbyPokemonLen))
 	statsCollector.AddDecodeGMOType("map_pokemon", float64(newMapPokemonLen))
 	statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
 	statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
 
-	return fmt.Sprintf("%d cells containing %d forts %d mon %d nearby", newMapCellsLen, newFortsLen, newWildPokemonLen, newNearbyPokemonLen)
+	return fmt.Sprintf("%d cells containing %d forts %d stations %d mon %d nearby", newMapCellsLen, newFortsLen, newStationsLen, newWildPokemonLen, newNearbyPokemonLen)
 }
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
@@ -909,4 +926,29 @@ func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data 
 	}
 
 	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
+}
+
+func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) string {
+	var decodedGetStationDetails pogo.GetStationedPokemonDetailsOutProto
+	if err := proto.Unmarshal(data, &decodedGetStationDetails); err != nil {
+		log.Errorf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
+		return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
+	}
+
+	var decodedGetStationDetailsRequest pogo.GetStationedPokemonDetailsProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &decodedGetStationDetailsRequest); err != nil {
+			log.Errorf("Failed to parse GetStationedPokemonDetailsProto %s", err)
+			return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsProto %s", err)
+		}
+	}
+
+	if decodedGetStationDetails.Result == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
+		// station without stationed pokemon found, therefore we need to reset the columns
+		return decoder.ResetStationedPokemonWithStationDetailsNotFound(ctx, dbDetails, &decodedGetStationDetailsRequest)
+	} else if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
+	}
+
+	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
 }
