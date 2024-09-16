@@ -616,12 +616,18 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 
 func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
 	type contestEntry struct {
-		Rank      int     `json:"rank"`
-		Score     float64 `json:"score"`
-		PokemonId int     `json:"pokemon_id"`
-		Form      int     `json:"form"`
-		Costume   int     `json:"costume"`
-		Gender    int     `json:"gender"`
+		Rank                  int     `json:"rank"`
+		Score                 float64 `json:"score"`
+		PokemonId             int     `json:"pokemon_id"`
+		Form                  int     `json:"form"`
+		Costume               int     `json:"costume"`
+		Gender                int     `json:"gender"`
+		Shiny                 bool    `json:"shiny"`
+		TempEvolution         int     `json:"temp_evolution"`
+		TempEvolutionFinishMs int64   `json:"temp_evolution_finish_ms"`
+		Alignment             int     `json:"alignment"`
+		Badge                 int     `json:"badge"`
+		LocationCard          int     `json:"location_card"`
 	}
 	type contestJson struct {
 		TotalEntries   int            `json:"total_entries"`
@@ -638,12 +644,23 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			break
 		}
 		j.ContestEntries = append(j.ContestEntries, contestEntry{
-			Rank:      int(rank),
-			Score:     entry.GetScore(),
-			PokemonId: int(entry.GetPokedexId()),
-			Form:      int(entry.GetPokemonDisplay().Form),
-			Costume:   int(entry.GetPokemonDisplay().Costume),
-			Gender:    int(entry.GetPokemonDisplay().Gender),
+			Rank:                  int(rank),
+			Score:                 entry.GetScore(),
+			PokemonId:             int(entry.GetPokedexId()),
+			Form:                  int(entry.GetPokemonDisplay().Form),
+			Costume:               int(entry.GetPokemonDisplay().Costume),
+			Gender:                int(entry.GetPokemonDisplay().Gender),
+			Shiny:                 entry.GetPokemonDisplay().Shiny,
+			TempEvolution:         int(entry.GetPokemonDisplay().CurrentTempEvolution),
+			TempEvolutionFinishMs: entry.GetPokemonDisplay().TemporaryEvolutionFinishMs,
+			Alignment:             int(entry.GetPokemonDisplay().Alignment),
+			Badge:                 int(entry.GetPokemonDisplay().PokemonBadge),
+			LocationCard: int(func() pogo.LocationCard {
+				if entry.GetPokemonDisplay().LocationCard == nil {
+					return 0
+				}
+				return entry.GetPokemonDisplay().LocationCard.LocationCard
+			}()),
 		})
 
 	}
