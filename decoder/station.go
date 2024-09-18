@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/util"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -164,6 +165,15 @@ func hasChangesStation(old *Station, new *Station) bool {
 func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
 	station.Id = stationProto.Id
 	station.Name = stationProto.Name
+	// NOTE: Some names have more than 255 runes, which won't fit in our
+	// varchar(255).
+	if truncateStr, truncated := util.TruncateUTF8(stationProto.Name, 255); truncated {
+		log.Warnf("truncating name for station id '%s'. Orig name: %s",
+			stationProto.Id,
+			stationProto.Name,
+		)
+		station.Name = truncateStr
+	}
 	station.Lat = stationProto.Lat
 	station.Lon = stationProto.Lng
 	station.StartTime = stationProto.StartTimeMs / 1000
