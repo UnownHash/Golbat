@@ -1,0 +1,315 @@
+definitions:
+  db.QuestStatus:
+    properties:
+      ar_quests:
+        type: integer
+      no_ar_quests:
+        type: integer
+      total:
+        type: integer
+    type: object
+  decoder.ApiPokemonDnfFilter:
+    properties:
+      atk_iv:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      cp:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax'
+      def_iv:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      gender:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      iv:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      level:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      pokemon:
+        items:
+          $ref: '#/definitions/decoder.ApiPokemonDnfId'
+        type: array
+      pvp_great:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax'
+      pvp_little:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax'
+      pvp_ultra:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax'
+      size:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+      sta_iv:
+        $ref: '#/definitions/decoder.ApiPokemonDnfMinMax8'
+    type: object
+  decoder.ApiPokemonDnfId:
+    properties:
+      form:
+        type: integer
+      id:
+        type: integer
+    type: object
+  decoder.ApiPokemonDnfMinMax:
+    properties:
+      max:
+        type: integer
+      min:
+        type: integer
+    type: object
+  decoder.ApiPokemonDnfMinMax8:
+    properties:
+      max:
+        type: integer
+      min:
+        type: integer
+    type: object
+  decoder.ApiPokemonResult:
+    properties:
+      atk_iv:
+        $ref: '#/definitions/null.Int'
+      capture_1:
+        $ref: '#/definitions/null.Float'
+      capture_2:
+        $ref: '#/definitions/null.Float'
+      capture_3:
+        $ref: '#/definitions/null.Float'
+      cell_id:
+        $ref: '#/definitions/null.Int'
+      changed:
+        type: integer
+      costume:
+        $ref: '#/definitions/null.Int'
+      cp:
+        $ref: '#/definitions/null.Int'
+      def_iv:
+        $ref: '#/definitions/null.Int'
+      display_pokemon_id:
+        $ref: '#/definitions/null.Int'
+      distance:
+        type: number
+      encounter_weather:
+        type: integer
+      expire_timestamp:
+        $ref: '#/definitions/null.Int'
+      expire_timestamp_verified:
+        type: boolean
+      first_seen_timestamp:
+        type: integer
+      form:
+        $ref: '#/definitions/null.Int'
+      gender:
+        $ref: '#/definitions/null.Int'
+      height:
+        $ref: '#/definitions/null.Float'
+      id:
+        type: string
+      is_ditto:
+        type: boolean
+      is_event:
+        type: integer
+      iv:
+        $ref: '#/definitions/null.Float'
+      lat:
+        type: number
+      level:
+        $ref: '#/definitions/null.Int'
+      lon:
+        type: number
+      move_1:
+        $ref: '#/definitions/null.Int'
+      move_2:
+        $ref: '#/definitions/null.Int'
+      pokemon_id:
+        type: integer
+      pokestop_id:
+        $ref: '#/definitions/null.String'
+      pvp:
+        additionalProperties:
+          items:
+            $ref: '#/definitions/gohbem.PokemonEntry'
+          type: array
+        type: object
+      seen_type:
+        $ref: '#/definitions/null.String'
+      shiny:
+        $ref: '#/definitions/null.Bool'
+      size:
+        $ref: '#/definitions/null.Int'
+      spawn_id:
+        $ref: '#/definitions/null.Int'
+      sta_iv:
+        $ref: '#/definitions/null.Int'
+      updated:
+        $ref: '#/definitions/null.Int'
+      username:
+        $ref: '#/definitions/null.String'
+      weather:
+        $ref: '#/definitions/null.Int'
+      weight:
+        $ref: '#/definitions/null.Float'
+    type: object
+  decoder.ApiPokemonScan2:
+    properties:
+      filters:
+        items:
+          $ref: '#/definitions/decoder.ApiPokemonDnfFilter'
+        type: array
+      limit:
+        type: integer
+      max:
+        $ref: '#/definitions/geo.Location'
+      min:
+        $ref: '#/definitions/geo.Location'
+    type: object
+  geo.Location:
+    properties:
+      latitude:
+        type: number
+      longitude:
+        type: number
+    type: object
+  gohbem.PokemonEntry:
+    properties:
+      cap:
+        type: number
+      capped:
+        type: boolean
+      cp:
+        type: integer
+      evolution:
+        type: integer
+      form:
+        type: integer
+      level:
+        type: number
+      percentage:
+        type: number
+      pokemon:
+        type: integer
+      rank:
+        type: integer
+      value:
+        type: number
+    type: object
+  main.ApiLocation:
+    properties:
+      lat:
+        type: number
+      lon:
+        type: number
+    type: object
+  main.GolbatFence:
+    properties:
+      fence:
+        items:
+          $ref: '#/definitions/main.ApiLocation'
+        type: array
+    type: object
+  main.Response:
+    properties:
+      data:
+        type: string
+      status:
+        type: string
+    type: object
+  null.Bool:
+    properties:
+      bool:
+        type: boolean
+      valid:
+        description: Valid is true if Bool is not NULL
+        type: boolean
+    type: object
+  null.Float:
+    properties:
+      float64:
+        type: number
+      valid:
+        description: Valid is true if Float64 is not NULL
+        type: boolean
+    type: object
+  null.Int:
+    properties:
+      int64:
+        type: integer
+      valid:
+        description: Valid is true if Int64 is not NULL
+        type: boolean
+    type: object
+  null.String:
+    properties:
+      string:
+        type: string
+      valid:
+        description: Valid is true if String is not NULL
+        type: boolean
+    type: object
+info:
+  contact: {}
+paths:
+  /api/clear-quests:
+    post:
+      consumes:
+      - application/json
+      description: Clear Quests in given Fence
+      parameters:
+      - description: Fence
+        in: body
+        name: GolbatFence
+        required: true
+        schema:
+          $ref: '#/definitions/main.GolbatFence'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success
+          schema:
+            $ref: '#/definitions/main.Response'
+      summary: Clear Quests
+      tags:
+      - quest
+  /api/pokemon/v2/scan:
+    post:
+      consumes:
+      - application/json
+      description: Scan Pokemon for given request
+      parameters:
+      - description: PokemonScan2
+        in: body
+        name: decoder.ApiPokemonScan2
+        required: true
+        schema:
+          $ref: '#/definitions/decoder.ApiPokemonScan2'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              $ref: '#/definitions/decoder.ApiPokemonResult'
+            type: array
+      summary: Pokemon Scan V2
+      tags:
+      - pokemon
+  /api/quest-status:
+    post:
+      consumes:
+      - application/json
+      description: Get Status of Quests in given Fence
+      parameters:
+      - description: Fence
+        in: body
+        name: GolbatFence
+        required: true
+        schema:
+          $ref: '#/definitions/main.GolbatFence'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            items:
+              $ref: '#/definitions/db.QuestStatus'
+            type: array
+      summary: Quests Status
+      tags:
+      - quest
+swagger: "2.0"
