@@ -18,6 +18,8 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	ginlogrus "github.com/toorop/gin-logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
@@ -256,6 +258,7 @@ func main() {
 
 	r.POST("/raw", Raw)
 	r.GET("/health", GetHealth)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)

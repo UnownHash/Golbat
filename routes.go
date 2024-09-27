@@ -317,6 +317,17 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
+// @BasePath /api
+
+// @Summary 	Clear Quests
+// @Schemes
+// @Description Clear Quests in given Fence
+// @Tags 		quest
+// @Accept 		json
+// @Produce 	json
+// @Param 		fence	 body 		geojson.Feature		true 	"Fence"
+// @Success 	200 	 {object} 	Response 		"Success"
+// @Router 		/api/clear-quests [post]
 func ClearQuests(c *gin.Context) {
 	fence, err := geo.NormaliseFenceRequest(c)
 
@@ -334,17 +345,13 @@ func ClearQuests(c *gin.Context) {
 	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
 	log.Infof("Clear quest took %s", time.Since(startTime))
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, &Response{Status: "ok"})
 }
 
 func ReloadGeojson(c *gin.Context) {
 	decoder.ReloadGeofenceAndClearStats()
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, &Response{Status: "ok"})
 }
 
 func PokemonScan(c *gin.Context) {
@@ -364,6 +371,17 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
+// @BasePath /api
+
+// @Summary 	Pokemon Scan V2
+// @Schemes
+// @Description Scan Pokemon for given request
+// @Tags 		pokemon
+// @Accept 		json
+// @Produce 	json
+// @Param 		scan 	body 		decoder.ApiPokemonScan2		true	"Pokemon Scan2"
+// @Success 	200 	{array} 	decoder.ApiPokemonResult 	"ok"
+// @Router 		/api/pokemon/v2/scan [post]
 func PokemonScan2(c *gin.Context) {
 	var requestBody decoder.ApiPokemonScan2
 
@@ -423,6 +441,17 @@ func PokemonSearch(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
+// @BasePath /api
+
+// @Summary 	Quests Status
+// @Schemes
+// @Description Get Status of Quests in given Fence
+// @Tags 		quest
+// @Accept 		json
+// @Produce 	json
+// @Param 		fence	 	body 		geojson.Feature		true 	"Fence"
+// @Success 	200 		{array} 	db.QuestStatus 	"ok"
+// @Router 		/api/quest-status [post]
 func GetQuestStatus(c *gin.Context) {
 	fence, err := geo.NormaliseFenceRequest(c)
 
@@ -477,4 +506,9 @@ func GetPokestop(c *gin.Context) {
 
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
+}
+
+type Response struct {
+	Status string  `json:"status" example:"ok"`
+	Data   *string `json:"data"`
 }
