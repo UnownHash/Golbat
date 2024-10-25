@@ -1,5 +1,5 @@
 # Build image
-FROM golang:1.22-alpine as build
+FROM golang:1.23-alpine as build
 
 WORKDIR /go/src/app
 COPY go.mod go.sum ./
