@@ -2,16 +2,18 @@ package decoder
 
 import (
 	"context"
-	"github.com/UnownHash/gohbem"
-	"github.com/jellydator/ttlcache/v3"
-	"github.com/puzpuzpuz/xsync/v2"
-	log "github.com/sirupsen/logrus"
-	"github.com/tidwall/rtree"
-	"golbat/config"
-	"gopkg.in/guregu/null.v4"
 	"math"
 	"strconv"
 	"sync"
+
+	"golbat/config"
+
+	"github.com/UnownHash/gohbem"
+	"github.com/jellydator/ttlcache/v3"
+	"github.com/puzpuzpuz/xsync/v3"
+	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
+	"gopkg.in/guregu/null.v4"
 )
 
 type PokemonLookupCacheItem struct {
@@ -46,7 +48,7 @@ var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
 func initPokemonRtree() {
-	pokemonLookupCache = xsync.NewIntegerMapOf[uint64, PokemonLookupCacheItem]()
+	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
 
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
 		r := v.Value()
