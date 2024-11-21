@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"time"
 
@@ -723,11 +722,11 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	cpMultiplier := float64(proto.CpMultiplier)
 	var level int64
 	if cpMultiplier < 0.734 {
-		level = int64(math.Round((58.35178527*cpMultiplier-2.838007664)*cpMultiplier + 0.8539209906))
+		level = int64((58.35178527*cpMultiplier-2.838007664)*cpMultiplier + 1.3539209906)
 	} else if cpMultiplier < .795 {
-		level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
+		level = int64(171.0112688*cpMultiplier - 94.70425243)
 	} else {
-		level = int64(math.Round(199.99995231630976*cpMultiplier - 118.05996066890287))
+		level = int64(199.99995231630976*cpMultiplier - 117.55996066890287)
 	}
 
 	// Here comes the Ditto logic. Embrace yourself :)
