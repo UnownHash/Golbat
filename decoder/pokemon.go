@@ -722,9 +722,9 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	cpMultiplier := float64(proto.CpMultiplier)
 	var level int64
 	if cpMultiplier < 0.734 {
-		level = int64((58.35178527*cpMultiplier-2.838007664)*cpMultiplier + 1.3539209906)
+		level = int64((58.215688455154954*cpMultiplier-2.7012478057856497)*cpMultiplier + 1.3220677708486794)
 	} else if cpMultiplier < .795 {
-		level = int64(171.0112688*cpMultiplier - 94.70425243)
+		level = int64(171.34093607855277*cpMultiplier - 94.95626666368578)
 	} else {
 		level = int64(199.99995231630976*cpMultiplier - 117.55996066890287)
 	}
