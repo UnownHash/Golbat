@@ -719,7 +719,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			pokemon.EncounterWeather = EncounterWeather_UnboostedNotPartlyCloudy
 		}
 	}
-	cpMultiplier := float64(proto.CpMultiplier)
+	cpMultiplier := proto.CpMultiplier
 	var level int64
 	if cpMultiplier < 0.734 {
 		level = int64((58.215688455154954*cpMultiplier-2.7012478057856497)*cpMultiplier + 1.3220677708486794)
