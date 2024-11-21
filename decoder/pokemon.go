@@ -724,8 +724,10 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	var level int64
 	if cpMultiplier < 0.734 {
 		level = int64(math.Round((58.35178527*cpMultiplier-2.838007664)*cpMultiplier + 0.8539209906))
-	} else {
+	} else if cpMultiplier < .795 {
 		level = int64(math.Round(171.0112688*cpMultiplier - 95.20425243))
+	} else {
+		level = int64(math.Round(199.99995231630976*cpMultiplier - 118.05996066890287))
 	}
 
 	// Here comes the Ditto logic. Embrace yourself :)
@@ -823,7 +825,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 				case EncounterWeather_Invalid: // should only happen when upgrading with pre-existing data
 					if !pokemon.IvInactive.Valid {
 						setDittoAttributes("00/0N>0P", true, false, true)
-					} else if level > 30 {
+					} else if level > 30 && level <= 35 {
 						setDittoAttributes("BN/PN>0P", true, false, true)
 					} else {
 						setDittoAttributes("00/0N/BN/PN>0P or B0>00/[0N]", false, true, false)
@@ -836,7 +838,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 					uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) | EncounterWeather_Rerolled:
 					setDittoAttributes("PN>0P", true, false, true)
 				default:
-					if level > 30 {
+					if level > 30 && level <= 35 {
 						setDittoAttributes("BN>0P", true, false, true)
 					} else if oldWeather&EncounterWeather_Rerolled != 0 {
 						// in case of BN>0P, we set Ditto to be a hidden 0P state, hoping we rediscover later
@@ -926,7 +928,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
 				int64(proto.IndividualStamina))
 		}
-	} else if level > 30 {
+	} else if level > 30 && level <= 35 {
 		setDittoAttributes("0P", true, false, true)
 	} else {
 		pokemon.Level = null.IntFrom(level)
