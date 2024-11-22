@@ -1068,6 +1068,7 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 }
 
 func (pokemon *Pokemon) repopulateStatsIfNeeded(ctx context.Context, db db.DbDetails) {
+	return
 	// TODO: repopulate weight/size/height?
 	if pokemon.Cp.Valid || ohbem == nil {
 		return
