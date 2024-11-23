@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package pokemon_internal;
+
+message PokemonInternal {
+  repeated PokemonScan scan_history = 1;
+}
+
+message PokemonScan {
+  // from display
+  int32 weather = 1;
+  bool strong = 2;
+  // from encounter
+  int32 level = 3;
+  int32 attack = 4;
+  int32 defense = 5;
+  int32 stamina = 6;
+  int32 cell_weather = 7;
+}
