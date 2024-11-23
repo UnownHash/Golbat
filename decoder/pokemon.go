@@ -771,11 +771,11 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 				}
 			}
 			pokemon.Level = null.IntFrom(level - 5)
-			pokemon.IvInactive = null.IntFrom(int64(
-				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
+			//pokemon.IvInactive = null.IntFrom(int64(
+			//	proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 		} else {
 			if archive {
-				pokemon.IvInactive = pokemon.compressIv()
+				//pokemon.IvInactive = pokemon.compressIv()
 			}
 			pokemon.Level = null.IntFrom(level)
 			pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
@@ -787,8 +787,8 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		// when disguise is boosted, it has same IV as Ditto
 		if isUnboostedPartlyCloudy {
 			if pokemon.Level.Int64 == level-5 {
-				pokemon.IvInactive = null.IntFrom(int64(
-					proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
+				//pokemon.IvInactive = null.IntFrom(int64(
+				//	proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 			} else {
 				setDittoAttributes("0N", false, true, false)
 			}
@@ -797,8 +797,8 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			oldWeather != uint8(pogo.GameplayWeatherProto_PARTLY_CLOUDY) &&
 			// at this point we are not sure if we are in 00 or 0P, so we guess 0P only if the last scanned level agrees
 			pokemon.Level.Int64 == level-5 {
-			pokemon.IvInactive = null.IntFrom(int64(
-				proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
+			//pokemon.IvInactive = null.IntFrom(int64(
+			//	proto.IndividualAttack | proto.IndividualDefense<<4 | proto.IndividualStamina<<8))
 		} else if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) &&
 			pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) && pokemon.Level.Int64 != level {
 			setDittoAttributes("BN", false, true, false)
@@ -1028,7 +1028,7 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 			reset = pokemon.Weather.ValueOrZero() != int64(pogo.GameplayWeatherProto_NONE) != isBoosted
 		}
 		if reset {
-			currentIv := pokemon.compressIv()
+			//currentIv := pokemon.compressIv()
 			if pokemon.IvInactive.Valid {
 				pokemon.calculateIv(pokemon.IvInactive.Int64&15, pokemon.IvInactive.Int64>>4&15,
 					pokemon.IvInactive.Int64>>8&15)
@@ -1051,15 +1051,9 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 					pokemon.SeenType = null.StringFrom(SeenType_Wild)
 				}
 			}
-			pokemon.IvInactive = currentIv
+			//pokemon.IvInactive = currentIv
 			pokemon.Cp = null.NewInt(0, false)
-			if pokemon.Level.Valid {
-				if isBoosted {
-					pokemon.Level.Int64 += 5
-				} else {
-					pokemon.Level.Int64 -= 5
-				}
-			}
+			pokemon.Level = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
 		}
 	}
@@ -1068,7 +1062,6 @@ func (pokemon *Pokemon) setWeather(weather int64) bool {
 }
 
 func (pokemon *Pokemon) repopulateStatsIfNeeded(ctx context.Context, db db.DbDetails) {
-	return
 	// TODO: repopulate weight/size/height?
 	if pokemon.Cp.Valid || ohbem == nil {
 		return
