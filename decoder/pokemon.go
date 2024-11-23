@@ -980,15 +980,13 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Move2 = null.NewInt(0, false)
 			pokemon.Cp = null.NewInt(0, false)
 			pokemon.Shiny = null.NewBool(false, false)
-			if pokemon.IsDitto {
-				if pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_NONE) &&
-					pokemon.Weather.Int64 != int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-					// reset weather for B0 state Ditto
-					pokemon.Weather = null.IntFrom(int64(pogo.GameplayWeatherProto_NONE))
-				}
-				pokemon.IsDitto = false
-			}
-			pokemon.EncounterWeather |= EncounterWeather_Rerolled
+			pokemon.IsDitto = false
+			pokemon.AtkIv = null.NewInt(0, false)
+			pokemon.DefIv = null.NewInt(0, false)
+			pokemon.StaIv = null.NewInt(0, false)
+			pokemon.Iv = null.NewFloat(0, false)
+			pokemon.Level = null.NewInt(0, false)
+			pokemon.EncounterWeather = EncounterWeather_Invalid
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
 		}
