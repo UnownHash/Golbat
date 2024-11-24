@@ -336,7 +336,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"atk_iv = :atk_iv, "+
 				"def_iv = :def_iv, "+
 				"sta_iv = :sta_iv, "+
-				"golbat_internal = :iv_ingolbat_internalactive,"+
+				"golbat_internal = :golbat_internal,"+
 				"iv = :iv,"+
 				"form = :form, "+
 				"level = :level, "+
