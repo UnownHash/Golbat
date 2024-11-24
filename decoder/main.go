@@ -405,7 +405,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				diskEncounter := storedDiskEncounter.Value()
 				diskEncounterCache.Delete(encounterId)
 				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
-				log.Infof("Processed stored disk encounter")
+				//log.Infof("Processed stored disk encounter")
 			}
 			savePokemonRecord(ctx, db, pokemon)
 		}
