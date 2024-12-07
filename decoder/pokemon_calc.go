@@ -555,3 +555,51 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		log.Errorf("[POKEMON] Failed to marshal internal data for %s, data may be lost: %s", c.pokemon.Id, err)
 	}
 }
+
+func (c *pokemonCalc) recomputeCpIfNeeded() {
+	if c.pokemon.Cp.Valid || ohbem == nil {
+		return
+	}
+	var displayPokemon int
+	shouldOverrideIv := false
+	var overrideIv *grpc.PokemonScan
+	if c.pokemon.IsDitto {
+		displayPokemon = int(c.pokemon.DisplayPokemonId.Int64)
+		if c.pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
+			weather, err := findWeatherRecordByLatLon(c.ctx, c.db, c.pokemon.Lat, c.pokemon.Lon)
+			if err != nil || weather == nil || !weather.GameplayCondition.Valid {
+				log.Warnf("Failed to obtain weather for Pokemon %s: %s", c.pokemon.Id, err)
+			} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				shouldOverrideIv = true
+				scan, isBoostedMatches := c.locateScan(false, false)
+				if scan != nil && isBoostedMatches {
+					overrideIv = scan
+				}
+			}
+		}
+	} else {
+		displayPokemon = int(c.pokemon.PokemonId)
+	}
+	var cp int
+	var err error
+	if shouldOverrideIv {
+		if overrideIv == nil {
+			return
+		}
+		// You should see boosted IV for 0P Ditto
+		cp, err = ohbem.CalculateCp(displayPokemon, int(c.pokemon.Form.ValueOrZero()), 0,
+			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
+	} else {
+		if !c.pokemon.AtkIv.Valid || !c.pokemon.Level.Valid {
+			return
+		}
+		cp, err = ohbem.CalculateCp(displayPokemon, int(c.pokemon.Form.ValueOrZero()), 0,
+			int(c.pokemon.AtkIv.Int64), int(c.pokemon.DefIv.Int64), int(c.pokemon.StaIv.Int64),
+			float64(c.pokemon.Level.Int64))
+	}
+	if err == nil {
+		c.pokemon.Cp = null.IntFrom(int64(cp))
+	} else {
+		log.Warnf("Pokemon %s %d CP unset due to error %s", c.pokemon.Id, displayPokemon, err)
+	}
+}

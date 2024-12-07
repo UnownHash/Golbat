@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"golbat/grpc"
 	"strconv"
 	"time"
 
@@ -14,7 +13,6 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	prot "google.golang.org/protobuf/proto"
 	"gopkg.in/guregu/null.v4"
 
 	"golbat/config"
@@ -255,7 +253,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	var pvpResults map[string][]gohbem.PokemonEntry
 	if ohbem != nil {
 		// Calculating PVP data
-		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp || oldPokemon.Form != pokemon.Form || oldPokemon.Costume != pokemon.Costume) {
+		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId ||
+			oldPokemon.Level != pokemon.Level || oldPokemon.Form != pokemon.Form ||
+			oldPokemon.Costume != pokemon.Costume || oldPokemon.Gender != pokemon.Gender) {
 			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
 				int(pokemon.Form.ValueOrZero()),
 				int(pokemon.Costume.ValueOrZero()),
@@ -516,7 +516,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
 	calc.addWildPokemon(wildPokemon, timestampMs)
-	pokemon.recomputeCpIfNeeded(ctx, db)
+	calc.recomputeCpIfNeeded()
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
@@ -548,7 +548,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	if mapPokemon.PokemonDisplay != nil {
 		calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
 		calc.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
-		pokemon.recomputeCpIfNeeded(ctx, db)
+		calc.recomputeCpIfNeeded()
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
 	} else {
@@ -575,7 +575,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokestopId := nearbyPokemon.FortId
 	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
 	calc.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
-	pokemon.recomputeCpIfNeeded(ctx, db)
+	calc.recomputeCpIfNeeded()
 	pokemon.Username = null.StringFrom(username)
 
 	var lat, lon float64
@@ -696,62 +696,6 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	calc.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
 	calc.addEncounterPokemon(encounterData.Pokemon, username)
-}
-
-func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails) {
-	if pokemon.Cp.Valid || ohbem == nil {
-		return
-	}
-	var displayPokemon int64
-	shouldOverrideIv := false
-	var overrideIv *grpc.PokemonScan
-	if pokemon.IsDitto {
-		displayPokemon = pokemon.DisplayPokemonId.Int64
-		if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
-			weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
-			if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-				log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
-			} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-				shouldOverrideIv = true
-				var internal grpc.PokemonInternal
-				err := prot.Unmarshal(pokemon.GolbatInternal, &internal)
-				if err != nil {
-					log.Warnf("Failed to parse internal data for %s: %s", pokemon.Id, err)
-				} else {
-					for _, entry := range internal.ScanHistory {
-						if entry.Weather != int32(pogo.GameplayWeatherProto_NONE) && !entry.Strong {
-							overrideIv = entry
-							break
-						}
-					}
-				}
-			}
-		}
-	} else {
-		displayPokemon = int64(pokemon.PokemonId)
-	}
-	var cp int
-	var err error
-	if shouldOverrideIv {
-		if overrideIv == nil {
-			return
-		}
-		// You should see boosted IV for 0P Ditto
-		cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
-			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
-	} else {
-		if !pokemon.AtkIv.Valid || !pokemon.Level.Valid {
-			return
-		}
-		cp, err = ohbem.CalculateCp(int(displayPokemon), int(pokemon.Form.ValueOrZero()), 0,
-			int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
-			float64(pokemon.Level.Int64))
-	}
-	if err == nil {
-		pokemon.Cp = null.IntFrom(int64(cp))
-	} else {
-		log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
-	}
 }
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
