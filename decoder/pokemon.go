@@ -492,17 +492,6 @@ func (pokemon *Pokemon) remainingDuration() time.Duration {
 	return remaining
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) bool {
-	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
-		panic("Unmatched EncounterId")
-	}
-	pokemon.Lat = wildPokemon.Latitude
-	pokemon.Lon = wildPokemon.Longitude
-
-	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
-	return pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
-}
-
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
 func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto, time int64) bool {
@@ -525,7 +514,8 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 	}
-	_ = pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+	calc.addWildPokemon(wildPokemon, timestampMs)
 	pokemon.recomputeCpIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -551,13 +541,13 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		return
 	}
 	pokemon.PokestopId = null.StringFrom(pokestop.Id)
-	pokemon.PokemonId = int16(mapPokemon.PokedexTypeId)
 	pokemon.Lat = pokestop.Lat
 	pokemon.Lon = pokestop.Lon
-	pokemon.SeenType = null.StringFrom(SeenType_LureWild) // TODO may have been encounter... this needs fixing
+	pokemon.SeenType = null.StringFrom(SeenType_LureWild)
 
 	if mapPokemon.PokemonDisplay != nil {
-		_ = pokemon.setPokemonDisplay(pokemon.PokemonId, mapPokemon.PokemonDisplay)
+		calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+		calc.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
 		pokemon.recomputeCpIfNeeded(ctx, db)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
@@ -580,18 +570,11 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	pokemon.AtkIv = null.IntFrom(a)
-	pokemon.DefIv = null.IntFrom(d)
-	pokemon.StaIv = null.IntFrom(s)
-	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
-}
-
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
 	pokemon.IsEvent = 0
 	pokestopId := nearbyPokemon.FortId
-	pokemonId := int16(nearbyPokemon.PokedexNumber)
-	_ = pokemon.setPokemonDisplay(pokemonId, nearbyPokemon.PokemonDisplay)
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+	calc.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db)
 	pokemon.Username = null.StringFrom(username)
 
@@ -692,210 +675,27 @@ func (pokemon *Pokemon) setUnknownTimestamp() {
 	}
 }
 
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.Username = null.StringFrom(username)
-	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
-	pokemon.Cp = null.IntFrom(int64(proto.Cp))
-	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
-	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
-	pokemon.Height = null.FloatFrom(float64(proto.HeightM))
-	pokemon.Size = null.IntFrom(int64(proto.Size))
-	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
-	scan := grpc.PokemonScan{
-		Weather:     int32(pokemon.Weather.Int64),
-		Strong:      pokemon.IsStrong.Bool,
-		CellWeather: int32(pokemon.Weather.Int64),
-	}
-	//isUnboostedPartlyCloudy := false
-	if proto.PokemonDisplay.WeatherBoostedCondition == pogo.GameplayWeatherProto_NONE {
-		weather, err := findWeatherRecordByLatLon(ctx, db, pokemon.Lat, pokemon.Lon)
-		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-			log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
-		} else {
-			scan.CellWeather = int32(weather.GameplayCondition.Int64)
-			//if scan.CellWeather == int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-			//	isUnboostedPartlyCloudy = true
-			//}
-		}
-	}
-	cpMultiplier := proto.CpMultiplier
-	var level int64
-	if cpMultiplier < 0.734 {
-		level = int64((58.215688455154954*cpMultiplier-2.7012478057856497)*cpMultiplier + 1.3220677708486794)
-	} else if cpMultiplier < .795 {
-		level = int64(171.34093607855277*cpMultiplier - 94.95626666368578)
-	} else {
-		level = int64(199.99995231630976*cpMultiplier - 117.55996066890287)
-	}
-
-	var internal grpc.PokemonInternal
-	err := prot.Unmarshal(pokemon.GolbatInternal, &internal)
-	if err != nil {
-		log.Warnf("Unrecognized internal data for Pokemon %s: %s", pokemon.Id, err)
-		internal.Reset()
-	}
-
-	// TODO: reimplement ditto logic
-	pokemon.Level = null.IntFrom(level)
-	pokemon.calculateIv(int64(proto.IndividualAttack), int64(proto.IndividualDefense),
-		int64(proto.IndividualStamina))
-	scan.Level = int32(level)
-	scan.Attack = proto.IndividualAttack
-	scan.Defense = proto.IndividualDefense
-	scan.Stamina = proto.IndividualStamina
-
-	newScans := make([]*grpc.PokemonScan, len(internal.ScanHistory)+1)
-	entriesCount := 0
-	for _, oldEntry := range internal.ScanHistory {
-		if oldEntry.Strong != pokemon.IsStrong.Bool || !oldEntry.Strong && oldEntry.Weather ==
-			int32(pogo.GameplayWeatherProto_NONE) != (pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE)) {
-			newScans[entriesCount] = oldEntry
-			entriesCount++
-			continue
-		}
-		if scan.Level != oldEntry.Level || scan.Attack != oldEntry.Attack || scan.Defense != oldEntry.Defense ||
-			scan.Stamina != oldEntry.Stamina {
-			log.Errorf("[POKEMON] An unexpected stat set was seen upon reencountering %s %t: (%d,%d,%d,%d,%d,%d) -> (%d,%d,%d,%d,%d,%d). Is this a Ditto?",
-				pokemon.Id, scan.Strong, oldEntry.Level, oldEntry.Attack, oldEntry.Defense, oldEntry.Stamina,
-				oldEntry.Weather, oldEntry.CellWeather, scan.Level, scan.Attack, scan.Defense, scan.Stamina,
-				scan.Weather, scan.CellWeather)
-		}
-	}
-	newScans[entriesCount] = &scan
-	internal.ScanHistory = newScans[:entriesCount+1]
-	marshaled, err := prot.Marshal(&internal)
-	if err == nil {
-		pokemon.GolbatInternal = marshaled
-	} else {
-		log.Errorf("[POKEMON] Failed to marshal internal data for %s, data may be lost: %s", pokemon.Id, err)
-	}
-}
-
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
+	calc.addWildPokemon(encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+	calc.addEncounterPokemon(encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
 		cellID := s2.CellIDFromLatLng(centerCoord).Parent(15)
 		pokemon.CellId = null.IntFrom(int64(cellID))
 	}
-
-	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
 	pokemon.IsEvent = 0
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
-
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+	calc.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
-}
-
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) bool {
-	if !pokemon.isNewRecord() {
-		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
-		var oldId int16
-		if pokemon.IsDitto {
-			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
-		} else {
-			oldId = pokemon.PokemonId
-		}
-		strongnessChanged := pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon
-		if strongnessChanged || oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
-			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
-			pokemon.Gender != null.IntFrom(int64(display.Gender)) {
-			log.Debugf("Pokemon %s changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
-				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
-				pokemon.IsStrong.ValueOrZero(),
-				pokemonId, display.Form, display.Costume, display.Gender, display.IsStrongPokemon)
-			pokemon.Weight = null.NewFloat(0, false)
-			pokemon.Height = null.NewFloat(0, false)
-			pokemon.Size = null.NewInt(0, false)
-			pokemon.Move1 = null.NewInt(0, false)
-			pokemon.Move2 = null.NewInt(0, false)
-			pokemon.Cp = null.NewInt(0, false)
-			pokemon.Shiny = null.NewBool(false, false)
-			pokemon.IsDitto = false
-			pokemon.DisplayPokemonId = null.NewInt(0, false)
-			pokemon.Pvp = null.NewString("", false)
-			if strongnessChanged {
-				pokemon.Level = null.NewInt(0, false)
-			}
-		}
-	}
-	if pokemon.isNewRecord() || !pokemon.IsDitto {
-		pokemon.PokemonId = pokemonId
-	}
-	pokemon.Gender = null.IntFrom(int64(display.Gender))
-	pokemon.Form = null.IntFrom(int64(display.Form))
-	pokemon.Costume = null.IntFrom(int64(display.Costume))
-	pokemon.IsStrong = null.BoolFrom(display.IsStrongPokemon)
-	return pokemon.setWeather(int64(display.WeatherBoostedCondition))
-}
-
-// the caller should make sure that strong <=> non-strong are already handled before calling this
-func (pokemon *Pokemon) setWeather(weather int64) bool {
-	shouldReencounter := false // whether reencountering might give more information. Returns false for new record
-	if !pokemon.isNewRecord() && pokemon.Weather.ValueOrZero() != weather {
-		var reset, isBoosted bool
-		if !pokemon.IsDitto {
-			isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
-			reset = pokemon.Weather.ValueOrZero() != int64(pogo.GameplayWeatherProto_NONE) != isBoosted
-		} else if pokemon.IsStrong.Bool {
-			log.Warnf("Strong Ditto??? I can't handle this fml %s", pokemon.Id)
-		} else {
-			isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
-			// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
-			// or both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
-			reset = isBoosted || pokemon.Weather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
-			// Technically Ditto should also be rescanned during 0P>B0 (and optionally B0>0P) but this is not the place to do it
-		}
-		if reset {
-			var internal grpc.PokemonInternal
-			err := prot.Unmarshal(pokemon.GolbatInternal, &internal)
-			if err != nil {
-				log.Warnf("Failed to parse internal data for %s: %s", pokemon.Id, err)
-			} else {
-				for _, entry := range internal.ScanHistory {
-					if entry.Strong == pokemon.IsStrong.Bool &&
-						entry.Weather != int32(pogo.GameplayWeatherProto_NONE) == isBoosted {
-						pokemon.Level = null.IntFrom(int64(entry.Level))
-						pokemon.calculateIv(int64(entry.Attack), int64(entry.Defense), int64(entry.Stamina))
-						switch pokemon.SeenType.ValueOrZero() {
-						case SeenType_LureWild:
-							pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
-						case SeenType_Wild:
-							pokemon.SeenType = null.StringFrom(SeenType_Encounter)
-						}
-						goto end
-					}
-				}
-			}
-			if isBoosted {
-				pokemon.Level.Int64 += 5
-			} else {
-				pokemon.Level.Int64 -= 5
-			}
-			pokemon.AtkIv = null.NewInt(0, false)
-			pokemon.DefIv = null.NewInt(0, false)
-			pokemon.StaIv = null.NewInt(0, false)
-			pokemon.Iv = null.NewFloat(0, false)
-			shouldReencounter = true
-			switch pokemon.SeenType.ValueOrZero() {
-			case SeenType_LureEncounter:
-				pokemon.SeenType = null.StringFrom(SeenType_LureWild)
-			case SeenType_Encounter:
-				pokemon.SeenType = null.StringFrom(SeenType_Wild)
-			}
-		end:
-			pokemon.Cp = null.NewInt(0, false)
-			pokemon.Pvp = null.NewString("", false)
-		}
-	}
-	pokemon.Weather = null.IntFrom(weather)
-	return shouldReencounter
+	calc.addEncounterPokemon(encounterData.Pokemon, username)
 }
 
 func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails) {
