@@ -303,7 +303,7 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 		if unboostedScan != nil && boostedScan != nil { // if we have both IVs then they must be correct
 			if unboostedScan.Level == scan.Level {
 				if isBoosted {
-					c.setDittoAttributes("B0", true, unboostedScan, scan)
+					c.setDittoAttributes(">B0", true, unboostedScan, scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 					return scan, nil
 				}
@@ -312,7 +312,7 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 				if isBoosted {
 					return scan, checkScans(boostedScan, scan)
 				}
-				c.setDittoAttributes("0P", true, boostedScan, scan)
+				c.setDittoAttributes(">0P", true, boostedScan, scan)
 				scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				return unboostedScan, nil
 			}
