@@ -19,6 +19,7 @@ func (s *PokemonScan) MustHaveRerolled(other *PokemonScan) bool {
 
 // RemoveDittoAuxInfo for saving space when this information is no longer needed
 func (s *PokemonScan) RemoveDittoAuxInfo() {
+	s.CellWeather = 0
 	s.Pokemon = 0
 	s.Costume = 0
 	s.Gender = 0

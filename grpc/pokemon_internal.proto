@@ -19,7 +19,6 @@ message PokemonScan {
   int32 stamina = 6;
   // for Ditto detection
   int32 cell_weather = 7;
-  // set these fields to 0 for saving space
   int32 pokemon = 8;
   int32 costume = 9;
   int32 gender = 10;
