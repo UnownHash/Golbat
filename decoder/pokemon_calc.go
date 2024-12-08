@@ -381,6 +381,7 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 					// setting 0P Ditto would also mean that we have a Ditto with unconfirmed IV which is a bad idea
 					c.setDittoAttributes("BN>0P or B0>[0N]", false, matchingScan, scan)
 				}
+				matchingScan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			case int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
 				// we can never be sure if this is a Ditto or rerolling into non-Ditto
 				if scan.MustHaveRerolled(matchingScan) {
