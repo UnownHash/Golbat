@@ -398,12 +398,12 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 			switch scan.Weather {
 			case int32(pogo.GameplayWeatherProto_NONE):
 				// we can never be sure if this is a Ditto or rerolling into non-Ditto
-				matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				if scan.MustHaveRerolled(matchingScan) {
 					c.setDittoAttributes("0P>00/[0N]", false, matchingScan, scan)
 				} else {
 					c.setDittoAttributes("0P>[00]/0N", true, matchingScan, scan)
 				}
+				matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				return scan, nil
 			case int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
 				c.setDittoAttributes("0P>PN", false, matchingScan, scan)
