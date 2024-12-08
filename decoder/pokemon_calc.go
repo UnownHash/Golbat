@@ -107,19 +107,21 @@ func (c *pokemonCalc) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDi
 	c.pokemon.IsStrong = null.BoolFrom(display.IsStrongPokemon)
 }
 
-func (c *pokemonCalc) clearIv() {
+func (c *pokemonCalc) clearIv(cp bool) {
 	c.pokemon.AtkIv = null.NewInt(0, false)
 	c.pokemon.DefIv = null.NewInt(0, false)
 	c.pokemon.StaIv = null.NewInt(0, false)
 	c.pokemon.Iv = null.NewFloat(0, false)
-	switch c.pokemon.SeenType.ValueOrZero() {
-	case SeenType_LureEncounter:
-		c.pokemon.SeenType = null.StringFrom(SeenType_LureWild)
-	case SeenType_Encounter:
-		c.pokemon.SeenType = null.StringFrom(SeenType_Wild)
+	if cp {
+		switch c.pokemon.SeenType.ValueOrZero() {
+		case SeenType_LureEncounter:
+			c.pokemon.SeenType = null.StringFrom(SeenType_LureWild)
+		case SeenType_Encounter:
+			c.pokemon.SeenType = null.StringFrom(SeenType_Wild)
+		}
+		c.pokemon.Cp = null.NewInt(0, false)
+		c.pokemon.Pvp = null.NewString("", false)
 	}
-	c.pokemon.Cp = null.NewInt(0, false)
-	c.pokemon.Pvp = null.NewString("", false)
 }
 
 func (c *pokemonCalc) calculateIv(a int64, d int64, s int64) {
@@ -139,7 +141,7 @@ func (c *pokemonCalc) repopulateIv(weather int64, isStrong bool) {
 		}
 	} else if isStrong {
 		log.Errorf("Strong Ditto??? I can't handle this fml %s", c.pokemon.Id)
-		c.clearIv()
+		c.clearIv(true)
 		return
 	} else {
 		isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
@@ -153,7 +155,7 @@ func (c *pokemonCalc) repopulateIv(weather int64, isStrong bool) {
 	var oldAtk, oldDef, oldSta int64
 	if matchingScan == nil {
 		c.pokemon.Level = null.NewInt(0, false)
-		c.clearIv()
+		c.clearIv(true)
 	} else {
 		oldLevel := c.pokemon.Level.ValueOrZero()
 		if c.pokemon.AtkIv.Valid {
@@ -175,7 +177,7 @@ func (c *pokemonCalc) repopulateIv(weather int64, isStrong bool) {
 				c.pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 			}
 		} else {
-			c.clearIv()
+			c.clearIv(true)
 		}
 		if !isBoostedMatches {
 			if isBoosted {
@@ -513,7 +515,7 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 	}
 	if caughtIv == nil { // this can only happen for a 0P Ditto
 		c.pokemon.Level = null.IntFrom(int64(scan.Level - 5))
-		c.clearIv()
+		c.clearIv(false)
 	} else {
 		c.pokemon.Level = null.IntFrom(int64(caughtIv.Level))
 		c.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
