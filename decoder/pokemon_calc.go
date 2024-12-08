@@ -280,6 +280,7 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 				case unboostedLevel + 5:
 					// For a confirmed Ditto, we persist IV in inactive only in 0P state
 					// when disguise is boosted, it has same IV as Ditto
+					scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 					return unboostedScan, checkScans(boostedScan, scan)
 				}
 				return scan, errors.New(fmt.Sprintf("Unexpected 0P Ditto level change, %s/%s -> %s",
@@ -291,6 +292,7 @@ func (c *pokemonCalc) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, er
 		}
 		switch scan.Level {
 		case unboostedLevel:
+			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			return scan, checkScans(unboostedScan, scan)
 		case unboostedLevel + 5:
 			return c.resetDittoAttributes("BN", boostedScan, unboostedScan, scan)
