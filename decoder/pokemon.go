@@ -508,20 +508,20 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
 }
 
-func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	switch pokemon.SeenType.ValueOrZero() {
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 	}
-	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db, weather: weather}
 	calc.addWildPokemon(wildPokemon, timestampMs)
 	calc.recomputeCpIfNeeded()
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) {
 
 	if !pokemon.isNewRecord() {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -546,7 +546,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SeenType = null.StringFrom(SeenType_LureWild)
 
 	if mapPokemon.PokemonDisplay != nil {
-		calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+		calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db, weather: weather}
 		calc.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
 		calc.recomputeCpIfNeeded()
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
@@ -570,10 +570,10 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, username string) {
+func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) {
 	pokemon.IsEvent = 0
 	pokestopId := nearbyPokemon.FortId
-	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db, weather: weather}
 	calc.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	calc.recomputeCpIfNeeded()
 	pokemon.Username = null.StringFrom(username)

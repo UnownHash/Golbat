@@ -48,11 +48,6 @@ type RawMapPokemonData struct {
 	Data *pogo.MapPokemonProto
 }
 
-type RawClientWeatherData struct {
-	Cell int64
-	Data *pogo.ClientWeatherProto
-}
-
 type webhooksSenderInterface interface {
 	AddMessage(whType webhooks.WebhookType, message any, areas []geo.AreaName)
 }
@@ -330,7 +325,12 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, username string) {
+func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, weather []*pogo.ClientWeatherProto, username string) {
+	weatherLookup := make(map[int64]pogo.GameplayWeatherProto_WeatherCondition)
+	for _, weatherProto := range weather {
+		weatherLookup[weatherProto.S2CellId] = weatherProto.GameplayWeather.GameplayCondition
+	}
+
 	for _, wild := range wildPokemonList {
 		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -361,7 +361,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 							if pokemon.wildSignificantUpdate(wildPokemon, updateTime) && pokemon.Updated.ValueOrZero() < updateTime {
 								log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
 
-								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, timestampMs, username)
+								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
 								savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
 							}
 						}
@@ -382,7 +382,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			if err != nil {
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
-				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), username)
+				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, username)
 				savePokemonRecord(ctx, db, pokemon)
 			}
 
@@ -399,7 +399,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), username)
+			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, username)
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
 			if storedDiskEncounter != nil {
 				diskEncounter := storedDiskEncounter.Value()
@@ -413,19 +413,19 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []RawClientWeatherData) {
+func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto) {
 	for _, weatherProto := range p {
-		weatherId := strconv.FormatInt(weatherProto.Data.S2CellId, 10)
+		weatherId := strconv.FormatInt(weatherProto.S2CellId, 10)
 		weatherMutex, _ := weatherStripedMutex.GetLock(weatherId)
 		weatherMutex.Lock()
-		weather, err := getWeatherRecord(ctx, db, weatherProto.Cell)
+		weather, err := getWeatherRecord(ctx, db, weatherProto.S2CellId)
 		if err != nil {
 			log.Printf("getWeatherRecord: %s", err)
 		} else {
 			if weather == nil {
 				weather = &Weather{}
 			}
-			weather.updateWeatherFromClientWeatherProto(weatherProto.Data)
+			weather.updateWeatherFromClientWeatherProto(weatherProto)
 			saveWeatherRecord(ctx, db, weather)
 		}
 		weatherMutex.Unlock()

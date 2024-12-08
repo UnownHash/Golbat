@@ -18,6 +18,7 @@ type pokemonCalc struct {
 	pokemon *Pokemon
 	ctx     context.Context
 	db      db.DbDetails
+	weather map[int64]pogo.GameplayWeatherProto_WeatherCondition
 
 	internal          grpc.PokemonInternal
 	internalPopulated bool
@@ -498,7 +499,7 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		Form:        int32(proto.PokemonDisplay.Form),
 	}
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
-		weather, err := findWeatherRecordByLatLon(c.ctx, c.db, c.pokemon.Lat, c.pokemon.Lon)
+		weather, err := getWeatherRecord(c.ctx, c.db, weatherCellIdFromLatLon(c.pokemon.Lat, c.pokemon.Lon))
 		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
 			log.Warnf("Failed to obtain weather for Pokemon %s: %s", c.pokemon.Id, err)
 		} else {
@@ -573,10 +574,19 @@ func (c *pokemonCalc) recomputeCpIfNeeded() {
 	if c.pokemon.IsDitto {
 		displayPokemon = int(c.pokemon.DisplayPokemonId.Int64)
 		if c.pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
-			weather, err := findWeatherRecordByLatLon(c.ctx, c.db, c.pokemon.Lat, c.pokemon.Lon)
-			if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-				log.Warnf("Failed to obtain weather for Pokemon %s: %s", c.pokemon.Id, err)
-			} else if weather.GameplayCondition.Int64 == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+			cellId := weatherCellIdFromLatLon(c.pokemon.Lat, c.pokemon.Lon)
+			weather, found := c.weather[cellId]
+			if !found {
+				record, err := getWeatherRecord(c.ctx, c.db, cellId)
+				if err != nil || record == nil || !record.GameplayCondition.Valid {
+					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %s: %s", c.pokemon.Id, err)
+				} else {
+					log.Warnf("[POKEMON] Weather not found locally for %s at %d", c.pokemon.Id, cellId)
+					weather = pogo.GameplayWeatherProto_WeatherCondition(record.GameplayCondition.Int64)
+					found = true
+				}
+			}
+			if found && weather == pogo.GameplayWeatherProto_PARTLY_CLOUDY {
 				shouldOverrideIv = true
 				scan, isBoostedMatches := c.locateScan(false, false)
 				if scan != nil && isBoostedMatches {

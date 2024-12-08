@@ -806,7 +806,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newWildPokemon []decoder.RawWildPokemonData
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
 	var newMapPokemon []decoder.RawMapPokemonData
-	var newClientWeather []decoder.RawClientWeatherData
+	var newClientWeather []*pogo.ClientWeatherProto
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
 
@@ -836,17 +836,17 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		}
 	}
 	for _, clientWeather := range decodedGmo.ClientWeather {
-		newClientWeather = append(newClientWeather, decoder.RawClientWeatherData{Cell: clientWeather.S2CellId, Data: clientWeather})
+		newClientWeather = append(newClientWeather, clientWeather)
 	}
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
 	}
-	if scanParameters.ProcessPokemon {
-		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, protoData.Account)
-	}
 	if scanParameters.ProcessWeather {
 		decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather)
+	}
+	if scanParameters.ProcessPokemon {
+		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, newClientWeather, protoData.Account)
 	}
 	if scanParameters.ProcessStations {
 		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
