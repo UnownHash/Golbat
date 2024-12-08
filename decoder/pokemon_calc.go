@@ -524,7 +524,7 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		for _, oldEntry := range c.internal.ScanHistory {
 			if oldEntry.Strong != scan.Strong || !oldEntry.Strong &&
 				oldEntry.Weather == int32(pogo.GameplayWeatherProto_NONE) !=
-					(c.pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE)) {
+					(scan.Weather == int32(pogo.GameplayWeatherProto_NONE)) {
 				newScans[entriesCount] = oldEntry
 				entriesCount++
 			}
