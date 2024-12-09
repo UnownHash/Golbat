@@ -2,7 +2,7 @@ package geo
 
 import (
 	"fmt"
-	"io"
+	"github.com/valyala/bytebufferpool"
 	"math"
 
 	"github.com/gin-gonic/gin"
@@ -297,26 +297,28 @@ func (fence *GeofenceApi) toGeofence() *Geofence {
 	return &Geofence{Fence: locations}
 }
 
-func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
-	bodyBytes, err := io.ReadAll(c.Request.Body)
+func NormaliseFenceRequest(c *gin.Context, bufferPool *bytebufferpool.Pool) (*geojson.Feature, error) {
+	bodyBytes := bufferPool.Get()
+	defer bufferPool.Put(bodyBytes)
+	_, err := bodyBytes.ReadFrom(c.Request.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	geometry, err := geojson.UnmarshalGeometry(bodyBytes)
+	geometry, err := geojson.UnmarshalGeometry(bodyBytes.Bytes())
 	if err == nil {
 		log.Debugf("%s %s - received a geometry", c.Request.Method, c.FullPath())
 		return geojson.NewFeature(geometry.Geometry()), nil
 	}
 
-	feature, err := geojson.UnmarshalFeature(bodyBytes)
+	feature, err := geojson.UnmarshalFeature(bodyBytes.Bytes())
 	if err == nil {
 		log.Debugf("%s %s - received a feature", c.Request.Method, c.FullPath())
 		return feature, nil
 	}
 
 	var golbatFance *GeofenceApi
-	err = json.Unmarshal(bodyBytes, &golbatFance)
+	err = json.Unmarshal(bodyBytes.Bytes(), &golbatFance)
 	if err == nil {
 		log.Debugf("%s %s - received a fence", c.Request.Method, c.FullPath())
 		return golbatFance.toGeofence().toFeature(), err

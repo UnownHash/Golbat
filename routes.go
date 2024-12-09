@@ -75,7 +75,9 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
+	body := bufferPool.Get()
+	defer bufferPool.Put(body)
+	_, err := body.ReadFrom(io.LimitReader(r.Body, 5*1048576))
 	if err != nil {
 		statsCollector.IncRawRequests("error", "io_error")
 		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
@@ -108,7 +110,7 @@ func Raw(c *gin.Context) {
 
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := json.Unmarshal(body.Bytes(), &raw); err != nil {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
@@ -140,7 +142,7 @@ func Raw(c *gin.Context) {
 		account = "Pogodroid"
 	} else {
 		var raw map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := json.Unmarshal(body.Bytes(), &raw); err != nil {
 			decodeError = true
 		} else {
 			if v := raw["have_ar"]; v != nil {
@@ -318,7 +320,7 @@ func AuthRequired() gin.HandlerFunc {
 }
 
 func ClearQuests(c *gin.Context) {
-	fence, err := geo.NormaliseFenceRequest(c)
+	fence, err := geo.NormaliseFenceRequest(c, &bufferPool)
 
 	if err != nil {
 		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
@@ -424,7 +426,7 @@ func PokemonSearch(c *gin.Context) {
 }
 
 func GetQuestStatus(c *gin.Context) {
-	fence, err := geo.NormaliseFenceRequest(c)
+	fence, err := geo.NormaliseFenceRequest(c, &bufferPool)
 
 	if err != nil {
 		log.Warnf("POST /api/quest-status/ Error during post area %v", err)
@@ -443,7 +445,7 @@ func GetHealth(c *gin.Context) {
 }
 
 func GetPokestopPositions(c *gin.Context) {
-	fence, err := geo.NormaliseFenceRequest(c)
+	fence, err := geo.NormaliseFenceRequest(c, &bufferPool)
 	if err != nil {
 		log.Warnf("POST /api/pokestop-positions/ Error during post area %v %v", err, fence)
 		c.Status(http.StatusInternalServerError)

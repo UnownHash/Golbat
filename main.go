@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/valyala/bytebufferpool"
 	"net"
 	"net/http"
 	"net/http/pprof"
@@ -35,6 +36,8 @@ import (
 var db *sqlx.DB
 var dbDetails db2.DbDetails
 var statsCollector stats_collector.StatsCollector
+
+var bufferPool bytebufferpool.Pool
 
 func main() {
 	var wg sync.WaitGroup
