@@ -1,11 +1,12 @@
 package decoder
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"golbat/grpc"
+	"google.golang.org/protobuf/proto"
 	"strconv"
 	"time"
 
@@ -70,6 +71,8 @@ type Pokemon struct {
 	Capture3                null.Float  `db:"capture_3" json:"capture_3"`
 	Pvp                     null.String `db:"pvp" json:"pvp"`
 	IsEvent                 int8        `db:"is_event" json:"is_event"`
+
+	internal grpc.PokemonInternal
 }
 
 //
@@ -192,7 +195,6 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		old.AtkIv != new.AtkIv ||
 		old.DefIv != new.DefIv ||
 		old.StaIv != new.StaIv ||
-		!bytes.Equal(old.GolbatInternal, new.GolbatInternal) ||
 		old.Form != new.Form ||
 		old.Level != new.Level ||
 		old.IsStrong != new.IsStrong ||
@@ -216,11 +218,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		!nullFloatAlmostEqual(old.Capture3, new.Capture3, floatTolerance)
 }
 
-func savePokemonRecord(ctx context.Context, db db.DbDetails, pokemon *Pokemon) {
-	savePokemonRecordAsAtTime(ctx, db, pokemon, time.Now().Unix())
-}
-
-func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, now int64) {
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter bool, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
@@ -288,6 +286,14 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if !config.Config.PokemonMemoryOnly {
+		if isEncounter && config.Config.PokemonInternalToDb {
+			marshaled, err := proto.Marshal(&pokemon.internal)
+			if err == nil {
+				pokemon.GolbatInternal = marshaled
+			} else {
+				log.Errorf("[POKEMON] Failed to marshal internal data for %s, data may be lost: %s", pokemon.Id, err)
+			}
+		}
 		if oldPokemon == nil {
 			pvpField, pvpValue := "", ""
 			if changePvpField {
@@ -715,7 +721,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	}
 
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username)
-	savePokemonRecord(ctx, db, pokemon)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
@@ -746,7 +752,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
-	savePokemonRecord(ctx, db, pokemon)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)

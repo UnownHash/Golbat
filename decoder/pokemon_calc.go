@@ -19,27 +19,23 @@ type pokemonCalc struct {
 	ctx     context.Context
 	db      db.DbDetails
 	weather map[int64]pogo.GameplayWeatherProto_WeatherCondition
-
-	internal          grpc.PokemonInternal
-	internalPopulated bool
 }
 
 func (c *pokemonCalc) populateInternal() {
-	if c.internalPopulated {
+	if len(c.pokemon.GolbatInternal) == 0 || len(c.pokemon.internal.ScanHistory) != 0 {
 		return
 	}
-	c.internalPopulated = true
-	err := prot.Unmarshal(c.pokemon.GolbatInternal, &c.internal)
+	err := prot.Unmarshal(c.pokemon.GolbatInternal, &c.pokemon.internal)
 	if err != nil {
 		log.Warnf("Failed to parse internal data for %s: %s", c.pokemon.Id, err)
-		c.internal.Reset()
+		c.pokemon.internal.Reset()
 	}
 }
 
 func (c *pokemonCalc) locateScan(isStrong bool, isBoosted bool) (*grpc.PokemonScan, bool) {
 	c.populateInternal()
 	var bestMatching *grpc.PokemonScan
-	for _, entry := range c.internal.ScanHistory {
+	for _, entry := range c.pokemon.internal.ScanHistory {
 		if entry.Strong != isStrong {
 			continue
 		}
@@ -54,7 +50,7 @@ func (c *pokemonCalc) locateScan(isStrong bool, isBoosted bool) (*grpc.PokemonSc
 
 func (c *pokemonCalc) locateAllScans() (unboosted, boosted, strong *grpc.PokemonScan) {
 	c.populateInternal()
-	for _, entry := range c.internal.ScanHistory {
+	for _, entry := range c.pokemon.internal.ScanHistory {
 		if entry.Strong {
 			strong = entry
 		} else if entry.Weather != int32(pogo.GameplayWeatherProto_NONE) {
@@ -527,9 +523,9 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		c.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
 	}
 	if err == nil {
-		newScans := make([]*grpc.PokemonScan, len(c.internal.ScanHistory)+1)
+		newScans := make([]*grpc.PokemonScan, len(c.pokemon.internal.ScanHistory)+1)
 		entriesCount := 0
-		for _, oldEntry := range c.internal.ScanHistory {
+		for _, oldEntry := range c.pokemon.internal.ScanHistory {
 			if oldEntry.Strong != scan.Strong || !oldEntry.Strong &&
 				oldEntry.Weather == int32(pogo.GameplayWeatherProto_NONE) !=
 					(scan.Weather == int32(pogo.GameplayWeatherProto_NONE)) {
@@ -538,7 +534,7 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 			}
 		}
 		newScans[entriesCount] = &scan
-		c.internal.ScanHistory = newScans[:entriesCount+1]
+		c.pokemon.internal.ScanHistory = newScans[:entriesCount+1]
 
 		unboosted, boosted, strong := c.locateAllScans()
 		if unboosted != nil && boosted != nil {
@@ -552,15 +548,8 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		// undo possible changes
 		scan.Confirmed = false
 		scan.Weather = int32(c.pokemon.Weather.Int64)
-		c.internal.ScanHistory = make([]*grpc.PokemonScan, 1)
-		c.internal.ScanHistory[0] = &scan
-	}
-
-	marshaled, err := prot.Marshal(&c.internal)
-	if err == nil {
-		c.pokemon.GolbatInternal = marshaled
-	} else {
-		log.Errorf("[POKEMON] Failed to marshal internal data for %s, data may be lost: %s", c.pokemon.Id, err)
+		c.pokemon.internal.ScanHistory = make([]*grpc.PokemonScan, 1)
+		c.pokemon.internal.ScanHistory[0] = &scan
 	}
 }
 
