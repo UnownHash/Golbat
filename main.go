@@ -435,8 +435,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		}
 		break
 	case pogo.Method_METHOD_GET_STATION_DETAILS:
-		// Request is essential to decode this
-		result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
+		if getScanParameters(protoData).ProcessStations {
+			// Request is essential to decode this
+			result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
+		}
 		processed = true
 
 	default:
