@@ -383,12 +383,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	createPokemonWebhooks(ctx, db, oldPokemon, pokemon, areas)
-	updatePokemonStats(oldPokemon, pokemon, areas)
+	updatePokemonStats(oldPokemon, pokemon, areas, now)
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration())
+		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
 	}
 }
 
@@ -481,10 +481,10 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
-func (pokemon *Pokemon) remainingDuration() time.Duration {
+func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 	remaining := ttlcache.DefaultTTL
 	if pokemon.ExpireTimestampVerified {
-		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - time.Now().Unix()
+		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
 		if timeLeft > 1 {
 			remaining = time.Duration(timeLeft) * time.Second
 		}
@@ -521,7 +521,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) {
+func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 
 	if !pokemon.isNewRecord() {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -562,7 +562,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.ExpireTimestamp = null.IntFrom(mapPokemon.ExpirationTimeMs / 1000)
 		pokemon.ExpireTimestampVerified = true
 		// if we have cached an encounter for this pokemon, update the TTL.
-		encounterCache.UpdateTTL(pokemon.Id, pokemon.remainingDuration())
+		encounterCache.UpdateTTL(pokemon.Id, pokemon.remainingDuration(timestampMs/1000))
 	} else {
 		pokemon.ExpireTimestampVerified = false
 	}
@@ -570,7 +570,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.CellId = null.IntFrom(cellId)
 }
 
-func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) {
+func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.IsEvent = 0
 	pokestopId := nearbyPokemon.FortId
 	calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db, weather: weather}
@@ -622,7 +622,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		pokemon.Lon = midpoint.Lng.Degrees()
 	}
 	pokemon.CellId = null.IntFrom(cellId)
-	pokemon.setUnknownTimestamp()
+	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
 const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
@@ -660,12 +660,11 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
 		pokemon.ExpireTimestampVerified = true
 	} else {
-		pokemon.setUnknownTimestamp()
+		pokemon.setUnknownTimestamp(timestampMs / 1000)
 	}
 }
 
-func (pokemon *Pokemon) setUnknownTimestamp() {
-	now := time.Now().Unix()
+func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
 	if !pokemon.ExpireTimestamp.Valid {
 		pokemon.ExpireTimestamp = null.IntFrom(now + 20*60) // should be configurable, add on 20min
 	} else {

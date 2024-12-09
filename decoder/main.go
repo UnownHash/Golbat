@@ -23,8 +23,9 @@ import (
 )
 
 type RawFortData struct {
-	Cell uint64
-	Data *pogo.PokemonFortProto
+	Cell      uint64
+	Data      *pogo.PokemonFortProto
+	Timestamp int64
 }
 
 type RawStationData struct {
@@ -35,17 +36,19 @@ type RawStationData struct {
 type RawWildPokemonData struct {
 	Cell      uint64
 	Data      *pogo.WildPokemonProto
-	Timestamp uint64
+	Timestamp int64
 }
 
 type RawNearbyPokemonData struct {
-	Cell uint64
-	Data *pogo.NearbyPokemonProto
+	Cell      uint64
+	Data      *pogo.NearbyPokemonProto
+	Timestamp int64
 }
 
 type RawMapPokemonData struct {
-	Cell uint64
-	Data *pogo.MapPokemonProto
+	Cell      uint64
+	Data      *pogo.MapPokemonProto
+	Timestamp int64
 }
 
 type webhooksSenderInterface interface {
@@ -250,7 +253,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			if pokestop == nil {
 				pokestop = &Pokestop{}
 			}
-			pokestop.updatePokestopFromFort(fort.Data, fort.Cell)
+			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp)
 			savePokestopRecord(ctx, db, pokestop)
 
 			incidents := fort.Data.PokestopDisplays
@@ -336,14 +339,14 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
-		spawnpointUpdateFromWild(ctx, db, wild.Data, int64(wild.Timestamp))
+		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
 
 		if scanParameters.ProcessWild {
 			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
 			} else {
-				updateTime := int64(wild.Timestamp / 1000)
+				updateTime := wild.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
 					go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
 						time.Sleep(15 * time.Second)
@@ -365,7 +368,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 								savePokemonRecordAsAtTime(ctx, db, pokemon, updateTime)
 							}
 						}
-					}(wild.Data, int64(wild.Cell), int64(wild.Timestamp))
+					}(wild.Data, int64(wild.Cell), wild.Timestamp)
 				}
 			}
 		}
@@ -382,8 +385,8 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			if err != nil {
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
-				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, username)
-				savePokemonRecord(ctx, db, pokemon)
+				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, nearby.Timestamp)
 			}
 
 			pokemonMutex.Unlock()
@@ -399,7 +402,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
 		} else {
-			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, username)
+			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
 			storedDiskEncounter := diskEncounterCache.Get(encounterId)
 			if storedDiskEncounter != nil {
 				diskEncounter := storedDiskEncounter.Value()
@@ -407,7 +410,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
 				//log.Infof("Processed stored disk encounter")
 			}
-			savePokemonRecord(ctx, db, pokemon)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, mapPokemon.Timestamp)
 		}
 		pokemonMutex.Unlock()
 	}

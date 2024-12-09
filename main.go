@@ -816,19 +816,18 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
 			}
 		}
-		timestampMs := uint64(mapCell.AsOfTimeMs)
 		for _, fort := range mapCell.Fort {
-			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort})
+			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
 
 			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon})
+				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
 			}
 		}
 		for _, mon := range mapCell.WildPokemon {
-			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: timestampMs})
+			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
 		}
 		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon})
+			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
 		}
 		for _, station := range mapCell.Stations {
 			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
