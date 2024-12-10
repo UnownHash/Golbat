@@ -287,6 +287,15 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	if !config.Config.PokemonMemoryOnly {
 		if isEncounter && config.Config.PokemonInternalToDb {
+			calc := pokemonCalc{pokemon: pokemon, ctx: ctx, db: db}
+			unboosted, boosted, strong := calc.locateAllScans()
+			if unboosted != nil && boosted != nil {
+				unboosted.RemoveDittoAuxInfo()
+				boosted.RemoveDittoAuxInfo()
+			}
+			if strong != nil {
+				strong.RemoveDittoAuxInfo()
+			}
 			marshaled, err := proto.Marshal(&pokemon.internal)
 			if err == nil {
 				pokemon.GolbatInternal = marshaled

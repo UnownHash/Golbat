@@ -535,15 +535,6 @@ func (c *pokemonCalc) addEncounterPokemon(proto *pogo.PokemonProto, username str
 		}
 		newScans[entriesCount] = &scan
 		c.pokemon.internal.ScanHistory = newScans[:entriesCount+1]
-
-		unboosted, boosted, strong := c.locateAllScans()
-		if unboosted != nil && boosted != nil {
-			unboosted.RemoveDittoAuxInfo()
-			boosted.RemoveDittoAuxInfo()
-		}
-		if strong != nil {
-			strong.RemoveDittoAuxInfo()
-		}
 	} else {
 		// undo possible changes
 		scan.Confirmed = false
