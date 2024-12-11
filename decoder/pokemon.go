@@ -665,6 +665,19 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 		panic(err)
 	}
 
+	log.Infof("Encounter [START] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
+
+	if timestampMs == 0 {
+		if pokemon.ExpireTimestamp.Valid {
+			// Unknown server timestamp (eg from an encounter), only proceed if we don't have a valid timestamp
+			log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp)
+
+			return
+		} else {
+			timestampMs = time.Now().UnixMilli() // Use current timestamp, accepting that this may be inaccurate
+		}
+	}
+
 	pokemon.SpawnId = null.IntFrom(spawnId)
 	pokemon.ExpireTimestampVerified = false
 
@@ -684,6 +697,8 @@ func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetail
 	} else {
 		pokemon.setUnknownTimestamp()
 	}
+
+	log.Infof("Encounter [END] %s: Spawnpoint %d Timestamp %d ExpireTimestampVerified: %t ExpireTimestamp: %v Spawnpoint data: %+v", pokemon.Id, spawnId, timestampMs, pokemon.ExpireTimestampVerified, pokemon.ExpireTimestamp, spawnPoint)
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp() {
@@ -939,7 +954,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, 0)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
