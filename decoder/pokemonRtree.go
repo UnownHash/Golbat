@@ -84,7 +84,6 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
-		Form:               int16(pokemon.Form.ValueOrZero()),
 		HasEncounterValues: pokemon.Move1.Valid,
 		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),
@@ -99,6 +98,9 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 			return -1
 		}(),
 		Size: int8(valueOrMinus1(pokemon.Size)),
+	}
+	if !pokemon.IsDitto {
+		pokemonLookupCacheItem.PokemonLookup.Form = int16(pokemon.Form.ValueOrZero())
 	}
 
 	if changePvp {
