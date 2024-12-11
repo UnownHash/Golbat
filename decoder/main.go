@@ -386,7 +386,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
 				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, nearby.Timestamp)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, nearby.Timestamp/1000)
 			}
 
 			pokemonMutex.Unlock()
@@ -410,7 +410,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
 				//log.Infof("Processed stored disk encounter")
 			}
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, mapPokemon.Timestamp)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, mapPokemon.Timestamp/1000)
 		}
 		pokemonMutex.Unlock()
 	}
