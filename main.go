@@ -423,14 +423,18 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeGetRoutes(protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_CONTEST_DATA:
-		// Request helps, but can be decoded without it
-		result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
+		if getScanParameters(protoData).ProcessPokestops {
+			// Request helps, but can be decoded without it
+			result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
+		}
 		processed = true
 		break
 	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
 		// Request is essential to decode this
 		if protoData.Request != nil {
-			result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
+			if getScanParameters(protoData).ProcessPokestops {
+				result = decodeGetPokemonSizeContestEntry(ctx, protoData.Request, protoData.Data)
+			}
 			processed = true
 		}
 		break
