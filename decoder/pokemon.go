@@ -795,10 +795,10 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 
 	// Here comes the Ditto logic. Embrace yourself :)
 	// Ditto weather can be split into 4 categories:
-	//   - 00: No weather boost
-	//   - 0P: No weather boost but Ditto is actually boosted by partly cloudy causing seen IV to be boosted [atypical]
-	//   - B0: Weather boosts disguise but not Ditto causing seen IV to be unboosted [atypical]
-	//   - PP: Weather being partly cloudy boosts both disguise and Ditto
+	//  - 00: No weather boost
+	//  - 0P: No weather boost but Ditto is actually boosted by partly cloudy causing seen IV to be boosted [atypical]
+	//  - B0: Weather boosts disguise but not Ditto causing seen IV to be unboosted [atypical]
+	//  - PP: Weather being partly cloudy boosts both disguise and Ditto
 	//
 	// We will also use 0N/BN/PN to denote a normal non-Ditto spawn with corresponding weather boosts.
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
@@ -880,6 +880,9 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				levelAdjustment = -5
 			}
 		}
+		// There are 10 total possible transitions among these states, i.e. all 12 of them except for 0P <-> PP.
+		// A Ditto in 00/PP state is undetectable. We try to detect them in the remaining possibilities.
+		// Now we try to detect all 10 possible conditions where we could identify Ditto with certainty
 		switch scan.Level - (matchingScan.Level + levelAdjustment) {
 		case 0:
 		// the Pokémon has been encountered before, but we find an unexpected level when reencountering it => Ditto
