@@ -9,6 +9,8 @@ import (
 	"golbat/grpc"
 	"google.golang.org/protobuf/proto"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -770,6 +772,30 @@ func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.Po
 	return new, checkScans(old, new)
 }
 
+// As far as I'm concerned, wild Ditto only depends on species but not costume/gender/form
+var dittoDisguises sync.Map
+
+func confirmDitto(scan *grpc.PokemonScan) {
+	now := time.Now()
+	lastSeen, exists := dittoDisguises.Swap(scan.Pokemon, now)
+	if exists {
+		log.Debugf("[DITTO] Disguise %s reseen after %s", scan, now.Sub(lastSeen.(time.Time)))
+	} else {
+		var sb strings.Builder
+		sb.WriteString("[DITTO] New disguise ")
+		sb.WriteString(scan.String())
+		sb.WriteString(" found. Current disguises ")
+		dittoDisguises.Range(func(disguise, lastSeen interface{}) bool {
+			sb.WriteString(strconv.FormatInt(int64(disguise.(int32)), 10))
+			sb.WriteString(" (")
+			sb.WriteString(now.Sub(lastSeen.(time.Time)).String())
+			sb.WriteString(") ")
+			return true
+		})
+		log.Infof(sb.String())
+	}
+}
+
 // detectDitto returns the IV/level set that should be used for persisting to db/seen if caught.
 // error is set if something unexpected happened and the scan history should be cleared.
 func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, error) {
@@ -848,6 +874,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 			if unboostedScan.Level == scan.Level {
 				if isBoosted {
 					pokemon.setDittoAttributes(">B0", true, unboostedScan, scan)
+					confirmDitto(scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 					return scan, nil
 				}
@@ -857,6 +884,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 					return scan, checkScans(boostedScan, scan)
 				}
 				pokemon.setDittoAttributes(">0P", true, boostedScan, scan)
+				confirmDitto(scan)
 				scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				return unboostedScan, nil
 			}
@@ -893,6 +921,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				switch matchingScan.Weather {
 				case int32(pogo.GameplayWeatherProto_NONE):
 					pokemon.setDittoAttributes("00/0N>0P", true, matchingScan, scan)
+					confirmDitto(scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 					return unboostedScan, nil
 				case int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
@@ -900,6 +929,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 						return scan, err
 					}
 					pokemon.setDittoAttributes("PN>0P", true, matchingScan, scan)
+					confirmDitto(scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 					scan.Confirmed = true
 					return unboostedScan, nil
@@ -917,6 +947,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 					scan.Confirmed = true
 				} else if matchingScan.Confirmed || scan.MustBeBoosted() {
 					pokemon.setDittoAttributes("BN>0P", true, matchingScan, scan)
+					confirmDitto(scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 					scan.Confirmed = true
 					return unboostedScan, nil
@@ -924,6 +955,14 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				} else {
 					// in case of BN>0P, we set Ditto to be a hidden 0P state, hoping we rediscover later
 					// setting 0P Ditto would also mean that we have a Ditto with unconfirmed IV which is a bad idea
+					if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
+						if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
+							// this guess is most likely to be correct except when Ditto pool just rerolled
+							pokemon.setDittoAttributes("BN>[0P] or B0>0N", true, matchingScan, scan)
+							scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+							return unboostedScan, nil
+						}
+					}
 					pokemon.setDittoAttributes("BN>0P or B0>[0N]", false, matchingScan, scan)
 				}
 				matchingScan.Weather = int32(pogo.GameplayWeatherProto_NONE)
@@ -969,10 +1008,19 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				} else if matchingScan.Confirmed || // this covers scan.MustBeUnboosted()
 					matchingScan.CellWeather != int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
 					pokemon.setDittoAttributes("00/0N>B0", true, matchingScan, scan)
+					confirmDitto(scan)
 					scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 					scan.Confirmed = true
 				} else {
 					// same rationale as BN>0P or B0>[0N]
+					if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
+						if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
+							// this guess is most likely to be correct except when Ditto pool just rerolled
+							pokemon.setDittoAttributes("0N>[B0] or 0P>BN", true, matchingScan, scan)
+							scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
+							return scan, nil
+						}
+					}
 					pokemon.setDittoAttributes("0N>B0 or 0P>[BN]", false, matchingScan, scan)
 					matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				}
@@ -982,15 +1030,18 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 			default:
 				pokemon.setDittoAttributes("BN>B0", true, matchingScan, scan)
 			}
+			confirmDitto(scan)
 			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			return scan, nil
 		case 10:
 			pokemon.setDittoAttributes("B0>0P", true, matchingScan, scan)
+			confirmDitto(scan)
 			matchingScan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 			return matchingScan, nil // unboostedScan is a wrong guess in this case
 		case -10:
 			pokemon.setDittoAttributes("0P>B0", true, matchingScan, scan)
+			confirmDitto(scan)
 			matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			return scan, nil
@@ -1001,6 +1052,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 	if isBoosted {
 		if scan.MustBeUnboosted() {
 			pokemon.setDittoAttributes("B0", true, matchingScan, scan)
+			confirmDitto(scan)
 			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			scan.Confirmed = true
 			return scan, checkScans(unboostedScan, scan)
@@ -1009,6 +1061,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 		return scan, checkScans(boostedScan, scan)
 	} else if scan.MustBeBoosted() {
 		pokemon.setDittoAttributes("0P", true, matchingScan, scan)
+		confirmDitto(scan)
 		scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 		scan.Confirmed = true
 		return unboostedScan, checkScans(boostedScan, scan)
