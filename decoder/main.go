@@ -253,7 +253,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			if pokestop == nil {
 				pokestop = &Pokestop{}
 			}
-			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp)
+			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 			savePokestopRecord(ctx, db, pokestop)
 
 			incidents := fort.Data.PokestopDisplays
