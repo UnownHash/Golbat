@@ -996,42 +996,38 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				scan.Confirmed = true
 				return scan, checkScans(matchingScan, scan)
 			}
-			switch matchingScan.Weather {
-			case int32(pogo.GameplayWeatherProto_NONE):
-				if err := checkScans(matchingScan, scan); err != nil {
-					return scan, err
-				}
-				if scan.MustBeBoosted() {
-					pokemon.setDittoAttributes("0P>BN", false, matchingScan, scan)
-					matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
-					scan.Confirmed = true
-				} else if matchingScan.Confirmed || // this covers scan.MustBeUnboosted()
-					matchingScan.CellWeather != int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
-					pokemon.setDittoAttributes("00/0N>B0", true, matchingScan, scan)
-					confirmDitto(scan)
-					scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
-					scan.Confirmed = true
-				} else {
-					// same rationale as BN>0P or B0>[0N]
-					if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
-						if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
-							// this guess is most likely to be correct except when Ditto pool just rerolled
-							pokemon.setDittoAttributes("0N>[B0] or 0P>BN", true, matchingScan, scan)
-							scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
-							return scan, nil
-						}
-					}
-					pokemon.setDittoAttributes("0N>B0 or 0P>[BN]", false, matchingScan, scan)
-					matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
-				}
+			if matchingScan.Weather != int32(pogo.GameplayWeatherProto_NONE) {
+				pokemon.setDittoAttributes("BN/PP/PN>B0", true, matchingScan, scan)
+				confirmDitto(scan)
+				scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 				return scan, nil
-			case int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
-				pokemon.setDittoAttributes("PP/PN>B0", true, matchingScan, scan)
-			default:
-				pokemon.setDittoAttributes("BN>B0", true, matchingScan, scan)
 			}
-			confirmDitto(scan)
-			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
+			if err := checkScans(matchingScan, scan); err != nil {
+				return scan, err
+			}
+			if scan.MustBeBoosted() {
+				pokemon.setDittoAttributes("0P>BN", false, matchingScan, scan)
+				matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+				scan.Confirmed = true
+			} else if matchingScan.Confirmed || // this covers scan.MustBeUnboosted()
+				matchingScan.CellWeather != int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				pokemon.setDittoAttributes("00/0N>B0", true, matchingScan, scan)
+				confirmDitto(scan)
+				scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
+				scan.Confirmed = true
+			} else {
+				// same rationale as BN>0P or B0>[0N]
+				if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
+					if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
+						// this guess is most likely to be correct except when Ditto pool just rerolled
+						pokemon.setDittoAttributes("0N>[B0] or 0P>BN", true, matchingScan, scan)
+						scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
+						return scan, nil
+					}
+				}
+				pokemon.setDittoAttributes("0N>B0 or 0P>[BN]", false, matchingScan, scan)
+				matchingScan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+			}
 			return scan, nil
 		case 10:
 			pokemon.setDittoAttributes("B0>0P", true, matchingScan, scan)
