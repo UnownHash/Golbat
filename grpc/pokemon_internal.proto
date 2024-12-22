@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package pokemon_internal;
+
+message PokemonInternal {
+  repeated PokemonScan scan_history = 1;
+}
+
+message PokemonScan {
+  // from display
+  int32 weather = 1;
+  bool strong = 2;
+  // from encounter
+  int32 level = 3;
+  int32 attack = 4;
+  int32 defense = 5;
+  int32 stamina = 6;
+  // for Ditto detection
+  int32 cell_weather = 7;
+  int32 pokemon = 8;
+  int32 costume = 9;
+  int32 gender = 10;
+  int32 form = 11;
+  // this is set if there is only one non-strong IV set but we were able to confirm it for some reason
+  bool confirmed = 12;
+}
