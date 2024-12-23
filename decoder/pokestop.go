@@ -193,7 +193,7 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 
 var LureTime int64 = 1800
 
-func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Pokestop {
+func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64, now int64) *Pokestop {
 	stop.Id = fortData.FortId
 	stop.Lat = fortData.Latitude
 	stop.Lon = fortData.Longitude
@@ -218,7 +218,6 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 				stop.LureExpireTimestamp = null.IntFrom(lureEnd)
 				stop.LureId = lureId
 			} else {
-				now := time.Now().Unix()
 				// wait some time after lure end before a restart in case of timing issue
 				if now > oldLureEnd+30 {
 					for now > lureEnd {
