@@ -28,10 +28,8 @@ var IncidentTypeToName = map[int8]string{
 }
 
 func ExtractLocationCardFromDisplay(display *pogo.PokemonDisplayProto) int {
-	return int(func() pogo.LocationCard {
-		if display.LocationCard == nil {
-			return 0
-		}
-		return display.LocationCard.LocationCard
-	}())
+	if display.LocationCard == nil {
+		return 0
+	}
+	return int(display.LocationCard.LocationCard)
 }
