@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -161,12 +162,12 @@ func initDataCache() {
 	go routeCache.Start()
 }
 
-func InitialiseOhbem() {
+func InitialiseOhbem() error {
 	if config.Config.Pvp.Enabled {
 		log.Info("Initialising Ohbem for PVP")
 		if len(config.Config.Pvp.LevelCaps) == 0 {
 			log.Errorf("PVP level caps not configured")
-			return
+			return errors.New("PVP level caps not configured")
 		}
 		leagues := map[string]gohbem.League{
 			"little": {
@@ -198,13 +199,14 @@ func InitialiseOhbem() {
 
 		if err := o.FetchPokemonData(); err != nil {
 			log.Errorf("ohbem.FetchPokemonData: %s", err)
-			return
+			return err
 		}
 
 		_ = o.WatchPokemonData()
 
 		ohbem = o
 	}
+	return nil
 }
 
 func ClearPokestopCache() {
