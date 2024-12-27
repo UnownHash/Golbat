@@ -190,9 +190,7 @@ func main() {
 		go db2.PromLiveStatsUpdater(dbDetails, cfg.Prometheus.LiveStatsSleep)
 	}
 
-	if decoder.InitialiseOhbem() != nil {
-		return
-	}
+	decoder.InitialiseOhbem()
 	decoder.LoadStatsGeofences()
 	InitDeviceCache()
 
