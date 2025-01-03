@@ -1,5 +1,7 @@
 package util
 
+import "golbat/pogo"
+
 var TeamIdToName = map[int8]string{
 	0: "harmony",
 	1: "mystic",
@@ -23,4 +25,11 @@ var IncidentTypeToName = map[int8]string{
 	7: "coin",
 	8: "kecleon",
 	9: "showcase",
+}
+
+func ExtractLocationCardFromDisplay(display *pogo.PokemonDisplayProto) int {
+	if display.LocationCard == nil {
+		return 0
+	}
+	return int(display.LocationCard.LocationCard)
 }
