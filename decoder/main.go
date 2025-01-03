@@ -184,9 +184,10 @@ func InitialiseOhbem() {
 		}
 
 		gohbemLogger := &gohbemLogger{}
-
+		cacheFileLocation := "cache/master-latest-basics.json"
 		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
-			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap, Logger: gohbemLogger}
+			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
+			MasterFileCachePath:   cacheFileLocation, Logger: gohbemLogger}
 		switch config.Config.Pvp.RankingComparator {
 		case "prefer_higher_cp":
 			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
@@ -197,7 +198,15 @@ func InitialiseOhbem() {
 		}
 
 		if err := o.FetchPokemonData(); err != nil {
-			log.Errorf("ohbem.FetchPokemonData: %s", err)
+			if err2 := o.LoadPokemonData(cacheFileLocation); err2 != nil {
+				log.Errorf("ohbem.FetchPokemonData failed. ohbem.LoadPokemonData failed: %s", err2)
+			} else {
+				log.Warnf("ohbem.FetchPokemonData failed, loaded from cache: %s", err)
+			}
+		}
+
+		if o.PokemonData.Initialized == true {
+			_ = o.SavePokemonData(cacheFileLocation)
 		}
 
 		_ = o.WatchPokemonData()
