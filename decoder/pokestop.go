@@ -439,11 +439,12 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
 			}
-			if info.PokemonDisplay != nil {
-				infoData["costume_id"] = int(info.PokemonDisplay.Costume)
-				infoData["form_id"] = int(info.PokemonDisplay.Form)
-				infoData["gender_id"] = int(info.PokemonDisplay.Gender)
-				infoData["shiny"] = info.PokemonDisplay.Shiny
+			if display := info.PokemonDisplay; display != nil {
+				infoData["costume_id"] = int(display.Costume)
+				infoData["form_id"] = int(display.Form)
+				infoData["gender_id"] = int(display.Gender)
+				infoData["shiny"] = display.Shiny
+				infoData["location_card"] = util.ExtractLocationCardFromDisplay(display)
 			} else {
 
 			}
@@ -654,12 +655,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			TempEvolutionFinishMs: entry.GetPokemonDisplay().TemporaryEvolutionFinishMs,
 			Alignment:             int(entry.GetPokemonDisplay().Alignment),
 			Badge:                 int(entry.GetPokemonDisplay().PokemonBadge),
-			LocationCard: int(func() pogo.LocationCard {
-				if entry.GetPokemonDisplay().LocationCard == nil {
-					return 0
-				}
-				return entry.GetPokemonDisplay().LocationCard.LocationCard
-			}()),
+			LocationCard:          util.ExtractLocationCardFromDisplay(entry.PokemonDisplay),
 		})
 
 	}
