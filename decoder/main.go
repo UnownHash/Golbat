@@ -199,7 +199,8 @@ func InitialiseOhbem() {
 
 		if err := o.FetchPokemonData(); err != nil {
 			if err2 := o.LoadPokemonData(cacheFileLocation); err2 != nil {
-				log.Errorf("ohbem.FetchPokemonData failed. ohbem.LoadPokemonData failed: %s", err2)
+				_ = o.LoadPokemonData("pogo/master-latest-basics.json")
+				log.Errorf("ohbem.FetchPokemonData failed. ohbem.LoadPokemonData from cache failed: %s. Loading from pogo/master-latest-basics.json instead.", err2)
 			} else {
 				log.Warnf("ohbem.FetchPokemonData failed, loaded from cache: %s", err)
 			}
