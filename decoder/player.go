@@ -71,6 +71,9 @@ type Player struct {
 	JumboPokemonCaught null.Int    `db:"jumbo_pokemon_caught"`
 	Vivillon           null.Int    `db:"vivillon"`
 	MaxSizeFirstPlace  null.Int    `db:"showcase_max_size_first_place"`
+	TotalRoutePlay     null.Int    `db:"total_route_play"`
+	PartiesCompleted   null.Int    `db:"parties_completed"`
+	EventCheckIns      null.Int    `db:"event_check_ins"`
 	DexGen1            null.Int    `db:"dex_gen1"`
 	DexGen2            null.Int    `db:"dex_gen2"`
 	DexGen3            null.Int    `db:"dex_gen3"`
@@ -174,14 +177,17 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	pogo.HoloBadgeType_BADGE_UNIQUE_MEGA_EVOS:             "UniqueMegaEvos",
 	pogo.HoloBadgeType_BADGE_TRAINERS_REFERRED:            "TrainersReferred",
 	//pogo.HoloBadgeType_BADGE_POKESTOPS_SCANNED:            "74",
-	pogo.HoloBadgeType_BADGE_RAID_BATTLE_STAT:         "RaidAchievements",
-	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN8A:    "DexGen8A",
-	pogo.HoloBadgeType_BADGE_CAPTURE_SMALL_POKEMON:    "TinyPokemonCaught",
-	pogo.HoloBadgeType_BADGE_CAPTURE_LARGE_POKEMON:    "JumboPokemonCaught",
-	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN9:     "DexGen9",
-	pogo.HoloBadgeType_BADGE_MINI_COLLECTION:          "CollectionsDone",
-	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:      "Vivillon",
-	pogo.HoloBadgeType_BADGE_MAX_SIZE_FIRST_PLACE_WIN: "MaxSizeFirstPlace",
+	pogo.HoloBadgeType_BADGE_RAID_BATTLE_STAT:           "RaidAchievements",
+	pogo.HoloBadgeType_BADGE_TOTAL_ROUTE_PLAY:           "TotalRoutePlay",
+	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN8A:      "DexGen8A",
+	pogo.HoloBadgeType_BADGE_CAPTURE_SMALL_POKEMON:      "TinyPokemonCaught",
+	pogo.HoloBadgeType_BADGE_CAPTURE_LARGE_POKEMON:      "JumboPokemonCaught",
+	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES_GEN9:       "DexGen9",
+	pogo.HoloBadgeType_BADGE_PARTY_CHALLENGES_COMPLETED: "PartiesCompleted",
+	pogo.HoloBadgeType_BADGE_CHECK_INS:                  "EventCheckIns",
+	pogo.HoloBadgeType_BADGE_MINI_COLLECTION:            "CollectionsDone",
+	pogo.HoloBadgeType_BADGE_BUTTERFLY_COLLECTOR:        "Vivillon",
+	pogo.HoloBadgeType_BADGE_MAX_SIZE_FIRST_PLACE_WIN:   "MaxSizeFirstPlace",
 }
 
 func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCode string) (*Player, error) {
@@ -296,6 +302,9 @@ func hasChangesPlayer(old *Player, new *Player) bool {
 		old.JumboPokemonCaught != new.JumboPokemonCaught ||
 		old.Vivillon != new.Vivillon ||
 		old.MaxSizeFirstPlace != new.MaxSizeFirstPlace ||
+		old.TotalRoutePlay != new.TotalRoutePlay ||
+		old.PartiesCompleted != new.PartiesCompleted ||
+		old.EventCheckIns != new.EventCheckIns ||
 		old.DexGen1 != new.DexGen1 ||
 		old.DexGen2 != new.DexGen2 ||
 		old.DexGen3 != new.DexGen3 ||
@@ -348,7 +357,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 								unique_mega_evos, unique_raid_bosses, unique_unown, seven_day_streaks, trade_km, raids_with_friends,
 								caught_at_lure, wayfarer_agreements, trainers_referred, raid_achievements, xl_karps, xs_rats,
 								pikachu_caught, league_great_won, league_ultra_won, league_master_won, tiny_pokemon_caught,
-								jumbo_pokemon_caught, vivillon, showcase_max_size_first_place, dex_gen1, dex_gen2, dex_gen3, dex_gen4, dex_gen5, dex_gen6,
+								jumbo_pokemon_caught, vivillon, showcase_max_size_first_place, total_route_play, parties_completed, event_check_ins, dex_gen1, dex_gen2, dex_gen3, dex_gen4, dex_gen5, dex_gen6,
 								dex_gen7, dex_gen8, dex_gen8a, dex_gen9, caught_normal, caught_fighting, caught_flying, caught_poison,
 								caught_ground, caught_rock, caught_bug, caught_ghost, caught_steel, caught_fire, caught_water,
 								caught_grass, caught_electric, caught_psychic, caught_ice, caught_dragon, caught_dark, caught_fairy)
@@ -359,7 +368,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 					:unique_mega_evos, :unique_raid_bosses, :unique_unown, :seven_day_streaks, :trade_km, :raids_with_friends,
 					:caught_at_lure, :wayfarer_agreements, :trainers_referred, :raid_achievements, :xl_karps, :xs_rats,
 					:pikachu_caught, :league_great_won, :league_ultra_won, :league_master_won, :tiny_pokemon_caught,
-					:jumbo_pokemon_caught, :vivillon, :showcase_max_size_first_place, :dex_gen1, :dex_gen2, :dex_gen3, :dex_gen4, :dex_gen5, :dex_gen6, :dex_gen7,
+					:jumbo_pokemon_caught, :vivillon, :showcase_max_size_first_place, :total_route_play, :parties_completed, :event_check_ins, :dex_gen1, :dex_gen2, :dex_gen3, :dex_gen4, :dex_gen5, :dex_gen6, :dex_gen7,
 					:dex_gen8, :dex_gen8a, :dex_gen9, :caught_normal, :caught_fighting, :caught_flying, :caught_poison, :caught_ground,
 					:caught_rock, :caught_bug, :caught_ghost, :caught_steel, :caught_fire, :caught_water, :caught_grass,
 					:caught_electric, :caught_psychic, :caught_ice, :caught_dragon, :caught_dark, :caught_fairy)
@@ -426,6 +435,9 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 				jumbo_pokemon_caught = :jumbo_pokemon_caught, 
 				vivillon = :vivillon, 
 				showcase_max_size_first_place = :showcase_max_size_first_place,
+				total_route_play = :total_route_play,
+				parties_completed = :parties_completed,
+				event_check_ins = :event_check_ins, 
 				dex_gen1 = :dex_gen1, 
 				dex_gen2 = :dex_gen2, 
 				dex_gen3 = :dex_gen3, 
