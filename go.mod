@@ -6,7 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/Depado/ginprom v1.8.1
-	github.com/UnownHash/gohbem v0.11.3
+	github.com/UnownHash/gohbem v0.12.0
 	github.com/getsentry/sentry-go v0.29.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/go-sql-driver/mysql v1.8.1
