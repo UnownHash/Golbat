@@ -288,52 +288,52 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 }
 
 func createStationWebhooks(oldStation *Station, station *Station) {
-    if oldStation == nil || (oldStation.EndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
-        station, _ :GetStationRecord(ctx, db, station.Id)
-        if station == nil {
-            station &Station{}
-        }
+	if oldStation == nil || (oldStation.EndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
+		station, _ := GetStationRecord(ctx, db, station.Id)
+		if station == nil {
+			station & Station{}
+		}
 
-        stationHook := map[sting]interface{}{
-            "id":station.Id,
-            "latitude": station.Lat,
-            "longitude": station.Lon,
-            "name": func() string {
-                if station.Name.Valid {
-                    return station.Name.String
-                } else {
-                    return "Unknown"
-                }
-            }()
-            "url":                           station.Url.ValueOrZero(),
-            "start_time":                    station.StartTime,
-            "end_time":                      station.EndTime,
-            "is_battle_available":           station.IsBattleAvailable,
-            "battle_level":                  station.BattleLevel,
-            "battle_start":                  station.BattleStart,
-            "battle_end":                    statiom.BattleEnd,
-            "updated":                       station.Updated,
-            "lineup":                        nil,
-        }
+		stationHook := map[sting]interface{}{
+			"id":        station.Id,
+			"latitude":  station.Lat,
+			"longitude": station.Lon,
+			"name": func() string {
+				if station.Name.Valid {
+					return station.Name.String
+				} else {
+					return "Unknown"
+				}
+			}(),
+			"url":                 station.Url.ValueOrZero(),
+			"start_time":          station.StartTime,
+			"end_time":            station.EndTime,
+			"is_battle_available": station.IsBattleAvailable,
+			"battle_level":        station.BattleLevel,
+			"battle_start":        station.BattleStart,
+			"battle_end":          statiom.BattleEnd,
+			"updated":             station.Updated,
+			"lineup":              nil,
+		}
 
-        if station.BattlePokemonId.Valid {
-            stationHook["lineup"] = []webhookLineup{
-                {
-                    PokemonId:                station.Id,
-                    PokemonForm:              station.BattlePokemonForm,
-                    PokemonCostume:           station.BattlePokemonCostume,
-                    PokemonGender:            station.BattlePokemonGender,
-                    PokemonAlignment:         sation.BattlePokemonAlignment,
-                    PokemonBreadMode:         station.BattlePokemonBreadMode,
-                    PokemonMove1:             station.BattlePokemonMove1,
-                    PokemonMove2:             station.BattlePokemonMove2,
-                    TotalStationedPokemon:    station.TotalStationedPokemon,
-                    StationedPokemon:         station.StationedPokemon,
-                }
-            }
-        }
-        areas := MatchStatsGeofence(station.Lat, station.Lon)
-        webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
-        statsCollector.UpdateStationCount(areas)
-    }
+		if station.BattlePokemonId.Valid {
+			stationHook["lineup"] = []webhookLineup{
+				{
+					PokemonId:             station.Id,
+					PokemonForm:           station.BattlePokemonForm,
+					PokemonCostume:        station.BattlePokemonCostume,
+					PokemonGender:         station.BattlePokemonGender,
+					PokemonAlignment:      sation.BattlePokemonAlignment,
+					PokemonBreadMode:      station.BattlePokemonBreadMode,
+					PokemonMove1:          station.BattlePokemonMove1,
+					PokemonMove2:          station.BattlePokemonMove2,
+					TotalStationedPokemon: station.TotalStationedPokemon,
+					StationedPokemon:      station.StationedPokemon,
+				},
+			}
+		}
+		areas := MatchStatsGeofence(station.Lat, station.Lon)
+		webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
+		statsCollector.UpdateStationCount(areas)
+	}
 }
