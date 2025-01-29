@@ -47,26 +47,17 @@ type Station struct {
 }
 
 type webhookLineup struct {
-	PokemonId                  null.Int `json:"pokemon_id"`
-	Form                       null.Int `json:"form"`
-	Costume                    null.Int `json:"costume"`
-	Gender                     null.Int `json:"gender"`
-	Alignment                  null.Int `json:"alignment"`
-	Mode                       null.Int `json:"mode"`
-	Move1                      null.Int `json:"move1"`
-	Move2                      null.Int `json:"move2"`
-	TotalStationedPokemon      null.Int `json:"totalstationedpokemon"`
-	StationedPokemon           null.String `json:"staitionedpokemon"`
+	PokemonId             null.Int    `json:"pokemon_id"`
+	Form                  null.Int    `json:"form"`
+	Costume               null.Int    `json:"costume"`
+	Gender                null.Int    `json:"gender"`
+	Alignment             null.Int    `json:"alignment"`
+	Mode                  null.Int    `json:"mode"`
+	Move1                 null.Int    `json:"move1"`
+	Move2                 null.Int    `json:"move2"`
+	TotalStationedPokemon null.Int    `json:"totalstationedpokemon"`
+	StationedPokemon      null.String `json:"staitionedpokemon"`
 }
-
-PokemonCostume:        station.BattlePokemonCostume,
-PokemonGender:         station.BattlePokemonGender,
-PokemonAlignment:      station.BattlePokemonAlignment,
-PokemonBreadMode:      station.BattlePokemonBreadMode,
-PokemonMove1:          station.BattlePokemonMove1,
-PokemonMove2:          station.BattlePokemonMove2,
-TotalStationedPokemon: station.TotalStationedPokemon,
-StationedPokemon:      station.StationedPokemon,
 
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
 	inMemoryStation := stationCache.Get(stationId)
