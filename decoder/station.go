@@ -288,7 +288,7 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 }
 
 func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
-	if oldStation == nil || (old.StationEndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
+	if oldStation == nil || (oldStation.EndTime != station.EndTime || oldStation.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
 		station, _ := getStationRecord(ctx, db, station.Id)
 		if station == nil {
 			station = &Station{}
@@ -299,13 +299,13 @@ func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Sta
 			"latitude":  station.Lat,
 			"longitude": station.Lon,
 			"name": func() string {
-				if station.Name.Valid {
+				if station.Name {
 					return station.Name.String
 				} else {
 					return "Unknown"
 				}
 			}(),
-			"url":                 station.Url.ValueOrZero(),
+			//"url":                 station.Url.ValueOrZero(),
 			"start_time":          station.StartTime,
 			"end_time":            station.EndTime,
 			"is_battle_available": station.IsBattleAvailable,
@@ -323,7 +323,7 @@ func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Sta
 					PokemonForm:           station.BattlePokemonForm,
 					PokemonCostume:        station.BattlePokemonCostume,
 					PokemonGender:         station.BattlePokemonGender,
-					PokemonAlignment:      sation.BattlePokemonAlignment,
+					PokemonAlignment:      station.BattlePokemonAlignment,
 					PokemonBreadMode:      station.BattlePokemonBreadMode,
 					PokemonMove1:          station.BattlePokemonMove1,
 					PokemonMove2:          station.BattlePokemonMove2,
