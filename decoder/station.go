@@ -46,6 +46,28 @@ type Station struct {
 	StationedPokemon      null.String `db:"stationed_pokemon"`
 }
 
+type webhookLineup struct {
+	PokemonId                  null.Int `json:"pokemon_id"`
+	Form                       null.Int `json:"form"`
+	Costume                    null.Int `json:"costume"`
+	Gender                     null.Int `json:"gender"`
+	Alignment                  null.Int `json:"alignment"`
+	Mode                       null.Int `json:"mode"`
+	Move1                      null.Int `json:"move1"`
+	Move2                      null.Int `json:"move2"`
+	TotalStationedPokemon      null.Int `json:"totalstationedpokemon"`
+	StationedPokemon           null.String `json:"staitionedpokemon"`
+}
+
+PokemonCostume:        station.BattlePokemonCostume,
+PokemonGender:         station.BattlePokemonGender,
+PokemonAlignment:      station.BattlePokemonAlignment,
+PokemonBreadMode:      station.BattlePokemonBreadMode,
+PokemonMove1:          station.BattlePokemonMove1,
+PokemonMove2:          station.BattlePokemonMove2,
+TotalStationedPokemon: station.TotalStationedPokemon,
+StationedPokemon:      station.StationedPokemon,
+
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
 	inMemoryStation := stationCache.Get(stationId)
 	if inMemoryStation != nil {
@@ -299,7 +321,7 @@ func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Sta
 			"latitude":  station.Lat,
 			"longitude": station.Lon,
 			"name": func() string {
-				if station.Name {
+				if station.Name.Valid {
 					return station.Name.String
 				} else {
 					return "Unknown"
