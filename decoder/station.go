@@ -288,13 +288,13 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 }
 
 func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
-	if oldStation == nil || (oldStation.EndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
-		station, _ := GetStationRecord(ctx, db, station.Id)
+	if oldStation == nil || (old.StationEndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
+		station, _ := getStationRecord(ctx, db, station.Id)
 		if station == nil {
 			station = &Station{}
 		}
 
-		stationHook := map[sting]interface{}{
+		stationHook := map[string]interface{}{
 			"id":        station.Id,
 			"latitude":  station.Lat,
 			"longitude": station.Lon,
@@ -311,7 +311,7 @@ func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Sta
 			"is_battle_available": station.IsBattleAvailable,
 			"battle_level":        station.BattleLevel,
 			"battle_start":        station.BattleStart,
-			"battle_end":          statiom.BattleEnd,
+			"battle_end":          station.BattleEnd,
 			"updated":             station.Updated,
 			"lineup":              nil,
 		}
