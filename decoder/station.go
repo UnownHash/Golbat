@@ -46,6 +46,19 @@ type Station struct {
 	StationedPokemon      null.String `db:"stationed_pokemon"`
 }
 
+type webhookLineup struct {
+	PokemonId             null.Int    `json:"pokemon_id"`
+	Form                  null.Int    `json:"form"`
+	Costume               null.Int    `json:"costume"`
+	Gender                null.Int    `json:"gender"`
+	Alignment             null.Int    `json:"alignment"`
+	Mode                  null.Int    `json:"mode"`
+	Move1                 null.Int    `json:"move1"`
+	Move2                 null.Int    `json:"move2"`
+	TotalStationedPokemon null.Int    `json:"totalstationedpokemon"`
+	StationedPokemon      null.String `json:"staitionedpokemon"`
+}
+
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
 	inMemoryStation := stationCache.Get(stationId)
 	if inMemoryStation != nil {
@@ -135,7 +148,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 
 	stationCache.Set(station.Id, *station, ttlcache.DefaultTTL)
-	createStationWebhooks(oldStation, station)
+	createStationWebhooks(ctx, db, oldStation, station)
 
 }
 
@@ -287,6 +300,53 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
-func createStationWebhooks(oldStation *Station, station *Station) {
-	//TODO we need to define webhooks, are they needed for stations, or only for battles?
+func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
+	if oldStation == nil || (oldStation.EndTime != station.EndTime || oldStation.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
+		station, _ := getStationRecord(ctx, db, station.Id)
+		if station == nil {
+			station = &Station{}
+		}
+
+		stationHook := map[string]interface{}{
+			"id":        station.Id,
+			"latitude":  station.Lat,
+			"longitude": station.Lon,
+			"name": func() string {
+				if station.Name.Valid {
+					return station.Name.String
+				} else {
+					return "Unknown"
+				}
+			}(),
+			//"url":                 station.Url.ValueOrZero(),
+			"start_time":          station.StartTime,
+			"end_time":            station.EndTime,
+			"is_battle_available": station.IsBattleAvailable,
+			"battle_level":        station.BattleLevel,
+			"battle_start":        station.BattleStart,
+			"battle_end":          station.BattleEnd,
+			"updated":             station.Updated,
+			"lineup":              nil,
+		}
+
+		if station.BattlePokemonId.Valid {
+			stationHook["lineup"] = []webhookLineup{
+				{
+					PokemonId:             station.Id,
+					Form:                  station.BattlePokemonForm,
+					Costume:               station.BattlePokemonCostume,
+					Gender:                station.BattlePokemonGender,
+					Alignment:             station.BattlePokemonAlignment,
+					Mode:                  station.BattlePokemonBreadMode,
+					Move1:                 station.BattlePokemonMove1,
+					Move2:                 station.BattlePokemonMove2,
+					TotalStationedPokemon: station.TotalStationedPokemon,
+					StationedPokemon:      station.StationedPokemon,
+				},
+			}
+		}
+		areas := MatchStatsGeofence(station.Lat, station.Lon)
+		webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
+		statsCollector.UpdateStationCount(areas)
+	}
 }
