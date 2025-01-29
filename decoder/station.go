@@ -289,9 +289,9 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 
 func createStationWebhooks(oldStation *Station, station *Station) {
     if oldStation == nil || (oldStation.EndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
-        stop, _ :GetStationRecord(ctx, db, station.Id)
-        if stop == nil {
-            stop &Station{}
+        station, _ :GetStationRecord(ctx, db, station.Id)
+        if station == nil {
+            station &Station{}
         }
 
         stationHook := map[sting]interface{}{
