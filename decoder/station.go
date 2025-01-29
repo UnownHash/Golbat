@@ -287,11 +287,11 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
-func createStationWebhooks(oldStation *Station, station *Station) {
+func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
 	if oldStation == nil || (oldStation.EndTime != station.EndTime || old.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
 		station, _ := GetStationRecord(ctx, db, station.Id)
 		if station == nil {
-			station & Station{}
+			station = &Station{}
 		}
 
 		stationHook := map[sting]interface{}{
