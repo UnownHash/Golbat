@@ -135,7 +135,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 
 	stationCache.Set(station.Id, *station, ttlcache.DefaultTTL)
-	createStationWebhooks(oldStation, station)
+	createStationWebhooks(ctx, db, oldStation, station)
 
 }
 
