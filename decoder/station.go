@@ -9,6 +9,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
+	"golbat/webhooks"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -46,19 +47,6 @@ type Station struct {
 	TotalStationedPokemon null.Int    `db:"total_stationed_pokemon"`
 	TotalStationedGmax    null.Int    `db:"total_stationed_gmax"`
 	StationedPokemon      null.String `db:"stationed_pokemon"`
-}
-
-type webhookLineup struct {
-	PokemonId             null.Int    `json:"pokemon_id"`
-	Form                  null.Int    `json:"form"`
-	Costume               null.Int    `json:"costume"`
-	Gender                null.Int    `json:"gender"`
-	Alignment             null.Int    `json:"alignment"`
-	Mode                  null.Int    `json:"mode"`
-	Move1                 null.Int    `json:"move1"`
-	Move2                 null.Int    `json:"move2"`
-	TotalStationedPokemon null.Int    `json:"totalstationedpokemon"`
-	StationedPokemon      null.String `json:"staitionedpokemon"`
 }
 
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
@@ -152,7 +140,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 
 	stationCache.Set(station.Id, *station, ttlcache.DefaultTTL)
-	createStationWebhooks(ctx, db, oldStation, station)
+	createStationWebhooks(oldStation, station)
 
 }
 
@@ -308,53 +296,39 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
-func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
-	if oldStation == nil || (oldStation.EndTime != station.EndTime || oldStation.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
-		station, _ := getStationRecord(ctx, db, station.Id)
-		if station == nil {
-			station = &Station{}
-		}
-
-		stationHook := map[string]interface{}{
-			"id":        station.Id,
-			"latitude":  station.Lat,
-			"longitude": station.Lon,
-			"name": func() string {
-				if station.Name.Valid {
-					return station.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			//"url":                 station.Url.ValueOrZero(),
-			"start_time":          station.StartTime,
-			"end_time":            station.EndTime,
-			"is_battle_available": station.IsBattleAvailable,
-			"battle_level":        station.BattleLevel,
-			"battle_start":        station.BattleStart,
-			"battle_end":          station.BattleEnd,
-			"updated":             station.Updated,
-			"lineup":              nil,
-		}
-
-		if station.BattlePokemonId.Valid {
-			stationHook["lineup"] = []webhookLineup{
-				{
-					PokemonId:             station.Id,
-					Form:                  station.BattlePokemonForm,
-					Costume:               station.BattlePokemonCostume,
-					Gender:                station.BattlePokemonGender,
-					Alignment:             station.BattlePokemonAlignment,
-					Mode:                  station.BattlePokemonBreadMode,
-					Move1:                 station.BattlePokemonMove1,
-					Move2:                 station.BattlePokemonMove2,
-					TotalStationedPokemon: station.TotalStationedPokemon,
-					StationedPokemon:      station.StationedPokemon,
-				},
-			}
+func createStationWebhooks(oldStation *Station, station *Station) {
+	if oldStation == nil || station.BattlePokemonId.Valid && (oldStation.EndTime != station.EndTime ||
+		oldStation.BattleEnd != station.BattleEnd ||
+		oldStation.BattlePokemonId != station.BattlePokemonId ||
+		oldStation.BattlePokemonForm != station.BattlePokemonForm ||
+		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
+		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
+		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
+		stationHook := map[string]any{
+			"id":                        station.Id,
+			"latitude":                  station.Lat,
+			"longitude":                 station.Lon,
+			"name":                      station.Name,
+			"start_time":                station.StartTime,
+			"end_time":                  station.EndTime,
+			"is_battle_available":       station.IsBattleAvailable,
+			"battle_level":              station.BattleLevel,
+			"battle_start":              station.BattleStart,
+			"battle_end":                station.BattleEnd,
+			"battle_pokemon_id":         station.BattlePokemonId,
+			"battle_pokemon_form":       station.BattlePokemonForm,
+			"battle_pokemon_costume":    station.BattlePokemonCostume,
+			"battle_pokemon_gender":     station.BattlePokemonGender,
+			"battle_pokemon_alignment":  station.BattlePokemonAlignment,
+			"battle_pokemon_bread_mode": station.BattlePokemonBreadMode,
+			"battle_pokemon_move_1":     station.BattlePokemonMove1,
+			"battle_pokemon_move_2":     station.BattlePokemonMove2,
+			"total_stationed_pokemon":   station.TotalStationedPokemon,
+			"total_stationed_gmax":      station.TotalStationedGmax,
+			"updated":                   station.Updated,
 		}
 		areas := MatchStatsGeofence(station.Lat, station.Lon)
-		webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
-		statsCollector.UpdateStationCount(areas)
+		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
+		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
 	}
 }
