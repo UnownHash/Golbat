@@ -9,6 +9,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
+	"golbat/webhooks"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -44,19 +45,6 @@ type Station struct {
 	TotalStationedPokemon null.Int    `db:"total_stationed_pokemon"`
 	TotalStationedGmax    null.Int    `db:"total_stationed_gmax"`
 	StationedPokemon      null.String `db:"stationed_pokemon"`
-}
-
-type webhookLineup struct {
-	PokemonId             null.Int    `json:"pokemon_id"`
-	Form                  null.Int    `json:"form"`
-	Costume               null.Int    `json:"costume"`
-	Gender                null.Int    `json:"gender"`
-	Alignment             null.Int    `json:"alignment"`
-	Mode                  null.Int    `json:"mode"`
-	Move1                 null.Int    `json:"move1"`
-	Move2                 null.Int    `json:"move2"`
-	TotalStationedPokemon null.Int    `json:"totalstationedpokemon"`
-	StationedPokemon      null.String `json:"staitionedpokemon"`
 }
 
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
@@ -148,7 +136,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 
 	stationCache.Set(station.Id, *station, ttlcache.DefaultTTL)
-	createStationWebhooks(ctx, db, oldStation, station)
+	createStationWebhooks(oldStation, station)
 
 }
 
@@ -300,25 +288,13 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
-func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Station, station *Station) {
+func createStationWebhooks(oldStation *Station, station *Station) {
 	if oldStation == nil || (oldStation.EndTime != station.EndTime || oldStation.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
-		station, _ := getStationRecord(ctx, db, station.Id)
-		if station == nil {
-			station = &Station{}
-		}
-
 		stationHook := map[string]interface{}{
-			"id":        station.Id,
-			"latitude":  station.Lat,
-			"longitude": station.Lon,
-			"name": func() string {
-				if station.Name.Valid {
-					return station.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			//"url":                 station.Url.ValueOrZero(),
+			"id":                  station.Id,
+			"latitude":            station.Lat,
+			"longitude":           station.Lon,
+			"name":                station.Name,
 			"start_time":          station.StartTime,
 			"end_time":            station.EndTime,
 			"is_battle_available": station.IsBattleAvailable,
@@ -326,27 +302,22 @@ func createStationWebhooks(ctx context.Context, db db.DbDetails, oldStation *Sta
 			"battle_start":        station.BattleStart,
 			"battle_end":          station.BattleEnd,
 			"updated":             station.Updated,
-			"lineup":              nil,
 		}
-
+		//TODO wonder if we should split up station details and station battle hook
 		if station.BattlePokemonId.Valid {
-			stationHook["lineup"] = []webhookLineup{
-				{
-					PokemonId:             station.Id,
-					Form:                  station.BattlePokemonForm,
-					Costume:               station.BattlePokemonCostume,
-					Gender:                station.BattlePokemonGender,
-					Alignment:             station.BattlePokemonAlignment,
-					Mode:                  station.BattlePokemonBreadMode,
-					Move1:                 station.BattlePokemonMove1,
-					Move2:                 station.BattlePokemonMove2,
-					TotalStationedPokemon: station.TotalStationedPokemon,
-					StationedPokemon:      station.StationedPokemon,
-				},
-			}
+			stationHook["battle_pokemon_id"] = station.BattlePokemonId
+			stationHook["battle_pokemon_form"] = station.BattlePokemonForm
+			stationHook["battle_pokemon_costume"] = station.BattlePokemonCostume
+			stationHook["battle_pokemon_gender"] = station.BattlePokemonGender
+			stationHook["battle_pokemon_alignment"] = station.BattlePokemonAlignment
+			stationHook["battle_pokemon_bread_mode"] = station.BattlePokemonBreadMode
+			stationHook["battle_pokemon_move_1"] = station.BattlePokemonMove1
+			stationHook["battle_pokemon_move_2"] = station.BattlePokemonMove2
+			stationHook["total_stationed_pokemon"] = station.TotalStationedPokemon
+			stationHook["total_stationed_gmax"] = station.TotalStationedGmax
 		}
 		areas := MatchStatsGeofence(station.Lat, station.Lon)
 		webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
-		statsCollector.UpdateStationCount(areas)
+		//TODO introduce: statsCollector.UpdateStationCount(areas)
 	}
 }
