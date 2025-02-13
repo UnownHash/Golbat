@@ -289,7 +289,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if !config.Config.PokemonMemoryOnly {
-		if isEncounter && config.Config.PokemonInternalToDb {
+		if isEncounter {
 			unboosted, boosted, strong := pokemon.locateAllScans()
 			if unboosted != nil && boosted != nil {
 				unboosted.RemoveDittoAuxInfo()
