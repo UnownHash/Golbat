@@ -564,6 +564,10 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 
 	focusStore := createFocusStoreFromContestProto(contest)
 
+	if len(focusStore) > 1 {
+		log.Warnf("SHOWCASE: we got more than one showcase focus: %v", focusStore)
+	}
+
 	for key, focus := range focusStore {
 		focus["type"] = key
 		jsonBytes, err := json.Marshal(focus)
