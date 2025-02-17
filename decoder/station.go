@@ -324,6 +324,6 @@ func createStationWebhooks(oldStation *Station, station *Station) {
 		}
 		areas := MatchStatsGeofence(station.Lat, station.Lon)
 		webhooksSender.AddMessage(webhooks.Station, stationHook, areas)
-		//TODO introduce: statsCollector.UpdateStationCount(areas)
+		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
 	}
 }
