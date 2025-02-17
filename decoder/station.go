@@ -289,7 +289,13 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 }
 
 func createStationWebhooks(oldStation *Station, station *Station) {
-	if oldStation == nil || (oldStation.EndTime != station.EndTime || oldStation.StationedPokemon != station.StationedPokemon || oldStation.BattlePokemonId != station.BattlePokemonId) {
+	if oldStation == nil || (oldStation.EndTime != station.EndTime ||
+		oldStation.BattleEnd != station.BattleEnd ||
+		oldStation.BattlePokemonId != station.BattlePokemonId ||
+		oldStation.BattlePokemonForm != station.BattlePokemonForm ||
+		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
+		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
+		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
 		stationHook := map[string]interface{}{
 			"id":                  station.Id,
 			"latitude":            station.Lat,
