@@ -1,11 +1,12 @@
 package stats_collector
 
 import (
+	"golbat/config"
+	"golbat/geo"
+
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
-	"golbat/config"
-	"golbat/geo"
 	"gopkg.in/guregu/null.v4"
 )
 
@@ -47,6 +48,7 @@ type StatsCollector interface {
 	SetQuests(ar float64, noAr float64)
 	IncPokemons(hasIv bool, seenType null.String)
 	DecPokemons(hasIv bool, seenType null.String)
+	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
 }
 
 type Config interface {
