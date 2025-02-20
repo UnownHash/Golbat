@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path/filepath"
+
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var lumberjackLogger *lumberjack.Logger
@@ -51,6 +52,6 @@ type PlainFormatter struct {
 }
 
 func (f *PlainFormatter) Format(entry *log.Entry) ([]byte, error) {
-	timestamp := fmt.Sprintf(entry.Time.Format(f.TimestampFormat))
+	timestamp := fmt.Sprint(entry.Time.Format(f.TimestampFormat))
 	return []byte(fmt.Sprintf("%s %s %s\n", f.LevelDesc[entry.Level], timestamp, entry.Message)), nil
 }

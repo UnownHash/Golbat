@@ -12,7 +12,7 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-[go 1.22](https://go.dev/doc/install)
+[go 1.24](https://go.dev/doc/install)
 
 # Instructions
 
@@ -29,7 +29,7 @@ At this time this is likely to be mostly development discussion.
 0. Authenticate to [GitHub Packages's docker container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 1. copy `docker-compose.yml.example` to `docker-compose.yml`
 2. modify it as you want
-3. `docker-compose up -d`
+3. `docker compose up -d`
 
 # Configuration of data source
 
