@@ -26,7 +26,7 @@ const (
 	FortUpdate
 	PokemonIV
 	PokemonNoIV
-	Station
+	MaxBattle
 	// this magically becomes the number of types we have
 	webhookTypesLength
 )
@@ -43,7 +43,7 @@ func init() {
 	webhookTypeToPayloadType[FortUpdate] = "fort_update"
 	webhookTypeToPayloadType[PokemonIV] = "pokemon"
 	webhookTypeToPayloadType[PokemonNoIV] = "pokemon"
-	webhookTypeToPayloadType[Station] = "station"
+	webhookTypeToPayloadType[MaxBattle] = "max_battle"
 
 	// if we add more types, make sure one has added everything here
 	for _, str := range webhookTypeToPayloadType {
@@ -64,7 +64,7 @@ var webhookConfigStringToType = map[string][]WebhookType{
 	"pokemon_iv":    []WebhookType{PokemonIV},
 	"pokemon_no_iv": []WebhookType{PokemonNoIV},
 	"pokemon":       []WebhookType{PokemonIV, PokemonNoIV},
-	"station":       []WebhookType{Station},
+	"max_battle":    []WebhookType{MaxBattle},
 }
 
 type webhook struct {
