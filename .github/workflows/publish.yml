@@ -4,7 +4,7 @@ on: [push]
 
 env:
   REGISTRY: ghcr.io
-  GHCR_REPO: ghcr.io/unownhash/golbat
+  IMAGE_NAME: ${{ github.repository }}
   GO_VERSION: '1.24.x'
 
 jobs:
