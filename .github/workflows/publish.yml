@@ -4,7 +4,9 @@ on: [push]
 
 env:
   REGISTRY: ghcr.io
-  GHCR_REPO: downcase ${{ github.repository }}
+  GHCR_REPO: downcase GHCR_REPO
+  run: |
+    echo "GHCR_REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
   GO_VERSION: '1.24.x'
 
 jobs:
