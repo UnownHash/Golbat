@@ -4,7 +4,7 @@ on: [push]
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  GHCR_REPO: ${{ github.repository }}
   GO_VERSION: '1.24.x'
 
 jobs:
