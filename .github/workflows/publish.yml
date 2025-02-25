@@ -4,9 +4,7 @@ on: [push]
 
 env:
   REGISTRY: ghcr.io
-  GHCR_REPO: downcase GHCR_REPO
-  run: |
-    echo "GHCR_REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+  GHCR_REPO: ghcr.io/reuschelcgn/golbat
   GO_VERSION: '1.24.x'
 
 jobs:
