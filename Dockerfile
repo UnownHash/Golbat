@@ -1,5 +1,5 @@
 # Build image
-FROM golang:1.23-alpine as build
+FROM golang:1.24-alpine AS build
 
 WORKDIR /go/src/app
 COPY go.mod go.sum ./
@@ -10,7 +10,7 @@ RUN CGO_ENABLED=0 go build -tags go_json -o /go/bin/golbat
 RUN mkdir /empty-dir
 
 # Now copy it into our base image.
-FROM gcr.io/distroless/static-debian11 as runner
+FROM gcr.io/distroless/static-debian11 AS runner
 COPY --from=build /go/bin/golbat /golbat/
 COPY --from=build /empty-dir /golbat/cache
 COPY --from=build /empty-dir /golbat/logs

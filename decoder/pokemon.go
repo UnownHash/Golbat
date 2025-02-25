@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golbat/config"
+	"golbat/db"
+	"golbat/geo"
 	"golbat/grpc"
-	"google.golang.org/protobuf/proto"
+	"golbat/pogo"
+	"golbat/webhooks"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,13 +21,8 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/guregu/null.v4"
-
-	"golbat/config"
-	"golbat/db"
-	"golbat/geo"
-	"golbat/pogo"
-	"golbat/webhooks"
 )
 
 // Pokemon struct.
@@ -792,7 +791,7 @@ func confirmDitto(scan *grpc.PokemonScan) {
 			sb.WriteString(") ")
 			return true
 		})
-		log.Infof(sb.String())
+		log.Info(sb.String())
 	}
 }
 
