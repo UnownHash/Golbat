@@ -822,8 +822,8 @@ func logPokemonCount(statsDb *sqlx.DB) {
 					rowsToWrite := rows[i:end]
 
 					_, err := statsDb.NamedExec(
-						fmt.Sprintf("INSERT INTO %s (date, area, fence, form_id, pokemon_id, `count`)"+
-							" VALUES (:date, :area, :fence, :form_id, :pokemon_id, :count)"+
+						fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, form_id, `count`)"+
+							" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count)"+
 							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
 						rowsToWrite,
 					)
@@ -854,8 +854,8 @@ func logPokemonCount(statsDb *sqlx.DB) {
 				rowsToWrite := rows[i:end]
 
 				_, err := statsDb.NamedExec(
-					"INSERT INTO pokemon_shiny_stats (date, area, fence, form_id, pokemon_id, `count`, total)"+
-						" VALUES (:date, :area, :fence, :form_id, :pokemon_id, :count, :total)"+
+					"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, form_id, `count`, total)"+
+						" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count, :total)"+
 						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
 					rowsToWrite,
 				)
