@@ -27,7 +27,6 @@ require (
 	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/ringsaturn/tzf v0.17.0
 	github.com/ringsaturn/tzf-rel v0.0.2025-a
-	github.com/ringsaturn/tzf-rel-lite v0.0.2025-a
 	github.com/sirupsen/logrus v1.9.3
 	github.com/tidwall/rtree v1.10.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
@@ -71,9 +70,9 @@ require (
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
+	github.com/ringsaturn/tzf-rel-lite v0.0.2025-a // indirect
 	github.com/tidwall/geoindex v1.7.0 // indirect
 	github.com/tidwall/geojson v1.4.5 // indirect
-	github.com/tidwall/lotsa v1.0.3 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/twpayne/go-polyline v1.1.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
