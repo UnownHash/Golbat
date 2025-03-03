@@ -575,43 +575,8 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 			log.Errorf("SHOWCASE: Stop '%s' - Focus '%v' marshalling failed: %s", stop.Id, focus, err)
 		}
 		stop.ShowcaseFocus = null.StringFrom(string(jsonBytes))
-
 		// still support old format - probably still required to filter in external tools
-		// could be replaced by a stored column like we do for quests
-		if key == focusPokemon {
-			if pokemonID, ok := focus["pokemon_id"].(int32); ok {
-				stop.ShowcasePokemon = null.IntFrom(int64(pokemonID))
-			} else {
-				log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_id'", stop.Id)
-				stop.ShowcasePokemon = null.IntFromPtr(nil)
-			}
-
-			if form, ok := focus["pokemon_form"].(int32); ok {
-				stop.ShowcasePokemonForm = null.IntFrom(int64(form))
-			} else {
-				stop.ShowcasePokemonForm = null.IntFromPtr(nil)
-			}
-		} else {
-			stop.ShowcasePokemon = null.IntFromPtr(nil)
-			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
-		}
-
-		if key == focusPokemonType {
-			if type1, ok := focus["pokemon_type1"].(int32); ok {
-				stop.ShowcasePokemonType = null.IntFrom(int64(type1))
-			} else {
-				log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_type1'", stop.Id)
-				stop.ShowcasePokemonType = null.IntFromPtr(nil)
-			}
-
-			if type2, ok := focus["pokemon_type_2"].(int32); ok {
-				if type2Int64 := int64(type2); type2Int64 != 0 {
-					log.Warnf("SHOWCASE: Stop: '%s' with Focused Pokemon Type 2: %d", stop.Id, type2Int64)
-				}
-			}
-		} else {
-			stop.ShowcasePokemonType = null.IntFromPtr(nil)
-		}
+		stop.extractShowcasePokemonInfoDeprecated(key, focus)
 	}
 }
 
