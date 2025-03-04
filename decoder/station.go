@@ -296,7 +296,7 @@ func createStationWebhooks(oldStation *Station, station *Station) {
 		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
 		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
 		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
-		stationHook := map[string]interface{}{
+		stationHook := map[string]any{
 			"id":                        station.Id,
 			"latitude":                  station.Lat,
 			"longitude":                 station.Lon,
