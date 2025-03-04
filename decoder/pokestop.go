@@ -445,7 +445,6 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				infoData["form_id"] = int(display.Form)
 				infoData["gender_id"] = int(display.Gender)
 				infoData["shiny"] = display.Shiny
-
 				infoData["location_card"] = util.ExtractLocationCardFromDisplay(display)
 			} else {
 
