@@ -47,12 +47,17 @@ type shinyChecks struct {
 	total int
 }
 
+type pokemonForm struct {
+	pokemonId int16
+	formId    int
+}
+
 type areaPokemonCountDetail struct {
-	hundos      [maxPokemonNo + 1]map[int]int
-	nundos      [maxPokemonNo + 1]map[int]int
-	shinyChecks [maxPokemonNo + 1]map[int]shinyChecks
-	count       [maxPokemonNo + 1]map[int]int
-	ivCount     [maxPokemonNo + 1]map[int]int
+	hundos      map[pokemonForm]int
+	nundos      map[pokemonForm]int
+	shinyChecks map[pokemonForm]shinyChecks
+	count       map[pokemonForm]int
+	ivCount     map[pokemonForm]int
 }
 
 type areaRaidCountDetail struct {
@@ -202,26 +207,24 @@ func updateEncounterStats(pokemon *Pokemon) {
 
 		countStats, exists := pokemonCount[areaName]
 		if !exists {
-			countStats = &areaPokemonCountDetail{}
-			for i := 0; i <= maxPokemonNo; i++ {
-				countStats.hundos[i] = make(map[int]int)
-				countStats.nundos[i] = make(map[int]int)
-				countStats.count[i] = make(map[int]int)
-				countStats.ivCount[i] = make(map[int]int)
+			countStats = &areaPokemonCountDetail{
+				hundos:      make(map[pokemonForm]int),
+				nundos:      make(map[pokemonForm]int),
+				count:       make(map[pokemonForm]int),
+				ivCount:     make(map[pokemonForm]int),
+				shinyChecks: make(map[pokemonForm]shinyChecks),
 			}
 			pokemonCount[areaName] = countStats
 		}
 
-		if countStats.shinyChecks[pokemon.PokemonId] == nil {
-			countStats.shinyChecks[pokemon.PokemonId] = make(map[int]shinyChecks)
-		}
+		pf := pokemonForm{pokemonId: pokemon.PokemonId, formId: formId}
 
-		entry := countStats.shinyChecks[pokemon.PokemonId][formId]
+		entry := countStats.shinyChecks[pf]
 		entry.total++
 		if pokemon.Shiny.ValueOrZero() {
 			entry.shiny++
 		}
-		countStats.shinyChecks[pokemon.PokemonId][formId] = entry
+		countStats.shinyChecks[pf] = entry
 	}()
 
 	// Prometheus
@@ -366,41 +369,44 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName, now in
 
 		// Count stats
 
-		if old == nil || old.Cp != new.Cp { // pokemon is new or cp has changed (eg encountered, or re-encountered)
-			if locked == false {
+		if old == nil || old.Cp != new.Cp { // pokemon is new or CP has changed (encountered or re-encountered)
+			if !locked {
 				pokemonStatsLock.Lock()
 				locked = true
 			}
 
 			countStats, exists := pokemonCount[area]
 			if !exists {
-				countStats = &areaPokemonCountDetail{}
-				for i := 0; i <= maxPokemonNo; i++ {
-					countStats.hundos[i] = make(map[int]int)
-					countStats.nundos[i] = make(map[int]int)
-					countStats.count[i] = make(map[int]int)
-					countStats.ivCount[i] = make(map[int]int)
+				countStats = &areaPokemonCountDetail{
+					hundos:      make(map[pokemonForm]int),
+					nundos:      make(map[pokemonForm]int),
+					count:       make(map[pokemonForm]int),
+					ivCount:     make(map[pokemonForm]int),
+					shinyChecks: make(map[pokemonForm]shinyChecks),
 				}
 				pokemonCount[area] = countStats
 			}
 
 			formId := int(new.Form.ValueOrZero())
+			pf := pokemonForm{pokemonId: new.PokemonId, formId: formId}
+
 			if old == nil || old.PokemonId != new.PokemonId { // pokemon is new or type has changed
-				countStats.count[new.PokemonId][formId]++
+				countStats.count[pf]++
 				statsCollector.IncPokemonCountNew(fullAreaName)
 				if new.ExpireTimestampVerified {
 					statsCollector.UpdateVerifiedTtl(area, new.SeenType, new.ExpireTimestamp)
 				}
 			}
+
 			if new.Cp.Valid {
-				countStats.ivCount[new.PokemonId][formId]++
+				countStats.ivCount[pf]++
 				statsCollector.IncPokemonCountIv(fullAreaName)
 				if isHundo {
 					statsCollector.IncPokemonCountHundo(fullAreaName)
-					countStats.hundos[new.PokemonId][formId]++
+					countStats.hundos[pf]++
 				} else if isNundo {
 					statsCollector.IncPokemonCountNundo(fullAreaName)
-					countStats.nundos[new.PokemonId][formId]++
+					countStats.nundos[pf]++
 				}
 			}
 		}
@@ -742,66 +748,52 @@ func logPokemonCount(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]pokemonCountDbRow, pokemonId int, formId int, count int) {
+			addRows := func(rows *[]pokemonCountDbRow, pf pokemonForm, count int) {
 				*rows = append(*rows, pokemonCountDbRow{
 					Date:      midnightString,
 					Area:      area.Parent,
 					Fence:     area.Name,
-					PokemonId: pokemonId,
-					FormId:    formId,
+					PokemonId: int(pf.pokemonId),
+					FormId:    pf.formId,
 					Count:     count,
 				})
 			}
 
-			for pokemonId := 0; pokemonId <= maxPokemonNo; pokemonId++ {
-				if stats.count[pokemonId] != nil {
-					for form, count := range stats.count[pokemonId] {
-						if count > 0 {
-							addRows(&allRows, pokemonId, form, count)
-						}
-					}
-				}
-
-				if stats.ivCount[pokemonId] != nil {
-					for form, count := range stats.ivCount[pokemonId] {
-						if count > 0 {
-							addRows(&ivRows, pokemonId, form, count)
-						}
-					}
-				}
-
-				if stats.hundos[pokemonId] != nil {
-					for form, count := range stats.hundos[pokemonId] {
-						if count > 0 {
-							addRows(&hundoRows, pokemonId, form, count)
-						}
-					}
-				}
-
-				if stats.nundos[pokemonId] != nil {
-					for form, count := range stats.nundos[pokemonId] {
-						if count > 0 {
-							addRows(&nundoRows, pokemonId, form, count)
-						}
-					}
+			for pf, count := range stats.count {
+				if count > 0 {
+					addRows(&allRows, pf, count)
 				}
 			}
 
-			for pokemonId := 0; pokemonId <= maxPokemonNo; pokemonId++ {
-				if stats.shinyChecks[pokemonId] != nil {
-					for formId, checks := range stats.shinyChecks[pokemonId] {
-						if checks.total > 0 {
-							shinyRows = append(shinyRows, pokemonShinyCountDbRow{
-								Date:      midnightString,
-								Area:      area.Parent,
-								Fence:     area.Name,
-								PokemonId: pokemonId,
-								FormId:    formId,
-								Count:     checks.shiny,
-								Total:     checks.total,
-							})
-						}
-					}
+			for pf, count := range stats.ivCount {
+				if count > 0 {
+					addRows(&ivRows, pf, count)
+				}
+			}
+
+			for pf, count := range stats.hundos {
+				if count > 0 {
+					addRows(&hundoRows, pf, count)
+				}
+			}
+
+			for pf, count := range stats.nundos {
+				if count > 0 {
+					addRows(&nundoRows, pf, count)
+				}
+			}
+
+			for pf, checks := range stats.shinyChecks {
+				if checks.total > 0 {
+					shinyRows = append(shinyRows, pokemonShinyCountDbRow{
+						Date:      midnightString,
+						Area:      area.Parent,
+						Fence:     area.Name,
+						PokemonId: int(pf.pokemonId),
+						FormId:    pf.formId,
+						Count:     checks.shiny,
+						Total:     checks.total,
+					})
 				}
 			}
 		}
@@ -813,8 +805,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 				for i := 0; i < len(rows); i += chunkSize {
 					end := i + chunkSize
 
-					// necessary check to avoid slicing beyond
-					// slice capacity
+					// necessary check to avoid slicing beyond slice capacity
 					if end > len(rows) {
 						end = len(rows)
 					}
@@ -845,8 +836,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 			for i := 0; i < len(rows); i += chunkSize {
 				end := i + chunkSize
 
-				// necessary check to avoid slicing beyond
-				// slice capacity
+				// necessary check to avoid slicing beyond slice capacity
 				if end > len(rows) {
 					end = len(rows)
 				}
@@ -865,6 +855,7 @@ func logPokemonCount(statsDb *sqlx.DB) {
 			}
 		}
 	}()
+
 }
 
 type raidStatsDbRow struct {
