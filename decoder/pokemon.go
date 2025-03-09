@@ -835,7 +835,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 			unboostedLevel = unboostedScan.Level
 		} else {
 			pokemon.resetDittoAttributes("?", nil, nil, scan)
-			return scan, errors.New(fmt.Sprintf("Missing past scans. Ditto will be reset"))
+			return scan, errors.New("Missing past scans. Ditto will be reset")
 		}
 		// If IsDitto = true, then the IV sets in history are ALWAYS confirmed
 		scan.Confirmed = true
