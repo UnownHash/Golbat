@@ -254,12 +254,12 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	questTarget := int64(questData.Goal.Target)
 	questTemplate := strings.ToLower(questData.TemplateId)
 
-	conditions := []map[string]interface{}{}
-	rewards := []map[string]interface{}{}
+	conditions := []map[string]any{}
+	rewards := []map[string]any{}
 
 	for _, conditionData := range questData.Goal.Condition {
-		condition := make(map[string]interface{})
-		infoData := make(map[string]interface{})
+		condition := make(map[string]any)
+		infoData := make(map[string]any)
 		condition["type"] = int(conditionData.Type)
 		switch conditionData.Type {
 		case pogo.QuestConditionProto_WITH_BADGE_TYPE:
@@ -411,8 +411,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	}
 
 	for _, rewardData := range questData.QuestRewards {
-		reward := make(map[string]interface{})
-		infoData := make(map[string]interface{})
+		reward := make(map[string]any)
+		infoData := make(map[string]any)
 		reward["type"] = int(rewardData.Type)
 		switch rewardData.Type {
 		case pogo.QuestRewardProto_EXPERIENCE:
@@ -439,6 +439,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
 			}
+			infoData["shiny_probability"] = info.ShinyProbability
 			if display := info.PokemonDisplay; display != nil {
 				infoData["costume_id"] = int(display.Costume)
 				infoData["form_id"] = int(display.Form)
@@ -678,7 +679,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 
 	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
-		questHook := map[string]interface{}{
+		questHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
 			"longitude":   stop.Lon,
@@ -704,7 +705,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 	}
 
 	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
-		questHook := map[string]interface{}{
+		questHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
 			"longitude":   stop.Lon,
@@ -729,7 +730,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
-		pokestopHook := map[string]interface{}{
+		pokestopHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
 			"longitude":   stop.Lon,
@@ -755,7 +756,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"showcase_pokemon_type_id":  stop.ShowcasePokemonType,
 			"showcase_ranking_standard": stop.ShowcaseRankingStandard,
 			"showcase_expiry":           stop.ShowcaseExpiry,
-			"showcase_rankings": func() interface{} {
+			"showcase_rankings": func() any {
 				if !stop.ShowcaseRankings.Valid {
 					return nil
 				} else {
