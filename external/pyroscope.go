@@ -41,8 +41,13 @@ func InitPyroscope() {
 			pyroscopeConfig.Logger = nil
 		}
 
-		if config.Config.Pyroscope.ApiKey != "" {
-			pyroscopeConfig.AuthToken = config.Config.Pyroscope.ApiKey
+		if apiKey := config.Config.Pyroscope.ApiKey; apiKey != "" {
+			pyroscopeConfig.HTTPHeaders = map[string]string{
+				"Authorization": "Bearer " + apiKey,
+			}
+		} else if basicAuthUser := config.Config.Pyroscope.BasicAuthUser; basicAuthUser != "" {
+			pyroscopeConfig.BasicAuthUser = basicAuthUser
+			pyroscopeConfig.BasicAuthPassword = config.Config.Pyroscope.BasicAuthPassword
 		}
 
 		_, err := pyroscope.Start(pyroscopeConfig)
