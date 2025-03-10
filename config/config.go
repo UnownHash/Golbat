@@ -80,10 +80,14 @@ type sentry struct {
 type pyroscope struct {
 	ApplicationName      string `koanf:"application_name"`
 	ServerAddress        string `koanf:"server_address"`
-	ApiKey               string `koanf:"api_key"`
+	BasicAuthUser        string `koanf:"basic_auth_user"`
+	BasicAuthPassword    string `koanf:"basic_auth_password"`
 	Logger               bool   `koanf:"logger"`
 	MutexProfileFraction int    `koanf:"mutex_profile_fraction"`
 	BlockProfileRate     int    `koanf:"block_profile_rate"`
+
+	// Deprecated
+	ApiKey string `koanf:"api_key"`
 }
 
 type Prometheus struct {
