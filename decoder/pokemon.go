@@ -828,14 +828,17 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 	// We will also use 0N/BN/PN to denote a normal non-Ditto spawn with corresponding weather boosts.
 	// Disguise IV depends on Ditto weather boost instead, and caught Ditto is boosted only in PP state.
 	if pokemon.IsDitto {
-		// If IsDitto = true, then the IV sets in history are ALWAYS confirmed
-		scan.Confirmed = true
 		var unboostedLevel int32
-		if boostedScan == nil {
+		if boostedScan != nil {
+			unboostedLevel = boostedScan.Level - 5
+		} else if unboostedScan != nil {
 			unboostedLevel = unboostedScan.Level
 		} else {
-			unboostedLevel = boostedScan.Level - 5
+			pokemon.resetDittoAttributes("?", nil, nil, scan)
+			return scan, errors.New("Missing past scans. Ditto will be reset")
 		}
+		// If IsDitto = true, then the IV sets in history are ALWAYS confirmed
+		scan.Confirmed = true
 		switch scan.Weather {
 		case int32(pogo.GameplayWeatherProto_NONE):
 			if scan.CellWeather == int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
