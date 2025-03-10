@@ -318,6 +318,14 @@ var (
 		},
 		[]string{"level"},
 	)
+	maxBattleCount = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "max_battle_count",
+			Help:      "Total number of created max battles",
+		},
+		[]string{"area", "level"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -564,6 +572,17 @@ func (col *promCollector) DecPokemons(hasIv bool, seenType null.String) {
 	pokemons.WithLabelValues(hasIvStr, seenType.ValueOrZero()).Dec()
 }
 
+func (col *promCollector) UpdateMaxBattleCount(areas []geo.AreaName, level int64) {
+	processed := make(map[string]bool)
+	for _, area := range areas {
+		areaName := area.String()
+		if !processed[areaName] {
+			maxBattleCount.WithLabelValues(areaName, strconv.FormatInt(level, 10)).Inc()
+			processed[areaName] = true
+		}
+	}
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -575,7 +594,7 @@ func initPrometheus() {
 		pokemonCountNew, pokemonCountIv, pokemonCountHundo, pokemonCountNundo,
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
-		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
+		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount,
 		duplicateEncounters, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,
