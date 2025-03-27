@@ -157,3 +157,38 @@ func GetOnePokemon(pokemonId uint64) *Pokemon {
 	}
 	return nil
 }
+
+type ApiPokemonLiveStatsResult struct {
+	PokemonActive      int `json:"pokemon_active"`
+	PokemonActiveIv    int `json:"pokemon_active_iv"`
+	PokemonActive100iv int `json:"pokemon_active_100iv"`
+	PokemonActiveShiny int `json:"pokemon_active_shiny"`
+}
+
+func GetLiveStatsPokemon() *ApiPokemonLiveStatsResult {
+	start := time.Now()
+
+	liveStats := &ApiPokemonLiveStatsResult{
+		0,
+		0,
+		0,
+		0,
+	}
+
+	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
+		liveStats.PokemonActive++
+		if pokemon.PokemonLookup.Iv > -1 {
+			liveStats.PokemonActiveIv++
+		}
+		if pokemon.PokemonLookup.Shiny {
+			liveStats.PokemonActiveShiny++
+		}
+		if pokemon.PokemonLookup.Iv == 100 {
+			liveStats.PokemonActive100iv++
+		}
+		return true
+	})
+
+	log.Infof("apiLiveStats - %d pokemon_active, %d pokemon_active_iv, %d pokemon_active_100iv, %d pokemon_active_shiny, total time %s", liveStats.PokemonActive, liveStats.PokemonActiveIv, liveStats.PokemonActive100iv, liveStats.PokemonActiveShiny, time.Since(start))
+	return liveStats
+}

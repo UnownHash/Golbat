@@ -35,6 +35,7 @@ type PokemonLookup struct {
 	Xxl                bool
 	Iv                 int8
 	Size               int8
+	Shiny              bool
 }
 
 type PokemonPvpLookup struct {
@@ -97,7 +98,8 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 			}
 			return -1
 		}(),
-		Size: int8(valueOrMinus1(pokemon.Size)),
+		Size:               int8(valueOrMinus1(pokemon.Size)),
+		Shiny:              bool(pokemon.Shiny.ValueOrZero()),
 	}
 	if !pokemon.IsDitto {
 		pokemonLookupCacheItem.PokemonLookup.Form = int16(pokemon.Form.ValueOrZero())
