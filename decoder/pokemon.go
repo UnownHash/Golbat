@@ -447,7 +447,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 					return &name
 				}
 			}(),
-			"encounter_id":            new.Id,
+			"encounter_id":            strconv.FormatUint(new.Id, 10),
 			"pokemon_id":              new.PokemonId,
 			"latitude":                new.Lat,
 			"longitude":               new.Lon,
