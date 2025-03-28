@@ -12,6 +12,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 const earthRadiusKm = 6371
@@ -177,16 +178,17 @@ func GetLiveStatsPokemon() *ApiPokemonLiveStatsResult {
 		0,
 	}
 
-	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
-		if pokemon.PokemonLookup.ExpireTimestamp > now {
+	pokemonCache.Range(func(pokemonCacheEntry *ttlcache.Item[string, Pokemon]) bool {
+	    pokemon := pokemonCacheEntry.Value()
+		if int64(valueOrMinus1(pokemon.ExpireTimestamp)) > now {
 			liveStats.PokemonActive++
-			if pokemon.PokemonLookup.Iv > -1 {
+			if !pokemon.Iv.IsZero() {
 				liveStats.PokemonActiveIv++
 			}
-			if pokemon.PokemonLookup.Shiny {
+			if bool(pokemon.Shiny.ValueOrZero()) {
 				liveStats.PokemonActiveShiny++
 			}
-			if pokemon.PokemonLookup.Iv == 100 {
+			if int(pokemon.Iv.ValueOrZero()) == 100 {
 				liveStats.PokemonActive100iv++
 			}
 		}

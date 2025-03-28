@@ -35,8 +35,6 @@ type PokemonLookup struct {
 	Xxl                bool
 	Iv                 int8
 	Size               int8
-	Shiny              bool
-	ExpireTimestamp    int64
 }
 
 type PokemonPvpLookup struct {
@@ -45,11 +43,9 @@ type PokemonPvpLookup struct {
 	Ultra  int16
 }
 
-var (
-	pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
-	pokemonTreeMutex   sync.RWMutex
-	pokemonTree        rtree.RTreeG[uint64]
-)
+var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
+var pokemonTreeMutex sync.RWMutex
+var pokemonTree rtree.RTreeG[uint64]
 
 func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
@@ -59,6 +55,7 @@ func initPokemonRtree() {
 		removePokemonFromTree(&r)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
+
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
@@ -100,9 +97,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 			}
 			return -1
 		}(),
-		Size:            int8(valueOrMinus1(pokemon.Size)),
-		Shiny:           bool(pokemon.Shiny.ValueOrZero()),
-		ExpireTimestamp: int64(valueOrMinus1(pokemon.ExpireTimestamp)),
+		Size: int8(valueOrMinus1(pokemon.Size)),
 	}
 	if !pokemon.IsDitto {
 		pokemonLookupCacheItem.PokemonLookup.Form = int16(pokemon.Form.ValueOrZero())
