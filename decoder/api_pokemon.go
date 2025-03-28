@@ -2,12 +2,13 @@ package decoder
 
 import (
 	"fmt"
-	"golbat/config"
-	"golbat/geo"
 	"math"
 	"slices"
 	"strconv"
 	"time"
+
+	"golbat/config"
+	"golbat/geo"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -167,6 +168,7 @@ type ApiPokemonLiveStatsResult struct {
 
 func GetLiveStatsPokemon() *ApiPokemonLiveStatsResult {
 	start := time.Now()
+	now := time.Now().Unix()
 
 	liveStats := &ApiPokemonLiveStatsResult{
 		0,
@@ -176,15 +178,17 @@ func GetLiveStatsPokemon() *ApiPokemonLiveStatsResult {
 	}
 
 	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
-		liveStats.PokemonActive++
-		if pokemon.PokemonLookup.Iv > -1 {
-			liveStats.PokemonActiveIv++
-		}
-		if pokemon.PokemonLookup.Shiny {
-			liveStats.PokemonActiveShiny++
-		}
-		if pokemon.PokemonLookup.Iv == 100 {
-			liveStats.PokemonActive100iv++
+		if pokemon.PokemonLookup.ExpireTimestamp > now {
+			liveStats.PokemonActive++
+			if pokemon.PokemonLookup.Iv > -1 {
+				liveStats.PokemonActiveIv++
+			}
+			if pokemon.PokemonLookup.Shiny {
+				liveStats.PokemonActiveShiny++
+			}
+			if pokemon.PokemonLookup.Iv == 100 {
+				liveStats.PokemonActive100iv++
+			}
 		}
 		return true
 	})
