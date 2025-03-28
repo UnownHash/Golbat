@@ -372,7 +372,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 						} else {
 							// Update if there is still a change required & this update is the most recent
 							if pokemon.wildSignificantUpdate(wildPokemon, updateTime) && pokemon.Updated.ValueOrZero() < updateTime {
-								log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
+								log.Debugf("DELAYED UPDATE: Updating pokemon %d from wild", encounterId)
 
 								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
 								savePokemonRecordAsAtTime(ctx, db, pokemon, false, updateTime)

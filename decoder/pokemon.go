@@ -285,7 +285,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	} else {
 		oldSeenType = oldPokemon.SeenType.ValueOrZero()
 	}
-	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
+	log.Debugf("Updating pokemon [%d] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if !config.Config.PokemonMemoryOnly {
@@ -382,7 +382,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				return
 			}
 			rows, rowsErr := res.RowsAffected()
-			log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+			log.Debugf("Updating pokemon [%d] after update res = %d %v", pokemon.Id, rows, rowsErr)
 		}
 	}
 
@@ -500,7 +500,7 @@ func (pokemon *Pokemon) populateInternal() {
 	}
 	err := proto.Unmarshal(pokemon.GolbatInternal, &pokemon.internal)
 	if err != nil {
-		log.Warnf("Failed to parse internal data for %s: %s", pokemon.Id, err)
+		log.Warnf("Failed to parse internal data for %d: %s", pokemon.Id, err)
 		pokemon.internal.Reset()
 	}
 }
@@ -618,7 +618,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
 	} else {
-		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %s", pokemon.Id)
+		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 	}
 	if !pokemon.Username.Valid {
 		pokemon.Username = null.StringFrom(username)
@@ -755,16 +755,16 @@ func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
 
 func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
 	if isDitto {
-		log.Debugf("[POKEMON] %s: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
+		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
 		pokemon.IsDitto = true
 		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 	} else {
-		log.Debugf("[POKEMON] %s: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
+		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
 func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
-	log.Debugf("[POKEMON] %s: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
+	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.IsDitto = false
 	pokemon.DisplayPokemonId = null.NewInt(0, false)
 	pokemon.PokemonId = int16(pokemon.DisplayPokemonId.Int64)
@@ -1111,7 +1111,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
 		weather, err := getWeatherRecord(ctx, db, weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon))
 		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-			log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+			log.Warnf("Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 		} else {
 			scan.CellWeather = int32(weather.GameplayCondition.Int64)
 		}
@@ -1127,7 +1127,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	caughtIv, err := pokemon.detectDitto(&scan)
 	if err != nil {
 		caughtIv = &scan
-		log.Errorf("[POKEMON] Unexpected %s: %s", pokemon.Id, err)
+		log.Errorf("[POKEMON] Unexpected %d: %s", pokemon.Id, err)
 	}
 	if caughtIv == nil { // this can only happen for a 0P Ditto
 		pokemon.Level = null.IntFrom(int64(scan.Level - 5))
@@ -1192,7 +1192,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
 			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
-			log.Debugf("Pokemon %s changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
+			log.Debugf("Pokemon %d changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemon.IsStrong.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender, display.IsStrongPokemon)
@@ -1230,7 +1230,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 			return
 		}
 	} else if isStrong {
-		log.Errorf("Strong Ditto??? I can't handle this fml %s", pokemon.Id)
+		log.Errorf("Strong Ditto??? I can't handle this fml %d", pokemon.Id)
 		pokemon.clearIv(true)
 		return
 	} else {
@@ -1299,9 +1299,9 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			if !found {
 				record, err := getWeatherRecord(ctx, db, cellId)
 				if err != nil || record == nil || !record.GameplayCondition.Valid {
-					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 				} else {
-					log.Warnf("[POKEMON] Weather not found locally for %s at %d", pokemon.Id, cellId)
+					log.Warnf("[POKEMON] Weather not found locally for %d at %d", pokemon.Id, cellId)
 					cellWeather = pogo.GameplayWeatherProto_WeatherCondition(record.GameplayCondition.Int64)
 					found = true
 				}
@@ -1337,7 +1337,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	if err == nil {
 		pokemon.Cp = null.IntFrom(int64(cp))
 	} else {
-		log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
+		log.Warnf("Pokemon %d %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
 	}
 }
 
@@ -1355,7 +1355,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
-		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
+		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
@@ -1365,7 +1365,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
 
-	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
 func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto, username string) string {
@@ -1382,14 +1382,14 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 
 	pokemon, err := getPokemonRecord(ctx, db, encounterId)
 	if err != nil {
-		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
+		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
 	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
-		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later", encounterId)
+		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
@@ -1397,5 +1397,5 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
 
-	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
