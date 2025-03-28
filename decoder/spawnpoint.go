@@ -109,7 +109,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			Lon:        wildPokemon.Longitude,
 			DespawnSec: null.IntFrom(int64(secondOfHour)),
 		}
-		spawnpointUpdate(ctx, db, &spawnpoint)
+		spawnpointUpdate(ctx, db, &spawnpoint, false)
 	} else {
 		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 		if spawnPoint == nil {
@@ -118,18 +118,21 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 				Lat: wildPokemon.Latitude,
 				Lon: wildPokemon.Longitude,
 			}
-			spawnpointUpdate(ctx, db, &spawnpoint)
+			spawnpointUpdate(ctx, db, &spawnpoint, true)
 		} else {
 			spawnpointSeen(ctx, db, spawnId)
 		}
 	}
 }
 
-func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
-	oldSpawnpoint, _ := getSpawnpointRecord(ctx, db, spawnpoint.Id)
+func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint, newSpawnpoint bool) {
+	// skip a check when we add a new spawnpoint
+	if !newSpawnpoint {
+		oldSpawnpoint, _ := getSpawnpointRecord(ctx, db, spawnpoint.Id)
 
-	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
-		return
+		if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
+			return
+		}
 	}
 
 	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
@@ -150,6 +153,12 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
 		return
+	}
+
+	if newSpawnpoint {
+		statsCollector.IncSpawnpoints("new")
+	} else {
+		statsCollector.IncSpawnpoints("update")
 	}
 
 	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
@@ -176,6 +185,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 			log.Printf("Error updating spawnpoint last seen %s", err)
 			return
 		}
+		statsCollector.IncSpawnpoints("seen")
 		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
 	}
 }

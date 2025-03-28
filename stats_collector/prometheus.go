@@ -268,6 +268,14 @@ var (
 		},
 		[]string{"query", "status"},
 	)
+	spawnpoints = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "spawnpoints",
+			Help:      "Spawnpoints counter by category",
+		},
+		[]string{"category"},
+	)
 
 	// query updated stats
 	gyms = prometheus.NewGaugeVec(
@@ -419,6 +427,10 @@ func (col *promCollector) IncPokemonCountHundo(area string) {
 
 func (col *promCollector) IncPokemonCountNundo(area string) {
 	pokemonCountNundo.WithLabelValues(area).Inc()
+}
+
+func (col *promCollector) IncSpawnpoints(category string) {
+	spawnpoints.WithLabelValues(category).Inc()
 }
 
 func (col *promCollector) UpdateVerifiedTtl(area geo.AreaName, seenType null.String, expireTimestamp null.Int) {
@@ -576,7 +588,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount,
-		duplicateEncounters, dbQueries,
+		duplicateEncounters, dbQueries, spawnpoints,
 
 		gyms, incidents, pokemons, lures, quests, raids,
 	)

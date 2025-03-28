@@ -35,6 +35,7 @@ func (col *noopCollector) IncPokemonCountShundo()                               
 func (col *noopCollector) IncPokemonCountSnundo()                                {}
 func (col *noopCollector) IncPokemonCountHundo(string)                           {}
 func (col *noopCollector) IncPokemonCountNundo(string)                           {}
+func (col *noopCollector) IncSpawnpoints(string)                                 {}
 func (col *noopCollector) UpdateVerifiedTtl(geo.AreaName, null.String, null.Int) {}
 func (col *noopCollector) UpdateRaidCount([]geo.AreaName, int64)                 {}
 func (col *noopCollector) UpdateFortCount([]geo.AreaName, string, string)        {}
