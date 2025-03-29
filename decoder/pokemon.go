@@ -1347,9 +1347,8 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	}
 
 	encounterId := encounter.Pokemon.EncounterId
-	encounterIdString := strconv.FormatUint(encounterId, 10)
 
-	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterIdString)
+	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
 
@@ -1374,9 +1373,8 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	}
 
 	encounterId := uint64(encounter.Pokemon.PokemonDisplay.DisplayId)
-	encounterIdString := strconv.FormatUint(encounterId, 10)
 
-	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterIdString)
+	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
 
