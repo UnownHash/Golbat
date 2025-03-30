@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/grpc"
 	"golbat/pogo"
 	"golbat/webhooks"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/UnownHash/gohbem"
 	"github.com/golang/geo/s2"
@@ -539,11 +540,13 @@ func (pokemon *Pokemon) isNewRecord() bool {
 }
 
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
-	remaining := ttlcache.DefaultTTL
+	remaining := ttlcache.PreviousOrDefaultTTL
 	if pokemon.ExpireTimestampVerified {
 		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
-		if timeLeft > 1 {
+		if timeLeft > 60 {
 			remaining = time.Duration(timeLeft) * time.Second
+		} else {
+			remaining = time.Minute
 		}
 	}
 	return remaining
