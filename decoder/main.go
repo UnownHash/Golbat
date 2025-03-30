@@ -51,6 +51,11 @@ type RawMapPokemonData struct {
 	Timestamp int64
 }
 
+type RawHyperlocalData struct {
+	Data      *pogo.HyperlocalExperimentClientProto
+	Timestamp int64
+}
+
 type webhooksSenderInterface interface {
 	AddMessage(whType webhooks.WebhookType, message any, areas []geo.AreaName)
 }
@@ -334,6 +339,46 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
 		saveStationRecord(ctx, db, station)
 		stationMutex.Unlock()
+	}
+}
+
+func UpdateHyperlocalBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawHyperlocalData) {
+	if len(p) <= 0 {
+		return
+	}
+	hyperlocals := make([]Hyperlocal, 0, len(p))
+	for _, raw := range p {
+		hyperlocal := Hyperlocal{
+			ExperimentId:      raw.Data.ExperimentId,
+			StartMs:           raw.Data.StartMs,
+			EndMs:             raw.Data.EndMs,
+			Lat:               raw.Data.LatDegrees,
+			Lon:               raw.Data.LngDegrees,
+			RadiusM:           raw.Data.EventRadiusM,
+			ChallengeBonusKey: raw.Data.ChallengeBonusKey,
+			UpdatedMs:         raw.Timestamp,
+		}
+		hyperlocals = append(hyperlocals, hyperlocal)
+	}
+	_, err := db.GeneralDb.NamedExecContext(ctx,
+		`
+		INSERT INTO hyperlocal (
+			experiment_id, start_ms, end_ms, lat, lon, radius_m, challenge_bonus_key, updated_ms
+		) VALUES (
+			:experiment_id, :start_ms, :end_ms, :lat, :lon, :radius_m, :challenge_bonus_key, :updated_ms
+		)
+		ON DUPLICATE KEY UPDATE
+			start_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(start_ms), hyperlocal.start_ms),
+			end_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(end_ms), hyperlocal.end_ms),
+			radius_m = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(radius_m), hyperlocal.radius_m),
+			challenge_bonus_key = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(challenge_bonus_key), hyperlocal.challenge_bonus_key),
+			updated_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(updated_ms), hyperlocal.updated_ms)
+			`, hyperlocals)
+
+	statsCollector.IncDbQuery("insert hyperlocals", err)
+	if err != nil {
+		log.Errorf("insert hyperlocals: %s", err)
+		return
 	}
 }
 
