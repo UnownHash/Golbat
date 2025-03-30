@@ -161,7 +161,11 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	}
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, pokemon, pokemon.remainingDuration(time.Now().Unix()))
+		remainingDuration := pokemon.remainingDuration(time.Now().Unix())
+		if remainingDuration <= 0 { // DefaultTTL or PreviousDefaultTTL gives us an hour (longer than ttlcache default)
+			remainingDuration = time.Hour
+		}
+		pokemonCache.Set(encounterId, pokemon, remainingDuration)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +178,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+		pokemonCache.Set(encounterId, *pokemon, time.Hour) // create new record with an hour TTL initially
 	}
 	return pokemon, nil
 }
