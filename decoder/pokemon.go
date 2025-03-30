@@ -161,7 +161,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	}
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+		pokemonCache.Set(encounterId, pokemon, pokemon.remainingDuration(time.Now().Unix()))
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -539,6 +539,9 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
+// remainingDuration calculates a TTL for the pokemon cache based on known expiry
+// timestamp - with a minimum of 1 minute to allow the record to stay around and be queried
+// without rehydrating from the database post despawn
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 	remaining := ttlcache.PreviousOrDefaultTTL
 	if pokemon.ExpireTimestampVerified {
