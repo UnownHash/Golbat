@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/grpc"
 	"golbat/pogo"
 	"golbat/webhooks"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
 
 	"github.com/UnownHash/gohbem"
 	"github.com/golang/geo/s2"
@@ -34,7 +35,7 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	Id                      string      `db:"id" json:"id"`
+	Id                      uint64      `db:"id" json:"id,string"`
 	PokestopId              null.String `db:"pokestop_id" json:"pokestop_id"`
 	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
 	Lat                     float64     `db:"lat" json:"lat"`
@@ -130,7 +131,7 @@ type Pokemon struct {
 //KEY `ix_iv` (`iv`)
 //)
 
-func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) (*Pokemon, error) {
+func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	if db.UsePokemonCache {
 		inMemoryPokemon := pokemonCache.Get(encounterId)
 		if inMemoryPokemon != nil {
@@ -166,7 +167,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) 
 	return &pokemon, nil
 }
 
-func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId string) (*Pokemon, error) {
+func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	pokemon, err := getPokemonRecord(ctx, db, encounterId)
 	if pokemon != nil || err != nil {
 		return pokemon, err
@@ -284,7 +285,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	} else {
 		oldSeenType = oldPokemon.SeenType.ValueOrZero()
 	}
-	log.Debugf("Updating pokemon [%s] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
+	log.Debugf("Updating pokemon [%d] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if !config.Config.PokemonMemoryOnly {
@@ -301,7 +302,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err == nil {
 				pokemon.GolbatInternal = marshaled
 			} else {
-				log.Errorf("[POKEMON] Failed to marshal internal data for %s, data may be lost: %s", pokemon.Id, err)
+				log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
 			}
 		}
 		if oldPokemon == nil {
@@ -314,15 +315,15 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"gender, form, cp, level, strong, weather, costume, weight, height, size,"+
 				"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 				"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-				"VALUES (:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
+				"VALUES (\"%d\", :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
 				":golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather, :costume,"+
 				":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
 				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
-				":seen_type)", pvpField, pvpValue), pokemon)
+				":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
 
 			statsCollector.IncDbQuery("insert pokemon", err)
 			if err != nil {
-				log.Errorf("insert pokemon: [%s] %s", pokemon.Id, err)
+				log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
 				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
 				return
@@ -370,18 +371,18 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"username = :username, "+
 				"%s"+
 				"is_event = :is_event "+
-				"WHERE id = :id", pvpUpdate), pokemon,
+				"WHERE id = \"%d\"", pvpUpdate, pokemon.Id), pokemon,
 			)
 			statsCollector.IncDbQuery("update pokemon", err)
 			if err != nil {
-				log.Errorf("Update pokemon [%s] %s", pokemon.Id, err)
+				log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
 				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
 
 				return
 			}
 			rows, rowsErr := res.RowsAffected()
-			log.Debugf("Updating pokemon [%s] after update res = %d %v", pokemon.Id, rows, rowsErr)
+			log.Debugf("Updating pokemon [%d] after update res = %d %v", pokemon.Id, rows, rowsErr)
 		}
 	}
 
@@ -446,7 +447,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 					return &name
 				}
 			}(),
-			"encounter_id":            new.Id,
+			"encounter_id":            strconv.FormatUint(new.Id, 10),
 			"pokemon_id":              new.PokemonId,
 			"latitude":                new.Lat,
 			"longitude":               new.Lon,
@@ -499,7 +500,7 @@ func (pokemon *Pokemon) populateInternal() {
 	}
 	err := proto.Unmarshal(pokemon.GolbatInternal, &pokemon.internal)
 	if err != nil {
-		log.Warnf("Failed to parse internal data for %s: %s", pokemon.Id, err)
+		log.Warnf("Failed to parse internal data for %d: %s", pokemon.Id, err)
 		pokemon.internal.Reset()
 	}
 }
@@ -550,7 +551,7 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
-	if strconv.FormatUint(wildPokemon.EncounterId, 10) != pokemon.Id {
+	if wildPokemon.EncounterId != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
 	pokemon.Lat = wildPokemon.Latitude
@@ -597,8 +598,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	pokemon.IsEvent = 0
 
-	encounterId := strconv.FormatUint(mapPokemon.EncounterId, 10)
-	pokemon.Id = encounterId
+	pokemon.Id = mapPokemon.EncounterId
 
 	spawnpointId := mapPokemon.SpawnpointId
 
@@ -618,7 +618,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
 	} else {
-		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %s", pokemon.Id)
+		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 	}
 	if !pokemon.Username.Valid {
 		pokemon.Username = null.StringFrom(username)
@@ -755,16 +755,16 @@ func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
 
 func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
 	if isDitto {
-		log.Debugf("[POKEMON] %s: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
+		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
 		pokemon.IsDitto = true
 		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
 	} else {
-		log.Debugf("[POKEMON] %s: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
+		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
 func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
-	log.Debugf("[POKEMON] %s: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
+	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.IsDitto = false
 	pokemon.DisplayPokemonId = null.NewInt(0, false)
 	pokemon.PokemonId = int16(pokemon.DisplayPokemonId.Int64)
@@ -1111,7 +1111,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
 		weather, err := getWeatherRecord(ctx, db, weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon))
 		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
-			log.Warnf("Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+			log.Warnf("Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 		} else {
 			scan.CellWeather = int32(weather.GameplayCondition.Int64)
 		}
@@ -1127,7 +1127,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	caughtIv, err := pokemon.detectDitto(&scan)
 	if err != nil {
 		caughtIv = &scan
-		log.Errorf("[POKEMON] Unexpected %s: %s", pokemon.Id, err)
+		log.Errorf("[POKEMON] Unexpected %d: %s", pokemon.Id, err)
 	}
 	if caughtIv == nil { // this can only happen for a 0P Ditto
 		pokemon.Level = null.IntFrom(int64(scan.Level - 5))
@@ -1192,7 +1192,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
 			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
-			log.Debugf("Pokemon %s changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
+			log.Debugf("Pokemon %d changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemon.IsStrong.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender, display.IsStrongPokemon)
@@ -1230,7 +1230,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 			return
 		}
 	} else if isStrong {
-		log.Errorf("Strong Ditto??? I can't handle this fml %s", pokemon.Id)
+		log.Errorf("Strong Ditto??? I can't handle this fml %d", pokemon.Id)
 		pokemon.clearIv(true)
 		return
 	} else {
@@ -1299,9 +1299,9 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			if !found {
 				record, err := getWeatherRecord(ctx, db, cellId)
 				if err != nil || record == nil || !record.GameplayCondition.Valid {
-					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %s: %s", pokemon.Id, err)
+					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 				} else {
-					log.Warnf("[POKEMON] Weather not found locally for %s at %d", pokemon.Id, cellId)
+					log.Warnf("[POKEMON] Weather not found locally for %d at %d", pokemon.Id, cellId)
 					cellWeather = pogo.GameplayWeatherProto_WeatherCondition(record.GameplayCondition.Int64)
 					found = true
 				}
@@ -1337,7 +1337,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	if err == nil {
 		pokemon.Cp = null.IntFrom(int64(cp))
 	} else {
-		log.Warnf("Pokemon %s %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
+		log.Warnf("Pokemon %d %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
 	}
 }
 
@@ -1346,7 +1346,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 		return "No encounter"
 	}
 
-	encounterId := strconv.FormatUint(encounter.Pokemon.EncounterId, 10)
+	encounterId := encounter.Pokemon.EncounterId
 
 	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 	pokemonMutex.Lock()
@@ -1354,7 +1354,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
-		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
+		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
@@ -1364,7 +1364,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
 
-	return fmt.Sprintf("%d %s Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
 
 func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto, username string) string {
@@ -1372,7 +1372,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return "No encounter"
 	}
 
-	encounterId := strconv.FormatUint(uint64(encounter.Pokemon.PokemonDisplay.DisplayId), 10)
+	encounterId := uint64(encounter.Pokemon.PokemonDisplay.DisplayId)
 
 	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 	pokemonMutex.Lock()
@@ -1380,14 +1380,14 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 
 	pokemon, err := getPokemonRecord(ctx, db, encounterId)
 	if err != nil {
-		log.Errorf("Error pokemon [%s]: %s", encounterId, err)
+		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
 	if pokemon == nil || pokemon.isNewRecord() {
 		// No pokemon found
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
-		return fmt.Sprintf("%s Disk encounter without previous GMO - Pokemon stored for later", encounterId)
+		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
@@ -1395,5 +1395,5 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
 
-	return fmt.Sprintf("%s Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }

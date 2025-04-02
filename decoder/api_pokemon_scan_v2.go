@@ -1,14 +1,15 @@
 package decoder
 
 import (
-	"github.com/UnownHash/gohbem"
-	log "github.com/sirupsen/logrus"
+	"math"
+	"time"
+
 	"golbat/config"
 	"golbat/geo"
 	pb "golbat/grpc"
-	"math"
-	"strconv"
-	"time"
+
+	"github.com/UnownHash/gohbem"
+	log "github.com/sirupsen/logrus"
 )
 
 type ApiPokemonScan2 struct {
@@ -195,7 +196,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
+		if pokemonCacheEntry := pokemonCache.Get(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
 			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
@@ -365,7 +366,7 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
+		if pokemonCacheEntry := pokemonCache.Get(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
 			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {

@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"math"
-	"strconv"
 	"sync"
 
 	"golbat/config"
@@ -50,7 +49,7 @@ var pokemonTree rtree.RTreeG[uint64]
 func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
 
-	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokemon]) {
+	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, Pokemon]) {
 		r := v.Value()
 		removePokemonFromTree(&r)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
@@ -59,7 +58,7 @@ func initPokemonRtree() {
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
-	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+	pokemonId := pokemon.Id
 
 	_, inMap := pokemonLookupCache.Load(pokemonId)
 
@@ -78,7 +77,7 @@ func valueOrMinus1(n null.Int) int {
 }
 
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
-	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+	pokemonId := pokemon.Id
 
 	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
 
@@ -150,7 +149,7 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 }
 
 func addPokemonToTree(pokemon *Pokemon) {
-	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+	pokemonId := pokemon.Id
 
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
@@ -158,7 +157,7 @@ func addPokemonToTree(pokemon *Pokemon) {
 }
 
 func removePokemonFromTree(pokemon *Pokemon) {
-	pokemonId, _ := strconv.ParseUint(pokemon.Id, 10, 64)
+	pokemonId := pokemon.Id
 	pokemonTreeMutex.Lock()
 	beforeLen := pokemonTree.Len()
 	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
