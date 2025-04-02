@@ -2,12 +2,12 @@ package decoder
 
 import (
 	"fmt"
-	"golbat/config"
-	"golbat/geo"
 	"math"
 	"slices"
-	"strconv"
 	"time"
+
+	"golbat/config"
+	"golbat/geo"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -128,7 +128,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
 
 			if found {
-				if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); pokemonCacheEntry != nil {
+				if pokemonCacheEntry := pokemonCache.Get(pokemonId); pokemonCacheEntry != nil {
 					pokemon := pokemonCacheEntry.Value()
 					results = append(results, &pokemon)
 					pokemonMatched++
@@ -151,7 +151,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 // Get one result
 
 func GetOnePokemon(pokemonId uint64) *Pokemon {
-	if item := pokemonCache.Get(strconv.FormatUint(pokemonId, 10)); item != nil {
+	if item := pokemonCache.Get(pokemonId); item != nil {
 		pokemon := item.Value()
 		return &pokemon
 	}

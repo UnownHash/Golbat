@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"golbat/intstripedmutex"
+
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
 	stripedmutex "github.com/nmvalera/striped-mutex"
@@ -63,19 +65,19 @@ var stationCache *ttlcache.Cache[string, Station]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
-var pokemonCache *ttlcache.Cache[string, Pokemon]
+var pokemonCache *ttlcache.Cache[uint64, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
-var diskEncounterCache *ttlcache.Cache[string, *pogo.DiskEncounterOutProto]
+var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
 var stationStripedMutex = stripedmutex.New(128)
 var incidentStripedMutex = stripedmutex.New(128)
-var pokemonStripedMutex = stripedmutex.New(1024)
-var weatherStripedMutex = stripedmutex.New(128)
+var pokemonStripedMutex = intstripedmutex.New(1024)
+var weatherStripedMutex = intstripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
 var routeStripedMutex = stripedmutex.New(128)
 
@@ -125,9 +127,9 @@ func initDataCache() {
 	)
 	go spawnpointCache.Start()
 
-	pokemonCache = ttlcache.New[string, Pokemon](
-		ttlcache.WithTTL[string, Pokemon](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
+	pokemonCache = ttlcache.New[uint64, Pokemon](
+		ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonCache.Start()
 	initPokemonRtree()
@@ -143,9 +145,9 @@ func initDataCache() {
 	)
 	go playerCache.Start()
 
-	diskEncounterCache = ttlcache.New[string, *pogo.DiskEncounterOutProto](
-		ttlcache.WithTTL[string, *pogo.DiskEncounterOutProto](10*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, *pogo.DiskEncounterOutProto](),
+	diskEncounterCache = ttlcache.New[uint64, *pogo.DiskEncounterOutProto](
+		ttlcache.WithTTL[uint64, *pogo.DiskEncounterOutProto](10*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, *pogo.DiskEncounterOutProto](),
 	)
 	go diskEncounterCache.Start()
 
@@ -344,7 +346,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, wild := range wildPokemonList {
-		encounterId := strconv.FormatUint(wild.Data.EncounterId, 10)
+		encounterId := wild.Data.EncounterId
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
@@ -371,7 +373,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 						} else {
 							// Update if there is still a change required & this update is the most recent
 							if pokemon.wildSignificantUpdate(wildPokemon, updateTime) && pokemon.Updated.ValueOrZero() < updateTime {
-								log.Debugf("DELAYED UPDATE: Updating pokemon %s from wild", encounterId)
+								log.Debugf("DELAYED UPDATE: Updating pokemon %d from wild", encounterId)
 
 								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
 								savePokemonRecordAsAtTime(ctx, db, pokemon, false, updateTime)
@@ -386,7 +388,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 	if scanParameters.ProcessNearby {
 		for _, nearby := range nearbyPokemonList {
-			encounterId := strconv.FormatUint(nearby.Data.EncounterId, 10)
+			encounterId := nearby.Data.EncounterId
 			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 			pokemonMutex.Lock()
 
@@ -403,7 +405,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, mapPokemon := range mapPokemonList {
-		encounterId := strconv.FormatUint(mapPokemon.Data.EncounterId, 10)
+		encounterId := mapPokemon.Data.EncounterId
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
@@ -427,8 +429,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto) {
 	for _, weatherProto := range p {
-		weatherId := strconv.FormatInt(weatherProto.S2CellId, 10)
-		weatherMutex, _ := weatherStripedMutex.GetLock(weatherId)
+		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.S2CellId))
 		weatherMutex.Lock()
 		weather, err := getWeatherRecord(ctx, db, weatherProto.S2CellId)
 		if err != nil {
