@@ -55,7 +55,7 @@ message PokemonScanResponse {
 
 
 message PokemonDetails {
-  string id = 1;
+  uint64 id = 1;
   optional string pokestop_id = 2;
   optional int64 spawn_id = 3;
    double lat = 4;

@@ -1,20 +1,22 @@
 package decoder
 
 import (
-	"github.com/UnownHash/gohbem"
-	log "github.com/sirupsen/logrus"
-	"golbat/config"
-	"golbat/geo"
-	"gopkg.in/guregu/null.v4"
 	"strconv"
 	"strings"
 	"time"
+
+	"golbat/config"
+	"golbat/geo"
+
+	"github.com/UnownHash/gohbem"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 // result
 
 type ApiPokemonResult struct {
-	Id                      string                           `json:"id"`
+	Id                      uint64                           `json:"id,string"`
 	PokestopId              null.String                      `json:"pokestop_id"`
 	SpawnId                 null.Int                         `json:"spawn_id"`
 	Lat                     float64                          `json:"lat"`
@@ -271,7 +273,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := pokemonCache.Get(strconv.FormatUint(key, 10)); pokemonCacheEntry != nil {
+		if pokemonCacheEntry := pokemonCache.Get(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
 			apiPokemon := ApiPokemonResult{
