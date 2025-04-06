@@ -489,7 +489,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 
 		if (raidBattleTime > now && gym.RaidLevel.ValueOrZero() > 0) ||
 			(raidEndTime > now && gym.RaidPokemonId.ValueOrZero() > 0) {
-			raidHook := map[string]interface{}{
+			raidHook := map[string]any{
 				"gym_id": gym.Id,
 				"gym_name": func() string {
 					if !gym.Name.Valid {
