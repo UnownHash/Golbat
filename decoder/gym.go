@@ -300,6 +300,23 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		gym.Description = null.StringFrom(gymData.Description)
 	}
 
+	var defenders []map[string]any
+	for _, protoDefender := range gymData.GymStatusAndDefenders.GymDefender {
+		defender := make(map[string]any)
+		defender["deployed_ms"] = protoDefender.DeploymentTotals.DeploymentDurationMs
+		defender["lost"] = protoDefender.DeploymentTotals.BattlesLost
+		defender["won"] = protoDefender.DeploymentTotals.BattlesWon
+		defender["fed"] = protoDefender.DeploymentTotals.TimesFed
+		defender["pokemon_id"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonId)
+		defender["form_id"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Form)
+		defender["costume"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Costume)
+		defender["shiny"] = protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Shiny
+
+		defenders = append(defenders, defender)
+	}
+	bDefenders, _ := json.Marshal(defenders)
+	log.Infof("Gym %s defenders %s ", gym.Id, string(bDefenders))
+
 	return gym
 }
 
