@@ -304,27 +304,31 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	}
 
 	type pokemonGymDefender struct {
-		PokemonId             int   `json:"pokemon_id,omitempty"`
-		Form                  int   `json:"form,omitempty"`
-		Costume               int   `json:"costume,omitempty"`
-		Gender                int   `json:"gender"`
-		Shiny                 bool  `json:"shiny,omitempty"`
-		TempEvolution         int   `json:"temp_evolution,omitempty"`
-		TempEvolutionFinishMs int64 `json:"temp_evolution_finish_ms,omitempty"`
-		Alignment             int   `json:"alignment,omitempty"`
-		Badge                 int   `json:"badge,omitempty"`
-		LocationCard          int   `json:"location_card,omitempty"`
-		DeployedMs            int64 `json:"deployed_ms,omitempty"`
-		DeployedTime          int64 `json:"deployed_time,omitempty"`
-		BattlesWon            int32 `json:"battles_won"`
-		BattlesLost           int32 `json:"battles_lost"`
-		TimesFed              int32 `json:"times_fed"`
+		PokemonId             int     `json:"pokemon_id,omitempty"`
+		Form                  int     `json:"form,omitempty"`
+		Costume               int     `json:"costume,omitempty"`
+		Gender                int     `json:"gender"`
+		Shiny                 bool    `json:"shiny,omitempty"`
+		TempEvolution         int     `json:"temp_evolution,omitempty"`
+		TempEvolutionFinishMs int64   `json:"temp_evolution_finish_ms,omitempty"`
+		Alignment             int     `json:"alignment,omitempty"`
+		Badge                 int     `json:"badge,omitempty"`
+		LocationCard          int     `json:"location_card,omitempty"`
+		DeployedMs            int64   `json:"deployed_ms,omitempty"`
+		DeployedTime          int64   `json:"deployed_time,omitempty"`
+		BattlesWon            int32   `json:"battles_won"`
+		BattlesLost           int32   `json:"battles_lost"`
+		TimesFed              int32   `json:"times_fed"`
+		MotivationNow         float64 `json:"motivation_now"`
+		CpNow                 int32   `json:"cp_now"`
+		CpWhenDeployed        int32   `json:"cp_when_deployed"`
 	}
 
 	var defenders []pokemonGymDefender
 	now := time.Now()
 	for _, protoDefender := range gymData.GymStatusAndDefenders.GymDefender {
-		pokemonDisplay := protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay
+		motivatedPokemon := protoDefender.MotivatedPokemon
+		pokemonDisplay := motivatedPokemon.Pokemon.PokemonDisplay
 		deploymentTotals := protoDefender.DeploymentTotals
 		defender := pokemonGymDefender{
 			DeployedMs: protoDefender.DeploymentTotals.DeploymentDurationMs,
@@ -344,8 +348,10 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 			Badge:                 int(pokemonDisplay.PokemonBadge),
 			LocationCard:          util.ExtractLocationCardFromDisplay(pokemonDisplay),
 			Shiny:                 pokemonDisplay.Shiny,
+			MotivationNow:         motivatedPokemon.MotivationNow,
+			CpNow:                 motivatedPokemon.CpNow,
+			CpWhenDeployed:        motivatedPokemon.CpWhenDeployed,
 		}
-
 		defenders = append(defenders, defender)
 	}
 	bDefenders, _ := json.Marshal(defenders)
