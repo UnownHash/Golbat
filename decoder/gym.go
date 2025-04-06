@@ -325,14 +325,15 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	now := time.Now()
 	for _, protoDefender := range gymData.GymStatusAndDefenders.GymDefender {
 		pokemonDisplay := protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay
+		deploymentTotals := protoDefender.DeploymentTotals
 		defender := pokemonGymDefender{
 			DeployedMs: protoDefender.DeploymentTotals.DeploymentDurationMs,
 			DeployedTime: now.
-				Add(-1 * time.Millisecond * time.Duration(protoDefender.DeploymentTotals.DeploymentDurationMs)).
+				Add(-1 * time.Millisecond * time.Duration(deploymentTotals.DeploymentDurationMs)).
 				Unix(), // This will only be approximately correct
-			BattlesLost:           protoDefender.DeploymentTotals.BattlesLost,
-			BattlesWon:            protoDefender.DeploymentTotals.BattlesWon,
-			TimesFed:              protoDefender.DeploymentTotals.TimesFed,
+			BattlesLost:           deploymentTotals.BattlesLost,
+			BattlesWon:            deploymentTotals.BattlesWon,
+			TimesFed:              deploymentTotals.TimesFed,
 			PokemonId:             int(protoDefender.MotivatedPokemon.Pokemon.PokemonId),
 			Form:                  int(pokemonDisplay.Form),
 			Costume:               int(pokemonDisplay.Costume),
