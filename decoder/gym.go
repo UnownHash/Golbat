@@ -325,6 +325,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		defenders = append(defenders, defender)
 	}
 	bDefenders, _ := json.Marshal(defenders)
+	gym.Defenders = null.StringFrom(string(bDefenders))
 	log.Infof("Gym %s defenders %s ", gym.Id, string(bDefenders))
 
 	return gym
