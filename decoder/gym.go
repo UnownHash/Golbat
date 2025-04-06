@@ -342,7 +342,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 			Alignment:             int(pokemonDisplay.Alignment),
 			Badge:                 int(pokemonDisplay.PokemonBadge),
 			LocationCard:          util.ExtractLocationCardFromDisplay(pokemonDisplay),
-			Shiny:                 protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Shiny,
+			Shiny:                 pokemonDisplay.Shiny,
 		}
 
 		defenders = append(defenders, defender)
