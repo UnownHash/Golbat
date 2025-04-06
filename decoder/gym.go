@@ -417,6 +417,7 @@ type GymDetailsWebhook struct {
 	PowerUpLevel        int64   `json:"power_up_level"`
 	PowerUpEndTimestamp int64   `json:"power_up_end_timestamp"`
 	ArScanEligible      int64   `json:"ar_scan_eligible"`
+	Defenders           any     `json:"defenders"`
 
 	//"id": id,
 	//"name": name ?? "Unknown",
@@ -466,6 +467,13 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 			}(),
 			ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
 			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+			Defenders: func() any {
+				if gym.Defenders.Valid {
+					return json.RawMessage(gym.Defenders.ValueOrZero())
+				} else {
+					return nil
+				}
+			}(),
 		}
 
 		webhooksSender.AddMessage(webhooks.GymDetails, gymDetails, areas)
