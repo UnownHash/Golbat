@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	"golbat/geo"
+
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
@@ -60,6 +62,7 @@ type Gym struct {
 	PowerUpPoints          null.Int    `db:"power_up_points"`
 	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
 	Description            null.String `db:"description"`
+	Defenders              null.String `db:"defenders"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -304,12 +307,19 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 	for _, protoDefender := range gymData.GymStatusAndDefenders.GymDefender {
 		defender := make(map[string]any)
 		defender["deployed_ms"] = protoDefender.DeploymentTotals.DeploymentDurationMs
+		defender["deployed"] = time.Now().
+			Add(-1 * time.Millisecond * time.Duration(protoDefender.DeploymentTotals.DeploymentDurationMs)).
+			Unix() // This will only be approximately correct
 		defender["lost"] = protoDefender.DeploymentTotals.BattlesLost
 		defender["won"] = protoDefender.DeploymentTotals.BattlesWon
 		defender["fed"] = protoDefender.DeploymentTotals.TimesFed
 		defender["pokemon_id"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonId)
-		defender["form_id"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Form)
-		defender["costume"] = uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Costume)
+		if formId := uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Form); formId > 0 {
+			defender["form_id"] = formId
+		}
+		if costume := uint(protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Costume); costume > 0 {
+			defender["costume"] = costume
+		}
 		defender["shiny"] = protoDefender.MotivatedPokemon.Pokemon.PokemonDisplay.Shiny
 
 		defenders = append(defenders, defender)
@@ -357,7 +367,7 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.RaidLevel != new.RaidLevel ||
 		old.Enabled != new.Enabled ||
 		old.ExRaidEligible != new.ExRaidEligible ||
-		old.InBattle != new.InBattle ||
+		//		old.InBattle != new.InBattle ||
 		old.RaidPokemonMove1 != new.RaidPokemonMove1 ||
 		old.RaidPokemonMove2 != new.RaidPokemonMove2 ||
 		old.RaidPokemonForm != new.RaidPokemonForm ||
@@ -380,6 +390,13 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.Description != new.Description ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+}
+
+// hasChangesInternalGym compares two Gym structs for changes that will be stored in memory
+// Float tolerance: Lat, Lon
+func hasInternalChangesGym(old *Gym, new *Gym) bool {
+	return old.InBattle != new.InBattle ||
+		old.Defenders != new.Defenders
 }
 
 type GymDetailsWebhook struct {
@@ -428,8 +445,7 @@ func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
 	}
 }
 
-func createGymWebhooks(oldGym *Gym, gym *Gym) {
-	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 	if oldGym == nil ||
 		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
@@ -504,16 +520,28 @@ func createGymWebhooks(oldGym *Gym, gym *Gym) {
 			statsCollector.UpdateRaidCount(areas, gym.RaidLevel.ValueOrZero())
 		}
 	}
-
 }
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
-	if oldGym != nil && !hasChangesGym(oldGym, gym) {
+	hasChanges := hasChangesGym(oldGym, gym)
+	hasInternalChanges := hasInternalChangesGym(oldGym, gym)
+
+	if hasInternalChanges {
+		gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
+	}
+
+	if oldGym != nil && !hasChanges {
 		if oldGym.Updated > now-900 {
 			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
+
+			// give gym battle toggle a chance to trigger a web hook
+
+			areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+			createGymWebhooks(oldGym, gym, areas)
+
 			return
 		}
 	}
@@ -522,8 +550,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	//log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders)", gym)
 
 		statsCollector.IncDbQuery("insert gym", err)
 		if err != nil {
@@ -570,7 +598,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 			"power_up_level = :power_up_level, "+
 			"power_up_points = :power_up_points, "+
 			"power_up_end_timestamp = :power_up_end_timestamp,"+
-			"description = :description "+
+			"description = :description,"+
+			"defenders = :defenders "+
 			"WHERE id = :id", gym,
 		)
 		statsCollector.IncDbQuery("update gym", err)
@@ -580,11 +609,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		_, _ = res, err
 	}
 
-	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
-	createGymWebhooks(oldGym, gym)
-	createGymFortWebhooks(oldGym, gym)
-
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+	createGymWebhooks(oldGym, gym, areas)
+	createGymFortWebhooks(oldGym, gym)
 	updateRaidStats(oldGym, gym, areas)
 }
 
