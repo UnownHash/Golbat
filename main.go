@@ -812,6 +812,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
+	var newHyperlocals []decoder.RawHyperlocalData
 
 	for _, mapCell := range decodedGmo.MapCell {
 		if isCellNotEmpty(mapCell) {
@@ -836,6 +837,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		for _, station := range mapCell.Stations {
 			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
 		}
+		for _, hyperlocal := range mapCell.HyperlocalExperiment {
+			newHyperlocals = append(newHyperlocals, decoder.RawHyperlocalData{Data: hyperlocal, Timestamp: mapCell.AsOfTimeMs})
+		}
 	}
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
@@ -849,6 +853,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	if scanParameters.ProcessStations {
 		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
+	}
+	if scanParameters.ProcessHyperlocals {
+		decoder.UpdateHyperlocalBatch(ctx, dbDetails, scanParameters, newHyperlocals)
 	}
 
 	if scanParameters.ProcessCells {
