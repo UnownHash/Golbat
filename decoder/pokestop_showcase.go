@@ -112,10 +112,10 @@ func (stop *Pokestop) extractShowcasePokemonInfoDeprecated(key contestFocusType,
 	}
 
 	if key == focusPokemonType {
-		if type1, ok := focus["pokemon_type1"].(int32); ok {
+		if type1, ok := focus["pokemon_type_1"].(int32); ok {
 			stop.ShowcasePokemonType = null.IntFrom(int64(type1))
 		} else {
-			log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_type1'", stop.Id)
+			log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_type_1'", stop.Id)
 			stop.ShowcasePokemonType = null.IntFromPtr(nil)
 		}
 
