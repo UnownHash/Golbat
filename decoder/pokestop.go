@@ -248,7 +248,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		return "Blank quest"
 	}
 	questData := questProto.ChallengeQuest.Quest
-	questTitle := questProto.ChallengeQuest.QuestDisplay.Title
+	questTitle := questProto.ChallengeQuest.QuestDisplay.Description
 	questType := int64(questData.QuestType)
 	questTarget := int64(questData.Goal.Target)
 	questTemplate := strings.ToLower(questData.TemplateId)
