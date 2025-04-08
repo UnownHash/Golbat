@@ -61,6 +61,7 @@ type Pokestop struct {
 	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
 	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
 	Description                null.String `db:"description" json:"description"`
+	ShowcaseFocus              null.String `db:"showcase_focus" json:"showcase_focus"`
 	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
 	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
 	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
@@ -184,9 +185,7 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
 		old.ShowcaseRankingStandard != new.ShowcaseRankingStandard ||
-		old.ShowcasePokemon != new.ShowcasePokemon ||
-		old.ShowcasePokemonForm != new.ShowcasePokemonForm ||
-		old.ShowcasePokemonType != new.ShowcasePokemonType ||
+		old.ShowcaseFocus != new.ShowcaseFocus ||
 		old.ShowcaseRankings != new.ShowcaseRankings ||
 		old.ShowcaseExpiry != new.ShowcaseExpiry
 }
@@ -249,7 +248,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		return "Blank quest"
 	}
 	questData := questProto.ChallengeQuest.Quest
-	questTitle := questProto.ChallengeQuest.QuestDisplay.Title
+	questTitle := questProto.ChallengeQuest.QuestDisplay.Description
 	questType := int64(questData.QuestType)
 	questTarget := int64(questData.Goal.Target)
 	questTemplate := strings.ToLower(questData.TemplateId)
@@ -443,11 +442,21 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				infoData["shiny_probability"] = info.ShinyProbability
 			}
 			if display := info.PokemonDisplay; display != nil {
-				infoData["costume_id"] = int(display.Costume)
-				infoData["form_id"] = int(display.Form)
-				infoData["gender_id"] = int(display.Gender)
-				infoData["shiny"] = display.Shiny
-				infoData["location_card"] = util.ExtractLocationCardFromDisplay(display)
+				if costumeId := int(display.Costume); costumeId != 0 {
+					infoData["costume_id"] = costumeId
+				}
+				if formId := int(display.Form); formId != 0 {
+					infoData["form_id"] = formId
+				}
+				if genderId := int(display.Gender); genderId != 0 {
+					infoData["gender_id"] = genderId
+				}
+				if display.Shiny {
+					infoData["shiny"] = display.Shiny
+				}
+				if locationCard := util.ExtractLocationCardFromDisplay(display); locationCard != 0 {
+					infoData["location_card"] = locationCard
+				}
 			} else {
 
 			}
@@ -566,54 +575,21 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	stop.ShowcaseRankingStandard = null.IntFrom(int64(contest.GetMetric().GetRankingStandard()))
 	stop.ShowcaseExpiry = null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
 
-	// Focuses is used now and populates the new 'RequireFormToMatch' field, which
-	// Focus does not populate. We can only store 1 atm, so this just grabs the first
-	// if there is one and falls back to Focus if Focuses is empty, just in case.
-	var focussedPokemon *pogo.ContestPokemonFocusProto
-	var focussedPokemonType *pogo.ContestFocusProto
+	focusStore := createFocusStoreFromContestProto(contest)
 
-	if focuses := contest.GetFocuses(); len(focuses) > 0 {
-		var numPokemon int
-
-		for _, focus := range focuses {
-			if pok := focus.GetPokemon(); pok != nil {
-				if focussedPokemon == nil {
-					focussedPokemon = pok
-				}
-				numPokemon++
-			}
-
-			if pokType := focus.GetType(); pokType != nil {
-				if focussedPokemonType == nil {
-					focussedPokemonType = focus
-				}
-			}
-		}
-		if l := len(focuses); l > 1 {
-			log.Warnf("pokestop '%s' contains %d focus entries (%d pokemon): using the first pokemon found",
-				stop.Id, l, numPokemon,
-			)
-		}
-	} else {
-		focussedPokemon = contest.GetFocus().GetPokemon()
+	if len(focusStore) > 1 {
+		log.Warnf("SHOWCASE: we got more than one showcase focus: %v", focusStore)
 	}
 
-	if focussedPokemon == nil {
-		stop.ShowcasePokemon = null.IntFromPtr(nil)
-		stop.ShowcasePokemonForm = null.IntFromPtr(nil)
-	} else {
-		stop.ShowcasePokemon = null.IntFrom(int64(focussedPokemon.GetPokedexId()))
-		if focussedPokemon.RequireFormToMatch {
-			stop.ShowcasePokemonForm = null.IntFrom(int64(focussedPokemon.GetPokemonDisplay().GetForm()))
-		} else {
-			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+	for key, focus := range focusStore {
+		focus["type"] = key
+		jsonBytes, err := json.Marshal(focus)
+		if err != nil {
+			log.Errorf("SHOWCASE: Stop '%s' - Focus '%v' marshalling failed: %s", stop.Id, focus, err)
 		}
-	}
-
-	if focussedPokemonType == nil {
-		stop.ShowcasePokemonType = null.IntFromPtr(nil)
-	} else {
-		stop.ShowcasePokemonType = null.IntFrom(int64(focussedPokemonType.GetType().GetPokemonType1()))
+		stop.ShowcaseFocus = null.StringFrom(string(jsonBytes))
+		// still support old format - probably still required to filter in external tools
+		stop.extractShowcasePokemonInfoDeprecated(key, focus)
 	}
 }
 
@@ -753,6 +729,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"power_up_points":           stop.PowerUpPoints.ValueOrZero(),
 			"power_up_end_timestamp":    stop.PowerUpPoints.ValueOrZero(),
 			"updated":                   stop.Updated,
+			"showcase_focus":            stop.ShowcaseFocus,
 			"showcase_pokemon_id":       stop.ShowcasePokemon,
 			"showcase_pokemon_form_id":  stop.ShowcasePokemonForm,
 			"showcase_pokemon_type_id":  stop.ShowcasePokemonType,
@@ -785,27 +762,27 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	//log.Traceln(cmp.Diff(oldPokestop, pokestop))
 
 	if oldPokestop == nil {
-		res, err := db.GeneralDb.NamedExecContext(ctx,
-			"INSERT INTO pokestop ("+
-				"id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,"+
-				"quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,"+
-				"alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,"+
-				"alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,"+
-				"alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,"+
-				"power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,"+
-				"quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id,"+
-				"showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings"+
-				")"+
-				"VALUES ("+
-				":id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,"+
-				":quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,"+
-				":alternative_quest_type, :alternative_quest_timestamp, :alternative_quest_target,"+
-				":alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,"+
-				":alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,"+
-				":power_up_points, :power_up_level, :power_up_end_timestamp,"+
-				"UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),"+
-				":quest_expiry, :alternative_quest_expiry, :description, :showcase_pokemon_id,"+
-				":showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)",
+		res, err := db.GeneralDb.NamedExecContext(ctx, `
+			INSERT INTO pokestop (
+				id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,
+				quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,
+				alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
+				alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,
+				alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,
+				power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,
+				quest_expiry, alternative_quest_expiry, description, showcase_focus, showcase_pokemon_id,
+				showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
+				)
+				VALUES (
+				:id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,
+				:quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,
+				:alternative_quest_type, :alternative_quest_timestamp, :alternative_quest_target,
+				:alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,
+				:alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,
+				:power_up_points, :power_up_level, :power_up_end_timestamp,
+				UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),
+				:quest_expiry, :alternative_quest_expiry, :description, :showcase_focus, :showcase_pokemon_id,
+				:showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)`,
 			pokestop)
 
 		statsCollector.IncDbQuery("insert pokestop", err)
@@ -816,49 +793,50 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		}
 		_ = res
 	} else {
-		res, err := db.GeneralDb.NamedExecContext(ctx,
-			"UPDATE pokestop SET "+
-				"lat = :lat,"+
-				"lon = :lon,"+
-				"name = :name,"+
-				"url = :url,"+
-				"enabled = :enabled,"+
-				"lure_expire_timestamp = :lure_expire_timestamp,"+
-				"last_modified_timestamp = :last_modified_timestamp,"+
-				"updated = :updated,"+
-				"quest_type = :quest_type, "+
-				"quest_timestamp = :quest_timestamp, "+
-				"quest_target = :quest_target, "+
-				"quest_conditions = :quest_conditions, "+
-				"quest_rewards = :quest_rewards, "+
-				"quest_template = :quest_template, "+
-				"quest_title = :quest_title,"+
-				"alternative_quest_type = :alternative_quest_type, "+
-				"alternative_quest_timestamp = :alternative_quest_timestamp,"+
-				"alternative_quest_target = :alternative_quest_target, "+
-				"alternative_quest_conditions = :alternative_quest_conditions, "+
-				"alternative_quest_rewards = :alternative_quest_rewards,"+
-				"alternative_quest_template = :alternative_quest_template,"+
-				"alternative_quest_title = :alternative_quest_title,"+
-				"cell_id = :cell_id,"+
-				"lure_id = :lure_id,"+
-				"deleted = :deleted,"+
-				"sponsor_id = :sponsor_id,"+
-				"partner_id = :partner_id,"+
-				"ar_scan_eligible = :ar_scan_eligible,"+
-				"power_up_points = :power_up_points,"+
-				"power_up_level = :power_up_level,"+
-				"power_up_end_timestamp = :power_up_end_timestamp,"+
-				"quest_expiry = :quest_expiry,"+
-				"alternative_quest_expiry = :alternative_quest_expiry,"+
-				"description = :description,"+
-				"showcase_pokemon_id = :showcase_pokemon_id,"+
-				"showcase_pokemon_form_id = :showcase_pokemon_form_id,"+
-				"showcase_pokemon_type_id = :showcase_pokemon_type_id,"+
-				"showcase_ranking_standard = :showcase_ranking_standard,"+
-				"showcase_expiry = :showcase_expiry,"+
-				"showcase_rankings = :showcase_rankings"+
-				" WHERE id = :id",
+		res, err := db.GeneralDb.NamedExecContext(ctx, `
+			UPDATE pokestop SET
+				lat = :lat,
+				lon = :lon,
+				name = :name,
+				url = :url,
+				enabled = :enabled,
+				lure_expire_timestamp = :lure_expire_timestamp,
+				last_modified_timestamp = :last_modified_timestamp,
+				updated = :updated,
+				quest_type = :quest_type, 
+				quest_timestamp = :quest_timestamp, 
+				quest_target = :quest_target, 
+				quest_conditions = :quest_conditions, 
+				quest_rewards = :quest_rewards, 
+				quest_template = :quest_template, 
+				quest_title = :quest_title,
+				alternative_quest_type = :alternative_quest_type, 
+				alternative_quest_timestamp = :alternative_quest_timestamp,
+				alternative_quest_target = :alternative_quest_target, 
+				alternative_quest_conditions = :alternative_quest_conditions, 
+				alternative_quest_rewards = :alternative_quest_rewards,
+				alternative_quest_template = :alternative_quest_template,
+				alternative_quest_title = :alternative_quest_title,
+				cell_id = :cell_id,
+				lure_id = :lure_id,
+				deleted = :deleted,
+				sponsor_id = :sponsor_id,
+				partner_id = :partner_id,
+				ar_scan_eligible = :ar_scan_eligible,
+				power_up_points = :power_up_points,
+				power_up_level = :power_up_level,
+				power_up_end_timestamp = :power_up_end_timestamp,
+				quest_expiry = :quest_expiry,
+				alternative_quest_expiry = :alternative_quest_expiry,
+				description = :description,
+				showcase_focus = :showcase_focus,
+				showcase_pokemon_id = :showcase_pokemon_id,
+				showcase_pokemon_form_id = :showcase_pokemon_form_id,
+				showcase_pokemon_type_id = :showcase_pokemon_type_id,
+				showcase_ranking_standard = :showcase_ranking_standard,
+				showcase_expiry = :showcase_expiry,
+				showcase_rankings = :showcase_rankings
+			WHERE id = :id`,
 			pokestop,
 		)
 		statsCollector.IncDbQuery("update pokestop", err)

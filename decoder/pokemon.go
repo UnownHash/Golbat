@@ -149,7 +149,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
 			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
-			"FROM pokemon WHERE id = ?", encounterId)
+			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
 
 	statsCollector.IncDbQuery("select pokemon", err)
 	if err == sql.ErrNoRows {
