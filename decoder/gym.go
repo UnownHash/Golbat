@@ -565,8 +565,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
-	hasChanges := hasChangesGym(oldGym, gym)
-	hasInternalChanges := hasInternalChangesGym(oldGym, gym)
+	hasChanges := oldGym == nil || hasChangesGym(oldGym, gym)
+	hasInternalChanges := oldGym == nil || hasInternalChangesGym(oldGym, gym)
 
 	if hasInternalChanges || hasChanges {
 		gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
