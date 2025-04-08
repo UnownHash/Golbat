@@ -568,7 +568,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	hasChanges := hasChangesGym(oldGym, gym)
 	hasInternalChanges := hasInternalChangesGym(oldGym, gym)
 
-	if hasInternalChanges {
+	if hasInternalChanges || hasChanges {
 		gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	}
 
