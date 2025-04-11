@@ -62,6 +62,7 @@ var statsCollector stats_collector.StatsCollector
 var pokestopCache *ttlcache.Cache[string, Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var stationCache *ttlcache.Cache[string, Station]
+var tappableCache *ttlcache.Cache[uint64, Tappable]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
@@ -75,6 +76,7 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
 var stationStripedMutex = stripedmutex.New(128)
+var tappableStripedMutex = intstripedmutex.New(512)
 var incidentStripedMutex = stripedmutex.New(128)
 var pokemonStripedMutex = intstripedmutex.New(1024)
 var weatherStripedMutex = intstripedmutex.New(128)
@@ -111,6 +113,11 @@ func initDataCache() {
 		ttlcache.WithTTL[string, Station](60 * time.Minute),
 	)
 	go stationCache.Start()
+
+	tappableCache = ttlcache.New[uint64, Tappable](
+		ttlcache.WithTTL[uint64, Tappable](60 * time.Minute),
+	)
+	go tappableCache.Start()
 
 	weatherCache = ttlcache.New[int64, Weather](
 		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
