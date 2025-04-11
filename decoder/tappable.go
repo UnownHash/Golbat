@@ -1,0 +1,189 @@
+package decoder
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"golbat/db"
+	"golbat/pogo"
+	"strconv"
+	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
+)
+
+type Tappable struct {
+	Id           uint64      `db:"id"`
+	Lat          float64     `db:"lat"`
+	Lon          float64     `db:"lon"`
+	FortId       null.String `db:"fort_id"` // either fortId or spawnpointId are given
+	SpawnpointId null.String `db:"spawnpoint_id"`
+	Type         string      `db:"type"`
+	Encounter    null.Int    `db:"pokemon_id"`
+	ItemId       null.Int    `db:"item_id"`
+	Count        null.Int    `db:"count"`
+	Updated      int64       `db:"updated"`
+}
+
+func (ta *Tappable) updateFromProcessTappableProto(tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto) {
+	// update from request
+	ta.Id = request.EncounterId
+	location := request.GetLocation()
+	if spawnpointId := location.GetSpawnpointId(); spawnpointId != "" {
+		ta.SpawnpointId = null.StringFrom(spawnpointId)
+	}
+	if fortId := location.GetFortId(); fortId != "" {
+		ta.FortId = null.StringFrom(fortId)
+	}
+	ta.Type = request.TappableTypeId
+	ta.Lat = request.LocationHintLat
+	ta.Lon = request.LocationHintLng
+
+	// update from tappable
+	if encounter := tappable.GetEncounter(); encounter != nil {
+		// tappable is a Pokèmon, encounter is sent in a separate proto
+		// we store this to link tappable with Pokèmon from encounter proto
+		ta.Encounter = null.IntFrom(int64(encounter.Pokemon.PokemonId))
+	} else if reward := tappable.GetReward(); reward != nil {
+		for _, lootProto := range reward {
+			for _, itemProto := range lootProto.GetLootItem() {
+				switch t := itemProto.Type.(type) {
+				case *pogo.LootItemProto_Item:
+					ta.ItemId = null.IntFrom(int64(t.Item))
+					ta.Count = null.IntFrom(int64(itemProto.Count))
+				case *pogo.LootItemProto_Stardust:
+					fmt.Println("[TAPPABLE] Reward is Stardust:", t.Stardust)
+				case *pogo.LootItemProto_Pokecoin:
+					fmt.Println("[TAPPABLE] Reward is Pokecoin:", t.Pokecoin)
+				case *pogo.LootItemProto_PokemonCandy:
+					fmt.Println("[TAPPABLE] Reward is Pokemon Candy:", t.PokemonCandy)
+				case *pogo.LootItemProto_Experience:
+					fmt.Println("[TAPPABLE] Reward is Experience:", t.Experience)
+				case *pogo.LootItemProto_PokemonEgg:
+					fmt.Println("[TAPPABLE] Reward is a Pokemon Egg:", t.PokemonEgg)
+				case *pogo.LootItemProto_AvatarTemplateId:
+					fmt.Println("[TAPPABLE] Reward is an Avatar Template ID:", t.AvatarTemplateId)
+				case *pogo.LootItemProto_StickerId:
+					fmt.Println("[TAPPABLE] Reward is a Sticker ID:", t.StickerId)
+				case *pogo.LootItemProto_MegaEnergyPokemonId:
+					fmt.Println("[TAPPABLE] Reward is Mega Energy Pokemon ID:", t.MegaEnergyPokemonId)
+				case *pogo.LootItemProto_XlCandy:
+					fmt.Println("[TAPPABLE] Reward is XL Candy:", t.XlCandy)
+				case *pogo.LootItemProto_FollowerPokemon:
+					fmt.Println("[TAPPABLE] Reward is a Follower Pokemon:", t.FollowerPokemon)
+				case *pogo.LootItemProto_NeutralAvatarTemplateId:
+					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Template ID:", t.NeutralAvatarTemplateId)
+				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
+					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Item Template:", t.NeutralAvatarItemTemplate)
+				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
+					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Item Display:", t.NeutralAvatarItemDisplay)
+				default:
+					fmt.Println("Unknown or unset Type")
+				}
+			}
+		}
+	}
+}
+
+func getTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, error) {
+	inMemoryTappable := tappableCache.Get(id)
+	if inMemoryTappable != nil {
+		tappable := inMemoryTappable.Value()
+		return &tappable, nil
+	}
+	tappable := Tappable{}
+	err := db.GeneralDb.GetContext(ctx, &tappable,
+		`SELECT id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
+         FROM tappable 
+         WHERE id = ?`, strconv.FormatUint(id, 10))
+	statsCollector.IncDbQuery("select tappable", err)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return &tappable, nil
+}
+
+func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
+	oldTappable, _ := getTappableRecord(ctx, details, tappable.Id)
+	now := time.Now().Unix()
+	if oldTappable != nil && !hasChangesTappable(oldTappable, tappable) {
+		return
+	}
+	tappable.Updated = now
+	if oldTappable == nil {
+		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
+			INSERT INTO tappable (
+				id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
+			) VALUES (
+				"%d", :lat, :lon, :fort_id, :spawnpoint_id, :type, :pokemon_id, :item_id, :count, :updated
+			)
+			`, tappable.Id), tappable)
+		statsCollector.IncDbQuery("insert tappable", err)
+		if err != nil {
+			log.Errorf("insert tappable %d: %s", tappable.Id, err)
+			return
+		}
+		_ = res
+	} else {
+		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
+			UPDATE tappable SET
+				lat = :lat,
+				lon = :lon,
+				fort_id = :fort_id,
+				spawnpoint_id = :spawnpoint_id,
+				type = :type,
+				pokemon_id = :pokemon_id,
+				item_id = :item_id,
+				count = :count,
+				updated = :updated
+			WHERE id = "%d"
+			`, tappable.Id), tappable)
+		statsCollector.IncDbQuery("update tappable", err)
+		if err != nil {
+			log.Errorf("update tappable %d: %s", tappable.Id, err)
+			return
+		}
+		_ = res
+	}
+	tappableCache.Set(tappable.Id, *tappable, ttlcache.DefaultTTL)
+}
+
+func hasChangesTappable(old *Tappable, new *Tappable) bool {
+	return old.Id != new.Id ||
+		old.FortId != new.FortId ||
+		old.SpawnpointId != new.SpawnpointId ||
+		old.Type != new.Type ||
+		old.Encounter != new.Encounter ||
+		old.ItemId != new.ItemId ||
+		old.Count != new.Count ||
+		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+}
+
+func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto) string {
+	id := request.GetEncounterId() //TODO check on items
+	tappableMutex, _ := tappableStripedMutex.GetLock(id)
+	tappableMutex.Lock()
+	defer tappableMutex.Unlock()
+
+	tappable, err := getTappableRecord(ctx, db, id)
+	if err != nil {
+		log.Printf("Get tappable %s", err)
+		return "Error getting tappable"
+	}
+
+	if tappable == nil {
+		tappable = &Tappable{}
+	}
+
+	tappable.updateFromProcessTappableProto(tappableDetails, request)
+	saveTappableRecord(ctx, db, tappable)
+	return fmt.Sprintf("ProcessTappableOutProto %d", id)
+}

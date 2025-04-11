@@ -380,7 +380,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_FORT_DETAILS:
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
@@ -403,19 +402,15 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		ignore = true
-		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
 		ignore = true
-		break
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
 		ignore = true
-		break
 	case pogo.Method(pogo.InternalPlatformClientAction_INTERNAL_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
 			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
@@ -428,7 +423,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-		break
 	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
 		// Request is essential to decode this
 		if protoData.Request != nil {
@@ -437,14 +431,18 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			}
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_STATION_DETAILS:
 		if getScanParameters(protoData).ProcessStations {
 			// Request is essential to decode this
 			result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-
+	case pogo.Method_METHOD_PROCESS_TAPPABLE:
+		if getScanParameters(protoData).ProcessTappables {
+			// Request is essential to decode this
+			result = decodeTappable(ctx, protoData.Request, protoData.Data)
+		}
+		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -952,4 +950,25 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 	}
 
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
+}
+
+func decodeTappable(ctx context.Context, request, data []byte) string {
+	var tappable pogo.ProcessTappableOutProto
+	if err := proto.Unmarshal(data, &tappable); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse ProcessTappableOutProto %s", err)
+	}
+
+	var tappableRequest pogo.ProcessTappableProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &tappableRequest); err != nil {
+			log.Errorf("Failed to parse %s", err)
+			return fmt.Sprintf("Failed to parse ProcessTappableProto %s", err)
+		}
+	}
+
+	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
+	}
+	return decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable)
 }
