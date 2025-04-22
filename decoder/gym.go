@@ -565,21 +565,18 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	oldGym, _ := getGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
-	hasChanges := oldGym == nil || hasChangesGym(oldGym, gym)
-	hasInternalChanges := oldGym == nil || hasInternalChangesGym(oldGym, gym)
-
-	if hasInternalChanges || hasChanges {
-		gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
-	}
-
-	if oldGym != nil && !hasChanges {
+	if oldGym != nil && !hasChangesGym(oldGym, gym) {
 		if oldGym.Updated > now-900 {
-			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
+			// if a gym is unchanged, and we are within 15 minutes don't make any changes
+			// however, gym battle toggle a chance to trigger a web hook and make sure we
+			// save defender changes to internal cache
 
-			// give gym battle toggle a chance to trigger a web hook
+			if hasInternalChangesGym(oldGym, gym) {
+				areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+				createGymWebhooks(oldGym, gym, areas)
 
-			areas := MatchStatsGeofence(gym.Lat, gym.Lon)
-			createGymWebhooks(oldGym, gym, areas)
+				gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
+			}
 
 			return
 		}
@@ -648,6 +645,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		_, _ = res, err
 	}
 
+	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	createGymWebhooks(oldGym, gym, areas)
 	createGymFortWebhooks(oldGym, gym)
