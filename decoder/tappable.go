@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"golbat/db"
 	"golbat/pogo"
+	"strconv"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -97,7 +98,7 @@ func getTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 	err := db.GeneralDb.GetContext(ctx, &tappable,
 		`SELECT id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
          FROM tappable 
-         WHERE id = ?`, id)
+         WHERE id = ?`, strconv.FormatUint(id, 10))
 	statsCollector.IncDbQuery("select tappable", err)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -118,21 +119,21 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	tappable.Updated = now
 
 	if oldTappable == nil {
-		res, err := details.GeneralDb.NamedExecContext(ctx, `
+		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
 				id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
 			) VALUES (
-				:id, :lat, :lon, :fort_id, :spawnpoint_id, :type, :pokemon_id, :item_id, :count, :updated
+				"%d", :lat, :lon, :fort_id, :spawnpoint_id, :type, :pokemon_id, :item_id, :count, :updated
 			)
-		`, tappable)
+			`, tappable.Id), tappable)
 		statsCollector.IncDbQuery("insert tappable", err)
 		if err != nil {
-			log.Errorf("insert tappable %s: %s", tappable.Id, err)
+			log.Errorf("insert tappable %d: %s", tappable.Id, err)
 			return
 		}
 		_ = res
 	} else {
-		res, err := details.GeneralDb.NamedExecContext(ctx, `
+		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			UPDATE tappable SET
 				lat = :lat,
 				lon = :lon,
@@ -143,11 +144,11 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 				item_id = :item_id,
 				count = :count,
 				updated = :updated
-			WHERE id = :id
-		`, tappable)
+			WHERE id = "%d"
+			`, tappable.Id), tappable)
 		statsCollector.IncDbQuery("update tappable", err)
 		if err != nil {
-			log.Errorf("update pokestop %s: %s", tappable.Id, err)
+			log.Errorf("update tappable %d: %s", tappable.Id, err)
 			return
 		}
 		_ = res
@@ -162,7 +163,9 @@ func hasChangesTappable(old *Tappable, new *Tappable) bool {
 		old.Type != new.Type ||
 		old.Encounter != new.Encounter ||
 		old.ItemId != new.ItemId ||
-		old.Count != new.Count
+		old.Count != new.Count ||
+		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
 }
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto) string {

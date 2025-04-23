@@ -1,5 +1,5 @@
 CREATE TABLE `tappable` (
-  `id`              BIGINT UNSIGNED NOT NULL,
+  `id`              varchar(25) NOT NULL,
   `lat`             double(18,14) NOT NULL,
   `lon`             double(18,14) NOT NULL,
   `fort_id`         varchar(35) DEFAULT NULL,
