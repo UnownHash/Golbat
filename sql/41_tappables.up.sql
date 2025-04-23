@@ -10,5 +10,8 @@ CREATE TABLE `tappable` (
   `count`           smallint unsigned DEFAULT NULL,
   `updated`         INT UNSIGNED NOT NULL,
   PRIMARY KEY (`id`),
-  KEY `ix_coords` (`lat`,`lon`),
-);
+  KEY `ix_coords` (`lat`,`lon`)
+) ENGINE = InnoDB
+  DEFAULT CHARSET = utf8mb4
+  COLLATE = utf8mb4_general_ci;
+
