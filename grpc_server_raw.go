@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"time"
+
 	"golbat/config"
 	pb "golbat/grpc"
+
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/metadata"
-	"time"
 )
 
 // server is used to implement helloworld.GreeterServer.
@@ -15,6 +17,7 @@ type grpcRawServer struct {
 }
 
 func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoRequest) (*pb.RawProtoResponse, error) {
+	dataReceivedTimestamp := time.Now().UnixMilli()
 	// Check for authorisation
 	if config.Config.RawBearer != "" {
 		md, _ := metadata.FromIncomingContext(ctx)
@@ -32,12 +35,15 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		scanContext = *in.ScanContext
 	}
 
+	if in.Timestamp > 0 {
+		dataReceivedTimestamp = in.Timestamp
+	}
+
 	latTarget, lonTarget := float64(in.LatTarget), float64(in.LonTarget)
 	globalHaveAr := in.HaveAr
 	var protoData []ProtoData
 
 	for _, v := range in.Contents {
-
 		inboundRawData := ProtoData{
 			Method:      int(v.Method),
 			Account:     account,
@@ -54,6 +60,7 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 				}
 				return globalHaveAr
 			}(),
+			TimestampMs: dataReceivedTimestamp,
 		}
 
 		protoData = append(protoData, inboundRawData)

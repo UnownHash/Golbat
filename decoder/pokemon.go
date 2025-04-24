@@ -550,14 +550,20 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 	return remaining
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
 	if wildPokemon.EncounterId != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
 	pokemon.Lat = wildPokemon.Latitude
 	pokemon.Lon = wildPokemon.Longitude
 
-	pokemon.updateSpawnpointInfo(ctx, db, wildPokemon, timestampMs)
+	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	if err != nil {
+		panic(err)
+	}
+	pokemon.SpawnId = null.IntFrom(spawnId)
+
+	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
 	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
 }
 
@@ -583,7 +589,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SeenType = null.StringFrom(SeenType_Wild)
 	}
-	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs)
+	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.Username = null.StringFrom(username)
 	pokemon.CellId = null.IntFrom(cellId)
@@ -705,19 +711,25 @@ const SeenType_LureWild string = "lure_wild"                   // Pokemon was se
 const SeenType_LureEncounter string = "lure_encounter"         // Pokemon has been encountered at a lure
 const SeenType_TappableEncounter string = "tappable_encounter" // Pokemon has been encountered from tappable
 
-// updateSpawnpointInfo sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
+// setExpireTimestampFromSpawnpoint sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
 // db - the database connection to be used
-// wildPokemon - the Pogo Proto to be decoded
 // timestampMs - the timestamp to be used for calculations
-func (pokemon *Pokemon) updateSpawnpointInfo(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
-	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
-	if err != nil {
-		panic(err)
+// trustworthyTimestamp - whether this timestamp is fully trustworthy (ie comes from GMO server time)
+func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db db.DbDetails, timestampMs int64, trustworthyTimestamp bool) {
+	if !trustworthyTimestamp && pokemon.ExpireTimestamp.Valid {
+		// If our time is not trustworthy, and we have already set a time from some other source (eg a GMO)
+		// don't modify it
+
+		return
 	}
 
-	pokemon.SpawnId = null.IntFrom(spawnId)
+	spawnId := pokemon.SpawnId.ValueOrZero()
 	pokemon.ExpireTimestampVerified = false
+
+	if spawnId == 0 {
+		return
+	}
 
 	spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
@@ -1159,10 +1171,10 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
 	pokemon.IsEvent = 0
 	// TODO is there a better way to get this from the proto? This is how RDM does it
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, time.Now().Unix()*1000)
+	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
 	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
@@ -1180,10 +1192,11 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
-func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string) {
+func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
 	pokemon.IsEvent = 0
 	pokemon.Lat = request.LocationHintLat
 	pokemon.Lon = request.LocationHintLng
+
 	if spawnPointId := request.GetLocation().GetSpawnpointId(); spawnPointId != "" {
 		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
 		if err != nil {
@@ -1191,9 +1204,10 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		}
 
 		pokemon.SpawnId = null.IntFrom(spawnId)
-		pokemon.ExpireTimestampVerified = false
+		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
 		pokemon.PokestopId = null.StringFrom(fortId)
+		pokemon.ExpireTimestampVerified = false
 	}
 	if !pokemon.Username.Valid {
 		pokemon.Username = null.StringFrom(username)
@@ -1365,7 +1379,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	}
 }
 
-func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string) string {
+func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string, timestamp int64) string {
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
@@ -1382,8 +1396,8 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
-	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
+	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, timestamp/1000)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
@@ -1422,7 +1436,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
 
-func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string) string {
+func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string, timestampMs int64) string {
 	encounterId := request.GetEncounterId()
 
 	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
@@ -1434,7 +1448,7 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
-	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username)
+	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username, timestampMs)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
