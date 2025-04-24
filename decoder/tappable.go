@@ -181,6 +181,10 @@ func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessT
 		return "Error getting tappable"
 	}
 
+	if tappable == nil {
+		tappable = &Tappable{}
+	}
+
 	tappable.updateFromProcessTappableProto(tappableDetails, request)
 	saveTappableRecord(ctx, db, tappable)
 	return fmt.Sprintf("ProcessTappableOutProto %d", id)
