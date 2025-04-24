@@ -16,24 +16,28 @@ import (
 )
 
 type Tappable struct {
-	Id           uint64      `db:"id"`
-	Lat          float64     `db:"lat"`
-	Lon          float64     `db:"lon"`
-	FortId       null.String `db:"fort_id"` // either fortId or spawnpointId are given
-	SpawnpointId null.String `db:"spawnpoint_id"`
-	Type         string      `db:"type"`
-	Encounter    null.Int    `db:"pokemon_id"`
-	ItemId       null.Int    `db:"item_id"`
-	Count        null.Int    `db:"count"`
-	Updated      int64       `db:"updated"`
+	Id        uint64      `db:"id"`
+	Lat       float64     `db:"lat"`
+	Lon       float64     `db:"lon"`
+	FortId    null.String `db:"fort_id"` // either fortId or spawnpointId are given
+	SpawnId   null.Int    `db:"spawn_id"`
+	Type      string      `db:"type"`
+	Encounter null.Int    `db:"pokemon_id"`
+	ItemId    null.Int    `db:"item_id"`
+	Count     null.Int    `db:"count"`
+	Updated   int64       `db:"updated"`
 }
 
 func (ta *Tappable) updateFromProcessTappableProto(tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto) {
 	// update from request
 	ta.Id = request.EncounterId
 	location := request.GetLocation()
-	if spawnpointId := location.GetSpawnpointId(); spawnpointId != "" {
-		ta.SpawnpointId = null.StringFrom(spawnpointId)
+	if spawnPointId := location.GetSpawnpointId(); spawnPointId != "" {
+		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
+		if err != nil {
+			panic(err)
+		}
+		ta.SpawnId = null.IntFrom(spawnId)
 	}
 	if fortId := location.GetFortId(); fortId != "" {
 		ta.FortId = null.StringFrom(fortId)
@@ -96,7 +100,7 @@ func getTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 	}
 	tappable := Tappable{}
 	err := db.GeneralDb.GetContext(ctx, &tappable,
-		`SELECT id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
+		`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, updated
          FROM tappable 
          WHERE id = ?`, strconv.FormatUint(id, 10))
 	statsCollector.IncDbQuery("select tappable", err)
@@ -120,9 +124,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	if oldTappable == nil {
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
-				id, lat, lon, fort_id, spawnpoint_id, type, pokemon_id, item_id, count, updated
+				id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, updated
 			) VALUES (
-				"%d", :lat, :lon, :fort_id, :spawnpoint_id, :type, :pokemon_id, :item_id, :count, :updated
+				"%d", :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :item_id, :count, :updated
 			)
 			`, tappable.Id), tappable)
 		statsCollector.IncDbQuery("insert tappable", err)
@@ -137,7 +141,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 				lat = :lat,
 				lon = :lon,
 				fort_id = :fort_id,
-				spawnpoint_id = :spawnpoint_id,
+				spawn_id = :spawn_id,
 				type = :type,
 				pokemon_id = :pokemon_id,
 				item_id = :item_id,
@@ -158,7 +162,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 func hasChangesTappable(old *Tappable, new *Tappable) bool {
 	return old.Id != new.Id ||
 		old.FortId != new.FortId ||
-		old.SpawnpointId != new.SpawnpointId ||
+		old.SpawnId != new.SpawnId ||
 		old.Type != new.Type ||
 		old.Encounter != new.Encounter ||
 		old.ItemId != new.ItemId ||
@@ -168,7 +172,7 @@ func hasChangesTappable(old *Tappable, new *Tappable) bool {
 }
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto) string {
-	id := request.GetEncounterId() //TODO check on items
+	id := request.GetEncounterId()
 	tappableMutex, _ := tappableStripedMutex.GetLock(id)
 	tappableMutex.Lock()
 	defer tappableMutex.Unlock()

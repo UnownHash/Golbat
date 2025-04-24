@@ -440,7 +440,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	case pogo.Method_METHOD_PROCESS_TAPPABLE:
 		if getScanParameters(protoData).ProcessTappables {
 			// Request is essential to decode this
-			result = decodeTappable(ctx, protoData.Request, protoData.Data)
+			result = decodeTappable(ctx, protoData.Request, protoData.Data, protoData.Account)
 		}
 		processed = true
 	default:
@@ -952,7 +952,7 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
 }
 
-func decodeTappable(ctx context.Context, request, data []byte) string {
+func decodeTappable(ctx context.Context, request, data []byte, username string) string {
 	var tappable pogo.ProcessTappableOutProto
 	if err := proto.Unmarshal(data, &tappable); err != nil {
 		log.Errorf("Failed to parse %s", err)
@@ -970,5 +970,9 @@ func decodeTappable(ctx context.Context, request, data []byte) string {
 	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
 		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
 	}
-	return decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable)
+	var result string
+	if encounter := tappable.GetEncounter(); encounter != nil {
+		result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, &tappableRequest, encounter, username)
+	}
+	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable)
 }
