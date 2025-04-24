@@ -697,12 +697,13 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
-const SeenType_Cell string = "nearby_cell"             // Pokemon was seen in a cell (without accurate location)
-const SeenType_NearbyStop string = "nearby_stop"       // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-const SeenType_Wild string = "wild"                    // Pokemon was seen in the wild, accurate location but with no IV details
-const SeenType_Encounter string = "encounter"          // Pokemon has been encountered giving exact details of current IV
-const SeenType_LureWild string = "lure_wild"           // Pokemon was seen at a lure
-const SeenType_LureEncounter string = "lure_encounter" // Pokemon has been encountered at a lure
+const SeenType_Cell string = "nearby_cell"                     // Pokemon was seen in a cell (without accurate location)
+const SeenType_NearbyStop string = "nearby_stop"               // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+const SeenType_Wild string = "wild"                            // Pokemon was seen in the wild, accurate location but with no IV details
+const SeenType_Encounter string = "encounter"                  // Pokemon has been encountered giving exact details of current IV
+const SeenType_LureWild string = "lure_wild"                   // Pokemon was seen at a lure
+const SeenType_LureEncounter string = "lure_encounter"         // Pokemon has been encountered at a lure
+const SeenType_TappableEncounter string = "tappable_encounter" // Pokemon has been encountered from tappable
 
 // updateSpawnpointInfo sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
@@ -1179,6 +1180,29 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
+func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string) {
+	pokemon.IsEvent = 0
+	pokemon.Lat = request.LocationHintLat
+	pokemon.Lon = request.LocationHintLng
+	if spawnPointId := request.GetLocation().GetSpawnpointId(); spawnPointId != "" {
+		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
+		if err != nil {
+			panic(err)
+		}
+
+		pokemon.SpawnId = null.IntFrom(spawnId)
+		pokemon.ExpireTimestampVerified = false
+	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
+		pokemon.PokestopId = null.StringFrom(fortId)
+	}
+	if !pokemon.Username.Valid {
+		pokemon.Username = null.StringFrom(username)
+	}
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	pokemon.SeenType = null.StringFrom(SeenType_TappableEncounter)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
+}
+
 func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
@@ -1396,4 +1420,25 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	updateEncounterStats(pokemon)
 
 	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+}
+
+func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string) string {
+	encounterId := request.GetEncounterId()
+
+	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+	pokemonMutex.Lock()
+	defer pokemonMutex.Unlock()
+
+	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+	if err != nil {
+		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
+		return fmt.Sprintf("Error finding pokemon %s", err)
+	}
+	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, time.Now().Unix())
+	// updateEncounterStats() should only be called for encounters, and called
+	// even if we have the pokemon record already.
+	updateEncounterStats(pokemon)
+
+	return fmt.Sprintf("%d Tappable Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
