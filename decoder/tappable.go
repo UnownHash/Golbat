@@ -28,7 +28,7 @@ type Tappable struct {
 	Updated      int64       `db:"updated"`
 }
 
-func (ta Tappable) updateFromProcessTappableProto(tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto) {
+func (ta *Tappable) updateFromProcessTappableProto(tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto) {
 	// update from request
 	ta.Id = request.EncounterId
 	location := request.GetLocation()
@@ -117,7 +117,6 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		return
 	}
 	tappable.Updated = now
-
 	if oldTappable == nil {
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
@@ -170,7 +169,6 @@ func hasChangesTappable(old *Tappable, new *Tappable) bool {
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto) string {
 	id := request.GetEncounterId() //TODO check on items
-
 	tappableMutex, _ := tappableStripedMutex.GetLock(id)
 	tappableMutex.Lock()
 	defer tappableMutex.Unlock()
