@@ -1173,9 +1173,11 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
 	pokemon.IsEvent = 0
-	// TODO is there a better way to get this from the proto? This is how RDM does it
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
-	pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+	// tappable encounter can also be available in seen as normal encounter once tapped
+	if pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter {
+		pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
@@ -1197,8 +1199,8 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	pokemon.Lat = request.LocationHintLat
 	pokemon.Lon = request.LocationHintLng
 
-	if spawnPointId := request.GetLocation().GetSpawnpointId(); spawnPointId != "" {
-		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
+	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
+		spawnId, err := strconv.ParseInt(spawnpointId, 16, 64)
 		if err != nil {
 			panic(err)
 		}
@@ -1207,6 +1209,8 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
 		pokemon.PokestopId = null.StringFrom(fortId)
+		// we don't know any despawn times from lured/fort tappables
+		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(120))
 		pokemon.ExpireTimestampVerified = false
 	}
 	if !pokemon.Username.Valid {
