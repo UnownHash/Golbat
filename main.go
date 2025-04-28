@@ -222,6 +222,10 @@ func main() {
 		StartIncidentExpiry(db)
 	}
 
+	if cfg.Cleanup.Tappables == true {
+		StartTappableExpiry(db)
+	}
+
 	if cfg.Cleanup.Quests == true {
 		StartQuestExpiry(db)
 	}
@@ -974,5 +978,5 @@ func decodeTappable(ctx context.Context, request, data []byte, username string, 
 	if encounter := tappable.GetEncounter(); encounter != nil {
 		result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, &tappableRequest, encounter, username, timestampMs)
 	}
-	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable)
+	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable, timestampMs)
 }
