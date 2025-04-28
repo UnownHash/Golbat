@@ -717,7 +717,7 @@ const SeenType_TappableEncounter string = "tappable_encounter" // Pokemon has be
 // timestampMs - the timestamp to be used for calculations
 // trustworthyTimestamp - whether this timestamp is fully trustworthy (ie comes from GMO server time)
 func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db db.DbDetails, timestampMs int64, trustworthyTimestamp bool) {
-	if !trustworthyTimestamp && pokemon.ExpireTimestamp.Valid {
+	if !trustworthyTimestamp && pokemon.ExpireTimestampVerified {
 		// If our time is not trustworthy, and we have already set a time from some other source (eg a GMO)
 		// don't modify it
 
@@ -725,12 +725,11 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 
 	spawnId := pokemon.SpawnId.ValueOrZero()
-	pokemon.ExpireTimestampVerified = false
-
 	if spawnId == 0 {
 		return
 	}
 
+	pokemon.ExpireTimestampVerified = false
 	spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
