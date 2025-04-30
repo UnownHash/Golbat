@@ -66,23 +66,23 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 				case *pogo.LootItemProto_Pokecoin:
 					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", t.Pokecoin)
 				case *pogo.LootItemProto_PokemonCandy:
-					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %d", t.PokemonCandy)
+					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", t.PokemonCandy)
 				case *pogo.LootItemProto_Experience:
 					log.Warnf("[TAPPABLE] Reward is Experience: %t", t.Experience)
 				case *pogo.LootItemProto_PokemonEgg:
 					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
 				case *pogo.LootItemProto_AvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %s", t.AvatarTemplateId)
+					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", t.AvatarTemplateId)
 				case *pogo.LootItemProto_StickerId:
 					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
 				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %d", t.MegaEnergyPokemonId)
+					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", t.MegaEnergyPokemonId)
 				case *pogo.LootItemProto_XlCandy:
-					log.Warnf("[TAPPABLE] Reward is XL Candy: %d", t.XlCandy)
+					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", t.XlCandy)
 				case *pogo.LootItemProto_FollowerPokemon:
 					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
 				case *pogo.LootItemProto_NeutralAvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %s", t.NeutralAvatarTemplateId)
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", t.NeutralAvatarTemplateId)
 				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
 					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
 				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
