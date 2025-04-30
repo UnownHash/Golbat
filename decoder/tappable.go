@@ -62,33 +62,33 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 					ta.ItemId = null.IntFrom(int64(t.Item))
 					ta.Count = null.IntFrom(int64(itemProto.Count))
 				case *pogo.LootItemProto_Stardust:
-					fmt.Println("[TAPPABLE] Reward is Stardust:", t.Stardust)
+					log.Warnf("[TAPPABLE] Reward is Stardust: %t", t.Stardust)
 				case *pogo.LootItemProto_Pokecoin:
-					fmt.Println("[TAPPABLE] Reward is Pokecoin:", t.Pokecoin)
+					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", t.Pokecoin)
 				case *pogo.LootItemProto_PokemonCandy:
-					fmt.Println("[TAPPABLE] Reward is Pokemon Candy:", t.PokemonCandy)
+					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %d", t.PokemonCandy)
 				case *pogo.LootItemProto_Experience:
-					fmt.Println("[TAPPABLE] Reward is Experience:", t.Experience)
+					log.Warnf("[TAPPABLE] Reward is Experience: %t", t.Experience)
 				case *pogo.LootItemProto_PokemonEgg:
-					fmt.Println("[TAPPABLE] Reward is a Pokemon Egg:", t.PokemonEgg)
+					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
 				case *pogo.LootItemProto_AvatarTemplateId:
-					fmt.Println("[TAPPABLE] Reward is an Avatar Template ID:", t.AvatarTemplateId)
+					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %s", t.AvatarTemplateId)
 				case *pogo.LootItemProto_StickerId:
-					fmt.Println("[TAPPABLE] Reward is a Sticker ID:", t.StickerId)
+					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
 				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					fmt.Println("[TAPPABLE] Reward is Mega Energy Pokemon ID:", t.MegaEnergyPokemonId)
+					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %d", t.MegaEnergyPokemonId)
 				case *pogo.LootItemProto_XlCandy:
-					fmt.Println("[TAPPABLE] Reward is XL Candy:", t.XlCandy)
+					log.Warnf("[TAPPABLE] Reward is XL Candy: %d", t.XlCandy)
 				case *pogo.LootItemProto_FollowerPokemon:
-					fmt.Println("[TAPPABLE] Reward is a Follower Pokemon:", t.FollowerPokemon)
+					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
 				case *pogo.LootItemProto_NeutralAvatarTemplateId:
-					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Template ID:", t.NeutralAvatarTemplateId)
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %s", t.NeutralAvatarTemplateId)
 				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
-					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Item Template:", t.NeutralAvatarItemTemplate)
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
 				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
-					fmt.Println("[TAPPABLE] Reward is a Neutral Avatar Item Display:", t.NeutralAvatarItemDisplay)
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
 				default:
-					fmt.Println("Unknown or unset Type")
+					log.Warnf("Unknown or unset Type")
 				}
 			}
 		}
