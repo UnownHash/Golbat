@@ -703,13 +703,14 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
-const SeenType_Cell string = "nearby_cell"                     // Pokemon was seen in a cell (without accurate location)
-const SeenType_NearbyStop string = "nearby_stop"               // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-const SeenType_Wild string = "wild"                            // Pokemon was seen in the wild, accurate location but with no IV details
-const SeenType_Encounter string = "encounter"                  // Pokemon has been encountered giving exact details of current IV
-const SeenType_LureWild string = "lure_wild"                   // Pokemon was seen at a lure
-const SeenType_LureEncounter string = "lure_encounter"         // Pokemon has been encountered at a lure
-const SeenType_TappableEncounter string = "tappable_encounter" // Pokemon has been encountered from tappable
+const SeenType_Cell string = "nearby_cell"                              // Pokemon was seen in a cell (without accurate location)
+const SeenType_NearbyStop string = "nearby_stop"                        // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+const SeenType_Wild string = "wild"                                     // Pokemon was seen in the wild, accurate location but with no IV details
+const SeenType_Encounter string = "encounter"                           // Pokemon has been encountered giving exact details of current IV
+const SeenType_LureWild string = "lure_wild"                            // Pokemon was seen at a lure
+const SeenType_LureEncounter string = "lure_encounter"                  // Pokemon has been encountered at a lure
+const SeenType_TappableEncounter string = "tappable_encounter"          // Pokemon has been encountered from tappable
+const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokemon has been encountered from a lured tappable
 
 // setExpireTimestampFromSpawnpoint sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
@@ -1174,7 +1175,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.IsEvent = 0
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
 	// tappable encounter can also be available in seen as normal encounter once tapped
-	if pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter {
+	if pokemon.isSeenFromTappable() {
 		pokemon.SeenType = null.StringFrom(SeenType_Encounter)
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
@@ -1184,6 +1185,10 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 		cellID := s2.CellIDFromLatLng(centerCoord).Parent(15)
 		pokemon.CellId = null.IntFrom(int64(cellID))
 	}
+}
+
+func (pokemon *Pokemon) isSeenFromTappable() bool {
+	return pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter && pokemon.SeenType.ValueOrZero() != SeenType_TappableLureEncounter
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
@@ -1199,6 +1204,8 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	pokemon.Lon = request.LocationHintLng
 
 	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
+		pokemon.SeenType = null.StringFrom(SeenType_TappableEncounter)
+
 		spawnId, err := strconv.ParseInt(spawnpointId, 16, 64)
 		if err != nil {
 			panic(err)
@@ -1207,6 +1214,8 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SpawnId = null.IntFrom(spawnId)
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
+		pokemon.SeenType = null.StringFrom(SeenType_TappableLureEncounter)
+
 		pokemon.PokestopId = null.StringFrom(fortId)
 		// we don't know any despawn times from lured/fort tappables
 		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(120))
@@ -1216,7 +1225,6 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.Username = null.StringFrom(username)
 	}
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
-	pokemon.SeenType = null.StringFrom(SeenType_TappableEncounter)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
