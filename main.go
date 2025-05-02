@@ -222,6 +222,10 @@ func main() {
 		StartIncidentExpiry(db)
 	}
 
+	if cfg.Cleanup.Tappables == true {
+		StartTappableExpiry(db)
+	}
+
 	if cfg.Cleanup.Quests == true {
 		StartQuestExpiry(db)
 	}
@@ -380,7 +384,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_FORT_DETAILS:
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
@@ -392,7 +395,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
 		if getScanParameters(protoData).ProcessPokemon {
-			result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+			result = decodeEncounter(ctx, protoData.Data, protoData.Account, protoData.TimestampMs)
 		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
@@ -403,19 +406,15 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		ignore = true
-		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
 		ignore = true
-		break
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
 		ignore = true
-		break
 	case pogo.Method(pogo.InternalPlatformClientAction_INTERNAL_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
 			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
@@ -428,7 +427,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-		break
 	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
 		// Request is essential to decode this
 		if protoData.Request != nil {
@@ -437,14 +435,18 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			}
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_STATION_DETAILS:
 		if getScanParameters(protoData).ProcessStations {
 			// Request is essential to decode this
 			result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-
+	case pogo.Method_METHOD_PROCESS_TAPPABLE:
+		if getScanParameters(protoData).ProcessTappables {
+			// Request is essential to decode this
+			result = decodeTappable(ctx, protoData.Request, protoData.Data, protoData.Account, protoData.TimestampMs)
+		}
+		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -703,7 +705,7 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
-func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
+func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
@@ -713,13 +715,13 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 
 	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
 		statsCollector.IncDecodeEncounter("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
+		res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
 
 	statsCollector.IncDecodeEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
 
 func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
@@ -952,4 +954,29 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 	}
 
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
+}
+
+func decodeTappable(ctx context.Context, request, data []byte, username string, timestampMs int64) string {
+	var tappable pogo.ProcessTappableOutProto
+	if err := proto.Unmarshal(data, &tappable); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse ProcessTappableOutProto %s", err)
+	}
+
+	var tappableRequest pogo.ProcessTappableProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &tappableRequest); err != nil {
+			log.Errorf("Failed to parse %s", err)
+			return fmt.Sprintf("Failed to parse ProcessTappableProto %s", err)
+		}
+	}
+
+	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
+	}
+	var result string
+	if encounter := tappable.GetEncounter(); encounter != nil {
+		result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, &tappableRequest, encounter, username, timestampMs)
+	}
+	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable, timestampMs)
 }

@@ -3,11 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"github.com/jmoiron/sqlx"
-	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
 	"time"
+
+	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 )
 
 func StartDbUsageStatsLogger(db *sqlx.DB) {
@@ -185,6 +186,30 @@ func StartIncidentExpiry(db *sqlx.DB) {
 			} else {
 				rows, _ := result.RowsAffected()
 				log.Infof("DB - Cleanup of incident table took %s (%d rows)", elapsed, rows)
+			}
+		}
+	}()
+}
+
+func StartTappableExpiry(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Hour + 16*time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+
+			var result sql.Result
+			var err error
+
+			result, err = db.Exec("DELETE FROM tappable WHERE expire_timestamp < UNIX_TIMESTAMP();")
+
+			elapsed := time.Since(start)
+
+			if err != nil {
+				log.Errorf("DB - Cleanup of tappable table error %s", err)
+			} else {
+				rows, _ := result.RowsAffected()
+				log.Infof("DB - Cleanup of tappable table took %s (%d rows)", elapsed, rows)
 			}
 		}
 	}()

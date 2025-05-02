@@ -40,6 +40,10 @@ func ReadConfig() (configDefinition, error) {
 			Compress:   true,
 		},
 		Cleanup: cleanup{
+			Pokemon:     true,
+			Quests:      true,
+			Incidents:   true,
+			Tappables:   true,
 			StatsDays:   7,
 			DeviceHours: 24,
 		},
