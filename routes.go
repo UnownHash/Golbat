@@ -489,3 +489,8 @@ func GetPokestop(c *gin.Context) {
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
+
+func PokemonLiveStats(c *gin.Context) {
+	res := decoder.GetLiveStatsPokemon()
+	c.JSON(http.StatusAccepted, res)
+}
