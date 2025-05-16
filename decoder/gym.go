@@ -393,11 +393,13 @@ func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gy
 	timeslots := make([]rsvpTimeslot, 0)
 
 	for _, timeslot := range fortData.RsvpTimeslots {
-		timeslots = append(timeslots, rsvpTimeslot{
-			Timeslot:   timeslot.TimeSlot,
-			GoingCount: timeslot.GoingCount,
-			MaybeCount: timeslot.MaybeCount,
-		})
+		if timeslot.GoingCount > 0 || timeslot.MaybeCount > 0 {
+			timeslots = append(timeslots, rsvpTimeslot{
+				Timeslot:   timeslot.TimeSlot,
+				GoingCount: timeslot.GoingCount,
+				MaybeCount: timeslot.MaybeCount,
+			})
+		}
 	}
 
 	if len(timeslots) == 0 {
