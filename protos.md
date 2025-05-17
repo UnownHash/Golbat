@@ -56,6 +56,18 @@ requires the proto request to be present in the raw.
 - Decode top 3 player scores for a contest. This requires the proto request
 to be present in the raw.
 
+`Method_METHOD_PROCESS_TAPPABLE = 1408`
+
+- Decode pokemon encounters and items hidden behind tappable objects
+- 
+`Method_METHOD_GET_EVENT_RSVPS = 3031`
+
+- Decode the number of players and time that they have indicated they will present at a raid
+- 
+`Method_REQUEST_TYPE_METHOD_GET_EVENT_RSVP_COUNT = 3036`
+
+- This proto is ignored
+
 # Social actions
 
 - The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto will be
