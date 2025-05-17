@@ -455,9 +455,10 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.PowerUpPoints != new.PowerUpPoints ||
 		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
 		old.Description != new.Description ||
+		old.Rsvps != new.Rsvps ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
-		old.Rsvps != new.Rsvps
+		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+
 }
 
 // hasChangesInternalGym compares two Gym structs for changes that will be stored in memory
