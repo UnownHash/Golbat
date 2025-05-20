@@ -550,7 +550,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
 		(oldGym == nil || oldGym.RaidLevel != gym.RaidLevel ||
 			oldGym.RaidPokemonId != gym.RaidPokemonId ||
-			oldGym.RaidSpawnTimestamp != gym.RaidSpawnTimestamp) {
+			oldGym.RaidSpawnTimestamp != gym.RaidSpawnTimestamp || oldGym.Rsvps != gym.Rsvps) {
 		raidBattleTime := gym.RaidBattleTimestamp.ValueOrZero()
 		raidEndTime := gym.RaidEndTimestamp.ValueOrZero()
 		now := time.Now().Unix()
@@ -591,6 +591,13 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 				"power_up_level":         gym.PowerUpLevel.ValueOrZero(),
 				"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
 				"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
+				"rsvps": func() any {
+					if !gym.Rsvps.Valid {
+						return nil
+					} else {
+						return json.RawMessage(gym.Rsvps.ValueOrZero())
+					}
+				}(),
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
