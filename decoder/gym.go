@@ -789,3 +789,27 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
+
+func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
+	gymMutex, _ := gymStripedMutex.GetLock(fortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
+	gym, err := getGymRecord(ctx, db, fortId)
+	if err != nil {
+		return err.Error()
+	}
+
+	if gym == nil {
+		// Do not add RSVP details to unknown gyms
+		return fmt.Sprintf("%s Gym not present", fortId)
+	}
+
+	if gym.Rsvps.Valid {
+		gym.Rsvps = null.NewString("", false)
+
+		saveGymRecord(ctx, db, gym)
+	}
+
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}

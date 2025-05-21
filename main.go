@@ -453,8 +453,10 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		}
 		processed = true
 	case pogo.Method_METHOD_GET_EVENT_RSVP_COUNT:
-		// We don't process the count, only the detail
-		ignore = true
+		if getScanParameters(protoData).ProcessGyms {
+			result = decodeGetEventRsvpCount(ctx, protoData.Data)
+		}
+		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -1016,4 +1018,26 @@ func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string
 	}
 
 	return "Failed to parse GetEventRsvpsProto - unknown event type"
+}
+
+func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
+	var rsvp pogo.GetEventRsvpCountOutProto
+	if err := proto.Unmarshal(data, &rsvp); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse GetEventRsvpCountOutProto %s", err)
+	}
+
+	if rsvp.Status != pogo.GetEventRsvpCountOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.Status)
+	}
+
+	var clearLocations []string
+	for _, rsvpDetails := range rsvp.RsvpDetails {
+		if rsvpDetails.MaybeCount == 0 || rsvpDetails.GoingCount == 0 {
+			clearLocations = append(clearLocations, rsvpDetails.LocationId)
+			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.LocationId)
+		}
+	}
+
+	return "Cleared RSVP @ " + strings.Join(clearLocations, ", ")
 }
