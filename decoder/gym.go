@@ -240,7 +240,14 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if fortData.RaidInfo != nil {
 		gym.RaidEndTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000)
 		gym.RaidSpawnTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000)
-		gym.RaidBattleTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidBattleMs) / 1000)
+		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs)
+
+		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {
+			// We are reporting a new raid, clear rsvp data
+			gym.Rsvps = null.NewString("", false)
+		}
+		gym.RaidBattleTimestamp = null.IntFrom(raidBattleTimestamp)
+
 		gym.RaidLevel = null.IntFrom(int64(fortData.RaidInfo.RaidLevel))
 		if fortData.RaidInfo.RaidPokemon != nil {
 			gym.RaidPokemonId = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId))
