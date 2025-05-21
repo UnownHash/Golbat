@@ -240,7 +240,14 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if fortData.RaidInfo != nil {
 		gym.RaidEndTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000)
 		gym.RaidSpawnTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000)
-		gym.RaidBattleTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidBattleMs) / 1000)
+		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs) / 1000
+
+		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {
+			// We are reporting a new raid, clear rsvp data
+			gym.Rsvps = null.NewString("", false)
+		}
+		gym.RaidBattleTimestamp = null.IntFrom(raidBattleTimestamp)
+
 		gym.RaidLevel = null.IntFrom(int64(fortData.RaidInfo.RaidLevel))
 		if fortData.RaidInfo.RaidPokemon != nil {
 			gym.RaidPokemonId = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId))
@@ -786,6 +793,30 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 	gym.updateGymFromRsvpProto(resp)
 
 	saveGymRecord(ctx, db, gym)
+
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
+	gymMutex, _ := gymStripedMutex.GetLock(fortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
+	gym, err := getGymRecord(ctx, db, fortId)
+	if err != nil {
+		return err.Error()
+	}
+
+	if gym == nil {
+		// Do not add RSVP details to unknown gyms
+		return fmt.Sprintf("%s Gym not present", fortId)
+	}
+
+	if gym.Rsvps.Valid {
+		gym.Rsvps = null.NewString("", false)
+
+		saveGymRecord(ctx, db, gym)
+	}
 
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
