@@ -1033,7 +1033,7 @@ func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
 
 	var clearLocations []string
 	for _, rsvpDetails := range rsvp.RsvpDetails {
-		if rsvpDetails.MaybeCount == 0 || rsvpDetails.GoingCount == 0 {
+		if rsvpDetails.MaybeCount == 0 && rsvpDetails.GoingCount == 0 {
 			clearLocations = append(clearLocations, rsvpDetails.LocationId)
 			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.LocationId)
 		}
