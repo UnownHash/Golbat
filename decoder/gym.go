@@ -1,10 +1,12 @@
 package decoder
 
 import (
+	"cmp"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"golbat/geo"
@@ -63,6 +65,7 @@ type Gym struct {
 	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
 	Description            null.String `db:"description"`
 	Defenders              null.String `db:"defenders"`
+	Rsvps                  null.String `db:"rsvps"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -237,7 +240,14 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if fortData.RaidInfo != nil {
 		gym.RaidEndTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000)
 		gym.RaidSpawnTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000)
-		gym.RaidBattleTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidBattleMs) / 1000)
+		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs) / 1000
+
+		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {
+			// We are reporting a new raid, clear rsvp data
+			gym.Rsvps = null.NewString("", false)
+		}
+		gym.RaidBattleTimestamp = null.IntFrom(raidBattleTimestamp)
+
 		gym.RaidLevel = null.IntFrom(int64(fortData.RaidInfo.RaidLevel))
 		if fortData.RaidInfo.RaidPokemon != nil {
 			gym.RaidPokemonId = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId))
@@ -380,6 +390,39 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	return gym
 }
 
+func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gym {
+	type rsvpTimeslot struct {
+		Timeslot   int64 `json:"timeslot"`
+		GoingCount int32 `json:"going_count"`
+		MaybeCount int32 `json:"maybe_count"`
+	}
+
+	timeslots := make([]rsvpTimeslot, 0)
+
+	for _, timeslot := range fortData.RsvpTimeslots {
+		if timeslot.GoingCount > 0 || timeslot.MaybeCount > 0 {
+			timeslots = append(timeslots, rsvpTimeslot{
+				Timeslot:   timeslot.TimeSlot,
+				GoingCount: timeslot.GoingCount,
+				MaybeCount: timeslot.MaybeCount,
+			})
+		}
+	}
+
+	if len(timeslots) == 0 {
+		gym.Rsvps = null.NewString("", false)
+	} else {
+		slices.SortFunc(timeslots, func(a, b rsvpTimeslot) int {
+			return cmp.Compare(a.Timeslot, b.Timeslot)
+		})
+
+		bRsvps, _ := json.Marshal(timeslots)
+		gym.Rsvps = null.StringFrom(string(bRsvps))
+	}
+
+	return gym
+}
+
 // hasChangesGym compares two Gym structs
 // Float tolerance: Lat, Lon
 func hasChangesGym(old *Gym, new *Gym) bool {
@@ -419,8 +462,10 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.PowerUpPoints != new.PowerUpPoints ||
 		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
 		old.Description != new.Description ||
+		old.Rsvps != new.Rsvps ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+
 }
 
 // hasChangesInternalGym compares two Gym structs for changes that will be stored in memory
@@ -512,7 +557,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
 		(oldGym == nil || oldGym.RaidLevel != gym.RaidLevel ||
 			oldGym.RaidPokemonId != gym.RaidPokemonId ||
-			oldGym.RaidSpawnTimestamp != gym.RaidSpawnTimestamp) {
+			oldGym.RaidSpawnTimestamp != gym.RaidSpawnTimestamp || oldGym.Rsvps != gym.Rsvps) {
 		raidBattleTime := gym.RaidBattleTimestamp.ValueOrZero()
 		raidEndTime := gym.RaidEndTimestamp.ValueOrZero()
 		now := time.Now().Unix()
@@ -553,6 +598,13 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 				"power_up_level":         gym.PowerUpLevel.ValueOrZero(),
 				"power_up_end_timestamp": gym.PowerUpEndTimestamp.ValueOrZero(),
 				"ar_scan_eligible":       gym.ArScanEligible.ValueOrZero(),
+				"rsvps": func() any {
+					if !gym.Rsvps.Valid {
+						return nil
+					} else {
+						return json.RawMessage(gym.Rsvps.ValueOrZero())
+					}
+				}(),
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
@@ -586,8 +638,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	//log.Traceln(cmp.Diff(oldGym, gym))
 	if oldGym == nil {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
 		statsCollector.IncDbQuery("insert gym", err)
 		if err != nil {
@@ -635,7 +687,8 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 			"power_up_points = :power_up_points, "+
 			"power_up_end_timestamp = :power_up_end_timestamp,"+
 			"description = :description,"+
-			"defenders = :defenders "+
+			"defenders = :defenders,"+
+			"rsvps = :rsvps "+
 			"WHERE id = :id", gym,
 		)
 		statsCollector.IncDbQuery("update gym", err)
@@ -721,4 +774,49 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
 	saveGymRecord(ctx, db, gym)
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pogo.RaidDetails, resp *pogo.GetEventRsvpsOutProto) string {
+	gymMutex, _ := gymStripedMutex.GetLock(req.FortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
+	gym, err := getGymRecord(ctx, db, req.FortId)
+	if err != nil {
+		return err.Error()
+	}
+
+	if gym == nil {
+		// Do not add RSVP details to unknown gyms
+		return fmt.Sprintf("%s Gym not present", req.FortId)
+	}
+	gym.updateGymFromRsvpProto(resp)
+
+	saveGymRecord(ctx, db, gym)
+
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
+}
+
+func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
+	gymMutex, _ := gymStripedMutex.GetLock(fortId)
+	gymMutex.Lock()
+	defer gymMutex.Unlock()
+
+	gym, err := getGymRecord(ctx, db, fortId)
+	if err != nil {
+		return err.Error()
+	}
+
+	if gym == nil {
+		// Do not add RSVP details to unknown gyms
+		return fmt.Sprintf("%s Gym not present", fortId)
+	}
+
+	if gym.Rsvps.Valid {
+		gym.Rsvps = null.NewString("", false)
+
+		saveGymRecord(ctx, db, gym)
+	}
+
+	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
