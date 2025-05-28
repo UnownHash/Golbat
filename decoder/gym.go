@@ -114,7 +114,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
+func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -614,7 +614,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 }
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
-	oldGym, _ := getGymRecord(ctx, db, gym.Id)
+	oldGym, _ := GetGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -720,7 +720,7 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, fort.Id) // should check error
+	gym, err := GetGymRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -741,7 +741,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
+	gym, err := GetGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -761,7 +761,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, mapFort.Id)
+	gym, err := GetGymRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -781,7 +781,7 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, req.FortId)
+	gym, err := GetGymRecord(ctx, db, req.FortId)
 	if err != nil {
 		return err.Error()
 	}
@@ -802,7 +802,7 @@ func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, fortId)
+	gym, err := GetGymRecord(ctx, db, fortId)
 	if err != nil {
 		return err.Error()
 	}

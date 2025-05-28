@@ -308,9 +308,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()
-			gym, err := getGymRecord(ctx, db, fortId)
+			gym, err := GetGymRecord(ctx, db, fortId)
 			if err != nil {
-				log.Errorf("getGymRecord: %s", err)
+				log.Errorf("GetGymRecord: %s", err)
 				gymMutex.Unlock()
 				continue
 			}
