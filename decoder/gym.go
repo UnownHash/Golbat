@@ -25,47 +25,47 @@ import (
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	Id                     string      `db:"id"`
-	Lat                    float64     `db:"lat"`
-	Lon                    float64     `db:"lon"`
-	Name                   null.String `db:"name"`
-	Url                    null.String `db:"url"`
-	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp"`
-	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp"`
-	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp"`
-	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp"`
-	Updated                int64       `db:"updated"`
-	RaidPokemonId          null.Int    `db:"raid_pokemon_id"`
-	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id"`
-	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display"`
-	AvailableSlots         null.Int    `db:"available_slots"`
-	TeamId                 null.Int    `db:"team_id"`
-	RaidLevel              null.Int    `db:"raid_level"`
-	Enabled                null.Int    `db:"enabled"`
-	ExRaidEligible         null.Int    `db:"ex_raid_eligible"`
-	InBattle               null.Int    `db:"in_battle"`
-	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1"`
-	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2"`
-	RaidPokemonForm        null.Int    `db:"raid_pokemon_form"`
-	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment"`
-	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp"`
-	RaidIsExclusive        null.Int    `db:"raid_is_exclusive"`
-	CellId                 null.Int    `db:"cell_id"`
-	Deleted                bool        `db:"deleted"`
-	TotalCp                null.Int    `db:"total_cp"`
-	FirstSeenTimestamp     int64       `db:"first_seen_timestamp"`
-	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender"`
-	SponsorId              null.Int    `db:"sponsor_id"`
-	PartnerId              null.String `db:"partner_id"`
-	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume"`
-	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution"`
-	ArScanEligible         null.Int    `db:"ar_scan_eligible"`
-	PowerUpLevel           null.Int    `db:"power_up_level"`
-	PowerUpPoints          null.Int    `db:"power_up_points"`
-	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
-	Description            null.String `db:"description"`
-	Defenders              null.String `db:"defenders"`
-	Rsvps                  null.String `db:"rsvps"`
+	Id                     string      `db:"id" json:"id"`
+	Lat                    float64     `db:"lat" json:"lat"`
+	Lon                    float64     `db:"lon" json:"lon"`
+	Name                   null.String `db:"name" json:"name"`
+	Url                    null.String `db:"url" json:"url"`
+	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
+	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp" json:"raid_end_timestamp"`
+	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp" json:"raid_spawn_timestamp"`
+	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp" json:"raid_battle_timestamp"`
+	Updated                int64       `db:"updated" json:"updated"`
+	RaidPokemonId          null.Int    `db:"raid_pokemon_id" json:"raid_pokemon_id"`
+	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id" json:"guarding_pokemon_id"`
+	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display" json:"guarding_pokemon_display"`
+	AvailableSlots         null.Int    `db:"available_slots" json:"available_slots"`
+	TeamId                 null.Int    `db:"team_id" json:"team_id"`
+	RaidLevel              null.Int    `db:"raid_level" json:"raid_level"`
+	Enabled                null.Int    `db:"enabled" json:"enabled"`
+	ExRaidEligible         null.Int    `db:"ex_raid_eligible" json:"ex_raid_eligible"`
+	InBattle               null.Int    `db:"in_battle" json:"in_battle"`
+	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1" json:"raid_pokemon_move_1"`
+	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2" json:"raid_pokemon_move_2"`
+	RaidPokemonForm        null.Int    `db:"raid_pokemon_form" json:"raid_pokemon_form"`
+	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment" json:"raid_pokemon_alignment"`
+	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp" json:"raid_pokemon_cp"`
+	RaidIsExclusive        null.Int    `db:"raid_is_exclusive" json:"raid_is_exclusive"`
+	CellId                 null.Int    `db:"cell_id" json:"cell_id"`
+	Deleted                bool        `db:"deleted" json:"deleted"`
+	TotalCp                null.Int    `db:"total_cp" json:"total_cp"`
+	FirstSeenTimestamp     int64       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender" json:"raid_pokemon_gender"`
+	SponsorId              null.Int    `db:"sponsor_id" json:"sponsor_id"`
+	PartnerId              null.String `db:"partner_id" json:"partner_id"`
+	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume" json:"raid_pokemon_costume"`
+	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution" json:"raid_pokemon_evolution"`
+	ArScanEligible         null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"`
+	PowerUpLevel           null.Int    `db:"power_up_level" json:"power_up_level"`
+	PowerUpPoints          null.Int    `db:"power_up_points" json:"power_up_points"`
+	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
+	Description            null.String `db:"description" json:"description"`
+	Defenders              null.String `db:"defenders" json:"defenders"`
+	Rsvps                  null.String `db:"rsvps" json:"rsvps"`
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -114,7 +114,7 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
-func getGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
+func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
@@ -614,7 +614,7 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 }
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
-	oldGym, _ := getGymRecord(ctx, db, gym.Id)
+	oldGym, _ := GetGymRecord(ctx, db, gym.Id)
 
 	now := time.Now().Unix()
 	if oldGym != nil && !hasChangesGym(oldGym, gym) {
@@ -720,7 +720,7 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, fort.Id) // should check error
+	gym, err := GetGymRecord(ctx, db, fort.Id) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -741,7 +741,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
+	gym, err := GetGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
 	if err != nil {
 		return err.Error()
 	}
@@ -761,7 +761,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, mapFort.Id)
+	gym, err := GetGymRecord(ctx, db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -781,7 +781,7 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, req.FortId)
+	gym, err := GetGymRecord(ctx, db, req.FortId)
 	if err != nil {
 		return err.Error()
 	}
@@ -802,7 +802,7 @@ func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
 	gymMutex.Lock()
 	defer gymMutex.Unlock()
 
-	gym, err := getGymRecord(ctx, db, fortId)
+	gym, err := GetGymRecord(ctx, db, fortId)
 	if err != nil {
 		return err.Error()
 	}

@@ -486,6 +486,21 @@ func GetPokestop(c *gin.Context) {
 	c.JSON(http.StatusAccepted, pokestop)
 }
 
+func GetGym(c *gin.Context) {
+	gymId := c.Param("gym_id")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	gym, err := decoder.GetGymRecord(ctx, dbDetails, gymId)
+	cancel()
+	if err != nil {
+		log.Warnf("GET /api/gym/id/:gym_id/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gym)
+}
+
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }

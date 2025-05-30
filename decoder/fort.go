@@ -94,7 +94,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 	var stops []Pokestop
 	if fortType == GYM {
 		for _, id := range ids {
-			gym, err := getGymRecord(ctx, dbDetails, id)
+			gym, err := GetGymRecord(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}
