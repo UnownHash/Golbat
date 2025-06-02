@@ -5,4 +5,4 @@ ALTER TABLE raid_stats
     DROP PRIMARY KEY;
 
 ALTER TABLE raid_stats
-    ADD PRIMARY KEY (pokemon_id, date, level, form_id);
+    ADD PRIMARY KEY (date, area, fence, pokemon_id, form_id, level);
