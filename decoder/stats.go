@@ -31,7 +31,9 @@ type areaStatsCount struct {
 }
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
-var raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail)
+
+var raidCount = make(map[geo.AreaName]map[int64]*areaRaidCountDetail)
+
 var invasionCount = make(map[geo.AreaName]*areaInvasionCountDetail)
 var questCount = make(map[geo.AreaName]map[int]areaQuestCountDetail)
 
@@ -61,7 +63,7 @@ type areaPokemonCountDetail struct {
 }
 
 type areaRaidCountDetail struct {
-	count [maxPokemonNo + 1]int
+    count map[int]int // Key: 4 digits pokemonId + 4 digits formId
 }
 
 type areaInvasionCountDetail struct {
@@ -449,50 +451,40 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName, now in
 }
 
 func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
-	if len(areas) == 0 {
-		areas = []geo.AreaName{
-			{
-				Parent: "unmatched",
-				Name:   "unmatched",
-			},
-		}
-	}
+    if len(areas) == 0 {
+        areas = []geo.AreaName{{Parent: "unmatched", Name: "unmatched"}}
+    }
+    areas = append(areas, geo.AreaName{Parent: "world", Name: "world"})
 
-	areas = append(areas, geo.AreaName{
-		Parent: "world",
-		Name:   "world",
-	})
+    locked := false
 
-	locked := false
+    for i := 0; i < len(areas); i++ {
+        area := areas[i]
 
-	// Loop though all areas
-	for i := 0; i < len(areas); i++ {
-		area := areas[i]
+        if new.RaidPokemonId.ValueOrZero() > 0 &&
+            (old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
-		// Check if Raid has started/is active or RaidEndTimestamp has changed (Back-to-back raids)
-		if new.RaidPokemonId.ValueOrZero() > 0 &&
-			(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
+            if !locked {
+                raidStatsLock.Lock()
+                locked = true
+            }
 
-			if !locked {
-				raidStatsLock.Lock()
-				locked = true
-			}
+            if raidCount[area] == nil {
+                raidCount[area] = make(map[int64]*areaRaidCountDetail)
+            }
+            countStats := raidCount[area]
+            raidLevel := new.RaidLevel.ValueOrZero()
+            if countStats[raidLevel] == nil {
+                countStats[raidLevel] = &areaRaidCountDetail{count: make(map[int]int)}
+            }
+            pf := int(new.RaidPokemonId.ValueOrZero())*10000 + int(new.RaidPokemonForm.ValueOrZero())
+            countStats[raidLevel].count[pf]++
+        }
+    }
 
-			countStats := raidCount[area]
-			if countStats == nil {
-				countStats = make(map[int64]areaRaidCountDetail)
-				raidCount[area] = countStats
-			}
-
-			var countRaids = raidCount[area][new.RaidLevel.ValueOrZero()]
-			countRaids.count[new.RaidPokemonId.ValueOrZero()]++
-			raidCount[area][new.RaidLevel.ValueOrZero()] = countRaids
-		}
-	}
-
-	if locked {
-		raidStatsLock.Unlock()
-	}
+    if locked {
+        raidStatsLock.Unlock()
+    }
 }
 
 func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
@@ -873,7 +865,7 @@ func logRaidStats(statsDb *sqlx.DB) {
 	log.Infof("STATS: Write raid stats")
 
 	currentStats := raidCount
-	raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail) // clear stats
+	raidCount = make(map[geo.AreaName]map[int64]*areaRaidCountDetail) // clear stats
 	raidStatsLock.Unlock()
 
 	go func() {
@@ -883,28 +875,31 @@ func logRaidStats(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
-				*rows = append(*rows, raidStatsDbRow{
-					Date:      midnightString,
-					Area:      area.Parent,
-					Fence:     area.Name,
-					Level:     level,
-					PokemonId: pokemonId,
-					FormId:    formId,
-					Count:     count,
-				})
-			}
+    addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
+        *rows = append(*rows, raidStatsDbRow{
+            Date:      midnightString,
+            Area:      area.Parent,
+            Fence:     area.Name,
+            Level:     level,
+            PokemonId: pokemonId,
+            FormId:    formId,
+            Count:     count,
+        })
+    }
 
-			for level := range stats {
-				pokemonForm: formId ?? 0,
-				pf := fmt.Printf("%04d", pokemonId) + fmt.Printf("%04d", pokemonForm)
-				for pf, count := range stats[level].count {
-					if count > 0 {
-						addRows(&rows, level, pokemonId, formId, count)
-					}
-				}
-			}
-		}
+    for level, raidDetail := range stats {
+        if raidDetail.count == nil {
+            continue // Kein Map, nichts zu tun
+        }
+        for pf, count := range raidDetail.count {
+            if count > 0 {
+                pokemonId := pf / 10000
+                formId := pf % 10000
+                addRows(&rows, level, pokemonId, formId, count)
+            }
+        }
+    }
+}
 
 		for i := 0; i < len(rows); i += batchInsertSize {
 			end := i + batchInsertSize
