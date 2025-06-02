@@ -864,6 +864,7 @@ type raidStatsDbRow struct {
 	Fence     string `db:"fence"`
 	Level     int64  `db:"level"`
 	PokemonId int    `db:"pokemon_id"`
+	FormId    int    `db:"form_id"`
 	Count     int    `db:"count"`
 }
 
@@ -882,21 +883,24 @@ func logRaidStats(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, count int) {
+			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
 				*rows = append(*rows, raidStatsDbRow{
 					Date:      midnightString,
 					Area:      area.Parent,
 					Fence:     area.Name,
 					Level:     level,
 					PokemonId: pokemonId,
+					FormId:    formId,
 					Count:     count,
 				})
 			}
 
 			for level := range stats {
-				for pokemonId, count := range stats[level].count {
+				pokemonForm: formId ?? 0,
+				pf := fmt.Printf("%04d", pokemonId) + fmt.Printf("%04d", pokemonForm)
+				for pf, count := range stats[level].count {
 					if count > 0 {
-						addRows(&rows, level, pokemonId, count)
+						addRows(&rows, level, pokemonId, formId, count)
 					}
 				}
 			}
@@ -911,8 +915,8 @@ func logRaidStats(statsDb *sqlx.DB) {
 			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO raid_stats "+
-					"(date, area, fence, level, pokemon_id, `count`)"+
-					" VALUES (:date, :area, :fence, :level, :pokemon_id, :count)"+
+					"(date, area, fence, level, pokemon_id, form_id, `count`)"+
+					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :count)"+
 					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)

@@ -16,6 +16,7 @@ type GymStats struct {
 type RaidStats struct {
 	RaidLevel int64   `db:"raid_level"`
 	Count     float64 `db:"count"`
+	FormID    int     `db:"form_id"`
 }
 
 type IncidentsStats struct {
@@ -58,8 +59,14 @@ func GetRaidStats(db DbDetails) ([]RaidStats, error) {
 	stats := []RaidStats{}
 
 	err := db.GeneralDb.Select(&stats,
-		"SELECT count(*) AS count, COALESCE(raid_level, 0) AS raid_level "+
-			"FROM `gym` WHERE raid_end_timestamp > UNIX_TIMESTAMP() GROUP BY raid_level;",
+		`SELECT 
+			COUNT(*) AS count,
+			COALESCE(raid_level, 0) AS raid_level,
+			COALESCE(raid_pokemon_form, 0) AS form_id
+		FROM gym
+		WHERE raid_end_timestamp > UNIX_TIMESTAMP()
+		  AND raid_pokemon_id IS NOT NULL
+		GROUP BY raid_level, raid_pokemon_form;`,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
