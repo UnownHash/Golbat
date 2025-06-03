@@ -63,7 +63,7 @@ type areaPokemonCountDetail struct {
 }
 
 type areaRaidCountDetail struct {
-    count map[int]int // Key: 4 digits pokemonId + 4 digits formId
+    count map[pokemonForm]int
 }
 
 type areaInvasionCountDetail struct {
@@ -475,10 +475,13 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
             countStats := raidCount[area]
             raidLevel := new.RaidLevel.ValueOrZero()
             if countStats[raidLevel] == nil {
-                countStats[raidLevel] = &areaRaidCountDetail{count: make(map[int]int)}
-            }
-            pf := int(new.RaidPokemonId.ValueOrZero())*10000 + int(new.RaidPokemonForm.ValueOrZero())
-            countStats[raidLevel].count[pf]++
+    countStats[raidLevel] = &areaRaidCountDetail{count: make(map[pokemonForm]int)}
+}
+pf := pokemonForm{
+    pokemonId: int16(new.RaidPokemonId.ValueOrZero()),
+    formId:    int(new.RaidPokemonForm.ValueOrZero()),
+}
+countStats[raidLevel].count[pf]++
         }
     }
 
@@ -892,10 +895,8 @@ func logRaidStats(statsDb *sqlx.DB) {
             continue // Kein Map, nichts zu tun
         }
         for pf, count := range raidDetail.count {
-            if count > 0 {
-                pokemonId := pf / 10000
-                formId := pf % 10000
-                addRows(&rows, level, pokemonId, formId, count)
+    if count > 0 {
+        addRows(&rows, level, int(pf.pokemonId), pf.formId, count)
             }
         }
     }
