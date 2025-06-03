@@ -63,7 +63,7 @@ type areaPokemonCountDetail struct {
 }
 
 type areaRaidCountDetail struct {
-    count map[pokemonForm]int
+	count map[pokemonForm]int
 }
 
 type areaInvasionCountDetail struct {
@@ -451,43 +451,43 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName, now in
 }
 
 func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
-    if len(areas) == 0 {
-        areas = []geo.AreaName{{Parent: "unmatched", Name: "unmatched"}}
-    }
-    areas = append(areas, geo.AreaName{Parent: "world", Name: "world"})
+	if len(areas) == 0 {
+		areas = []geo.AreaName{{Parent: "unmatched", Name: "unmatched"}}
+	}
+	areas = append(areas, geo.AreaName{Parent: "world", Name: "world"})
 
-    locked := false
+	locked := false
 
-    for i := 0; i < len(areas); i++ {
-        area := areas[i]
+	for i := 0; i < len(areas); i++ {
+		area := areas[i]
 
-        if new.RaidPokemonId.ValueOrZero() > 0 &&
-            (old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
+		if new.RaidPokemonId.ValueOrZero() > 0 &&
+			(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
-            if !locked {
-                raidStatsLock.Lock()
-                locked = true
-            }
+			if !locked {
+				raidStatsLock.Lock()
+				locked = true
+			}
 
-            if raidCount[area] == nil {
-                raidCount[area] = make(map[int64]*areaRaidCountDetail)
-            }
-            countStats := raidCount[area]
-            raidLevel := new.RaidLevel.ValueOrZero()
-            if countStats[raidLevel] == nil {
-    countStats[raidLevel] = &areaRaidCountDetail{count: make(map[pokemonForm]int)}
-}
-pf := pokemonForm{
-    pokemonId: int16(new.RaidPokemonId.ValueOrZero()),
-    formId:    int(new.RaidPokemonForm.ValueOrZero()),
-}
-countStats[raidLevel].count[pf]++
-        }
-    }
+			if raidCount[area] == nil {
+				raidCount[area] = make(map[int64]*areaRaidCountDetail)
+			}
+			countStats := raidCount[area]
+			raidLevel := new.RaidLevel.ValueOrZero()
+			if countStats[raidLevel] == nil {
+				countStats[raidLevel] = &areaRaidCountDetail{count: make(map[pokemonForm]int)}
+			}
+			pf := pokemonForm{
+				pokemonId: int16(new.RaidPokemonId.ValueOrZero()),
+				formId:    int(new.RaidPokemonForm.ValueOrZero()),
+			}
+			countStats[raidLevel].count[pf]++
+		}
+	}
 
-    if locked {
-        raidStatsLock.Unlock()
-    }
+	if locked {
+		raidStatsLock.Unlock()
+	}
 }
 
 func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
@@ -878,29 +878,29 @@ func logRaidStats(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-    addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
-        *rows = append(*rows, raidStatsDbRow{
-            Date:      midnightString,
-            Area:      area.Parent,
-            Fence:     area.Name,
-            Level:     level,
-            PokemonId: pokemonId,
-            FormId:    formId,
-            Count:     count,
-        })
-    }
+			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
+				*rows = append(*rows, raidStatsDbRow{
+					Date:      midnightString,
+					Area:      area.Parent,
+					Fence:     area.Name,
+					Level:     level,
+					PokemonId: pokemonId,
+					FormId:    formId,
+					Count:     count,
+				})
+			}
 
-    for level, raidDetail := range stats {
-        if raidDetail.count == nil {
-            continue // Kein Map, nichts zu tun
-        }
-        for pf, count := range raidDetail.count {
-    if count > 0 {
-        addRows(&rows, level, int(pf.pokemonId), pf.formId, count)
-            }
-        }
-    }
-}
+			for level, raidDetail := range stats {
+				if raidDetail.count == nil {
+					continue // Kein Map, nichts zu tun
+				}
+				for pf, count := range raidDetail.count {
+					if count > 0 {
+						addRows(&rows, level, int(pf.pokemonId), pf.formId, count)
+					}
+				}
+			}
+		}
 
 		for i := 0; i < len(rows); i += batchInsertSize {
 			end := i + batchInsertSize
