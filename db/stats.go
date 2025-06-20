@@ -3,8 +3,9 @@ package db
 import (
 	"database/sql"
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type GymStats struct {
