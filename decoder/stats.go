@@ -31,9 +31,7 @@ type areaStatsCount struct {
 }
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
-
 var raidCount = make(map[geo.AreaName]map[int64]*areaRaidCountDetail)
-
 var invasionCount = make(map[geo.AreaName]*areaInvasionCountDetail)
 var questCount = make(map[geo.AreaName]map[int]areaQuestCountDetail)
 
