@@ -892,7 +892,7 @@ func logRaidStats(statsDb *sqlx.DB) {
 
 			for level, raidDetail := range stats {
 				if raidDetail.count == nil {
-					continue // Kein Map, nichts zu tun
+					continue // nothing to do
 				}
 				for pf, count := range raidDetail.count {
 					if count > 0 {
