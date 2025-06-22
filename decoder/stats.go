@@ -31,7 +31,7 @@ type areaStatsCount struct {
 }
 
 var pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
-var raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail)
+var raidCount = make(map[geo.AreaName]map[int64]*areaRaidCountDetail)
 var invasionCount = make(map[geo.AreaName]*areaInvasionCountDetail)
 var questCount = make(map[geo.AreaName]map[int]areaQuestCountDetail)
 
@@ -61,7 +61,7 @@ type areaPokemonCountDetail struct {
 }
 
 type areaRaidCountDetail struct {
-	count [maxPokemonNo + 1]int
+	count map[pokemonForm]int
 }
 
 type areaInvasionCountDetail struct {
@@ -450,26 +450,15 @@ func updatePokemonStats(old *Pokemon, new *Pokemon, areas []geo.AreaName, now in
 
 func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 	if len(areas) == 0 {
-		areas = []geo.AreaName{
-			{
-				Parent: "unmatched",
-				Name:   "unmatched",
-			},
-		}
+		areas = []geo.AreaName{{Parent: "unmatched", Name: "unmatched"}}
 	}
-
-	areas = append(areas, geo.AreaName{
-		Parent: "world",
-		Name:   "world",
-	})
+	areas = append(areas, geo.AreaName{Parent: "world", Name: "world"})
 
 	locked := false
 
-	// Loop though all areas
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
 
-		// Check if Raid has started/is active or RaidEndTimestamp has changed (Back-to-back raids)
 		if new.RaidPokemonId.ValueOrZero() > 0 &&
 			(old == nil || old.RaidPokemonId != new.RaidPokemonId || old.RaidEndTimestamp != new.RaidEndTimestamp) {
 
@@ -478,15 +467,19 @@ func updateRaidStats(old *Gym, new *Gym, areas []geo.AreaName) {
 				locked = true
 			}
 
-			countStats := raidCount[area]
-			if countStats == nil {
-				countStats = make(map[int64]areaRaidCountDetail)
-				raidCount[area] = countStats
+			if raidCount[area] == nil {
+				raidCount[area] = make(map[int64]*areaRaidCountDetail)
 			}
-
-			var countRaids = raidCount[area][new.RaidLevel.ValueOrZero()]
-			countRaids.count[new.RaidPokemonId.ValueOrZero()]++
-			raidCount[area][new.RaidLevel.ValueOrZero()] = countRaids
+			countStats := raidCount[area]
+			raidLevel := new.RaidLevel.ValueOrZero()
+			if countStats[raidLevel] == nil {
+				countStats[raidLevel] = &areaRaidCountDetail{count: make(map[pokemonForm]int)}
+			}
+			pf := pokemonForm{
+				pokemonId: int16(new.RaidPokemonId.ValueOrZero()),
+				formId:    int(new.RaidPokemonForm.ValueOrZero()),
+			}
+			countStats[raidLevel].count[pf]++
 		}
 	}
 
@@ -864,6 +857,7 @@ type raidStatsDbRow struct {
 	Fence     string `db:"fence"`
 	Level     int64  `db:"level"`
 	PokemonId int    `db:"pokemon_id"`
+	FormId    int    `db:"form_id"`
 	Count     int    `db:"count"`
 }
 
@@ -872,7 +866,7 @@ func logRaidStats(statsDb *sqlx.DB) {
 	log.Infof("STATS: Write raid stats")
 
 	currentStats := raidCount
-	raidCount = make(map[geo.AreaName]map[int64]areaRaidCountDetail) // clear stats
+	raidCount = make(map[geo.AreaName]map[int64]*areaRaidCountDetail) // clear stats
 	raidStatsLock.Unlock()
 
 	go func() {
@@ -882,21 +876,25 @@ func logRaidStats(statsDb *sqlx.DB) {
 		midnightString := t.Format("2006-01-02")
 
 		for area, stats := range currentStats {
-			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, count int) {
+			addRows := func(rows *[]raidStatsDbRow, level int64, pokemonId int, formId int, count int) {
 				*rows = append(*rows, raidStatsDbRow{
 					Date:      midnightString,
 					Area:      area.Parent,
 					Fence:     area.Name,
 					Level:     level,
 					PokemonId: pokemonId,
+					FormId:    formId,
 					Count:     count,
 				})
 			}
 
-			for level := range stats {
-				for pokemonId, count := range stats[level].count {
+			for level, raidDetail := range stats {
+				if raidDetail.count == nil {
+					continue // nothing to do
+				}
+				for pf, count := range raidDetail.count {
 					if count > 0 {
-						addRows(&rows, level, pokemonId, count)
+						addRows(&rows, level, int(pf.pokemonId), pf.formId, count)
 					}
 				}
 			}
@@ -911,8 +909,8 @@ func logRaidStats(statsDb *sqlx.DB) {
 			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO raid_stats "+
-					"(date, area, fence, level, pokemon_id, `count`)"+
-					" VALUES (:date, :area, :fence, :level, :pokemon_id, :count)"+
+					"(date, area, fence, level, pokemon_id, form_id, `count`)"+
+					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :count)"+
 					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)
