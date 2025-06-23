@@ -772,6 +772,7 @@ func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *
 		pokemon.IsDitto = true
 		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
 		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+		pokemon.Form = null.IntFrom(0)
 	} else {
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
