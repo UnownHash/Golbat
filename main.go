@@ -277,6 +277,8 @@ func main() {
 	apiGroup.POST("/pokemon/v2/scan", PokemonScan2)
 	apiGroup.POST("/pokemon/search", PokemonSearch)
 
+	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
+
 	apiGroup.GET("/devices/all", GetDevices)
 
 	debugGroup := r.Group("/debug")

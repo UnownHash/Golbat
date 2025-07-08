@@ -501,6 +501,26 @@ func GetGym(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gym)
 }
 
+func GetTappable(c *gin.Context) {
+	id := c.Param("tappable_id")
+	tappableId, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		log.Warnf("GET /api/tappable/id/:tappable_id/ Non valid param: %v", err)
+		c.Status(http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	tappable, err := decoder.GetTappableRecord(ctx, dbDetails, tappableId)
+	cancel()
+	if err != nil {
+		log.Warnf("GET /api/tappable/id/:tappable_id/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, tappable)
+}
+
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
