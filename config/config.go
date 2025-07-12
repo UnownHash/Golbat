@@ -124,18 +124,19 @@ type tuning struct {
 }
 
 type scanRule struct {
-	Areas            []string       `koanf:"areas"`
-	AreaNames        []geo.AreaName `koanf:"-"`
-	ScanContext      []string       `koanf:"context"`
-	ProcessPokemon   *bool          `koanf:"pokemon"`
-	ProcessWilds     *bool          `koanf:"wild_pokemon"`
-	ProcessNearby    *bool          `koanf:"nearby_pokemon"`
-	ProcessWeather   *bool          `koanf:"weather"`
-	ProcessCells     *bool          `koanf:"cells"`
-	ProcessPokestops *bool          `koanf:"pokestops"`
-	ProcessGyms      *bool          `koanf:"gyms"`
-	ProcessStations  *bool          `koanf:"stations"`
-	ProcessTappables *bool          `koanf:"tappables"`
+	Areas              []string       `koanf:"areas"`
+	AreaNames          []geo.AreaName `koanf:"-"`
+	ScanContext        []string       `koanf:"context"`
+	ProcessPokemon     *bool          `koanf:"pokemon"`
+	ProcessWilds       *bool          `koanf:"wild_pokemon"`
+	ProcessNearby      *bool          `koanf:"nearby_pokemon"`
+	ProcessWeather     *bool          `koanf:"weather"`
+	ProcessCells       *bool          `koanf:"cells"`
+	ProcessPokestops   *bool          `koanf:"pokestops"`
+	ProcessGyms        *bool          `koanf:"gyms"`
+	ProcessStations    *bool          `koanf:"stations"`
+	ProcessTappables   *bool          `koanf:"tappables"`
+	ProcessHyperlocals *bool          `koanf:"hyperlocals"`
 }
 
 var Config configDefinition

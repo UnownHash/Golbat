@@ -7,15 +7,16 @@ import (
 )
 
 type ScanParameters struct {
-	ProcessPokemon   bool
-	ProcessWild      bool
-	ProcessNearby    bool
-	ProcessWeather   bool
-	ProcessPokestops bool
-	ProcessGyms      bool
-	ProcessStations  bool
-	ProcessCells     bool
-	ProcessTappables bool
+	ProcessPokemon     bool
+	ProcessWild        bool
+	ProcessNearby      bool
+	ProcessWeather     bool
+	ProcessPokestops   bool
+	ProcessGyms        bool
+	ProcessStations    bool
+	ProcessHyperlocals bool
+	ProcessCells       bool
+	ProcessTappables   bool
 }
 
 func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters {
@@ -54,27 +55,29 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 			return *value
 		}
 		return ScanParameters{
-			ProcessPokemon:   defaultTrue(rule.ProcessPokemon),
-			ProcessWild:      defaultTrue(rule.ProcessWilds),
-			ProcessNearby:    defaultTrue(rule.ProcessNearby),
-			ProcessCells:     defaultTrue(rule.ProcessCells),
-			ProcessWeather:   defaultTrue(rule.ProcessWeather),
-			ProcessPokestops: defaultTrue(rule.ProcessPokestops),
-			ProcessGyms:      defaultTrue(rule.ProcessGyms),
-			ProcessStations:  defaultTrue(rule.ProcessStations),
-			ProcessTappables: defaultTrue(rule.ProcessTappables),
+			ProcessPokemon:     defaultTrue(rule.ProcessPokemon),
+			ProcessWild:        defaultTrue(rule.ProcessWilds),
+			ProcessNearby:      defaultTrue(rule.ProcessNearby),
+			ProcessCells:       defaultTrue(rule.ProcessCells),
+			ProcessWeather:     defaultTrue(rule.ProcessWeather),
+			ProcessPokestops:   defaultTrue(rule.ProcessPokestops),
+			ProcessGyms:        defaultTrue(rule.ProcessGyms),
+			ProcessStations:    defaultTrue(rule.ProcessStations),
+			ProcessTappables:   defaultTrue(rule.ProcessTappables),
+			ProcessHyperlocals: defaultTrue(rule.ProcessHyperlocals),
 		}
 	}
 
 	return ScanParameters{
-		ProcessPokemon:   true,
-		ProcessWild:      true,
-		ProcessNearby:    true,
-		ProcessCells:     true,
-		ProcessWeather:   true,
-		ProcessGyms:      true,
-		ProcessPokestops: true,
-		ProcessStations:  true,
-		ProcessTappables: true,
+		ProcessPokemon:     true,
+		ProcessWild:        true,
+		ProcessNearby:      true,
+		ProcessCells:       true,
+		ProcessWeather:     true,
+		ProcessGyms:        true,
+		ProcessPokestops:   true,
+		ProcessStations:    true,
+		ProcessTappables:   true,
+		ProcessHyperlocals: true,
 	}
 }
