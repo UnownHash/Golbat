@@ -226,6 +226,10 @@ func main() {
 		StartTappableExpiry(db)
 	}
 
+	if cfg.Cleanup.Hyperlocals == true {
+		StartHyperlocalExpiry(db)
+	}
+
 	if cfg.Cleanup.Quests == true {
 		StartQuestExpiry(db)
 	}

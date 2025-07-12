@@ -77,6 +77,7 @@ var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
+var hyperlocalCache *ttlcache.Cache[HyperlocalKey, Hyperlocal]
 
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
@@ -87,6 +88,7 @@ var pokemonStripedMutex = intstripedmutex.New(1024)
 var weatherStripedMutex = intstripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
 var routeStripedMutex = stripedmutex.New(128)
+var hyperlocalStripedMutex = intstripedmutex.New(128)
 
 var s2CellLookup = sync.Map{}
 
@@ -173,6 +175,11 @@ func initDataCache() {
 		ttlcache.WithTTL[string, Route](60 * time.Minute),
 	)
 	go routeCache.Start()
+
+	hyperlocalCache = ttlcache.New[HyperlocalKey, Hyperlocal](
+		ttlcache.WithTTL[HyperlocalKey, Hyperlocal](60 * time.Minute),
+	)
+	go hyperlocalCache.Start()
 }
 
 func InitialiseOhbem() {
@@ -355,39 +362,32 @@ func UpdateHyperlocalBatch(ctx context.Context, db db.DbDetails, scanParameters 
 	if len(p) <= 0 {
 		return
 	}
-	hyperlocals := make([]Hyperlocal, 0, len(p))
-	for _, raw := range p {
-		hyperlocal := Hyperlocal{
-			ExperimentId:      raw.Data.ExperimentId,
-			StartMs:           raw.Data.StartMs,
-			EndMs:             raw.Data.EndMs,
-			Lat:               raw.Data.LatDegrees,
-			Lon:               raw.Data.LngDegrees,
-			RadiusM:           raw.Data.EventRadiusM,
-			ChallengeBonusKey: raw.Data.ChallengeBonusKey,
-			UpdatedMs:         raw.Timestamp,
-		}
-		hyperlocals = append(hyperlocals, hyperlocal)
-	}
-	_, err := db.GeneralDb.NamedExecContext(ctx,
-		`
-		INSERT INTO hyperlocal (
-			experiment_id, start_ms, end_ms, lat, lon, radius_m, challenge_bonus_key, updated_ms
-		) VALUES (
-			:experiment_id, :start_ms, :end_ms, :lat, :lon, :radius_m, :challenge_bonus_key, :updated_ms
-		)
-		ON DUPLICATE KEY UPDATE
-			start_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(start_ms), hyperlocal.start_ms),
-			end_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(end_ms), hyperlocal.end_ms),
-			radius_m = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(radius_m), hyperlocal.radius_m),
-			challenge_bonus_key = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(challenge_bonus_key), hyperlocal.challenge_bonus_key),
-			updated_ms = IF(VALUES(updated_ms) >= hyperlocal.updated_ms, VALUES(updated_ms), hyperlocal.updated_ms)
-			`, hyperlocals)
 
-	statsCollector.IncDbQuery("insert hyperlocals", err)
-	if err != nil {
-		log.Errorf("insert hyperlocals: %s", err)
-		return
+	for _, raw := range p {
+		key := HyperlocalKey{
+			ExperimentId: raw.Data.GetExperimentId(),
+			Lat:          raw.Data.GetLatDegrees(),
+			Lon:          raw.Data.GetLngDegrees(),
+		}
+
+		hyperlocalMutex, _ := hyperlocalStripedMutex.GetLock(uint64(key.ExperimentId) ^ math.Float64bits(key.Lat) ^ math.Float64bits(key.Lon))
+		hyperlocalMutex.Lock()
+
+		hyperlocal, err := getHyperlocalRecord(ctx, db, key)
+		if err != nil {
+			log.Errorf("getHyperlocalRecord: %s", err)
+			hyperlocalMutex.Unlock()
+			continue
+		}
+
+		if hyperlocal == nil {
+			hyperlocal = &Hyperlocal{}
+		}
+
+		hyperlocal.updateFromHyperlocalProto(raw.Data, raw.Timestamp)
+		saveHyperlocalRecord(ctx, db, hyperlocal)
+
+		hyperlocalMutex.Unlock()
 	}
 }
 
