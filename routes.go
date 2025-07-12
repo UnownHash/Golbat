@@ -29,6 +29,7 @@ type ProtoData struct {
 	ScanContext string
 	Lat         float64
 	Lon         float64
+	TimestampMs int64
 }
 
 type InboundRawData struct {
@@ -65,6 +66,8 @@ func questsHeldHasARTask(quests_held any) *bool {
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	var r *http.Request = c.Request
+
+	dataReceivedTimestamp := time.Now().UnixMilli()
 
 	authHeader := r.Header.Get("Authorization")
 	if config.Config.RawBearer != "" {
@@ -173,6 +176,13 @@ func Raw(c *gin.Context) {
 				lonTarget, _ = v.(float64)
 			}
 
+			if v := raw["timestamp_ms"]; v != nil {
+				ts, _ := v.(int64)
+				if ts > 0 {
+					dataReceivedTimestamp = ts
+				}
+			}
+
 			contents, ok := raw["contents"].([]interface{})
 			if !ok {
 				decodeError = true
@@ -277,6 +287,7 @@ func Raw(c *gin.Context) {
 				Lat:         latTarget,
 				Lon:         lonTarget,
 				ScanContext: scanContext,
+				TimestampMs: dataReceivedTimestamp,
 			}
 			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
 			if request != "" {
@@ -473,6 +484,21 @@ func GetPokestop(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, pokestop)
+}
+
+func GetGym(c *gin.Context) {
+	gymId := c.Param("gym_id")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	gym, err := decoder.GetGymRecord(ctx, dbDetails, gymId)
+	cancel()
+	if err != nil {
+		log.Warnf("GET /api/gym/id/:gym_id/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gym)
 }
 
 func GetDevices(c *gin.Context) {

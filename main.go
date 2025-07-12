@@ -222,6 +222,10 @@ func main() {
 		StartIncidentExpiry(db)
 	}
 
+	if cfg.Cleanup.Tappables == true {
+		StartTappableExpiry(db)
+	}
+
 	if cfg.Cleanup.Quests == true {
 		StartQuestExpiry(db)
 	}
@@ -263,6 +267,7 @@ func main() {
 	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
 	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
+	apiGroup.GET("/gym/id/:gym_id", GetGym)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
@@ -380,7 +385,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeOpenInvasion(ctx, protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_FORT_DETAILS:
 		result = decodeFortDetails(ctx, protoData.Data)
 		processed = true
@@ -392,7 +396,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
 		if getScanParameters(protoData).ProcessPokemon {
-			result = decodeEncounter(ctx, protoData.Data, protoData.Account)
+			result = decodeEncounter(ctx, protoData.Data, protoData.Account, protoData.TimestampMs)
 		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
@@ -403,19 +407,15 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		processed = true
 	case pogo.Method_METHOD_GET_PLAYER:
 		ignore = true
-		break
 	case pogo.Method_METHOD_GET_HOLOHOLO_INVENTORY:
 		ignore = true
-		break
 	case pogo.Method_METHOD_CREATE_COMBAT_CHALLENGE:
 		ignore = true
-		break
 	case pogo.Method(pogo.InternalPlatformClientAction_INTERNAL_PROXY_SOCIAL_ACTION):
 		if protoData.Request != nil {
 			result = decodeSocialActionWithRequest(protoData.Request, protoData.Data)
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_MAP_FORTS:
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
@@ -428,7 +428,6 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			result = decodeGetContestData(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-		break
 	case pogo.Method_METHOD_GET_POKEMON_SIZE_CONTEST_ENTRY:
 		// Request is essential to decode this
 		if protoData.Request != nil {
@@ -437,14 +436,28 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 			}
 			processed = true
 		}
-		break
 	case pogo.Method_METHOD_GET_STATION_DETAILS:
 		if getScanParameters(protoData).ProcessStations {
 			// Request is essential to decode this
 			result = decodeGetStationDetails(ctx, protoData.Request, protoData.Data)
 		}
 		processed = true
-
+	case pogo.Method_METHOD_PROCESS_TAPPABLE:
+		if getScanParameters(protoData).ProcessTappables {
+			// Request is essential to decode this
+			result = decodeTappable(ctx, protoData.Request, protoData.Data, protoData.Account, protoData.TimestampMs)
+		}
+		processed = true
+	case pogo.Method_METHOD_GET_EVENT_RSVPS:
+		if getScanParameters(protoData).ProcessGyms {
+			result = decodeGetEventRsvp(ctx, protoData.Request, protoData.Data)
+		}
+		processed = true
+	case pogo.Method_METHOD_GET_EVENT_RSVP_COUNT:
+		if getScanParameters(protoData).ProcessGyms {
+			result = decodeGetEventRsvpCount(ctx, protoData.Data)
+		}
+		processed = true
 	default:
 		log.Debugf("Did not know hook type %s", pogo.Method(method))
 	}
@@ -703,7 +716,7 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
-func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
+func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
@@ -713,13 +726,13 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string) string {
 
 	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
 		statsCollector.IncDecodeEncounter("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
+		res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
 			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
 		return res
 	}
 
 	statsCollector.IncDecodeEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
 
 func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
@@ -959,4 +972,80 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 	}
 
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
+}
+
+func decodeTappable(ctx context.Context, request, data []byte, username string, timestampMs int64) string {
+	var tappable pogo.ProcessTappableOutProto
+	if err := proto.Unmarshal(data, &tappable); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse ProcessTappableOutProto %s", err)
+	}
+
+	var tappableRequest pogo.ProcessTappableProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &tappableRequest); err != nil {
+			log.Errorf("Failed to parse %s", err)
+			return fmt.Sprintf("Failed to parse ProcessTappableProto %s", err)
+		}
+	}
+
+	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
+	}
+	var result string
+	if encounter := tappable.GetEncounter(); encounter != nil {
+		result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, &tappableRequest, encounter, username, timestampMs)
+	}
+	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable, timestampMs)
+}
+
+func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string {
+	var rsvp pogo.GetEventRsvpsOutProto
+	if err := proto.Unmarshal(data, &rsvp); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse GetEventRsvpsOutProto %s", err)
+	}
+
+	var rsvpRequest pogo.GetEventRsvpsProto
+	if request != nil {
+		if err := proto.Unmarshal(request, &rsvpRequest); err != nil {
+			log.Errorf("Failed to parse %s", err)
+			return fmt.Sprintf("Failed to parse GetEventRsvpsProto %s", err)
+		}
+	}
+
+	if rsvp.Status != pogo.GetEventRsvpsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetEventRsvpsOutProto non-success status %s", rsvp.Status)
+	}
+
+	switch op := rsvpRequest.EventDetails.(type) {
+	case *pogo.GetEventRsvpsProto_Raid:
+		return decoder.UpdateGymRecordWithRsvpProto(ctx, dbDetails, op.Raid, &rsvp)
+	case *pogo.GetEventRsvpsProto_GmaxBattle:
+		return "Unsupported GmaxBattle Rsvp received"
+	}
+
+	return "Failed to parse GetEventRsvpsProto - unknown event type"
+}
+
+func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
+	var rsvp pogo.GetEventRsvpCountOutProto
+	if err := proto.Unmarshal(data, &rsvp); err != nil {
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse GetEventRsvpCountOutProto %s", err)
+	}
+
+	if rsvp.Status != pogo.GetEventRsvpCountOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.Status)
+	}
+
+	var clearLocations []string
+	for _, rsvpDetails := range rsvp.RsvpDetails {
+		if rsvpDetails.MaybeCount == 0 && rsvpDetails.GoingCount == 0 {
+			clearLocations = append(clearLocations, rsvpDetails.LocationId)
+			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.LocationId)
+		}
+	}
+
+	return "Cleared RSVP @ " + strings.Join(clearLocations, ", ")
 }
