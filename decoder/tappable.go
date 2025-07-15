@@ -16,18 +16,18 @@ import (
 )
 
 type Tappable struct {
-	Id                      uint64      `db:"id"`
-	Lat                     float64     `db:"lat"`
-	Lon                     float64     `db:"lon"`
-	FortId                  null.String `db:"fort_id"` // either fortId or spawnpointId are given
-	SpawnId                 null.Int    `db:"spawn_id"`
-	Type                    string      `db:"type"`
-	Encounter               null.Int    `db:"pokemon_id"`
-	ItemId                  null.Int    `db:"item_id"`
-	Count                   null.Int    `db:"count"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
-	Updated                 int64       `db:"updated"`
+	Id                      uint64      `db:"id" json:"id"`
+	Lat                     float64     `db:"lat" json:"lat"`
+	Lon                     float64     `db:"lon" json:"lon"`
+	FortId                  null.String `db:"fort_id" json:"fort_id"` // either fortId or spawnpointId are given
+	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
+	Type                    string      `db:"type" json:"type"`
+	Encounter               null.Int    `db:"pokemon_id" json:"pokemon_id"`
+	ItemId                  null.Int    `db:"item_id" json:"item_id"`
+	Count                   null.Int    `db:"count" json:"count"`
+	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
+	Updated                 int64       `db:"updated" json:"updated"`
 }
 
 func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.DbDetails, tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto, timestampMs int64) {
@@ -130,7 +130,7 @@ func (ta *Tappable) setUnknownTimestamp(now int64) {
 	}
 }
 
-func getTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, error) {
+func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, error) {
 	inMemoryTappable := tappableCache.Get(id)
 	if inMemoryTappable != nil {
 		tappable := inMemoryTappable.Value()
@@ -153,7 +153,7 @@ func getTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 }
 
 func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
-	oldTappable, _ := getTappableRecord(ctx, details, tappable.Id)
+	oldTappable, _ := GetTappableRecord(ctx, details, tappable.Id)
 	now := time.Now().Unix()
 	if oldTappable != nil && !hasChangesTappable(oldTappable, tappable) {
 		return
@@ -219,7 +219,7 @@ func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessT
 	tappableMutex.Lock()
 	defer tappableMutex.Unlock()
 
-	tappable, err := getTappableRecord(ctx, db, id)
+	tappable, err := GetTappableRecord(ctx, db, id)
 	if err != nil {
 		log.Printf("Get tappable %s", err)
 		return "Error getting tappable"
