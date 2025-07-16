@@ -8,8 +8,7 @@ CREATE TABLE `hyperlocal` (
  `challenge_bonus_key` VARCHAR(255) NOT NULL,
  `updated_ms`          BIGINT NOT NULL,
  PRIMARY KEY(`experiment_id`,`lat`,`lon`),
- KEY `ix_end_ms` (`end_ms`),
- KEY `ix_updated_ms` (`updated_ms`)
+ KEY `ix_end_ms` (`end_ms`,`lat`,`lon`)
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4
   COLLATE = utf8mb4_general_ci;
