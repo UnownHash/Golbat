@@ -44,6 +44,7 @@ func ReadConfig() (configDefinition, error) {
 			Quests:      true,
 			Incidents:   true,
 			Tappables:   true,
+			Hyperlocals: true,
 			StatsDays:   7,
 			DeviceHours: 24,
 		},

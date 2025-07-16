@@ -438,7 +438,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
 			}
-			if info.ShinyProbability > 0.0 {
+			if info.ShinyProbability != 0.0 {
 				infoData["shiny_probability"] = info.ShinyProbability
 			}
 			if display := info.PokemonDisplay; display != nil {
