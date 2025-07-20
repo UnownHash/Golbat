@@ -48,6 +48,7 @@ func (col *noopCollector) SetLures(int32, float64)                              
 func (col *noopCollector) SetQuests(float64, float64)                            {}
 func (col *noopCollector) IncPokemons(bool, null.String)                         {}
 func (col *noopCollector) DecPokemons(bool, null.String)                         {}
+func (col *noopCollector) UpdateMaxBattleCount([]geo.AreaName, int64)            {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}
