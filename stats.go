@@ -215,6 +215,36 @@ func StartTappableExpiry(db *sqlx.DB) {
 	}()
 }
 
+func StartHyperlocalExpiry(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Hour + 30*time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+
+			var result sql.Result
+			var err error
+
+			// Delete expired hyperlocals where end_ms is in the past
+			result, err = db.Exec("DELETE FROM hyperlocal WHERE end_ms < UNIX_TIMESTAMP() * 1000;")
+
+			elapsed := time.Since(start)
+
+			if err != nil {
+				log.Errorf("DB - Cleanup of hyperlocal table error %s", err)
+			} else {
+				rows, _ := result.RowsAffected()
+				log.Infof("DB - Cleanup of hyperlocal table took %s (%d rows)", elapsed, rows)
+
+				// Clear the hyperlocal cache if we deleted any rows
+				if rows > 0 {
+					decoder.ClearHyperlocalCache()
+				}
+			}
+		}
+	}()
+}
+
 func StartQuestExpiry(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Hour + 1*time.Minute)
 	go func() {
