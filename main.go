@@ -826,14 +826,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newNearbyPokemon []decoder.RawNearbyPokemonData
 	var newMapPokemon []decoder.RawMapPokemonData
 	var newMapCells []uint64
-	var cellsToBeCleaned []uint64
 
 	for _, mapCell := range decodedGmo.MapCell {
 		if isCellNotEmpty(mapCell) {
 			newMapCells = append(newMapCells, mapCell.S2CellId)
-			if cellContainsForts(mapCell) {
-				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
-			}
 		}
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
@@ -872,7 +868,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				decoder.ClearRemovedForts(ctx, dbDetails, cellsToBeCleaned)
+				decoder.ClearRemovedForts(ctx, dbDetails, newMapCells)
 			}()
 		}
 	}
@@ -899,10 +895,6 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
 	return len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
-}
-
-func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Fort) > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
