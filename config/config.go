@@ -24,6 +24,7 @@ type configDefinition struct {
 	Pvp                 pvp        `koanf:"pvp"`
 	Koji                koji       `koanf:"koji"`
 	Tuning              tuning     `koanf:"tuning"`
+	Weather             weather    `koanf:"weather"`
 	ScanRules           []scanRule `koanf:"scan_rules"`
 }
 
@@ -124,18 +125,25 @@ type tuning struct {
 }
 
 type scanRule struct {
-	Areas            []string       `koanf:"areas"`
-	AreaNames        []geo.AreaName `koanf:"-"`
-	ScanContext      []string       `koanf:"context"`
-	ProcessPokemon   *bool          `koanf:"pokemon"`
-	ProcessWilds     *bool          `koanf:"wild_pokemon"`
-	ProcessNearby    *bool          `koanf:"nearby_pokemon"`
-	ProcessWeather   *bool          `koanf:"weather"`
-	ProcessCells     *bool          `koanf:"cells"`
-	ProcessPokestops *bool          `koanf:"pokestops"`
-	ProcessGyms      *bool          `koanf:"gyms"`
-	ProcessStations  *bool          `koanf:"stations"`
-	ProcessTappables *bool          `koanf:"tappables"`
+	Areas                    []string       `koanf:"areas"`
+	AreaNames                []geo.AreaName `koanf:"-"`
+	ScanContext              []string       `koanf:"context"`
+	ProcessPokemon           *bool          `koanf:"pokemon"`
+	ProcessWilds             *bool          `koanf:"wild_pokemon"`
+	ProcessNearby            *bool          `koanf:"nearby_pokemon"`
+	ProcessWeather           *bool          `koanf:"weather"`
+	ProcessCells             *bool          `koanf:"cells"`
+	ProcessPokestops         *bool          `koanf:"pokestops"`
+	ProcessGyms              *bool          `koanf:"gyms"`
+	ProcessStations          *bool          `koanf:"stations"`
+	ProcessTappables         *bool          `koanf:"tappables"`
+	ProactiveIVSwitching     *bool          `koanf:"proactive_iv_switching"`
+	ProactiveIVSwitchingToDB *bool          `koanf:"proactive_iv_switching_to_db"`
+}
+
+type weather struct {
+	ProactiveIVSwitching     bool `koanf:"proactive_iv_switching"`
+	ProactiveIVSwitchingToDB bool `koanf:"proactive_iv_switching_to_db"`
 }
 
 var Config configDefinition

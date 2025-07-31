@@ -79,7 +79,8 @@ func weatherCellIdFromLatLon(lat, lon float64) int64 {
 	return int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10))
 }
 
-func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) *Weather {
+func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) (oldGameplayCondition null.Int) {
+	oldGameplayCondition = weather.GameplayCondition
 	weather.Id = clientWeather.S2CellId
 	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
 	weather.Latitude = s2cell.CapBound().RectBound().Center().Lat.Degrees()
@@ -97,7 +98,7 @@ func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.
 		weather.Severity = null.IntFrom(int64(alert.Severity))
 		weather.WarnWeather = null.BoolFrom(alert.WarnWeather)
 	}
-	return weather
+	return
 }
 
 // hasChangesWeather compares two Weather structs

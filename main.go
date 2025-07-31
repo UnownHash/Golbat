@@ -191,6 +191,9 @@ func main() {
 	}
 
 	decoder.InitialiseOhbem()
+	if cfg.Weather.ProactiveIVSwitching {
+		_ = decoder.WatchMasterFileData()
+	}
 	decoder.LoadStatsGeofences()
 	InitDeviceCache()
 
@@ -856,11 +859,17 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
 	}
+	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {
-		decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather)
+		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather)
 	}
 	if scanParameters.ProcessPokemon {
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
+		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
+			for _, weatherUpdate := range weatherUpdates {
+				decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB)
+			}
+		}
 	}
 	if scanParameters.ProcessStations {
 		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
