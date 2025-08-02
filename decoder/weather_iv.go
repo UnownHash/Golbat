@@ -176,7 +176,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 				boostedWeathers = findBoostedWeathers(pokemon.PokemonId, pokemon.Form.ValueOrZero())
 				if boostedWeathers != 0 {
 					var newWeather int32
-					if boostedWeathers|uint8(1)<<weatherUpdate.NewWeather != 0 {
+					if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
 						newWeather = weatherUpdate.NewWeather
 					}
 					if int64(newWeather) != pokemon.Weather.ValueOrZero() {
@@ -199,5 +199,5 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonMutex.Unlock()
 		return true
 	})
-	log.Infof("ProactiveIVSwitch - scan time %s (locked time %s), %d/%d/%d/%d cp scanned/locked/updated/cp updated", time.Since(start), lockedTime, pokemonExamined, pokemonLocked, pokemonUpdated, pokemonCpUpdated)
+	log.Infof("ProactiveIVSwitch - scan time %s (locked time %s), %d/%d/%d/%d scanned/locked/updated/cp updated", time.Since(start), lockedTime, pokemonExamined, pokemonLocked, pokemonUpdated, pokemonCpUpdated)
 }
