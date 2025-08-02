@@ -115,13 +115,14 @@ func findBoostedWeathers(pokemonId int16, form int64) (result uint8) {
 	}
 	if form > 0 {
 		formData, ok := pokemon.Forms[int(form)]
-		if ok {
+		if !ok {
+			log.Warnf("Unknown Form %d for PokemonId %d", form, pokemonId)
+		} else if formData.Types != nil {
 			for _, t := range formData.Types {
 				result |= boostedWeatherLookup[t]
 			}
 			return
 		}
-		log.Warnf("Unknown Form %d for PokemonId %d", form, pokemonId)
 	}
 	for _, t := range pokemon.Types {
 		result |= boostedWeatherLookup[t]
@@ -138,13 +139,19 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	cellLo := cellBound.Lo()
 	cellHi := cellBound.Hi()
 
+	start := time.Now()
 	pokemonTreeMutex.RLock()
 	pokemonTree2 := pokemonTree.Copy()
 	pokemonTreeMutex.RUnlock()
+	lockedTime := time.Since(start)
 
-	start := time.Now()
 	startUnix := start.Unix()
+	pokemonExamined := 0
+	pokemonLocked := 0
+	pokemonUpdated := 0
+	pokemonCpUpdated := 0
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
+		pokemonExamined++
 		pokemonEntry := pokemonCache.Get(pokemonId)
 		if pokemonEntry == nil {
 			return true
@@ -161,6 +168,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		}
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(pokemonId)
 		pokemonMutex.Lock()
+		pokemonLocked++
 		pokemonEntry = pokemonCache.Get(pokemonId) // refresh copy after acquiring mutex
 		if pokemonEntry != nil {
 			pokemon = pokemonEntry.Value()
@@ -172,6 +180,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 						newWeather = weatherUpdate.NewWeather
 					}
 					if int64(newWeather) != pokemon.Weather.ValueOrZero() {
+						pokemonUpdated++
 						pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
 						if !pokemon.Cp.Valid {
 							pokemon.Weather = null.IntFrom(int64(newWeather))
@@ -179,6 +188,9 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 								weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 							})
 							savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, startUnix)
+							if pokemon.Cp.Valid {
+								pokemonCpUpdated++
+							}
 						}
 					}
 				}
@@ -187,4 +199,5 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonMutex.Unlock()
 		return true
 	})
+	log.Infof("ProactiveIVSwitch - scan time %s (locked time %s), %d/%d/%d/%d cp scanned/locked/updated/cp updated", time.Since(start), lockedTime, pokemonExamined, pokemonLocked, pokemonUpdated, pokemonCpUpdated)
 }
