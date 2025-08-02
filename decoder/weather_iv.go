@@ -164,7 +164,14 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		cachedPokemonId := pokemon.PokemonId
 		cachedForm := pokemon.Form.ValueOrZero()
 		boostedWeathers := findBoostedWeathers(cachedPokemonId, cachedForm)
-		if boostedWeathers == 0 ||
+		if boostedWeathers == 0 {
+			return true
+		}
+		var newWeather int32
+		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
+			newWeather = weatherUpdate.NewWeather
+		}
+		if int64(newWeather) == pokemon.Weather.ValueOrZero() ||
 			!weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon))) {
 			return true
 		}
@@ -174,23 +181,17 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonEntry = pokemonCache.Get(pokemonId) // refresh copy after acquiring mutex
 		if pokemonEntry != nil {
 			pokemon = pokemonEntry.Value()
-			if cachedPokemonId == pokemon.PokemonId && cachedForm == pokemon.Form.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {
-				var newWeather int32
-				if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
-					newWeather = weatherUpdate.NewWeather
-				}
-				if int64(newWeather) != pokemon.Weather.ValueOrZero() {
+			if cachedPokemonId == pokemon.PokemonId && cachedForm == pokemon.Form.ValueOrZero() && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {
+				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
+				if !pokemon.Cp.Valid {
+					pokemon.Weather = null.IntFrom(int64(newWeather))
+					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
+						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
+					})
+					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, startUnix)
 					pokemonUpdated++
-					pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
-					if !pokemon.Cp.Valid {
-						pokemon.Weather = null.IntFrom(int64(newWeather))
-						pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
-							weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
-						})
-						savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, startUnix)
-						if pokemon.Cp.Valid {
-							pokemonCpUpdated++
-						}
+					if pokemon.Cp.Valid {
+						pokemonCpUpdated++
 					}
 				}
 			}
