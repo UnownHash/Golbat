@@ -107,13 +107,13 @@ type WeatherUpdate struct {
 
 var boostedWeatherLookup = []uint8{0, 8, 16, 32, 16, 2, 8, 4, 128, 64, 2, 4, 2, 4, 32, 64, 32, 128, 16}
 
-func findBoostedWeathers(pokemonId int16, form int64) (result uint8) {
+func findBoostedWeathers(pokemonId int16, form int64, isDitto bool) (result uint8) {
 	pokemon, ok := masterFileData.Pokemon[int(pokemonId)]
 	if !ok {
 		log.Warnf("Unknown PokemonId %d", pokemonId)
 		return
 	}
-	if form > 0 {
+	if !isDitto && form > 0 {
 		formData, ok := pokemon.Forms[int(form)]
 		if !ok {
 			log.Warnf("Unknown Form %d for PokemonId %d", form, pokemonId)
@@ -163,7 +163,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		}
 		cachedPokemonId := pokemon.PokemonId
 		cachedForm := pokemon.Form.ValueOrZero()
-		boostedWeathers := findBoostedWeathers(cachedPokemonId, cachedForm)
+		boostedWeathers := findBoostedWeathers(cachedPokemonId, cachedForm, pokemon.IsDitto)
 		if boostedWeathers == 0 {
 			return true
 		}
