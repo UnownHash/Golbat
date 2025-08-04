@@ -132,13 +132,13 @@ type Pokemon struct {
 //)
 
 func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
-	if db.UsePokemonCache {
-		inMemoryPokemon := pokemonCache.Get(encounterId)
-		if inMemoryPokemon != nil {
-			pokemon := inMemoryPokemon.Value()
-			return &pokemon, nil
-		}
+	inMemoryPokemon := pokemonCache.Get(encounterId)
+	if inMemoryPokemon != nil {
+		pokemon := inMemoryPokemon.Value()
+		newPokemonValue := *pokemon // Return a pointer to a copy of this value
+		return &newPokemonValue, nil
 	}
+
 	if config.Config.PokemonMemoryOnly {
 		return nil, nil
 	}
@@ -160,10 +160,11 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 		return nil, err
 	}
 
-	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
-	}
-	pokemonRtreeUpdatePokemonOnGet(&pokemon)
+	basePokemonValue := pokemon // create a copy of the pokemon and use this for the base of the in-memory cache
+
+	pokemonCache.Set(encounterId, &basePokemonValue, ttlcache.DefaultTTL)
+
+	pokemonRtreeUpdatePokemonOnGet(&basePokemonValue)
 	return &pokemon, nil
 }
 
@@ -172,11 +173,21 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	if pokemon != nil || err != nil {
 		return pokemon, err
 	}
+
 	pokemon = &Pokemon{Id: encounterId}
-	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
-	}
+	basePokemonValue := *pokemon
+	pokemonCache.Set(encounterId, &basePokemonValue, ttlcache.DefaultTTL)
+
 	return pokemon, nil
+}
+
+// peekPokemonRecord returns an unsafe (should not be modified) view of the pokemon record in cache
+func peekPokemonRecord(encounterId uint64) *Pokemon {
+	inMemoryPokemon := pokemonCache.Get(encounterId)
+	if inMemoryPokemon != nil {
+		return inMemoryPokemon.Value()
+	}
+	return nil
 }
 
 // hasChangesPokemon compares two Pokemon structs
@@ -222,7 +233,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter bool, now int64) {
-	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
+	oldPokemon := peekPokemonRecord(pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
@@ -404,9 +415,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
-	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
-	}
+	pokemonCache.Set(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 }
 
 func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, new *Pokemon, areas []geo.AreaName) {

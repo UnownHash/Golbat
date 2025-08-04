@@ -66,7 +66,7 @@ var tappableCache *ttlcache.Cache[uint64, Tappable]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
-var pokemonCache *ttlcache.Cache[uint64, Pokemon]
+var pokemonCache *ttlcache.Cache[uint64, *Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
@@ -134,9 +134,9 @@ func initDataCache() {
 	)
 	go spawnpointCache.Start()
 
-	pokemonCache = ttlcache.New[uint64, Pokemon](
-		ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
+	pokemonCache = ttlcache.New[uint64, *Pokemon](
+		ttlcache.WithTTL[uint64, *Pokemon](60*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, *Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
 	)
 	go pokemonCache.Start()
 	initPokemonRtree()

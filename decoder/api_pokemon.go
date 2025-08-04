@@ -130,7 +130,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 			if found {
 				if pokemonCacheEntry := pokemonCache.Get(pokemonId); pokemonCacheEntry != nil {
 					pokemon := pokemonCacheEntry.Value()
-					results = append(results, &pokemon)
+					results = append(results, pokemon)
 					pokemonMatched++
 
 					if pokemonMatched > maxPokemon {
@@ -148,12 +148,8 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 	return results, nil
 }
 
-// Get one result
+// Get one result, do not allow changes
 
 func GetOnePokemon(pokemonId uint64) *Pokemon {
-	if item := pokemonCache.Get(pokemonId); item != nil {
-		pokemon := item.Value()
-		return &pokemon
-	}
-	return nil
+	return peekPokemonRecord(pokemonId)
 }
