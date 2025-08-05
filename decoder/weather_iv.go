@@ -150,13 +150,14 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	pokemonLocked := 0
 	pokemonUpdated := 0
 	pokemonCpUpdated := 0
+	var pokemon Pokemon
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
 		pokemonExamined++
 		pokemonEntry := pokemonCache.Get(pokemonId)
 		if pokemonEntry == nil {
 			return true
 		}
-		pokemon := pokemonEntry.Value()
+		pokemon = pokemonEntry.Value()
 		if !pokemon.AtkIv.Valid && len(pokemon.GolbatInternal) == 0 && len(pokemon.internal.ScanHistory) == 0 || // skip if no encounter history
 			pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
 			return true
