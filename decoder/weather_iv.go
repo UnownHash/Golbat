@@ -152,6 +152,9 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	pokemonCpUpdated := 0
 	var pokemon Pokemon
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
+		if !weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(min[1], min[0]))) {
+			return true
+		}
 		pokemonExamined++
 		pokemonLookup, found := pokemonLookupCache.Load(pokemonId)
 		if !found || !pokemonLookup.PokemonLookup.HasEncounterValues {
@@ -165,8 +168,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
 			newWeather = weatherUpdate.NewWeather
 		}
-		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather ||
-			!weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(min[1], min[0]))) {
+		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather {
 			return true
 		}
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(pokemonId)
