@@ -24,6 +24,7 @@ type PokemonLookup struct {
 	PokemonId          int16
 	Form               int16
 	HasEncounterValues bool
+	Weather            int8
 	Atk                int8
 	Def                int8
 	Sta                int8
@@ -83,7 +84,8 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
-		HasEncounterValues: pokemon.Move1.Valid,
+		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
+		Weather:            int8(valueOrMinus1(pokemon.Weather)),
 		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),
 		Sta:                int8(valueOrMinus1(pokemon.StaIv)),

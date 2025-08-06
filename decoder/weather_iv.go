@@ -107,13 +107,13 @@ type WeatherUpdate struct {
 
 var boostedWeatherLookup = []uint8{0, 8, 16, 32, 16, 2, 8, 4, 128, 64, 2, 4, 2, 4, 32, 64, 32, 128, 16}
 
-func findBoostedWeathers(pokemonId int16, form int64, isDitto bool) (result uint8) {
+func findBoostedWeathers(pokemonId, form int16) (result uint8) {
 	pokemon, ok := masterFileData.Pokemon[int(pokemonId)]
 	if !ok {
 		log.Warnf("Unknown PokemonId %d", pokemonId)
 		return
 	}
-	if !isDitto && form > 0 {
+	if form > 0 {
 		formData, ok := pokemon.Forms[int(form)]
 		if !ok {
 			log.Warnf("Unknown Form %d for PokemonId %d", form, pokemonId)
@@ -153,18 +153,14 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	var pokemon Pokemon
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
 		pokemonExamined++
-		pokemonEntry := pokemonCache.Get(pokemonId)
-		if pokemonEntry == nil {
+		pokemonLookup, found := pokemonLookupCache.Load(pokemonId)
+		if !found {
 			return true
 		}
-		pokemon = pokemonEntry.Value()
-		if !pokemon.AtkIv.Valid && len(pokemon.GolbatInternal) == 0 && len(pokemon.internal.ScanHistory) == 0 || // skip if no encounter history
-			pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
+		if !pokemonLookup.PokemonLookup.HasEncounterValues {
 			return true
 		}
-		cachedPokemonId := pokemon.PokemonId
-		cachedForm := pokemon.Form.ValueOrZero()
-		boostedWeathers := findBoostedWeathers(cachedPokemonId, cachedForm, pokemon.IsDitto)
+		boostedWeathers := findBoostedWeathers(pokemonLookup.PokemonLookup.PokemonId, pokemonLookup.PokemonLookup.Form)
 		if boostedWeathers == 0 {
 			return true
 		}
@@ -172,17 +168,17 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
 			newWeather = weatherUpdate.NewWeather
 		}
-		if int64(newWeather) == pokemon.Weather.ValueOrZero() ||
-			!weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon))) {
+		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather ||
+			!weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(min[0], min[1]))) {
 			return true
 		}
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(pokemonId)
 		pokemonMutex.Lock()
 		pokemonLocked++
-		pokemonEntry = pokemonCache.Get(pokemonId) // refresh copy after acquiring mutex
+		pokemonEntry := pokemonCache.Get(pokemonId)
 		if pokemonEntry != nil {
 			pokemon = pokemonEntry.Value()
-			if cachedPokemonId == pokemon.PokemonId && cachedForm == pokemon.Form.ValueOrZero() && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {
+			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {
 				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
 					pokemon.Weather = null.IntFrom(int64(newWeather))
@@ -200,5 +196,5 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonMutex.Unlock()
 		return true
 	})
-	log.Infof("ProactiveIVSwitch - scan time %s (locked time %s), %d/%d/%d/%d scanned/locked/updated/cp updated", time.Since(start), lockedTime, pokemonExamined, pokemonLocked, pokemonUpdated, pokemonCpUpdated)
+	log.Infof("ProactiveIVSwitch - %d->%d, scan time %s (locked time %s), %d/%d/%d/%d scanned/locked/updated/cp updated", weatherUpdate.S2CellId, weatherUpdate.NewWeather, time.Since(start), lockedTime, pokemonExamined, pokemonLocked, pokemonUpdated, pokemonCpUpdated)
 }
