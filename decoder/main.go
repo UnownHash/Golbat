@@ -76,10 +76,10 @@ var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
 var stationStripedMutex = stripedmutex.New(128)
-var tappableStripedMutex = intstripedmutex.New(512)
+var tappableStripedMutex = intstripedmutex.New(563)
 var incidentStripedMutex = stripedmutex.New(128)
-var pokemonStripedMutex = intstripedmutex.New(1024)
-var weatherStripedMutex = intstripedmutex.New(128)
+var pokemonStripedMutex = intstripedmutex.New(1103)
+var weatherStripedMutex = intstripedmutex.New(157)
 var s2cellStripedMutex = stripedmutex.New(1024)
 var routeStripedMutex = stripedmutex.New(128)
 
