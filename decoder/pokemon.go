@@ -221,7 +221,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		!nullFloatAlmostEqual(old.Capture3, new.Capture3, floatTolerance)
 }
 
-func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB bool, now int64) {
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
@@ -399,7 +399,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
-	if writeDB {
+	if webhook {
 		createPokemonWebhooks(ctx, db, oldPokemon, pokemon, areas)
 	}
 	updatePokemonStats(oldPokemon, pokemon, areas, now)
@@ -1410,7 +1410,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	}
 
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, timestamp/1000)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
@@ -1441,7 +1441,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, time.Now().Unix())
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)
@@ -1462,7 +1462,7 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username, timestampMs)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, time.Now().Unix())
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	updateEncounterStats(pokemon)

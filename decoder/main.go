@@ -405,7 +405,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 								log.Debugf("DELAYED UPDATE: Updating pokemon %d from wild", encounterId)
 
 								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
-								savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, updateTime)
+								savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
 							}
 						}
 					}(wild.Data, int64(wild.Cell), wild.Timestamp)
@@ -426,7 +426,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
 				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, nearby.Timestamp/1000)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
 			}
 
 			pokemonMutex.Unlock()
@@ -450,7 +450,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
 				//log.Infof("Processed stored disk encounter")
 			}
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, mapPokemon.Timestamp/1000)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
 		}
 		pokemonMutex.Unlock()
 	}

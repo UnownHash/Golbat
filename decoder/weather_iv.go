@@ -184,7 +184,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 					})
-					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, startUnix)
+					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, startUnix)
 					pokemonUpdated++
 					if pokemon.Cp.Valid {
 						pokemonCpUpdated++
