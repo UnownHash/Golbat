@@ -353,12 +353,13 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, wild := range wildPokemonList {
+		encounterId := wild.Data.EncounterId
+		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
+		pokemonMutex.Lock()
+
 		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
 
 		if scanParameters.ProcessWild {
-			encounterId := wild.Data.EncounterId
-			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-			pokemonMutex.Lock()
 			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
@@ -388,8 +389,8 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 					}(wild.Data, int64(wild.Cell), wild.Timestamp)
 				}
 			}
-			pokemonMutex.Unlock()
 		}
+		pokemonMutex.Unlock()
 	}
 
 	if scanParameters.ProcessNearby {
