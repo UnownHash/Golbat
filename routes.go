@@ -78,17 +78,8 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 5*1048576))
-	if err != nil {
-		statsCollector.IncRawRequests("error", "io_error")
-		log.Errorf("Raw: Error (1) during HTTP receive %s", err)
-		return
-	}
-	if err := r.Body.Close(); err != nil {
-		statsCollector.IncRawRequests("error", "io_close_error")
-		log.Errorf("Raw: Error (2) during HTTP receive %s", err)
-		return
-	}
+	rawDecoder := json.NewDecoder(io.LimitReader(r.Body, 5*1048576))
+	defer r.Body.Close()
 
 	decodeError := false
 	uuid := ""
@@ -111,7 +102,7 @@ func Raw(c *gin.Context) {
 
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := rawDecoder.Decode(&raw); err != nil {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
@@ -143,7 +134,7 @@ func Raw(c *gin.Context) {
 		account = "Pogodroid"
 	} else {
 		var raw map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := rawDecoder.Decode(&raw); err != nil {
 			decodeError = true
 		} else {
 			if v := raw["have_ar"]; v != nil {
@@ -255,7 +246,7 @@ func Raw(c *gin.Context) {
 
 	if decodeError == true {
 		statsCollector.IncRawRequests("error", "decode")
-		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
+		log.Infof("Raw: Data could not be decoded. From User agent %s", userAgent)
 
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusUnprocessableEntity)
