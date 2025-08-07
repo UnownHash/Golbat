@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -66,7 +67,7 @@ var tappableCache *ttlcache.Cache[uint64, Tappable]
 var weatherCache *ttlcache.Cache[int64, Weather]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
-var pokemonCache *ttlcache.Cache[uint64, Pokemon]
+var pokemonCache []*ttlcache.Cache[uint64, Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
@@ -96,6 +97,22 @@ type gohbemLogger struct{}
 
 func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
+}
+
+func getPokemonCache(key uint64) *ttlcache.Cache[uint64, Pokemon] {
+	return pokemonCache[key%uint64(len(pokemonCache))]
+}
+
+func setPokemonCache(key uint64, value Pokemon, ttl time.Duration) {
+	getPokemonCache(key).Set(key, value, ttl)
+}
+
+func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, Pokemon] {
+	return getPokemonCache(key).Get(key)
+}
+
+func deletePokemonFromCache(key uint64) {
+	getPokemonCache(key).Delete(key)
 }
 
 func initDataCache() {
@@ -134,11 +151,16 @@ func initDataCache() {
 	)
 	go spawnpointCache.Start()
 
-	pokemonCache = ttlcache.New[uint64, Pokemon](
-		ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
-	)
-	go pokemonCache.Start()
+	// pokemon is the most active table. Use an array of caches to increase concurrency for querying ttlcache, which places a global lock for each Get/Set operation
+	// Initialize pokemon cache array: by picking it to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
+	pokemonCache = make([]*ttlcache.Cache[uint64, Pokemon], runtime.NumCPU())
+	for i := 0; i < len(pokemonCache); i++ {
+		pokemonCache[i] = ttlcache.New[uint64, Pokemon](
+			ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
+			ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
+		)
+		go pokemonCache[i].Start()
+	}
 	initPokemonRtree()
 	initFortRtree()
 

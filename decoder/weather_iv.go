@@ -174,7 +174,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(pokemonId)
 		pokemonMutex.Lock()
 		pokemonLocked++
-		pokemonEntry := pokemonCache.Get(pokemonId)
+		pokemonEntry := getPokemonFromCache(pokemonId)
 		if pokemonEntry != nil {
 			pokemon = pokemonEntry.Value()
 			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {

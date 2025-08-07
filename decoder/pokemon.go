@@ -133,7 +133,7 @@ type Pokemon struct {
 
 func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	if db.UsePokemonCache {
-		inMemoryPokemon := pokemonCache.Get(encounterId)
+		inMemoryPokemon := getPokemonFromCache(encounterId)
 		if inMemoryPokemon != nil {
 			pokemon := inMemoryPokemon.Value()
 			return &pokemon, nil
@@ -161,7 +161,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 	}
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +174,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, *pokemon, ttlcache.DefaultTTL)
 	}
 	return pokemon, nil
 }
@@ -325,7 +325,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
-				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
+				deletePokemonFromCache(pokemon.Id) // Force reload of pokemon from database
 				return
 			}
 
@@ -377,7 +377,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
-				pokemonCache.Delete(pokemon.Id) // Force reload of pokemon from database
+				deletePokemonFromCache(pokemon.Id) // Force reload of pokemon from database
 
 				return
 			}
@@ -407,7 +407,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
+		setPokemonCache(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
 	}
 }
 
