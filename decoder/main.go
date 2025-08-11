@@ -456,7 +456,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto) (updates []WeatherUpdate) {
+func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64) (updates []WeatherUpdate) {
 	for _, weatherProto := range p {
 		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.S2CellId))
 		weatherMutex.Lock()
@@ -467,13 +467,16 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 			if weather == nil {
 				weather = &Weather{}
 			}
-			oldWeather := weather.updateWeatherFromClientWeatherProto(weatherProto)
-			saveWeatherRecord(ctx, db, weather)
-			if oldWeather != weather.GameplayCondition {
-				updates = append(updates, WeatherUpdate{
-					S2CellId:   weatherProto.S2CellId,
-					NewWeather: int32(weatherProto.GameplayWeather.GameplayCondition),
-				})
+			if timestampMs >= weather.UpdatedMs {
+				weather.UpdatedMs = timestampMs
+				oldWeather := weather.updateWeatherFromClientWeatherProto(weatherProto)
+				saveWeatherRecord(ctx, db, weather)
+				if oldWeather != weather.GameplayCondition {
+					updates = append(updates, WeatherUpdate{
+						S2CellId:   weatherProto.S2CellId,
+						NewWeather: int32(weatherProto.GameplayWeather.GameplayCondition),
+					})
+				}
 			}
 		}
 		weatherMutex.Unlock()

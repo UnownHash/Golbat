@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/golang/geo/s2"
-	log "github.com/sirupsen/logrus"
 	"golbat/db"
 	"golbat/pogo"
-	"gopkg.in/guregu/null.v4"
 	"net/http"
 	"reflect"
 	"time"
+
+	"github.com/golang/geo/s2"
+	log "github.com/sirupsen/logrus"
+	"gopkg.in/guregu/null.v4"
 )
 
 const masterFileURL = "https://raw.githubusercontent.com/WatWowMap/Masterfile-Generator/master/master-latest-rdm.json"

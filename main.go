@@ -831,6 +831,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
 
+	if len(decodedGmo.MapCell) == 0 {
+		return "Skipping GetMapObjectsOutProto: No map cells found"
+	}
 	for _, mapCell := range decodedGmo.MapCell {
 		if isCellNotEmpty(mapCell) {
 			newMapCells = append(newMapCells, mapCell.S2CellId)
@@ -861,7 +864,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {
-		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather)
+		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather, decodedGmo.MapCell[0].AsOfTimeMs)
 	}
 	if scanParameters.ProcessPokemon {
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
