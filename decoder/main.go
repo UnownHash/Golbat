@@ -86,9 +86,12 @@ var routeStripedMutex = stripedmutex.New(128)
 
 var s2CellLookup = sync.Map{}
 
+var ProactiveIVSwitchSem chan bool
+
 var ohbem *gohbem.Ohbem
 
 func init() {
+	ProactiveIVSwitchSem = make(chan bool, runtime.NumCPU())
 	initDataCache()
 	initLiveStats()
 }

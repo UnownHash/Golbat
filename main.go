@@ -870,7 +870,11 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
 		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
 			for _, weatherUpdate := range weatherUpdates {
-				decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB)
+				go func(weatherUpdate decoder.WeatherUpdate) {
+					decoder.ProactiveIVSwitchSem <- true
+					defer func() { <-decoder.ProactiveIVSwitchSem }()
+					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB)
+				}(weatherUpdate)
 			}
 		}
 	}
