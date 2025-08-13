@@ -61,6 +61,7 @@ func ReadConfig() (configDefinition, error) {
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
 		},
+		MaxConcurrentProactiveIVSwitch: 6,
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))

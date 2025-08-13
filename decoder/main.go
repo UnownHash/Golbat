@@ -91,9 +91,12 @@ var ProactiveIVSwitchSem chan bool
 var ohbem *gohbem.Ohbem
 
 func init() {
-	ProactiveIVSwitchSem = make(chan bool, runtime.NumCPU())
 	initDataCache()
 	initLiveStats()
+}
+
+func InitProactiveIVSwitchSem() {
+	ProactiveIVSwitchSem = make(chan bool, config.Config.MaxConcurrentProactiveIVSwitch)
 }
 
 type gohbemLogger struct{}

@@ -7,25 +7,26 @@ import (
 )
 
 type configDefinition struct {
-	Port                int        `koanf:"port"`
-	GrpcPort            int        `koanf:"grpc_port"`
-	Webhooks            []Webhook  `koanf:"webhooks"`
-	Database            database   `koanf:"database"`
-	Logging             logging    `koanf:"logging"`
-	Sentry              sentry     `koanf:"sentry"`
-	Pyroscope           pyroscope  `koanf:"pyroscope"`
-	Prometheus          Prometheus `koanf:"prometheus"`
-	PokemonMemoryOnly   bool       `koanf:"pokemon_memory_only"`
-	PokemonInternalToDb bool       `koanf:"pokemon_internal_to_db"`
-	TestFortInMemory    bool       `koanf:"test_fort_in_memory"`
-	Cleanup             cleanup    `koanf:"cleanup"`
-	RawBearer           string     `koanf:"raw_bearer"`
-	ApiSecret           string     `koanf:"api_secret"`
-	Pvp                 pvp        `koanf:"pvp"`
-	Koji                koji       `koanf:"koji"`
-	Tuning              tuning     `koanf:"tuning"`
-	Weather             weather    `koanf:"weather"`
-	ScanRules           []scanRule `koanf:"scan_rules"`
+	Port                           int        `koanf:"port"`
+	GrpcPort                       int        `koanf:"grpc_port"`
+	Webhooks                       []Webhook  `koanf:"webhooks"`
+	Database                       database   `koanf:"database"`
+	Logging                        logging    `koanf:"logging"`
+	Sentry                         sentry     `koanf:"sentry"`
+	Pyroscope                      pyroscope  `koanf:"pyroscope"`
+	Prometheus                     Prometheus `koanf:"prometheus"`
+	PokemonMemoryOnly              bool       `koanf:"pokemon_memory_only"`
+	PokemonInternalToDb            bool       `koanf:"pokemon_internal_to_db"`
+	TestFortInMemory               bool       `koanf:"test_fort_in_memory"`
+	Cleanup                        cleanup    `koanf:"cleanup"`
+	RawBearer                      string     `koanf:"raw_bearer"`
+	ApiSecret                      string     `koanf:"api_secret"`
+	Pvp                            pvp        `koanf:"pvp"`
+	Koji                           koji       `koanf:"koji"`
+	Tuning                         tuning     `koanf:"tuning"`
+	Weather                        weather    `koanf:"weather"`
+	ScanRules                      []scanRule `koanf:"scan_rules"`
+	MaxConcurrentProactiveIVSwitch int        `koanf:"max_concurrent_proactive_iv_switch"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {

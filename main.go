@@ -192,6 +192,7 @@ func main() {
 
 	decoder.InitialiseOhbem()
 	if cfg.Weather.ProactiveIVSwitching {
+		decoder.InitProactiveIVSwitchSem()
 		_ = decoder.WatchMasterFileData()
 	}
 	decoder.LoadStatsGeofences()
