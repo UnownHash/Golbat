@@ -26,9 +26,12 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jmoiron/sqlx"
+	vtgrpc "github.com/planetscale/vtprotobuf/codec/grpc"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding"
+	_ "google.golang.org/grpc/encoding/proto"
 )
 
 var db *sqlx.DB
@@ -243,13 +246,15 @@ func main() {
 	if cfg.GrpcPort > 0 {
 		log.Infof("Starting GRPC server on port %d", cfg.GrpcPort)
 		go func() {
+			encoding.RegisterCodec(vtgrpc.Codec{})
+
 			lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.GrpcPort))
 			if err != nil {
 				log.Fatalf("failed to listen: %v", err)
 			}
 			s := grpc.NewServer()
 			pb.RegisterRawProtoServer(s, &grpcRawServer{})
-			pb.RegisterPokemonServer(s, &grpcPokemonServer{})
+			//pb.RegisterPokemonServer(s, &grpcPokemonServer{})
 			log.Printf("grpc server listening at %v", lis.Addr())
 			if err := s.Serve(lis); err != nil {
 				log.Fatalf("failed to serve: %v", err)
