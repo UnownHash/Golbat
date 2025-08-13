@@ -7,6 +7,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"net/http"
+	"os"
 	"reflect"
 	"time"
 
@@ -17,7 +18,13 @@ import (
 
 const masterFileURL = "https://raw.githubusercontent.com/WatWowMap/Masterfile-Generator/master/master-latest-rdm.json"
 
+var masterFileCachePath string = "cache/master-latest-rdm.json"
+
 var errMasterFileFetch = errors.New("can't fetch remote Weather MasterFile")
+var errMasterFileOpen = errors.New("can't open Weather MasterFile")
+var errMasterFileUnmarshall = errors.New("can't unmarshall Weather MasterFile")
+var errMasterFileMarshall = errors.New("can't marshall Weather MasterFile")
+var errMasterFileSave = errors.New("can't save Weather MasterFile")
 
 type MasterFileData struct {
 	Initialized bool                      `json:"-"`
@@ -62,6 +69,44 @@ func fetchMasterFile() (MasterFileData, error) {
 var watcherChan chan bool
 var masterFileData MasterFileData
 
+// FetchMasterFileData Fetch remote MasterFile and keep it in memory.
+func FetchMasterFileData() error {
+	var err error
+	masterFileData, err = fetchMasterFile()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// LoadMasterFileData Load MasterFile from provided filePath and keep it in memory.
+func LoadMasterFileData(filePath string) error {
+	if filePath == "" {
+		filePath = masterFileCachePath
+	}
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return errMasterFileOpen
+	}
+	if err := json.Unmarshal(data, &masterFileData); err != nil {
+		return errMasterFileUnmarshall
+	}
+	masterFileData.Initialized = true
+	return nil
+}
+
+// SaveMasterFileData Save MasterFile from memory to provided location.
+func SaveMasterFileData() error {
+	data, err := json.Marshal(masterFileData)
+	if err != nil {
+		return errMasterFileMarshall
+	}
+	if err := os.WriteFile(masterFileCachePath, data, 0644); err != nil {
+		return errMasterFileSave
+	}
+	return nil
+}
+
 func WatchMasterFileData() error {
 	if watcherChan != nil {
 		return errors.New("Weather MasterFile watcher is already running")
@@ -79,7 +124,7 @@ func WatchMasterFileData() error {
 		for {
 			select {
 			case <-watcherChan:
-				log.Infof("MasterFile Watcher Stopped")
+				log.Infof("Weather MasterFile Watcher Stopped")
 				ticker.Stop()
 				return
 			case <-ticker.C:
@@ -94,6 +139,13 @@ func WatchMasterFileData() error {
 				} else {
 					log.Infof("New Weather MasterFile found! Updating PokemonData")
 					masterFileData = pokemonData // overwrite PokemonData using new MasterFile
+					masterFileData.Initialized = true
+					err = SaveMasterFileData()
+					if err != nil {
+						log.Warnf("Storing Weather MasterFile cache under %s has failed: %v", masterFileCachePath, err)
+					} else {
+						log.Infof("Weather MasterFile cache saved to %s", masterFileCachePath)
+					}
 				}
 			}
 		}

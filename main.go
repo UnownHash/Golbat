@@ -193,6 +193,20 @@ func main() {
 	decoder.InitialiseOhbem()
 	if cfg.Weather.ProactiveIVSwitching {
 		decoder.InitProactiveIVSwitchSem()
+
+		// Try to fetch from remote first, fallback to cache, then fallback to bundled file
+		if err := decoder.FetchMasterFileData(); err != nil {
+			if err2 := decoder.LoadMasterFileData(""); err2 != nil {
+				_ = decoder.LoadMasterFileData("pogo/master-latest-rdm.json")
+				log.Errorf("Weather MasterFile fetch failed. Loading from cache failed: %s. Loading from pogo/master-latest-rdm.json instead.", err2)
+			} else {
+				log.Warnf("Weather MasterFile fetch failed, loaded from cache: %s", err)
+			}
+		} else {
+			// Save to cache if successfully fetched
+			_ = decoder.SaveMasterFileData()
+		}
+
 		_ = decoder.WatchMasterFileData()
 	}
 	decoder.LoadStatsGeofences()
