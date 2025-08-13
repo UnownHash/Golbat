@@ -131,7 +131,7 @@ func findBoostedWeathers(pokemonId, form int16) (result uint8) {
 	return
 }
 
-func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate WeatherUpdate, toDB bool) {
+func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate WeatherUpdate, toDB bool, timestamp int64) {
 	if !masterFileData.Initialized {
 		return
 	}
@@ -178,14 +178,14 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		pokemonEntry := getPokemonFromCache(pokemonId)
 		if pokemonEntry != nil {
 			pokemon = pokemonEntry.Value()
-			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix {
+			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix && pokemon.Updated < timestamp {
 				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
 					pokemon.Weather = null.IntFrom(int64(newWeather))
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 					})
-					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, startUnix)
+					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, timestamp)
 					pokemonUpdated++
 					if pokemon.Cp.Valid {
 						pokemonCpUpdated++

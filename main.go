@@ -873,7 +873,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				go func(weatherUpdate decoder.WeatherUpdate) {
 					decoder.ProactiveIVSwitchSem <- true
 					defer func() { <-decoder.ProactiveIVSwitchSem }()
-					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB)
+					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, decodedGmo.MapCell[0].AsOfTimeMs/1000)
 				}(weatherUpdate)
 			}
 		}
