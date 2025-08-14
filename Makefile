@@ -12,4 +12,7 @@ FLAGS = go_json
 golbat: FORCE
 	go build -tags $(FLAGS) golbat
 
+orchestrion: FORCE
+	orchestrion go build -tags $(FLAGS) golbat
+
 FORCE: ;
