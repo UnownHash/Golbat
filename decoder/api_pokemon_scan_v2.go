@@ -49,6 +49,7 @@ type ApiPokemonDnfMinMax8 struct {
 	Max int8 `json:"max"`
 }
 
+//dd:span
 func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 	type dnfFilterLookup struct {
 		pokemon int16
@@ -188,6 +189,7 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) []uint64 {
 	return results
 }
 
+//dd:span
 func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	returnKeys := internalGetPokemonInArea2(retrieveParameters)
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
@@ -264,6 +266,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	return results
 }
 
+//dd:span
 func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.PokemonDetails {
 	// Build consistent api request
 

@@ -72,6 +72,7 @@ type webhook struct {
 	httpClient  *http.Client
 }
 
+//dd:span
 func (wh *webhook) getPayload(collection webhookCollection) ([]byte, error) {
 	var totalCollection []webhookMessage
 
@@ -101,6 +102,7 @@ func (wh *webhook) getPayload(collection webhookCollection) ([]byte, error) {
 	return json.Marshal(totalCollection)
 }
 
+//dd:span
 func (wh *webhook) sendCollection(collection webhookCollection) error {
 	payload, err := wh.getPayload(collection)
 	if err != nil {

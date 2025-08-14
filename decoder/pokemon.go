@@ -221,6 +221,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		!nullFloatAlmostEqual(old.Capture3, new.Capture3, floatTolerance)
 }
 
+//dd:span
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter bool, now int64) {
 	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
 
@@ -494,6 +495,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 	}
 }
 
+//dd:span
 func (pokemon *Pokemon) populateInternal() {
 	if len(pokemon.GolbatInternal) == 0 || len(pokemon.internal.ScanHistory) != 0 {
 		return

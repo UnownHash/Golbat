@@ -360,6 +360,7 @@ func main() {
 	log.Info("Golbat exiting!")
 }
 
+//dd:span
 func decode(ctx context.Context, method int, protoData *ProtoData) {
 	getMethodName := func(method int, trimString bool) string {
 		if val, ok := pogo.Method_name[int32(method)]; ok {
@@ -483,6 +484,7 @@ func getScanParameters(protoData *ProtoData) decoder.ScanParameters {
 	return decoder.FindScanConfiguration(protoData.ScanContext, protoData.Lat, protoData.Lon)
 }
 
+//dd:span
 func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	if haveAr == nil {
 		statsCollector.IncDecodeQuest("error", "missing_ar_info")
@@ -508,6 +510,7 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 
 }
 
+//dd:span
 func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 	var proxyRequestProto pogo.ProxyRequestProto
 
@@ -543,6 +546,7 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 	return fmt.Sprintf("Did not process %s", pogo.InternalSocialAction(proxyRequestProto.GetAction()).String())
 }
 
+//dd:span
 func decodeGetFriendDetails(payload []byte) string {
 	var getFriendDetailsOutProto pogo.InternalGetFriendDetailsOutProto
 	getFriendDetailsError := getFriendDetailsOutProto.UnmarshalVT(payload)
@@ -573,6 +577,7 @@ func decodeGetFriendDetails(payload []byte) string {
 	return fmt.Sprintf("%d players decoded on %d", len(getFriendDetailsOutProto.GetFriend())-failures, len(getFriendDetailsOutProto.GetFriend()))
 }
 
+//dd:span
 func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byte) string {
 	var searchPlayerOutProto pogo.InternalSearchPlayerOutProto
 	searchPlayerOutError := searchPlayerOutProto.UnmarshalVT(payload)
@@ -607,6 +612,7 @@ func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byt
 	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
 }
 
+//dd:span
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	decodedFort := &pogo.FortDetailsOutProto{}
 	if err := decodedFort.UnmarshalVT(sDec); err != nil {
@@ -628,6 +634,7 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 	return "Unknown fort type"
 }
 
+//dd:span
 func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	decodedMapForts := &pogo.GetMapFortsOutProto{}
 	if err := decodedMapForts.UnmarshalVT(sDec); err != nil {
@@ -661,6 +668,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	return "No forts updated"
 }
 
+//dd:span
 func decodeGetRoutes(payload []byte) string {
 	getRoutesOutProto := &pogo.GetRoutesOutProto{}
 	if err := getRoutesOutProto.UnmarshalVT(payload); err != nil {
@@ -702,6 +710,7 @@ func decodeGetRoutes(payload []byte) string {
 	)
 }
 
+//dd:span
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	decodedGymInfo := &pogo.GymGetInfoOutProto{}
 	if err := decodedGymInfo.UnmarshalVT(sDec); err != nil {
@@ -721,6 +730,7 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
 }
 
+//dd:span
 func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {
 	decodedEncounterInfo := &pogo.EncounterOutProto{}
 	if err := decodedEncounterInfo.UnmarshalVT(sDec); err != nil {
@@ -740,6 +750,7 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
 
+//dd:span
 func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := decodedEncounterInfo.UnmarshalVT(sDec); err != nil {
@@ -759,6 +770,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) stri
 	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
 }
 
+//dd:span
 func decodeStartIncident(ctx context.Context, sDec []byte) string {
 	decodedIncident := &pogo.StartIncidentOutProto{}
 	if err := decodedIncident.UnmarshalVT(sDec); err != nil {
@@ -778,6 +790,7 @@ func decodeStartIncident(ctx context.Context, sDec []byte) string {
 	return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
 }
 
+//dd:span
 func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) string {
 	decodeOpenInvasionRequest := &pogo.OpenInvasionCombatSessionProto{}
 
@@ -808,6 +821,7 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
 }
 
+//dd:span
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
@@ -908,6 +922,7 @@ func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
 	return len(mapCell.Fort) > 0
 }
 
+//dd:span
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
 	var decodedContestData pogo.GetContestDataOutProto
 	if err := decodedContestData.UnmarshalVT(data); err != nil {
@@ -925,6 +940,7 @@ func decodeGetContestData(ctx context.Context, request []byte, data []byte) stri
 	return decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
 }
 
+//dd:span
 func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
 	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeLeaderboardEntryOutProto
 	if err := decodedPokemonSizeContestEntry.UnmarshalVT(data); err != nil {
@@ -947,6 +963,7 @@ func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data 
 	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
 }
 
+//dd:span
 func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) string {
 	var decodedGetStationDetails pogo.GetStationedPokemonDetailsOutProto
 	if err := decodedGetStationDetails.UnmarshalVT(data); err != nil {
@@ -972,6 +989,7 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
 }
 
+//dd:span
 func decodeTappable(ctx context.Context, request, data []byte, username string, timestampMs int64) string {
 	var tappable pogo.ProcessTappableOutProto
 	if err := tappable.UnmarshalVT(data); err != nil {
@@ -997,6 +1015,7 @@ func decodeTappable(ctx context.Context, request, data []byte, username string, 
 	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable, timestampMs)
 }
 
+//dd:span
 func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string {
 	var rsvp pogo.GetEventRsvpsOutProto
 	if err := rsvp.UnmarshalVT(data); err != nil {
@@ -1026,6 +1045,7 @@ func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string
 	return "Failed to parse GetEventRsvpsProto - unknown event type"
 }
 
+//dd:span
 func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
 	var rsvp pogo.GetEventRsvpCountOutProto
 	if err := rsvp.UnmarshalVT(data); err != nil {

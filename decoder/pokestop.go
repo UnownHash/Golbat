@@ -241,6 +241,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	return stop
 }
 
+//dd:span
 func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) string {
 
 	if questProto.ChallengeQuest == nil {
@@ -571,6 +572,7 @@ func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMa
 	return stop
 }
 
+//dd:span
 func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.ContestProto) {
 	stop.ShowcaseRankingStandard = null.IntFrom(int64(contest.GetMetric().GetRankingStandard()))
 	stop.ShowcaseExpiry = null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000)
@@ -593,6 +595,7 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	}
 }
 
+//dd:span
 func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
 	type contestEntry struct {
 		Rank                  int     `json:"rank"`

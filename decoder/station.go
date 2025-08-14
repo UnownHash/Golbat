@@ -204,6 +204,7 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 	return station
 }
 
+//dd:span
 func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
 	type stationedPokemonDetail struct {
 		PokemonId int `json:"pokemon_id"`
