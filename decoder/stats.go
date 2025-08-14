@@ -535,6 +535,7 @@ func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
 	}
 }
 
+//dd:span
 func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 
 	type areaQuestCount []struct {

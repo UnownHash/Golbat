@@ -163,6 +163,7 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 	return powerUpLevel, powerUpEndTimestamp
 }
 
+//dd:span
 func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
 	type pokemonDisplay struct {
 		Form                  int   `json:"form,omitempty"`
@@ -296,6 +297,7 @@ func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym 
 	return gym
 }
 
+//dd:span
 func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *Gym {
 	gym.Id = gymData.GymStatusAndDefenders.PokemonFortProto.FortId
 	gym.Lat = gymData.GymStatusAndDefenders.PokemonFortProto.Latitude
@@ -390,6 +392,7 @@ func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutPr
 	return gym
 }
 
+//dd:span
 func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gym {
 	type rsvpTimeslot struct {
 		Timeslot   int64 `json:"timeslot"`

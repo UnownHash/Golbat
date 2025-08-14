@@ -163,6 +163,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 	return nil
 }
 
+//dd:span
 func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
 	route.Name = sharedRouteProto.GetName()
 	route.Description = sharedRouteProto.GetDescription()

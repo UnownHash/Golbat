@@ -25,6 +25,7 @@ type QuestStatus struct {
 	TotalStops uint32 `db:"total" json:"total"`
 }
 
+//dd:span
 func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation, error) {
 	bbox := fence.Geometry.Bound()
 	bytes, err := fence.MarshalJSON()
@@ -49,6 +50,7 @@ func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation
 	return areas, nil
 }
 
+//dd:span
 func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (int64, error) {
 	const updateChunkSize = 500
 
@@ -169,6 +171,7 @@ func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) erro
 	return nil
 }
 
+//dd:span
 func GetQuestStatus(db DbDetails, fence *geojson.Feature) (QuestStatus, error) {
 	bbox := fence.Geometry.Bound()
 	status := QuestStatus{}

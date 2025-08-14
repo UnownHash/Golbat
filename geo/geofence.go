@@ -297,6 +297,7 @@ func (fence *GeofenceApi) toGeofence() *Geofence {
 	return &Geofence{Fence: locations}
 }
 
+//dd:span
 func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {

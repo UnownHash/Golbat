@@ -63,6 +63,7 @@ func questsHeldHasARTask(quests_held any) *bool {
 	return &res
 }
 
+//dd:span
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	var r *http.Request = c.Request
