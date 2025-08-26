@@ -152,7 +152,7 @@ func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, of
 
 	const querySQL = `
 		SELECT id FROM gym
-		WHERE (name LIKE ? ESCAPE '\\')
+		WHERE name LIKE ? ESCAPE '\\' AND enabled = 1
 		ORDER BY name ASC
 		LIMIT ? OFFSET ?
 	`
