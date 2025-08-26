@@ -503,7 +503,7 @@ func GetGym(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gym)
 }
 
-// POST /api/gym
+// POST /api/gym/batch
 //
 //	{ "ids": ["gymid1", "gymid2", ...] }
 func GetGyms(c *gin.Context) {
@@ -516,7 +516,7 @@ func GetGyms(c *gin.Context) {
 		var arr []string
 		if err2 := c.ShouldBindJSON(&arr); err2 != nil {
 			log.Warnf("POST /api/gyms invalid JSON: %v / %v", err, err2)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] } or [ ... ]"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] }"})
 			return
 		}
 		payload.IDs = arr
@@ -552,7 +552,7 @@ func GetGyms(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	out := make([]decoder.Gym, 0, len(ids))
+	out := make([]*decoder.Gym, 0, len(ids))
 	for _, id := range ids {
 		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
 		if err != nil {
@@ -561,7 +561,7 @@ func GetGyms(c *gin.Context) {
 			return
 		}
 		if g != nil {
-			out = append(out, *g)
+			out = append(out, g)
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)
@@ -635,7 +635,7 @@ func SearchGyms(c *gin.Context) {
 		return
 	}
 
-	out := make([]decoder.Gym, 0, len(ids))
+	out := make([]*decoder.Gym, 0, len(ids))
 	for _, id := range ids {
 		if id == "" {
 			continue
@@ -652,7 +652,7 @@ func SearchGyms(c *gin.Context) {
 			return
 		}
 		if g != nil {
-			out = append(out, *g)
+			out = append(out, g)
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)

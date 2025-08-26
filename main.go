@@ -268,7 +268,7 @@ func main() {
 	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
 	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
 	apiGroup.GET("/gym/id/:gym_id", GetGym)
-	apiGroup.POST("/gym", GetGyms)
+	apiGroup.POST("/gym/query", GetGyms)
 	apiGroup.POST("/gym/search", SearchGyms)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
