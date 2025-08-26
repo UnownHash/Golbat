@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"golbat/geo"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 
@@ -137,6 +139,126 @@ func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, er
 		fortRtreeUpdateGymOnGet(&gym)
 	}
 	return &gym, nil
+}
+
+func GetGymRecords(ctx context.Context, db db.DbDetails, fortIds []string) ([]Gym, error) {
+	if len(fortIds) == 0 {
+		return []Gym{}, nil
+	}
+
+	type item struct {
+		idx int
+		gym Gym
+	}
+	cached := make(map[string]item, len(fortIds))
+	missing := make([]string, 0, len(fortIds))
+
+	for i, fortId := range fortIds {
+		if inMemoryGym := gymCache.Get(fortId); inMemoryGym != nil {
+			g := inMemoryGym.Value()
+			cached[fortId] = item{idx: i, gym: g}
+		} else {
+			missing = append(missing, fortId)
+		}
+	}
+
+	if len(missing) == 0 {
+		out := make([]Gym, 0, len(fortIds))
+		for _, id := range fortIds {
+			out = append(out, cached[id].gym)
+		}
+		return out, nil
+	}
+
+	queryBase := `
+		SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp,
+			raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, guarding_pokemon_display,
+			available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1,
+			raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive,
+			cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id,
+			raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
+			power_up_end_timestamp, description, defenders, rsvps
+		FROM gym
+		WHERE id IN (?)
+	`
+
+	q, args, err := sqlx.In(queryBase, missing)
+	if err != nil {
+		return nil, err
+	}
+	q = db.GeneralDb.Rebind(q)
+
+	var fetched []Gym
+	err = db.GeneralDb.SelectContext(ctx, &fetched, q, args...)
+	statsCollector.IncDbQuery("select gyms", err)
+
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+
+	fetchedByID := make(map[string]Gym, len(fetched))
+	for _, g := range fetched {
+		fetchedByID[g.Id] = g
+		gymCache.Set(g.Id, g, ttlcache.DefaultTTL)
+		if config.Config.TestFortInMemory {
+			fortRtreeUpdateGymOnGet(&g)
+		}
+	}
+
+	out := make([]Gym, 0, len(fortIds))
+	for _, id := range fortIds {
+		if it, ok := cached[id]; ok {
+			out = append(out, it.gym)
+			continue
+		}
+		if g, ok := fetchedByID[id]; ok {
+			out = append(out, g)
+		}
+	}
+
+	return out, nil
+}
+
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
+}
+
+func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, offset int) ([]Gym, error) {
+	like := "%" + escapeLike(query) + "%"
+
+	const selectColumns = `
+		SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp,
+			raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, guarding_pokemon_display,
+			available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1,
+			raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive,
+			cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id,
+			raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
+			power_up_end_timestamp, description, defenders, rsvps
+		FROM gym
+	`
+
+	querySQL := selectColumns + `
+		WHERE (name LIKE ? ESCAPE '\' OR url LIKE ? ESCAPE '\' OR description LIKE ? ESCAPE '\' OR id LIKE ? ESCAPE '\')
+		ORDER BY updated DESC, name ASC
+		LIMIT ? OFFSET ?
+	`
+
+	q := db.GeneralDb.Rebind(querySQL)
+
+	var gyms []Gym
+	err := db.GeneralDb.SelectContext(ctx, &gyms, q, like, like, like, like, limit, offset)
+	statsCollector.IncDbQuery("search gyms", err)
+
+	if err == sql.ErrNoRows {
+		return []Gym{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return gyms, nil
 }
 
 func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int) {
