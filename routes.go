@@ -4,6 +4,7 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -503,10 +504,8 @@ func GetGym(c *gin.Context) {
 }
 
 // POST /api/gym
-// Body:
+//
 //	{ "ids": ["gymid1", "gymid2", ...] }
-// Also supported:
-//	["gymid1", "gymid2", ...]
 func GetGyms(c *gin.Context) {
 	type idsPayload struct {
 		IDs []string `json:"ids"`
@@ -553,17 +552,28 @@ func GetGyms(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gyms, err := decoder.GetGymRecords(ctx, dbDetails, ids)
-	if err != nil {
-		log.Warnf("POST /api/gyms error retrieving gyms: %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
+	out := make([]decoder.Gym, 0, len(ids))
+	for _, id := range ids {
+		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		if err != nil {
+			log.Warnf("POST /api/gyms error retrieving gym %s: %v", id, err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if g != nil {
+			out = append(out, *g)
+		}
+		if ctx.Err() != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
 	}
 
-	c.JSON(http.StatusOK, gyms)
+	c.JSON(http.StatusOK, out)
 }
 
 // Handler: POST /api/gyms/search
+//
 //	{
 //	  "query": "central park",
 //	  "limit": 100,    // optional, default 100, max 500
@@ -613,14 +623,44 @@ func SearchGyms(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	gyms, err := decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
+	ids, err := decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			log.Warnf("POST /api/gyms/search timed out: %v", err)
+			c.Status(http.StatusGatewayTimeout)
+			return
+		}
 		log.Warnf("POST /api/gyms/search error: %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusOK, gyms)
+	out := make([]decoder.Gym, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				log.Warnf("POST /api/gyms/search timed out while fetching %s: %v", id, err)
+				c.Status(http.StatusGatewayTimeout)
+				return
+			}
+			log.Warnf("POST /api/gyms/search error retrieving gym %s: %v", id, err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if g != nil {
+			out = append(out, *g)
+		}
+		if ctx.Err() != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
 }
 
 func GetTappable(c *gin.Context) {
