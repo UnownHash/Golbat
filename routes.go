@@ -503,7 +503,7 @@ func GetGym(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gym)
 }
 
-// POST /api/gym/batch
+// POST /api/gym/query
 //
 //	{ "ids": ["gymid1", "gymid2", ...] }
 func GetGyms(c *gin.Context) {
