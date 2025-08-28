@@ -4,9 +4,11 @@ import (
 	"context"
 	b64 "encoding/base64"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -499,6 +501,166 @@ func GetGym(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gym)
+}
+
+// POST /api/gym/query
+//
+//	{ "ids": ["gymid1", "gymid2", ...] }
+func GetGyms(c *gin.Context) {
+	type idsPayload struct {
+		IDs []string `json:"ids"`
+	}
+
+	var payload idsPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		var arr []string
+		if err2 := c.ShouldBindJSON(&arr); err2 != nil {
+			log.Warnf("POST /api/gyms invalid JSON: %v / %v", err, err2)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] }"})
+			return
+		}
+		payload.IDs = arr
+	}
+
+	seen := make(map[string]struct{}, len(payload.IDs))
+	ids := make([]string, 0, len(payload.IDs))
+	for _, id := range payload.IDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	const maxIDs = 500
+	if len(ids) > maxIDs {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"error":         "too many ids",
+			"max_supported": maxIDs,
+		})
+		return
+	}
+
+	if len(ids) == 0 {
+		c.JSON(http.StatusOK, []decoder.Gym{})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	out := make([]*decoder.Gym, 0, len(ids))
+	for _, id := range ids {
+		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		if err != nil {
+			log.Warnf("POST /api/gyms error retrieving gym %s: %v", id, err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if g != nil {
+			out = append(out, g)
+		}
+		if ctx.Err() != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
+// Handler: POST /api/gyms/search
+//
+//	{
+//	  "query": "central park",
+//	  "limit": 100,    // optional, default 100, max 500
+//	  "offset": 0,     // optional
+//	  "page": 1        // optional; if provided and offset not provided, offset = (page-1)*limit
+//	}
+func SearchGyms(c *gin.Context) {
+	type payload struct {
+		Query  string `json:"query"`
+		Limit  *int   `json:"limit"`
+		Offset *int   `json:"offset"`
+		Page   *int   `json:"page"`
+	}
+
+	var p payload
+	if err := c.ShouldBindJSON(&p); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+	q := strings.TrimSpace(p.Query)
+	if q == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+		return
+	}
+
+	limit := 100
+	if p.Limit != nil {
+		limit = *p.Limit
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	offset := 0
+	if p.Offset != nil {
+		offset = *p.Offset
+	} else if p.Page != nil && *p.Page > 0 {
+		offset = (*p.Page - 1) * limit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ids, err := decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			log.Warnf("POST /api/gyms/search timed out: %v", err)
+			c.Status(http.StatusGatewayTimeout)
+			return
+		}
+		log.Warnf("POST /api/gyms/search error: %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	out := make([]*decoder.Gym, 0, len(ids))
+	for _, id := range ids {
+		if id == "" {
+			continue
+		}
+		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				log.Warnf("POST /api/gyms/search timed out while fetching %s: %v", id, err)
+				c.Status(http.StatusGatewayTimeout)
+				return
+			}
+			log.Warnf("POST /api/gyms/search error retrieving gym %s: %v", id, err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if g != nil {
+			out = append(out, g)
+		}
+		if ctx.Err() != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
 }
 
 func GetTappable(c *gin.Context) {
