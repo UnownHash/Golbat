@@ -512,7 +512,7 @@ func GetGyms(c *gin.Context) {
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		var arr []string
 		if err2 := c.ShouldBindJSON(&arr); err2 != nil {
-			log.Warnf("POST /api/gyms invalid JSON: %v / %v", err, err2)
+			log.Warnf("invalid JSON: %v / %v", err, err2)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] }"})
 			return
 		}
@@ -553,7 +553,7 @@ func GetGyms(c *gin.Context) {
 	for _, id := range ids {
 		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
 		if err != nil {
-			log.Warnf("POST /api/gyms error retrieving gym %s: %v", id, err)
+			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}
@@ -569,7 +569,7 @@ func GetGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Handler: POST /api/gyms/search
+// Handler: POST /api/gym/search
 //
 //		{
 //		  "query": "central park", // optional (if lat,lon,distance is used) but can be used together
@@ -666,11 +666,11 @@ func SearchGyms(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			log.Warnf("POST /api/gyms/search timed out: %v", err)
+			log.Warnf("timed out: %v", err)
 			c.Status(http.StatusGatewayTimeout)
 			return
 		}
-		log.Warnf("POST /api/gyms/search error: %v", err)
+		log.Warnf("error: %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -683,11 +683,11 @@ func SearchGyms(c *gin.Context) {
 		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				log.Warnf("POST /api/gyms/search timed out while fetching %s: %v", id, err)
+				log.Warnf("timed out while fetching %s: %v", id, err)
 				c.Status(http.StatusGatewayTimeout)
 				return
 			}
-			log.Warnf("POST /api/gyms/search error retrieving gym %s: %v", id, err)
+			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}

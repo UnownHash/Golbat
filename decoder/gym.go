@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -174,51 +175,73 @@ func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, of
 	return ids, nil
 }
 
-// Search Gyms by Geo and optional name
-func SearchGymsSQLGeo(ctx context.Context, db db.DbDetails, query string, lat, lon, distanceKm float64, limit, offset int) ([]string, error) {
-	args := []any{}
-	where := []string{"enabled = 1"}
+func SearchGymsSQLGeo(
+	ctx context.Context,
+	db db.DbDetails,
+	query string,
+	lat, lon, distanceKm float64,
+	limit, offset int,
+) ([]string, error) {
+	trimQ := strings.TrimSpace(query)
 
-	// name filter
-	if strings.TrimSpace(query) != "" {
-		where = append(where, "name LIKE ? ESCAPE '\\'")
-		args = append(args, "%"+escapeLike(query)+"%")
+	// name filter bits
+	nameFilter := ""
+	nameArgs := []any{}
+	if trimQ != "" {
+		nameFilter = "AND name LIKE ? ESCAPE '\\' "
+		nameArgs = append(nameArgs, "%"+escapeLike(trimQ)+"%")
 	}
 
-	// distanceMeters = 2*R*asin(sqrt(sin^2((lat2-lat1)/2)+cos(lat1)*cos(lat2)*sin^2((lon2-lon1)/2)))
+	// 1' lat ≈ 111.045 km; lon scaled by cos(latitude)
+	latDelta := distanceKm / 111.045
+	lonScale := math.Cos(lat * math.Pi / 180)
+	if lonScale < 1e-6 {
+		lonScale = 1e-6 // avoid div-by-zero at poles
+	}
+	lonDelta := distanceKm / (111.045 * lonScale)
+
+	latMin, latMax := lat-latDelta, lat+latDelta
+	lonMin, lonMax := lon-lonDelta, lon+lonDelta
+
 	const haversine = `
 		(2 * 6371000 * ASIN(SQRT(
 			POWER(SIN(RADIANS(? - lat) / 2), 2) +
-			COS(RADIANS(lat)) * COS(RADIANS(?)) * POWER(SIN(RADIANS(? - lon) / 2), 2)
+			COS(RADIANS(lat)) * COS(RADIANS(?)) *
+			POWER(SIN(RADIANS(? - lon) / 2), 2)
 		)))
 	`
-	where = append(where, haversine+" <= ?")
-	distanceMeters := distanceKm * 1000.0
-	args = append(args, lat, lat, lon, distanceMeters)
 
-	// ORDER BY distance, name
-	orderBy := "distance ASC, name ASC"
-
-	// final raw sql
-	querySQL := fmt.Sprintf(`
-		SELECT id
-		, %s AS distance
+	inner := fmt.Sprintf(`
+		SELECT
+			id,
+			%s AS distance
 		FROM gym
-		WHERE %s
-		ORDER BY %s
-		LIMIT ? OFFSET ?
-	`, haversine, strings.Join(where, " AND "), orderBy)
+		WHERE enabled = 1
+		  %s
+		  AND lat BETWEEN ? AND ?
+		  AND lon BETWEEN ? AND ?
+		  AND %s <= ?
+	`, haversine, nameFilter, haversine)
 
-	selectArgs := []any{lat, lat, lon}
-	args = append(selectArgs, args...)
+	rawSql := fmt.Sprintf(`
+		SELECT id
+		FROM (%s) AS t
+		ORDER BY distance ASC, id ASC
+		LIMIT ? OFFSET ?
+	`, inner)
+
+	args := []any{
+		lat, lat, lon,
+	}
+	args = append(args, nameArgs...)
+	args = append(args, latMin, latMax, lonMin, lonMax)
+	args = append(args, lat, lat, lon, distanceKm*1000.0)
 	args = append(args, limit, offset)
 
-	q := db.GeneralDb.Rebind(querySQL)
+	q := db.GeneralDb.Rebind(rawSql)
 
-	var rows []struct {
-		ID string `db:"id"`
-	}
-	err := db.GeneralDb.SelectContext(ctx, &rows, q, args...)
+	var ids []string
+	err := db.GeneralDb.SelectContext(ctx, &ids, q, args...)
 	statsCollector.IncDbQuery("search gyms geo", err)
 
 	if err == sql.ErrNoRows {
@@ -226,11 +249,6 @@ func SearchGymsSQLGeo(ctx context.Context, db db.DbDetails, query string, lat, l
 	}
 	if err != nil {
 		return nil, err
-	}
-
-	ids := make([]string, 0, len(rows))
-	for _, r := range rows {
-		ids = append(ids, r.ID)
 	}
 	return ids, nil
 }
