@@ -147,11 +147,13 @@ func escapeLike(s string) string {
 	return s
 }
 
+// Search Gyms by name
 func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, offset int) ([]string, error) {
 	like := "%" + escapeLike(query) + "%"
 
 	const querySQL = `
-		SELECT id FROM gym
+		SELECT id
+		FROM gym
 		WHERE name LIKE ? ESCAPE '\\' AND enabled = 1
 		ORDER BY name ASC
 		LIMIT ? OFFSET ?
@@ -168,6 +170,67 @@ func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, of
 	}
 	if err != nil {
 		return nil, err
+	}
+	return ids, nil
+}
+
+// Search Gyms by Geo and optional name
+func SearchGymsSQLGeo(ctx context.Context, db db.DbDetails, query string, lat, lon, distanceKm float64, limit, offset int) ([]string, error) {
+	args := []any{}
+	where := []string{"enabled = 1"}
+
+	// name filter
+	if strings.TrimSpace(query) != "" {
+		where = append(where, "name LIKE ? ESCAPE '\\'")
+		args = append(args, "%"+escapeLike(query)+"%")
+	}
+
+	// distanceMeters = 2*R*asin(sqrt(sin^2((lat2-lat1)/2)+cos(lat1)*cos(lat2)*sin^2((lon2-lon1)/2)))
+	const haversine = `
+		(2 * 6371000 * ASIN(SQRT(
+			POWER(SIN(RADIANS(? - lat) / 2), 2) +
+			COS(RADIANS(lat)) * COS(RADIANS(?)) * POWER(SIN(RADIANS(? - lon) / 2), 2)
+		)))
+	`
+	where = append(where, haversine+" <= ?")
+	distanceMeters := distanceKm * 1000.0
+	args = append(args, lat, lat, lon, distanceMeters)
+
+	// ORDER BY distance, name
+	orderBy := "distance ASC, name ASC"
+
+	// final raw sql
+	querySQL := fmt.Sprintf(`
+		SELECT id
+		, %s AS distance
+		FROM gym
+		WHERE %s
+		ORDER BY %s
+		LIMIT ? OFFSET ?
+	`, haversine, strings.Join(where, " AND "), orderBy)
+
+	selectArgs := []any{lat, lat, lon}
+	args = append(selectArgs, args...)
+	args = append(args, limit, offset)
+
+	q := db.GeneralDb.Rebind(querySQL)
+
+	var rows []struct {
+		ID string `db:"id"`
+	}
+	err := db.GeneralDb.SelectContext(ctx, &rows, q, args...)
+	statsCollector.IncDbQuery("search gyms geo", err)
+
+	if err == sql.ErrNoRows {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
 	}
 	return ids, nil
 }

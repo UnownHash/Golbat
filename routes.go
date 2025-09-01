@@ -571,18 +571,24 @@ func GetGyms(c *gin.Context) {
 
 // Handler: POST /api/gyms/search
 //
-//	{
-//	  "query": "central park",
-//	  "limit": 100,    // optional, default 100, max 500
-//	  "offset": 0,     // optional
-//	  "page": 1        // optional; if provided and offset not provided, offset = (page-1)*limit
-//	}
+//		{
+//		  "query": "central park", // optional (if lat,lon,distance is used) but can be used together
+//	   "lat": "130.34",
+//	   "lon": "35.11",
+//	   "distance": "150",
+//		  "limit": 100,    // optional, default 100, max 500
+//		  "offset": 0,     // optional
+//		  "page": 1,       // optional; if provided and offset not provided, offset = (page-1)*limit
+//		}
 func SearchGyms(c *gin.Context) {
 	type payload struct {
-		Query  string `json:"query"`
-		Limit  *int   `json:"limit"`
-		Offset *int   `json:"offset"`
-		Page   *int   `json:"page"`
+		Query      string   `json:"query"`
+		Limit      *int     `json:"limit"`
+		Offset     *int     `json:"offset"`
+		Page       *int     `json:"page"`
+		Lat        *float64 `json:"lat"`
+		Lon        *float64 `json:"lon"`
+		DistanceKm *float64 `json:"distance_km"`
 	}
 
 	var p payload
@@ -590,18 +596,39 @@ func SearchGyms(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
 		return
 	}
+
 	q := strings.TrimSpace(p.Query)
-	if q == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+
+	// validation
+
+	// geo present if all three provided
+	geoProvided := p.Lat != nil && p.Lon != nil && p.DistanceKm != nil
+
+	// require query or geo
+	if q == "" && !geoProvided {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide either 'query' or ('lat','lon','distance_km')"})
 		return
 	}
 
-	limit := 100
-	if p.Limit != nil {
-		limit = *p.Limit
+	if geoProvided {
+		if *p.DistanceKm <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "'distance_km' must be > 0"})
+			return
+		}
+		// upper km limit
+		if *p.DistanceKm > 500 {
+			d := 500.0
+			p.DistanceKm = &d
+		}
+		if *p.Lat < -90 || *p.Lat > 90 || *p.Lon < -180 || *p.Lon > 180 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "lat must be [-90,90], lon must be [-180,180]"})
+			return
+		}
 	}
-	if limit <= 0 {
-		limit = 100
+
+	limit := 100
+	if p.Limit != nil && *p.Limit > 0 {
+		limit = *p.Limit
 	}
 	if limit > 500 {
 		limit = 500
@@ -620,7 +647,23 @@ func SearchGyms(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ids, err := decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
+	var (
+		ids []string
+		err error
+	)
+
+	if geoProvided {
+		ids, err = decoder.SearchGymsSQLGeo(
+			ctx,
+			dbDetails,
+			q,
+			*p.Lat, *p.Lon, *p.DistanceKm,
+			limit, offset,
+		)
+	} else {
+		ids, err = decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
+	}
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			log.Warnf("POST /api/gyms/search timed out: %v", err)
