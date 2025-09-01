@@ -188,7 +188,7 @@ func SearchGymsSQLGeo(
 	nameFilter := ""
 	nameArgs := []any{}
 	if trimQ != "" {
-		nameFilter = "AND name LIKE ? ESCAPE '\\' "
+		nameFilter = "AND name LIKE ? "
 		nameArgs = append(nameArgs, "%"+escapeLike(trimQ)+"%")
 	}
 
@@ -201,7 +201,20 @@ func SearchGymsSQLGeo(
 	lonDelta := distanceKm / (111.045 * lonScale)
 
 	latMin, latMax := lat-latDelta, lat+latDelta
-	lonMin, lonMax := lon-lonDelta, lon+lonDelta
+	lonMinRaw, lonMaxRaw := lon-lonDelta, lon+lonDelta
+
+	normalizeLon := func(v float64) float64 {
+		v = math.Mod(v+180.0, 360.0)
+		if v < 0 {
+			v += 360.0
+		}
+		return v - 180.0
+	}
+
+	// nomralize longitudes into [-180,180]
+	lonMin := normalizeLon(lonMinRaw)
+	lonMax := normalizeLon(lonMaxRaw)
+	crossesAM := lonMin > lonMax
 
 	const haversine = `
 		(2 * 6371000 * ASIN(SQRT(
@@ -211,6 +224,12 @@ func SearchGymsSQLGeo(
 		)))
 	`
 
+	// antimeridian crossing
+	lonClause := "lon BETWEEN ? AND ?"
+	if crossesAM {
+		lonClause = "(lon >= ? OR lon <= ?)"
+	}
+
 	inner := fmt.Sprintf(`
 		SELECT
 			id,
@@ -219,9 +238,9 @@ func SearchGymsSQLGeo(
 		WHERE enabled = 1
 		  %s
 		  AND lat BETWEEN ? AND ?
-		  AND lon BETWEEN ? AND ?
+		  AND %s
 		  AND %s <= ?
-	`, haversine, nameFilter, haversine)
+	`, haversine, nameFilter, lonClause, haversine)
 
 	rawSql := fmt.Sprintf(`
 		SELECT id
@@ -230,13 +249,22 @@ func SearchGymsSQLGeo(
 		LIMIT ? OFFSET ?
 	`, inner)
 
+	// args
 	args := []any{
 		lat, lat, lon,
 	}
 	args = append(args, nameArgs...)
-	args = append(args, latMin, latMax, lonMin, lonMax)
-	args = append(args, lat, lat, lon, distanceKm*1000.0)
-	args = append(args, limit, offset)
+	args = append(args, latMin, latMax)
+	if crossesAM {
+		args = append(args, lonMin, lonMax)
+	} else {
+		args = append(args, lonMin, lonMax)
+	}
+	args = append(args,
+		lat, lat, lon,
+		distanceKm*1000.0,
+		limit, offset,
+	)
 
 	q := db.GeneralDb.Rebind(rawSql)
 
@@ -244,9 +272,6 @@ func SearchGymsSQLGeo(
 	err := db.GeneralDb.SelectContext(ctx, &ids, q, args...)
 	statsCollector.IncDbQuery("search gyms geo", err)
 
-	if err == sql.ErrNoRows {
-		return []string{}, nil
-	}
 	if err != nil {
 		return nil, err
 	}
