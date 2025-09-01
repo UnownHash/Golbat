@@ -179,7 +179,7 @@ func SearchGymsSQLGeo(
 	ctx context.Context,
 	db db.DbDetails,
 	query string,
-	lat, lon, distanceKm float64,
+	lat, lon, distance float64,
 	limit, offset int,
 ) ([]string, error) {
 	trimQ := strings.TrimSpace(query)
@@ -193,12 +193,12 @@ func SearchGymsSQLGeo(
 	}
 
 	// 1' lat ≈ 111.045 km; lon scaled by cos(latitude)
-	latDelta := distanceKm / 111.045
+	latDelta := distance / 111_045.0
 	lonScale := math.Cos(lat * math.Pi / 180)
 	if lonScale < 1e-6 {
 		lonScale = 1e-6 // avoid div-by-zero at poles
 	}
-	lonDelta := distanceKm / (111.045 * lonScale)
+	lonDelta := distance / (111_045.0 * lonScale)
 
 	latMin, latMax := lat-latDelta, lat+latDelta
 	lonMinRaw, lonMaxRaw := lon-lonDelta, lon+lonDelta
@@ -216,12 +216,11 @@ func SearchGymsSQLGeo(
 	lonMax := normalizeLon(lonMaxRaw)
 	crossesAM := lonMin > lonMax
 
-	const haversine = `
-		(2 * 6371000 * ASIN(SQRT(
-			POWER(SIN(RADIANS(? - lat) / 2), 2) +
-			COS(RADIANS(lat)) * COS(RADIANS(?)) *
-			POWER(SIN(RADIANS(? - lon) / 2), 2)
-		)))
+	const distExpr = `
+		ST_Distance_Sphere(
+			POINT(lon, lat),
+			POINT(?, ?)
+		)
 	`
 
 	// antimeridian crossing
@@ -240,41 +239,35 @@ func SearchGymsSQLGeo(
 		  AND lat BETWEEN ? AND ?
 		  AND %s
 		  AND %s <= ?
-	`, haversine, nameFilter, lonClause, haversine)
+	`, distExpr, nameFilter, lonClause, distExpr)
 
-	rawSql := fmt.Sprintf(`
+	rawSQL := fmt.Sprintf(`
 		SELECT id
 		FROM (%s) AS t
 		ORDER BY distance ASC, id ASC
 		LIMIT ? OFFSET ?
 	`, inner)
 
-	// args
 	args := []any{
-		lat, lat, lon,
+		lon, lat,
 	}
 	args = append(args, nameArgs...)
 	args = append(args, latMin, latMax)
-	if crossesAM {
-		args = append(args, lonMin, lonMax)
-	} else {
-		args = append(args, lonMin, lonMax)
-	}
+	args = append(args, lonMin, lonMax)
 	args = append(args,
-		lat, lat, lon,
-		distanceKm*1000.0,
+		lon, lat,
+		distance,
 		limit, offset,
 	)
 
-	q := db.GeneralDb.Rebind(rawSql)
+	q := db.GeneralDb.Rebind(rawSQL)
 
 	var ids []string
-	err := db.GeneralDb.SelectContext(ctx, &ids, q, args...)
-	statsCollector.IncDbQuery("search gyms geo", err)
-
-	if err != nil {
+	if err := db.GeneralDb.SelectContext(ctx, &ids, q, args...); err != nil {
+		statsCollector.IncDbQuery("search gyms geo", err)
 		return nil, err
 	}
+	statsCollector.IncDbQuery("search gyms geo", nil)
 	return ids, nil
 }
 

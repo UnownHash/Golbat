@@ -570,25 +570,26 @@ func GetGyms(c *gin.Context) {
 }
 
 // Handler: POST /api/gym/search
+// use query || query && lat, lon, distance || lat, lon, distance
 //
-//		{
-//		  "query": "central park", // optional (if lat,lon,distance is used) but can be used together
-//	   "lat": "130.34",
-//	   "lon": "35.11",
-//	   "distance": "150",
-//		  "limit": 100,    // optional, default 100, max 500
-//		  "offset": 0,     // optional
-//		  "page": 1,       // optional; if provided and offset not provided, offset = (page-1)*limit
-//		}
+// {
+// "query": "central park",
+// "lat": "130.34",
+// "lon": "35.11",
+// "distance": "150",  // meters, max 500_000
+// "limit": 100,       // optional, default 100, max 500
+// "offset": 0,        // optional
+// "page": 1,          // optional; if provided and offset not provided, offset = (page-1)*limit
+// }
 func SearchGyms(c *gin.Context) {
 	type payload struct {
-		Query      string   `json:"query"`
-		Limit      *int     `json:"limit"`
-		Offset     *int     `json:"offset"`
-		Page       *int     `json:"page"`
-		Lat        *float64 `json:"lat"`
-		Lon        *float64 `json:"lon"`
-		DistanceKm *float64 `json:"distance_km"`
+		Query    string   `json:"query"`
+		Limit    *int     `json:"limit"`
+		Offset   *int     `json:"offset"`
+		Page     *int     `json:"page"`
+		Lat      *float64 `json:"lat"`
+		Lon      *float64 `json:"lon"`
+		Distance *float64 `json:"distance"`
 	}
 
 	var p payload
@@ -600,25 +601,24 @@ func SearchGyms(c *gin.Context) {
 	q := strings.TrimSpace(p.Query)
 
 	// validation
-
 	// geo present if all three provided
-	geoProvided := p.Lat != nil && p.Lon != nil && p.DistanceKm != nil
+	geoProvided := p.Lat != nil && p.Lon != nil && p.Distance != nil
 
 	// require query or geo
 	if q == "" && !geoProvided {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide either 'query' or ('lat','lon','distance_km')"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide either 'query' or ('lat','lon','distance') or both"})
 		return
 	}
 
 	if geoProvided {
-		if *p.DistanceKm <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "'distance_km' must be > 0"})
+		if *p.Distance <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "'distance' must be > 0"})
 			return
 		}
 		// upper km limit
-		if *p.DistanceKm > 500 {
-			d := 500.0
-			p.DistanceKm = &d
+		if *p.Distance > 500_000 {
+			d := 500_000.0
+			p.Distance = &d
 		}
 		if *p.Lat < -90 || *p.Lat > 90 || *p.Lon < -180 || *p.Lon > 180 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "lat must be [-90,90], lon must be [-180,180]"})
@@ -657,7 +657,7 @@ func SearchGyms(c *gin.Context) {
 			ctx,
 			dbDetails,
 			q,
-			*p.Lat, *p.Lon, *p.DistanceKm,
+			*p.Lat, *p.Lon, *p.Distance,
 			limit, offset,
 		)
 	} else {
