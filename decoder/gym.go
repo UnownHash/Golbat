@@ -175,6 +175,14 @@ func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, of
 	return ids, nil
 }
 
+func normalizeLon(v float64) float64 {
+	v = math.Mod(v+180.0, 360.0)
+	if v < 0 {
+		v += 360.0
+	}
+	return v - 180.0
+}
+
 func SearchGymsSQLGeo(
 	ctx context.Context,
 	db db.DbDetails,
@@ -202,14 +210,6 @@ func SearchGymsSQLGeo(
 
 	latMin, latMax := lat-latDelta, lat+latDelta
 	lonMinRaw, lonMaxRaw := lon-lonDelta, lon+lonDelta
-
-	normalizeLon := func(v float64) float64 {
-		v = math.Mod(v+180.0, 360.0)
-		if v < 0 {
-			v += 360.0
-		}
-		return v - 180.0
-	}
 
 	// nomralize longitudes into [-180,180]
 	lonMin := normalizeLon(lonMinRaw)
@@ -268,6 +268,67 @@ func SearchGymsSQLGeo(
 		return nil, err
 	}
 	statsCollector.IncDbQuery("search gyms geo", nil)
+	return ids, nil
+}
+
+func SearchGymsSQLBBox(
+	ctx context.Context,
+	db db.DbDetails,
+	query string,
+	minLon, minLat, maxLon, maxLat float64,
+	limit, offset int,
+) ([]string, error) {
+	trimQ := strings.TrimSpace(query)
+
+	nameFilter := ""
+	nameArgs := []any{}
+	if trimQ != "" {
+		nameFilter = "AND name LIKE ? "
+		nameArgs = append(nameArgs, "%"+escapeLike(trimQ)+"%")
+	}
+
+	latMin := math.Min(minLat, maxLat)
+	latMax := math.Max(minLat, maxLat)
+
+	lonMin := normalizeLon(minLon)
+	lonMax := normalizeLon(maxLon)
+	crossesAM := lonMin > lonMax
+
+	lonClause := "lon BETWEEN ? AND ?"
+	if crossesAM {
+		lonClause = "(lon >= ? OR lon <= ?)"
+	}
+
+	inner := fmt.Sprintf(`
+		SELECT id
+		FROM gym
+		WHERE enabled = 1
+		  %s
+		  AND lat BETWEEN ? AND ?
+		  AND %s
+	`, nameFilter, lonClause)
+
+	rawSQL := fmt.Sprintf(`
+		SELECT id
+		FROM (%s) AS t
+		ORDER BY id ASC
+		LIMIT ? OFFSET ?
+	`, inner)
+
+	args := []any{}
+	args = append(args, nameArgs...)
+	args = append(args, latMin, latMax)
+	args = append(args, lonMin, lonMax)
+	args = append(args, limit, offset)
+
+	q := db.GeneralDb.Rebind(rawSQL)
+
+	var ids []string
+	if err := db.GeneralDb.SelectContext(ctx, &ids, q, args...); err != nil {
+		statsCollector.IncDbQuery("search gyms bbox", err)
+		return nil, err
+	}
+	statsCollector.IncDbQuery("search gyms bbox", nil)
 	return ids, nil
 }
 

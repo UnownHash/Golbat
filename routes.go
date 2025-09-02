@@ -569,27 +569,29 @@ func GetGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Handler: POST /api/gym/search
-// use query || query && lat, lon, distance || lat, lon, distance
+// Handler: POST /api/gym/search ; possible combinations
+// query || query && (lat, lon, distance || bbox) || lat, lon, distance || bbox
 //
 // {
 // "query": "central park",
 // "lat": "130.34",
 // "lon": "35.11",
 // "distance": "150",  // meters, max 500_000
+// "bbox": [minLon, minLat, maxLon, maxLat]
 // "limit": 100,       // optional, default 100, max 500
 // "offset": 0,        // optional
 // "page": 1,          // optional; if provided and offset not provided, offset = (page-1)*limit
 // }
 func SearchGyms(c *gin.Context) {
 	type payload struct {
-		Query    string   `json:"query"`
-		Limit    *int     `json:"limit"`
-		Offset   *int     `json:"offset"`
-		Page     *int     `json:"page"`
-		Lat      *float64 `json:"lat"`
-		Lon      *float64 `json:"lon"`
-		Distance *float64 `json:"distance"`
+		Query    string     `json:"query"`
+		Lat      *float64   `json:"lat"`
+		Lon      *float64   `json:"lon"`
+		Distance *float64   `json:"distance"`
+		Bbox     *[]float64 `json:"bbox"` // [minLon, minLat, maxLon, maxLat]
+		Limit    *int       `json:"limit"`
+		Offset   *int       `json:"offset"`
+		Page     *int       `json:"page"`
 	}
 
 	var p payload
@@ -603,10 +605,11 @@ func SearchGyms(c *gin.Context) {
 	// validation
 	// geo present if all three provided
 	geoProvided := p.Lat != nil && p.Lon != nil && p.Distance != nil
+	bboxProvided := p.Bbox != nil && len(*p.Bbox) == 4
 
 	// require query or geo
-	if q == "" && !geoProvided {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide either 'query' or ('lat','lon','distance') or both"})
+	if q == "" && !geoProvided && !bboxProvided {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "must provide either 'query' or ('lat','lon','distance') or 'bbox' or combinations"})
 		return
 	}
 
@@ -622,6 +625,19 @@ func SearchGyms(c *gin.Context) {
 		}
 		if *p.Lat < -90 || *p.Lat > 90 || *p.Lon < -180 || *p.Lon > 180 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "lat must be [-90,90], lon must be [-180,180]"})
+			return
+		}
+	}
+
+	if bboxProvided {
+		b := *p.Bbox
+		minLon, minLat, maxLon, maxLat := b[0], b[1], b[2], b[3]
+		if minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90 || minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bbox coordinates out of range: lat must be [-90,90], lon must be [-180,180]"})
+			return
+		}
+		if minLat > maxLat {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "bbox invalid: minLat must be <= maxLat"})
 			return
 		}
 	}
@@ -658,6 +674,15 @@ func SearchGyms(c *gin.Context) {
 			dbDetails,
 			q,
 			*p.Lat, *p.Lon, *p.Distance,
+			limit, offset,
+		)
+	} else if bboxProvided {
+		b := *p.Bbox
+		ids, err = decoder.SearchGymsSQLBBox(
+			ctx,
+			dbDetails,
+			q,
+			b[0], b[1], b[2], b[3],
 			limit, offset,
 		)
 	} else {
