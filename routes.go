@@ -404,10 +404,7 @@ func PokemonOne(c *gin.Context) {
 	res := decoder.GetOnePokemon(uint64(pokemonId))
 
 	if res != nil {
-		c.JSON(http.StatusAccepted, map[string]interface{}{
-			"lat": res.Lat,
-			"lon": res.Lon,
-		})
+		c.JSON(http.StatusAccepted, res)
 	} else {
 		c.Status(http.StatusNotFound)
 	}
