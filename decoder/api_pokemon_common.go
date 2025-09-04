@@ -4,7 +4,7 @@ import (
     "github.com/UnownHash/gohbem"
 )
 
-func buildApiPokemonResult(pokemon Pokemon) ApiPokemonResult {
+func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
     return ApiPokemonResult{
         Id:                      pokemon.Id,
         PokestopId:              pokemon.PokestopId,
