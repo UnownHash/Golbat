@@ -167,7 +167,9 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 
 func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
 	route.Name = sharedRouteProto.GetName()
-	route.Shortcode = sharedRouteProto.GetShortCode()
+	if sharedRouteProto.GetShortCode() != "" {
+		route.Shortcode = sharedRouteProto.GetShortCode()
+	}
 	route.Description = sharedRouteProto.GetDescription()
 	// NOTE: Some descriptions have more than 255 runes, which won't fit in our
 	// varchar(255).
