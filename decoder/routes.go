@@ -17,6 +17,7 @@ import (
 type Route struct {
 	Id               string      `db:"id"`
 	Name             string      `db:"name"`
+	Shortcode        string      `db:"shortcode"`
 	Description      string      `db:"description"`
 	DistanceMeters   int64       `db:"distance_meters"`
 	DurationSeconds  int64       `db:"duration_seconds"`
@@ -68,6 +69,7 @@ func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
 // hasChangesRoute compares two Route structs
 func hasChangesRoute(old *Route, new *Route) bool {
 	return old.Name != new.Name ||
+		old.Shortcode != new.Shortcode ||
 		old.Description != new.Description ||
 		old.DistanceMeters != new.DistanceMeters ||
 		old.DurationSeconds != new.DurationSeconds ||
@@ -100,8 +102,8 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 		_, err := db.GeneralDb.NamedExec(
 			`
 			INSERT INTO route (
-			  id, name, description, distance_meters, 
-			  duration_seconds, end_fort_id, end_image, 
+			  id, name, shortcode, description, distance_meters,
+			  duration_seconds, end_fort_id, end_image,
 			  end_lat, end_lon, image, image_border_color, 
 			  reversible, start_fort_id, start_image, 
 			  start_lat, start_lon, tags, type, 
@@ -109,8 +111,8 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			)
 			VALUES
 			  (
-				:id, :name, :description, :distance_meters, 
-				:duration_seconds, :end_fort_id, 
+				:id, :name, :shortcode, :description, :distance_meters,
+				:duration_seconds, :end_fort_id,
 				:end_image, :end_lat, :end_lon, :image, 
 				:image_border_color, :reversible, 
 				:start_fort_id, :start_image, :start_lat, 
@@ -130,6 +132,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			`
 			UPDATE route SET
 				name = :name,
+				shortcode = :shortcode,
 				description = :description,
 				distance_meters = :distance_meters,
 				duration_seconds = :duration_seconds,
@@ -165,6 +168,9 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 
 func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
 	route.Name = sharedRouteProto.GetName()
+	if sharedRouteProto.GetShortCode() != "" {
+		route.Shortcode = sharedRouteProto.GetShortCode()
+	}
 	route.Description = sharedRouteProto.GetDescription()
 	// NOTE: Some descriptions have more than 255 runes, which won't fit in our
 	// varchar(255).
