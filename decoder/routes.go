@@ -132,6 +132,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 			`
 			UPDATE route SET
 				name = :name,
+				shortcode = :shortcode,
 				description = :description,
 				distance_meters = :distance_meters,
 				duration_seconds = :duration_seconds,
