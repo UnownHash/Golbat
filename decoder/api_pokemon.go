@@ -150,10 +150,11 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 
 // Get one result
 
-func GetOnePokemon(pokemonId uint64) *Pokemon {
+func GetOnePokemon(pokemonId uint64) *ApiPokemonResult {
 	if item := pokemonCache.Get(pokemonId); item != nil {
 		pokemon := item.Value()
-		return &pokemon
+		apiPokemon := buildApiPokemonResult(&pokemon)
+		return &apiPokemon
 	}
 	return nil
 }
