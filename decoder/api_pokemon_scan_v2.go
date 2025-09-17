@@ -195,7 +195,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := pokemonCache.Get(key); pokemonCacheEntry != nil {
+		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
 			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
@@ -315,7 +315,7 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := pokemonCache.Get(key); pokemonCacheEntry != nil {
+		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
 			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
