@@ -638,6 +638,10 @@ func SearchGyms(c *gin.Context) {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "bbox invalid: minLat must be <= maxLat"})
 				return
 			}
+			if bbox.MinLon > bbox.MaxLon {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "bbox invalid: minLon must be <= maxLon"})
+				return
+			}
 		}
 	}
 
