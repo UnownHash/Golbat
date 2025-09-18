@@ -1,10 +1,21 @@
 package geo
 
-import "golbat/pogo"
+import (
+	"math"
+
+	"golbat/pogo"
+)
 
 type Location struct {
 	Latitude  float64
 	Longitude float64
+}
+
+type Bbox struct {
+	MinLon float64 `json:"min_lon"`
+	MinLat float64 `json:"min_lat"`
+	MaxLon float64 `json:"max_lon"`
+	MaxLat float64 `json:"max_lat"`
 }
 
 type ApiLocation struct {
@@ -18,6 +29,14 @@ func (l Location) Tuple() (float64, float64) {
 
 func LocationFromFort(fort *pogo.PokemonFortProto) Location {
 	return Location{fort.Latitude, fort.Longitude}
+}
+
+func NormalizeLon(v float64) float64 {
+	v = math.Mod(v+180.0, 360.0)
+	if v < 0 {
+		v += 360.0
+	}
+	return v - 180.0
 }
 
 var UseCurrentLocation = Location{0, 0}

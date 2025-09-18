@@ -147,31 +147,6 @@ func escapeLike(s string) string {
 	return s
 }
 
-func SearchGymsSQL(ctx context.Context, db db.DbDetails, query string, limit, offset int) ([]string, error) {
-	like := "%" + escapeLike(query) + "%"
-
-	const querySQL = `
-		SELECT id FROM gym
-		WHERE name LIKE ? ESCAPE '\\' AND enabled = 1
-		ORDER BY name ASC
-		LIMIT ? OFFSET ?
-	`
-
-	q := db.GeneralDb.Rebind(querySQL)
-
-	var ids []string
-	err := db.GeneralDb.SelectContext(ctx, &ids, q, like, limit, offset)
-	statsCollector.IncDbQuery("search gyms", err)
-
-	if err == sql.ErrNoRows {
-		return []string{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
 func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int) {
 	now := time.Now().Unix()
 	powerUpLevelExpirationMs := int64(fortData.PowerUpLevelExpirationMs) / 1000

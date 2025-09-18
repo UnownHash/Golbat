@@ -4,7 +4,7 @@ on: [push]
 
 env:
   REGISTRY: ghcr.io
-  GO_VERSION: '1.24.x'
+  GO_VERSION: '1.25.x'
 
 jobs:
   test:

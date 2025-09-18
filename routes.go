@@ -8,7 +8,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -512,7 +511,7 @@ func GetGyms(c *gin.Context) {
 	if err := c.ShouldBindJSON(&payload); err != nil {
 		var arr []string
 		if err2 := c.ShouldBindJSON(&arr); err2 != nil {
-			log.Warnf("POST /api/gyms invalid JSON: %v / %v", err, err2)
+			log.Warnf("invalid JSON: %v / %v", err, err2)
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] }"})
 			return
 		}
@@ -553,7 +552,7 @@ func GetGyms(c *gin.Context) {
 	for _, id := range ids {
 		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
 		if err != nil {
-			log.Warnf("POST /api/gyms error retrieving gym %s: %v", id, err)
+			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}
@@ -569,20 +568,30 @@ func GetGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
-// Handler: POST /api/gyms/search
+// POST /api/gym/search
+// Multiple filter combinations with AND logic
 //
 //	{
-//	  "query": "central park",
-//	  "limit": 100,    // optional, default 100, max 500
-//	  "offset": 0,     // optional
-//	  "page": 1        // optional; if provided and offset not provided, offset = (page-1)*limit
+//	  "filters": [
+//	    {
+//	      "name": "central park",           // optional: gym name search
+//	      "description": "playground",      // optional: gym description search
+//	      "location_distance": {            // optional: geographic radius search
+//	        "location": {"lat": 40.7829, "lon": -73.9654},
+//	        "distance": 500                 // meters, max 500_000
+//	      },
+//	      "bbox": {                         // optional: bounding box search
+//	        "min_lon": -74.0, "min_lat": 40.7,
+//	        "max_lon": -73.9, "max_lat": 40.8
+//	      }
+//	    }
+//	  ],
+//	  "limit": 100                        // optional, default 500, max 10000
 //	}
 func SearchGyms(c *gin.Context) {
 	type payload struct {
-		Query  string `json:"query"`
-		Limit  *int   `json:"limit"`
-		Offset *int   `json:"offset"`
-		Page   *int   `json:"page"`
+		Filters []decoder.ApiGymSearchFilter `json:"filters"`
+		Limit   *int                         `json:"limit"`
 	}
 
 	var p payload
@@ -590,44 +599,74 @@ func SearchGyms(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
 		return
 	}
-	q := strings.TrimSpace(p.Query)
-	if q == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "query is required"})
+
+	// Validate request
+	if len(p.Filters) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "filters array is required"})
 		return
 	}
 
-	limit := 100
-	if p.Limit != nil {
-		limit = *p.Limit
-	}
-	if limit <= 0 {
-		limit = 100
-	}
-	if limit > 500 {
-		limit = 500
+	var search decoder.ApiGymSearch
+	search.Filters = p.Filters
+
+	// Validate filters
+	for _, filter := range search.Filters {
+		if filter.LocationDistance != nil {
+			locDist := *filter.LocationDistance
+			if locDist.Distance <= 0 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "distance must be > 0"})
+				return
+			}
+			if locDist.Distance > 500_000 {
+				locDist.Distance = 500_000
+				filter.LocationDistance = &locDist
+			}
+			lat, lon := locDist.Location.Latitude, locDist.Location.Longitude
+			if lat < -90 || lat > 90 || lon < -180 || lon > 180 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "lat must be [-90,90], lon must be [-180,180]"})
+				return
+			}
+		}
+		if filter.Bbox != nil {
+			bbox := *filter.Bbox
+			if bbox.MinLat < -90 || bbox.MinLat > 90 || bbox.MaxLat < -90 || bbox.MaxLat > 90 ||
+				bbox.MinLon < -180 || bbox.MinLon > 180 || bbox.MaxLon < -180 || bbox.MaxLon > 180 {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "bbox coordinates out of range: lat must be [-90,90], lon must be [-180,180]"})
+				return
+			}
+			if bbox.MinLat > bbox.MaxLat {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "bbox invalid: minLat must be <= maxLat"})
+				return
+			}
+			if bbox.MinLon > bbox.MaxLon {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "bbox invalid: minLon must be <= maxLon"})
+				return
+			}
+		}
 	}
 
-	offset := 0
-	if p.Offset != nil {
-		offset = *p.Offset
-	} else if p.Page != nil && *p.Page > 0 {
-		offset = (*p.Page - 1) * limit
+	// Set limit
+	search.Limit = 500
+	if p.Limit != nil && *p.Limit > 0 {
+		search.Limit = *p.Limit
 	}
-	if offset < 0 {
-		offset = 0
+	if search.Limit > 10000 {
+		search.Limit = 10000
 	}
 
+	// Execute search
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	ids, err := decoder.SearchGymsSQL(ctx, dbDetails, q, limit, offset)
+	ids, err := decoder.SearchGymsAPI(ctx, dbDetails, search)
+
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-			log.Warnf("POST /api/gyms/search timed out: %v", err)
+			log.Warnf("timed out: %v", err)
 			c.Status(http.StatusGatewayTimeout)
 			return
 		}
-		log.Warnf("POST /api/gyms/search error: %v", err)
+		log.Warnf("error: %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
@@ -640,11 +679,11 @@ func SearchGyms(c *gin.Context) {
 		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
 		if err != nil {
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				log.Warnf("POST /api/gyms/search timed out while fetching %s: %v", id, err)
+				log.Warnf("timed out while fetching %s: %v", id, err)
 				c.Status(http.StatusGatewayTimeout)
 				return
 			}
-			log.Warnf("POST /api/gyms/search error retrieving gym %s: %v", id, err)
+			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}
