@@ -204,6 +204,9 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		})
 		gym.GuardingPokemonDisplay = null.StringFrom(string(display))
 	}
+	if !gym.TeamId.Valid || gym.TeamId.Int64 != int64(fortData.Team) {
+		gym.Defenders = null.NewString("", false)
+	}
 	gym.TeamId = null.IntFrom(int64(fortData.Team))
 	if fortData.GymDisplay != nil {
 		gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
