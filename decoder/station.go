@@ -29,17 +29,19 @@ type Station struct {
 	IsInactive        bool    `db:"is_inactive"`
 	Updated           int64   `db:"updated"`
 
-	BattleLevel            null.Int `db:"battle_level"`
-	BattleStart            null.Int `db:"battle_start"`
-	BattleEnd              null.Int `db:"battle_end"`
-	BattlePokemonId        null.Int `db:"battle_pokemon_id"`
-	BattlePokemonForm      null.Int `db:"battle_pokemon_form"`
-	BattlePokemonCostume   null.Int `db:"battle_pokemon_costume"`
-	BattlePokemonGender    null.Int `db:"battle_pokemon_gender"`
-	BattlePokemonAlignment null.Int `db:"battle_pokemon_alignment"`
-	BattlePokemonBreadMode null.Int `db:"battle_pokemon_bread_mode"`
-	BattlePokemonMove1     null.Int `db:"battle_pokemon_move_1"`
-	BattlePokemonMove2     null.Int `db:"battle_pokemon_move_2"`
+	BattleLevel               null.Int   `db:"battle_level"`
+	BattleStart               null.Int   `db:"battle_start"`
+	BattleEnd                 null.Int   `db:"battle_end"`
+	BattlePokemonId           null.Int   `db:"battle_pokemon_id"`
+	BattlePokemonForm         null.Int   `db:"battle_pokemon_form"`
+	BattlePokemonCostume      null.Int   `db:"battle_pokemon_costume"`
+	BattlePokemonGender       null.Int   `db:"battle_pokemon_gender"`
+	BattlePokemonAlignment    null.Int   `db:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode    null.Int   `db:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1        null.Int   `db:"battle_pokemon_move_1"`
+	BattlePokemonMove2        null.Int   `db:"battle_pokemon_move_2"`
+	BattlePokemonStamina      null.Int   `db:"battle_pokemon_stamina"`
+	BattlePokemonCpMultiplier null.Float `db:"battle_pokemon_cp_multiplier"`
 
 	TotalStationedPokemon null.Int    `db:"total_stationed_pokemon"`
 	TotalStationedGmax    null.Int    `db:"total_stationed_gmax"`
@@ -55,7 +57,7 @@ func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*
 	station := Station{}
 	err := db.GeneralDb.GetContext(ctx, &station,
 		`
-			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
+			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
 			FROM station WHERE id = ?
 		`, stationId)
 	statsCollector.IncDbQuery("select station", err)
@@ -86,8 +88,8 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	if oldStation == nil {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			`
-			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
-			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_start,:battle_end,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:battle_pokemon_bread_mode,:battle_pokemon_move_1,:battle_pokemon_move_2,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
+			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
+			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_start,:battle_end,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:battle_pokemon_bread_mode,:battle_pokemon_move_1,:battle_pokemon_move_2,:battle_pokemon_stamina,:battle_pokemon_cp_multiplier,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
 			`, station)
 
 		statsCollector.IncDbQuery("insert station", err)
@@ -121,6 +123,8 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 			    battle_pokemon_bread_mode = :battle_pokemon_bread_mode,
 			    battle_pokemon_move_1 = :battle_pokemon_move_1,
 			    battle_pokemon_move_2 = :battle_pokemon_move_2,
+			    battle_pokemon_stamina = :battle_pokemon_stamina,
+			    battle_pokemon_cp_multiplier = :battle_pokemon_cp_multiplier,
 			    total_stationed_pokemon = :total_stationed_pokemon,
 			    total_stationed_gmax = :total_stationed_gmax,
 			    stationed_pokemon = :stationed_pokemon
@@ -160,6 +164,8 @@ func hasChangesStation(old *Station, new *Station) bool {
 		old.BattlePokemonBreadMode != new.BattlePokemonBreadMode ||
 		old.BattlePokemonMove1 != new.BattlePokemonMove1 ||
 		old.BattlePokemonMove2 != new.BattlePokemonMove2 ||
+		old.BattlePokemonStamina != new.BattlePokemonStamina ||
+		old.BattlePokemonCpMultiplier != new.BattlePokemonCpMultiplier ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
 }
@@ -195,6 +201,8 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 			station.BattlePokemonGender = null.IntFrom(int64(pokemon.PokemonDisplay.Gender))
 			station.BattlePokemonAlignment = null.IntFrom(int64(pokemon.PokemonDisplay.Alignment))
 			station.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.PokemonDisplay.BreadModeEnum))
+			station.BattlePokemonStamina = null.IntFrom(int64(pokemon.Stamina))
+			station.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.CpMultiplier))
 			if rewardPokemon := battleDetails.RewardPokemon; rewardPokemon != nil && pokemon.PokemonId != rewardPokemon.PokemonId {
 				log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
 			}
