@@ -457,6 +457,9 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				if locationCard := util.ExtractLocationCardFromDisplay(display); locationCard != 0 {
 					infoData["location_card"] = locationCard
 				}
+				if breadMode := int(display.BreadModeEnum); breadMode != 0 {
+					infoData["bread_mode"] = breadMode
+				}
 			} else {
 
 			}
