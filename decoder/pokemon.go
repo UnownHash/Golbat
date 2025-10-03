@@ -256,7 +256,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		// Calculating PVP data
 		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId ||
 			oldPokemon.Level != pokemon.Level || oldPokemon.Form != pokemon.Form ||
-			oldPokemon.Costume != pokemon.Costume || oldPokemon.Gender != pokemon.Gender) {
+			oldPokemon.Costume != pokemon.Costume || oldPokemon.Gender != pokemon.Gender ||
+			oldPokemon.Weather != pokemon.Weather) {
 			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
 				int(pokemon.Form.ValueOrZero()),
 				int(pokemon.Costume.ValueOrZero()),
