@@ -50,6 +50,7 @@ type cleanup struct {
 	Quests      bool `koanf:"quests"`
 	Incidents   bool `koanf:"incidents"`
 	Tappables   bool `koanf:"tappables"`
+	Hyperlocals bool `koanf:"hyperlocals"`
 	Stats       bool `koanf:"stats"`
 	StatsDays   int  `koanf:"stats_days"`
 	DeviceHours int  `koanf:"device_hours"`
@@ -124,18 +125,19 @@ type tuning struct {
 }
 
 type scanRule struct {
-	Areas            []string       `koanf:"areas"`
-	AreaNames        []geo.AreaName `koanf:"-"`
-	ScanContext      []string       `koanf:"context"`
-	ProcessPokemon   *bool          `koanf:"pokemon"`
-	ProcessWilds     *bool          `koanf:"wild_pokemon"`
-	ProcessNearby    *bool          `koanf:"nearby_pokemon"`
-	ProcessWeather   *bool          `koanf:"weather"`
-	ProcessCells     *bool          `koanf:"cells"`
-	ProcessPokestops *bool          `koanf:"pokestops"`
-	ProcessGyms      *bool          `koanf:"gyms"`
-	ProcessStations  *bool          `koanf:"stations"`
-	ProcessTappables *bool          `koanf:"tappables"`
+	Areas              []string       `koanf:"areas"`
+	AreaNames          []geo.AreaName `koanf:"-"`
+	ScanContext        []string       `koanf:"context"`
+	ProcessPokemon     *bool          `koanf:"pokemon"`
+	ProcessWilds       *bool          `koanf:"wild_pokemon"`
+	ProcessNearby      *bool          `koanf:"nearby_pokemon"`
+	ProcessWeather     *bool          `koanf:"weather"`
+	ProcessCells       *bool          `koanf:"cells"`
+	ProcessPokestops   *bool          `koanf:"pokestops"`
+	ProcessGyms        *bool          `koanf:"gyms"`
+	ProcessStations    *bool          `koanf:"stations"`
+	ProcessTappables   *bool          `koanf:"tappables"`
+	ProcessHyperlocals *bool          `koanf:"hyperlocals"`
 }
 
 var Config configDefinition

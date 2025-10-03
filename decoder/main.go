@@ -53,6 +53,11 @@ type RawMapPokemonData struct {
 	Timestamp int64
 }
 
+type RawHyperlocalData struct {
+	Data      *pogo.HyperlocalExperimentClientProto
+	Timestamp int64
+}
+
 type webhooksSenderInterface interface {
 	AddMessage(whType webhooks.WebhookType, message any, areas []geo.AreaName)
 }
@@ -72,6 +77,7 @@ var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
+var hyperlocalCache *ttlcache.Cache[HyperlocalKey, Hyperlocal]
 
 var gymStripedMutex = stripedmutex.New(128)
 var pokestopStripedMutex = stripedmutex.New(128)
@@ -82,6 +88,7 @@ var pokemonStripedMutex = intstripedmutex.New(1024)
 var weatherStripedMutex = intstripedmutex.New(128)
 var s2cellStripedMutex = stripedmutex.New(1024)
 var routeStripedMutex = stripedmutex.New(128)
+var hyperlocalStripedMutex = intstripedmutex.New(128)
 
 var s2CellLookup = sync.Map{}
 
@@ -168,6 +175,11 @@ func initDataCache() {
 		ttlcache.WithTTL[string, Route](60 * time.Minute),
 	)
 	go routeCache.Start()
+
+	hyperlocalCache = ttlcache.New[HyperlocalKey, Hyperlocal](
+		ttlcache.WithTTL[HyperlocalKey, Hyperlocal](60 * time.Minute),
+	)
+	go hyperlocalCache.Start()
 }
 
 func InitialiseOhbem() {
@@ -343,6 +355,39 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
 		saveStationRecord(ctx, db, station)
 		stationMutex.Unlock()
+	}
+}
+
+func UpdateHyperlocalBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawHyperlocalData) {
+	if len(p) <= 0 {
+		return
+	}
+
+	for _, raw := range p {
+		key := HyperlocalKey{
+			ExperimentId: raw.Data.GetExperimentId(),
+			Lat:          raw.Data.GetLatDegrees(),
+			Lon:          raw.Data.GetLngDegrees(),
+		}
+
+		hyperlocalMutex, _ := hyperlocalStripedMutex.GetLock(uint64(key.ExperimentId) ^ math.Float64bits(key.Lat) ^ math.Float64bits(key.Lon))
+		hyperlocalMutex.Lock()
+
+		hyperlocal, err := getHyperlocalRecord(ctx, db, key)
+		if err != nil {
+			log.Errorf("getHyperlocalRecord: %s", err)
+			hyperlocalMutex.Unlock()
+			continue
+		}
+
+		if hyperlocal == nil {
+			hyperlocal = &Hyperlocal{}
+		}
+
+		hyperlocal.updateFromHyperlocalProto(raw.Data, raw.Timestamp)
+		saveHyperlocalRecord(ctx, db, hyperlocal)
+
+		hyperlocalMutex.Unlock()
 	}
 }
 
