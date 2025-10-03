@@ -900,7 +900,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 }
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
+	return len(mapCell.Stations) > 0 || len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
 }
 
 func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
