@@ -24,6 +24,7 @@ type PokemonLookup struct {
 	PokemonId          int16
 	Form               int16
 	HasEncounterValues bool
+	Weather            int8
 	Atk                int8
 	Def                int8
 	Sta                int8
@@ -49,12 +50,14 @@ var pokemonTree rtree.RTreeG[uint64]
 func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
 
-	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, Pokemon]) {
-		r := v.Value()
-		removePokemonFromTree(&r)
-		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
-	})
-
+	// Set up OnEviction callbacks for each cache in the array
+	for i := range pokemonCache {
+		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, Pokemon]) {
+			r := v.Value()
+			removePokemonFromTree(&r)
+			// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
+		})
+	}
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
@@ -83,7 +86,8 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
-		HasEncounterValues: pokemon.Move1.Valid,
+		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
+		Weather:            int8(valueOrMinus1(pokemon.Weather)),
 		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),
 		Sta:                int8(valueOrMinus1(pokemon.StaIv)),

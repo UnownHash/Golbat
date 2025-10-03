@@ -64,3 +64,7 @@ max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokem
 max_pokemon_results = 3000  # Maximum number of pokemon to return
 extended_timeout = false
 profile_routes = false
+
+[weather]
+proactive_iv_switching = true       # Enable proactive IV switching upon weather changes (default: true)
+proactive_iv_switching_to_db = false # Write proactive IV changes to database (default: false)

@@ -191,6 +191,24 @@ func main() {
 	}
 
 	decoder.InitialiseOhbem()
+	if cfg.Weather.ProactiveIVSwitching {
+		decoder.InitProactiveIVSwitchSem()
+
+		// Try to fetch from remote first, fallback to cache, then fallback to bundled file
+		if err := decoder.FetchMasterFileData(); err != nil {
+			if err2 := decoder.LoadMasterFileData(""); err2 != nil {
+				_ = decoder.LoadMasterFileData("pogo/master-latest-rdm.json")
+				log.Errorf("Weather MasterFile fetch failed. Loading from cache failed: %s. Loading from pogo/master-latest-rdm.json instead.", err2)
+			} else {
+				log.Warnf("Weather MasterFile fetch failed, loaded from cache: %s", err)
+			}
+		} else {
+			// Save to cache if successfully fetched
+			_ = decoder.SaveMasterFileData()
+		}
+
+		_ = decoder.WatchMasterFileData()
+	}
 	decoder.LoadStatsGeofences()
 	InitDeviceCache()
 
@@ -830,6 +848,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
 
+	if len(decodedGmo.MapCell) == 0 {
+		return "Skipping GetMapObjectsOutProto: No map cells found"
+	}
 	for _, mapCell := range decodedGmo.MapCell {
 		if isCellNotEmpty(mapCell) {
 			newMapCells = append(newMapCells, mapCell.S2CellId)
@@ -858,11 +879,21 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
 	}
+	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {
-		decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather)
+		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather, decodedGmo.MapCell[0].AsOfTimeMs)
 	}
 	if scanParameters.ProcessPokemon {
 		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
+		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
+			for _, weatherUpdate := range weatherUpdates {
+				go func(weatherUpdate decoder.WeatherUpdate) {
+					decoder.ProactiveIVSwitchSem <- true
+					defer func() { <-decoder.ProactiveIVSwitchSem }()
+					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, decodedGmo.MapCell[0].AsOfTimeMs/1000)
+				}(weatherUpdate)
+			}
+		}
 	}
 	if scanParameters.ProcessStations {
 		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
