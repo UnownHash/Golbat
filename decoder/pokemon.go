@@ -68,6 +68,7 @@ type Pokemon struct {
 	IsDitto                 bool        `db:"is_ditto" json:"is_ditto"`
 	SeenType                null.String `db:"seen_type" json:"seen_type"`
 	Shiny                   null.Bool   `db:"shiny" json:"shiny"`
+	Background              null.Int    `db:"background" json:"background"`
 	Username                null.String `db:"username" json:"username"`
 	Capture1                null.Float  `db:"capture_1" json:"capture_1"`
 	Capture2                null.Float  `db:"capture_2" json:"capture_2"`
@@ -109,6 +110,7 @@ type Pokemon struct {
 //`display_pokemon_id` smallint unsigned DEFAULT NULL,
 //`seen_type` enum('wild','encounter','nearby_stop','nearby_cell') DEFAULT NULL,
 //`shiny` tinyint(1) DEFAULT '0',
+//`background` smallint unsigned DEFAULT NULL,
 //`username` varchar(32) DEFAULT NULL,
 //`capture_1` double(18,14) DEFAULT NULL,
 //`capture_2` double(18,14) DEFAULT NULL,
@@ -148,7 +150,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, "+
 			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
 			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
-			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
+			"expire_timestamp_verified, shiny, background, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
 
 	statsCollector.IncDbQuery("select pokemon", err)
@@ -211,6 +213,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		old.IsDitto != new.IsDitto ||
 		old.SeenType != new.SeenType ||
 		old.Shiny != new.Shiny ||
+		old.Background != new.Background ||
 		old.IsEvent != new.IsEvent ||
 		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
 		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
@@ -315,12 +318,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, move_1, move_2,"+
 				"gender, form, cp, level, strong, weather, costume, weight, height, size,"+
 				"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-				"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
+				"expire_timestamp_verified, shiny, background, username, %s is_event, seen_type) "+
 				"VALUES (\"%d\", :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
 				":golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather, :costume,"+
 				":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
-				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
-				":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
+				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :background, :username,"+
+				"%s :is_event, :seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
 
 			statsCollector.IncDbQuery("insert pokemon", err)
 			if err != nil {
@@ -369,6 +372,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				"is_ditto = :is_ditto, "+
 				"seen_type = :seen_type, "+
 				"shiny = :shiny, "+
+				"background = :background, "+
 				"username = :username, "+
 				"%s"+
 				"is_event = :is_event "+
@@ -474,6 +478,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 			"capture_2":               new.Capture2.ValueOrZero(),
 			"capture_3":               new.Capture3.ValueOrZero(),
 			"shiny":                   new.Shiny,
+			"background":              new.Background,
 			"username":                new.Username,
 			"display_pokemon_id":      new.DisplayPokemonId,
 			"is_event":                new.IsEvent,
@@ -1104,6 +1109,9 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	pokemon.Username = null.StringFrom(username)
 	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
+	if proto.PokemonDisplay.LocationCard != nil {
+		pokemon.Background = null.IntFrom(int64(proto.PokemonDisplay.LocationCard.LocationCard.Number()))
+	}
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -1254,6 +1262,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Move2 = null.NewInt(0, false)
 			pokemon.Cp = null.NewInt(0, false)
 			pokemon.Shiny = null.NewBool(false, false)
+			pokemon.Background = null.NewInt(0, false)
 			pokemon.IsDitto = false
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
