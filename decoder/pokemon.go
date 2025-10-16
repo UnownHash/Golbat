@@ -1109,7 +1109,6 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	pokemon.Username = null.StringFrom(username)
 	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
-	pokemon.Background = null.IntFrom(util.ExtractBackgroundFromDisplay(proto.PokemonDisplay))
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -1260,7 +1259,6 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Move2 = null.NewInt(0, false)
 			pokemon.Cp = null.NewInt(0, false)
 			pokemon.Shiny = null.NewBool(false, false)
-			pokemon.Background = null.NewInt(0, false)
 			pokemon.IsDitto = false
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
@@ -1272,6 +1270,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	pokemon.Gender = null.IntFrom(int64(display.Gender))
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
+	pokemon.Background = null.IntFrom(util.ExtractBackgroundFromDisplay(display))
 	if !pokemon.isNewRecord() {
 		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
 	}
