@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golbat/util"
 	"strconv"
 	"strings"
 	"sync"
@@ -1108,9 +1109,7 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	pokemon.Username = null.StringFrom(username)
 	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
-	if proto.PokemonDisplay.LocationCard != nil {
-		pokemon.Background = null.IntFrom(int64(proto.PokemonDisplay.LocationCard.LocationCard.Number()))
-	}
+	pokemon.Background = null.IntFrom(util.ExtractBackgroundFromDisplay(proto.PokemonDisplay))
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))

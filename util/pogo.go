@@ -27,9 +27,9 @@ var IncidentTypeToName = map[int8]string{
 	9: "showcase",
 }
 
-func ExtractBackgroundFromDisplay(display *pogo.PokemonDisplayProto) int {
+func ExtractBackgroundFromDisplay(display *pogo.PokemonDisplayProto) int64 {
 	if display.LocationCard == nil {
 		return 0
 	}
-	return int(display.LocationCard.LocationCard)
+	return int64(display.LocationCard.LocationCard)
 }

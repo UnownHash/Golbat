@@ -609,7 +609,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 		TempEvolutionFinishMs int64   `json:"temp_evolution_finish_ms"`
 		Alignment             int     `json:"alignment"`
 		Badge                 int     `json:"badge"`
-		Background            int     `json:"background"`
+		Background            int64   `json:"background"`
 	}
 	type contestJson struct {
 		TotalEntries   int            `json:"total_entries"`
