@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golbat/util"
 	"strconv"
 	"strings"
 	"sync"
@@ -1250,6 +1251,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 		if oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
+			pokemon.Background != null.IntFromPtr(util.ExtractBackgroundFromDisplay(display)) ||
 			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
 			log.Debugf("Pokemon %d changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
@@ -1274,6 +1276,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	pokemon.Gender = null.IntFrom(int64(display.Gender))
 	pokemon.Form = null.IntFrom(int64(display.Form))
 	pokemon.Costume = null.IntFrom(int64(display.Costume))
+	pokemon.Background = null.IntFromPtr(util.ExtractBackgroundFromDisplay(display))
 	if !pokemon.isNewRecord() {
 		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
 	}
