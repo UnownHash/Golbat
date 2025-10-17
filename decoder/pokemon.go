@@ -1110,9 +1110,6 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	pokemon.Username = null.StringFrom(username)
 	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
-	if proto.PokemonDisplay.LocationCard != nil {
-		pokemon.Background = null.IntFrom(int64(proto.PokemonDisplay.LocationCard.LocationCard.Number()))
-	}
 	pokemon.Cp = null.IntFrom(int64(proto.Cp))
 	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
 	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
@@ -1264,7 +1261,6 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.Move2 = null.NewInt(0, false)
 			pokemon.Cp = null.NewInt(0, false)
 			pokemon.Shiny = null.NewBool(false, false)
-			pokemon.Background = null.NewInt(0, false)
 			pokemon.IsDitto = false
 			pokemon.DisplayPokemonId = null.NewInt(0, false)
 			pokemon.Pvp = null.NewString("", false)
