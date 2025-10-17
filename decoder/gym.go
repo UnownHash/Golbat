@@ -173,15 +173,15 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 
 func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
 	type pokemonDisplay struct {
-		Form                  int   `json:"form,omitempty"`
-		Costume               int   `json:"costume,omitempty"`
-		Gender                int   `json:"gender"`
-		Shiny                 bool  `json:"shiny,omitempty"`
-		TempEvolution         int   `json:"temp_evolution,omitempty"`
-		TempEvolutionFinishMs int64 `json:"temp_evolution_finish_ms,omitempty"`
-		Alignment             int   `json:"alignment,omitempty"`
-		Badge                 int   `json:"badge,omitempty"`
-		Background            int64 `json:"background,omitempty"`
+		Form                  int    `json:"form,omitempty"`
+		Costume               int    `json:"costume,omitempty"`
+		Gender                int    `json:"gender"`
+		Shiny                 bool   `json:"shiny,omitempty"`
+		TempEvolution         int    `json:"temp_evolution,omitempty"`
+		TempEvolutionFinishMs int64  `json:"temp_evolution_finish_ms,omitempty"`
+		Alignment             int    `json:"alignment,omitempty"`
+		Badge                 int    `json:"badge,omitempty"`
+		Background            *int64 `json:"background,omitempty"`
 	}
 	gym.Id = fortData.FortId
 	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
@@ -331,7 +331,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		TempEvolutionFinishMs int64              `json:"temp_evolution_finish_ms,omitempty"`
 		Alignment             int                `json:"alignment,omitempty"`
 		Badge                 int                `json:"badge,omitempty"`
-		Background            int64              `json:"background,omitempty"`
+		Background            *int64             `json:"background,omitempty"`
 		DeployedMs            int64              `json:"deployed_ms,omitempty"`
 		DeployedTime          int64              `json:"deployed_time,omitempty"`
 		BattlesWon            int32              `json:"battles_won"`
