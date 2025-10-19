@@ -48,6 +48,7 @@ type ApiPokemonResult struct {
 	IsDitto                 bool                             `json:"is_ditto"`
 	SeenType                null.String                      `json:"seen_type"`
 	Shiny                   null.Bool                        `json:"shiny"`
+	Background              null.Int                         `json:"background"`
 	Username                null.String                      `json:"username"`
 	Capture1                null.Float                       `json:"capture_1"`
 	Capture2                null.Float                       `json:"capture_2"`
@@ -308,6 +309,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				IsDitto:                 pokemon.IsDitto,
 				SeenType:                pokemon.SeenType,
 				Shiny:                   pokemon.Shiny,
+				Background:              pokemon.Background,
 				Username:                pokemon.Username,
 				Pvp: func() map[string][]gohbem.PokemonEntry {
 					if ohbem != nil {
