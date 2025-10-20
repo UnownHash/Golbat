@@ -135,8 +135,8 @@ func initDataCache() {
 	go spawnpointCache.Start()
 
 	pokemonCache = ttlcache.New[uint64, Pokemon](
-		ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
-		ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
+		ttlcache.WithTTL[uint64, Pokemon](10*time.Minute),
+		ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 10 mins by default but will be adjusted
 	)
 	go pokemonCache.Start()
 	initPokemonRtree()

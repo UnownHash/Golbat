@@ -161,7 +161,11 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 	}
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, pokemon, ttlcache.DefaultTTL)
+		remainingDuration := pokemon.remainingDuration(time.Now().Unix())
+		if remainingDuration <= 0 { // DefaultTTL or PreviousDefaultTTL gives us an hour (longer than ttlcache default)
+			remainingDuration = time.Hour
+		}
+		pokemonCache.Set(encounterId, pokemon, remainingDuration)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +178,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		pokemonCache.Set(encounterId, *pokemon, ttlcache.DefaultTTL)
+		pokemonCache.Set(encounterId, *pokemon, time.Hour) // create new record with an hour TTL initially
 	}
 	return pokemon, nil
 }
@@ -540,12 +544,17 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.FirstSeenTimestamp == 0
 }
 
+// remainingDuration calculates a TTL for the pokemon cache based on known expiry
+// timestamp - with a minimum of 1 minute to allow the record to stay around and be queried
+// without rehydrating from the database post despawn
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
-	remaining := ttlcache.DefaultTTL
+	remaining := ttlcache.PreviousOrDefaultTTL
 	if pokemon.ExpireTimestampVerified {
 		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
-		if timeLeft > 1 {
+		if timeLeft > 60 {
 			remaining = time.Duration(timeLeft) * time.Second
+		} else {
+			remaining = time.Minute
 		}
 	}
 	return remaining
