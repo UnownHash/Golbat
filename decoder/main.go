@@ -460,17 +460,10 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 	now := time.Now().Unix()
 	// check gyms in cell
 	for _, cellId := range mapCells {
-		// lookup for last check
-		if shouldSkipCellCheck(cellId, now) {
-			continue
-		}
-
-		// time to check again
 		s2cellMutex, _ := s2cellStripedMutex.GetLock(strconv.FormatUint(cellId, 10))
 		s2cellMutex.Lock()
 
 		if shouldSkipCellCheck(cellId, now) {
-			// if another GMO processed that cell already, then skip
 			s2cellMutex.Unlock()
 			continue
 		}
@@ -481,7 +474,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 			log.Errorf("ClearRemovedForts - Unable to clear old gyms: %s", errGyms)
 		} else {
 			if gymIds == nil {
-				// if there is no gym to clear we are done with gyms
+				// if there is no gym to clear, we are done with gyms
 				gymsDone = true
 			} else {
 				// we need to clear removed gyms (not seen for 60 minutes)
@@ -505,7 +498,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 			log.Errorf("ClearRemovedForts - Unable to clear old stops: %s", stopsErr)
 		} else {
 			if stopIds == nil {
-				// iff there is no stop to clear we update stops
+				// iff there is no stop to clear, we update stops
 				stopsDone = true
 			} else {
 				// we need to clear removed stops (not seen for 60 minutes)
@@ -513,7 +506,7 @@ func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []u
 				if stopsErr2 != nil {
 					log.Errorf("ClearRemovedForts - Unable to clear old stops '%v': %s", stopIds, stopsErr2)
 				} else {
-					// if there are all gyms cleared we are done with gyms
+					// if there are all gyms cleared, we are done with gyms
 					stopsDone = true
 					for _, stopId := range stopIds {
 						pokestopCache.Delete(stopId)
