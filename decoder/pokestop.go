@@ -454,8 +454,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				if display.Shiny {
 					infoData["shiny"] = display.Shiny
 				}
-				if locationCard := util.ExtractLocationCardFromDisplay(display); locationCard != 0 {
-					infoData["location_card"] = locationCard
+				if background := util.ExtractBackgroundFromDisplay(display); background != nil {
+					infoData["background"] = background
 				}
 				if breadMode := int(display.BreadModeEnum); breadMode != 0 {
 					infoData["bread_mode"] = breadMode
@@ -609,7 +609,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 		TempEvolutionFinishMs int64   `json:"temp_evolution_finish_ms"`
 		Alignment             int     `json:"alignment"`
 		Badge                 int     `json:"badge"`
-		LocationCard          int     `json:"location_card"`
+		Background            *int64  `json:"background,omitempty"`
 	}
 	type contestJson struct {
 		TotalEntries   int            `json:"total_entries"`
@@ -637,7 +637,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			TempEvolutionFinishMs: entry.GetPokemonDisplay().TemporaryEvolutionFinishMs,
 			Alignment:             int(entry.GetPokemonDisplay().Alignment),
 			Badge:                 int(entry.GetPokemonDisplay().PokemonBadge),
-			LocationCard:          util.ExtractLocationCardFromDisplay(entry.PokemonDisplay),
+			Background:            util.ExtractBackgroundFromDisplay(entry.PokemonDisplay),
 		})
 
 	}
