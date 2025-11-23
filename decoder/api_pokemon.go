@@ -128,7 +128,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
 
 			if found {
-				if pokemonCacheEntry := pokemonCache.Get(pokemonId); pokemonCacheEntry != nil {
+				if pokemonCacheEntry := getPokemonFromCache(pokemonId); pokemonCacheEntry != nil {
 					pokemon := pokemonCacheEntry.Value()
 					results = append(results, &pokemon)
 					pokemonMatched++
@@ -151,7 +151,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 // Get one result
 
 func GetOnePokemon(pokemonId uint64) *ApiPokemonResult {
-	if item := pokemonCache.Get(pokemonId); item != nil {
+	if item := getPokemonFromCache(pokemonId); item != nil {
 		pokemon := item.Value()
 		apiPokemon := buildApiPokemonResult(&pokemon)
 		return &apiPokemon
