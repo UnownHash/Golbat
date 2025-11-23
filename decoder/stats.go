@@ -156,7 +156,7 @@ func ReloadGeofenceAndClearStats() {
 }
 
 // update stats for an encounterId
-func updateEncounterStats(pokemon *Pokemon) {
+func updateEncounterStats(pokemon *Pokemon, areas []geo.AreaName) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
 	// And double check that we have IVs, anyway.
@@ -200,31 +200,48 @@ func updateEncounterStats(pokemon *Pokemon) {
 
 	// For the DB
 	func() {
-		areaName := geo.AreaName{Parent: "world", Name: "world"}
+		// Use the provided areas
+		if len(areas) == 0 {
+			areas = []geo.AreaName{
+				{
+					Parent: "unmatched",
+					Name:   "unmatched",
+				},
+			}
+		}
+
+		// Always include world stats for backward compatibility
+		areas = append(areas, geo.AreaName{
+			Parent: "world",
+			Name:   "world",
+		})
 
 		pokemonStatsLock.Lock()
 		defer pokemonStatsLock.Unlock()
 
-		countStats, exists := pokemonCount[areaName]
-		if !exists {
-			countStats = &areaPokemonCountDetail{
-				hundos:      make(map[pokemonForm]int),
-				nundos:      make(map[pokemonForm]int),
-				count:       make(map[pokemonForm]int),
-				ivCount:     make(map[pokemonForm]int),
-				shinyChecks: make(map[pokemonForm]shinyChecks),
-			}
-			pokemonCount[areaName] = countStats
-		}
-
 		pf := pokemonForm{pokemonId: pokemon.PokemonId, formId: formId}
 
-		entry := countStats.shinyChecks[pf]
-		entry.total++
-		if pokemon.Shiny.ValueOrZero() {
-			entry.shiny++
+		// Update shiny stats for each area
+		for _, areaName := range areas {
+			countStats, exists := pokemonCount[areaName]
+			if !exists {
+				countStats = &areaPokemonCountDetail{
+					hundos:      make(map[pokemonForm]int),
+					nundos:      make(map[pokemonForm]int),
+					count:       make(map[pokemonForm]int),
+					ivCount:     make(map[pokemonForm]int),
+					shinyChecks: make(map[pokemonForm]shinyChecks),
+				}
+				pokemonCount[areaName] = countStats
+			}
+
+			entry := countStats.shinyChecks[pf]
+			entry.total++
+			if pokemon.Shiny.ValueOrZero() {
+				entry.shiny++
+			}
+			countStats.shinyChecks[pf] = entry
 		}
-		countStats.shinyChecks[pf] = entry
 	}()
 
 	// Prometheus
