@@ -9,6 +9,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
+	"golbat/webhooks"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -214,25 +215,38 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 
 func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
 	type stationedPokemonDetail struct {
-		PokemonId int `json:"pokemon_id"`
-		Form      int `json:"form"`
-		Costume   int `json:"costume"`
-		Gender    int `json:"gender"`
-		BreadMode int `json:"bread_mode"`
+		PokemonId             int    `json:"pokemon_id"`
+		Form                  int    `json:"form"`
+		Costume               int    `json:"costume"`
+		Gender                int    `json:"gender"`
+		Shiny                 bool   `json:"shiny,omitempty"`
+		TempEvolution         int    `json:"temp_evolution,omitempty"`
+		TempEvolutionFinishMs int64  `json:"temp_evolution_finish_ms,omitempty"`
+		Alignment             int    `json:"alignment,omitempty"`
+		Badge                 int    `json:"badge,omitempty"`
+		Background            *int64 `json:"background,omitempty"`
+		BreadMode             int    `json:"bread_mode"`
 	}
 
 	var stationedPokemon []stationedPokemonDetail
 	stationedGmax := int64(0)
 	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
 		pokemon := stationedPokemonDetails.Pokemon
+		display := pokemon.PokemonDisplay
 		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
-			PokemonId: int(pokemon.PokemonId),
-			Form:      int(pokemon.PokemonDisplay.Form),
-			Costume:   int(pokemon.PokemonDisplay.Costume),
-			Gender:    int(pokemon.PokemonDisplay.Gender),
-			BreadMode: int(pokemon.PokemonDisplay.BreadModeEnum),
+			PokemonId:             int(pokemon.PokemonId),
+			Form:                  int(display.Form),
+			Costume:               int(display.Costume),
+			Gender:                int(display.Gender),
+			Shiny:                 display.Shiny,
+			TempEvolution:         int(display.CurrentTempEvolution),
+			TempEvolutionFinishMs: display.TemporaryEvolutionFinishMs,
+			Alignment:             int(display.Alignment),
+			Badge:                 int(display.PokemonBadge),
+			Background:            util.ExtractBackgroundFromDisplay(display),
+			BreadMode:             int(display.BreadModeEnum),
 		})
-		if pokemon.PokemonDisplay.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || pokemon.PokemonDisplay.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
+		if display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
 			stationedGmax++
 		}
 	}
@@ -296,5 +310,38 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 }
 
 func createStationWebhooks(oldStation *Station, station *Station) {
-	//TODO we need to define webhooks, are they needed for stations, or only for battles?
+	if oldStation == nil || station.BattlePokemonId.Valid && (oldStation.EndTime != station.EndTime ||
+		oldStation.BattleEnd != station.BattleEnd ||
+		oldStation.BattlePokemonId != station.BattlePokemonId ||
+		oldStation.BattlePokemonForm != station.BattlePokemonForm ||
+		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
+		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
+		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
+		stationHook := map[string]any{
+			"id":                        station.Id,
+			"latitude":                  station.Lat,
+			"longitude":                 station.Lon,
+			"name":                      station.Name,
+			"start_time":                station.StartTime,
+			"end_time":                  station.EndTime,
+			"is_battle_available":       station.IsBattleAvailable,
+			"battle_level":              station.BattleLevel,
+			"battle_start":              station.BattleStart,
+			"battle_end":                station.BattleEnd,
+			"battle_pokemon_id":         station.BattlePokemonId,
+			"battle_pokemon_form":       station.BattlePokemonForm,
+			"battle_pokemon_costume":    station.BattlePokemonCostume,
+			"battle_pokemon_gender":     station.BattlePokemonGender,
+			"battle_pokemon_alignment":  station.BattlePokemonAlignment,
+			"battle_pokemon_bread_mode": station.BattlePokemonBreadMode,
+			"battle_pokemon_move_1":     station.BattlePokemonMove1,
+			"battle_pokemon_move_2":     station.BattlePokemonMove2,
+			"total_stationed_pokemon":   station.TotalStationedPokemon,
+			"total_stationed_gmax":      station.TotalStationedGmax,
+			"updated":                   station.Updated,
+		}
+		areas := MatchStatsGeofence(station.Lat, station.Lon)
+		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
+		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
+	}
 }
