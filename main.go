@@ -295,6 +295,7 @@ func main() {
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
 	apiGroup.POST("/pokemon/v2/scan", PokemonScan2)
+	apiGroup.POST("/pokemon/v3/scan", PokemonScan3)
 	apiGroup.POST("/pokemon/search", PokemonSearch)
 
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)

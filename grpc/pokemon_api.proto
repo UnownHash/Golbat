@@ -7,6 +7,7 @@ package pokemon_api;
 // Interface exported by the server.
 service Pokemon {
   rpc Search (PokemonScanRequest) returns (PokemonScanResponse) {}
+  rpc SearchV3 (PokemonScanRequestV3) returns (PokemonScanResponseV3) {}
 }
 
 message PokemonScanRequest {
@@ -18,19 +19,43 @@ message PokemonScanRequest {
   repeated PokemonDnf filters = 7;
 }
 
+message PokemonScanRequestV3 {
+  float min_lat = 1;
+  float min_lon = 2;
+  float max_lat = 3;
+  float max_lon = 4;
+  int32 limit = 6;
+  repeated PokemonDnfV3 filters = 7;
+}
+
 message PokemonDnf  {
-  repeated PokemonId pokemon            = 1;
-  optional RangeMinMax Iv               = 2;
-  optional RangeMinMax AtkIv            = 3;
-  optional RangeMinMax DefIv            = 4;
-  optional RangeMinMax StaIv            = 5;
-  optional RangeMinMax Level            = 6;
-  optional RangeMinMax Cp               = 7;
-  optional RangeMinMax Gender           = 8;
-  optional RangeMinMax Size             = 9;
+  repeated PokemonId pokemon = 1;
+  optional RangeMinMax Iv = 2;
+  optional RangeMinMax AtkIv = 3;
+  optional RangeMinMax DefIv = 4;
+  optional RangeMinMax StaIv = 5;
+  optional RangeMinMax Level = 6;
+  optional RangeMinMax Cp = 7;
+  optional RangeMinMax Gender = 8;
+  optional RangeMinMax Size = 9;
   optional RangeMinMax PvpLittleRanking = 10;
-  optional RangeMinMax PvpGreatRanking  = 11;
-  optional RangeMinMax PvpUltraRanking  = 12;
+  optional RangeMinMax PvpGreatRanking = 11;
+  optional RangeMinMax PvpUltraRanking = 12;
+}
+
+message PokemonDnfV3  {
+  repeated PokemonId pokemon = 1;
+  optional RangeMinMax Iv = 2;
+  optional RangeMinMax AtkIv = 3;
+  optional RangeMinMax DefIv = 4;
+  optional RangeMinMax StaIv = 5;
+  optional RangeMinMax Level = 6;
+  optional RangeMinMax Cp = 7;
+  repeated int32 Gender = 8;
+  optional RangeMinMax Size = 9;
+  optional RangeMinMax PvpLittleRanking = 10;
+  optional RangeMinMax PvpGreatRanking = 11;
+  optional RangeMinMax PvpUltraRanking = 12;
 }
 
 message PokemonId {
@@ -52,14 +77,24 @@ message PokemonScanResponse {
   repeated PokemonDetails pokemon = 2;
 }
 
-
+message PokemonScanResponseV3 {
+  enum Status {
+    UNSET = 0;
+    SUCCESS = 200;
+  }
+  Status status = 1;
+  repeated PokemonDetails pokemon = 2;
+  int32 examined = 3;
+  int32 skipped = 4;
+  int32 total = 5;
+}
 
 message PokemonDetails {
   uint64 id = 1;
   optional string pokestop_id = 2;
   optional int64 spawn_id = 3;
-   double lat = 4;
-   double lon = 5;
+  double lat = 4;
+  double lon = 5;
   optional float weight = 6;
   optional int32 size = 7;
   optional float height = 8;
