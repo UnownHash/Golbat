@@ -387,6 +387,26 @@ CREATE TABLE `invasion_stats` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Table structure for table `invasion_lineup_stats`
+--
+
+DROP TABLE IF EXISTS `invasion_lineup_stats`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `invasion_lineup_stats` (
+  `date` date NOT NULL,
+  `area` varchar(255) NOT NULL DEFAULT '',
+  `fence` varchar(255) NOT NULL DEFAULT '',
+  `character` smallint unsigned NOT NULL,
+  `slot` tinyint unsigned NOT NULL,
+  `pokemon_id` smallint unsigned NOT NULL,
+  `form_id` smallint unsigned NOT NULL DEFAULT '0',
+  `count` int NOT NULL,
+  PRIMARY KEY (`date`,`area`,`fence`,`character`,`slot`,`pokemon_id`,`form_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `metadata`
 --
 

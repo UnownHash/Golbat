@@ -11,6 +11,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
+	null "gopkg.in/guregu/null.v4"
 
 	"golbat/encounter_cache"
 	"golbat/geo"
@@ -65,13 +66,27 @@ type areaRaidCountDetail struct {
 }
 
 type areaInvasionCountDetail struct {
-	count [maxInvasionCharacter + 1]int
+	count  [maxInvasionCharacter + 1]int
+	lineup map[invasionLineupKey]int
 }
 
 type areaQuestCountDetail struct {
 	count          int
 	pokemonDetails [maxPokemonNo + 1]map[int]int // for each pokemonId[megaCount] keep a count
 	itemDetails    [maxItemNo + 1]map[int]int    // for each itemId[amount] keep a count
+}
+
+type invasionLineupKey struct {
+	Character int
+	Slot      uint8
+	PokemonID int
+	FormID    int
+}
+
+func newAreaInvasionCountDetail() *areaInvasionCountDetail {
+	return &areaInvasionCountDetail{
+		lineup: make(map[invasionLineupKey]int),
+	}
 }
 
 // a cache indexed by encounterId (Pokemon.Id)
@@ -509,24 +524,112 @@ func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
 
-		// Check if StartTime has changed, then we can assume a new Incident has appeared.
-		if old == nil || old.StartTime != new.StartTime {
+		if new.Character == 0 {
+			continue
+		}
 
-			if !locked {
-				incidentStatsLock.Lock()
-				locked = true
+		needGeneralCount := old == nil || old.StartTime != new.StartTime
+
+		shouldCountSlot := func(newValid bool, newID int64, newFormValid bool, newForm int64, oldValid bool, oldID int64, oldFormValid bool, oldForm int64) bool {
+			if !newValid {
+				return false
+			}
+			if newID <= 0 {
+				return false
+			}
+			if !oldValid {
+				return true
+			}
+			if oldID != newID {
+				return true
+			}
+			if oldFormValid != newFormValid {
+				return true
+			}
+			if newFormValid && oldForm != newForm {
+				return true
+			}
+			return false
+		}
+
+		lineupChanged := false
+
+		var oldSlot1Valid, oldSlot1FormValid bool
+		var oldSlot1ID, oldSlot1Form int64
+		if old != nil {
+			oldSlot1Valid = old.Slot1PokemonId.Valid
+			oldSlot1ID = old.Slot1PokemonId.ValueOrZero()
+			oldSlot1FormValid = old.Slot1Form.Valid
+			oldSlot1Form = old.Slot1Form.ValueOrZero()
+		}
+		lineupChanged = lineupChanged || shouldCountSlot(new.Slot1PokemonId.Valid, new.Slot1PokemonId.ValueOrZero(), new.Slot1Form.Valid, new.Slot1Form.ValueOrZero(),
+			oldSlot1Valid, oldSlot1ID, oldSlot1FormValid, oldSlot1Form)
+
+		var oldSlot2Valid, oldSlot2FormValid bool
+		var oldSlot2ID, oldSlot2Form int64
+		if old != nil {
+			oldSlot2Valid = old.Slot2PokemonId.Valid
+			oldSlot2ID = old.Slot2PokemonId.ValueOrZero()
+			oldSlot2FormValid = old.Slot2Form.Valid
+			oldSlot2Form = old.Slot2Form.ValueOrZero()
+		}
+		lineupChanged = lineupChanged || shouldCountSlot(new.Slot2PokemonId.Valid, new.Slot2PokemonId.ValueOrZero(), new.Slot2Form.Valid, new.Slot2Form.ValueOrZero(),
+			oldSlot2Valid, oldSlot2ID, oldSlot2FormValid, oldSlot2Form)
+
+		var oldSlot3Valid, oldSlot3FormValid bool
+		var oldSlot3ID, oldSlot3Form int64
+		if old != nil {
+			oldSlot3Valid = old.Slot3PokemonId.Valid
+			oldSlot3ID = old.Slot3PokemonId.ValueOrZero()
+			oldSlot3FormValid = old.Slot3Form.Valid
+			oldSlot3Form = old.Slot3Form.ValueOrZero()
+		}
+		lineupChanged = lineupChanged || shouldCountSlot(new.Slot3PokemonId.Valid, new.Slot3PokemonId.ValueOrZero(), new.Slot3Form.Valid, new.Slot3Form.ValueOrZero(),
+			oldSlot3Valid, oldSlot3ID, oldSlot3FormValid, oldSlot3Form)
+
+		if !needGeneralCount && !lineupChanged {
+			continue
+		}
+
+		if !locked {
+			incidentStatsLock.Lock()
+			locked = true
+		}
+
+		invasionStats := invasionCount[area]
+		if invasionStats == nil {
+			invasionStats = newAreaInvasionCountDetail()
+			invasionCount[area] = invasionStats
+		} else if invasionStats.lineup == nil {
+			invasionStats.lineup = make(map[invasionLineupKey]int)
+		}
+
+		if needGeneralCount {
+			invasionStats.count[new.Character]++
+		}
+
+		if lineupChanged {
+			addSlot := func(slot uint8, pokemonID null.Int, formID null.Int) {
+				if !pokemonID.Valid {
+					return
+				}
+				pid := pokemonID.ValueOrZero()
+				if pid <= 0 {
+					return
+				}
+
+				key := invasionLineupKey{
+					Character: int(new.Character),
+					Slot:      slot,
+					PokemonID: int(pid),
+					FormID:    int(formID.ValueOrZero()),
+				}
+				invasionStats.lineup[key]++
 			}
 
-			invasionStats := invasionCount[area]
-			if invasionStats == nil {
-				invasionStats = &areaInvasionCountDetail{}
-				invasionCount[area] = invasionStats
-			}
-
-			// Exclude Kecleon, Showcases and other UNSET characters for invasionStats.
-			if new.Character != 0 {
-				invasionStats.count[new.Character]++
-			}
+			addSlot(1, new.Slot1PokemonId, new.Slot1Form)
+			addSlot(2, new.Slot2PokemonId, new.Slot2Form)
+			addSlot(3, new.Slot3PokemonId, new.Slot3Form)
 		}
 	}
 
@@ -927,6 +1030,17 @@ type invasionStatsDbRow struct {
 	Count     int    `db:"count"`
 }
 
+type invasionLineupStatsDbRow struct {
+	Date      string `db:"date"`
+	Area      string `db:"area"`
+	Fence     string `db:"fence"`
+	Character int    `db:"character"`
+	Slot      int    `db:"slot"`
+	PokemonID int    `db:"pokemon_id"`
+	FormID    int    `db:"form_id"`
+	Count     int    `db:"count"`
+}
+
 func logInvasionStats(statsDb *sqlx.DB) {
 	incidentStatsLock.Lock()
 	log.Infof("STATS: Write invasion stats")
@@ -937,6 +1051,7 @@ func logInvasionStats(statsDb *sqlx.DB) {
 
 	go func() {
 		var rows []invasionStatsDbRow
+		var lineupRows []invasionLineupStatsDbRow
 
 		t := time.Now().In(time.Local)
 		midnightString := t.Format("2006-01-02")
@@ -957,6 +1072,24 @@ func logInvasionStats(statsDb *sqlx.DB) {
 					addRows(&rows, character, count)
 				}
 			}
+
+			if stats.lineup != nil {
+				for key, count := range stats.lineup {
+					if count <= 0 {
+						continue
+					}
+					lineupRows = append(lineupRows, invasionLineupStatsDbRow{
+						Date:      midnightString,
+						Area:      area.Parent,
+						Fence:     area.Name,
+						Character: key.Character,
+						Slot:      int(key.Slot),
+						PokemonID: key.PokemonID,
+						FormID:    key.FormID,
+						Count:     count,
+					})
+				}
+			}
 		}
 
 		for i := 0; i < len(rows); i += batchInsertSize {
@@ -973,6 +1106,23 @@ func logInvasionStats(statsDb *sqlx.DB) {
 					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting invasion_stats: %v", err)
+			}
+		}
+
+		for i := 0; i < len(lineupRows); i += batchInsertSize {
+			end := i + batchInsertSize
+			if end > len(lineupRows) {
+				end = len(lineupRows)
+			}
+
+			batchRows := lineupRows[i:end]
+			_, err := statsDb.NamedExec(
+				"INSERT INTO invasion_lineup_stats "+
+					"(date, area, fence, `character`, slot, pokemon_id, form_id, `count`)"+
+					" VALUES (:date, :area, :fence, :character, :slot, :pokemon_id, :form_id, :count)"+
+					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+			if err != nil {
+				log.Errorf("Error inserting invasion_lineup_stats: %v", err)
 			}
 		}
 	}()
