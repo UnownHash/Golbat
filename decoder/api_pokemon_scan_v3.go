@@ -114,7 +114,7 @@ func GetPokemonInArea3(retrieveParameters ApiPokemonScan3) *PokemonScan3Result {
 			pokemon := pokemonCacheEntry.Value()
 
 			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
-				skipped++
+				examined--
 				continue
 			}
 
