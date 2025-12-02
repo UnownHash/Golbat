@@ -134,9 +134,6 @@ func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, er
 	}
 
 	gymCache.Set(fortId, gym, ttlcache.DefaultTTL)
-	if config.Config.TestFortInMemory {
-		fortRtreeUpdateGymOnGet(&gym)
-	}
 	return &gym, nil
 }
 
@@ -711,6 +708,10 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	createGymWebhooks(oldGym, gym, areas)
 	createGymFortWebhooks(oldGym, gym)
 	updateRaidStats(oldGym, gym, areas)
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdateGymOnSave(gym)
+	}
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {

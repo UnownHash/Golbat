@@ -123,13 +123,21 @@ func deletePokemonFromCache(key uint64) {
 
 func initDataCache() {
 	pokestopCache = ttlcache.New[string, Pokestop](
-		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
+		ttlcache.WithTTL[string, Pokestop](60*time.Minute),
 	)
+	pokestopCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Pokestop]) {
+		r := v.Value()
+		removeFortFromTree(r.Id, r.Lat, r.Lon)
+	})
 	go pokestopCache.Start()
 
 	gymCache = ttlcache.New[string, Gym](
-		ttlcache.WithTTL[string, Gym](60 * time.Minute),
+		ttlcache.WithTTL[string, Gym](60*time.Minute),
 	)
+	gymCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[string, Gym]) {
+		r := v.Value()
+		removeFortFromTree(r.Id, r.Lat, r.Lon)
+	})
 	go gymCache.Start()
 
 	stationCache = ttlcache.New[string, Station](

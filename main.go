@@ -252,7 +252,7 @@ func main() {
 		StartStatsExpiry(db)
 	}
 
-	if cfg.TestFortInMemory {
+	if cfg.FortInMemory {
 		go decoder.LoadAllPokestops(dbDetails)
 		go decoder.LoadAllGyms(dbDetails)
 	}
@@ -285,9 +285,11 @@ func main() {
 	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
 	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
+	apiGroup.POST("/pokestop/scan", PokestopScan)
 	apiGroup.GET("/gym/id/:gym_id", GetGym)
 	apiGroup.POST("/gym/query", GetGyms)
 	apiGroup.POST("/gym/search", SearchGyms)
+	apiGroup.POST("/gym/scan", GymScan)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 

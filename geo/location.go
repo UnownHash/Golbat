@@ -18,6 +18,11 @@ type Bbox struct {
 	MaxLat float64 `json:"max_lat"`
 }
 
+type LocationDistance struct {
+	Location ApiLocation `json:"location"`
+	Distance float64     `json:"distance"` // in meters
+}
+
 type ApiLocation struct {
 	Latitude  float64 `json:"lat"`
 	Longitude float64 `json:"lon"`

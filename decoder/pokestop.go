@@ -25,49 +25,60 @@ import (
 // Pokestop struct.
 // REMINDER! Keep hasChangesPokestop updated after making changes
 type Pokestop struct {
-	Id                         string      `db:"id" json:"id"`
-	Lat                        float64     `db:"lat" json:"lat"`
-	Lon                        float64     `db:"lon" json:"lon"`
-	Name                       null.String `db:"name" json:"name"`
-	Url                        null.String `db:"url" json:"url"`
-	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
-	Updated                    int64       `db:"updated" json:"updated"`
-	Enabled                    null.Bool   `db:"enabled" json:"enabled"`
-	QuestType                  null.Int    `db:"quest_type" json:"quest_type"`
-	QuestTimestamp             null.Int    `db:"quest_timestamp" json:"quest_timestamp"`
-	QuestTarget                null.Int    `db:"quest_target" json:"quest_target"`
-	QuestConditions            null.String `db:"quest_conditions" json:"quest_conditions"`
-	QuestRewards               null.String `db:"quest_rewards" json:"quest_rewards"`
-	QuestTemplate              null.String `db:"quest_template" json:"quest_template"`
-	QuestTitle                 null.String `db:"quest_title" json:"quest_title"`
-	QuestExpiry                null.Int    `db:"quest_expiry" json:"quest_expiry"`
-	CellId                     null.Int    `db:"cell_id" json:"cell_id"`
-	Deleted                    bool        `db:"deleted" json:"deleted"`
-	LureId                     int16       `db:"lure_id" json:"lure_id"`
-	FirstSeenTimestamp         int16       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
-	SponsorId                  null.Int    `db:"sponsor_id" json:"sponsor_id"`
-	PartnerId                  null.String `db:"partner_id" json:"partner_id"`
-	ArScanEligible             null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
-	PowerUpLevel               null.Int    `db:"power_up_level" json:"power_up_level"`
-	PowerUpPoints              null.Int    `db:"power_up_points" json:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `db:"alternative_quest_type" json:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target" json:"alternative_quest_target"`
-	AlternativeQuestConditions null.String `db:"alternative_quest_conditions" json:"alternative_quest_conditions"`
-	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards" json:"alternative_quest_rewards"`
-	AlternativeQuestTemplate   null.String `db:"alternative_quest_template" json:"alternative_quest_template"`
-	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
-	Description                null.String `db:"description" json:"description"`
-	ShowcaseFocus              null.String `db:"showcase_focus" json:"showcase_focus"`
-	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
-	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
-	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
-	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
-	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
-	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
+	Id                                string      `db:"id" json:"id"`
+	Lat                               float64     `db:"lat" json:"lat"`
+	Lon                               float64     `db:"lon" json:"lon"`
+	Name                              null.String `db:"name" json:"name"`
+	Url                               null.String `db:"url" json:"url"`
+	LureExpireTimestamp               null.Int    `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
+	LastModifiedTimestamp             null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
+	Updated                           int64       `db:"updated" json:"updated"`
+	Enabled                           null.Bool   `db:"enabled" json:"enabled"`
+	QuestType                         null.Int    `db:"quest_type" json:"quest_type"`
+	QuestTimestamp                    null.Int    `db:"quest_timestamp" json:"quest_timestamp"`
+	QuestTarget                       null.Int    `db:"quest_target" json:"quest_target"`
+	QuestConditions                   null.String `db:"quest_conditions" json:"quest_conditions"`
+	QuestRewards                      null.String `db:"quest_rewards" json:"quest_rewards"`
+	QuestTemplate                     null.String `db:"quest_template" json:"quest_template"`
+	QuestTitle                        null.String `db:"quest_title" json:"quest_title"`
+	QuestExpiry                       null.Int    `db:"quest_expiry" json:"quest_expiry"`
+	questRewardType                   null.Int
+	questRewardPokemonId              null.Int
+	questRewardPokemonForm            null.Int
+	questRewardAmount                 null.Int
+	questRewardItemId                 null.Int
+	CellId                            null.Int    `db:"cell_id" json:"cell_id"`
+	Deleted                           bool        `db:"deleted" json:"deleted"`
+	LureId                            int16       `db:"lure_id" json:"lure_id"`
+	FirstSeenTimestamp                int16       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
+	SponsorId                         null.Int    `db:"sponsor_id" json:"sponsor_id"`
+	PartnerId                         null.String `db:"partner_id" json:"partner_id"`
+	ArScanEligible                    null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
+	PowerUpLevel                      null.Int    `db:"power_up_level" json:"power_up_level"`
+	PowerUpPoints                     null.Int    `db:"power_up_points" json:"power_up_points"`
+	PowerUpEndTimestamp               null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
+	AlternativeQuestType              null.Int    `db:"alternative_quest_type" json:"alternative_quest_type"`
+	AlternativeQuestTimestamp         null.Int    `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
+	AlternativeQuestTarget            null.Int    `db:"alternative_quest_target" json:"alternative_quest_target"`
+	AlternativeQuestConditions        null.String `db:"alternative_quest_conditions" json:"alternative_quest_conditions"`
+	AlternativeQuestRewards           null.String `db:"alternative_quest_rewards" json:"alternative_quest_rewards"`
+	AlternativeQuestTemplate          null.String `db:"alternative_quest_template" json:"alternative_quest_template"`
+	AlternativeQuestTitle             null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
+	AlternativeQuestExpiry            null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
+	alternativeQuestRewardType        null.Int
+	alternativeQuestRewardPokemonId   null.Int
+	alternativeQuestRewardPokemonForm null.Int
+	alternativeQuestRewardAmount      null.Int
+	alternativeQuestRewardItemId      null.Int
+	Description                       null.String `db:"description" json:"description"`
+	ShowcaseFocus                     null.String `db:"showcase_focus" json:"showcase_focus"`
+	ShowcasePokemon                   null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
+	ShowcasePokemonForm               null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
+	ShowcasePokemonType               null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
+	ShowcaseRankingStandard           null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
+	ShowcaseExpiry                    null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
+	ShowcaseRankings                  null.String `db:"showcase_rankings" json:"showcase_rankings"`
+	showcaseTotalEntries              null.Int
 	//`id` varchar(35) NOT NULL,
 	//`lat` double(18,14) NOT NULL,
 	//`lon` double(18,14) NOT NULL,
@@ -139,9 +150,6 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 	}
 
 	pokestopCache.Set(fortId, pokestop, ttlcache.DefaultTTL)
-	if config.Config.TestFortInMemory {
-		fortRtreeUpdatePokestopOnGet(&pokestop)
-	}
 	return &pokestop, nil
 }
 
@@ -238,6 +246,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		stop.Deleted = false
 		log.Warnf("Cleared Stop with id '%s' is found again in GMO, therefore un-deleted", stop.Id)
 	}
+
 	return stop
 }
 
@@ -413,30 +422,46 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		reward := make(map[string]any)
 		infoData := make(map[string]any)
 		reward["type"] = int(rewardData.Type)
+
+		var currentRewardAmount null.Int
+		var currentRewardItemId null.Int
+		var currentRewardPokemonId null.Int
+		var currentRewardForm null.Int
+
 		switch rewardData.Type {
 		case pogo.QuestRewardProto_EXPERIENCE:
 			infoData["amount"] = rewardData.GetExp()
+			currentRewardAmount = null.IntFrom(int64(rewardData.GetExp()))
 		case pogo.QuestRewardProto_ITEM:
 			info := rewardData.GetItem()
 			infoData["amount"] = info.Amount
 			infoData["item_id"] = int(info.Item)
+			currentRewardAmount = null.IntFrom(int64(info.Amount))
+			currentRewardItemId = null.IntFrom(int64(info.Item))
 		case pogo.QuestRewardProto_STARDUST:
 			infoData["amount"] = rewardData.GetStardust()
+			currentRewardAmount = null.IntFrom(int64(rewardData.GetStardust()))
 		case pogo.QuestRewardProto_CANDY:
 			info := rewardData.GetCandy()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			currentRewardAmount = null.IntFrom(int64(info.Amount))
+			currentRewardPokemonId = null.IntFrom(int64(info.PokemonId))
 		case pogo.QuestRewardProto_XL_CANDY:
 			info := rewardData.GetXlCandy()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			currentRewardAmount = null.IntFrom(int64(info.Amount))
+			currentRewardPokemonId = null.IntFrom(int64(info.PokemonId))
 		case pogo.QuestRewardProto_POKEMON_ENCOUNTER:
 			info := rewardData.GetPokemonEncounter()
 			if info.IsHiddenDitto {
 				infoData["pokemon_id"] = 132
 				infoData["pokemon_id_display"] = int(info.GetPokemonId())
+				currentRewardPokemonId = null.IntFrom(132)
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
+				currentRewardPokemonId = null.IntFrom(int64(info.GetPokemonId()))
 			}
 			if info.ShinyProbability > 0.0 {
 				infoData["shiny_probability"] = info.ShinyProbability
@@ -447,6 +472,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				}
 				if formId := int(display.Form); formId != 0 {
 					infoData["form_id"] = formId
+					currentRewardForm = null.IntFrom(int64(formId))
 				}
 				if genderId := int(display.Gender); genderId != 0 {
 					infoData["gender_id"] = genderId
@@ -465,14 +491,18 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			}
 		case pogo.QuestRewardProto_POKECOIN:
 			infoData["amount"] = rewardData.GetPokecoin()
+			currentRewardAmount = null.IntFrom(int64(rewardData.GetPokecoin()))
 		case pogo.QuestRewardProto_STICKER:
 			info := rewardData.GetSticker()
 			infoData["amount"] = info.Amount
 			infoData["sticker_id"] = info.StickerId
+			currentRewardAmount = null.IntFrom(int64(info.Amount))
 		case pogo.QuestRewardProto_MEGA_RESOURCE:
 			info := rewardData.GetMegaResource()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			currentRewardAmount = null.IntFrom(int64(info.Amount))
+			currentRewardPokemonId = null.IntFrom(int64(info.PokemonId))
 		case pogo.QuestRewardProto_AVATAR_CLOTHING:
 		case pogo.QuestRewardProto_QUEST:
 		case pogo.QuestRewardProto_LEVEL_CAP:
@@ -480,10 +510,24 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		case pogo.QuestRewardProto_PLAYER_ATTRIBUTE:
 		default:
 			break
-
 		}
 		reward["info"] = infoData
 		rewards = append(rewards, reward)
+
+		if !haveAr {
+			stop.questRewardType = null.IntFrom(int64(rewardData.Type))
+			stop.questRewardAmount = currentRewardAmount
+			stop.questRewardItemId = currentRewardItemId
+			stop.questRewardPokemonId = currentRewardPokemonId
+			stop.questRewardPokemonForm = currentRewardForm
+		} else {
+			stop.alternativeQuestRewardType = null.IntFrom(int64(rewardData.Type))
+			stop.alternativeQuestRewardAmount = currentRewardAmount
+			stop.alternativeQuestRewardItemId = currentRewardItemId
+			stop.alternativeQuestRewardPokemonId = currentRewardPokemonId
+			stop.alternativeQuestRewardPokemonForm = currentRewardForm
+		}
+
 	}
 
 	questConditions, _ := json.Marshal(conditions)
@@ -619,6 +663,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 
 	j := contestJson{LastUpdate: time.Now().Unix()}
 	j.TotalEntries = int(contestData.TotalEntries)
+	stop.showcaseTotalEntries = null.IntFrom(int64(j.TotalEntries))
 
 	for _, entry := range contestData.GetContestEntries() {
 		rank := entry.GetRank()
@@ -853,6 +898,10 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	pokestopCache.Set(pokestop.Id, *pokestop, ttlcache.DefaultTTL)
 	createPokestopWebhooks(oldPokestop, pokestop)
 	createPokestopFortWebhooks(oldPokestop, pokestop)
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdatePokestopOnSave(pokestop)
+	}
 }
 
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {

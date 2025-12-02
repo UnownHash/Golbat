@@ -484,6 +484,25 @@ func GetPokestop(c *gin.Context) {
 	c.JSON(http.StatusAccepted, pokestop)
 }
 
+func PokestopScan(c *gin.Context) {
+	var requestBody decoder.ApiFortScan
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /api/fort/scan/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.PokestopScanEndpoint(requestBody, dbDetails)
+	log.Infof("Got response %v", res)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	log.Infof("Return")
+	c.JSON(http.StatusAccepted, res)
+}
+
 func GetGym(c *gin.Context) {
 	gymId := c.Param("gym_id")
 
@@ -697,6 +716,23 @@ func SearchGyms(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, out)
+}
+
+func GymScan(c *gin.Context) {
+	var requestBody decoder.ApiFortScan
+
+	if err := c.BindJSON(&requestBody); err != nil {
+		log.Warnf("POST /api/fort/scan/ Error during post retrieve %v", err)
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	res := decoder.GymScanEndpoint(requestBody, dbDetails)
+	if res == nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusAccepted, res)
 }
 
 func GetTappable(c *gin.Context) {

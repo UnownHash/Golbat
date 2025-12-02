@@ -17,7 +17,7 @@ type configDefinition struct {
 	Prometheus                     Prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly              bool       `koanf:"pokemon_memory_only"`
 	PokemonInternalToDb            bool       `koanf:"pokemon_internal_to_db"`
-	TestFortInMemory               bool       `koanf:"test_fort_in_memory"`
+	FortInMemory                   bool       `koanf:"fort_in_memory"`
 	Cleanup                        cleanup    `koanf:"cleanup"`
 	RawBearer                      string     `koanf:"raw_bearer"`
 	ApiSecret                      string     `koanf:"api_secret"`
