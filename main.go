@@ -252,6 +252,18 @@ func main() {
 		StartStatsExpiry(db)
 	}
 
+	// init fort tracker for memory-based fort cleanup
+	if cfg.Cleanup.Forts {
+		staleThreshold := cfg.Cleanup.FortsStaleThreshold
+		if staleThreshold <= 0 {
+			staleThreshold = 3600 // def 1 hour
+		}
+		decoder.InitFortTracker(staleThreshold)
+		if err := decoder.LoadFortsFromDB(ctx, dbDetails); err != nil {
+			log.Errorf("failed to load forts into tracker: %s", err)
+		}
+	}
+
 	if cfg.TestFortInMemory {
 		go decoder.LoadAllPokestops(dbDetails)
 		go decoder.LoadAllGyms(dbDetails)
@@ -849,6 +861,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
 
+	// track forts per cell for memory-based cleanup
+	cellForts := make(map[uint64]*decoder.CellFortsData)
+
 	if len(decodedGmo.MapCell) == 0 {
 		return "Skipping GetMapObjectsOutProto: No map cells found"
 	}
@@ -857,10 +872,24 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			newMapCells = append(newMapCells, mapCell.S2CellId)
 			if cellContainsForts(mapCell) {
 				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
+				// initialize cell forts tracking
+				cellForts[mapCell.S2CellId] = &decoder.CellFortsData{
+					Pokestops: make([]string, 0),
+					Gyms:      make([]string, 0),
+				}
 			}
 		}
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
+
+			// track fort by type for memory-based cleanup
+			if cf, ok := cellForts[mapCell.S2CellId]; ok {
+				if fort.FortType == pogo.FortType_GYM {
+					cf.Gyms = append(cf.Gyms, fort.FortId)
+				} else if fort.FortType == pogo.FortType_CHECKPOINT {
+					cf.Pokestops = append(cf.Pokestops, fort.FortId)
+				}
+			}
 
 			if fort.ActivePokemon != nil {
 				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
@@ -906,7 +935,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				decoder.ClearRemovedForts(ctx, dbDetails, cellsToBeCleaned)
+				decoder.ClearRemovedForts(ctx, dbDetails, cellsToBeCleaned, cellForts)
 			}()
 		}
 	}

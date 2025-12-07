@@ -237,6 +237,10 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 	if stop.Deleted {
 		stop.Deleted = false
 		log.Warnf("Cleared Stop with id '%s' is found again in GMO, therefore un-deleted", stop.Id)
+		// Restore in fort tracker if enabled
+		if fortTracker != nil {
+			fortTracker.RestoreFort(stop.Id, cellId, false, time.Now().Unix())
+		}
 	}
 	return stop
 }
