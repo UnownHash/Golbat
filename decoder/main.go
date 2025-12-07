@@ -494,9 +494,64 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []
 	saveS2CellRecords(ctx, db, cellIds)
 }
 
-func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64) {
+func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData) {
 	now := time.Now().Unix()
-	// check gyms in cell
+
+	// Use memory-based tracker if available
+	if fortTracker != nil {
+		clearRemovedFortsMemory(ctx, dbDetails, mapCells, cellForts, now)
+		return
+	}
+
+	// Fallback to DB-based approach
+	clearRemovedFortsDB(ctx, dbDetails, mapCells, now)
+}
+
+// clearRemovedFortsMemory uses the in-memory fort tracker for fast detection
+func clearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData, now int64) {
+	for _, cellId := range mapCells {
+		cf, ok := cellForts[cellId]
+		if !ok {
+			continue
+		}
+
+		// Process cell through tracker - returns stale forts
+		stalePokestops, staleGyms := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, now)
+
+		// Clear stale gyms
+		if len(staleGyms) > 0 {
+			errGyms := db.ClearOldGyms(ctx, dbDetails, staleGyms)
+			if errGyms != nil {
+				log.Errorf("ClearRemovedForts (memory) - Unable to clear old gyms '%v': %s", staleGyms, errGyms)
+			} else {
+				for _, gymId := range staleGyms {
+					gymCache.Delete(gymId)
+					fortTracker.RemoveFort(gymId)
+				}
+				log.Infof("ClearRemovedForts (memory) - Cleared old Gym(s) in cell %d: %v", cellId, staleGyms)
+				CreateFortWebhooks(ctx, dbDetails, staleGyms, GYM, REMOVAL)
+			}
+		}
+
+		// Clear stale pokestops
+		if len(stalePokestops) > 0 {
+			stopsErr := db.ClearOldPokestops(ctx, dbDetails, stalePokestops)
+			if stopsErr != nil {
+				log.Errorf("ClearRemovedForts (memory) - Unable to clear old stops '%v': %s", stalePokestops, stopsErr)
+			} else {
+				for _, stopId := range stalePokestops {
+					pokestopCache.Delete(stopId)
+					fortTracker.RemoveFort(stopId)
+				}
+				log.Infof("ClearRemovedForts (memory) - Cleared old Stop(s) in cell %d: %v", cellId, stalePokestops)
+				CreateFortWebhooks(ctx, dbDetails, stalePokestops, POKESTOP, REMOVAL)
+			}
+		}
+	}
+}
+
+// clearRemovedFortsDB is the legacy DB-based approach (fallback when tracker not enabled)
+func clearRemovedFortsDB(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, now int64) {
 	for _, cellId := range mapCells {
 		// lookup for last check
 		if shouldSkipCellCheck(cellId, now) {

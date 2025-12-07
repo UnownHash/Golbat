@@ -287,6 +287,10 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if gym.Deleted {
 		gym.Deleted = false
 		log.Warnf("Cleared Gym with id '%s' is found again in GMO, therefore un-deleted", gym.Id)
+		// Restore in fort tracker if enabled
+		if fortTracker != nil {
+			fortTracker.RestoreFort(gym.Id, cellId, true, time.Now().Unix())
+		}
 	}
 
 	return gym
