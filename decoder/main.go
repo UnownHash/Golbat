@@ -297,19 +297,11 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 
-			// If this is a new pokestop, check if it was converted from a gym and copy name/url/description
+			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
 			if isNewPokestop {
 				gym, _ := GetGymRecord(ctx, db, fortId)
 				if gym != nil {
-					if gym.Name.Valid && !pokestop.Name.Valid {
-						pokestop.Name = gym.Name
-					}
-					if gym.Url.Valid && !pokestop.Url.Valid {
-						pokestop.Url = gym.Url
-					}
-					if gym.Description.Valid && !pokestop.Description.Valid {
-						pokestop.Description = gym.Description
-					}
+					copySharedFieldsFromGym(pokestop, gym)
 				}
 			}
 
@@ -363,19 +355,11 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
 
-			// If this is a new gym, check if it was converted from a pokestop and copy name/url/description
+			// If this is a new gym, check if it was converted from a pokestop and copy shared fields
 			if isNewGym {
 				pokestop, _ := GetPokestopRecord(ctx, db, fortId)
 				if pokestop != nil {
-					if pokestop.Name.Valid && !gym.Name.Valid {
-						gym.Name = pokestop.Name
-					}
-					if pokestop.Url.Valid && !gym.Url.Valid {
-						gym.Url = pokestop.Url
-					}
-					if pokestop.Description.Valid && !gym.Description.Valid {
-						gym.Description = pokestop.Description
-					}
+					copySharedFieldsFromPokestop(gym, pokestop)
 				}
 			}
 
