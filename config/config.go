@@ -55,7 +55,6 @@ type cleanup struct {
 	Stats               bool  `koanf:"stats"`
 	StatsDays           int   `koanf:"stats_days"`
 	DeviceHours         int   `koanf:"device_hours"`
-	Forts               bool  `koanf:"forts"`
 	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"` // seconds, default 3600 (1 hour)
 }
 
