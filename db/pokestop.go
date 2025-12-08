@@ -137,26 +137,6 @@ func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (in
 	return removedQuestsCount, err
 }
 
-func FindOldPokestops(ctx context.Context, db DbDetails, cellId int64) ([]string, error) {
-	fortIds := []FortId{}
-	err := db.GeneralDb.SelectContext(ctx, &fortIds,
-		"SELECT id FROM pokestop WHERE deleted = 0 AND cell_id = ? AND updated < UNIX_TIMESTAMP() - 3600;", cellId)
-	statsCollector.IncDbQuery("select old-pokestops", err)
-	if err != nil {
-		return nil, err
-	}
-	if len(fortIds) == 0 {
-		return nil, nil
-	}
-
-	// convert slices of struct to slices of string
-	var list []string
-	for _, element := range fortIds {
-		list = append(list, element.Id)
-	}
-	return list, nil
-}
-
 func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) error {
 	query, args, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?);", stopIds)
 	query = db.GeneralDb.Rebind(query)
