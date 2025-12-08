@@ -35,16 +35,8 @@ type CellFortState struct {
 type FortInfo struct {
 	cellId   uint64
 	lastSeen int64 // last time this fort was seen in GMO
-	isGym    bool
+	isGym    bool  // faster targeted removal
 }
-
-// FortType for tell apart pokestops and gyms
-type TrackedFortType int
-
-const (
-	TrackedPokestop TrackedFortType = iota
-	TrackedGym
-)
 
 // CellFortsData holds fort IDs per cell from GMO processing
 type CellFortsData struct {
@@ -91,7 +83,7 @@ func LoadFortsFromDB(ctx context.Context, dbDetails db.DbDetails) error {
 	return nil
 }
 
-const loadBatchSize = 50000
+const loadBatchSize = 30000
 
 func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 	type pokestopRow struct {
@@ -361,22 +353,6 @@ func (ft *FortTracker) RemoveFort(fortId string) {
 // RestoreFort adds a fort back to tracking (called when un-deleting)
 func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now int64) {
 	ft.UpdateFort(fortId, cellId, isGym, now)
-}
-
-// GetStats returns current tracker statistics
-func (ft *FortTracker) GetStats() (cellCount, pokestopCount, gymCount int) {
-	ft.mu.RLock()
-	defer ft.mu.RUnlock()
-
-	cellCount = len(ft.cells)
-	for _, info := range ft.forts {
-		if info.isGym {
-			gymCount++
-		} else {
-			pokestopCount++
-		}
-	}
-	return
 }
 
 // GetFortTracker returns the global fort tracker instance
