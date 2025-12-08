@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golbat/intstripedmutex"
@@ -494,8 +495,26 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []
 	saveS2CellRecords(ctx, db, cellIds)
 }
 
+var (
+	clearFortsCallCount int64
+	clearFortsTotalTime int64 // nanoseconds
+)
+
 // clearRemovedFortsMemory uses the in-memory fort tracker for fast detection
 func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData, now int64) {
+	start := time.Now()
+	defer func() {
+		duration := time.Since(start)
+		count := atomic.AddInt64(&clearFortsCallCount, 1)
+		atomic.AddInt64(&clearFortsTotalTime, duration.Nanoseconds())
+
+		if count%1000 == 0 {
+			totalNs := atomic.LoadInt64(&clearFortsTotalTime)
+			avgTime := time.Duration(totalNs / count)
+			log.Infof("FortTracker: ClearRemovedFortsMemory stats - %d calls, avg: %v, last: %v",
+				count, avgTime, duration)
+		}
+	}()
 	for _, cellId := range mapCells {
 		cf, ok := cellForts[cellId]
 		if !ok {
