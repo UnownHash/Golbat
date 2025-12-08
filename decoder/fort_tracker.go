@@ -261,6 +261,9 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		currentGyms[id] = struct{}{}
 	}
 
+	// Check if this is the first time we're seeing this cell
+	firstScan := cell.lastSeen == 0
+
 	// Update lastSeen for forts present in GMO
 	for _, id := range pokestopIds {
 		if info, exists := ft.forts[id]; exists {
@@ -280,6 +283,13 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	// Update cell lastSeen
 	cell.lastSeen = now
 
+	// Skip stale check on first scan - we need at least one prior scan to compare against
+	if firstScan {
+		cell.pokestops = currentPokestops
+		cell.gyms = currentGyms
+		return nil, nil
+	}
+
 	// Check forts in cell: if fort.lastSeen < cell.lastSeen, it's missing
 	var pendingPokestops, pendingGyms []string
 
@@ -288,7 +298,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			continue
 		}
 		if info, exists := ft.forts[stopId]; exists {
-			missingDuration := cell.lastSeen - info.lastSeen
+			missingDuration := now - info.lastSeen
 			if missingDuration >= ft.staleThreshold {
 				stalePokestops = append(stalePokestops, stopId)
 			} else {
@@ -302,7 +312,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			continue
 		}
 		if info, exists := ft.forts[gymId]; exists {
-			missingDuration := cell.lastSeen - info.lastSeen
+			missingDuration := now - info.lastSeen
 			if missingDuration >= ft.staleThreshold {
 				staleGyms = append(staleGyms, gymId)
 			} else {
