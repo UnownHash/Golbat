@@ -522,13 +522,13 @@ func clearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 		if len(staleGyms) > 0 {
 			errGyms := db.ClearOldGyms(ctx, dbDetails, staleGyms)
 			if errGyms != nil {
-				log.Errorf("ClearRemovedForts (memory) - Unable to clear old gyms '%v': %s", staleGyms, errGyms)
+				log.Errorf("FortTracker: failed to clear old gyms %v - %s", staleGyms, errGyms)
 			} else {
 				for _, gymId := range staleGyms {
 					gymCache.Delete(gymId)
 					fortTracker.RemoveFort(gymId)
 				}
-				log.Infof("ClearRemovedForts (memory) - Cleared old Gym(s) in cell %d: %v", cellId, staleGyms)
+				log.Infof("FortTracker: removed %d gym(s) in cell %d: %v", len(staleGyms), cellId, staleGyms)
 				CreateFortWebhooks(ctx, dbDetails, staleGyms, GYM, REMOVAL)
 			}
 		}
@@ -537,13 +537,13 @@ func clearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 		if len(stalePokestops) > 0 {
 			stopsErr := db.ClearOldPokestops(ctx, dbDetails, stalePokestops)
 			if stopsErr != nil {
-				log.Errorf("ClearRemovedForts (memory) - Unable to clear old stops '%v': %s", stalePokestops, stopsErr)
+				log.Errorf("FortTracker: failed to clear old pokestops %v - %s", stalePokestops, stopsErr)
 			} else {
 				for _, stopId := range stalePokestops {
 					pokestopCache.Delete(stopId)
 					fortTracker.RemoveFort(stopId)
 				}
-				log.Infof("ClearRemovedForts (memory) - Cleared old Stop(s) in cell %d: %v", cellId, stalePokestops)
+				log.Infof("FortTracker: removed %d pokestop(s) in cell %d: %v", len(stalePokestops), cellId, stalePokestops)
 				CreateFortWebhooks(ctx, dbDetails, stalePokestops, POKESTOP, REMOVAL)
 			}
 		}
