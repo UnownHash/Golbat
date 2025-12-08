@@ -26,7 +26,7 @@ type FortTracker struct {
 
 // CellFortState tracks the state of forts within a single S2 cell
 type CellFortState struct {
-	lastSeen  int64
+	lastSeen  int64               // last time this cell was seen in GMO
 	pokestops map[string]struct{} // set of pokestop IDs
 	gyms      map[string]struct{} // set of gym IDs
 }
@@ -34,7 +34,7 @@ type CellFortState struct {
 // FortInfo tracks individual fort metadata
 type FortInfo struct {
 	cellId   uint64
-	lastSeen int64
+	lastSeen int64 // last time this fort was seen in GMO
 	isGym    bool
 }
 
@@ -243,57 +243,74 @@ func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now 
 }
 
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
-// This is the main entry point called after processing all forts in a cell.
+// Logic: if fort.lastSeen < cell.lastSeen, fort is missing from cell.
+// Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
 func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, now int64) (stalePokestops []string, staleGyms []string) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
 	cell := ft.getOrCreateCellLocked(cellId)
 
-	// Build sets of current forts
+	// Build sets of current forts from GMO
 	currentPokestops := make(map[string]struct{}, len(pokestopIds))
 	for _, id := range pokestopIds {
 		currentPokestops[id] = struct{}{}
 	}
-
 	currentGyms := make(map[string]struct{}, len(gymIds))
 	for _, id := range gymIds {
 		currentGyms[id] = struct{}{}
 	}
 
-	// Find pokestops that were in cell before but not in current GMO
-	var pendingPokestops []string
+	// Update lastSeen for forts present in GMO
+	for _, id := range pokestopIds {
+		if info, exists := ft.forts[id]; exists {
+			info.lastSeen = now
+		} else {
+			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: false}
+		}
+	}
+	for _, id := range gymIds {
+		if info, exists := ft.forts[id]; exists {
+			info.lastSeen = now
+		} else {
+			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: true}
+		}
+	}
+
+	// Update cell lastSeen
+	cell.lastSeen = now
+
+	// Check forts in cell: if fort.lastSeen < cell.lastSeen, it's missing
+	var pendingPokestops, pendingGyms []string
+
 	for stopId := range cell.pokestops {
-		if _, found := currentPokestops[stopId]; !found {
-			// Pokestop was here before, not anymore - check if stale
-			if info, exists := ft.forts[stopId]; exists {
-				timeLeft := ft.staleThreshold - (now - info.lastSeen)
-				if timeLeft <= 0 {
-					stalePokestops = append(stalePokestops, stopId)
-				} else {
-					pendingPokestops = append(pendingPokestops, stopId)
-				}
+		if _, inGMO := currentPokestops[stopId]; inGMO {
+			continue
+		}
+		if info, exists := ft.forts[stopId]; exists {
+			missingDuration := cell.lastSeen - info.lastSeen
+			if missingDuration >= ft.staleThreshold {
+				stalePokestops = append(stalePokestops, stopId)
+			} else {
+				pendingPokestops = append(pendingPokestops, stopId)
 			}
 		}
 	}
 
-	// Find gyms that were in cell before but not in current GMO
-	var pendingGyms []string
 	for gymId := range cell.gyms {
-		if _, found := currentGyms[gymId]; !found {
-			// Gym was here before, not anymore - check if stale
-			if info, exists := ft.forts[gymId]; exists {
-				timeLeft := ft.staleThreshold - (now - info.lastSeen)
-				if timeLeft <= 0 {
-					staleGyms = append(staleGyms, gymId)
-				} else {
-					pendingGyms = append(pendingGyms, gymId)
-				}
+		if _, inGMO := currentGyms[gymId]; inGMO {
+			continue
+		}
+		if info, exists := ft.forts[gymId]; exists {
+			missingDuration := cell.lastSeen - info.lastSeen
+			if missingDuration >= ft.staleThreshold {
+				staleGyms = append(staleGyms, gymId)
+			} else {
+				pendingGyms = append(pendingGyms, gymId)
 			}
 		}
 	}
 
-	// Log pending removals (missing but not yet stale)
 	if len(pendingPokestops) > 0 {
 		log.Debugf("FortTracker: cell %d has %d pokestop(s) pending removal: %v", cellId, len(pendingPokestops), pendingPokestops)
 	}
@@ -301,34 +318,9 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
 	}
 
-	// Update cell state with current forts
-	cell.lastSeen = now
+	// Update cell fort sets with current GMO data
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
-
-	// Update lastSeen for all current forts
-	for _, id := range pokestopIds {
-		if info, exists := ft.forts[id]; exists {
-			info.lastSeen = now
-		} else {
-			ft.forts[id] = &FortInfo{
-				cellId:   cellId,
-				lastSeen: now,
-				isGym:    false,
-			}
-		}
-	}
-	for _, id := range gymIds {
-		if info, exists := ft.forts[id]; exists {
-			info.lastSeen = now
-		} else {
-			ft.forts[id] = &FortInfo{
-				cellId:   cellId,
-				lastSeen: now,
-				isGym:    true,
-			}
-		}
-	}
 
 	return stalePokestops, staleGyms
 }
