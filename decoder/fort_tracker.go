@@ -256,9 +256,25 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	// Check if this is the first time we're seeing this cell
 	firstScan := cell.lastSeen == 0
 
-	// Update lastSeen for forts present in GMO
+	// Update lastSeen for forts present in GMO and handle cell moves / type changes
 	for _, id := range pokestopIds {
 		if info, exists := ft.forts[id]; exists {
+			// Handle cell move
+			if info.cellId != cellId {
+				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
+					if info.isGym {
+						delete(oldCell.gyms, id)
+					} else {
+						delete(oldCell.pokestops, id)
+					}
+				}
+				info.cellId = cellId
+			}
+			// Handle type change (gym -> pokestop)
+			if info.isGym {
+				info.isGym = false
+				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
+			}
 			info.lastSeen = now
 		} else {
 			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: false}
@@ -266,6 +282,22 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	}
 	for _, id := range gymIds {
 		if info, exists := ft.forts[id]; exists {
+			// Handle cell move
+			if info.cellId != cellId {
+				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
+					if info.isGym {
+						delete(oldCell.gyms, id)
+					} else {
+						delete(oldCell.pokestops, id)
+					}
+				}
+				info.cellId = cellId
+			}
+			// Handle type change (pokestop -> gym)
+			if !info.isGym {
+				info.isGym = true
+				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
+			}
 			info.lastSeen = now
 		} else {
 			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: true}
