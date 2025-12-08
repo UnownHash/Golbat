@@ -494,21 +494,8 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []
 	saveS2CellRecords(ctx, db, cellIds)
 }
 
-func ClearRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData) {
-	now := time.Now().Unix()
-
-	// Use memory-based tracker if available
-	if fortTracker != nil {
-		clearRemovedFortsMemory(ctx, dbDetails, mapCells, cellForts, now)
-		return
-	}
-
-	// Fallback to DB-based approach
-	clearRemovedFortsDB(ctx, dbDetails, mapCells, now)
-}
-
 // clearRemovedFortsMemory uses the in-memory fort tracker for fast detection
-func clearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData, now int64) {
+func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData, now int64) {
 	for _, cellId := range mapCells {
 		cf, ok := cellForts[cellId]
 		if !ok {
@@ -551,7 +538,7 @@ func clearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 }
 
 // clearRemovedFortsDB is the legacy DB-based approach (fallback when tracker not enabled)
-func clearRemovedFortsDB(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, now int64) {
+func ClearRemovedFortsDB(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, now int64) {
 	for _, cellId := range mapCells {
 		// lookup for last check
 		if shouldSkipCellCheck(cellId, now) {
