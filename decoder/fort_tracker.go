@@ -62,7 +62,7 @@ func InitFortTracker(staleThresholdSeconds int64) {
 		forts:          make(map[string]*FortInfo),
 		staleThreshold: staleThresholdSeconds,
 	}
-	log.Infof("FortTracker initialized with stale threshold of %d seconds", staleThresholdSeconds)
+	log.Infof("FortTracker: initialized with stale threshold of %d seconds", staleThresholdSeconds)
 }
 
 // LoadFortsFromDB populates the tracker from database on startup
@@ -85,7 +85,7 @@ func LoadFortsFromDB(ctx context.Context, dbDetails db.DbDetails) error {
 		return err
 	}
 
-	log.Infof("FortTracker loaded %d pokestops and %d gyms from DB in %v",
+	log.Infof("FortTracker: loaded %d pokestops and %d gyms from DB in %v",
 		pokestopCount, gymCount, time.Since(startTime))
 
 	return nil
@@ -109,7 +109,7 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			"SELECT id, cell_id, updated FROM pokestop WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
 			lastId, loadBatchSize)
 		if err != nil {
-			log.Errorf("FortTracker: failed to load pokestops: %s", err)
+			log.Errorf("FortTracker: failed to load pokestops - %s", err)
 			return totalCount, err
 		}
 
@@ -137,7 +137,7 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			break
 		}
 
-		log.Debugf("FortTracker: loaded %d pokestops so far...", totalCount)
+		log.Debugf("FortTracker: loading pokestops... %d so far", totalCount)
 	}
 
 	return totalCount, nil
@@ -159,7 +159,7 @@ func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 			"SELECT id, cell_id, updated FROM gym WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
 			lastId, loadBatchSize)
 		if err != nil {
-			log.Errorf("FortTracker: failed to load gyms: %s", err)
+			log.Errorf("FortTracker: failed to load gyms - %s", err)
 			return totalCount, err
 		}
 
@@ -187,7 +187,7 @@ func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 			break
 		}
 
-		log.Debugf("FortTracker: loaded %d gyms so far...", totalCount)
+		log.Debugf("FortTracker: loading gyms... %d so far", totalCount)
 	}
 
 	return totalCount, nil
@@ -262,27 +262,43 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	}
 
 	// Find pokestops that were in cell before but not in current GMO
+	var pendingPokestops []string
 	for stopId := range cell.pokestops {
 		if _, found := currentPokestops[stopId]; !found {
 			// Pokestop was here before, not anymore - check if stale
 			if info, exists := ft.forts[stopId]; exists {
-				if now-info.lastSeen > ft.staleThreshold {
+				timeLeft := ft.staleThreshold - (now - info.lastSeen)
+				if timeLeft <= 0 {
 					stalePokestops = append(stalePokestops, stopId)
+				} else {
+					pendingPokestops = append(pendingPokestops, stopId)
 				}
 			}
 		}
 	}
 
 	// Find gyms that were in cell before but not in current GMO
+	var pendingGyms []string
 	for gymId := range cell.gyms {
 		if _, found := currentGyms[gymId]; !found {
 			// Gym was here before, not anymore - check if stale
 			if info, exists := ft.forts[gymId]; exists {
-				if now-info.lastSeen > ft.staleThreshold {
+				timeLeft := ft.staleThreshold - (now - info.lastSeen)
+				if timeLeft <= 0 {
 					staleGyms = append(staleGyms, gymId)
+				} else {
+					pendingGyms = append(pendingGyms, gymId)
 				}
 			}
 		}
+	}
+
+	// Log pending removals (missing but not yet stale)
+	if len(pendingPokestops) > 0 {
+		log.Debugf("FortTracker: cell %d has %d pokestop(s) pending removal: %v", cellId, len(pendingPokestops), pendingPokestops)
+	}
+	if len(pendingGyms) > 0 {
+		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
 	}
 
 	// Update cell state with current forts
