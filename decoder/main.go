@@ -489,7 +489,7 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []
 	saveS2CellRecords(ctx, db, cellIds)
 }
 
-// clearRemovedFortsMemory uses the in-memory fort tracker for fast detection
+// ClearRemovedFortsMemory uses the in-memory fort tracker for fast detection
 func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData) {
 	now := time.Now().Unix()
 	for _, cellId := range mapCells {
@@ -498,36 +498,62 @@ func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 			continue
 		}
 
-		// Process cell through tracker - returns stale forts
-		stalePokestops, staleGyms := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, now)
+		// Process cell through tracker - returns stale and converted forts
+		result := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, now)
 
 		// Clear stale gyms
-		if len(staleGyms) > 0 {
-			errGyms := db.ClearOldGyms(ctx, dbDetails, staleGyms)
+		if len(result.StaleGyms) > 0 {
+			errGyms := db.ClearOldGyms(ctx, dbDetails, result.StaleGyms)
 			if errGyms != nil {
-				log.Errorf("FortTracker: failed to clear old gyms %v - %s", staleGyms, errGyms)
+				log.Errorf("FortTracker: failed to clear old gyms %v - %s", result.StaleGyms, errGyms)
 			} else {
-				for _, gymId := range staleGyms {
+				for _, gymId := range result.StaleGyms {
 					gymCache.Delete(gymId)
 					fortTracker.RemoveFort(gymId)
 				}
-				log.Infof("FortTracker: removed %d gym(s) in cell %d: %v", len(staleGyms), cellId, staleGyms)
-				CreateFortWebhooks(ctx, dbDetails, staleGyms, GYM, REMOVAL)
+				log.Infof("FortTracker: removed %d gym(s) in cell %d: %v", len(result.StaleGyms), cellId, result.StaleGyms)
+				CreateFortWebhooks(ctx, dbDetails, result.StaleGyms, GYM, REMOVAL)
 			}
 		}
 
 		// Clear stale pokestops
-		if len(stalePokestops) > 0 {
-			stopsErr := db.ClearOldPokestops(ctx, dbDetails, stalePokestops)
+		if len(result.StalePokestops) > 0 {
+			stopsErr := db.ClearOldPokestops(ctx, dbDetails, result.StalePokestops)
 			if stopsErr != nil {
-				log.Errorf("FortTracker: failed to clear old pokestops %v - %s", stalePokestops, stopsErr)
+				log.Errorf("FortTracker: failed to clear old pokestops %v - %s", result.StalePokestops, stopsErr)
 			} else {
-				for _, stopId := range stalePokestops {
+				for _, stopId := range result.StalePokestops {
 					pokestopCache.Delete(stopId)
 					fortTracker.RemoveFort(stopId)
 				}
-				log.Infof("FortTracker: removed %d pokestop(s) in cell %d: %v", len(stalePokestops), cellId, stalePokestops)
-				CreateFortWebhooks(ctx, dbDetails, stalePokestops, POKESTOP, REMOVAL)
+				log.Infof("FortTracker: removed %d pokestop(s) in cell %d: %v", len(result.StalePokestops), cellId, result.StalePokestops)
+				CreateFortWebhooks(ctx, dbDetails, result.StalePokestops, POKESTOP, REMOVAL)
+			}
+		}
+
+		// Mark old pokestops as deleted when converted to gyms
+		if len(result.ConvertedToGyms) > 0 {
+			stopsErr := db.ClearOldPokestops(ctx, dbDetails, result.ConvertedToGyms)
+			if stopsErr != nil {
+				log.Errorf("FortTracker: failed to mark converted pokestops as deleted %v - %s", result.ConvertedToGyms, stopsErr)
+			} else {
+				for _, stopId := range result.ConvertedToGyms {
+					pokestopCache.Delete(stopId)
+				}
+				log.Infof("FortTracker: marked %d pokestop(s) as deleted (converted to gym): %v", len(result.ConvertedToGyms), result.ConvertedToGyms)
+			}
+		}
+
+		// Mark old gyms as deleted when converted to pokestops
+		if len(result.ConvertedToPokestops) > 0 {
+			gymsErr := db.ClearOldGyms(ctx, dbDetails, result.ConvertedToPokestops)
+			if gymsErr != nil {
+				log.Errorf("FortTracker: failed to mark converted gyms as deleted %v - %s", result.ConvertedToPokestops, gymsErr)
+			} else {
+				for _, gymId := range result.ConvertedToPokestops {
+					gymCache.Delete(gymId)
+				}
+				log.Infof("FortTracker: marked %d gym(s) as deleted (converted to pokestop): %v", len(result.ConvertedToPokestops), result.ConvertedToPokestops)
 			}
 		}
 	}

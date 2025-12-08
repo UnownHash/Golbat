@@ -234,13 +234,22 @@ func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now 
 	}
 }
 
+// CellUpdateResult holds the results of processing a cell update
+type CellUpdateResult struct {
+	StalePokestops       []string // pokestops to mark deleted (not seen for staleThreshold)
+	StaleGyms            []string // gyms to mark deleted (not seen for staleThreshold)
+	ConvertedToGyms      []string // pokestops that became gyms (mark pokestop as deleted)
+	ConvertedToPokestops []string // gyms that became pokestops (mark gym as deleted)
+}
+
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
 // Logic: if fort.lastSeen < cell.lastSeen, fort is missing from cell.
 // Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
-func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, now int64) (stalePokestops []string, staleGyms []string) {
+func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, now int64) CellUpdateResult {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
+	result := CellUpdateResult{}
 	cell := ft.getOrCreateCellLocked(cellId)
 
 	// Build sets of current forts from GMO
@@ -273,6 +282,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			// Handle type change (gym -> pokestop)
 			if info.isGym {
 				info.isGym = false
+				result.ConvertedToPokestops = append(result.ConvertedToPokestops, id)
 				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
 			}
 			info.lastSeen = now
@@ -296,6 +306,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			// Handle type change (pokestop -> gym)
 			if !info.isGym {
 				info.isGym = true
+				result.ConvertedToGyms = append(result.ConvertedToGyms, id)
 				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
 			}
 			info.lastSeen = now
@@ -311,7 +322,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	if firstScan {
 		cell.pokestops = currentPokestops
 		cell.gyms = currentGyms
-		return nil, nil
+		return result
 	}
 
 	// Check forts in cell: if fort.lastSeen < cell.lastSeen, it's missing
@@ -324,7 +335,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		if info, exists := ft.forts[stopId]; exists {
 			missingDuration := now - info.lastSeen
 			if missingDuration >= ft.staleThreshold {
-				stalePokestops = append(stalePokestops, stopId)
+				result.StalePokestops = append(result.StalePokestops, stopId)
 			} else {
 				pendingPokestops = append(pendingPokestops, stopId)
 			}
@@ -338,7 +349,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		if info, exists := ft.forts[gymId]; exists {
 			missingDuration := now - info.lastSeen
 			if missingDuration >= ft.staleThreshold {
-				staleGyms = append(staleGyms, gymId)
+				result.StaleGyms = append(result.StaleGyms, gymId)
 			} else {
 				pendingGyms = append(pendingGyms, gymId)
 			}
@@ -356,7 +367,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
 
-	return stalePokestops, staleGyms
+	return result
 }
 
 // RemoveFort removes a fort from tracking (called after marking as deleted)
