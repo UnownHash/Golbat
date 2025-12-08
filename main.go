@@ -253,15 +253,13 @@ func main() {
 	}
 
 	// init fort tracker for memory-based fort cleanup
-	if cfg.Cleanup.Forts {
-		staleThreshold := cfg.Cleanup.FortsStaleThreshold
-		if staleThreshold <= 0 {
-			staleThreshold = 3600 // def 1 hour
-		}
-		decoder.InitFortTracker(staleThreshold)
-		if err := decoder.LoadFortsFromDB(ctx, dbDetails); err != nil {
-			log.Errorf("failed to load forts into tracker: %s", err)
-		}
+	staleThreshold := cfg.Cleanup.FortsStaleThreshold
+	if staleThreshold <= 0 {
+		staleThreshold = 3600 // def 1 hour
+	}
+	decoder.InitFortTracker(staleThreshold)
+	if err := decoder.LoadFortsFromDB(ctx, dbDetails); err != nil {
+		log.Errorf("failed to load forts into tracker: %s", err)
 	}
 
 	if cfg.TestFortInMemory {
@@ -862,11 +860,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var cellsToBeCleaned []uint64
 
 	// track forts per cell for memory-based cleanup (only if tracker enabled)
-	var cellForts map[uint64]*decoder.CellFortsData
-	fortTrackerEnabled := decoder.GetFortTracker() != nil
-	if fortTrackerEnabled {
-		cellForts = make(map[uint64]*decoder.CellFortsData)
-	}
+	cellForts := make(map[uint64]*decoder.CellFortsData)
 
 	if len(decodedGmo.MapCell) == 0 {
 		return "Skipping GetMapObjectsOutProto: No map cells found"
@@ -877,11 +871,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			if cellContainsForts(mapCell) {
 				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
 				// initialize cell forts tracking (only if tracker enabled)
-				if fortTrackerEnabled {
-					cellForts[mapCell.S2CellId] = &decoder.CellFortsData{
-						Pokestops: make([]string, 0),
-						Gyms:      make([]string, 0),
-					}
+				cellForts[mapCell.S2CellId] = &decoder.CellFortsData{
+					Pokestops: make([]string, 0),
+					Gyms:      make([]string, 0),
 				}
 			}
 		}
@@ -889,13 +881,12 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
 
 			// track fort by type for memory-based cleanup (only if tracker enabled)
-			if fortTrackerEnabled {
-				if cf, ok := cellForts[mapCell.S2CellId]; ok {
-					if fort.FortType == pogo.FortType_GYM {
-						cf.Gyms = append(cf.Gyms, fort.FortId)
-					} else if fort.FortType == pogo.FortType_CHECKPOINT {
-						cf.Pokestops = append(cf.Pokestops, fort.FortId)
-					}
+			if cf, ok := cellForts[mapCell.S2CellId]; ok {
+				switch fort.FortType {
+				case pogo.FortType_GYM:
+					cf.Gyms = append(cf.Gyms, fort.FortId)
+				case pogo.FortType_CHECKPOINT:
+					cf.Pokestops = append(cf.Pokestops, fort.FortId)
 				}
 			}
 
@@ -941,7 +932,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
 	}
 
-	if fortTrackerEnabled && (scanParameters.ProcessGyms || scanParameters.ProcessPokestops) {
+	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
