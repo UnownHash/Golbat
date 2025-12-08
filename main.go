@@ -940,21 +940,22 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	now := time.Now().Unix()
 	if scanParameters.ProcessCells {
 		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
-		if !fortTrackerEnabled {
+	}
+
+	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+		if fortTrackerEnabled {
+			go func() {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				decoder.ClearRemovedFortsMemory(ctx, dbDetails, cellsToBeCleaned, cellForts, now)
+			}()
+		} else if scanParameters.ProcessCells {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				decoder.ClearRemovedFortsDB(ctx, dbDetails, cellsToBeCleaned, now)
 			}()
 		}
-	}
-
-	if fortTrackerEnabled && scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			decoder.ClearRemovedFortsMemory(ctx, dbDetails, cellsToBeCleaned, cellForts, now)
-		}()
 	}
 
 	newFortsLen := len(newForts)
