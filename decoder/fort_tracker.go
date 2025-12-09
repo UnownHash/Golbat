@@ -42,6 +42,7 @@ type FortInfo struct {
 type CellFortsData struct {
 	Pokestops []string
 	Gyms      []string
+	Timestamp int64 // GMO AsOfTimeMs for this cell
 }
 
 // Global fort tracker instance
@@ -116,7 +117,7 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			cell.pokestops[row.Id] = struct{}{}
 			fortTracker.forts[row.Id] = &FortInfo{
 				cellId:   cellId,
-				lastSeen: row.Updated,
+				lastSeen: row.Updated * 1000, // convert to milliseconds
 				isGym:    false,
 			}
 		}
@@ -166,7 +167,7 @@ func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 			cell.gyms[row.Id] = struct{}{}
 			fortTracker.forts[row.Id] = &FortInfo{
 				cellId:   cellId,
-				lastSeen: row.Updated,
+				lastSeen: row.Updated * 1000, // convert to milliseconds
 				isGym:    true,
 			}
 		}
@@ -245,12 +246,19 @@ type CellUpdateResult struct {
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
 // Logic: if fort.lastSeen < cell.lastSeen, fort is missing from cell.
 // Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
-func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, now int64) CellUpdateResult {
+// Returns nil if timestamp is older than last processed for this cell.
+func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) *CellUpdateResult {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
-	result := CellUpdateResult{}
 	cell := ft.getOrCreateCellLocked(cellId)
+
+	// Skip if this GMO is older than the last one we processed for this cell
+	if timestamp <= cell.lastSeen {
+		return nil
+	}
+
+	result := CellUpdateResult{}
 
 	// Build sets of current forts from GMO
 	currentPokestops := make(map[string]struct{}, len(pokestopIds))
@@ -285,9 +293,9 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 				result.ConvertedToPokestops = append(result.ConvertedToPokestops, id)
 				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
 			}
-			info.lastSeen = now
+			info.lastSeen = timestamp
 		} else {
-			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: false}
+			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: timestamp, isGym: false}
 		}
 	}
 	for _, id := range gymIds {
@@ -309,20 +317,20 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 				result.ConvertedToGyms = append(result.ConvertedToGyms, id)
 				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
 			}
-			info.lastSeen = now
+			info.lastSeen = timestamp
 		} else {
-			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: now, isGym: true}
+			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: timestamp, isGym: true}
 		}
 	}
 
 	// Update cell lastSeen
-	cell.lastSeen = now
+	cell.lastSeen = timestamp
 
 	// Skip stale check on first scan - we need at least one prior scan to compare against
 	if firstScan {
 		cell.pokestops = currentPokestops
 		cell.gyms = currentGyms
-		return result
+		return &result
 	}
 
 	// Check forts in cell: if fort.lastSeen < cell.lastSeen, it's missing
@@ -333,8 +341,8 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			continue
 		}
 		if info, exists := ft.forts[stopId]; exists {
-			missingDuration := now - info.lastSeen
-			if missingDuration >= ft.staleThreshold {
+			missingDuration := timestamp - info.lastSeen
+			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
 				result.StalePokestops = append(result.StalePokestops, stopId)
 			} else {
 				pendingPokestops = append(pendingPokestops, stopId)
@@ -347,8 +355,8 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			continue
 		}
 		if info, exists := ft.forts[gymId]; exists {
-			missingDuration := now - info.lastSeen
-			if missingDuration >= ft.staleThreshold {
+			missingDuration := timestamp - info.lastSeen
+			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
 				result.StaleGyms = append(result.StaleGyms, gymId)
 			} else {
 				pendingGyms = append(pendingGyms, gymId)
@@ -367,7 +375,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
 
-	return result
+	return &result
 }
 
 // RemoveFort removes a fort from tracking (called after marking as deleted)
@@ -405,7 +413,6 @@ func GetFortTracker() *FortTracker {
 
 // ClearRemovedFortsMemory uses the in-memory fort tracker for fast detection
 func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData) {
-	now := time.Now().Unix()
 	for _, cellId := range mapCells {
 		cf, ok := cellForts[cellId]
 		if !ok {
@@ -413,7 +420,11 @@ func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 		}
 
 		// Process cell through tracker - returns stale and converted forts
-		result := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, now)
+		// Returns nil if this GMO timestamp is older than last processed for this cell
+		result := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, cf.Timestamp)
+		if result == nil {
+			continue
+		}
 
 		// Clear stale gyms
 		if len(result.StaleGyms) > 0 {
