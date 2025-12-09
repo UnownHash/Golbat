@@ -874,6 +874,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				cellForts[mapCell.S2CellId] = &decoder.CellFortsData{
 					Pokestops: make([]string, 0),
 					Gyms:      make([]string, 0),
+					Timestamp: mapCell.AsOfTimeMs,
 				}
 			}
 		}
