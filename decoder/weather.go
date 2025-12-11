@@ -30,7 +30,7 @@ type Weather struct {
 	SpecialEffectLevel null.Int  `db:"special_effect_level"`
 	Severity           null.Int  `db:"severity"`
 	WarnWeather        null.Bool `db:"warn_weather"`
-	Updated            int64     `db:"updated"`
+	UpdatedMs          int64     `db:"updated"`
 }
 
 // CREATE TABLE `weather` (
@@ -71,6 +71,7 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 		return nil, err
 	}
 
+	weather.UpdatedMs *= 1000
 	weatherCache.Set(weatherId, weather, ttlcache.DefaultTTL)
 	return &weather, nil
 }
@@ -79,7 +80,8 @@ func weatherCellIdFromLatLon(lat, lon float64) int64 {
 	return int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10))
 }
 
-func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) *Weather {
+func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) (oldGameplayCondition null.Int) {
+	oldGameplayCondition = weather.GameplayCondition
 	weather.Id = clientWeather.S2CellId
 	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
 	weather.Latitude = s2cell.CapBound().RectBound().Center().Lat.Degrees()
@@ -97,7 +99,7 @@ func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.
 		weather.Severity = null.IntFrom(int64(alert.Severity))
 		weather.WarnWeather = null.BoolFrom(alert.WarnWeather)
 	}
-	return weather
+	return
 }
 
 // hasChangesWeather compares two Weather structs
@@ -115,7 +117,7 @@ func hasChangesWeather(old *Weather, new *Weather) bool {
 		old.SpecialEffectLevel != new.SpecialEffectLevel ||
 		old.Severity != new.Severity ||
 		old.WarnWeather != new.WarnWeather ||
-		old.Updated != new.Updated ||
+		old.UpdatedMs != new.UpdatedMs ||
 		!floatAlmostEqual(old.Latitude, new.Latitude, floatTolerance) ||
 		!floatAlmostEqual(old.Longitude, new.Longitude, floatTolerance)
 }
@@ -146,7 +148,7 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 			"special_effect_level": weather.SpecialEffectLevel.ValueOrZero(),
 			"severity":             weather.Severity.ValueOrZero(),
 			"warn_weather":         weather.WarnWeather.ValueOrZero(),
-			"updated":              weather.Updated,
+			"updated":              weather.UpdatedMs / 1000,
 		}
 		areas := MatchStatsGeofence(weather.Latitude, weather.Longitude)
 		webhooksSender.AddMessage(webhooks.Weather, weatherHook, areas)
@@ -167,7 +169,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 				"VALUES ("+
 				":id, :latitude, :longitude, :level, :gameplay_condition, :wind_direction, :cloud_level, :rain_level, "+
 				":wind_level, :snow_level, :fog_level, :special_effect_level, :severity, :warn_weather, "+
-				"UNIX_TIMESTAMP())",
+				":updated/1000)",
 			weather)
 		statsCollector.IncDbQuery("insert weather", err)
 		if err != nil {
@@ -190,7 +192,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 			"special_effect_level = :special_effect_level, "+
 			"severity = :severity, "+
 			"warn_weather = :warn_weather, "+
-			"updated = UNIX_TIMESTAMP() "+
+			"updated = :updated/1000 "+
 			"WHERE id = :id",
 			weather)
 		statsCollector.IncDbQuery("update weather", err)

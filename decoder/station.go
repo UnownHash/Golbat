@@ -215,25 +215,38 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 
 func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
 	type stationedPokemonDetail struct {
-		PokemonId int `json:"pokemon_id"`
-		Form      int `json:"form"`
-		Costume   int `json:"costume"`
-		Gender    int `json:"gender"`
-		BreadMode int `json:"bread_mode"`
+		PokemonId             int    `json:"pokemon_id"`
+		Form                  int    `json:"form"`
+		Costume               int    `json:"costume"`
+		Gender                int    `json:"gender"`
+		Shiny                 bool   `json:"shiny,omitempty"`
+		TempEvolution         int    `json:"temp_evolution,omitempty"`
+		TempEvolutionFinishMs int64  `json:"temp_evolution_finish_ms,omitempty"`
+		Alignment             int    `json:"alignment,omitempty"`
+		Badge                 int    `json:"badge,omitempty"`
+		Background            *int64 `json:"background,omitempty"`
+		BreadMode             int    `json:"bread_mode"`
 	}
 
 	var stationedPokemon []stationedPokemonDetail
 	stationedGmax := int64(0)
 	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
 		pokemon := stationedPokemonDetails.Pokemon
+		display := pokemon.PokemonDisplay
 		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
-			PokemonId: int(pokemon.PokemonId),
-			Form:      int(pokemon.PokemonDisplay.Form),
-			Costume:   int(pokemon.PokemonDisplay.Costume),
-			Gender:    int(pokemon.PokemonDisplay.Gender),
-			BreadMode: int(pokemon.PokemonDisplay.BreadModeEnum),
+			PokemonId:             int(pokemon.PokemonId),
+			Form:                  int(display.Form),
+			Costume:               int(display.Costume),
+			Gender:                int(display.Gender),
+			Shiny:                 display.Shiny,
+			TempEvolution:         int(display.CurrentTempEvolution),
+			TempEvolutionFinishMs: display.TemporaryEvolutionFinishMs,
+			Alignment:             int(display.Alignment),
+			Badge:                 int(display.PokemonBadge),
+			Background:            util.ExtractBackgroundFromDisplay(display),
+			BreadMode:             int(display.BreadModeEnum),
 		})
-		if pokemon.PokemonDisplay.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || pokemon.PokemonDisplay.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
+		if display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
 			stationedGmax++
 		}
 	}
