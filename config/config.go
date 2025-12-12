@@ -48,13 +48,14 @@ type koji struct {
 }
 
 type cleanup struct {
-	Pokemon     bool `koanf:"pokemon"`
-	Quests      bool `koanf:"quests"`
-	Incidents   bool `koanf:"incidents"`
-	Tappables   bool `koanf:"tappables"`
-	Stats       bool `koanf:"stats"`
-	StatsDays   int  `koanf:"stats_days"`
-	DeviceHours int  `koanf:"device_hours"`
+	Pokemon             bool  `koanf:"pokemon"`
+	Quests              bool  `koanf:"quests"`
+	Incidents           bool  `koanf:"incidents"`
+	Tappables           bool  `koanf:"tappables"`
+	Stats               bool  `koanf:"stats"`
+	StatsDays           int   `koanf:"stats_days"`
+	DeviceHours         int   `koanf:"device_hours"`
+	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"` // seconds, default 3600 (1 hour)
 }
 
 type Webhook struct {

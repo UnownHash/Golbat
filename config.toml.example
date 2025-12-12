@@ -10,13 +10,14 @@ url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
 bearer_token = "secret"
 
 [cleanup]
-pokemon = true          # Keep pokemon table is kept nice and short
-incidents = true        # Remove incidents after expiry
-quests = true           # Remove quests after expiry
-tappables = true        # Remove tappables after expiry
-stats = true            # Enable/Disable stats history
-stats_days = 7          # Remove entries from "pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats", "invasion_stats", "quest_stats", "raid_stats" after x days
-device_hours = 24       # Remove devices from in memory after not seen for x hours
+pokemon = true                  # Keep pokemon table is kept nice and short
+incidents = true                # Remove incidents after expiry
+quests = true                   # Remove quests after expiry
+tappables = true                # Remove tappables after expiry
+stats = true                    # Enable/Disable stats history
+stats_days = 7                  # Remove entries from "pokemon_stats", "pokemon_shiny_stats", "pokemon_iv_stats", "pokemon_hundo_stats", "pokemon_nundo_stats", "invasion_stats", "quest_stats", "raid_stats" after x days
+device_hours = 24               # Remove devices from in memory after not seen for x hours
+forts_stale_threshold = 3600    # Seconds before a fort is considered stale (default: 1 hour)
 
 [logging]
 debug = false
