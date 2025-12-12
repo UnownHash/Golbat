@@ -937,7 +937,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			decoder.ClearRemovedFortsMemory(ctx, dbDetails, cellsToBeCleaned, cellForts)
+			decoder.CheckRemovedForts(ctx, dbDetails, cellsToBeCleaned, cellForts)
 		}()
 	}
 
