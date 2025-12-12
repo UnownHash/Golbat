@@ -426,60 +426,64 @@ func ClearRemovedFortsMemory(ctx context.Context, dbDetails db.DbDetails, mapCel
 			continue
 		}
 
-		// Clear stale gyms
-		if len(result.StaleGyms) > 0 {
-			errGyms := db.ClearOldGyms(ctx, dbDetails, result.StaleGyms)
-			if errGyms != nil {
-				log.Errorf("FortTracker: failed to clear old gyms %v - %s", result.StaleGyms, errGyms)
+		// Clear stale gyms (with mutex to prevent race with UpdateFortBatch)
+		for _, gymId := range result.StaleGyms {
+			gymMutex, _ := gymStripedMutex.GetLock(gymId)
+			gymMutex.Lock()
+			gymCache.Delete(gymId)
+			errGym := db.ClearOldGyms(ctx, dbDetails, []string{gymId})
+			if errGym != nil {
+				log.Errorf("FortTracker: failed to clear old gym %s - %s", gymId, errGym)
 			} else {
-				for _, gymId := range result.StaleGyms {
-					gymCache.Delete(gymId)
-					fortTracker.RemoveFort(gymId)
-				}
-				log.Infof("FortTracker: removed %d gym(s) in cell %d: %v", len(result.StaleGyms), cellId, result.StaleGyms)
-				CreateFortWebhooks(ctx, dbDetails, result.StaleGyms, GYM, REMOVAL)
+				fortTracker.RemoveFort(gymId)
+				log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
+				CreateFortWebhooks(ctx, dbDetails, []string{gymId}, GYM, REMOVAL)
 			}
+			gymMutex.Unlock()
 		}
 
-		// Clear stale pokestops
-		if len(result.StalePokestops) > 0 {
-			stopsErr := db.ClearOldPokestops(ctx, dbDetails, result.StalePokestops)
-			if stopsErr != nil {
-				log.Errorf("FortTracker: failed to clear old pokestops %v - %s", result.StalePokestops, stopsErr)
+		// Clear stale pokestops (with mutex to prevent race with UpdateFortBatch)
+		for _, stopId := range result.StalePokestops {
+			pokestopMutex, _ := pokestopStripedMutex.GetLock(stopId)
+			pokestopMutex.Lock()
+			pokestopCache.Delete(stopId)
+			stopErr := db.ClearOldPokestops(ctx, dbDetails, []string{stopId})
+			if stopErr != nil {
+				log.Errorf("FortTracker: failed to clear old pokestop %s - %s", stopId, stopErr)
 			} else {
-				for _, stopId := range result.StalePokestops {
-					pokestopCache.Delete(stopId)
-					fortTracker.RemoveFort(stopId)
-				}
-				log.Infof("FortTracker: removed %d pokestop(s) in cell %d: %v", len(result.StalePokestops), cellId, result.StalePokestops)
-				CreateFortWebhooks(ctx, dbDetails, result.StalePokestops, POKESTOP, REMOVAL)
+				fortTracker.RemoveFort(stopId)
+				log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)
+				CreateFortWebhooks(ctx, dbDetails, []string{stopId}, POKESTOP, REMOVAL)
 			}
+			pokestopMutex.Unlock()
 		}
 
-		// Mark old pokestops as deleted when converted to gyms
-		if len(result.ConvertedToGyms) > 0 {
-			stopsErr := db.ClearOldPokestops(ctx, dbDetails, result.ConvertedToGyms)
-			if stopsErr != nil {
-				log.Errorf("FortTracker: failed to mark converted pokestops as deleted %v - %s", result.ConvertedToGyms, stopsErr)
+		// Mark old pokestops as deleted when converted to gyms (with mutex)
+		for _, stopId := range result.ConvertedToGyms {
+			pokestopMutex, _ := pokestopStripedMutex.GetLock(stopId)
+			pokestopMutex.Lock()
+			pokestopCache.Delete(stopId)
+			stopErr := db.ClearOldPokestops(ctx, dbDetails, []string{stopId})
+			if stopErr != nil {
+				log.Errorf("FortTracker: failed to mark converted pokestop as deleted %s - %s", stopId, stopErr)
 			} else {
-				for _, stopId := range result.ConvertedToGyms {
-					pokestopCache.Delete(stopId)
-				}
-				log.Infof("FortTracker: marked %d pokestop(s) as deleted (converted to gym): %v", len(result.ConvertedToGyms), result.ConvertedToGyms)
+				log.Infof("FortTracker: marked pokestop as deleted (converted to gym): %s", stopId)
 			}
+			pokestopMutex.Unlock()
 		}
 
-		// Mark old gyms as deleted when converted to pokestops
-		if len(result.ConvertedToPokestops) > 0 {
-			gymsErr := db.ClearOldGyms(ctx, dbDetails, result.ConvertedToPokestops)
-			if gymsErr != nil {
-				log.Errorf("FortTracker: failed to mark converted gyms as deleted %v - %s", result.ConvertedToPokestops, gymsErr)
+		// Mark old gyms as deleted when converted to pokestops (with mutex)
+		for _, gymId := range result.ConvertedToPokestops {
+			gymMutex, _ := gymStripedMutex.GetLock(gymId)
+			gymMutex.Lock()
+			gymCache.Delete(gymId)
+			gymErr := db.ClearOldGyms(ctx, dbDetails, []string{gymId})
+			if gymErr != nil {
+				log.Errorf("FortTracker: failed to mark converted gym as deleted %s - %s", gymId, gymErr)
 			} else {
-				for _, gymId := range result.ConvertedToPokestops {
-					gymCache.Delete(gymId)
-				}
-				log.Infof("FortTracker: marked %d gym(s) as deleted (converted to pokestop): %v", len(result.ConvertedToPokestops), result.ConvertedToPokestops)
+				log.Infof("FortTracker: marked gym as deleted (converted to pokestop): %s", gymId)
 			}
+			gymMutex.Unlock()
 		}
 	}
 }
