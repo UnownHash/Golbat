@@ -1,4 +1,4 @@
 golbat: FORCE
-	GOEXPERIMENT=jsonv2 go build golbat
+	GOEXPERIMENT=jsonv2,greenteagc go build golbat
 
 FORCE: ;
