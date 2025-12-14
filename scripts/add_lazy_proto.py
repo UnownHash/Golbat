@@ -257,6 +257,7 @@ def main():
 
     dry_run = '--dry-run' in sys.argv
     verbose = '--verbose' in sys.argv or '-v' in sys.argv
+    mark_all = '--all' in sys.argv
 
     if verbose:
         print(f"Project root: {project_root}")
@@ -294,23 +295,36 @@ def main():
     lazy_candidates_by_message = defaultdict(set)
     total_candidates = 0
 
-    for msg_name in key_messages:
-        if msg_name not in messages:
-            continue
-
-        fields = messages[msg_name]
-
-        for field in fields:
-            pascal_name = snake_to_pascal(field['name'])
-            is_used = pascal_name in used_getters
-
-            if verbose:
-                status = "USED" if is_used else "LAZY"
-                print(f"  {msg_name}.{field['name']} ({field['type']}): {status}")
-
-            if not is_used:
+    if mark_all:
+        # Mark ALL submessage fields as lazy in ALL messages
+        if verbose:
+            print("Mode: --all (marking all submessage fields as lazy)")
+            print()
+        for msg_name, fields in messages.items():
+            for field in fields:
+                if verbose:
+                    print(f"  {msg_name}.{field['name']} ({field['type']}): LAZY")
                 lazy_candidates_by_message[msg_name].add(field['name'])
                 total_candidates += 1
+    else:
+        # Only mark unused fields in key messages
+        for msg_name in key_messages:
+            if msg_name not in messages:
+                continue
+
+            fields = messages[msg_name]
+
+            for field in fields:
+                pascal_name = snake_to_pascal(field['name'])
+                is_used = pascal_name in used_getters
+
+                if verbose:
+                    status = "USED" if is_used else "LAZY"
+                    print(f"  {msg_name}.{field['name']} ({field['type']}): {status}")
+
+                if not is_used:
+                    lazy_candidates_by_message[msg_name].add(field['name'])
+                    total_candidates += 1
 
     if verbose:
         print()
