@@ -6,7 +6,7 @@ COPY go.mod go.sum ./
 RUN if [ ! -f vendor/modules.txt ]; then go mod download; fi
 
 COPY . .
-RUN CGO_ENABLED=0 go build -tags go_json -o /go/bin/golbat
+RUN CGO_ENABLED=0 GOEXPERIMENT=jsonv2 go build -o /go/bin/golbat
 RUN mkdir /empty-dir
 
 # Now copy it into our base image.

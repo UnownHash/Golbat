@@ -208,8 +208,8 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
-		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
+		getMapFortsCache.Set(mapFort.GetId(), mapFort, ttlcache.DefaultTTL)
+		log.Debugf("Saved getMapFort in cache: %s", mapFort.GetId())
 	}
 	return status, output
 }

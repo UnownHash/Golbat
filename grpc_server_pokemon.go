@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	log "github.com/sirupsen/logrus"
 	"golbat/config"
 	"golbat/decoder"
 	pb "golbat/grpc"
+
+	log "github.com/sirupsen/logrus"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/metadata"
 )
@@ -27,8 +28,8 @@ func (s *grpcPokemonServer) Search(ctx context.Context, in *pb.PokemonScanReques
 
 	log.Infof("Received request %+v", in)
 
-	return &pb.PokemonScanResponse{
+	return pb.PokemonScanResponse_builder{
 		Status:  pb.PokemonScanResponse_SUCCESS,
 		Pokemon: decoder.GrpcGetPokemonInArea2(in),
-	}, nil
+	}.Build(), nil
 }

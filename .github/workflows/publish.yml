@@ -19,7 +19,7 @@ jobs:
       - name: Install dependencies
         run: go get .
       - name: Test with the Go CLI
-        run: go test -v ./...
+        run: GOEXPERIMENT=jsonv2 go test -v ./...
 
   build:
     needs: [test]

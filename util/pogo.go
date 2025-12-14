@@ -28,9 +28,9 @@ var IncidentTypeToName = map[int8]string{
 }
 
 func ExtractBackgroundFromDisplay(display *pogo.PokemonDisplayProto) *int64 {
-	if display.LocationCard == nil {
+	if !display.HasLocationCard() {
 		return nil
 	}
-	result := int64(display.LocationCard.LocationCard)
+	result := int64(display.GetLocationCard().GetLocationCard())
 	return &result
 }

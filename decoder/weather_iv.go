@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"golbat/db"
 	"golbat/pogo"
@@ -10,6 +9,8 @@ import (
 	"os"
 	"reflect"
 	"time"
+
+	"encoding/json/v2"
 
 	"github.com/golang/geo/s2"
 	log "github.com/sirupsen/logrus"
@@ -58,7 +59,7 @@ func fetchMasterFile() (MasterFileData, error) {
 	defer resp.Body.Close()
 
 	var data MasterFileData
-	err = json.NewDecoder(resp.Body).Decode(&data)
+	err = json.UnmarshalRead(resp.Body, &data)
 	if err != nil {
 		return MasterFileData{}, errors.New("can't decode remote Weather MasterFile")
 	}

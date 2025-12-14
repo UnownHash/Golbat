@@ -2,12 +2,13 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"encoding/json/v2"
 
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"

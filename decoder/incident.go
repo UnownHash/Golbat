@@ -212,10 +212,10 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 }
 
 func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pogo.PokestopIncidentDisplayProto) {
-	incident.Id = pokestopDisplay.IncidentId
-	incident.StartTime = int64(pokestopDisplay.IncidentStartMs / 1000)
-	incident.ExpirationTime = int64(pokestopDisplay.IncidentExpirationMs / 1000)
-	incident.DisplayType = int16(pokestopDisplay.IncidentDisplayType)
+	incident.Id = pokestopDisplay.GetIncidentId()
+	incident.StartTime = int64(pokestopDisplay.GetIncidentStartMs() / 1000)
+	incident.ExpirationTime = int64(pokestopDisplay.GetIncidentExpirationMs() / 1000)
+	incident.DisplayType = int16(pokestopDisplay.GetIncidentDisplayType())
 	if (incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_MALE) || incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_FEMALE)) && incident.Confirmed {
 		log.Debugf("Incident has already been confirmed as a decoy: %s", incident.Id)
 		return
@@ -223,23 +223,23 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	characterDisplay := pokestopDisplay.GetCharacterDisplay()
 	if characterDisplay != nil {
 		// team := pokestopDisplay.Open
-		incident.Style = int16(characterDisplay.Style)
-		incident.Character = int16(characterDisplay.Character)
+		incident.Style = int16(characterDisplay.GetStyle())
+		incident.Character = int16(characterDisplay.GetCharacter())
 	} else {
 		incident.Style, incident.Character = 0, 0
 	}
 }
 
 func (incident *Incident) updateFromOpenInvasionCombatSessionOut(protoRes *pogo.OpenInvasionCombatSessionOutProto) {
-	incident.Slot1PokemonId = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true)
-	incident.Slot1Form = null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true)
-	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
+	incident.Slot1PokemonId = null.NewInt(int64(protoRes.GetCombat().GetOpponent().GetActivePokemon().GetPokedexId().Number()), true)
+	incident.Slot1Form = null.NewInt(int64(protoRes.GetCombat().GetOpponent().GetActivePokemon().GetPokemonDisplay().GetForm().Number()), true)
+	for i, pokemon := range protoRes.GetCombat().GetOpponent().GetReservePokemon() {
 		if i == 0 {
-			incident.Slot2PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot2Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+			incident.Slot2PokemonId = null.NewInt(int64(pokemon.GetPokedexId().Number()), true)
+			incident.Slot2Form = null.NewInt(int64(pokemon.GetPokemonDisplay().GetForm().Number()), true)
 		} else if i == 1 {
-			incident.Slot3PokemonId = null.NewInt(int64(pokemon.PokedexId.Number()), true)
-			incident.Slot3Form = null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true)
+			incident.Slot3PokemonId = null.NewInt(int64(pokemon.GetPokedexId().Number()), true)
+			incident.Slot3Form = null.NewInt(int64(pokemon.GetPokemonDisplay().GetForm().Number()), true)
 		}
 	}
 	incident.Confirmed = true
@@ -252,6 +252,6 @@ func (incident *Incident) updateFromStartIncidentOut(proto *pogo.StartIncidentOu
 		incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_FEMALE) {
 		incident.Confirmed = true
 	}
-	incident.StartTime = int64(proto.Incident.GetCompletionDisplay().GetIncidentStartMs() / 1000)
-	incident.ExpirationTime = int64(proto.Incident.GetCompletionDisplay().GetIncidentExpirationMs() / 1000)
+	incident.StartTime = int64(proto.GetIncident().GetCompletionDisplay().GetIncidentStartMs() / 1000)
+	incident.ExpirationTime = int64(proto.GetIncident().GetCompletionDisplay().GetIncidentExpirationMs() / 1000)
 }

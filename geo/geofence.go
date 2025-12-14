@@ -5,8 +5,9 @@ import (
 	"io"
 	"math"
 
+	"encoding/json/v2"
+
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/paulmach/orb/planar"

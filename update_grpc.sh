@@ -1,10 +1,12 @@
-protoc --go_out=. --go_opt=paths=source_relative \
+protoc --go_out=. --go_opt=paths=source_relative --go_opt=default_api_level=API_OPAQUE \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     --go_opt=Mvbase.proto=github.com/unownhash/golbat/grpc \
     grpc/raw_receiver.proto
 
-
-protoc --go_out=. --go_opt=paths=source_relative \
+protoc --go_out=. --go_opt=paths=source_relative --go_opt=default_api_level=API_OPAQUE \
     --go-grpc_out=. --go-grpc_opt=paths=source_relative \
     --go_opt=Mvbase.proto=github.com/unownhash/golbat/grpc \
     grpc/pokemon_api.proto
+
+protoc --go_out=. --go_opt=paths=source_relative --go_opt=default_api_level=API_OPAQUE \
+    grpc/pokemon_internal.proto

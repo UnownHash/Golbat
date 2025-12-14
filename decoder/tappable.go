@@ -32,7 +32,7 @@ type Tappable struct {
 
 func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.DbDetails, tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto, timestampMs int64) {
 	// update from request
-	ta.Id = request.EncounterId
+	ta.Id = request.GetEncounterId()
 	location := request.GetLocation()
 	if spawnPointId := location.GetSpawnpointId(); spawnPointId != "" {
 		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
@@ -44,49 +44,49 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 	if fortId := location.GetFortId(); fortId != "" {
 		ta.FortId = null.StringFrom(fortId)
 	}
-	ta.Type = request.TappableTypeId
-	ta.Lat = request.LocationHintLat
-	ta.Lon = request.LocationHintLng
+	ta.Type = request.GetTappableTypeId()
+	ta.Lat = request.GetLocationHintLat()
+	ta.Lon = request.GetLocationHintLng()
 	ta.setExpireTimestamp(ctx, db, timestampMs)
 
 	// update from tappable
 	if encounter := tappable.GetEncounter(); encounter != nil {
 		// tappable is a Pokèmon, encounter is sent in a separate proto
 		// we store this to link tappable with Pokèmon from encounter proto
-		ta.Encounter = null.IntFrom(int64(encounter.Pokemon.PokemonId))
+		ta.Encounter = null.IntFrom(int64(encounter.GetPokemon().GetPokemonId()))
 	} else if reward := tappable.GetReward(); reward != nil {
 		for _, lootProto := range reward {
 			for _, itemProto := range lootProto.GetLootItem() {
-				switch t := itemProto.Type.(type) {
-				case *pogo.LootItemProto_Item:
-					ta.ItemId = null.IntFrom(int64(t.Item))
-					ta.Count = null.IntFrom(int64(itemProto.Count))
-				case *pogo.LootItemProto_Stardust:
-					log.Warnf("[TAPPABLE] Reward is Stardust: %t", t.Stardust)
-				case *pogo.LootItemProto_Pokecoin:
-					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", t.Pokecoin)
-				case *pogo.LootItemProto_PokemonCandy:
-					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", t.PokemonCandy)
-				case *pogo.LootItemProto_Experience:
-					log.Warnf("[TAPPABLE] Reward is Experience: %t", t.Experience)
-				case *pogo.LootItemProto_PokemonEgg:
-					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
-				case *pogo.LootItemProto_AvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", t.AvatarTemplateId)
-				case *pogo.LootItemProto_StickerId:
-					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
-				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", t.MegaEnergyPokemonId)
-				case *pogo.LootItemProto_XlCandy:
-					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", t.XlCandy)
-				case *pogo.LootItemProto_FollowerPokemon:
-					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
-				case *pogo.LootItemProto_NeutralAvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", t.NeutralAvatarTemplateId)
-				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
-				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
+				switch itemProto.WhichType() {
+				case pogo.LootItemProto_Item_case:
+					ta.ItemId = null.IntFrom(int64(itemProto.GetItem()))
+					ta.Count = null.IntFrom(int64(itemProto.GetCount()))
+				case pogo.LootItemProto_Stardust_case:
+					log.Warnf("[TAPPABLE] Reward is Stardust: %t", itemProto.GetStardust())
+				case pogo.LootItemProto_Pokecoin_case:
+					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", itemProto.GetPokecoin())
+				case pogo.LootItemProto_PokemonCandy_case:
+					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", itemProto.GetPokemonCandy())
+				case pogo.LootItemProto_Experience_case:
+					log.Warnf("[TAPPABLE] Reward is Experience: %t", itemProto.GetExperience())
+				case pogo.LootItemProto_PokemonEgg_case:
+					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", itemProto.GetPokemonEgg())
+				case pogo.LootItemProto_AvatarTemplateId_case:
+					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", itemProto.GetAvatarTemplateId())
+				case pogo.LootItemProto_StickerId_case:
+					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", itemProto.GetStickerId())
+				case pogo.LootItemProto_MegaEnergyPokemonId_case:
+					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", itemProto.GetMegaEnergyPokemonId())
+				case pogo.LootItemProto_XlCandy_case:
+					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", itemProto.GetXlCandy())
+				case pogo.LootItemProto_FollowerPokemon_case:
+					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", itemProto.GetFollowerPokemon())
+				case pogo.LootItemProto_NeutralAvatarTemplateId_case:
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", itemProto.GetNeutralAvatarTemplateId())
+				case pogo.LootItemProto_NeutralAvatarItemTemplate_case:
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", itemProto.GetNeutralAvatarItemTemplate())
+				case pogo.LootItemProto_NeutralAvatarItemDisplay_case:
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", itemProto.GetNeutralAvatarItemDisplay())
 				default:
 					log.Warnf("Unknown or unset Type")
 				}

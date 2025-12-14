@@ -3,11 +3,13 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
@@ -193,23 +195,23 @@ func hasChangesPokestop(old *Pokestop, new *Pokestop) bool {
 var LureTime int64 = 1800
 
 func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64, now int64) *Pokestop {
-	stop.Id = fortData.FortId
-	stop.Lat = fortData.Latitude
-	stop.Lon = fortData.Longitude
+	stop.Id = fortData.GetFortId()
+	stop.Lat = fortData.GetLatitude()
+	stop.Lon = fortData.GetLongitude()
 
-	stop.PartnerId = null.NewString(fortData.PartnerId, fortData.PartnerId != "")
-	stop.SponsorId = null.IntFrom(int64(fortData.Sponsor))
-	stop.Enabled = null.BoolFrom(fortData.Enabled)
-	stop.ArScanEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
-	stop.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
+	stop.PartnerId = null.NewString(fortData.GetPartnerId(), fortData.GetPartnerId() != "")
+	stop.SponsorId = null.IntFrom(int64(fortData.GetSponsor()))
+	stop.Enabled = null.BoolFrom(fortData.GetEnabled())
+	stop.ArScanEligible = null.IntFrom(util.BoolToInt[int64](fortData.GetIsArScanEligible()))
+	stop.PowerUpPoints = null.IntFrom(int64(fortData.GetPowerUpProgressPoints()))
 	stop.PowerUpLevel, stop.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
 
 	// lasModifiedMs is also modified when incident happens
-	lastModifiedTimestamp := fortData.LastModifiedMs / 1000
+	lastModifiedTimestamp := fortData.GetLastModifiedMs() / 1000
 	stop.LastModifiedTimestamp = null.IntFrom(lastModifiedTimestamp)
 
-	if len(fortData.ActiveFortModifier) > 0 {
-		lureId := int16(fortData.ActiveFortModifier[0])
+	if len(fortData.GetActiveFortModifier()) > 0 {
+		lureId := int16(fortData.GetActiveFortModifier()[0])
 		if lureId >= 501 && lureId <= 510 {
 			lureEnd := lastModifiedTimestamp + LureTime
 			oldLureEnd := stop.LureExpireTimestamp.ValueOrZero()
@@ -229,8 +231,8 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		}
 	}
 
-	if fortData.ImageUrl != "" {
-		stop.Url = null.StringFrom(fortData.ImageUrl)
+	if fortData.GetImageUrl() != "" {
+		stop.Url = null.StringFrom(fortData.GetImageUrl())
 	}
 	stop.CellId = null.IntFrom(int64(cellId))
 
@@ -243,60 +245,60 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 
 func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOutProto, haveAr bool) string {
 
-	if questProto.ChallengeQuest == nil {
+	if !questProto.HasChallengeQuest() {
 		log.Debugf("Received blank quest")
 		return "Blank quest"
 	}
-	questData := questProto.ChallengeQuest.Quest
-	questTitle := questProto.ChallengeQuest.QuestDisplay.Description
-	questType := int64(questData.QuestType)
-	questTarget := int64(questData.Goal.Target)
-	questTemplate := strings.ToLower(questData.TemplateId)
+	questData := questProto.GetChallengeQuest().GetQuest()
+	questTitle := questProto.GetChallengeQuest().GetQuestDisplay().GetDescription()
+	questType := int64(questData.GetQuestType())
+	questTarget := int64(questData.GetGoal().GetTarget())
+	questTemplate := strings.ToLower(questData.GetTemplateId())
 
 	conditions := []map[string]any{}
 	rewards := []map[string]any{}
 
-	for _, conditionData := range questData.Goal.Condition {
+	for _, conditionData := range questData.GetGoal().GetCondition() {
 		condition := make(map[string]any)
 		infoData := make(map[string]any)
-		condition["type"] = int(conditionData.Type)
-		switch conditionData.Type {
+		condition["type"] = int(conditionData.GetType())
+		switch conditionData.GetType() {
 		case pogo.QuestConditionProto_WITH_BADGE_TYPE:
 			info := conditionData.GetWithBadgeType()
-			infoData["amount"] = info.Amount
-			infoData["badge_rank"] = info.BadgeRank
+			infoData["amount"] = info.GetAmount()
+			infoData["badge_rank"] = info.GetBadgeRank()
 			badgeTypeById := []int{}
-			for _, badge := range info.BadgeType {
+			for _, badge := range info.GetBadgeType() {
 				badgeTypeById = append(badgeTypeById, int(badge))
 			}
 			infoData["badge_types"] = badgeTypeById
 
 		case pogo.QuestConditionProto_WITH_ITEM:
 			info := conditionData.GetWithItem()
-			if int(info.Item) != 0 {
-				infoData["item_id"] = int(info.Item)
+			if int(info.GetItem()) != 0 {
+				infoData["item_id"] = int(info.GetItem())
 			}
 		case pogo.QuestConditionProto_WITH_RAID_LEVEL:
 			info := conditionData.GetWithRaidLevel()
 			raidLevelById := []int{}
-			for _, raidLevel := range info.RaidLevel {
+			for _, raidLevel := range info.GetRaidLevel() {
 				raidLevelById = append(raidLevelById, int(raidLevel))
 			}
 			infoData["raid_levels"] = raidLevelById
 		case pogo.QuestConditionProto_WITH_POKEMON_TYPE:
 			info := conditionData.GetWithPokemonType()
 			pokemonTypesById := []int{}
-			for _, t := range info.PokemonType {
+			for _, t := range info.GetPokemonType() {
 				pokemonTypesById = append(pokemonTypesById, int(t))
 			}
 			infoData["pokemon_type_ids"] = pokemonTypesById
 		case pogo.QuestConditionProto_WITH_POKEMON_CATEGORY:
 			info := conditionData.GetWithPokemonCategory()
-			if info.CategoryName != "" {
-				infoData["category_name"] = info.CategoryName
+			if info.GetCategoryName() != "" {
+				infoData["category_name"] = info.GetCategoryName()
 			}
 			pokemonById := []int{}
-			for _, pokemon := range info.PokemonIds {
+			for _, pokemon := range info.GetPokemonIds() {
 				pokemonById = append(pokemonById, int(pokemon))
 			}
 			infoData["pokemon_ids"] = pokemonById
@@ -315,60 +317,60 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["hit"] = info.GetHit()
 		case pogo.QuestConditionProto_WITH_LOCATION:
 			info := conditionData.GetWithLocation()
-			infoData["cell_ids"] = info.S2CellId
+			infoData["cell_ids"] = info.GetS2CellId()
 		case pogo.QuestConditionProto_WITH_DISTANCE:
 			info := conditionData.GetWithDistance()
-			infoData["distance"] = info.DistanceKm
+			infoData["distance"] = info.GetDistanceKm()
 		case pogo.QuestConditionProto_WITH_POKEMON_ALIGNMENT:
 			info := conditionData.GetWithPokemonAlignment()
 			alignmentIds := []int{}
-			for _, alignment := range info.Alignment {
+			for _, alignment := range info.GetAlignment() {
 				alignmentIds = append(alignmentIds, int(alignment))
 			}
 			infoData["alignment_ids"] = alignmentIds
 		case pogo.QuestConditionProto_WITH_INVASION_CHARACTER:
 			info := conditionData.GetWithInvasionCharacter()
 			characterCategoryIds := []int{}
-			for _, characterCategory := range info.Category {
+			for _, characterCategory := range info.GetCategory() {
 				characterCategoryIds = append(characterCategoryIds, int(characterCategory))
 			}
 			infoData["character_category_ids"] = characterCategoryIds
 		case pogo.QuestConditionProto_WITH_NPC_COMBAT:
 			info := conditionData.GetWithNpcCombat()
-			infoData["win"] = info.RequiresWin
-			infoData["template_ids"] = info.CombatNpcTrainerId
+			infoData["win"] = info.GetRequiresWin()
+			infoData["template_ids"] = info.GetCombatNpcTrainerId()
 		case pogo.QuestConditionProto_WITH_PLAYER_LEVEL:
 			info := conditionData.GetWithPlayerLevel()
-			infoData["level"] = info.Level
+			infoData["level"] = info.GetLevel()
 		case pogo.QuestConditionProto_WITH_BUDDY:
 			info := conditionData.GetWithBuddy()
 			if info != nil {
-				infoData["min_buddy_level"] = int(info.MinBuddyLevel)
-				infoData["must_be_on_map"] = info.MustBeOnMap
+				infoData["min_buddy_level"] = int(info.GetMinBuddyLevel())
+				infoData["must_be_on_map"] = info.GetMustBeOnMap()
 			} else {
 				infoData["min_buddy_level"] = 0
 				infoData["must_be_on_map"] = false
 			}
 		case pogo.QuestConditionProto_WITH_DAILY_BUDDY_AFFECTION:
 			info := conditionData.GetWithDailyBuddyAffection()
-			infoData["min_buddy_affection_earned_today"] = info.MinBuddyAffectionEarnedToday
+			infoData["min_buddy_affection_earned_today"] = info.GetMinBuddyAffectionEarnedToday()
 		case pogo.QuestConditionProto_WITH_TEMP_EVO_POKEMON:
 			info := conditionData.GetWithTempEvoId()
 			tempEvoIds := []int{}
-			for _, evolution := range info.MegaForm {
+			for _, evolution := range info.GetMegaForm() {
 				tempEvoIds = append(tempEvoIds, int(evolution))
 			}
 			infoData["raid_pokemon_evolutions"] = tempEvoIds
 		case pogo.QuestConditionProto_WITH_ITEM_TYPE:
 			info := conditionData.GetWithItemType()
 			itemTypes := []int{}
-			for _, itemType := range info.ItemType {
+			for _, itemType := range info.GetItemType() {
 				itemTypes = append(itemTypes, int(itemType))
 			}
 			infoData["item_type_ids"] = itemTypes
 		case pogo.QuestConditionProto_WITH_RAID_ELAPSED_TIME:
 			info := conditionData.GetWithElapsedTime()
-			infoData["time"] = int64(info.ElapsedTimeMs) / 1000
+			infoData["time"] = int64(info.GetElapsedTimeMs()) / 1000
 		case pogo.QuestConditionProto_WITH_WIN_GYM_BATTLE_STATUS:
 		case pogo.QuestConditionProto_WITH_SUPER_EFFECTIVE_CHARGE:
 		case pogo.QuestConditionProto_WITH_UNIQUE_POKESTOP:
@@ -409,55 +411,55 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		conditions = append(conditions, condition)
 	}
 
-	for _, rewardData := range questData.QuestRewards {
+	for _, rewardData := range questData.GetQuestRewards() {
 		reward := make(map[string]any)
 		infoData := make(map[string]any)
-		reward["type"] = int(rewardData.Type)
-		switch rewardData.Type {
+		reward["type"] = int(rewardData.GetType())
+		switch rewardData.GetType() {
 		case pogo.QuestRewardProto_EXPERIENCE:
 			infoData["amount"] = rewardData.GetExp()
 		case pogo.QuestRewardProto_ITEM:
 			info := rewardData.GetItem()
-			infoData["amount"] = info.Amount
-			infoData["item_id"] = int(info.Item)
+			infoData["amount"] = info.GetAmount()
+			infoData["item_id"] = int(info.GetItem())
 		case pogo.QuestRewardProto_STARDUST:
 			infoData["amount"] = rewardData.GetStardust()
 		case pogo.QuestRewardProto_CANDY:
 			info := rewardData.GetCandy()
-			infoData["amount"] = info.Amount
-			infoData["pokemon_id"] = int(info.PokemonId)
+			infoData["amount"] = info.GetAmount()
+			infoData["pokemon_id"] = int(info.GetPokemonId())
 		case pogo.QuestRewardProto_XL_CANDY:
 			info := rewardData.GetXlCandy()
-			infoData["amount"] = info.Amount
-			infoData["pokemon_id"] = int(info.PokemonId)
+			infoData["amount"] = info.GetAmount()
+			infoData["pokemon_id"] = int(info.GetPokemonId())
 		case pogo.QuestRewardProto_POKEMON_ENCOUNTER:
 			info := rewardData.GetPokemonEncounter()
-			if info.IsHiddenDitto {
+			if info.GetIsHiddenDitto() {
 				infoData["pokemon_id"] = 132
 				infoData["pokemon_id_display"] = int(info.GetPokemonId())
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
 			}
-			if info.ShinyProbability > 0.0 {
-				infoData["shiny_probability"] = info.ShinyProbability
+			if info.GetShinyProbability() > 0.0 {
+				infoData["shiny_probability"] = info.GetShinyProbability()
 			}
-			if display := info.PokemonDisplay; display != nil {
-				if costumeId := int(display.Costume); costumeId != 0 {
+			if display := info.GetPokemonDisplay(); display != nil {
+				if costumeId := int(display.GetCostume()); costumeId != 0 {
 					infoData["costume_id"] = costumeId
 				}
-				if formId := int(display.Form); formId != 0 {
+				if formId := int(display.GetForm()); formId != 0 {
 					infoData["form_id"] = formId
 				}
-				if genderId := int(display.Gender); genderId != 0 {
+				if genderId := int(display.GetGender()); genderId != 0 {
 					infoData["gender_id"] = genderId
 				}
-				if display.Shiny {
-					infoData["shiny"] = display.Shiny
+				if display.GetShiny() {
+					infoData["shiny"] = display.GetShiny()
 				}
 				if background := util.ExtractBackgroundFromDisplay(display); background != nil {
 					infoData["background"] = background
 				}
-				if breadMode := int(display.BreadModeEnum); breadMode != 0 {
+				if breadMode := int(display.GetBreadModeEnum()); breadMode != 0 {
 					infoData["bread_mode"] = breadMode
 				}
 			} else {
@@ -467,12 +469,12 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 			infoData["amount"] = rewardData.GetPokecoin()
 		case pogo.QuestRewardProto_STICKER:
 			info := rewardData.GetSticker()
-			infoData["amount"] = info.Amount
-			infoData["sticker_id"] = info.StickerId
+			infoData["amount"] = info.GetAmount()
+			infoData["sticker_id"] = info.GetStickerId()
 		case pogo.QuestRewardProto_MEGA_RESOURCE:
 			info := rewardData.GetMegaResource()
-			infoData["amount"] = info.Amount
-			infoData["pokemon_id"] = int(info.PokemonId)
+			infoData["amount"] = info.GetAmount()
+			infoData["pokemon_id"] = int(info.GetPokemonId())
 		case pogo.QuestRewardProto_AVATAR_CLOTHING:
 		case pogo.QuestRewardProto_QUEST:
 		case pogo.QuestRewardProto_LEVEL_CAP:
@@ -533,24 +535,24 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 }
 
 func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDetailsOutProto) *Pokestop {
-	stop.Id = fortData.Id
-	stop.Lat = fortData.Latitude
-	stop.Lon = fortData.Longitude
-	if len(fortData.ImageUrl) > 0 {
-		stop.Url = null.StringFrom(fortData.ImageUrl[0])
+	stop.Id = fortData.GetId()
+	stop.Lat = fortData.GetLatitude()
+	stop.Lon = fortData.GetLongitude()
+	if len(fortData.GetImageUrl()) > 0 {
+		stop.Url = null.StringFrom(fortData.GetImageUrl()[0])
 	}
-	stop.Name = null.StringFrom(fortData.Name)
+	stop.Name = null.StringFrom(fortData.GetName())
 
-	if fortData.Description == "" {
+	if fortData.GetDescription() == "" {
 		stop.Description = null.NewString("", false)
 	} else {
-		stop.Description = null.StringFrom(fortData.Description)
+		stop.Description = null.StringFrom(fortData.GetDescription())
 	}
 
-	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
+	if fortData.GetModifier() != nil && len(fortData.GetModifier()) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
-		lureId := int16(fortData.Modifier[0].ModifierType)
-		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000
+		lureId := int16(fortData.GetModifier()[0].GetModifierType())
+		lureExpiry := fortData.GetModifier()[0].GetExpirationTimeMs() / 1000
 
 		stop.LureId = lureId
 		stop.LureExpireTimestamp = null.IntFrom(lureExpiry)
@@ -560,14 +562,14 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 }
 
 func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Pokestop {
-	stop.Id = fortData.Id
-	stop.Lat = fortData.Latitude
-	stop.Lon = fortData.Longitude
+	stop.Id = fortData.GetId()
+	stop.Lat = fortData.GetLatitude()
+	stop.Lon = fortData.GetLongitude()
 
-	if len(fortData.Image) > 0 {
-		stop.Url = null.StringFrom(fortData.Image[0].Url)
+	if len(fortData.GetImage()) > 0 {
+		stop.Url = null.StringFrom(fortData.GetImage()[0].GetUrl())
 	}
-	stop.Name = null.StringFrom(fortData.Name)
+	stop.Name = null.StringFrom(fortData.GetName())
 	if stop.Deleted {
 		log.Debugf("Cleared Stop with id '%s' is found again in GMF, therefore kept deleted", stop.Id)
 	}
@@ -618,7 +620,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 	}
 
 	j := contestJson{LastUpdate: time.Now().Unix()}
-	j.TotalEntries = int(contestData.TotalEntries)
+	j.TotalEntries = int(contestData.GetTotalEntries())
 
 	for _, entry := range contestData.GetContestEntries() {
 		rank := entry.GetRank()
@@ -629,15 +631,15 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			Rank:                  int(rank),
 			Score:                 entry.GetScore(),
 			PokemonId:             int(entry.GetPokedexId()),
-			Form:                  int(entry.GetPokemonDisplay().Form),
-			Costume:               int(entry.GetPokemonDisplay().Costume),
-			Gender:                int(entry.GetPokemonDisplay().Gender),
-			Shiny:                 entry.GetPokemonDisplay().Shiny,
-			TempEvolution:         int(entry.GetPokemonDisplay().CurrentTempEvolution),
-			TempEvolutionFinishMs: entry.GetPokemonDisplay().TemporaryEvolutionFinishMs,
-			Alignment:             int(entry.GetPokemonDisplay().Alignment),
-			Badge:                 int(entry.GetPokemonDisplay().PokemonBadge),
-			Background:            util.ExtractBackgroundFromDisplay(entry.PokemonDisplay),
+			Form:                  int(entry.GetPokemonDisplay().GetForm()),
+			Costume:               int(entry.GetPokemonDisplay().GetCostume()),
+			Gender:                int(entry.GetPokemonDisplay().GetGender()),
+			Shiny:                 entry.GetPokemonDisplay().GetShiny(),
+			TempEvolution:         int(entry.GetPokemonDisplay().GetCurrentTempEvolution()),
+			TempEvolutionFinishMs: entry.GetPokemonDisplay().GetTemporaryEvolutionFinishMs(),
+			Alignment:             int(entry.GetPokemonDisplay().GetAlignment()),
+			Badge:                 int(entry.GetPokemonDisplay().GetPokemonBadge()),
+			Background:            util.ExtractBackgroundFromDisplay(entry.GetPokemonDisplay()),
 		})
 
 	}
@@ -675,8 +677,8 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"target":           stop.AlternativeQuestTarget,
 			"template":         stop.AlternativeQuestTemplate,
 			"title":            stop.AlternativeQuestTitle,
-			"conditions":       json.RawMessage(stop.AlternativeQuestConditions.ValueOrZero()),
-			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
+			"conditions":       jsontext.Value(stop.AlternativeQuestConditions.ValueOrZero()),
+			"rewards":          jsontext.Value(stop.AlternativeQuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
 			"pokestop_url":     stop.Url.ValueOrZero(),
@@ -701,8 +703,8 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 			"target":           stop.QuestTarget,
 			"template":         stop.QuestTemplate,
 			"title":            stop.QuestTitle,
-			"conditions":       json.RawMessage(stop.QuestConditions.ValueOrZero()),
-			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
+			"conditions":       jsontext.Value(stop.QuestConditions.ValueOrZero()),
+			"rewards":          jsontext.Value(stop.QuestRewards.ValueOrZero()),
 			"updated":          stop.Updated,
 			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
 			"pokestop_url":     stop.Url.ValueOrZero(),
@@ -742,7 +744,7 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 				if !stop.ShowcaseRankings.Valid {
 					return nil
 				} else {
-					return json.RawMessage(stop.ShowcaseRankings.ValueOrZero())
+					return jsontext.Value(stop.ShowcaseRankings.ValueOrZero())
 				}
 			}(),
 		}
@@ -866,11 +868,11 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 }
 
 func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.GetId())
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, fort.Id) // should check error
+	pokestop, err := GetPokestopRecord(ctx, db, fort.GetId()) // should check error
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -883,7 +885,7 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
-	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
+	return fmt.Sprintf("%s %s", fort.GetId(), fort.GetName())
 }
 
 func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
@@ -892,17 +894,17 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 		haveArStr = "AR"
 	}
 
-	if quest.ChallengeQuest == nil {
+	if !quest.HasChallengeQuest() {
 		statsCollector.IncDecodeQuest("error", "no_quest")
-		return fmt.Sprintf("%s %s Blank quest", quest.FortId, haveArStr)
+		return fmt.Sprintf("%s %s Blank quest", quest.GetFortId(), haveArStr)
 	}
 
 	statsCollector.IncDecodeQuest("ok", haveArStr)
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.GetFortId())
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, quest.FortId)
+	pokestop, err := GetPokestopRecord(ctx, db, quest.GetFortId())
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -919,7 +921,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	areas := MatchStatsGeofence(pokestop.Lat, pokestop.Lon)
 	updateQuestStats(pokestop, haveAr, areas)
 
-	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
+	return fmt.Sprintf("%s %s %s", quest.GetFortId(), haveArStr, questTitle)
 }
 
 func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
@@ -943,11 +945,11 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 }
 
 func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.Id)
+	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.GetId())
 	pokestopMutex.Lock()
 	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, mapFort.Id)
+	pokestop, err := GetPokestopRecord(ctx, db, mapFort.GetId())
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -959,7 +961,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 
 	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
 	savePokestopRecord(ctx, db, pokestop)
-	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
+	return true, fmt.Sprintf("%s %s", mapFort.GetId(), mapFort.GetName())
 }
 
 func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
@@ -967,27 +969,27 @@ func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db
 }
 
 func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request *pogo.GetContestDataProto, contestData *pogo.GetContestDataOutProto) string {
-	if contestData.ContestIncident == nil || len(contestData.ContestIncident.Contests) == 0 {
+	if !contestData.HasContestIncident() || len(contestData.GetContestIncident().GetContests()) == 0 {
 		return "No contests found"
 	}
 
 	var fortId string
 	if request != nil {
-		fortId = request.FortId
+		fortId = request.GetFortId()
 	} else {
-		fortId = getFortIdFromContest(contestData.ContestIncident.Contests[0].ContestId)
+		fortId = getFortIdFromContest(contestData.GetContestIncident().GetContests()[0].GetContestId())
 	}
 
 	if fortId == "" {
 		return "No fortId found"
 	}
 
-	if len(contestData.ContestIncident.Contests) > 1 {
+	if len(contestData.GetContestIncident().GetContests()) > 1 {
 		log.Errorf("More than one contest found")
 		return fmt.Sprintf("More than one contest found in %s", fortId)
 	}
 
-	contest := contestData.ContestIncident.Contests[0]
+	contest := contestData.GetContestIncident().GetContests()[0]
 
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 	pokestopMutex.Lock()

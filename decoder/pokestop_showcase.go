@@ -28,9 +28,9 @@ func createFocusStoreFromContestProto(contest *pogo.ContestProto) map[contestFoc
 	for _, focus := range contest.GetFocuses() {
 		if pok := focus.GetPokemon(); pok != nil {
 			result := make(map[string]any)
-			result["pokemon_id"] = int32(pok.PokedexId)
-			if pok.RequireFormToMatch {
-				result["pokemon_form"] = int32(pok.PokemonDisplay.Form)
+			result["pokemon_id"] = int32(pok.GetPokedexId())
+			if pok.GetRequireFormToMatch() {
+				result["pokemon_form"] = int32(pok.GetPokemonDisplay().GetForm())
 			}
 			focusStore[focusPokemon] = result
 		}

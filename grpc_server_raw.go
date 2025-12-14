@@ -23,40 +23,45 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		md, _ := metadata.FromIncomingContext(ctx)
 
 		if auth := md.Get("authorization"); len(auth) == 0 || auth[0] != config.Config.RawBearer {
-			return &pb.RawProtoResponse{Message: "Incorrect authorisation received"}, nil
+			return pb.RawProtoResponse_builder{Message: "Incorrect authorisation received"}.Build(), nil
 		}
 	}
 
-	uuid := in.DeviceId
-	account := in.Username
-	level := int(in.TrainerLevel)
+	uuid := in.GetDeviceId()
+	account := in.GetUsername()
+	level := int(in.GetTrainerLevel())
 	scanContext := ""
-	if in.ScanContext != nil {
-		scanContext = *in.ScanContext
+	if in.HasScanContext() {
+		scanContext = in.GetScanContext()
 	}
 
-	if in.Timestamp > 0 {
-		dataReceivedTimestamp = in.Timestamp
+	if in.GetTimestamp() > 0 {
+		dataReceivedTimestamp = in.GetTimestamp()
 	}
 
-	latTarget, lonTarget := float64(in.LatTarget), float64(in.LonTarget)
-	globalHaveAr := in.HaveAr
+	latTarget, lonTarget := float64(in.GetLatTarget()), float64(in.GetLonTarget())
+	var globalHaveAr *bool
+	if in.HasHaveAr() {
+		haveAr := in.GetHaveAr()
+		globalHaveAr = &haveAr
+	}
 	var protoData []ProtoData
 
-	for _, v := range in.Contents {
+	for _, v := range in.GetContents() {
 		inboundRawData := ProtoData{
-			Method:      int(v.Method),
+			Method:      int(v.GetMethod()),
 			Account:     account,
 			Level:       level,
 			ScanContext: scanContext,
 			Lat:         latTarget,
 			Lon:         lonTarget,
-			Data:        v.ResponsePayload,
-			Request:     v.RequestPayload,
+			Data:        v.GetResponsePayload(),
+			Request:     v.GetRequestPayload(),
 			Uuid:        uuid,
 			HaveAr: func() *bool {
-				if v.HaveAr != nil {
-					return v.HaveAr
+				if v.HasHaveAr() {
+					haveAr := v.GetHaveAr()
+					return &haveAr
 				}
 				return globalHaveAr
 			}(),
@@ -85,5 +90,5 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
-	return &pb.RawProtoResponse{Message: "Processed"}, nil
+	return pb.RawProtoResponse_builder{Message: "Processed"}.Build(), nil
 }

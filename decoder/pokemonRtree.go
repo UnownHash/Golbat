@@ -86,7 +86,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
-		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
+		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.GetScanHistory()) > 0,
 		Weather:            int8(valueOrMinus1(pokemon.Weather)),
 		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
 		Def:                int8(valueOrMinus1(pokemon.DefIv)),

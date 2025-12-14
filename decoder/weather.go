@@ -82,22 +82,22 @@ func weatherCellIdFromLatLon(lat, lon float64) int64 {
 
 func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) (oldGameplayCondition null.Int) {
 	oldGameplayCondition = weather.GameplayCondition
-	weather.Id = clientWeather.S2CellId
-	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
+	weather.Id = clientWeather.GetS2CellId()
+	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.GetS2CellId()))
 	weather.Latitude = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 	weather.Longitude = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 	weather.Level = null.IntFrom(int64(s2cell.Level()))
-	weather.GameplayCondition = null.IntFrom(int64(clientWeather.GameplayWeather.GameplayCondition))
-	weather.WindDirection = null.IntFrom(int64(clientWeather.DisplayWeather.WindDirection))
-	weather.CloudLevel = null.IntFrom(int64(clientWeather.DisplayWeather.CloudLevel))
-	weather.RainLevel = null.IntFrom(int64(clientWeather.DisplayWeather.RainLevel))
-	weather.WindLevel = null.IntFrom(int64(clientWeather.DisplayWeather.WindLevel))
-	weather.SnowLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SnowLevel))
-	weather.FogLevel = null.IntFrom(int64(clientWeather.DisplayWeather.FogLevel))
-	weather.SpecialEffectLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SpecialEffectLevel))
-	for _, alert := range clientWeather.Alerts {
-		weather.Severity = null.IntFrom(int64(alert.Severity))
-		weather.WarnWeather = null.BoolFrom(alert.WarnWeather)
+	weather.GameplayCondition = null.IntFrom(int64(clientWeather.GetGameplayWeather().GetGameplayCondition()))
+	weather.WindDirection = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetWindDirection()))
+	weather.CloudLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetCloudLevel()))
+	weather.RainLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetRainLevel()))
+	weather.WindLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetWindLevel()))
+	weather.SnowLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetSnowLevel()))
+	weather.FogLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetFogLevel()))
+	weather.SpecialEffectLevel = null.IntFrom(int64(clientWeather.GetDisplayWeather().GetSpecialEffectLevel()))
+	for _, alert := range clientWeather.GetAlerts() {
+		weather.Severity = null.IntFrom(int64(alert.GetSeverity()))
+		weather.WarnWeather = null.BoolFrom(alert.GetWarnWeather())
 	}
 	return
 }
