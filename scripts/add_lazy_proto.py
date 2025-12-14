@@ -192,6 +192,21 @@ def parse_proto_messages(proto_file, enum_names):
     return messages
 
 
+def clean_lazy_annotations(proto_file, dry_run=False):
+    """Remove all existing [lazy = true] annotations from the proto file."""
+    with open(proto_file, 'r') as f:
+        content = f.read()
+    
+    new_content = content.replace(' [lazy = true]', '')
+    changes = content.count(' [lazy = true]')
+    
+    if not dry_run and changes > 0:
+        with open(proto_file, 'w') as f:
+            f.write(new_content)
+    
+    return changes
+
+
 def add_lazy_annotations(proto_file, lazy_fields_by_message, dry_run=False):
     """Add [lazy = true] to specified fields in the proto file.
     
@@ -264,6 +279,12 @@ def main():
         print(f"Proto file: {proto_file}")
         print(f"Dry run: {dry_run}")
         print()
+
+    # Clean existing lazy annotations first
+    cleaned = clean_lazy_annotations(proto_file, dry_run)
+    if cleaned > 0:
+        action = "Would remove" if dry_run else "Removed"
+        print(f"{action} {cleaned} existing [lazy = true] annotations")
 
     # Get used getters from Go code
     used_getters = get_used_getters(project_root)
