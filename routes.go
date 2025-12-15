@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	b64 "encoding/base64"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
+
+	"encoding/json/v2"
 
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"

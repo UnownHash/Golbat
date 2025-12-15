@@ -284,8 +284,8 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	//var stopsToModify []string
 
 	for _, fort := range p {
-		fortId := fort.Data.FortId
-		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
+		fortId := fort.Data.GetFortId()
+		if fort.Data.GetFortType() == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
 			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
 
 			pokestopMutex.Lock()
@@ -302,17 +302,17 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 			savePokestopRecord(ctx, db, pokestop)
 
-			incidents := fort.Data.PokestopDisplays
-			if incidents == nil && fort.Data.PokestopDisplay != nil {
-				incidents = []*pogo.PokestopIncidentDisplayProto{fort.Data.PokestopDisplay}
+			incidents := fort.Data.GetPokestopDisplays()
+			if incidents == nil && fort.Data.HasPokestopDisplay() {
+				incidents = []*pogo.PokestopIncidentDisplayProto{fort.Data.GetPokestopDisplay()}
 			}
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
-					incidentMutex, _ := incidentStripedMutex.GetLock(incidentProto.IncidentId)
+					incidentMutex, _ := incidentStripedMutex.GetLock(incidentProto.GetIncidentId())
 
 					incidentMutex.Lock()
-					incident, err := getIncidentRecord(ctx, db, incidentProto.IncidentId)
+					incident, err := getIncidentRecord(ctx, db, incidentProto.GetIncidentId())
 					if err != nil {
 						log.Errorf("getIncident: %s", err)
 						incidentMutex.Unlock()
@@ -332,7 +332,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			pokestopMutex.Unlock()
 		}
 
-		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
+		if fort.Data.GetFortType() == pogo.FortType_GYM && scanParameters.ProcessGyms {
 			gymMutex, _ := gymStripedMutex.GetLock(fortId)
 
 			gymMutex.Lock()
@@ -356,7 +356,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
-		stationId := stationProto.Data.Id
+		stationId := stationProto.Data.GetId()
 		stationMutex, _ := stationStripedMutex.GetLock(stationId)
 		stationMutex.Lock()
 		station, err := getStationRecord(ctx, db, stationId)
@@ -377,11 +377,11 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, weather []*pogo.ClientWeatherProto, username string) {
 	weatherLookup := make(map[int64]pogo.GameplayWeatherProto_WeatherCondition)
 	for _, weatherProto := range weather {
-		weatherLookup[weatherProto.S2CellId] = weatherProto.GameplayWeather.GameplayCondition
+		weatherLookup[weatherProto.GetS2CellId()] = weatherProto.GetGameplayWeather().GetGameplayCondition()
 	}
 
 	for _, wild := range wildPokemonList {
-		encounterId := wild.Data.EncounterId
+		encounterId := wild.Data.GetEncounterId()
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
@@ -423,7 +423,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 	if scanParameters.ProcessNearby {
 		for _, nearby := range nearbyPokemonList {
-			encounterId := nearby.Data.EncounterId
+			encounterId := nearby.Data.GetEncounterId()
 			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 			pokemonMutex.Lock()
 
@@ -440,7 +440,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, mapPokemon := range mapPokemonList {
-		encounterId := mapPokemon.Data.EncounterId
+		encounterId := mapPokemon.Data.GetEncounterId()
 		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 		pokemonMutex.Lock()
 
@@ -464,9 +464,9 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64) (updates []WeatherUpdate) {
 	for _, weatherProto := range p {
-		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.S2CellId))
+		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.GetS2CellId()))
 		weatherMutex.Lock()
-		weather, err := getWeatherRecord(ctx, db, weatherProto.S2CellId)
+		weather, err := getWeatherRecord(ctx, db, weatherProto.GetS2CellId())
 		if err != nil {
 			log.Printf("getWeatherRecord: %s", err)
 		} else {
@@ -479,8 +479,8 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 				saveWeatherRecord(ctx, db, weather)
 				if oldWeather != weather.GameplayCondition {
 					updates = append(updates, WeatherUpdate{
-						S2CellId:   weatherProto.S2CellId,
-						NewWeather: int32(weatherProto.GameplayWeather.GameplayCondition),
+						S2CellId:   weatherProto.GetS2CellId(),
+						NewWeather: int32(weatherProto.GetGameplayWeather().GetGameplayCondition()),
 					})
 				}
 			}
@@ -585,19 +585,19 @@ func shouldSkipCellCheck(cellId uint64, now int64) bool {
 }
 
 func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.OpenInvasionCombatSessionProto, protoRes *pogo.OpenInvasionCombatSessionOutProto) string {
-	incidentMutex, _ := incidentStripedMutex.GetLock(protoReq.IncidentLookup.IncidentId)
+	incidentMutex, _ := incidentStripedMutex.GetLock(protoReq.GetIncidentLookup().GetIncidentId())
 
 	incidentMutex.Lock()
-	incident, err := getIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId)
+	incident, err := getIncidentRecord(ctx, db, protoReq.GetIncidentLookup().GetIncidentId())
 	if err != nil {
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
-		log.Debugf("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
+		log.Debugf("Updating lineup before it was saved: %s", protoReq.GetIncidentLookup().GetIncidentId())
 		incident = &Incident{
-			Id:         protoReq.IncidentLookup.IncidentId,
-			PokestopId: protoReq.IncidentLookup.FortId,
+			Id:         protoReq.GetIncidentLookup().GetIncidentId(),
+			PokestopId: protoReq.GetIncidentLookup().GetFortId(),
 		}
 	}
 	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
@@ -608,19 +608,19 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 }
 
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
-	incidentMutex, _ := incidentStripedMutex.GetLock(proto.Incident.IncidentId)
+	incidentMutex, _ := incidentStripedMutex.GetLock(proto.GetIncident().GetIncidentId())
 
 	incidentMutex.Lock()
-	incident, err := getIncidentRecord(ctx, db, proto.Incident.IncidentId)
+	incident, err := getIncidentRecord(ctx, db, proto.GetIncident().GetIncidentId())
 	if err != nil {
 		incidentMutex.Unlock()
 		return fmt.Sprintf("getIncident: %s", err)
 	}
 	if incident == nil {
-		log.Debugf("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
+		log.Debugf("Confirming incident before it was saved: %s", proto.GetIncident().GetIncidentId())
 		incident = &Incident{
-			Id:         proto.Incident.IncidentId,
-			PokestopId: proto.Incident.FortId,
+			Id:         proto.GetIncident().GetIncidentId(),
+			PokestopId: proto.GetIncident().GetFortId(),
 		}
 	}
 	incident.updateFromStartIncidentOut(proto)

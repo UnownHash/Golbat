@@ -28,7 +28,7 @@ func (l Location) Tuple() (float64, float64) {
 }
 
 func LocationFromFort(fort *pogo.PokemonFortProto) Location {
-	return Location{fort.Latitude, fort.Longitude}
+	return Location{fort.GetLatitude(), fort.GetLongitude()}
 }
 
 func NormalizeLon(v float64) float64 {

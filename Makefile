@@ -1,15 +1,12 @@
-FLAGS = go_json
-
-# Alternative to switch in the sonic json library
-
-#ARCH=$(shell arch)
-#ifeq ($(ARCH),x86_64)
-#FLAGS := sonic
-#else
-#FLAGS := go_json
-#endif
-
 golbat: FORCE
-	go build -tags $(FLAGS) golbat
+	GOEXPERIMENT=jsonv2,greenteagc go build golbat
+
+proto: FORCE
+	python3 scripts/add_lazy_proto.py
+	protoc --go_out=pogo --go_opt=paths=source_relative --go_opt=default_api_level=API_OPAQUE --go_opt=Mvbase.proto=golbat/pogo vbase.proto
+
+proto-lazy-all: FORCE
+	python3 scripts/add_lazy_proto.py --all
+	protoc --go_out=pogo --go_opt=paths=source_relative --go_opt=default_api_level=API_OPAQUE --go_opt=Mvbase.proto=golbat/pogo vbase.proto
 
 FORCE: ;

@@ -218,14 +218,14 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 
 	apiRequest := ApiPokemonScan2{
 		Min: geo.Location{
-			Latitude:  float64(retrieveParameters.MinLat),
-			Longitude: float64(retrieveParameters.MinLon),
+			Latitude:  float64(retrieveParameters.GetMinLat()),
+			Longitude: float64(retrieveParameters.GetMinLon()),
 		},
 		Max: geo.Location{
-			Latitude:  float64(retrieveParameters.MaxLat),
-			Longitude: float64(retrieveParameters.MaxLon),
+			Latitude:  float64(retrieveParameters.GetMaxLat()),
+			Longitude: float64(retrieveParameters.GetMaxLon()),
 		},
-		Limit: int(retrieveParameters.Limit),
+		Limit: int(retrieveParameters.GetLimit()),
 	}
 	var dnfFilters []ApiPokemonDnfFilter
 
@@ -235,11 +235,11 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 		}
 		var minV int8 = 0
 		var maxV int8 = math.MaxInt8
-		if minmax.Min != nil {
-			minV = int8(*minmax.Min)
+		if minmax.HasMin() {
+			minV = int8(minmax.GetMin())
 		}
-		if minmax.Max != nil {
-			maxV = int8(*minmax.Min)
+		if minmax.HasMax() {
+			maxV = int8(minmax.GetMin())
 		}
 
 		return &ApiPokemonDnfMinMax8{
@@ -254,11 +254,11 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 		}
 		var minV int16 = 0
 		var maxV int16 = math.MaxInt16
-		if minmax.Min != nil {
-			minV = int16(*minmax.Min)
+		if minmax.HasMin() {
+			minV = int16(minmax.GetMin())
 		}
-		if minmax.Max != nil {
-			maxV = int16(*minmax.Min)
+		if minmax.HasMax() {
+			maxV = int16(minmax.GetMin())
 		}
 
 		return &ApiPokemonDnfMinMax{
@@ -267,21 +267,21 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 		}
 	}
 
-	for _, filter := range retrieveParameters.Filters {
+	for _, filter := range retrieveParameters.GetFilters() {
 		dnfFilter := ApiPokemonDnfFilter{
 			Pokemon: func() []ApiPokemonDnfId {
 				var pokemonRes []ApiPokemonDnfId
-				for _, pokemon := range filter.Pokemon {
+				for _, pokemon := range filter.GetPokemon() {
 					pokemonRes = append(pokemonRes, ApiPokemonDnfId{
 						Pokemon: func() int16 {
-							if pokemon.Id == nil {
+							if !pokemon.HasId() {
 								return 0
 							}
-							return int16(*pokemon.Id)
+							return int16(pokemon.GetId())
 						}(),
 						Form: func() *int16 {
-							if pokemon.Form != nil {
-								form := int16(*pokemon.Form)
+							if pokemon.HasForm() {
+								form := int16(pokemon.GetForm())
 								return &form
 							}
 							return nil
@@ -291,17 +291,17 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 
 				return pokemonRes
 			}(),
-			Iv:     convertToMinMax8(filter.Iv),
-			AtkIv:  convertToMinMax8(filter.AtkIv),
-			DefIv:  convertToMinMax8(filter.DefIv),
-			StaIv:  convertToMinMax8(filter.StaIv),
-			Level:  convertToMinMax8(filter.Level),
-			Cp:     convertToMinMax16(filter.Cp),
-			Size:   convertToMinMax8(filter.Size),
-			Gender: convertToMinMax8(filter.Gender),
-			Little: convertToMinMax16(filter.PvpLittleRanking),
-			Great:  convertToMinMax16(filter.PvpGreatRanking),
-			Ultra:  convertToMinMax16(filter.PvpUltraRanking),
+			Iv:     convertToMinMax8(filter.GetIv()),
+			AtkIv:  convertToMinMax8(filter.GetAtkIv()),
+			DefIv:  convertToMinMax8(filter.GetDefIv()),
+			StaIv:  convertToMinMax8(filter.GetStaIv()),
+			Level:  convertToMinMax8(filter.GetLevel()),
+			Cp:     convertToMinMax16(filter.GetCp()),
+			Size:   convertToMinMax8(filter.GetSize()),
+			Gender: convertToMinMax8(filter.GetGender()),
+			Little: convertToMinMax16(filter.GetPvpLittleRanking()),
+			Great:  convertToMinMax16(filter.GetPvpGreatRanking()),
+			Ultra:  convertToMinMax16(filter.GetPvpUltraRanking()),
 		}
 
 		dnfFilters = append(dnfFilters, dnfFilter)
@@ -322,60 +322,16 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 				continue
 			}
 
-			apiPokemon := pb.PokemonDetails{
+			apiPokemon := pb.PokemonDetails_builder{
 				Id:         pokemon.Id,
 				PokestopId: pokemon.PokestopId.Ptr(),
 				SpawnId:    pokemon.SpawnId.Ptr(),
 				Lat:        pokemon.Lat,
 				Lon:        pokemon.Lon,
-				/* TODO:
-				Weight:          pokemon.Weight,
-				Size:            pokemon.Size,
-				Height:          pokemon.Height,
-				ExpireTimestamp: pokemon.ExpireTimestamp,
-				Updated:         pokemon.Updated,
-				PokemonId:       pokemon.PokemonId,
-				Move1:           pokemon.Move1,
-				Move2:           pokemon.Move2,
-				Gender:          pokemon.Gender,
-				Cp:              pokemon.Cp,
-				AtkIv:           pokemon.AtkIv,
-				DefIv:           pokemon.DefIv,
-				StaIv:           pokemon.StaIv,
-				Iv:                      pokemon.Iv,
-				Form:                    pokemon.Form,
-				Level:                   pokemon.Level,
-				Weather:                 pokemon.Weather,
-				Costume:                 pokemon.Costume,
-				FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
-				Changed:                 pokemon.Changed,
-				CellId:                  pokemon.CellId,
-				ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
-				DisplayPokemonId:        pokemon.DisplayPokemonId,
-				IsDitto:                 pokemon.IsDitto,
-				SeenType:                pokemon.SeenType,
-				Shiny:                   pokemon.Shiny,
-				Username:                pokemon.Username,
-				Pvp: func() map[string][]gohbem.PokemonEntry {
-					if ohbem != nil {
-						pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
-							int(pokemon.Form.ValueOrZero()),
-							int(pokemon.Costume.ValueOrZero()),
-							int(pokemon.Gender.ValueOrZero()),
-							int(pokemon.AtkIv.ValueOrZero()),
-							int(pokemon.DefIv.ValueOrZero()),
-							int(pokemon.StaIv.ValueOrZero()),
-							float64(pokemon.Level.ValueOrZero()))
-						if err != nil {
-							return nil
-						}
-						return pvp
-					}
-					return nil
-				}(),*/
-			}
+			}.Build()
+			/* TODO: Add more fields to PokemonDetails */
 
-			results = append(results, &apiPokemon)
+			results = append(results, apiPokemon)
 		}
 	}
 

@@ -11,6 +11,15 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"golbat/config"
+	db2 "golbat/db"
+	"golbat/decoder"
+	"golbat/external"
+	pb "golbat/grpc"
+	"golbat/pogo"
+	"golbat/stats_collector"
+	"golbat/webhooks"
+
 	"github.com/gin-gonic/gin"
 	"github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
@@ -21,15 +30,6 @@ import (
 	ginlogrus "github.com/toorop/gin-logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-
-	"golbat/config"
-	db2 "golbat/db"
-	"golbat/decoder"
-	"golbat/external"
-	pb "golbat/grpc"
-	"golbat/pogo"
-	"golbat/stats_collector"
-	"golbat/webhooks"
 )
 
 var db *sqlx.DB
@@ -513,10 +513,10 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 		return "Parse failure"
 	}
 
-	if decodedQuest.Result != pogo.FortSearchOutProto_SUCCESS {
+	if decodedQuest.GetResult() != pogo.FortSearchOutProto_SUCCESS {
 		statsCollector.IncDecodeQuest("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.Result,
-			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.Result)])
+		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.GetResult(),
+			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.GetResult())])
 		return res
 	}
 
@@ -541,18 +541,18 @@ func decodeSocialActionWithRequest(request []byte, payload []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
+	if proxyResponseProto.GetStatus() != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.GetStatus() != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
 		statsCollector.IncDecodeSocialActionWithRequest("error", "non_success")
-		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
+		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.GetStatus()), proxyResponseProto.GetStatus())
 	}
 
 	switch pogo.InternalSocialAction(proxyRequestProto.GetAction()) {
 	case pogo.InternalSocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
-		return decodeGetFriendDetails(proxyResponseProto.Payload)
+		return decodeGetFriendDetails(proxyResponseProto.GetPayload())
 	case pogo.InternalSocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
 		statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
-		return decodeSearchPlayer(&proxyRequestProto, proxyResponseProto.Payload)
+		return decodeSearchPlayer(&proxyRequestProto, proxyResponseProto.GetPayload())
 
 	}
 
@@ -580,7 +580,7 @@ func decodeGetFriendDetails(payload []byte) string {
 	for _, friend := range getFriendDetailsOutProto.GetFriend() {
 		player := friend.GetPlayer()
 
-		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, "", player.GetPlayerId())
+		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.GetPublicData(), "", player.GetPlayerId())
 		if updatePlayerError != nil {
 			failures++
 		}
@@ -614,7 +614,7 @@ func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byt
 	}
 
 	player := searchPlayerOutProto.GetPlayer()
-	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, searchPlayerProto.GetFriendCode(), "")
+	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.GetPublicData(), searchPlayerProto.GetFriendCode(), "")
 	if updatePlayerError != nil {
 		statsCollector.IncDecodeSearchPlayer("error", "update")
 		return fmt.Sprintf("Failed update player %s", updatePlayerError)
@@ -632,7 +632,7 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	switch decodedFort.FortType {
+	switch decodedFort.GetFortType() {
 	case pogo.FortType_CHECKPOINT:
 		statsCollector.IncDecodeFortDetails("ok", "pokestop")
 		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
@@ -653,10 +653,10 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedMapForts.Status != pogo.GetMapFortsOutProto_SUCCESS {
+	if decodedMapForts.GetStatus() != pogo.GetMapFortsOutProto_SUCCESS {
 		statsCollector.IncDecodeGetMapForts("error", "non_success")
-		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.Status,
-			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.Status)])
+		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.GetStatus(),
+			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.GetStatus())])
 		return res
 	}
 
@@ -664,7 +664,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	var outputString string
 	processedForts := 0
 
-	for _, fort := range decodedMapForts.Fort {
+	for _, fort := range decodedMapForts.GetFort() {
 		status, output := decoder.UpdateFortRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
 		if status {
 			processedForts += 1
@@ -684,8 +684,8 @@ func decodeGetRoutes(payload []byte) string {
 		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
 	}
 
-	if getRoutesOutProto.Status != pogo.GetRoutesOutProto_SUCCESS {
-		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
+	if getRoutesOutProto.GetStatus() != pogo.GetRoutesOutProto_SUCCESS {
+		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.GetStatus(), getRoutesOutProto.GetStatus().String())
 	}
 
 	decodeSuccesses := map[string]bool{}
@@ -694,19 +694,19 @@ func decodeGetRoutes(payload []byte) string {
 	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
 		for _, route := range routeMapCell.GetRoute() {
 			//TODO we need to check the repeated field, for now access last element
-			routeSubmissionStatus := route.RouteSubmissionStatus[len(route.RouteSubmissionStatus)-1]
-			if routeSubmissionStatus != nil && routeSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
+			routeSubmissionStatus := route.GetRouteSubmissionStatus()[len(route.GetRouteSubmissionStatus())-1]
+			if routeSubmissionStatus != nil && routeSubmissionStatus.GetStatus() != pogo.RouteSubmissionStatus_PUBLISHED {
 				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", routeSubmissionStatus.String())
 				continue
 			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
 			if decodeError != nil {
-				if decodeErrors[route.Id] != true {
-					decodeErrors[route.Id] = true
+				if decodeErrors[route.GetId()] != true {
+					decodeErrors[route.GetId()] = true
 				}
 				log.Errorf("Failed to decode route %s", decodeError)
-			} else if decodeSuccesses[route.Id] != true {
-				decodeSuccesses[route.Id] = true
+			} else if decodeSuccesses[route.GetId()] != true {
+				decodeSuccesses[route.GetId()] = true
 			}
 		}
 	}
@@ -727,10 +727,10 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedGymInfo.Result != pogo.GymGetInfoOutProto_SUCCESS {
+	if decodedGymInfo.GetResult() != pogo.GymGetInfoOutProto_SUCCESS {
 		statsCollector.IncDecodeGetGymInfo("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.Result,
-			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
+		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.GetResult(),
+			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.GetResult())])
 		return res
 	}
 
@@ -746,10 +746,10 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
+	if decodedEncounterInfo.GetStatus() != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
 		statsCollector.IncDecodeEncounter("error", "non_success")
-		res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
-			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
+		res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.GetStatus(),
+			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.GetStatus())])
 		return res
 	}
 
@@ -765,10 +765,10 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) stri
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedEncounterInfo.Result != pogo.DiskEncounterOutProto_SUCCESS {
+	if decodedEncounterInfo.GetResult() != pogo.DiskEncounterOutProto_SUCCESS {
 		statsCollector.IncDecodeDiskEncounter("error", "non_success")
-		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Result,
-			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.Result)])
+		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.GetResult(),
+			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.GetResult())])
 		return res
 	}
 
@@ -784,10 +784,10 @@ func decodeStartIncident(ctx context.Context, sDec []byte) string {
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedIncident.Status != pogo.StartIncidentOutProto_SUCCESS {
+	if decodedIncident.GetStatus() != pogo.StartIncidentOutProto_SUCCESS {
 		statsCollector.IncDecodeStartIncident("error", "non_success")
-		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.Status,
-			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.Status)])
+		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.GetStatus(),
+			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.GetStatus())])
 		return res
 	}
 
@@ -803,7 +803,7 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 		statsCollector.IncDecodeOpenInvasion("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-	if decodeOpenInvasionRequest.IncidentLookup == nil {
+	if !decodeOpenInvasionRequest.HasIncidentLookup() {
 		return "Invalid OpenInvasionCombatSessionProto received"
 	}
 
@@ -814,10 +814,10 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
-	if decodedOpenInvasionResponse.Status != pogo.InvasionStatus_SUCCESS {
+	if decodedOpenInvasionResponse.GetStatus() != pogo.InvasionStatus_SUCCESS {
 		statsCollector.IncDecodeOpenInvasion("error", "non_success")
-		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.Status,
-			pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.Status)])
+		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.GetStatus(),
+			pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.GetStatus())])
 		return res
 	}
 
@@ -833,10 +833,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		log.Errorf("Failed to parse %s", err)
 	}
 
-	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
+	if decodedGmo.GetStatus() != pogo.GetMapObjectsOutProto_SUCCESS {
 		statsCollector.IncDecodeGMO("error", "non_success")
-		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.Status,
-			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.Status)])
+		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.GetStatus(),
+			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.GetStatus())])
 		return res
 	}
 
@@ -848,31 +848,31 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var newMapCells []uint64
 	var cellsToBeCleaned []uint64
 
-	if len(decodedGmo.MapCell) == 0 {
+	if len(decodedGmo.GetMapCell()) == 0 {
 		return "Skipping GetMapObjectsOutProto: No map cells found"
 	}
-	for _, mapCell := range decodedGmo.MapCell {
+	for _, mapCell := range decodedGmo.GetMapCell() {
 		if isCellNotEmpty(mapCell) {
-			newMapCells = append(newMapCells, mapCell.S2CellId)
+			newMapCells = append(newMapCells, mapCell.GetS2CellId())
 			if cellContainsForts(mapCell) {
-				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
+				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.GetS2CellId())
 			}
 		}
-		for _, fort := range mapCell.Fort {
-			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
+		for _, fort := range mapCell.GetFort() {
+			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.GetS2CellId(), Data: fort, Timestamp: mapCell.GetAsOfTimeMs()})
 
-			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
+			if fort.HasActivePokemon() {
+				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.GetS2CellId(), Data: fort.GetActivePokemon(), Timestamp: mapCell.GetAsOfTimeMs()})
 			}
 		}
-		for _, mon := range mapCell.WildPokemon {
-			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+		for _, mon := range mapCell.GetWildPokemon() {
+			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.GetS2CellId(), Data: mon, Timestamp: mapCell.GetAsOfTimeMs()})
 		}
-		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+		for _, mon := range mapCell.GetNearbyPokemon() {
+			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.GetS2CellId(), Data: mon, Timestamp: mapCell.GetAsOfTimeMs()})
 		}
-		for _, station := range mapCell.Stations {
-			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
+		for _, station := range mapCell.GetStations() {
+			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.GetS2CellId(), Data: station})
 		}
 	}
 
@@ -881,16 +881,16 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {
-		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather, decodedGmo.MapCell[0].AsOfTimeMs)
+		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.GetClientWeather(), decodedGmo.GetMapCell()[0].GetAsOfTimeMs())
 	}
 	if scanParameters.ProcessPokemon {
-		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
+		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.GetClientWeather(), protoData.Account)
 		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
 			for _, weatherUpdate := range weatherUpdates {
 				go func(weatherUpdate decoder.WeatherUpdate) {
 					decoder.ProactiveIVSwitchSem <- true
 					defer func() { <-decoder.ProactiveIVSwitchSem }()
-					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, decodedGmo.MapCell[0].AsOfTimeMs/1000)
+					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, decodedGmo.GetMapCell()[0].GetAsOfTimeMs()/1000)
 				}(weatherUpdate)
 			}
 		}
@@ -915,7 +915,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	newWildPokemonLen := len(newWildPokemon)
 	newNearbyPokemonLen := len(newNearbyPokemon)
 	newMapPokemonLen := len(newMapPokemon)
-	newClientWeatherLen := len(decodedGmo.ClientWeather)
+	newClientWeatherLen := len(decodedGmo.GetClientWeather())
 	newMapCellsLen := len(newMapCells)
 
 	statsCollector.IncDecodeGMO("ok", "")
@@ -931,11 +931,11 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 }
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Stations) > 0 || len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
+	return len(mapCell.GetStations()) > 0 || len(mapCell.GetFort()) > 0 || len(mapCell.GetWildPokemon()) > 0 || len(mapCell.GetNearbyPokemon()) > 0 || len(mapCell.GetCatchablePokemon()) > 0
 }
 
 func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Fort) > 0
+	return len(mapCell.GetFort()) > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
@@ -962,8 +962,8 @@ func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data 
 		return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
 	}
 
-	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetPokemonSizeLeaderboardEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
+	if decodedPokemonSizeContestEntry.GetStatus() != pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetPokemonSizeLeaderboardEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.GetStatus())
 	}
 
 	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeLeaderboardEntryProto
@@ -992,11 +992,11 @@ func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) s
 		}
 	}
 
-	if decodedGetStationDetails.Result == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
+	if decodedGetStationDetails.GetResult() == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
 		// station without stationed pokemon found, therefore we need to reset the columns
 		return decoder.ResetStationedPokemonWithStationDetailsNotFound(ctx, dbDetails, &decodedGetStationDetailsRequest)
-	} else if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
+	} else if decodedGetStationDetails.GetResult() != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.GetResult())
 	}
 
 	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
@@ -1017,8 +1017,8 @@ func decodeTappable(ctx context.Context, request, data []byte, username string, 
 		}
 	}
 
-	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
+	if tappable.GetStatus() != pogo.ProcessTappableOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.GetStatus())
 	}
 	var result string
 	if encounter := tappable.GetEncounter(); encounter != nil {
@@ -1042,14 +1042,13 @@ func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string
 		}
 	}
 
-	if rsvp.Status != pogo.GetEventRsvpsOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetEventRsvpsOutProto non-success status %s", rsvp.Status)
+	if rsvp.GetStatus() != pogo.GetEventRsvpsOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetEventRsvpsOutProto non-success status %s", rsvp.GetStatus())
 	}
 
-	switch op := rsvpRequest.EventDetails.(type) {
-	case *pogo.GetEventRsvpsProto_Raid:
-		return decoder.UpdateGymRecordWithRsvpProto(ctx, dbDetails, op.Raid, &rsvp)
-	case *pogo.GetEventRsvpsProto_GmaxBattle:
+	if rsvpRequest.HasRaid() {
+		return decoder.UpdateGymRecordWithRsvpProto(ctx, dbDetails, rsvpRequest.GetRaid(), &rsvp)
+	} else if rsvpRequest.HasGmaxBattle() {
 		return "Unsupported GmaxBattle Rsvp received"
 	}
 
@@ -1063,15 +1062,15 @@ func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
 		return fmt.Sprintf("Failed to parse GetEventRsvpCountOutProto %s", err)
 	}
 
-	if rsvp.Status != pogo.GetEventRsvpCountOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.Status)
+	if rsvp.GetStatus() != pogo.GetEventRsvpCountOutProto_SUCCESS {
+		return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.GetStatus())
 	}
 
 	var clearLocations []string
-	for _, rsvpDetails := range rsvp.RsvpDetails {
-		if rsvpDetails.MaybeCount == 0 && rsvpDetails.GoingCount == 0 {
-			clearLocations = append(clearLocations, rsvpDetails.LocationId)
-			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.LocationId)
+	for _, rsvpDetails := range rsvp.GetRsvpDetails() {
+		if rsvpDetails.GetMaybeCount() == 0 && rsvpDetails.GetGoingCount() == 0 {
+			clearLocations = append(clearLocations, rsvpDetails.GetLocationId())
+			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.GetLocationId())
 		}
 	}
 

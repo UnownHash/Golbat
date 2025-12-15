@@ -2,7 +2,6 @@ package webhooks
 
 import (
 	"context"
-	"encoding/json"
 	"golbat/config"
 	"golbat/geo"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"encoding/json/v2"
 )
 
 type webhookConfig struct {
@@ -53,10 +54,8 @@ func createTestServer(responseCode int) *testWebhookReceiver {
 	receiver := &testWebhookReceiver{}
 	h := http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		defer req.Body.Close()
-		decoder := json.NewDecoder(req.Body)
-
 		var payloads []webhookMessage
-		decoder.Decode(&payloads)
+		json.UnmarshalRead(req.Body, &payloads)
 		receiver.mutex.Lock()
 		receiver.payloadsReceived = append(receiver.payloadsReceived, payloads...)
 		receiver.mutex.Unlock()

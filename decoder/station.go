@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"golbat/db"
@@ -11,6 +10,8 @@ import (
 	"golbat/util"
 	"golbat/webhooks"
 	"time"
+
+	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -172,39 +173,39 @@ func hasChangesStation(old *Station, new *Station) bool {
 }
 
 func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
-	station.Id = stationProto.Id
-	station.Name = stationProto.Name
+	station.Id = stationProto.GetId()
+	station.Name = stationProto.GetName()
 	// NOTE: Some names have more than 255 runes, which won't fit in our
 	// varchar(255).
-	if truncateStr, truncated := util.TruncateUTF8(stationProto.Name, 255); truncated {
+	if truncateStr, truncated := util.TruncateUTF8(stationProto.GetName(), 255); truncated {
 		log.Warnf("truncating name for station id '%s'. Orig name: %s",
-			stationProto.Id,
-			stationProto.Name,
+			stationProto.GetId(),
+			stationProto.GetName(),
 		)
 		station.Name = truncateStr
 	}
-	station.Lat = stationProto.Lat
-	station.Lon = stationProto.Lng
-	station.StartTime = stationProto.StartTimeMs / 1000
-	station.EndTime = stationProto.EndTimeMs / 1000
-	station.CooldownComplete = stationProto.CooldownCompleteMs
-	station.IsBattleAvailable = stationProto.IsBreadBattleAvailable
-	if battleDetails := stationProto.BattleDetails; battleDetails != nil {
-		station.BattleLevel = null.IntFrom(int64(battleDetails.BattleLevel))
-		station.BattleStart = null.IntFrom(battleDetails.BattleWindowStartMs / 1000)
-		station.BattleEnd = null.IntFrom(battleDetails.BattleWindowEndMs / 1000)
-		if pokemon := battleDetails.BattlePokemon; pokemon != nil {
-			station.BattlePokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			station.BattlePokemonMove1 = null.IntFrom(int64(pokemon.Move1))
-			station.BattlePokemonMove2 = null.IntFrom(int64(pokemon.Move2))
-			station.BattlePokemonForm = null.IntFrom(int64(pokemon.PokemonDisplay.Form))
-			station.BattlePokemonCostume = null.IntFrom(int64(pokemon.PokemonDisplay.Costume))
-			station.BattlePokemonGender = null.IntFrom(int64(pokemon.PokemonDisplay.Gender))
-			station.BattlePokemonAlignment = null.IntFrom(int64(pokemon.PokemonDisplay.Alignment))
-			station.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.PokemonDisplay.BreadModeEnum))
-			station.BattlePokemonStamina = null.IntFrom(int64(pokemon.Stamina))
-			station.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.CpMultiplier))
-			if rewardPokemon := battleDetails.RewardPokemon; rewardPokemon != nil && pokemon.PokemonId != rewardPokemon.PokemonId {
+	station.Lat = stationProto.GetLat()
+	station.Lon = stationProto.GetLng()
+	station.StartTime = stationProto.GetStartTimeMs() / 1000
+	station.EndTime = stationProto.GetEndTimeMs() / 1000
+	station.CooldownComplete = stationProto.GetCooldownCompleteMs()
+	station.IsBattleAvailable = stationProto.GetIsBreadBattleAvailable()
+	if battleDetails := stationProto.GetBattleDetails(); battleDetails != nil {
+		station.BattleLevel = null.IntFrom(int64(battleDetails.GetBattleLevel()))
+		station.BattleStart = null.IntFrom(battleDetails.GetBattleWindowStartMs() / 1000)
+		station.BattleEnd = null.IntFrom(battleDetails.GetBattleWindowEndMs() / 1000)
+		if pokemon := battleDetails.GetBattlePokemon(); pokemon != nil {
+			station.BattlePokemonId = null.IntFrom(int64(pokemon.GetPokemonId()))
+			station.BattlePokemonMove1 = null.IntFrom(int64(pokemon.GetMove1()))
+			station.BattlePokemonMove2 = null.IntFrom(int64(pokemon.GetMove2()))
+			station.BattlePokemonForm = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetForm()))
+			station.BattlePokemonCostume = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetCostume()))
+			station.BattlePokemonGender = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetGender()))
+			station.BattlePokemonAlignment = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetAlignment()))
+			station.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetBreadModeEnum()))
+			station.BattlePokemonStamina = null.IntFrom(int64(pokemon.GetStamina()))
+			station.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.GetCpMultiplier()))
+			if rewardPokemon := battleDetails.GetRewardPokemon(); rewardPokemon != nil && pokemon.GetPokemonId() != rewardPokemon.GetPokemonId() {
 				log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
 			}
 		}
@@ -230,29 +231,29 @@ func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProt
 
 	var stationedPokemon []stationedPokemonDetail
 	stationedGmax := int64(0)
-	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
-		pokemon := stationedPokemonDetails.Pokemon
-		display := pokemon.PokemonDisplay
+	for _, stationedPokemonDetails := range stationProto.GetStationedPokemons() {
+		pokemon := stationedPokemonDetails.GetPokemon()
+		display := pokemon.GetPokemonDisplay()
 		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
-			PokemonId:             int(pokemon.PokemonId),
-			Form:                  int(display.Form),
-			Costume:               int(display.Costume),
-			Gender:                int(display.Gender),
-			Shiny:                 display.Shiny,
-			TempEvolution:         int(display.CurrentTempEvolution),
-			TempEvolutionFinishMs: display.TemporaryEvolutionFinishMs,
-			Alignment:             int(display.Alignment),
-			Badge:                 int(display.PokemonBadge),
+			PokemonId:             int(pokemon.GetPokemonId()),
+			Form:                  int(display.GetForm()),
+			Costume:               int(display.GetCostume()),
+			Gender:                int(display.GetGender()),
+			Shiny:                 display.GetShiny(),
+			TempEvolution:         int(display.GetCurrentTempEvolution()),
+			TempEvolutionFinishMs: display.GetTemporaryEvolutionFinishMs(),
+			Alignment:             int(display.GetAlignment()),
+			Badge:                 int(display.GetPokemonBadge()),
 			Background:            util.ExtractBackgroundFromDisplay(display),
-			BreadMode:             int(display.BreadModeEnum),
+			BreadMode:             int(display.GetBreadModeEnum()),
 		})
-		if display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
+		if display.GetBreadModeEnum() == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.GetBreadModeEnum() == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
 			stationedGmax++
 		}
 	}
 	jsonString, _ := json.Marshal(stationedPokemon)
 	station.StationedPokemon = null.StringFrom(string(jsonString))
-	station.TotalStationedPokemon = null.IntFrom(int64(stationProto.TotalNumStationedPokemon))
+	station.TotalStationedPokemon = null.IntFrom(int64(stationProto.GetTotalNumStationedPokemon()))
 	station.TotalStationedGmax = null.IntFrom(stationedGmax)
 	return station
 }
@@ -266,7 +267,7 @@ func (station *Station) resetStationedPokemonFromStationDetailsNotFound() *Stati
 }
 
 func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto) string {
-	stationId := request.StationId
+	stationId := request.GetStationId()
 	stationMutex, _ := stationStripedMutex.GetLock(stationId)
 	stationMutex.Lock()
 	defer stationMutex.Unlock()
@@ -288,7 +289,7 @@ func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.
 }
 
 func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
-	stationId := request.StationId
+	stationId := request.GetStationId()
 	stationMutex, _ := stationStripedMutex.GetLock(stationId)
 	stationMutex.Lock()
 	defer stationMutex.Unlock()

@@ -2,7 +2,6 @@ package webhooks
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"golbat/config"
@@ -10,6 +9,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"encoding/json/v2"
 
 	log "github.com/sirupsen/logrus"
 )

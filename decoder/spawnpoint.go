@@ -93,20 +93,20 @@ func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
 }
 
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
-	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	spawnId, err := strconv.ParseInt(wildPokemon.GetSpawnPointId(), 16, 64)
 	if err != nil {
 		panic(err)
 	}
 
-	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
-		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
+	if wildPokemon.GetTimeTillHiddenMs() <= 90000 && wildPokemon.GetTimeTillHiddenMs() > 0 {
+		expireTimeStamp := (timestampMs + int64(wildPokemon.GetTimeTillHiddenMs())) / 1000
 
 		date := time.Unix(expireTimeStamp, 0)
 		secondOfHour := date.Second() + date.Minute()*60
 		spawnpoint := Spawnpoint{
 			Id:         spawnId,
-			Lat:        wildPokemon.Latitude,
-			Lon:        wildPokemon.Longitude,
+			Lat:        wildPokemon.GetLatitude(),
+			Lon:        wildPokemon.GetLongitude(),
 			DespawnSec: null.IntFrom(int64(secondOfHour)),
 		}
 		spawnpointUpdate(ctx, db, &spawnpoint)
@@ -115,8 +115,8 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		if spawnPoint == nil {
 			spawnpoint := Spawnpoint{
 				Id:  spawnId,
-				Lat: wildPokemon.Latitude,
-				Lon: wildPokemon.Longitude,
+				Lat: wildPokemon.GetLatitude(),
+				Lon: wildPokemon.GetLongitude(),
 			}
 			spawnpointUpdate(ctx, db, &spawnpoint)
 		} else {

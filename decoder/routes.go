@@ -2,12 +2,13 @@ package decoder
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
 	"time"
+
+	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
