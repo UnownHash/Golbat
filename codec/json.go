@@ -48,3 +48,14 @@ func JSONUnmarshalRead(r io.Reader, v any) error {
 	}
 	return json.UnmarshalRead(r, v)
 }
+
+// JSONMarshalWrite encodes v as JSON directly to an io.Writer.
+// This is more efficient than JSONMarshal when writing to a stream
+// as it avoids intermediate []byte allocation.
+// Uses go-json if UseGoJSON is true, otherwise uses jsonv2.
+func JSONMarshalWrite(w io.Writer, v any) error {
+	if UseGoJSON {
+		return gojson.NewEncoder(w).Encode(v)
+	}
+	return json.MarshalWrite(w, v)
+}

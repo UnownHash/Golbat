@@ -101,7 +101,12 @@ func (wh *webhook) getPayload(collection webhookCollection) ([]byte, error) {
 		return nil, nil
 	}
 
-	return codec.JSONMarshal(totalCollection)
+	// Use streaming marshal to avoid intermediate allocation
+	var buf bytes.Buffer
+	if err := codec.JSONMarshalWrite(&buf, totalCollection); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func (wh *webhook) sendCollection(collection webhookCollection) error {
