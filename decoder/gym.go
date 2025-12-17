@@ -4,14 +4,13 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"encoding/json/jsontext"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
 
-	"encoding/json/jsontext"
-	"encoding/json/v2"
-
+	"golbat/codec"
 	"golbat/geo"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -193,7 +192,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if !fortData.HasGuardPokemonDisplay() {
 		gym.GuardingPokemonDisplay = null.NewString("", false)
 	} else {
-		display, _ := json.Marshal(pokemonDisplay{
+		display, _ := codec.JSONMarshal(pokemonDisplay{
 			Form:                  int(fortData.GetGuardPokemonDisplay().GetForm()),
 			Costume:               int(fortData.GetGuardPokemonDisplay().GetCostume()),
 			Gender:                int(fortData.GetGuardPokemonDisplay().GetGender()),
@@ -374,7 +373,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		}
 		defenders = append(defenders, defender)
 	}
-	bDefenders, _ := json.Marshal(defenders)
+	bDefenders, _ := codec.JSONMarshal(defenders)
 	gym.Defenders = null.StringFrom(string(bDefenders))
 	//	log.Debugf("Gym %s defenders %s ", gym.Id, string(bDefenders))
 
@@ -426,7 +425,7 @@ func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gy
 			return cmp.Compare(a.Timeslot, b.Timeslot)
 		})
 
-		bRsvps, _ := json.Marshal(timeslots)
+		bRsvps, _ := codec.JSONMarshal(timeslots)
 		gym.Rsvps = null.StringFrom(string(bRsvps))
 	}
 

@@ -9,11 +9,10 @@ import (
 	"strconv"
 	"time"
 
-	"encoding/json/v2"
-
 	"github.com/gin-gonic/gin"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/codec"
 	"golbat/config"
 	"golbat/decoder"
 	"golbat/geo"
@@ -113,7 +112,7 @@ func Raw(c *gin.Context) {
 
 	if pogodroidHeader != "" {
 		var raw []map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := codec.JSONUnmarshal(body, &raw); err != nil {
 			decodeError = true
 		} else {
 			for _, entry := range raw {
@@ -145,7 +144,7 @@ func Raw(c *gin.Context) {
 		account = "Pogodroid"
 	} else {
 		var raw map[string]interface{}
-		if err := json.Unmarshal(body, &raw); err != nil {
+		if err := codec.JSONUnmarshal(body, &raw); err != nil {
 			decodeError = true
 		} else {
 			if v := raw["have_ar"]; v != nil {

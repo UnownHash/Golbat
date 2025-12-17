@@ -3,12 +3,11 @@ package decoder
 import (
 	"database/sql"
 	"fmt"
+	"golbat/codec"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
 	"time"
-
-	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -198,11 +197,11 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.Type = int8(sharedRouteProto.GetType())
 	route.Updated = time.Now().Unix()
 	route.Version = sharedRouteProto.GetVersion()
-	waypoints, _ := json.Marshal(sharedRouteProto.GetWaypoints())
+	waypoints, _ := codec.JSONMarshal(sharedRouteProto.GetWaypoints())
 	route.Waypoints = string(waypoints)
 
 	if len(sharedRouteProto.GetTags()) > 0 {
-		tags, _ := json.Marshal(sharedRouteProto.GetTags())
+		tags, _ := codec.JSONMarshal(sharedRouteProto.GetTags())
 		route.Tags = null.StringFrom(string(tags))
 	}
 }

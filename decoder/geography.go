@@ -1,12 +1,10 @@
 package decoder
 
 import (
+	"golbat/codec"
 	"golbat/geo"
 	"io/ioutil"
 	"net/http"
-
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 
 	"github.com/tidwall/rtree"
 
@@ -63,7 +61,7 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 	defer resp.Body.Close()
 
 	var response KojiResponse
-	err = json.UnmarshalRead(resp.Body, &response)
+	err = codec.JSONUnmarshalRead(resp.Body, &response)
 
 	return &response.Data, err
 }
@@ -90,7 +88,7 @@ func ReadGeofences() error {
 			}
 		} else {
 			log.Infof("KOJI: Loaded geofence from koji, caching")
-			bytes, _ := json.Marshal(fc, jsontext.WithIndent("\t"))
+			bytes, _ := codec.JSONMarshalIndent(fc, "", "\t")
 			ioutil.WriteFile(kojiCacheFilename, []byte(bytes), 0644)
 			statsFeatureCollection = fc
 

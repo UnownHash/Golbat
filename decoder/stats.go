@@ -8,11 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"encoding/json/v2"
-
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/codec"
 	"golbat/encounter_cache"
 	"golbat/geo"
 )
@@ -564,9 +563,9 @@ func updateQuestStats(pokestop *Pokestop, haveAr bool, areas []geo.AreaName) {
 	var err error
 	var data areaQuestCount
 	if !haveAr {
-		err = json.Unmarshal([]byte(pokestop.AlternativeQuestRewards.String), &data)
+		err = codec.JSONUnmarshal([]byte(pokestop.AlternativeQuestRewards.String), &data)
 	} else {
-		err = json.Unmarshal([]byte(pokestop.QuestRewards.String), &data)
+		err = codec.JSONUnmarshal([]byte(pokestop.QuestRewards.String), &data)
 	}
 
 	if err != nil {

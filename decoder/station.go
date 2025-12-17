@@ -5,13 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"golbat/codec"
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/util"
 	"golbat/webhooks"
 	"time"
-
-	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -251,7 +250,7 @@ func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProt
 			stationedGmax++
 		}
 	}
-	jsonString, _ := json.Marshal(stationedPokemon)
+	jsonString, _ := codec.JSONMarshal(stationedPokemon)
 	station.StationedPokemon = null.StringFrom(string(jsonString))
 	station.TotalStationedPokemon = null.IntFrom(int64(stationProto.GetTotalNumStationedPokemon()))
 	station.TotalStationedGmax = null.IntFrom(stationedGmax)
@@ -259,7 +258,7 @@ func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProt
 }
 
 func (station *Station) resetStationedPokemonFromStationDetailsNotFound() *Station {
-	jsonString, _ := json.Marshal([]string{})
+	jsonString, _ := codec.JSONMarshal([]string{})
 	station.StationedPokemon = null.StringFrom(string(jsonString))
 	station.TotalStationedPokemon = null.IntFrom(0)
 	station.TotalStationedGmax = null.IntFrom(0)

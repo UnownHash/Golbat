@@ -11,6 +11,7 @@ import (
 	"time"
 	_ "time/tzdata"
 
+	"golbat/codec"
 	"golbat/config"
 	db2 "golbat/db"
 	"golbat/decoder"
@@ -51,6 +52,9 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	// Set JSON library from config
+	codec.UseGoJSON = cfg.Tuning.UseGoJSON
 
 	logLevel := log.InfoLevel
 

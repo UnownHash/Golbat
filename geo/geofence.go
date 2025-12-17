@@ -2,10 +2,9 @@ package geo
 
 import (
 	"fmt"
+	"golbat/codec"
 	"io"
 	"math"
-
-	"encoding/json/v2"
 
 	"github.com/gin-gonic/gin"
 	"github.com/paulmach/orb"
@@ -317,7 +316,7 @@ func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
 	}
 
 	var golbatFance *GeofenceApi
-	err = json.Unmarshal(bodyBytes, &golbatFance)
+	err = codec.JSONUnmarshal(bodyBytes, &golbatFance)
 	if err == nil {
 		log.Debugf("%s %s - received a fence", c.Request.Method, c.FullPath())
 		return golbatFance.toGeofence().toFeature(), err

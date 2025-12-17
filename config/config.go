@@ -123,6 +123,7 @@ type tuning struct {
 	MaxPokemonResults  int     `koanf:"max_pokemon_results"`
 	MaxPokemonDistance float64 `koanf:"max_pokemon_distance"`
 	ProfileRoutes      bool    `koanf:"profile_routes"`
+	UseGoJSON          bool    `koanf:"use_go_json"`
 }
 
 type scanRule struct {

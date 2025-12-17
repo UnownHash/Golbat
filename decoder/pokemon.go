@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"strconv"
@@ -10,9 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"encoding/json/jsontext"
-	"encoding/json/v2"
-
+	"golbat/codec"
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
@@ -270,7 +269,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				float64(pokemon.Level.ValueOrZero()))
 
 			if err == nil {
-				pvpBytes, _ := json.Marshal(pvp)
+				pvpBytes, _ := codec.JSONMarshal(pvp)
 				pokemon.Pvp = null.StringFrom(string(pvpBytes))
 				changePvpField = true
 				pvpResults = pvp

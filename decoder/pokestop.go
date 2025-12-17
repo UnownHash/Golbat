@@ -3,19 +3,18 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"encoding/json/jsontext"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
-
-	"encoding/json/jsontext"
-	"encoding/json/v2"
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 
+	"golbat/codec"
 	"golbat/config"
 	"golbat/db"
 	"golbat/pogo"
@@ -488,8 +487,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		rewards = append(rewards, reward)
 	}
 
-	questConditions, _ := json.Marshal(conditions)
-	questRewards, _ := json.Marshal(rewards)
+	questConditions, _ := codec.JSONMarshal(conditions)
+	questRewards, _ := codec.JSONMarshal(rewards)
 	questTimestamp := time.Now().Unix()
 
 	questExpiry := null.NewInt(0, false)
@@ -588,7 +587,7 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 
 	for key, focus := range focusStore {
 		focus["type"] = key
-		jsonBytes, err := json.Marshal(focus)
+		jsonBytes, err := codec.JSONMarshal(focus)
 		if err != nil {
 			log.Errorf("SHOWCASE: Stop '%s' - Focus '%v' marshalling failed: %s", stop.Id, focus, err)
 		}
@@ -643,7 +642,7 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 		})
 
 	}
-	jsonString, _ := json.Marshal(j)
+	jsonString, _ := codec.JSONMarshal(j)
 	stop.ShowcaseRankings = null.StringFrom(string(jsonString))
 }
 

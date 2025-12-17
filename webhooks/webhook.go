@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"golbat/codec"
 	"golbat/config"
 	"golbat/geo"
 	"io"
 	"net/http"
 	"net/url"
-
-	"encoding/json/v2"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -102,7 +101,7 @@ func (wh *webhook) getPayload(collection webhookCollection) ([]byte, error) {
 		return nil, nil
 	}
 
-	return json.Marshal(totalCollection)
+	return codec.JSONMarshal(totalCollection)
 }
 
 func (wh *webhook) sendCollection(collection webhookCollection) error {

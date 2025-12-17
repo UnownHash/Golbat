@@ -3,14 +3,13 @@ package decoder
 import (
 	"context"
 	"errors"
+	"golbat/codec"
 	"golbat/db"
 	"golbat/pogo"
 	"net/http"
 	"os"
 	"reflect"
 	"time"
-
-	"encoding/json/v2"
 
 	"github.com/golang/geo/s2"
 	log "github.com/sirupsen/logrus"
@@ -59,7 +58,7 @@ func fetchMasterFile() (MasterFileData, error) {
 	defer resp.Body.Close()
 
 	var data MasterFileData
-	err = json.UnmarshalRead(resp.Body, &data)
+	err = codec.JSONUnmarshalRead(resp.Body, &data)
 	if err != nil {
 		return MasterFileData{}, errors.New("can't decode remote Weather MasterFile")
 	}
@@ -89,7 +88,7 @@ func LoadMasterFileData(filePath string) error {
 	if err != nil {
 		return errMasterFileOpen
 	}
-	if err := json.Unmarshal(data, &masterFileData); err != nil {
+	if err := codec.JSONUnmarshal(data, &masterFileData); err != nil {
 		return errMasterFileUnmarshall
 	}
 	masterFileData.Initialized = true
@@ -98,7 +97,7 @@ func LoadMasterFileData(filePath string) error {
 
 // SaveMasterFileData Save MasterFile from memory to provided location.
 func SaveMasterFileData() error {
-	data, err := json.Marshal(masterFileData)
+	data, err := codec.JSONMarshal(masterFileData)
 	if err != nil {
 		return errMasterFileMarshall
 	}
