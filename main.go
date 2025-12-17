@@ -304,6 +304,7 @@ func main() {
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
 	apiGroup.GET("/devices/all", GetDevices)
+	apiGroup.GET("/codec/json/:value", SetJSONCodec)
 
 	debugGroup := r.Group("/debug")
 

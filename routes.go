@@ -329,6 +329,32 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
+func SetJSONCodec(c *gin.Context) {
+	value := c.Param("value")
+	switch value {
+	case "0":
+		codec.UseGoJSON = false
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"status": "ok",
+			"codec":  "jsonv2",
+		})
+	case "1":
+		codec.UseGoJSON = true
+		c.JSON(http.StatusOK, map[string]interface{}{
+			"status": "ok",
+			"codec":  "go-json",
+		})
+	default:
+		c.JSON(http.StatusBadRequest, map[string]interface{}{
+			"status":  "error",
+			"message": "invalid value, use 0 for jsonv2 or 1 for go-json",
+			"current": map[string]interface{}{
+				"use_go_json": codec.UseGoJSON,
+			},
+		})
+	}
+}
+
 func ClearQuests(c *gin.Context) {
 	fence, err := geo.NormaliseFenceRequest(c)
 
