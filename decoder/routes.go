@@ -197,12 +197,31 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.Type = int8(sharedRouteProto.GetType())
 	route.Updated = time.Now().Unix()
 	route.Version = sharedRouteProto.GetVersion()
-	waypoints, _ := codec.JSONMarshal(sharedRouteProto.GetWaypoints())
-	route.Waypoints = string(waypoints)
 
+	// Convert proto waypoints to plain Go struct for proper JSON marshaling
+	type waypointData struct {
+		FortId            string  `json:"fort_id,omitempty"`
+		LatDegrees        float64 `json:"lat_degrees"`
+		LngDegrees        float64 `json:"lng_degrees"`
+		ElevationInMeters float64 `json:"elevation_in_meters,omitempty"`
+	}
+	protoWaypoints := sharedRouteProto.GetWaypoints()
+	waypoints := make([]waypointData, 0, len(protoWaypoints))
+	for _, wp := range protoWaypoints {
+		waypoints = append(waypoints, waypointData{
+			FortId:            wp.GetFortId(),
+			LatDegrees:        wp.GetLatDegrees(),
+			LngDegrees:        wp.GetLngDegrees(),
+			ElevationInMeters: wp.GetElevationInMeters(),
+		})
+	}
+	waypointsJson, _ := codec.JSONMarshal(waypoints)
+	route.Waypoints = string(waypointsJson)
+
+	// Tags are already []string, can marshal directly
 	if len(sharedRouteProto.GetTags()) > 0 {
-		tags, _ := codec.JSONMarshal(sharedRouteProto.GetTags())
-		route.Tags = null.StringFrom(string(tags))
+		tagsJson, _ := codec.JSONMarshal(sharedRouteProto.GetTags())
+		route.Tags = null.StringFrom(string(tagsJson))
 	}
 }
 
