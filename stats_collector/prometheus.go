@@ -326,6 +326,14 @@ var (
 		},
 		[]string{"area", "level"},
 	)
+	fortChange = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "fort_change",
+			Help:      "Total number of fort changes (deletions and conversions)",
+		},
+		[]string{"change_type"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -583,6 +591,10 @@ func (col *promCollector) UpdateMaxBattleCount(areas []geo.AreaName, level int64
 	}
 }
 
+func (col *promCollector) IncFortChange(changeType string) {
+	fortChange.WithLabelValues(changeType).Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -594,7 +606,7 @@ func initPrometheus() {
 		pokemonCountNew, pokemonCountIv, pokemonCountHundo, pokemonCountNundo,
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
-		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount,
+		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
 		duplicateEncounters, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,

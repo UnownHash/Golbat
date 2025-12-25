@@ -426,8 +426,10 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 		fortTracker.RemoveFort(gymId)
 		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
 		CreateFortWebhooks(ctx, dbDetails, []string{gymId}, GYM, REMOVAL)
+		statsCollector.IncFortChange("gym_delete")
 	} else {
 		log.Infof("FortTracker: marked gym as deleted (converted to pokestop) in cell %d: %s", cellId, gymId)
+		statsCollector.IncFortChange("gym_to_pokestop")
 	}
 }
 
@@ -446,8 +448,10 @@ func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId s
 		fortTracker.RemoveFort(stopId)
 		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)
 		CreateFortWebhooks(ctx, dbDetails, []string{stopId}, POKESTOP, REMOVAL)
+		statsCollector.IncFortChange("pokestop_delete")
 	} else {
 		log.Infof("FortTracker: marked pokestop as deleted (converted to gym) in cell %d: %s", cellId, stopId)
+		statsCollector.IncFortChange("pokestop_to_gym")
 	}
 }
 
