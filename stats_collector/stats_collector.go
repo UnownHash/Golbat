@@ -49,6 +49,7 @@ type StatsCollector interface {
 	IncPokemons(hasIv bool, seenType null.String)
 	DecPokemons(hasIv bool, seenType null.String)
 	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
+	IncFortChange(changeType string)
 }
 
 type Config interface {

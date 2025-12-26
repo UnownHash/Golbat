@@ -213,3 +213,59 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 	return status, output
 }
+
+// copySharedFieldsFromPokestop copies shared fields from a pokestop to a gym during conversion
+func copySharedFieldsFromPokestop(gym *Gym, pokestop *Pokestop) {
+	if pokestop.Name.Valid && !gym.Name.Valid {
+		gym.Name = pokestop.Name
+	}
+	if pokestop.Url.Valid && !gym.Url.Valid {
+		gym.Url = pokestop.Url
+	}
+	if pokestop.Description.Valid && !gym.Description.Valid {
+		gym.Description = pokestop.Description
+	}
+	if pokestop.PartnerId.Valid && !gym.PartnerId.Valid {
+		gym.PartnerId = pokestop.PartnerId
+	}
+	if pokestop.ArScanEligible.Valid && !gym.ArScanEligible.Valid {
+		gym.ArScanEligible = pokestop.ArScanEligible
+	}
+	if pokestop.PowerUpLevel.Valid && !gym.PowerUpLevel.Valid {
+		gym.PowerUpLevel = pokestop.PowerUpLevel
+	}
+	if pokestop.PowerUpPoints.Valid && !gym.PowerUpPoints.Valid {
+		gym.PowerUpPoints = pokestop.PowerUpPoints
+	}
+	if pokestop.PowerUpEndTimestamp.Valid && !gym.PowerUpEndTimestamp.Valid {
+		gym.PowerUpEndTimestamp = pokestop.PowerUpEndTimestamp
+	}
+}
+
+// copySharedFieldsFromGym copies shared fields from a gym to a pokestop during conversion
+func copySharedFieldsFromGym(pokestop *Pokestop, gym *Gym) {
+	if gym.Name.Valid && !pokestop.Name.Valid {
+		pokestop.Name = gym.Name
+	}
+	if gym.Url.Valid && !pokestop.Url.Valid {
+		pokestop.Url = gym.Url
+	}
+	if gym.Description.Valid && !pokestop.Description.Valid {
+		pokestop.Description = gym.Description
+	}
+	if gym.PartnerId.Valid && !pokestop.PartnerId.Valid {
+		pokestop.PartnerId = gym.PartnerId
+	}
+	if gym.ArScanEligible.Valid && !pokestop.ArScanEligible.Valid {
+		pokestop.ArScanEligible = gym.ArScanEligible
+	}
+	if gym.PowerUpLevel.Valid && !pokestop.PowerUpLevel.Valid {
+		pokestop.PowerUpLevel = gym.PowerUpLevel
+	}
+	if gym.PowerUpPoints.Valid && !pokestop.PowerUpPoints.Valid {
+		pokestop.PowerUpPoints = gym.PowerUpPoints
+	}
+	if gym.PowerUpEndTimestamp.Valid && !pokestop.PowerUpEndTimestamp.Valid {
+		pokestop.PowerUpEndTimestamp = gym.PowerUpEndTimestamp
+	}
+}
