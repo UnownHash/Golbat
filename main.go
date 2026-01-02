@@ -860,24 +860,26 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	var cellsToBeCleaned []uint64
 
 	// track forts per cell for memory-based cleanup (only if tracker enabled)
-	cellForts := make(map[uint64]*decoder.CellFortsData)
+	cellForts := make(map[uint64]*decoder.FortTrackerGMOContents)
 
 	if len(decodedGmo.MapCell) == 0 {
 		return "Skipping GetMapObjectsOutProto: No map cells found"
 	}
 	for _, mapCell := range decodedGmo.MapCell {
+		// initialize cell forts tracking for every map cell (so empty fort lists are seen as "no forts")
+		cellForts[mapCell.S2CellId] = &decoder.FortTrackerGMOContents{
+			Pokestops: make([]string, 0),
+			Gyms:      make([]string, 0),
+			Timestamp: mapCell.AsOfTimeMs,
+		}
+		// always mark this mapCell to be checked for removed forts. Previously only cells with forts were
+		// added which meant an empty fort list (all forts removed) was never passed to the tracker.
+		cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
+
 		if isCellNotEmpty(mapCell) {
 			newMapCells = append(newMapCells, mapCell.S2CellId)
-			if cellContainsForts(mapCell) {
-				cellsToBeCleaned = append(cellsToBeCleaned, mapCell.S2CellId)
-				// initialize cell forts tracking (only if tracker enabled)
-				cellForts[mapCell.S2CellId] = &decoder.CellFortsData{
-					Pokestops: make([]string, 0),
-					Gyms:      make([]string, 0),
-					Timestamp: mapCell.AsOfTimeMs,
-				}
-			}
 		}
+
 		for _, fort := range mapCell.Fort {
 			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
 

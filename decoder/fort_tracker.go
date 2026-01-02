@@ -15,31 +15,31 @@ type FortTracker struct {
 	mu sync.RWMutex
 
 	// cellId -> CellFortState
-	cells map[uint64]*CellFortState
+	cells map[uint64]*FortTrackerCellState
 
 	// fortId -> FortInfo (for quick lookup)
-	forts map[string]*FortInfo
+	forts map[string]*FortTrackerLastSeen
 
 	// Configuration
 	staleThreshold int64 // seconds after which a fort is considered stale
 }
 
 // CellFortState tracks the state of forts within a single S2 cell
-type CellFortState struct {
+type FortTrackerCellState struct {
 	lastSeen  int64               // last time this cell was seen in GMO
 	pokestops map[string]struct{} // set of pokestop IDs
 	gyms      map[string]struct{} // set of gym IDs
 }
 
 // FortInfo tracks individual fort metadata
-type FortInfo struct {
+type FortTrackerLastSeen struct {
 	cellId   uint64
 	lastSeen int64 // last time this fort was seen in GMO
 	isGym    bool  // faster targeted removal
 }
 
 // CellFortsData holds fort IDs per cell from GMO processing
-type CellFortsData struct {
+type FortTrackerGMOContents struct {
 	Pokestops []string
 	Gyms      []string
 	Timestamp int64 // GMO AsOfTimeMs for this cell
@@ -51,8 +51,8 @@ var fortTracker *FortTracker
 // InitFortTracker initializes the global fort tracker
 func InitFortTracker(staleThresholdSeconds int64) {
 	fortTracker = &FortTracker{
-		cells:          make(map[uint64]*CellFortState),
-		forts:          make(map[string]*FortInfo),
+		cells:          make(map[uint64]*FortTrackerCellState),
+		forts:          make(map[string]*FortTrackerLastSeen),
 		staleThreshold: staleThresholdSeconds,
 	}
 	log.Infof("FortTracker: initialized with stale threshold of %d seconds", staleThresholdSeconds)
@@ -115,7 +115,7 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			cellId := uint64(row.CellId)
 			cell := fortTracker.getOrCreateCellLocked(cellId)
 			cell.pokestops[row.Id] = struct{}{}
-			fortTracker.forts[row.Id] = &FortInfo{
+			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
 				cellId:   cellId,
 				lastSeen: row.Updated * 1000, // convert to milliseconds
 				isGym:    false,
@@ -165,7 +165,7 @@ func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 			cellId := uint64(row.CellId)
 			cell := fortTracker.getOrCreateCellLocked(cellId)
 			cell.gyms[row.Id] = struct{}{}
-			fortTracker.forts[row.Id] = &FortInfo{
+			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
 				cellId:   cellId,
 				lastSeen: row.Updated * 1000, // convert to milliseconds
 				isGym:    true,
@@ -187,10 +187,10 @@ func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 }
 
 // getOrCreateCellLocked returns or creates a cell state (caller must hold lock)
-func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *CellFortState {
+func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellState {
 	cell, exists := ft.cells[cellId]
 	if !exists {
-		cell = &CellFortState{
+		cell = &FortTrackerCellState{
 			pokestops: make(map[string]struct{}),
 			gyms:      make(map[string]struct{}),
 		}
@@ -228,7 +228,7 @@ func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now 
 	}
 
 	// Update fort info
-	ft.forts[fortId] = &FortInfo{
+	ft.forts[fortId] = &FortTrackerLastSeen{
 		cellId:   cellId,
 		lastSeen: now,
 		isGym:    isGym,
@@ -295,7 +295,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			}
 			info.lastSeen = timestamp
 		} else {
-			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: timestamp, isGym: false}
+			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: false}
 		}
 	}
 	for _, id := range gymIds {
@@ -319,7 +319,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 			}
 			info.lastSeen = timestamp
 		} else {
-			ft.forts[id] = &FortInfo{cellId: cellId, lastSeen: timestamp, isGym: true}
+			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: true}
 		}
 	}
 
@@ -328,8 +328,6 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 
 	// Skip stale check on first scan - we need at least one prior scan to compare against
 	if firstScan {
-		cell.pokestops = currentPokestops
-		cell.gyms = currentGyms
 		return &result
 	}
 
@@ -456,7 +454,7 @@ func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId s
 }
 
 // CheckRemovedForts uses the in-memory fort tracker for fast detection
-func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*CellFortsData) {
+func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*FortTrackerGMOContents) {
 	for _, cellId := range mapCells {
 		cf, ok := cellForts[cellId]
 		if !ok {
