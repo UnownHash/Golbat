@@ -20,14 +20,14 @@ type ScanParameters struct {
 	ProactiveIVSwitchingToDB bool
 }
 
-func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters {
+func FindScanConfiguration(scanContext string, location geo.Location) ScanParameters {
 	var areas []geo.AreaName
 	areaLookedUp := false
 
 	for _, rule := range config.Config.ScanRules {
 		if len(rule.AreaNames) > 0 {
 			if !areaLookedUp {
-				areas = MatchStatsGeofence(lat, lon)
+				areas = MatchStatsGeofence(location.Latitude, location.Longitude)
 				areaLookedUp = true
 			}
 			if !geo.AreaMatchWithWildcards(areas, rule.AreaNames) {

@@ -1019,6 +1019,10 @@ func getFortIdFromContest(id string) string {
 }
 
 func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
+	if request == nil {
+		return "Request is not available"
+	}
+
 	fortId := getFortIdFromContest(request.GetContestId())
 
 	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)

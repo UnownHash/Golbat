@@ -7,8 +7,12 @@ import (
 )
 
 type Location struct {
-	Latitude  float64
-	Longitude float64
+	Latitude  float64 `json:"lat"`
+	Longitude float64 `json:"lon"`
+}
+
+func (l Location) IsZero() bool {
+	return l.Latitude == 0 && l.Longitude == 0
 }
 
 type Bbox struct {
