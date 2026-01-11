@@ -227,10 +227,8 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
-			pokemon := pokemonCacheEntry.Value()
-
-			apiPokemon := buildApiPokemonResult(&pokemon)
+		if pokemon := peekPokemonFromCache(key); pokemon != nil {
+			apiPokemon := buildApiPokemonResult(pokemon)
 			results = append(results, &apiPokemon)
 		}
 	}

@@ -133,10 +133,8 @@ type Pokemon struct {
 
 func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	if db.UsePokemonCache {
-		inMemoryPokemon := getPokemonFromCache(encounterId)
-		if inMemoryPokemon != nil {
-			pokemon := inMemoryPokemon.Value()
-			return &pokemon, nil
+		if pokemon := getPokemonFromCache(encounterId); pokemon != nil {
+			return pokemon, nil
 		}
 	}
 	if config.Config.PokemonMemoryOnly {
@@ -161,7 +159,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 	}
 
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, &pokemon, ttlcache.DefaultTTL)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +172,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, *pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
 	return pokemon, nil
 }
@@ -222,7 +220,8 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
-	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
+	// Use peek for oldPokemon - we only need it for read-only comparison, no copy needed
+	oldPokemon := peekPokemonFromCache(pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
@@ -408,7 +407,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		setPokemonCache(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
+		setPokemonCache(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 	}
 }
 
@@ -697,7 +696,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	if overrideLatLon {
 		pokemon.Lat, pokemon.Lon = lat, lon
 	} else {
-		midpoint := s2.LatLngFromPoint(s2.Point{s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
+		midpoint := s2.LatLngFromPoint(s2.Point{Vector: s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
 			Add(s2.PointFromLatLng(s2.LatLngFromDegrees(lat, lon)).Vector)})
 		pokemon.Lat = midpoint.Lat.Degrees()
 		pokemon.Lon = midpoint.Lng.Degrees()

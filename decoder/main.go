@@ -66,7 +66,7 @@ var weatherCache *ttlcache.Cache[int64, Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
-var pokemonCache []*ttlcache.Cache[uint64, Pokemon]
+var pokemonCache []*ttlcache.Cache[uint64, *Pokemon]
 var incidentCache *ttlcache.Cache[string, Incident]
 var playerCache *ttlcache.Cache[string, Player]
 var routeCache *ttlcache.Cache[string, Route]
@@ -101,16 +101,34 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
-func getPokemonCache(key uint64) *ttlcache.Cache[uint64, Pokemon] {
+func getPokemonCache(key uint64) *ttlcache.Cache[uint64, *Pokemon] {
 	return pokemonCache[key%uint64(len(pokemonCache))]
 }
 
-func setPokemonCache(key uint64, value Pokemon, ttl time.Duration) {
+func setPokemonCache(key uint64, value *Pokemon, ttl time.Duration) {
 	getPokemonCache(key).Set(key, value, ttl)
 }
 
-func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, Pokemon] {
-	return getPokemonCache(key).Get(key)
+// getPokemonFromCache returns a COPY of the cached Pokemon to preserve
+// change detection semantics. Returns nil if not found.
+// Use this when you need to modify the pokemon and compare changes.
+func getPokemonFromCache(key uint64) *Pokemon {
+	item := getPokemonCache(key).Get(key)
+	if item == nil {
+		return nil
+	}
+	pokemonCopy := *item.Value()
+	return &pokemonCopy
+}
+
+// peekPokemonFromCache returns the cached Pokemon pointer directly without copying.
+// Use this for read-only access where no modifications will be made.
+func peekPokemonFromCache(key uint64) *Pokemon {
+	item := getPokemonCache(key).Get(key)
+	if item == nil {
+		return nil
+	}
+	return item.Value()
 }
 
 func deletePokemonFromCache(key uint64) {
@@ -160,11 +178,11 @@ func initDataCache() {
 
 	// pokemon is the most active table. Use an array of caches to increase concurrency for querying ttlcache, which places a global lock for each Get/Set operation
 	// Initialize pokemon cache array: by picking it to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
-	pokemonCache = make([]*ttlcache.Cache[uint64, Pokemon], runtime.NumCPU())
+	pokemonCache = make([]*ttlcache.Cache[uint64, *Pokemon], runtime.NumCPU())
 	for i := 0; i < len(pokemonCache); i++ {
-		pokemonCache[i] = ttlcache.New[uint64, Pokemon](
-			ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
-			ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
+		pokemonCache[i] = ttlcache.New[uint64, *Pokemon](
+			ttlcache.WithTTL[uint64, *Pokemon](60*time.Minute),
+			ttlcache.WithDisableTouchOnHit[uint64, *Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
 		)
 		go pokemonCache[i].Start()
 	}
