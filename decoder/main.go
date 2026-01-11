@@ -415,27 +415,18 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			} else {
 				updateTime := wild.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
-					go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
-						time.Sleep(15 * time.Second)
-						pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-						pokemonMutex.Lock()
-						defer pokemonMutex.Unlock()
-
-						ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-						defer cancel()
-
-						if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
-							log.Errorf("getOrCreatePokemonRecord: %s", err)
-						} else {
-							// Update if there is still a change required & this update is the most recent
-							if pokemon.wildSignificantUpdate(wildPokemon, updateTime) && pokemon.Updated.ValueOrZero() < updateTime {
-								log.Debugf("DELAYED UPDATE: Updating pokemon %d from wild", encounterId)
-
-								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
-								savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
-							}
-						}
-					}(wild.Data, int64(wild.Cell), wild.Timestamp)
+					// Add to pending queue instead of spawning a goroutine
+					// The sweeper will process it after timeout if no encounter arrives
+					pending := &PendingPokemon{
+						EncounterId:   encounterId,
+						WildPokemon:   wild.Data,
+						CellId:        int64(wild.Cell),
+						TimestampMs:   wild.Timestamp,
+						UpdateTime:    updateTime,
+						WeatherLookup: weatherLookup,
+						Username:      username,
+					}
+					pokemonPendingQueue.AddPending(pending)
 				}
 			}
 		}
