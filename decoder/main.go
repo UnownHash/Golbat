@@ -301,7 +301,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			if isNewPokestop {
 				gym, _ := GetGymRecord(ctx, db, fortId)
 				if gym != nil {
-					copySharedFieldsFromGym(pokestop, gym)
+					pokestop.copySharedFieldsFrom(gym)
 				}
 			}
 
@@ -359,7 +359,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			if isNewGym {
 				pokestop, _ := GetPokestopRecord(ctx, db, fortId)
 				if pokestop != nil {
-					copySharedFieldsFromPokestop(gym, pokestop)
+					gym.copySharedFieldsFrom(pokestop)
 				}
 			}
 

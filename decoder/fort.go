@@ -214,8 +214,8 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	return status, output
 }
 
-// copySharedFieldsFromPokestop copies shared fields from a pokestop to a gym during conversion
-func copySharedFieldsFromPokestop(gym *Gym, pokestop *Pokestop) {
+// copySharedFieldsFrom copies shared fields from a pokestop to a gym during conversion
+func (gym *Gym) copySharedFieldsFrom(pokestop *Pokestop) {
 	if pokestop.Name.Valid && !gym.Name.Valid {
 		gym.Name = pokestop.Name
 	}
@@ -242,30 +242,30 @@ func copySharedFieldsFromPokestop(gym *Gym, pokestop *Pokestop) {
 	}
 }
 
-// copySharedFieldsFromGym copies shared fields from a gym to a pokestop during conversion
-func copySharedFieldsFromGym(pokestop *Pokestop, gym *Gym) {
-	if gym.Name.Valid && !pokestop.Name.Valid {
-		pokestop.Name = gym.Name
+// copySharedFieldsFrom copies shared fields from a gym to a pokestop during conversion
+func (stop *Pokestop) copySharedFieldsFrom(gym *Gym) {
+	if gym.Name.Valid && !stop.Name.Valid {
+		stop.Name = gym.Name
 	}
-	if gym.Url.Valid && !pokestop.Url.Valid {
-		pokestop.Url = gym.Url
+	if gym.Url.Valid && !stop.Url.Valid {
+		stop.Url = gym.Url
 	}
-	if gym.Description.Valid && !pokestop.Description.Valid {
-		pokestop.Description = gym.Description
+	if gym.Description.Valid && !stop.Description.Valid {
+		stop.Description = gym.Description
 	}
-	if gym.PartnerId.Valid && !pokestop.PartnerId.Valid {
-		pokestop.PartnerId = gym.PartnerId
+	if gym.PartnerId.Valid && !stop.PartnerId.Valid {
+		stop.PartnerId = gym.PartnerId
 	}
-	if gym.ArScanEligible.Valid && !pokestop.ArScanEligible.Valid {
-		pokestop.ArScanEligible = gym.ArScanEligible
+	if gym.ArScanEligible.Valid && !stop.ArScanEligible.Valid {
+		stop.ArScanEligible = gym.ArScanEligible
 	}
-	if gym.PowerUpLevel.Valid && !pokestop.PowerUpLevel.Valid {
-		pokestop.PowerUpLevel = gym.PowerUpLevel
+	if gym.PowerUpLevel.Valid && !stop.PowerUpLevel.Valid {
+		stop.PowerUpLevel = gym.PowerUpLevel
 	}
-	if gym.PowerUpPoints.Valid && !pokestop.PowerUpPoints.Valid {
-		pokestop.PowerUpPoints = gym.PowerUpPoints
+	if gym.PowerUpPoints.Valid && !stop.PowerUpPoints.Valid {
+		stop.PowerUpPoints = gym.PowerUpPoints
 	}
-	if gym.PowerUpEndTimestamp.Valid && !pokestop.PowerUpEndTimestamp.Valid {
-		pokestop.PowerUpEndTimestamp = gym.PowerUpEndTimestamp
+	if gym.PowerUpEndTimestamp.Valid && !stop.PowerUpEndTimestamp.Valid {
+		stop.PowerUpEndTimestamp = gym.PowerUpEndTimestamp
 	}
 }
