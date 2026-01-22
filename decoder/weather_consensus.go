@@ -43,12 +43,14 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 	return state
 }
 
-func (state *WeatherConsensusState) applyObservation(hourKey int64, account string, weatherProto *pogo.ClientWeatherProto) (bool, int32, *pogo.ClientWeatherProto) {
+// applyObservation records a weather observation and decides whether to publish an update.
+// Returns true with the most recent observation for the winning condition; otherwise false, nil.
+func (state *WeatherConsensusState) applyObservation(hourKey int64, account string, weatherProto *pogo.ClientWeatherProto) (bool, *pogo.ClientWeatherProto) {
 	if state == nil || weatherProto == nil {
-		return false, 0, nil
+		return false, nil
 	}
 	if hourKey < state.HourKey {
-		return false, 0, nil
+		return false, nil
 	}
 	if hourKey > state.HourKey {
 		state.reset(hourKey)
@@ -71,39 +73,43 @@ func (state *WeatherConsensusState) applyObservation(hourKey int64, account stri
 		state.CountsByCondition[condition]++
 	}
 
-	bestCondition, bestCount, secondCount := state.bestCounts()
+	bestCondition, bestCount, runnerUpCount := state.bestCounts()
 	if bestCount == 0 {
-		return false, 0, nil
+		return false, nil
 	}
 	if !state.Published {
 		state.Published = true
 		state.PublishedCondition = bestCondition
-		return true, bestCondition, state.LastObsByCondition[bestCondition]
+		return true, state.LastObsByCondition[bestCondition]
 	}
 	if bestCondition == state.PublishedCondition {
-		return false, 0, nil
+		return false, nil
 	}
-	if bestCount > secondCount {
+	// Only publish a change when the leader is strictly ahead (no tie).
+	if bestCount > runnerUpCount {
 		state.PublishedCondition = bestCondition
-		return true, bestCondition, state.LastObsByCondition[bestCondition]
+		return true, state.LastObsByCondition[bestCondition]
 	}
-	return false, 0, nil
+	return false, nil
 }
 
+// bestCounts returns the leading condition, its vote count, and the runner-up count.
+// The runner-up count equals the best count when there is a tie for first.
 func (state *WeatherConsensusState) bestCounts() (int32, int, int) {
 	var bestCondition int32
 	bestCount := 0
-	secondCount := 0
+	runnerUpCount := 0
 	for condition, count := range state.CountsByCondition {
-		if count > bestCount {
-			secondCount = bestCount
+		switch {
+		case count > bestCount:
+			runnerUpCount = bestCount
 			bestCount = count
 			bestCondition = condition
-			continue
-		}
-		if count > secondCount {
-			secondCount = count
+		case count == bestCount:
+			runnerUpCount = bestCount
+		case count > runnerUpCount:
+			runnerUpCount = count
 		}
 	}
-	return bestCondition, bestCount, secondCount
+	return bestCondition, bestCount, runnerUpCount
 }

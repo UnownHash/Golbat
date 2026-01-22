@@ -495,7 +495,7 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 		} else if weather == nil || timestampMs >= weather.UpdatedMs {
 			state := getWeatherConsensusState(weatherProto.S2CellId, hourKey)
 			if state != nil {
-				publish, _, publishProto := state.applyObservation(hourKey, account, weatherProto)
+				publish, publishProto := state.applyObservation(hourKey, account, weatherProto)
 				if publish {
 					if publishProto == nil {
 						publishProto = weatherProto
