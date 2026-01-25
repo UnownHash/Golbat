@@ -63,6 +63,7 @@ var gymCache *ttlcache.Cache[string, Gym]
 var stationCache *ttlcache.Cache[string, Station]
 var tappableCache *ttlcache.Cache[uint64, Tappable]
 var weatherCache *ttlcache.Cache[int64, Weather]
+var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
 var s2CellCache *ttlcache.Cache[uint64, S2Cell]
 var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
 var pokemonCache []*ttlcache.Cache[uint64, Pokemon]
@@ -141,6 +142,11 @@ func initDataCache() {
 		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
 	)
 	go weatherCache.Start()
+
+	weatherConsensusCache = ttlcache.New[int64, *WeatherConsensusState](
+		ttlcache.WithTTL[int64, *WeatherConsensusState](2 * time.Hour),
+	)
+	go weatherConsensusCache.Start()
 
 	s2CellCache = ttlcache.New[uint64, S2Cell](
 		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
@@ -477,29 +483,39 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64) (updates []WeatherUpdate) {
+func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64, account string) (updates []WeatherUpdate) {
+	hourKey := timestampMs / time.Hour.Milliseconds()
 	for _, weatherProto := range p {
 		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.S2CellId))
 		weatherMutex.Lock()
+
 		weather, err := getWeatherRecord(ctx, db, weatherProto.S2CellId)
 		if err != nil {
 			log.Printf("getWeatherRecord: %s", err)
-		} else {
-			if weather == nil {
-				weather = &Weather{}
-			}
-			if timestampMs >= weather.UpdatedMs {
-				weather.UpdatedMs = timestampMs
-				oldWeather := weather.updateWeatherFromClientWeatherProto(weatherProto)
-				saveWeatherRecord(ctx, db, weather)
-				if oldWeather != weather.GameplayCondition {
-					updates = append(updates, WeatherUpdate{
-						S2CellId:   weatherProto.S2CellId,
-						NewWeather: int32(weatherProto.GameplayWeather.GameplayCondition),
-					})
+		} else if weather == nil || timestampMs >= weather.UpdatedMs {
+			state := getWeatherConsensusState(weatherProto.S2CellId, hourKey)
+			if state != nil {
+				publish, publishProto := state.applyObservation(hourKey, account, weatherProto)
+				if publish {
+					if publishProto == nil {
+						publishProto = weatherProto
+					}
+					if weather == nil {
+						weather = &Weather{}
+					}
+					weather.UpdatedMs = timestampMs
+					oldWeather := weather.updateWeatherFromClientWeatherProto(publishProto)
+					saveWeatherRecord(ctx, db, weather)
+					if oldWeather != weather.GameplayCondition {
+						updates = append(updates, WeatherUpdate{
+							S2CellId:   publishProto.S2CellId,
+							NewWeather: int32(publishProto.GetGameplayWeather().GetGameplayCondition()),
+						})
+					}
 				}
 			}
 		}
+
 		weatherMutex.Unlock()
 	}
 	return updates
