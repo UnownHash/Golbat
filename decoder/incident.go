@@ -40,6 +40,26 @@ type webhookLineup struct {
 	Form      null.Int `json:"form"`
 }
 
+type IncidentWebhook struct {
+	Id                      string          `json:"id"`
+	PokestopId              string          `json:"pokestop_id"`
+	Latitude                float64         `json:"latitude"`
+	Longitude               float64         `json:"longitude"`
+	PokestopName            string          `json:"pokestop_name"`
+	Url                     string          `json:"url"`
+	Enabled                 bool            `json:"enabled"`
+	Start                   int64           `json:"start"`
+	IncidentExpireTimestamp int64           `json:"incident_expire_timestamp"`
+	Expiration              int64           `json:"expiration"`
+	DisplayType             int16           `json:"display_type"`
+	Style                   int16           `json:"style"`
+	GruntType               int16           `json:"grunt_type"`
+	Character               int16           `json:"character"`
+	Updated                 int64           `json:"updated"`
+	Confirmed               bool            `json:"confirmed"`
+	Lineup                  []webhookLineup `json:"lineup"`
+}
+
 //->   `id` varchar(35) NOT NULL,
 //->   `pokestop_id` varchar(35) NOT NULL,
 //->   `start` int unsigned NOT NULL,
@@ -160,34 +180,14 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 			stop = &Pokestop{}
 		}
 
-		incidentHook := map[string]interface{}{
-			"id":          incident.Id,
-			"pokestop_id": incident.PokestopId,
-			"latitude":    stop.Lat,
-			"longitude":   stop.Lon,
-			"pokestop_name": func() string {
-				if stop.Name.Valid {
-					return stop.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			"url":                       stop.Url.ValueOrZero(),
-			"enabled":                   stop.Enabled.ValueOrZero(),
-			"start":                     incident.StartTime,
-			"incident_expire_timestamp": incident.ExpirationTime, // deprecated, remove old key in the future
-			"expiration":                incident.ExpirationTime,
-			"display_type":              incident.DisplayType,
-			"style":                     incident.Style,
-			"grunt_type":                incident.Character, // deprecated, remove old key in the future
-			"character":                 incident.Character,
-			"updated":                   incident.Updated,
-			"confirmed":                 incident.Confirmed,
-			"lineup":                    nil,
+		pokestopName := "Unknown"
+		if stop.Name.Valid {
+			pokestopName = stop.Name.String
 		}
 
+		var lineup []webhookLineup
 		if incident.Slot1PokemonId.Valid {
-			incidentHook["lineup"] = []webhookLineup{
+			lineup = []webhookLineup{
 				{
 					Slot:      1,
 					PokemonId: incident.Slot1PokemonId,
@@ -205,6 +205,27 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, oldIncident *I
 				},
 			}
 		}
+
+		incidentHook := IncidentWebhook{
+			Id:                      incident.Id,
+			PokestopId:              incident.PokestopId,
+			Latitude:                stop.Lat,
+			Longitude:               stop.Lon,
+			PokestopName:            pokestopName,
+			Url:                     stop.Url.ValueOrZero(),
+			Enabled:                 stop.Enabled.ValueOrZero(),
+			Start:                   incident.StartTime,
+			IncidentExpireTimestamp: incident.ExpirationTime,
+			Expiration:              incident.ExpirationTime,
+			DisplayType:             incident.DisplayType,
+			Style:                   incident.Style,
+			GruntType:               incident.Character,
+			Character:               incident.Character,
+			Updated:                 incident.Updated,
+			Confirmed:               incident.Confirmed,
+			Lineup:                  lineup,
+		}
+
 		areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
 		statsCollector.UpdateIncidentCount(areas)

@@ -412,81 +412,109 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, new *Pokemon, areas []geo.AreaName) {
-	//nullString := func (v null.Int) interface{} {
-	//	if !v.Valid {
-	//		return "null"
-	//	}
-	//	return v.ValueOrZero()
-	//}
+type PokemonWebhook struct {
+	SpawnpointId          string          `json:"spawnpoint_id"`
+	PokestopId            string          `json:"pokestop_id"`
+	PokestopName          *string         `json:"pokestop_name"`
+	EncounterId           string          `json:"encounter_id"`
+	PokemonId             int16           `json:"pokemon_id"`
+	Latitude              float64         `json:"latitude"`
+	Longitude             float64         `json:"longitude"`
+	DisappearTime         int64           `json:"disappear_time"`
+	DisappearTimeVerified bool            `json:"disappear_time_verified"`
+	FirstSeen             int64           `json:"first_seen"`
+	LastModifiedTime      null.Int        `json:"last_modified_time"`
+	Gender                null.Int        `json:"gender"`
+	Cp                    null.Int        `json:"cp"`
+	Form                  null.Int        `json:"form"`
+	Costume               null.Int        `json:"costume"`
+	IndividualAttack      null.Int        `json:"individual_attack"`
+	IndividualDefense     null.Int        `json:"individual_defense"`
+	IndividualStamina     null.Int        `json:"individual_stamina"`
+	PokemonLevel          null.Int        `json:"pokemon_level"`
+	Move1                 null.Int        `json:"move_1"`
+	Move2                 null.Int        `json:"move_2"`
+	Weight                null.Float      `json:"weight"`
+	Size                  null.Int        `json:"size"`
+	Height                null.Float      `json:"height"`
+	Weather               null.Int        `json:"weather"`
+	Capture1              float64         `json:"capture_1"`
+	Capture2              float64         `json:"capture_2"`
+	Capture3              float64         `json:"capture_3"`
+	Shiny                 null.Bool       `json:"shiny"`
+	Username              null.String     `json:"username"`
+	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
+	IsEvent               int8            `json:"is_event"`
+	SeenType              null.String     `json:"seen_type"`
+	Pvp                   json.RawMessage `json:"pvp"`
+}
 
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, new *Pokemon, areas []geo.AreaName) {
 	if old == nil ||
 		old.PokemonId != new.PokemonId ||
 		old.Weather != new.Weather ||
 		old.Cp != new.Cp {
-		pokemonHook := map[string]interface{}{
-			"spawnpoint_id": func() string {
-				if !new.SpawnId.Valid {
-					return "None"
-				}
-				return strconv.FormatInt(new.SpawnId.ValueOrZero(), 16)
-			}(),
-			"pokestop_id": func() string {
-				if !new.PokestopId.Valid {
-					return "None"
-				} else {
-					return new.PokestopId.ValueOrZero()
-				}
-			}(),
-			"pokestop_name": func() *string {
-				if !new.PokestopId.Valid {
-					return nil
-				} else {
-					pokestop, _ := GetPokestopRecord(ctx, db, new.PokestopId.String)
-					name := "Unknown"
-					if pokestop != nil {
-						name = pokestop.Name.ValueOrZero()
-					}
-					return &name
-				}
-			}(),
-			"encounter_id":            strconv.FormatUint(new.Id, 10),
-			"pokemon_id":              new.PokemonId,
-			"latitude":                new.Lat,
-			"longitude":               new.Lon,
-			"disappear_time":          new.ExpireTimestamp.ValueOrZero(),
-			"disappear_time_verified": new.ExpireTimestampVerified,
-			"first_seen":              new.FirstSeenTimestamp,
-			"last_modified_time":      new.Updated,
-			"gender":                  new.Gender,
-			"cp":                      new.Cp,
-			"form":                    new.Form,
-			"costume":                 new.Costume,
-			"individual_attack":       new.AtkIv,
-			"individual_defense":      new.DefIv,
-			"individual_stamina":      new.StaIv,
-			"pokemon_level":           new.Level,
-			"move_1":                  new.Move1,
-			"move_2":                  new.Move2,
-			"weight":                  new.Weight,
-			"size":                    new.Size,
-			"height":                  new.Height,
-			"weather":                 new.Weather,
-			"capture_1":               new.Capture1.ValueOrZero(),
-			"capture_2":               new.Capture2.ValueOrZero(),
-			"capture_3":               new.Capture3.ValueOrZero(),
-			"shiny":                   new.Shiny,
-			"username":                new.Username,
-			"display_pokemon_id":      new.DisplayPokemonId,
-			"is_event":                new.IsEvent,
-			"seen_type":               new.SeenType,
-			"pvp": func() interface{} {
-				if !new.Pvp.Valid {
-					return nil
-				} else {
-					return json.RawMessage(new.Pvp.ValueOrZero())
-				}
-			}(),
+
+		spawnpointId := "None"
+		if new.SpawnId.Valid {
+			spawnpointId = strconv.FormatInt(new.SpawnId.ValueOrZero(), 16)
+		}
+
+		pokestopId := "None"
+		if new.PokestopId.Valid {
+			pokestopId = new.PokestopId.ValueOrZero()
+		}
+
+		var pokestopName *string
+		if new.PokestopId.Valid {
+			pokestop, _ := GetPokestopRecord(ctx, db, new.PokestopId.String)
+			name := "Unknown"
+			if pokestop != nil {
+				name = pokestop.Name.ValueOrZero()
+			}
+			pokestopName = &name
+		}
+
+		var pvp json.RawMessage
+		if new.Pvp.Valid {
+			pvp = json.RawMessage(new.Pvp.ValueOrZero())
+		}
+
+		pokemonHook := PokemonWebhook{
+			SpawnpointId:          spawnpointId,
+			PokestopId:            pokestopId,
+			PokestopName:          pokestopName,
+			EncounterId:           strconv.FormatUint(new.Id, 10),
+			PokemonId:             new.PokemonId,
+			Latitude:              new.Lat,
+			Longitude:             new.Lon,
+			DisappearTime:         new.ExpireTimestamp.ValueOrZero(),
+			DisappearTimeVerified: new.ExpireTimestampVerified,
+			FirstSeen:             new.FirstSeenTimestamp,
+			LastModifiedTime:      new.Updated,
+			Gender:                new.Gender,
+			Cp:                    new.Cp,
+			Form:                  new.Form,
+			Costume:               new.Costume,
+			IndividualAttack:      new.AtkIv,
+			IndividualDefense:     new.DefIv,
+			IndividualStamina:     new.StaIv,
+			PokemonLevel:          new.Level,
+			Move1:                 new.Move1,
+			Move2:                 new.Move2,
+			Weight:                new.Weight,
+			Size:                  new.Size,
+			Height:                new.Height,
+			Weather:               new.Weather,
+			Capture1:              new.Capture1.ValueOrZero(),
+			Capture2:              new.Capture2.ValueOrZero(),
+			Capture3:              new.Capture3.ValueOrZero(),
+			Shiny:                 new.Shiny,
+			Username:              new.Username,
+			DisplayPokemonId:      new.DisplayPokemonId,
+			IsEvent:               new.IsEvent,
+			SeenType:              new.SeenType,
+			Pvp:                   pvp,
 		}
 
 		if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {

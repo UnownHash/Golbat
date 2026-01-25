@@ -40,6 +40,10 @@ type InboundRawData struct {
 	HaveAr     *bool
 }
 
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
 func questsHeldHasARTask(quests_held any) *bool {
 	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
 
@@ -346,17 +350,13 @@ func ClearQuests(c *gin.Context) {
 	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
 	log.Infof("Clear quest took %s", time.Since(startTime))
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
 }
 
 func ReloadGeojson(c *gin.Context) {
 	decoder.ReloadGeofenceAndClearStats()
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
 }
 
 func PokemonScan(c *gin.Context) {
