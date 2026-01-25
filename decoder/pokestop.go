@@ -108,6 +108,47 @@ type Pokestop struct {
 
 }
 
+type QuestWebhook struct {
+	PokestopId     string          `json:"pokestop_id"`
+	Latitude       float64         `json:"latitude"`
+	Longitude      float64         `json:"longitude"`
+	PokestopName   string          `json:"pokestop_name"`
+	Type           null.Int        `json:"type"`
+	Target         null.Int        `json:"target"`
+	Template       null.String     `json:"template"`
+	Title          null.String     `json:"title"`
+	Conditions     json.RawMessage `json:"conditions"`
+	Rewards        json.RawMessage `json:"rewards"`
+	Updated        int64           `json:"updated"`
+	ArScanEligible int64           `json:"ar_scan_eligible"`
+	PokestopUrl    string          `json:"pokestop_url"`
+	WithAr         bool            `json:"with_ar"`
+}
+
+type PokestopWebhook struct {
+	PokestopId              string          `json:"pokestop_id"`
+	Latitude                float64         `json:"latitude"`
+	Longitude               float64         `json:"longitude"`
+	Name                    string          `json:"name"`
+	Url                     string          `json:"url"`
+	LureExpiration          int64           `json:"lure_expiration"`
+	LastModified            int64           `json:"last_modified"`
+	Enabled                 bool            `json:"enabled"`
+	LureId                  int16           `json:"lure_id"`
+	ArScanEligible          int64           `json:"ar_scan_eligible"`
+	PowerUpLevel            int64           `json:"power_up_level"`
+	PowerUpPoints           int64           `json:"power_up_points"`
+	PowerUpEndTimestamp     int64           `json:"power_up_end_timestamp"`
+	Updated                 int64           `json:"updated"`
+	ShowcaseFocus           null.String     `json:"showcase_focus"`
+	ShowcasePokemonId       null.Int        `json:"showcase_pokemon_id"`
+	ShowcasePokemonFormId   null.Int        `json:"showcase_pokemon_form_id"`
+	ShowcasePokemonTypeId   null.Int        `json:"showcase_pokemon_type_id"`
+	ShowcaseRankingStandard null.Int        `json:"showcase_ranking_standard"`
+	ShowcaseExpiry          null.Int        `json:"showcase_expiry"`
+	ShowcaseRankings        json.RawMessage `json:"showcase_rankings"`
+}
+
 func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
 	stop := pokestopCache.Get(fortId)
 	if stop != nil {
@@ -663,92 +704,78 @@ func createPokestopWebhooks(oldStop *Pokestop, stop *Pokestop) {
 
 	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 
+	pokestopName := "Unknown"
+	if stop.Name.Valid {
+		pokestopName = stop.Name.String
+	}
+
 	if stop.AlternativeQuestType.Valid && (oldStop == nil || stop.AlternativeQuestType != oldStop.AlternativeQuestType) {
-		questHook := map[string]any{
-			"pokestop_id": stop.Id,
-			"latitude":    stop.Lat,
-			"longitude":   stop.Lon,
-			"pokestop_name": func() string {
-				if stop.Name.Valid {
-					return stop.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			"type":             stop.AlternativeQuestType,
-			"target":           stop.AlternativeQuestTarget,
-			"template":         stop.AlternativeQuestTemplate,
-			"title":            stop.AlternativeQuestTitle,
-			"conditions":       json.RawMessage(stop.AlternativeQuestConditions.ValueOrZero()),
-			"rewards":          json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
-			"updated":          stop.Updated,
-			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.ValueOrZero(),
-			"with_ar":          false,
+		questHook := QuestWebhook{
+			PokestopId:     stop.Id,
+			Latitude:       stop.Lat,
+			Longitude:      stop.Lon,
+			PokestopName:   pokestopName,
+			Type:           stop.AlternativeQuestType,
+			Target:         stop.AlternativeQuestTarget,
+			Template:       stop.AlternativeQuestTemplate,
+			Title:          stop.AlternativeQuestTitle,
+			Conditions:     json.RawMessage(stop.AlternativeQuestConditions.ValueOrZero()),
+			Rewards:        json.RawMessage(stop.AlternativeQuestRewards.ValueOrZero()),
+			Updated:        stop.Updated,
+			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
+			PokestopUrl:    stop.Url.ValueOrZero(),
+			WithAr:         false,
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 
 	if stop.QuestType.Valid && (oldStop == nil || stop.QuestType != oldStop.QuestType) {
-		questHook := map[string]any{
-			"pokestop_id": stop.Id,
-			"latitude":    stop.Lat,
-			"longitude":   stop.Lon,
-			"pokestop_name": func() string {
-				if stop.Name.Valid {
-					return stop.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			"type":             stop.QuestType,
-			"target":           stop.QuestTarget,
-			"template":         stop.QuestTemplate,
-			"title":            stop.QuestTitle,
-			"conditions":       json.RawMessage(stop.QuestConditions.ValueOrZero()),
-			"rewards":          json.RawMessage(stop.QuestRewards.ValueOrZero()),
-			"updated":          stop.Updated,
-			"ar_scan_eligible": stop.ArScanEligible.ValueOrZero(),
-			"pokestop_url":     stop.Url.ValueOrZero(),
-			"with_ar":          true,
+		questHook := QuestWebhook{
+			PokestopId:     stop.Id,
+			Latitude:       stop.Lat,
+			Longitude:      stop.Lon,
+			PokestopName:   pokestopName,
+			Type:           stop.QuestType,
+			Target:         stop.QuestTarget,
+			Template:       stop.QuestTemplate,
+			Title:          stop.QuestTitle,
+			Conditions:     json.RawMessage(stop.QuestConditions.ValueOrZero()),
+			Rewards:        json.RawMessage(stop.QuestRewards.ValueOrZero()),
+			Updated:        stop.Updated,
+			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
+			PokestopUrl:    stop.Url.ValueOrZero(),
+			WithAr:         true,
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 	if (oldStop == nil && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (oldStop != nil && ((stop.LureExpireTimestamp != oldStop.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != oldStop.PowerUpEndTimestamp)) {
-		pokestopHook := map[string]any{
-			"pokestop_id": stop.Id,
-			"latitude":    stop.Lat,
-			"longitude":   stop.Lon,
-			"name": func() string {
-				if stop.Name.Valid {
-					return stop.Name.String
-				} else {
-					return "Unknown"
-				}
-			}(),
-			"url":                       stop.Url.ValueOrZero(),
-			"lure_expiration":           stop.LureExpireTimestamp.ValueOrZero(),
-			"last_modified":             stop.LastModifiedTimestamp.ValueOrZero(),
-			"enabled":                   stop.Enabled.ValueOrZero(),
-			"lure_id":                   stop.LureId,
-			"ar_scan_eligible":          stop.ArScanEligible.ValueOrZero(),
-			"power_up_level":            stop.PowerUpLevel.ValueOrZero(),
-			"power_up_points":           stop.PowerUpPoints.ValueOrZero(),
-			"power_up_end_timestamp":    stop.PowerUpPoints.ValueOrZero(),
-			"updated":                   stop.Updated,
-			"showcase_focus":            stop.ShowcaseFocus,
-			"showcase_pokemon_id":       stop.ShowcasePokemon,
-			"showcase_pokemon_form_id":  stop.ShowcasePokemonForm,
-			"showcase_pokemon_type_id":  stop.ShowcasePokemonType,
-			"showcase_ranking_standard": stop.ShowcaseRankingStandard,
-			"showcase_expiry":           stop.ShowcaseExpiry,
-			"showcase_rankings": func() any {
-				if !stop.ShowcaseRankings.Valid {
-					return nil
-				} else {
-					return json.RawMessage(stop.ShowcaseRankings.ValueOrZero())
-				}
-			}(),
+		var showcaseRankings json.RawMessage
+		if stop.ShowcaseRankings.Valid {
+			showcaseRankings = json.RawMessage(stop.ShowcaseRankings.ValueOrZero())
+		}
+
+		pokestopHook := PokestopWebhook{
+			PokestopId:              stop.Id,
+			Latitude:                stop.Lat,
+			Longitude:               stop.Lon,
+			Name:                    pokestopName,
+			Url:                     stop.Url.ValueOrZero(),
+			LureExpiration:          stop.LureExpireTimestamp.ValueOrZero(),
+			LastModified:            stop.LastModifiedTimestamp.ValueOrZero(),
+			Enabled:                 stop.Enabled.ValueOrZero(),
+			LureId:                  stop.LureId,
+			ArScanEligible:          stop.ArScanEligible.ValueOrZero(),
+			PowerUpLevel:            stop.PowerUpLevel.ValueOrZero(),
+			PowerUpPoints:           stop.PowerUpPoints.ValueOrZero(),
+			PowerUpEndTimestamp:     stop.PowerUpPoints.ValueOrZero(),
+			Updated:                 stop.Updated,
+			ShowcaseFocus:           stop.ShowcaseFocus,
+			ShowcasePokemonId:       stop.ShowcasePokemon,
+			ShowcasePokemonFormId:   stop.ShowcasePokemonForm,
+			ShowcasePokemonTypeId:   stop.ShowcasePokemonType,
+			ShowcaseRankingStandard: stop.ShowcaseRankingStandard,
+			ShowcaseExpiry:          stop.ShowcaseExpiry,
+			ShowcaseRankings:        showcaseRankings,
 		}
 
 		webhooksSender.AddMessage(webhooks.Pokestop, pokestopHook, areas)
