@@ -95,28 +95,28 @@ func createFocusStoreFromContestProto(contest *pogo.ContestProto) map[contestFoc
 func (stop *Pokestop) extractShowcasePokemonInfoDeprecated(key contestFocusType, focus map[string]any) {
 	if key == focusPokemon {
 		if pokemonID, ok := focus["pokemon_id"].(int32); ok {
-			stop.ShowcasePokemon = null.IntFrom(int64(pokemonID))
+			stop.SetShowcasePokemon(null.IntFrom(int64(pokemonID)))
 		} else {
 			log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_id'", stop.Id)
-			stop.ShowcasePokemon = null.IntFromPtr(nil)
+			stop.SetShowcasePokemon(null.IntFromPtr(nil))
 		}
 
 		if form, ok := focus["pokemon_form"].(int32); ok {
-			stop.ShowcasePokemonForm = null.IntFrom(int64(form))
+			stop.SetShowcasePokemonForm(null.IntFrom(int64(form)))
 		} else {
-			stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+			stop.SetShowcasePokemonForm(null.IntFromPtr(nil))
 		}
 	} else {
-		stop.ShowcasePokemon = null.IntFromPtr(nil)
-		stop.ShowcasePokemonForm = null.IntFromPtr(nil)
+		stop.SetShowcasePokemon(null.IntFromPtr(nil))
+		stop.SetShowcasePokemonForm(null.IntFromPtr(nil))
 	}
 
 	if key == focusPokemonType {
 		if type1, ok := focus["pokemon_type_1"].(int32); ok {
-			stop.ShowcasePokemonType = null.IntFrom(int64(type1))
+			stop.SetShowcasePokemonType(null.IntFrom(int64(type1)))
 		} else {
 			log.Warnf("SHOWCASE: Stop '%s' - Missing or invalid 'pokemon_type_1'", stop.Id)
-			stop.ShowcasePokemonType = null.IntFromPtr(nil)
+			stop.SetShowcasePokemonType(null.IntFromPtr(nil))
 		}
 
 		if type2, ok := focus["pokemon_type_2"].(int32); ok {
@@ -125,6 +125,6 @@ func (stop *Pokestop) extractShowcasePokemonInfoDeprecated(key contestFocusType,
 			}
 		}
 	} else {
-		stop.ShowcasePokemonType = null.IntFromPtr(nil)
+		stop.SetShowcasePokemonType(null.IntFromPtr(nil))
 	}
 }

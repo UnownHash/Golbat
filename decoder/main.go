@@ -58,7 +58,7 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *ttlcache.Cache[string, Pokestop]
+var pokestopCache *ttlcache.Cache[string, *Pokestop]
 var gymCache *ttlcache.Cache[string, Gym]
 var stationCache *ttlcache.Cache[string, Station]
 var tappableCache *ttlcache.Cache[uint64, Tappable]
@@ -118,8 +118,8 @@ func deletePokemonFromCache(key uint64) {
 }
 
 func initDataCache() {
-	pokestopCache = ttlcache.New[string, Pokestop](
-		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
+	pokestopCache = ttlcache.New[string, *Pokestop](
+		ttlcache.WithTTL[string, *Pokestop](60 * time.Minute),
 	)
 	go pokestopCache.Start()
 
@@ -297,14 +297,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			isNewPokestop := pokestop == nil
-			if isNewPokestop {
-				pokestop = &Pokestop{}
+			if pokestop == nil {
+				pokestop = &Pokestop{newRecord: true}
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 
 			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
-			if isNewPokestop {
+			if pokestop.IsNewRecord() {
 				gym, _ := GetGymRecord(ctx, db, fortId)
 				if gym != nil {
 					pokestop.copySharedFieldsFrom(gym)

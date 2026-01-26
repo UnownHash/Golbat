@@ -245,27 +245,27 @@ func (gym *Gym) copySharedFieldsFrom(pokestop *Pokestop) {
 // copySharedFieldsFrom copies shared fields from a gym to a pokestop during conversion
 func (stop *Pokestop) copySharedFieldsFrom(gym *Gym) {
 	if gym.Name.Valid && !stop.Name.Valid {
-		stop.Name = gym.Name
+		stop.SetName(gym.Name)
 	}
 	if gym.Url.Valid && !stop.Url.Valid {
-		stop.Url = gym.Url
+		stop.SetUrl(gym.Url)
 	}
 	if gym.Description.Valid && !stop.Description.Valid {
-		stop.Description = gym.Description
+		stop.SetDescription(gym.Description)
 	}
 	if gym.PartnerId.Valid && !stop.PartnerId.Valid {
-		stop.PartnerId = gym.PartnerId
+		stop.SetPartnerId(gym.PartnerId)
 	}
 	if gym.ArScanEligible.Valid && !stop.ArScanEligible.Valid {
-		stop.ArScanEligible = gym.ArScanEligible
+		stop.SetArScanEligible(gym.ArScanEligible)
 	}
 	if gym.PowerUpLevel.Valid && !stop.PowerUpLevel.Valid {
-		stop.PowerUpLevel = gym.PowerUpLevel
+		stop.SetPowerUpLevel(gym.PowerUpLevel)
 	}
 	if gym.PowerUpPoints.Valid && !stop.PowerUpPoints.Valid {
-		stop.PowerUpPoints = gym.PowerUpPoints
+		stop.SetPowerUpPoints(gym.PowerUpPoints)
 	}
 	if gym.PowerUpEndTimestamp.Valid && !stop.PowerUpEndTimestamp.Valid {
-		stop.PowerUpEndTimestamp = gym.PowerUpEndTimestamp
+		stop.SetPowerUpEndTimestamp(gym.PowerUpEndTimestamp)
 	}
 }
