@@ -75,7 +75,7 @@ type Pokemon struct {
 	Pvp                     null.String `db:"pvp" json:"pvp"`
 	IsEvent                 int8        `db:"is_event" json:"is_event"`
 
-	internal grpc.PokemonInternal
+	internal PokemonInternalNative
 }
 
 //
@@ -133,10 +133,8 @@ type Pokemon struct {
 
 func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	if db.UsePokemonCache {
-		inMemoryPokemon := getPokemonFromCache(encounterId)
-		if inMemoryPokemon != nil {
-			pokemon := inMemoryPokemon.Value()
-			return &pokemon, nil
+		if pokemon := getPokemonFromCache(encounterId); pokemon != nil {
+			return pokemon, nil
 		}
 	}
 	if config.Config.PokemonMemoryOnly {
@@ -161,7 +159,7 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 	}
 
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, &pokemon, ttlcache.DefaultTTL)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +172,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, *pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
 	return pokemon, nil
 }
@@ -222,7 +220,8 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
-	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
+	// Use peek for oldPokemon - we only need it for read-only comparison, no copy needed
+	oldPokemon := peekPokemonFromCache(pokemon.Id)
 
 	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
 		return
@@ -299,7 +298,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if strong != nil {
 				strong.RemoveDittoAuxInfo()
 			}
-			marshaled, err := proto.Marshal(&pokemon.internal)
+			pb := pokemon.internal.ToProto()
+			marshaled, err := proto.Marshal(pb)
 			if err == nil {
 				pokemon.GolbatInternal = marshaled
 			} else {
@@ -408,7 +408,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		setPokemonCache(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
+		setPokemonCache(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 	}
 }
 
@@ -501,16 +501,19 @@ func (pokemon *Pokemon) populateInternal() {
 	if len(pokemon.GolbatInternal) == 0 || len(pokemon.internal.ScanHistory) != 0 {
 		return
 	}
-	err := proto.Unmarshal(pokemon.GolbatInternal, &pokemon.internal)
+	var pb grpc.PokemonInternal
+	err := proto.Unmarshal(pokemon.GolbatInternal, &pb)
 	if err != nil {
 		log.Warnf("Failed to parse internal data for %d: %s", pokemon.Id, err)
-		pokemon.internal.Reset()
+		pokemon.internal = PokemonInternalNative{}
+		return
 	}
+	pokemon.internal = PokemonInternalFromProto(&pb)
 }
 
-func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*grpc.PokemonScan, bool) {
+func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*PokemonScanNative, bool) {
 	pokemon.populateInternal()
-	var bestMatching *grpc.PokemonScan
+	var bestMatching *PokemonScanNative
 	for _, entry := range pokemon.internal.ScanHistory {
 		if entry.Strong != isStrong {
 			continue
@@ -524,7 +527,7 @@ func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*grpc.Pokemon
 	return bestMatching, false
 }
 
-func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *grpc.PokemonScan) {
+func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *PokemonScanNative) {
 	pokemon.populateInternal()
 	for _, entry := range pokemon.internal.ScanHistory {
 		if entry.Strong {
@@ -697,7 +700,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	if overrideLatLon {
 		pokemon.Lat, pokemon.Lon = lat, lon
 	} else {
-		midpoint := s2.LatLngFromPoint(s2.Point{s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
+		midpoint := s2.LatLngFromPoint(s2.Point{Vector: s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
 			Add(s2.PointFromLatLng(s2.LatLngFromDegrees(lat, lon)).Vector)})
 		pokemon.Lat = midpoint.Lat.Degrees()
 		pokemon.Lon = midpoint.Lng.Degrees()
@@ -762,14 +765,14 @@ func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
 	}
 }
 
-func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
+func checkScans(old *PokemonScanNative, new *PokemonScanNative) error {
 	if old == nil || old.CompressedIv() == new.CompressedIv() {
 		return nil
 	}
 	return errors.New(fmt.Sprintf("Unexpected IV mismatch %s != %s", old, new))
 }
 
-func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
+func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *PokemonScanNative) {
 	if isDitto {
 		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
 		pokemon.IsDitto = true
@@ -779,7 +782,7 @@ func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
-func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
+func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *PokemonScanNative) (*PokemonScanNative, error) {
 	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.IsDitto = false
 	pokemon.DisplayPokemonId = null.NewInt(0, false)
@@ -790,7 +793,7 @@ func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.Po
 // As far as I'm concerned, wild Ditto only depends on species but not costume/gender/form
 var dittoDisguises sync.Map
 
-func confirmDitto(scan *grpc.PokemonScan) {
+func confirmDitto(scan *PokemonScanNative) {
 	now := time.Now()
 	lastSeen, exists := dittoDisguises.Swap(scan.Pokemon, now)
 	if exists {
@@ -813,7 +816,7 @@ func confirmDitto(scan *grpc.PokemonScan) {
 
 // detectDitto returns the IV/level set that should be used for persisting to db/seen if caught.
 // error is set if something unexpected happened and the scan history should be cleared.
-func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, error) {
+func (pokemon *Pokemon) detectDitto(scan *PokemonScanNative) (*PokemonScanNative, error) {
 	unboostedScan, boostedScan, strongScan := pokemon.locateAllScans()
 	if scan.Strong {
 		if strongScan != nil {
@@ -886,7 +889,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 	}
 
 	isBoosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
-	var matchingScan *grpc.PokemonScan
+	var matchingScan *PokemonScanNative
 	if unboostedScan != nil || boostedScan != nil {
 		if unboostedScan != nil && boostedScan != nil { // if we have both IVs then they must be correct
 			if unboostedScan.Level == scan.Level {
@@ -1112,7 +1115,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	pokemon.Size = null.IntFrom(int64(proto.Size))
 	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
 
-	scan := grpc.PokemonScan{
+	scan := PokemonScanNative{
 		Weather:     int32(pokemon.Weather.Int64),
 		Strong:      pokemon.IsStrong.Bool,
 		Attack:      proto.IndividualAttack,
@@ -1153,7 +1156,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
 	}
 	if err == nil {
-		newScans := make([]*grpc.PokemonScan, len(pokemon.internal.ScanHistory)+1)
+		newScans := make([]*PokemonScanNative, len(pokemon.internal.ScanHistory)+1)
 		entriesCount := 0
 		for _, oldEntry := range pokemon.internal.ScanHistory {
 			if oldEntry.Strong != scan.Strong || !oldEntry.Strong &&
@@ -1169,7 +1172,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		// undo possible changes
 		scan.Confirmed = false
 		scan.Weather = int32(pokemon.Weather.Int64)
-		pokemon.internal.ScanHistory = make([]*grpc.PokemonScan, 1)
+		pokemon.internal.ScanHistory = make([]*PokemonScanNative, 1)
 		pokemon.internal.ScanHistory[0] = &scan
 	}
 }
@@ -1342,7 +1345,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	}
 	var displayPokemon int
 	shouldOverrideIv := false
-	var overrideIv *grpc.PokemonScan
+	var overrideIv *PokemonScanNative
 	if pokemon.IsDitto {
 		displayPokemon = int(pokemon.DisplayPokemonId.Int64)
 		if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {

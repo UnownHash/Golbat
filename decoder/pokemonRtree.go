@@ -52,9 +52,9 @@ func initPokemonRtree() {
 
 	// Set up OnEviction callbacks for each cache in the array
 	for i := range pokemonCache {
-		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, Pokemon]) {
+		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
 			r := v.Value()
-			removePokemonFromTree(&r)
+			removePokemonFromTree(r)
 			// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 		})
 	}
