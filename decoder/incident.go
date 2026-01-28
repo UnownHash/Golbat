@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"time"
 
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	null "gopkg.in/guregu/null.v4"
 
@@ -231,6 +232,7 @@ func getIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string) 
 		return nil, err
 	}
 
+	incidentCache.Set(incidentId, &incident, ttlcache.DefaultTTL)
 	incident.snapshotOldValues()
 	return &incident, nil
 }
