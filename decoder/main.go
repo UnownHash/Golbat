@@ -415,7 +415,6 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			} else {
 				updateTime := wild.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
-					// Add to pending queue instead of spawning a goroutine
 					// The sweeper will process it after timeout if no encounter arrives
 					pending := &PendingPokemon{
 						EncounterId:   encounterId,
