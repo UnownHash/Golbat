@@ -210,6 +210,7 @@ func main() {
 		_ = decoder.WatchMasterFileData()
 	}
 	decoder.LoadStatsGeofences()
+	decoder.InitPokemonPendingQueue(ctx, dbDetails, 30*time.Second, 5*time.Second)
 	InitDeviceCache()
 
 	wg.Add(1)
