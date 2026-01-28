@@ -77,8 +77,8 @@ type Pokemon struct {
 
 	internal grpc.PokemonInternal
 
-	dirty bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	// Note: newRecord tracked via FirstSeenTimestamp == 0 (see isNewRecord method)
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"`
 
 	oldValues PokemonOldValues `db:"-" json:"-"` // Old values for webhook comparison and stats
 }
@@ -424,7 +424,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	if pokemon != nil || err != nil {
 		return pokemon, err
 	}
-	pokemon = &Pokemon{Id: encounterId}
+	pokemon = &Pokemon{Id: encounterId, newRecord: true}
 	if db.UsePokemonCache {
 		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
@@ -474,7 +474,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
-	if !pokemon.isNewRecord() && !pokemon.IsDirty() {
+	if !pokemon.newRecord && !pokemon.IsDirty() {
 		return
 	}
 
@@ -524,7 +524,14 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
-	log.Debugf("Updating pokemon [%d] to %s", pokemon.Id, pokemon.SeenType.ValueOrZero())
+	var oldSeenType string
+	if !pokemon.oldValues.SeenType.Valid {
+		oldSeenType = "n/a"
+	} else {
+		oldSeenType = pokemon.oldValues.SeenType.ValueOrZero()
+	}
+
+	log.Debugf("Updating pokemon [%d] from %s->%s - newRecord: %t", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero(), pokemon.isNewRecord())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if writeDB && !config.Config.PokemonMemoryOnly {
@@ -568,7 +575,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				return
 			}
 
-			_, _ = res, err
+			rows, rowsErr := res.RowsAffected()
+			log.Debugf("Inserting pokemon [%d] after insert res = %d %v", pokemon.Id, rows, rowsErr)
 		} else {
 			pvpUpdate := ""
 			if changePvpField {
@@ -642,6 +650,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 	updatePokemonStats(pokemon, areas, now)
 
+	pokemon.newRecord = false // After saving, it's no longer a new record
 	pokemon.ClearDirty()
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
@@ -778,7 +787,7 @@ func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *grpc.Pokem
 }
 
 func (pokemon *Pokemon) isNewRecord() bool {
-	return pokemon.FirstSeenTimestamp == 0
+	return pokemon.newRecord
 }
 
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
