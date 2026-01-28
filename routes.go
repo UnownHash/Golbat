@@ -739,3 +739,44 @@ func GetTappable(c *gin.Context) {
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
+
+func GetFortTrackerCell(c *gin.Context) {
+	cellIdStr := c.Param("cell_id")
+	cellId, err := strconv.ParseUint(cellIdStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cell ID"})
+		return
+	}
+
+	fortTracker := decoder.GetFortTracker()
+	if fortTracker == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "FortTracker not initialized"})
+		return
+	}
+
+	cellInfo := fortTracker.GetCellInfo(cellId)
+	if cellInfo == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Cell not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, cellInfo)
+}
+
+func GetFortTrackerFort(c *gin.Context) {
+	fortId := c.Param("fort_id")
+
+	fortTracker := decoder.GetFortTracker()
+	if fortTracker == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "FortTracker not initialized"})
+		return
+	}
+
+	fortInfo := fortTracker.GetFortInfo(fortId)
+	if fortInfo == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Fort not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, fortInfo)
+}

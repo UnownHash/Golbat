@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -407,6 +408,76 @@ func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now
 // GetFortTracker returns the global fort tracker instance
 func GetFortTracker() *FortTracker {
 	return fortTracker
+}
+
+// CellFortInfo holds information about forts in a cell for API response
+type CellFortInfo struct {
+	CellId    string   `json:"cell_id"`
+	LastSeen  int64    `json:"last_seen"`
+	Pokestops []string `json:"pokestops"`
+	Gyms      []string `json:"gyms"`
+}
+
+// FortTrackerInfo holds information about a fort for API response
+type FortTrackerInfo struct {
+	FortId   string `json:"fort_id"`
+	CellId   string `json:"cell_id"`
+	LastSeen int64  `json:"last_seen"`
+	IsGym    bool   `json:"is_gym"`
+}
+
+// GetCellInfo returns information about a specific cell
+func (ft *FortTracker) GetCellInfo(cellId uint64) *CellFortInfo {
+	if ft == nil {
+		return nil
+	}
+
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+
+	cell, exists := ft.cells[cellId]
+	if !exists {
+		return nil
+	}
+
+	pokestops := make([]string, 0, len(cell.pokestops))
+	for stopId := range cell.pokestops {
+		pokestops = append(pokestops, stopId)
+	}
+
+	gyms := make([]string, 0, len(cell.gyms))
+	for gymId := range cell.gyms {
+		gyms = append(gyms, gymId)
+	}
+
+	return &CellFortInfo{
+		CellId:    fmt.Sprintf("%d", cellId),
+		LastSeen:  cell.lastSeen,
+		Pokestops: pokestops,
+		Gyms:      gyms,
+	}
+}
+
+// GetFortInfo returns information about a specific fort
+func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
+	if ft == nil {
+		return nil
+	}
+
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+
+	fort, exists := ft.forts[fortId]
+	if !exists {
+		return nil
+	}
+
+	return &FortTrackerInfo{
+		FortId:   fortId,
+		CellId:   fmt.Sprintf("%d", fort.cellId),
+		LastSeen: fort.lastSeen,
+		IsGym:    fort.isGym,
+	}
 }
 
 // clearGymWithLock marks a gym as deleted while holding the striped mutex
