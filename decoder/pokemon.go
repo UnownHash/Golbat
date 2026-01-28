@@ -1685,6 +1685,11 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	encounterId := encounter.Pokemon.EncounterId
 
+	// Remove from pending queue - encounter arrived so no need for delayed wild update
+	if pokemonPendingQueue != nil {
+		pokemonPendingQueue.Remove(encounterId)
+	}
+
 	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
 	pokemonMutex.Lock()
 	defer pokemonMutex.Unlock()
