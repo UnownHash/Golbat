@@ -3,10 +3,11 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"golbat/db"
-	"golbat/pogo"
 	"strconv"
 	"time"
+
+	"golbat/db"
+	"golbat/pogo"
 
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
@@ -194,8 +195,10 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	}
 
 	spawnpoint.ClearDirty()
-	spawnpoint.newRecord = false
-	spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+	if spawnpoint.IsNewRecord() {
+		spawnpoint.newRecord = false
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+	}
 }
 
 func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {

@@ -2,11 +2,14 @@ package decoder
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	"golbat/db"
 
 	"github.com/golang/geo/s2"
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
@@ -49,6 +52,8 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 			s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
 			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
 			s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
+
+			s2CellCache.Set(s2Cell.Id, s2Cell, ttlcache.DefaultTTL)
 		}
 		s2Cell.Updated = now
 
@@ -57,6 +62,14 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 
 	if len(outputCellIds) == 0 {
 		return
+	}
+
+	if dbDebugEnabled {
+		var updatedCells []string
+		for _, s2cell := range outputCellIds {
+			updatedCells = append(updatedCells, strconv.FormatUint(s2cell.Id, 10))
+		}
+		log.Debugf("[DB_S2CELL] Updated cells: %s", strings.Join(updatedCells, ","))
 	}
 
 	// run bulk query

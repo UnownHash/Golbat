@@ -11,6 +11,7 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
@@ -31,8 +32,9 @@ type Tappable struct {
 	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
 	Updated                 int64       `db:"updated" json:"updated"`
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 }
 
 // IsDirty returns true if any field has been modified
@@ -56,6 +58,9 @@ func (ta *Tappable) SetLat(v float64) {
 	if !floatAlmostEqual(ta.Lat, v, floatTolerance) {
 		ta.Lat = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Lat")
+		}
 	}
 }
 
@@ -63,6 +68,9 @@ func (ta *Tappable) SetLon(v float64) {
 	if !floatAlmostEqual(ta.Lon, v, floatTolerance) {
 		ta.Lon = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Lon")
+		}
 	}
 }
 
@@ -70,6 +78,9 @@ func (ta *Tappable) SetFortId(v null.String) {
 	if ta.FortId != v {
 		ta.FortId = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "FortId")
+		}
 	}
 }
 
@@ -77,6 +88,9 @@ func (ta *Tappable) SetSpawnId(v null.Int) {
 	if ta.SpawnId != v {
 		ta.SpawnId = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "SpawnId")
+		}
 	}
 }
 
@@ -84,6 +98,9 @@ func (ta *Tappable) SetType(v string) {
 	if ta.Type != v {
 		ta.Type = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Type")
+		}
 	}
 }
 
@@ -91,6 +108,9 @@ func (ta *Tappable) SetEncounter(v null.Int) {
 	if ta.Encounter != v {
 		ta.Encounter = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Encounter")
+		}
 	}
 }
 
@@ -98,6 +118,9 @@ func (ta *Tappable) SetItemId(v null.Int) {
 	if ta.ItemId != v {
 		ta.ItemId = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "ItemId")
+		}
 	}
 }
 
@@ -105,6 +128,9 @@ func (ta *Tappable) SetCount(v null.Int) {
 	if ta.Count != v {
 		ta.Count = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Count")
+		}
 	}
 }
 
@@ -112,6 +138,9 @@ func (ta *Tappable) SetExpireTimestamp(v null.Int) {
 	if ta.ExpireTimestamp != v {
 		ta.ExpireTimestamp = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "ExpireTimestamp")
+		}
 	}
 }
 
@@ -119,6 +148,9 @@ func (ta *Tappable) SetExpireTimestampVerified(v bool) {
 	if ta.ExpireTimestampVerified != v {
 		ta.ExpireTimestampVerified = v
 		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "ExpireTimestampVerified")
+		}
 	}
 }
 
@@ -254,6 +286,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	tappable.Updated = now
 
 	if tappable.IsNewRecord() {
+		if dbDebugEnabled {
+			dbDebugLog("INSERT", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
+		}
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
 				id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
@@ -268,6 +303,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		}
 		_ = res
 	} else {
+		if dbDebugEnabled {
+			dbDebugLog("UPDATE", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
+		}
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			UPDATE tappable SET
 				lat = :lat,
@@ -290,9 +328,14 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		}
 		_ = res
 	}
+	if dbDebugEnabled {
+		tappable.changedFields = tappable.changedFields[:0]
+	}
 	tappable.ClearDirty()
-	tappable.newRecord = false
-	//tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
+	if tappable.IsNewRecord() {
+		tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
+		tappable.newRecord = false
+	}
 }
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto, timestampMs int64) string {

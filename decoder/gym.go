@@ -68,8 +68,9 @@ type Gym struct {
 	Defenders              null.String `db:"defenders" json:"defenders"`
 	Rsvps                  null.String `db:"rsvps" json:"rsvps"`
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 
 	oldValues GymOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
@@ -177,6 +178,9 @@ func (gym *Gym) SetId(v string) {
 	if gym.Id != v {
 		gym.Id = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Id")
+		}
 	}
 }
 
@@ -184,6 +188,9 @@ func (gym *Gym) SetLat(v float64) {
 	if !floatAlmostEqual(gym.Lat, v, floatTolerance) {
 		gym.Lat = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Lat")
+		}
 	}
 }
 
@@ -191,6 +198,9 @@ func (gym *Gym) SetLon(v float64) {
 	if !floatAlmostEqual(gym.Lon, v, floatTolerance) {
 		gym.Lon = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Lon")
+		}
 	}
 }
 
@@ -198,6 +208,9 @@ func (gym *Gym) SetName(v null.String) {
 	if gym.Name != v {
 		gym.Name = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Name")
+		}
 	}
 }
 
@@ -205,6 +218,9 @@ func (gym *Gym) SetUrl(v null.String) {
 	if gym.Url != v {
 		gym.Url = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Url")
+		}
 	}
 }
 
@@ -212,6 +228,9 @@ func (gym *Gym) SetLastModifiedTimestamp(v null.Int) {
 	if gym.LastModifiedTimestamp != v {
 		gym.LastModifiedTimestamp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "LastModifiedTimestamp")
+		}
 	}
 }
 
@@ -219,6 +238,9 @@ func (gym *Gym) SetRaidEndTimestamp(v null.Int) {
 	if gym.RaidEndTimestamp != v {
 		gym.RaidEndTimestamp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidEndTimestamp")
+		}
 	}
 }
 
@@ -226,6 +248,9 @@ func (gym *Gym) SetRaidSpawnTimestamp(v null.Int) {
 	if gym.RaidSpawnTimestamp != v {
 		gym.RaidSpawnTimestamp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidSpawnTimestamp")
+		}
 	}
 }
 
@@ -233,6 +258,9 @@ func (gym *Gym) SetRaidBattleTimestamp(v null.Int) {
 	if gym.RaidBattleTimestamp != v {
 		gym.RaidBattleTimestamp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidBattleTimestamp")
+		}
 	}
 }
 
@@ -240,6 +268,9 @@ func (gym *Gym) SetRaidPokemonId(v null.Int) {
 	if gym.RaidPokemonId != v {
 		gym.RaidPokemonId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonId")
+		}
 	}
 }
 
@@ -247,6 +278,9 @@ func (gym *Gym) SetGuardingPokemonId(v null.Int) {
 	if gym.GuardingPokemonId != v {
 		gym.GuardingPokemonId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "GuardingPokemonId")
+		}
 	}
 }
 
@@ -254,6 +288,9 @@ func (gym *Gym) SetGuardingPokemonDisplay(v null.String) {
 	if gym.GuardingPokemonDisplay != v {
 		gym.GuardingPokemonDisplay = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "GuardingPokemonDisplay")
+		}
 	}
 }
 
@@ -261,6 +298,9 @@ func (gym *Gym) SetAvailableSlots(v null.Int) {
 	if gym.AvailableSlots != v {
 		gym.AvailableSlots = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "AvailableSlots")
+		}
 	}
 }
 
@@ -268,6 +308,9 @@ func (gym *Gym) SetTeamId(v null.Int) {
 	if gym.TeamId != v {
 		gym.TeamId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "TeamId")
+		}
 	}
 }
 
@@ -275,6 +318,9 @@ func (gym *Gym) SetRaidLevel(v null.Int) {
 	if gym.RaidLevel != v {
 		gym.RaidLevel = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidLevel")
+		}
 	}
 }
 
@@ -282,6 +328,9 @@ func (gym *Gym) SetEnabled(v null.Int) {
 	if gym.Enabled != v {
 		gym.Enabled = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Enabled")
+		}
 	}
 }
 
@@ -289,6 +338,9 @@ func (gym *Gym) SetExRaidEligible(v null.Int) {
 	if gym.ExRaidEligible != v {
 		gym.ExRaidEligible = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "ExRaidEligible")
+		}
 	}
 }
 
@@ -304,6 +356,9 @@ func (gym *Gym) SetRaidPokemonMove1(v null.Int) {
 	if gym.RaidPokemonMove1 != v {
 		gym.RaidPokemonMove1 = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonMove1")
+		}
 	}
 }
 
@@ -311,6 +366,9 @@ func (gym *Gym) SetRaidPokemonMove2(v null.Int) {
 	if gym.RaidPokemonMove2 != v {
 		gym.RaidPokemonMove2 = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonMove2")
+		}
 	}
 }
 
@@ -318,6 +376,9 @@ func (gym *Gym) SetRaidPokemonForm(v null.Int) {
 	if gym.RaidPokemonForm != v {
 		gym.RaidPokemonForm = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonForm")
+		}
 	}
 }
 
@@ -325,6 +386,9 @@ func (gym *Gym) SetRaidPokemonAlignment(v null.Int) {
 	if gym.RaidPokemonAlignment != v {
 		gym.RaidPokemonAlignment = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonAlignment")
+		}
 	}
 }
 
@@ -332,6 +396,9 @@ func (gym *Gym) SetRaidPokemonCp(v null.Int) {
 	if gym.RaidPokemonCp != v {
 		gym.RaidPokemonCp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonCp")
+		}
 	}
 }
 
@@ -339,6 +406,9 @@ func (gym *Gym) SetRaidIsExclusive(v null.Int) {
 	if gym.RaidIsExclusive != v {
 		gym.RaidIsExclusive = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidIsExclusive")
+		}
 	}
 }
 
@@ -346,6 +416,9 @@ func (gym *Gym) SetCellId(v null.Int) {
 	if gym.CellId != v {
 		gym.CellId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "CellId")
+		}
 	}
 }
 
@@ -353,6 +426,9 @@ func (gym *Gym) SetDeleted(v bool) {
 	if gym.Deleted != v {
 		gym.Deleted = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Deleted")
+		}
 	}
 }
 
@@ -360,6 +436,9 @@ func (gym *Gym) SetTotalCp(v null.Int) {
 	if gym.TotalCp != v {
 		gym.TotalCp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "TotalCp")
+		}
 	}
 }
 
@@ -367,6 +446,9 @@ func (gym *Gym) SetRaidPokemonGender(v null.Int) {
 	if gym.RaidPokemonGender != v {
 		gym.RaidPokemonGender = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonGender")
+		}
 	}
 }
 
@@ -374,6 +456,9 @@ func (gym *Gym) SetSponsorId(v null.Int) {
 	if gym.SponsorId != v {
 		gym.SponsorId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "SponsorId")
+		}
 	}
 }
 
@@ -381,6 +466,9 @@ func (gym *Gym) SetPartnerId(v null.String) {
 	if gym.PartnerId != v {
 		gym.PartnerId = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "PartnerId")
+		}
 	}
 }
 
@@ -388,6 +476,9 @@ func (gym *Gym) SetRaidPokemonCostume(v null.Int) {
 	if gym.RaidPokemonCostume != v {
 		gym.RaidPokemonCostume = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonCostume")
+		}
 	}
 }
 
@@ -395,6 +486,9 @@ func (gym *Gym) SetRaidPokemonEvolution(v null.Int) {
 	if gym.RaidPokemonEvolution != v {
 		gym.RaidPokemonEvolution = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "RaidPokemonEvolution")
+		}
 	}
 }
 
@@ -402,6 +496,9 @@ func (gym *Gym) SetArScanEligible(v null.Int) {
 	if gym.ArScanEligible != v {
 		gym.ArScanEligible = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "ArScanEligible")
+		}
 	}
 }
 
@@ -409,6 +506,9 @@ func (gym *Gym) SetPowerUpLevel(v null.Int) {
 	if gym.PowerUpLevel != v {
 		gym.PowerUpLevel = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "PowerUpLevel")
+		}
 	}
 }
 
@@ -416,6 +516,9 @@ func (gym *Gym) SetPowerUpPoints(v null.Int) {
 	if gym.PowerUpPoints != v {
 		gym.PowerUpPoints = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "PowerUpPoints")
+		}
 	}
 }
 
@@ -423,6 +526,9 @@ func (gym *Gym) SetPowerUpEndTimestamp(v null.Int) {
 	if gym.PowerUpEndTimestamp != v {
 		gym.PowerUpEndTimestamp = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "PowerUpEndTimestamp")
+		}
 	}
 }
 
@@ -430,6 +536,9 @@ func (gym *Gym) SetDescription(v null.String) {
 	if gym.Description != v {
 		gym.Description = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Description")
+		}
 	}
 }
 
@@ -445,6 +554,9 @@ func (gym *Gym) SetRsvps(v null.String) {
 	if gym.Rsvps != v {
 		gym.Rsvps = v
 		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Rsvps")
+		}
 	}
 }
 
@@ -992,6 +1104,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	gym.Updated = now
 
 	if gym.IsNewRecord() {
+		if dbDebugEnabled {
+			dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
@@ -1003,6 +1118,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 		_, _ = res, err
 	} else {
+		if dbDebugEnabled {
+			dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
 			"lat = :lat, "+
 			"lon = :lon, "+
@@ -1057,8 +1175,15 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	createGymWebhooks(gym, areas)
 	createGymFortWebhooks(gym)
 	updateRaidStats(gym, areas)
-	gym.newRecord = false // After saving, it's no longer a new record
+	if dbDebugEnabled {
+		gym.changedFields = gym.changedFields[:0]
+	}
+	if gym.IsNewRecord() {
+		gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
+		gym.newRecord = false
+	}
 	gym.ClearDirty()
+
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {

@@ -914,8 +914,10 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	}
 
 	player.ClearDirty()
-	player.newRecord = false
-	//playerCache.Set(player.Name, player, ttlcache.DefaultTTL)
+	if player.IsNewRecord() {
+		player.newRecord = false
+		playerCache.Set(player.Name, player, ttlcache.DefaultTTL)
+	}
 }
 
 func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicProfileProto) {

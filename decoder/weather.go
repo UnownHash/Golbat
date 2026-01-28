@@ -9,6 +9,7 @@ import (
 	"golbat/webhooks"
 
 	"github.com/golang/geo/s2"
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
@@ -340,6 +341,8 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 	}
 	createWeatherWebhooks(weather)
 	weather.ClearDirty()
-	weather.newRecord = false
-	//weatherCache.Set(weather.Id, weather, ttlcache.DefaultTTL)
+	if weather.IsNewRecord() {
+		weatherCache.Set(weather.Id, weather, ttlcache.DefaultTTL)
+		weather.newRecord = false
+	}
 }

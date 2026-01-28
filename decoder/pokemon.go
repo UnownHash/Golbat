@@ -77,8 +77,9 @@ type Pokemon struct {
 
 	internal grpc.PokemonInternal
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"`
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"`
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 
 	oldValues PokemonOldValues `db:"-" json:"-"` // Old values for webhook comparison and stats
 }
@@ -175,6 +176,9 @@ func (pokemon *Pokemon) SetPokestopId(v null.String) {
 	if pokemon.PokestopId != v {
 		pokemon.PokestopId = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "PokestopId")
+		}
 	}
 }
 
@@ -182,6 +186,9 @@ func (pokemon *Pokemon) SetSpawnId(v null.Int) {
 	if pokemon.SpawnId != v {
 		pokemon.SpawnId = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "SpawnId")
+		}
 	}
 }
 
@@ -189,6 +196,9 @@ func (pokemon *Pokemon) SetLat(v float64) {
 	if !floatAlmostEqual(pokemon.Lat, v, floatTolerance) {
 		pokemon.Lat = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Lat")
+		}
 	}
 }
 
@@ -196,6 +206,9 @@ func (pokemon *Pokemon) SetLon(v float64) {
 	if !floatAlmostEqual(pokemon.Lon, v, floatTolerance) {
 		pokemon.Lon = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Lon")
+		}
 	}
 }
 
@@ -203,6 +216,9 @@ func (pokemon *Pokemon) SetPokemonId(v int16) {
 	if pokemon.PokemonId != v {
 		pokemon.PokemonId = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "PokemonId")
+		}
 	}
 }
 
@@ -210,6 +226,9 @@ func (pokemon *Pokemon) SetForm(v null.Int) {
 	if pokemon.Form != v {
 		pokemon.Form = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Form")
+		}
 	}
 }
 
@@ -217,6 +236,9 @@ func (pokemon *Pokemon) SetCostume(v null.Int) {
 	if pokemon.Costume != v {
 		pokemon.Costume = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Costume")
+		}
 	}
 }
 
@@ -224,6 +246,9 @@ func (pokemon *Pokemon) SetGender(v null.Int) {
 	if pokemon.Gender != v {
 		pokemon.Gender = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Gender")
+		}
 	}
 }
 
@@ -231,6 +256,9 @@ func (pokemon *Pokemon) SetWeather(v null.Int) {
 	if pokemon.Weather != v {
 		pokemon.Weather = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Weather")
+		}
 	}
 }
 
@@ -238,6 +266,9 @@ func (pokemon *Pokemon) SetIsStrong(v null.Bool) {
 	if pokemon.IsStrong != v {
 		pokemon.IsStrong = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "IsStrong")
+		}
 	}
 }
 
@@ -245,6 +276,9 @@ func (pokemon *Pokemon) SetExpireTimestamp(v null.Int) {
 	if pokemon.ExpireTimestamp != v {
 		pokemon.ExpireTimestamp = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "ExpireTimestamp")
+		}
 	}
 }
 
@@ -252,6 +286,9 @@ func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 	if pokemon.ExpireTimestampVerified != v {
 		pokemon.ExpireTimestampVerified = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "ExpireTimestampVerified")
+		}
 	}
 }
 
@@ -259,6 +296,9 @@ func (pokemon *Pokemon) SetSeenType(v null.String) {
 	if pokemon.SeenType != v {
 		pokemon.SeenType = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "SeenType")
+		}
 	}
 }
 
@@ -273,6 +313,9 @@ func (pokemon *Pokemon) SetCellId(v null.Int) {
 	if pokemon.CellId != v {
 		pokemon.CellId = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "CellId")
+		}
 	}
 }
 
@@ -280,6 +323,9 @@ func (pokemon *Pokemon) SetIsEvent(v int8) {
 	if pokemon.IsEvent != v {
 		pokemon.IsEvent = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "IsEvent")
+		}
 	}
 }
 
@@ -287,6 +333,9 @@ func (pokemon *Pokemon) SetShiny(v null.Bool) {
 	if pokemon.Shiny != v {
 		pokemon.Shiny = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Shiny")
+		}
 	}
 }
 
@@ -294,6 +343,9 @@ func (pokemon *Pokemon) SetCp(v null.Int) {
 	if pokemon.Cp != v {
 		pokemon.Cp = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Cp")
+		}
 	}
 }
 
@@ -301,6 +353,9 @@ func (pokemon *Pokemon) SetLevel(v null.Int) {
 	if pokemon.Level != v {
 		pokemon.Level = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Level")
+		}
 	}
 }
 
@@ -308,6 +363,9 @@ func (pokemon *Pokemon) SetMove1(v null.Int) {
 	if pokemon.Move1 != v {
 		pokemon.Move1 = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Move1")
+		}
 	}
 }
 
@@ -315,6 +373,9 @@ func (pokemon *Pokemon) SetMove2(v null.Int) {
 	if pokemon.Move2 != v {
 		pokemon.Move2 = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Move2")
+		}
 	}
 }
 
@@ -322,6 +383,9 @@ func (pokemon *Pokemon) SetHeight(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Height, v, floatTolerance) {
 		pokemon.Height = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Height")
+		}
 	}
 }
 
@@ -329,6 +393,9 @@ func (pokemon *Pokemon) SetWeight(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Weight, v, floatTolerance) {
 		pokemon.Weight = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Weight")
+		}
 	}
 }
 
@@ -336,6 +403,9 @@ func (pokemon *Pokemon) SetSize(v null.Int) {
 	if pokemon.Size != v {
 		pokemon.Size = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Size")
+		}
 	}
 }
 
@@ -343,6 +413,9 @@ func (pokemon *Pokemon) SetIsDitto(v bool) {
 	if pokemon.IsDitto != v {
 		pokemon.IsDitto = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "IsDitto")
+		}
 	}
 }
 
@@ -350,6 +423,9 @@ func (pokemon *Pokemon) SetDisplayPokemonId(v null.Int) {
 	if pokemon.DisplayPokemonId != v {
 		pokemon.DisplayPokemonId = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "DisplayPokemonId")
+		}
 	}
 }
 
@@ -357,6 +433,9 @@ func (pokemon *Pokemon) SetPvp(v null.String) {
 	if pokemon.Pvp != v {
 		pokemon.Pvp = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Pvp")
+		}
 	}
 }
 
@@ -364,6 +443,9 @@ func (pokemon *Pokemon) SetCapture1(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture1, v, floatTolerance) {
 		pokemon.Capture1 = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Capture1")
+		}
 	}
 }
 
@@ -371,6 +453,9 @@ func (pokemon *Pokemon) SetCapture2(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture2, v, floatTolerance) {
 		pokemon.Capture2 = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Capture2")
+		}
 	}
 }
 
@@ -378,6 +463,9 @@ func (pokemon *Pokemon) SetCapture3(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture3, v, floatTolerance) {
 		pokemon.Capture3 = v
 		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Capture3")
+		}
 	}
 }
 
@@ -552,6 +640,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			}
 		}
 		if pokemon.isNewRecord() {
+			if dbDebugEnabled {
+				dbDebugLog("INSERT", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+			}
 			pvpField, pvpValue := "", ""
 			if changePvpField {
 				pvpField, pvpValue = "pvp, ", ":pvp, "
@@ -578,6 +669,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			rows, rowsErr := res.RowsAffected()
 			log.Debugf("Inserting pokemon [%d] after insert res = %d %v", pokemon.Id, rows, rowsErr)
 		} else {
+			if dbDebugEnabled {
+				dbDebugLog("UPDATE", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+			}
 			pvpUpdate := ""
 			if changePvpField {
 				pvpUpdate = "pvp = :pvp, "
@@ -650,6 +744,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 	updatePokemonStats(pokemon, areas, now)
 
+	if dbDebugEnabled {
+		pokemon.changedFields = pokemon.changedFields[:0]
+	}
 	pokemon.newRecord = false // After saving, it's no longer a new record
 	pokemon.ClearDirty()
 

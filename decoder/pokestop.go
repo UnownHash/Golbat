@@ -68,8 +68,9 @@ type Pokestop struct {
 	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
 	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 
 	oldValues PokestopOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
@@ -164,6 +165,9 @@ func (p *Pokestop) SetId(v string) {
 	if p.Id != v {
 		p.Id = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Id")
+		}
 	}
 }
 
@@ -171,6 +175,9 @@ func (p *Pokestop) SetLat(v float64) {
 	if !floatAlmostEqual(p.Lat, v, floatTolerance) {
 		p.Lat = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Lat")
+		}
 	}
 }
 
@@ -178,6 +185,9 @@ func (p *Pokestop) SetLon(v float64) {
 	if !floatAlmostEqual(p.Lon, v, floatTolerance) {
 		p.Lon = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Lon")
+		}
 	}
 }
 
@@ -185,6 +195,9 @@ func (p *Pokestop) SetName(v null.String) {
 	if p.Name != v {
 		p.Name = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Name")
+		}
 	}
 }
 
@@ -192,6 +205,9 @@ func (p *Pokestop) SetUrl(v null.String) {
 	if p.Url != v {
 		p.Url = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Url")
+		}
 	}
 }
 
@@ -199,6 +215,9 @@ func (p *Pokestop) SetLureExpireTimestamp(v null.Int) {
 	if p.LureExpireTimestamp != v {
 		p.LureExpireTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "LureExpireTimestamp")
+		}
 	}
 }
 
@@ -206,6 +225,9 @@ func (p *Pokestop) SetLastModifiedTimestamp(v null.Int) {
 	if p.LastModifiedTimestamp != v {
 		p.LastModifiedTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "LastModifiedTimestamp")
+		}
 	}
 }
 
@@ -213,6 +235,9 @@ func (p *Pokestop) SetEnabled(v null.Bool) {
 	if p.Enabled != v {
 		p.Enabled = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Enabled")
+		}
 	}
 }
 
@@ -220,6 +245,9 @@ func (p *Pokestop) SetQuestType(v null.Int) {
 	if p.QuestType != v {
 		p.QuestType = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestType")
+		}
 	}
 }
 
@@ -227,6 +255,9 @@ func (p *Pokestop) SetQuestTimestamp(v null.Int) {
 	if p.QuestTimestamp != v {
 		p.QuestTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestTimestamp")
+		}
 	}
 }
 
@@ -234,6 +265,9 @@ func (p *Pokestop) SetQuestTarget(v null.Int) {
 	if p.QuestTarget != v {
 		p.QuestTarget = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestTarget")
+		}
 	}
 }
 
@@ -241,6 +275,9 @@ func (p *Pokestop) SetQuestConditions(v null.String) {
 	if p.QuestConditions != v {
 		p.QuestConditions = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestConditions")
+		}
 	}
 }
 
@@ -248,6 +285,9 @@ func (p *Pokestop) SetQuestRewards(v null.String) {
 	if p.QuestRewards != v {
 		p.QuestRewards = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestRewards")
+		}
 	}
 }
 
@@ -255,6 +295,9 @@ func (p *Pokestop) SetQuestTemplate(v null.String) {
 	if p.QuestTemplate != v {
 		p.QuestTemplate = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestTemplate")
+		}
 	}
 }
 
@@ -262,6 +305,9 @@ func (p *Pokestop) SetQuestTitle(v null.String) {
 	if p.QuestTitle != v {
 		p.QuestTitle = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestTitle")
+		}
 	}
 }
 
@@ -269,6 +315,9 @@ func (p *Pokestop) SetQuestExpiry(v null.Int) {
 	if p.QuestExpiry != v {
 		p.QuestExpiry = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "QuestExpiry")
+		}
 	}
 }
 
@@ -276,6 +325,9 @@ func (p *Pokestop) SetCellId(v null.Int) {
 	if p.CellId != v {
 		p.CellId = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "CellId")
+		}
 	}
 }
 
@@ -283,6 +335,9 @@ func (p *Pokestop) SetDeleted(v bool) {
 	if p.Deleted != v {
 		p.Deleted = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Deleted")
+		}
 	}
 }
 
@@ -290,6 +345,9 @@ func (p *Pokestop) SetLureId(v int16) {
 	if p.LureId != v {
 		p.LureId = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "LureId")
+		}
 	}
 }
 
@@ -297,6 +355,9 @@ func (p *Pokestop) SetFirstSeenTimestamp(v int16) {
 	if p.FirstSeenTimestamp != v {
 		p.FirstSeenTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "FirstSeenTimestamp")
+		}
 	}
 }
 
@@ -304,6 +365,9 @@ func (p *Pokestop) SetSponsorId(v null.Int) {
 	if p.SponsorId != v {
 		p.SponsorId = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "SponsorId")
+		}
 	}
 }
 
@@ -311,6 +375,9 @@ func (p *Pokestop) SetPartnerId(v null.String) {
 	if p.PartnerId != v {
 		p.PartnerId = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "PartnerId")
+		}
 	}
 }
 
@@ -318,6 +385,9 @@ func (p *Pokestop) SetArScanEligible(v null.Int) {
 	if p.ArScanEligible != v {
 		p.ArScanEligible = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ArScanEligible")
+		}
 	}
 }
 
@@ -325,6 +395,9 @@ func (p *Pokestop) SetPowerUpLevel(v null.Int) {
 	if p.PowerUpLevel != v {
 		p.PowerUpLevel = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "PowerUpLevel")
+		}
 	}
 }
 
@@ -332,6 +405,9 @@ func (p *Pokestop) SetPowerUpPoints(v null.Int) {
 	if p.PowerUpPoints != v {
 		p.PowerUpPoints = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "PowerUpPoints")
+		}
 	}
 }
 
@@ -339,6 +415,9 @@ func (p *Pokestop) SetPowerUpEndTimestamp(v null.Int) {
 	if p.PowerUpEndTimestamp != v {
 		p.PowerUpEndTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "PowerUpEndTimestamp")
+		}
 	}
 }
 
@@ -346,6 +425,9 @@ func (p *Pokestop) SetAlternativeQuestType(v null.Int) {
 	if p.AlternativeQuestType != v {
 		p.AlternativeQuestType = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestType")
+		}
 	}
 }
 
@@ -353,6 +435,9 @@ func (p *Pokestop) SetAlternativeQuestTimestamp(v null.Int) {
 	if p.AlternativeQuestTimestamp != v {
 		p.AlternativeQuestTimestamp = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestTimestamp")
+		}
 	}
 }
 
@@ -360,6 +445,9 @@ func (p *Pokestop) SetAlternativeQuestTarget(v null.Int) {
 	if p.AlternativeQuestTarget != v {
 		p.AlternativeQuestTarget = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestTarget")
+		}
 	}
 }
 
@@ -367,6 +455,9 @@ func (p *Pokestop) SetAlternativeQuestConditions(v null.String) {
 	if p.AlternativeQuestConditions != v {
 		p.AlternativeQuestConditions = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestConditions")
+		}
 	}
 }
 
@@ -374,6 +465,9 @@ func (p *Pokestop) SetAlternativeQuestRewards(v null.String) {
 	if p.AlternativeQuestRewards != v {
 		p.AlternativeQuestRewards = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestRewards")
+		}
 	}
 }
 
@@ -381,6 +475,9 @@ func (p *Pokestop) SetAlternativeQuestTemplate(v null.String) {
 	if p.AlternativeQuestTemplate != v {
 		p.AlternativeQuestTemplate = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestTemplate")
+		}
 	}
 }
 
@@ -388,6 +485,9 @@ func (p *Pokestop) SetAlternativeQuestTitle(v null.String) {
 	if p.AlternativeQuestTitle != v {
 		p.AlternativeQuestTitle = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestTitle")
+		}
 	}
 }
 
@@ -395,6 +495,9 @@ func (p *Pokestop) SetAlternativeQuestExpiry(v null.Int) {
 	if p.AlternativeQuestExpiry != v {
 		p.AlternativeQuestExpiry = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "AlternativeQuestExpiry")
+		}
 	}
 }
 
@@ -402,6 +505,9 @@ func (p *Pokestop) SetDescription(v null.String) {
 	if p.Description != v {
 		p.Description = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Description")
+		}
 	}
 }
 
@@ -409,6 +515,9 @@ func (p *Pokestop) SetShowcaseFocus(v null.String) {
 	if p.ShowcaseFocus != v {
 		p.ShowcaseFocus = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcaseFocus")
+		}
 	}
 }
 
@@ -416,6 +525,9 @@ func (p *Pokestop) SetShowcasePokemon(v null.Int) {
 	if p.ShowcasePokemon != v {
 		p.ShowcasePokemon = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcasePokemon")
+		}
 	}
 }
 
@@ -423,6 +535,9 @@ func (p *Pokestop) SetShowcasePokemonForm(v null.Int) {
 	if p.ShowcasePokemonForm != v {
 		p.ShowcasePokemonForm = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcasePokemonForm")
+		}
 	}
 }
 
@@ -430,6 +545,9 @@ func (p *Pokestop) SetShowcasePokemonType(v null.Int) {
 	if p.ShowcasePokemonType != v {
 		p.ShowcasePokemonType = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcasePokemonType")
+		}
 	}
 }
 
@@ -437,6 +555,9 @@ func (p *Pokestop) SetShowcaseRankingStandard(v null.Int) {
 	if p.ShowcaseRankingStandard != v {
 		p.ShowcaseRankingStandard = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcaseRankingStandard")
+		}
 	}
 }
 
@@ -444,6 +565,9 @@ func (p *Pokestop) SetShowcaseExpiry(v null.Int) {
 	if p.ShowcaseExpiry != v {
 		p.ShowcaseExpiry = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcaseExpiry")
+		}
 	}
 }
 
@@ -451,6 +575,9 @@ func (p *Pokestop) SetShowcaseRankings(v null.String) {
 	if p.ShowcaseRankings != v {
 		p.ShowcaseRankings = v
 		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "ShowcaseRankings")
+		}
 	}
 }
 
@@ -1106,6 +1233,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	pokestop.Updated = now
 
 	if pokestop.IsNewRecord() {
+		if dbDebugEnabled {
+			dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExecContext(ctx, `
 			INSERT INTO pokestop (
 				id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,
@@ -1138,6 +1268,9 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		_ = res
 	} else {
 		// Existing record - UPDATE
+		if dbDebugEnabled {
+			dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExecContext(ctx, `
 			UPDATE pokestop SET
 				lat = :lat,
@@ -1193,8 +1326,15 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		_ = res
 	}
 	//pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
-	pokestop.newRecord = false // After saving, it's no longer a new record
+	if dbDebugEnabled {
+		pokestop.changedFields = pokestop.changedFields[:0]
+	}
+	if pokestop.IsNewRecord() {
+		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
+		pokestop.newRecord = false
+	}
 	pokestop.ClearDirty()
+
 	createPokestopWebhooks(pokestop)
 	createPokestopFortWebhooks(pokestop)
 }
