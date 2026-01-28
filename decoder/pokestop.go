@@ -1192,7 +1192,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		}
 		_ = res
 	}
-	pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
+	//pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
 	pokestop.newRecord = false // After saving, it's no longer a new record
 	pokestop.ClearDirty()
 	createPokestopWebhooks(pokestop)

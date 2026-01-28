@@ -485,7 +485,7 @@ func updateRaidStats(gym *Gym, areas []geo.AreaName) {
 	}
 }
 
-func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
+func updateIncidentStats(incident *Incident, areas []geo.AreaName) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
@@ -501,13 +501,15 @@ func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
 	})
 
 	locked := false
+	old := &incident.oldValues
+	isNew := incident.IsNewRecord()
 
 	// Loop though all areas
 	for i := 0; i < len(areas); i++ {
 		area := areas[i]
 
 		// Check if StartTime has changed, then we can assume a new Incident has appeared.
-		if old == nil || old.StartTime != new.StartTime {
+		if isNew || old.StartTime != incident.StartTime {
 
 			if !locked {
 				incidentStatsLock.Lock()
@@ -521,8 +523,8 @@ func updateIncidentStats(old *Incident, new *Incident, areas []geo.AreaName) {
 			}
 
 			// Exclude Kecleon, Showcases and other UNSET characters for invasionStats.
-			if new.Character != 0 {
-				invasionStats.count[new.Character]++
+			if incident.Character != 0 {
+				invasionStats.count[incident.Character]++
 			}
 		}
 	}

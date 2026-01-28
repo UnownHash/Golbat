@@ -2,11 +2,11 @@ package decoder
 
 import (
 	"context"
-	"golbat/db"
 	"time"
 
+	"golbat/db"
+
 	"github.com/golang/geo/s2"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
@@ -30,11 +30,11 @@ type S2Cell struct {
 
 func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	now := time.Now().Unix()
-	outputCellIds := []S2Cell{}
+	var outputCellIds []*S2Cell
 
 	// prepare list of cells to update
 	for _, cellId := range cellIds {
-		var s2Cell = S2Cell{}
+		var s2Cell *S2Cell
 
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
@@ -44,6 +44,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 			s2Cell = cachedCell
 		} else {
 			mapS2Cell := s2.CellFromCellID(s2.CellID(cellId))
+			s2Cell = &S2Cell{}
 			s2Cell.Id = cellId
 			s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
 			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
@@ -71,8 +72,8 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 		return
 	}
 
-	// set cache
-	for _, cellId := range outputCellIds {
-		s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
-	}
+	// since cache is now a pointer, ttl will already have been updated
+	//for _, cellId := range outputCellIds {
+	//	s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
+	//}
 }

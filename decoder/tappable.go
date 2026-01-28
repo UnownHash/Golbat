@@ -5,16 +5,18 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"golbat/db"
-	"golbat/pogo"
 	"strconv"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
+	"golbat/db"
+	"golbat/pogo"
+
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
 
+// Tappable struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Tappable struct {
 	Id                      uint64      `db:"id" json:"id"`
 	Lat                     float64     `db:"lat" json:"lat"`
@@ -28,39 +30,129 @@ type Tappable struct {
 	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
 	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
 	Updated                 int64       `db:"updated" json:"updated"`
+
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+}
+
+// IsDirty returns true if any field has been modified
+func (ta *Tappable) IsDirty() bool {
+	return ta.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (ta *Tappable) ClearDirty() {
+	ta.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (ta *Tappable) IsNewRecord() bool {
+	return ta.newRecord
+}
+
+// --- Set methods with dirty tracking ---
+
+func (ta *Tappable) SetLat(v float64) {
+	if !floatAlmostEqual(ta.Lat, v, floatTolerance) {
+		ta.Lat = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetLon(v float64) {
+	if !floatAlmostEqual(ta.Lon, v, floatTolerance) {
+		ta.Lon = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetFortId(v null.String) {
+	if ta.FortId != v {
+		ta.FortId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetSpawnId(v null.Int) {
+	if ta.SpawnId != v {
+		ta.SpawnId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetType(v string) {
+	if ta.Type != v {
+		ta.Type = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetEncounter(v null.Int) {
+	if ta.Encounter != v {
+		ta.Encounter = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetItemId(v null.Int) {
+	if ta.ItemId != v {
+		ta.ItemId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetCount(v null.Int) {
+	if ta.Count != v {
+		ta.Count = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetExpireTimestamp(v null.Int) {
+	if ta.ExpireTimestamp != v {
+		ta.ExpireTimestamp = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetExpireTimestampVerified(v bool) {
+	if ta.ExpireTimestampVerified != v {
+		ta.ExpireTimestampVerified = v
+		ta.dirty = true
+	}
 }
 
 func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.DbDetails, tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto, timestampMs int64) {
 	// update from request
-	ta.Id = request.EncounterId
+	ta.Id = request.EncounterId // Id is primary key, don't track as dirty
 	location := request.GetLocation()
 	if spawnPointId := location.GetSpawnpointId(); spawnPointId != "" {
 		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
 		if err != nil {
 			panic(err)
 		}
-		ta.SpawnId = null.IntFrom(spawnId)
+		ta.SetSpawnId(null.IntFrom(spawnId))
 	}
 	if fortId := location.GetFortId(); fortId != "" {
-		ta.FortId = null.StringFrom(fortId)
+		ta.SetFortId(null.StringFrom(fortId))
 	}
-	ta.Type = request.TappableTypeId
-	ta.Lat = request.LocationHintLat
-	ta.Lon = request.LocationHintLng
+	ta.SetType(request.TappableTypeId)
+	ta.SetLat(request.LocationHintLat)
+	ta.SetLon(request.LocationHintLng)
 	ta.setExpireTimestamp(ctx, db, timestampMs)
 
 	// update from tappable
 	if encounter := tappable.GetEncounter(); encounter != nil {
 		// tappable is a Pokèmon, encounter is sent in a separate proto
 		// we store this to link tappable with Pokèmon from encounter proto
-		ta.Encounter = null.IntFrom(int64(encounter.Pokemon.PokemonId))
+		ta.SetEncounter(null.IntFrom(int64(encounter.Pokemon.PokemonId)))
 	} else if reward := tappable.GetReward(); reward != nil {
 		for _, lootProto := range reward {
 			for _, itemProto := range lootProto.GetLootItem() {
 				switch t := itemProto.Type.(type) {
 				case *pogo.LootItemProto_Item:
-					ta.ItemId = null.IntFrom(int64(t.Item))
-					ta.Count = null.IntFrom(int64(itemProto.Count))
+					ta.SetItemId(null.IntFrom(int64(t.Item)))
+					ta.SetCount(null.IntFrom(int64(itemProto.Count)))
 				case *pogo.LootItemProto_Stardust:
 					log.Warnf("[TAPPABLE] Reward is Stardust: %t", t.Stardust)
 				case *pogo.LootItemProto_Pokecoin:
@@ -96,7 +188,7 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 }
 
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {
-	ta.ExpireTimestampVerified = false
+	ta.SetExpireTimestampVerified(false)
 	if spawnId := ta.SpawnId.ValueOrZero(); spawnId != 0 {
 		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
@@ -109,23 +201,23 @@ func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, tim
 			if despawnOffset < 0 {
 				despawnOffset += 3600
 			}
-			ta.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
-			ta.ExpireTimestampVerified = true
+			ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+			ta.SetExpireTimestampVerified(true)
 		} else {
 			ta.setUnknownTimestamp(timestampMs / 1000)
 		}
 	} else if fortId := ta.FortId.ValueOrZero(); fortId != "" {
 		// we don't know any despawn times from lured/fort tappables
-		ta.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(120))
+		ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 	}
 }
 
 func (ta *Tappable) setUnknownTimestamp(now int64) {
 	if !ta.ExpireTimestamp.Valid {
-		ta.ExpireTimestamp = null.IntFrom(now + 20*60)
+		ta.SetExpireTimestamp(null.IntFrom(now + 20*60))
 	} else {
 		if ta.ExpireTimestamp.Int64 < now {
-			ta.ExpireTimestamp = null.IntFrom(now + 10*60)
+			ta.SetExpireTimestamp(null.IntFrom(now + 10*60))
 		}
 	}
 }
@@ -134,12 +226,12 @@ func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 	inMemoryTappable := tappableCache.Get(id)
 	if inMemoryTappable != nil {
 		tappable := inMemoryTappable.Value()
-		return &tappable, nil
+		return tappable, nil
 	}
 	tappable := Tappable{}
 	err := db.GeneralDb.GetContext(ctx, &tappable,
 		`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
-         FROM tappable 
+         FROM tappable
          WHERE id = ?`, strconv.FormatUint(id, 10))
 	statsCollector.IncDbQuery("select tappable", err)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -153,13 +245,15 @@ func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 }
 
 func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
-	oldTappable, _ := GetTappableRecord(ctx, details, tappable.Id)
-	now := time.Now().Unix()
-	if oldTappable != nil && !hasChangesTappable(oldTappable, tappable) {
+	// Skip save if not dirty and not new
+	if !tappable.IsDirty() && !tappable.IsNewRecord() {
 		return
 	}
+
+	now := time.Now().Unix()
 	tappable.Updated = now
-	if oldTappable == nil {
+
+	if tappable.IsNewRecord() {
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
 				id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
@@ -184,7 +278,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 				pokemon_id = :pokemon_id,
 				item_id = :item_id,
 				count = :count,
-				expire_timestamp = :expire_timestamp, 
+				expire_timestamp = :expire_timestamp,
 				expire_timestamp_verified = :expire_timestamp_verified,
 				updated = :updated
 			WHERE id = "%d"
@@ -196,21 +290,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		}
 		_ = res
 	}
-	tappableCache.Set(tappable.Id, *tappable, ttlcache.DefaultTTL)
-}
-
-func hasChangesTappable(old *Tappable, new *Tappable) bool {
-	return old.Id != new.Id ||
-		old.FortId != new.FortId ||
-		old.SpawnId != new.SpawnId ||
-		old.Type != new.Type ||
-		old.Encounter != new.Encounter ||
-		old.ItemId != new.ItemId ||
-		old.Count != new.Count ||
-		old.ExpireTimestamp != new.ExpireTimestamp ||
-		old.ExpireTimestampVerified != new.ExpireTimestampVerified ||
-		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
+	tappable.ClearDirty()
+	tappable.newRecord = false
+	//tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
 }
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto, timestampMs int64) string {
@@ -226,7 +308,7 @@ func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessT
 	}
 
 	if tappable == nil {
-		tappable = &Tappable{}
+		tappable = &Tappable{newRecord: true}
 	}
 
 	tappable.updateFromProcessTappableProto(ctx, db, tappableDetails, request, timestampMs)

@@ -265,7 +265,7 @@ func (pokemon *Pokemon) SetSeenType(v null.String) {
 func (pokemon *Pokemon) SetUsername(v null.String) {
 	if pokemon.Username != v {
 		pokemon.Username = v
-		pokemon.dirty = true
+		//pokemon.dirty = true
 	}
 }
 
@@ -860,6 +860,36 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
 		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
 		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
+}
+
+// wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
+// should be written.
+func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonProto, time int64) bool {
+	pokemonDisplay := wildPokemon.PokemonDisplay
+	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
+
+	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
+		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
+		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
+		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
+		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender)
+
+	if pokemonChanged {
+		return true
+	}
+
+	hasExpired := (!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
+
+	if hasExpired {
+		return true
+	}
+
+	if pokemon.SeenType.ValueOrZero() == SeenType_Cell {
+		return true
+	}
+
+	// if it's at a nearby stop, or encounter and no other details have changed update is not worthwhile
+	return false
 }
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {

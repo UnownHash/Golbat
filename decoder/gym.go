@@ -1052,7 +1052,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		_, _ = res, err
 	}
 
-	gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
+	//gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
 	createGymWebhooks(gym, areas)
 	createGymFortWebhooks(gym)

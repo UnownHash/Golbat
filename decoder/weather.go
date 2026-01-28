@@ -3,18 +3,18 @@ package decoder
 import (
 	"context"
 	"database/sql"
+
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
 
 	"github.com/golang/geo/s2"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 )
 
 // Weather struct.
-// REMINDER! Keep hasChangesWeather updated after making changes
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Weather struct {
 	Id                 int64     `db:"id"`
 	Latitude           float64   `db:"latitude"`
@@ -31,6 +31,17 @@ type Weather struct {
 	Severity           null.Int  `db:"severity"`
 	WarnWeather        null.Bool `db:"warn_weather"`
 	UpdatedMs          int64     `db:"updated"`
+
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+
+	oldValues WeatherOldValues `db:"-" json:"-"` // Old values for webhook comparison
+}
+
+// WeatherOldValues holds old field values for webhook comparison
+type WeatherOldValues struct {
+	GameplayCondition null.Int
+	WarnWeather       null.Bool
 }
 
 // CREATE TABLE `weather` (
@@ -52,11 +63,136 @@ type Weather struct {
 //  PRIMARY KEY (`id`)
 //)
 
+// IsDirty returns true if any field has been modified
+func (weather *Weather) IsDirty() bool {
+	return weather.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (weather *Weather) ClearDirty() {
+	weather.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (weather *Weather) IsNewRecord() bool {
+	return weather.newRecord
+}
+
+// snapshotOldValues saves current values for webhook comparison
+// Call this after loading from cache/DB but before modifications
+func (weather *Weather) snapshotOldValues() {
+	weather.oldValues = WeatherOldValues{
+		GameplayCondition: weather.GameplayCondition,
+		WarnWeather:       weather.WarnWeather,
+	}
+}
+
+// --- Set methods with dirty tracking ---
+
+func (weather *Weather) SetId(v int64) {
+	if weather.Id != v {
+		weather.Id = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetLatitude(v float64) {
+	if !floatAlmostEqual(weather.Latitude, v, floatTolerance) {
+		weather.Latitude = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetLongitude(v float64) {
+	if !floatAlmostEqual(weather.Longitude, v, floatTolerance) {
+		weather.Longitude = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetLevel(v null.Int) {
+	if weather.Level != v {
+		weather.Level = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetGameplayCondition(v null.Int) {
+	if weather.GameplayCondition != v {
+		weather.GameplayCondition = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetWindDirection(v null.Int) {
+	if weather.WindDirection != v {
+		weather.WindDirection = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetCloudLevel(v null.Int) {
+	if weather.CloudLevel != v {
+		weather.CloudLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetRainLevel(v null.Int) {
+	if weather.RainLevel != v {
+		weather.RainLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetWindLevel(v null.Int) {
+	if weather.WindLevel != v {
+		weather.WindLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetSnowLevel(v null.Int) {
+	if weather.SnowLevel != v {
+		weather.SnowLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetFogLevel(v null.Int) {
+	if weather.FogLevel != v {
+		weather.FogLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetSpecialEffectLevel(v null.Int) {
+	if weather.SpecialEffectLevel != v {
+		weather.SpecialEffectLevel = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetSeverity(v null.Int) {
+	if weather.Severity != v {
+		weather.Severity = v
+		weather.dirty = true
+	}
+}
+
+func (weather *Weather) SetWarnWeather(v null.Bool) {
+	if weather.WarnWeather != v {
+		weather.WarnWeather = v
+		weather.dirty = true
+	}
+}
+
 func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, error) {
 	inMemoryWeather := weatherCache.Get(weatherId)
 	if inMemoryWeather != nil {
 		weather := inMemoryWeather.Value()
-		return &weather, nil
+		weather.snapshotOldValues()
+		return weather, nil
 	}
 	weather := Weather{}
 
@@ -72,7 +208,7 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 	}
 
 	weather.UpdatedMs *= 1000
-	weatherCache.Set(weatherId, weather, ttlcache.DefaultTTL)
+	weather.snapshotOldValues()
 	return &weather, nil
 }
 
@@ -80,46 +216,24 @@ func weatherCellIdFromLatLon(lat, lon float64) int64 {
 	return int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10))
 }
 
-func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) (oldGameplayCondition null.Int) {
-	oldGameplayCondition = weather.GameplayCondition
-	weather.Id = clientWeather.S2CellId
+func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) {
+	weather.SetId(clientWeather.S2CellId)
 	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
-	weather.Latitude = s2cell.CapBound().RectBound().Center().Lat.Degrees()
-	weather.Longitude = s2cell.CapBound().RectBound().Center().Lng.Degrees()
-	weather.Level = null.IntFrom(int64(s2cell.Level()))
-	weather.GameplayCondition = null.IntFrom(int64(clientWeather.GameplayWeather.GameplayCondition))
-	weather.WindDirection = null.IntFrom(int64(clientWeather.DisplayWeather.WindDirection))
-	weather.CloudLevel = null.IntFrom(int64(clientWeather.DisplayWeather.CloudLevel))
-	weather.RainLevel = null.IntFrom(int64(clientWeather.DisplayWeather.RainLevel))
-	weather.WindLevel = null.IntFrom(int64(clientWeather.DisplayWeather.WindLevel))
-	weather.SnowLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SnowLevel))
-	weather.FogLevel = null.IntFrom(int64(clientWeather.DisplayWeather.FogLevel))
-	weather.SpecialEffectLevel = null.IntFrom(int64(clientWeather.DisplayWeather.SpecialEffectLevel))
+	weather.SetLatitude(s2cell.CapBound().RectBound().Center().Lat.Degrees())
+	weather.SetLongitude(s2cell.CapBound().RectBound().Center().Lng.Degrees())
+	weather.SetLevel(null.IntFrom(int64(s2cell.Level())))
+	weather.SetGameplayCondition(null.IntFrom(int64(clientWeather.GameplayWeather.GameplayCondition)))
+	weather.SetWindDirection(null.IntFrom(int64(clientWeather.DisplayWeather.WindDirection)))
+	weather.SetCloudLevel(null.IntFrom(int64(clientWeather.DisplayWeather.CloudLevel)))
+	weather.SetRainLevel(null.IntFrom(int64(clientWeather.DisplayWeather.RainLevel)))
+	weather.SetWindLevel(null.IntFrom(int64(clientWeather.DisplayWeather.WindLevel)))
+	weather.SetSnowLevel(null.IntFrom(int64(clientWeather.DisplayWeather.SnowLevel)))
+	weather.SetFogLevel(null.IntFrom(int64(clientWeather.DisplayWeather.FogLevel)))
+	weather.SetSpecialEffectLevel(null.IntFrom(int64(clientWeather.DisplayWeather.SpecialEffectLevel)))
 	for _, alert := range clientWeather.Alerts {
-		weather.Severity = null.IntFrom(int64(alert.Severity))
-		weather.WarnWeather = null.BoolFrom(alert.WarnWeather)
+		weather.SetSeverity(null.IntFrom(int64(alert.Severity)))
+		weather.SetWarnWeather(null.BoolFrom(alert.WarnWeather))
 	}
-	return
-}
-
-// hasChangesWeather compares two Weather structs
-// Float tolerance: Latitude, Longitude
-func hasChangesWeather(old *Weather, new *Weather) bool {
-	return old.Id != new.Id ||
-		old.Level != new.Level ||
-		old.GameplayCondition != new.GameplayCondition ||
-		old.WindDirection != new.WindDirection ||
-		old.CloudLevel != new.CloudLevel ||
-		old.RainLevel != new.RainLevel ||
-		old.WindLevel != new.WindLevel ||
-		old.SnowLevel != new.SnowLevel ||
-		old.FogLevel != new.FogLevel ||
-		old.SpecialEffectLevel != new.SpecialEffectLevel ||
-		old.Severity != new.Severity ||
-		old.WarnWeather != new.WarnWeather ||
-		old.UpdatedMs != new.UpdatedMs ||
-		!floatAlmostEqual(old.Latitude, new.Latitude, floatTolerance) ||
-		!floatAlmostEqual(old.Longitude, new.Longitude, floatTolerance)
 }
 
 type WeatherWebhook struct {
@@ -140,9 +254,12 @@ type WeatherWebhook struct {
 	Updated            int64         `json:"updated"`
 }
 
-func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
-	if oldWeather == nil || oldWeather.GameplayCondition.ValueOrZero() != weather.GameplayCondition.ValueOrZero() ||
-		oldWeather.WarnWeather.ValueOrZero() != weather.WarnWeather.ValueOrZero() {
+func createWeatherWebhooks(weather *Weather) {
+	old := &weather.oldValues
+	isNew := weather.IsNewRecord()
+
+	if isNew || old.GameplayCondition.ValueOrZero() != weather.GameplayCondition.ValueOrZero() ||
+		old.WarnWeather.ValueOrZero() != weather.WarnWeather.ValueOrZero() {
 
 		s2cell := s2.CellFromCellID(s2.CellID(weather.Id))
 		var polygon [4][2]float64
@@ -175,12 +292,12 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 }
 
 func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
-	oldWeather, _ := getWeatherRecord(ctx, db, weather.Id)
-	if oldWeather != nil && !hasChangesWeather(oldWeather, weather) {
+	// Skip save if not dirty and not new
+	if !weather.IsDirty() && !weather.IsNewRecord() {
 		return
 	}
 
-	if oldWeather == nil {
+	if weather.IsNewRecord() {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			"INSERT INTO weather ("+
 				"id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, "+
@@ -221,6 +338,8 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 		}
 		_ = res
 	}
-	weatherCache.Set(weather.Id, *weather, ttlcache.DefaultTTL)
-	createWeatherWebhooks(oldWeather, weather)
+	createWeatherWebhooks(weather)
+	weather.ClearDirty()
+	weather.newRecord = false
+	//weatherCache.Set(weather.Id, weather, ttlcache.DefaultTTL)
 }

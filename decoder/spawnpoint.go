@@ -14,7 +14,7 @@ import (
 )
 
 // Spawnpoint struct.
-// REMINDER! Keep hasChangesSpawnpoint updated after making changes
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
 	Id         int64    `db:"id"`
 	Lat        float64  `db:"lat"`
@@ -22,6 +22,9 @@ type Spawnpoint struct {
 	Updated    int64    `db:"updated"`
 	LastSeen   int64    `db:"last_seen"`
 	DespawnSec null.Int `db:"despawn_sec"`
+
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -37,11 +40,75 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
+// IsDirty returns true if any field has been modified
+func (s *Spawnpoint) IsDirty() bool {
+	return s.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (s *Spawnpoint) ClearDirty() {
+	s.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (s *Spawnpoint) IsNewRecord() bool {
+	return s.newRecord
+}
+
+// --- Set methods with dirty tracking ---
+
+func (s *Spawnpoint) SetLat(v float64) {
+	if !floatAlmostEqual(s.Lat, v, floatTolerance) {
+		s.Lat = v
+		s.dirty = true
+	}
+}
+
+func (s *Spawnpoint) SetLon(v float64) {
+	if !floatAlmostEqual(s.Lon, v, floatTolerance) {
+		s.Lon = v
+		s.dirty = true
+	}
+}
+
+// SetDespawnSec sets despawn_sec with 2-second tolerance logic
+func (s *Spawnpoint) SetDespawnSec(v null.Int) {
+	// Handle validity changes
+	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
+		s.DespawnSec = v
+		s.dirty = true
+		return
+	}
+
+	// Both invalid - no change
+	if !s.DespawnSec.Valid && !v.Valid {
+		return
+	}
+
+	// Both valid - check with tolerance
+	oldVal := s.DespawnSec.Int64
+	newVal := v.Int64
+
+	// Handle wraparound at hour boundary (0/3600)
+	if oldVal <= 1 && newVal >= 3598 {
+		return
+	}
+	if newVal <= 1 && oldVal >= 3598 {
+		return
+	}
+
+	// Allow 2-second tolerance for despawn time
+	if Abs(oldVal-newVal) > 2 {
+		s.DespawnSec = v
+		s.dirty = true
+	}
+}
+
 func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
 	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
 	if inMemorySpawnpoint != nil {
 		spawnpoint := inMemorySpawnpoint.Value()
-		return &spawnpoint, nil
+		return spawnpoint, nil
 	}
 	spawnpoint := Spawnpoint{}
 
@@ -56,7 +123,6 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 		return &Spawnpoint{Id: spawnpointId}, err
 	}
 
-	spawnpointCache.Set(spawnpointId, spawnpoint, ttlcache.DefaultTTL)
 	return &spawnpoint, nil
 }
 
@@ -65,31 +131,6 @@ func Abs(x int64) int64 {
 		return -x
 	}
 	return x
-}
-
-func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	if !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
-		(old.DespawnSec.Valid && !new.DespawnSec.Valid) ||
-		(!old.DespawnSec.Valid && new.DespawnSec.Valid) {
-		return true
-	}
-	if !old.DespawnSec.Valid && !new.DespawnSec.Valid {
-		return false
-	}
-
-	// Ignore small movements in despawn time
-	oldDespawnSec := old.DespawnSec.Int64
-	newDespawnSec := new.DespawnSec.Int64
-
-	if oldDespawnSec <= 1 && newDespawnSec >= 3598 {
-		return false
-	}
-	if newDespawnSec <= 1 && oldDespawnSec >= 3598 {
-		return false
-	}
-
-	return Abs(old.DespawnSec.Int64-new.DespawnSec.Int64) > 2
 }
 
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
@@ -103,22 +144,25 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 
 		date := time.Unix(expireTimeStamp, 0)
 		secondOfHour := date.Second() + date.Minute()*60
-		spawnpoint := Spawnpoint{
-			Id:         spawnId,
-			Lat:        wildPokemon.Latitude,
-			Lon:        wildPokemon.Longitude,
-			DespawnSec: null.IntFrom(int64(secondOfHour)),
+
+		spawnpoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+		if spawnpoint == nil {
+			spawnpoint = &Spawnpoint{Id: spawnId, newRecord: true}
 		}
-		spawnpointUpdate(ctx, db, &spawnpoint)
+		spawnpoint.SetLat(wildPokemon.Latitude)
+		spawnpoint.SetLon(wildPokemon.Longitude)
+		spawnpoint.SetDespawnSec(null.IntFrom(int64(secondOfHour)))
+		spawnpointUpdate(ctx, db, spawnpoint)
 	} else {
 		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
 		if spawnPoint == nil {
-			spawnpoint := Spawnpoint{
-				Id:  spawnId,
-				Lat: wildPokemon.Latitude,
-				Lon: wildPokemon.Longitude,
+			spawnpoint := &Spawnpoint{
+				Id:        spawnId,
+				Lat:       wildPokemon.Latitude,
+				Lon:       wildPokemon.Longitude,
+				newRecord: true,
 			}
-			spawnpointUpdate(ctx, db, &spawnpoint)
+			spawnpointUpdate(ctx, db, spawnpoint)
 		} else {
 			spawnpointSeen(ctx, db, spawnId)
 		}
@@ -126,13 +170,10 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 }
 
 func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
-	oldSpawnpoint, _ := getSpawnpointRecord(ctx, db, spawnpoint.Id)
-
-	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
+	// Skip save if not dirty and not new
+	if !spawnpoint.IsDirty() && !spawnpoint.IsNewRecord() {
 		return
 	}
-
-	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
 
 	spawnpoint.Updated = time.Now().Unix()  // ensure future updates are set correctly
 	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
@@ -152,7 +193,9 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		return
 	}
 
-	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
+	spawnpoint.ClearDirty()
+	spawnpoint.newRecord = false
+	spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
 }
 
 func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
@@ -176,6 +219,6 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 			log.Printf("Error updating spawnpoint last seen %s", err)
 			return
 		}
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+		// Cache already contains a pointer, no need to update
 	}
 }

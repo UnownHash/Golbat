@@ -60,27 +60,27 @@ var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
 var pokestopCache *ttlcache.Cache[string, *Pokestop]
 var gymCache *ttlcache.Cache[string, *Gym]
-var stationCache *ttlcache.Cache[string, Station]
-var tappableCache *ttlcache.Cache[uint64, Tappable]
-var weatherCache *ttlcache.Cache[int64, Weather]
+var stationCache *ttlcache.Cache[string, *Station]
+var tappableCache *ttlcache.Cache[uint64, *Tappable]
+var weatherCache *ttlcache.Cache[int64, *Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
-var s2CellCache *ttlcache.Cache[uint64, S2Cell]
-var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
+var s2CellCache *ttlcache.Cache[uint64, *S2Cell]
+var spawnpointCache *ttlcache.Cache[int64, *Spawnpoint]
 var pokemonCache []*ttlcache.Cache[uint64, *Pokemon]
-var incidentCache *ttlcache.Cache[string, Incident]
-var playerCache *ttlcache.Cache[string, Player]
-var routeCache *ttlcache.Cache[string, Route]
+var incidentCache *ttlcache.Cache[string, *Incident]
+var playerCache *ttlcache.Cache[string, *Player]
+var routeCache *ttlcache.Cache[string, *Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
-var gymStripedMutex = stripedmutex.New(128)
-var pokestopStripedMutex = stripedmutex.New(128)
-var stationStripedMutex = stripedmutex.New(128)
+var gymStripedMutex = stripedmutex.New(1103)
+var pokestopStripedMutex = stripedmutex.New(1103)
+var stationStripedMutex = stripedmutex.New(1103)
 var tappableStripedMutex = intstripedmutex.New(563)
-var incidentStripedMutex = stripedmutex.New(128)
+var incidentStripedMutex = stripedmutex.New(157)
 var pokemonStripedMutex = intstripedmutex.New(1103)
 var weatherStripedMutex = intstripedmutex.New(157)
-var routeStripedMutex = stripedmutex.New(128)
+var routeStripedMutex = stripedmutex.New(157)
 
 var ProactiveIVSwitchSem chan bool
 
@@ -128,18 +128,18 @@ func initDataCache() {
 	)
 	go gymCache.Start()
 
-	stationCache = ttlcache.New[string, Station](
-		ttlcache.WithTTL[string, Station](60 * time.Minute),
+	stationCache = ttlcache.New[string, *Station](
+		ttlcache.WithTTL[string, *Station](60 * time.Minute),
 	)
 	go stationCache.Start()
 
-	tappableCache = ttlcache.New[uint64, Tappable](
-		ttlcache.WithTTL[uint64, Tappable](60 * time.Minute),
+	tappableCache = ttlcache.New[uint64, *Tappable](
+		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),
 	)
 	go tappableCache.Start()
 
-	weatherCache = ttlcache.New[int64, Weather](
-		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
+	weatherCache = ttlcache.New[int64, *Weather](
+		ttlcache.WithTTL[int64, *Weather](60 * time.Minute),
 	)
 	go weatherCache.Start()
 
@@ -148,13 +148,13 @@ func initDataCache() {
 	)
 	go weatherConsensusCache.Start()
 
-	s2CellCache = ttlcache.New[uint64, S2Cell](
-		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
+	s2CellCache = ttlcache.New[uint64, *S2Cell](
+		ttlcache.WithTTL[uint64, *S2Cell](60 * time.Minute),
 	)
 	go s2CellCache.Start()
 
-	spawnpointCache = ttlcache.New[int64, Spawnpoint](
-		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
+	spawnpointCache = ttlcache.New[int64, *Spawnpoint](
+		ttlcache.WithTTL[int64, *Spawnpoint](60 * time.Minute),
 	)
 	go spawnpointCache.Start()
 
@@ -171,13 +171,13 @@ func initDataCache() {
 	initPokemonRtree()
 	initFortRtree()
 
-	incidentCache = ttlcache.New[string, Incident](
-		ttlcache.WithTTL[string, Incident](60 * time.Minute),
+	incidentCache = ttlcache.New[string, *Incident](
+		ttlcache.WithTTL[string, *Incident](60 * time.Minute),
 	)
 	go incidentCache.Start()
 
-	playerCache = ttlcache.New[string, Player](
-		ttlcache.WithTTL[string, Player](60 * time.Minute),
+	playerCache = ttlcache.New[string, *Player](
+		ttlcache.WithTTL[string, *Player](60 * time.Minute),
 	)
 	go playerCache.Start()
 
@@ -193,8 +193,8 @@ func initDataCache() {
 	)
 	go getMapFortsCache.Start()
 
-	routeCache = ttlcache.New[string, Route](
-		ttlcache.WithTTL[string, Route](60 * time.Minute),
+	routeCache = ttlcache.New[string, *Route](
+		ttlcache.WithTTL[string, *Route](60 * time.Minute),
 	)
 	go routeCache.Start()
 }
@@ -331,6 +331,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 					if incident == nil {
 						incident = &Incident{
 							PokestopId: fortId,
+							newRecord:  true,
 						}
 					}
 					incident.updateFromPokestopIncidentDisplay(incidentProto)
@@ -385,7 +386,7 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			continue
 		}
 		if station == nil {
-			station = &Station{}
+			station = &Station{newRecord: true}
 		}
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
 		saveStationRecord(ctx, db, station)
@@ -440,8 +441,11 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			if err != nil {
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
-				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+				updateTime := nearby.Timestamp / 1000
+				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
+					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+				}
 			}
 
 			pokemonMutex.Unlock()
@@ -489,12 +493,12 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 						publishProto = weatherProto
 					}
 					if weather == nil {
-						weather = &Weather{}
+						weather = &Weather{newRecord: true}
 					}
 					weather.UpdatedMs = timestampMs
-					oldWeather := weather.updateWeatherFromClientWeatherProto(publishProto)
+					weather.updateWeatherFromClientWeatherProto(publishProto)
 					saveWeatherRecord(ctx, db, weather)
-					if oldWeather != weather.GameplayCondition {
+					if weather.oldValues.GameplayCondition != weather.GameplayCondition {
 						updates = append(updates, WeatherUpdate{
 							S2CellId:   publishProto.S2CellId,
 							NewWeather: int32(publishProto.GetGameplayWeather().GetGameplayCondition()),
@@ -527,6 +531,7 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 		incident = &Incident{
 			Id:         protoReq.IncidentLookup.IncidentId,
 			PokestopId: protoReq.IncidentLookup.FortId,
+			newRecord:  true,
 		}
 	}
 	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
@@ -550,6 +555,7 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 		incident = &Incident{
 			Id:         proto.Incident.IncidentId,
 			PokestopId: proto.Incident.FortId,
+			newRecord:  true,
 		}
 	}
 	incident.updateFromStartIncidentOut(proto)
