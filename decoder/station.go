@@ -406,6 +406,7 @@ func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*
 	if err != nil {
 		return nil, err
 	}
+	stationCache.Set(stationId, &station, ttlcache.DefaultTTL)
 	station.snapshotOldValues()
 	return &station, nil
 }

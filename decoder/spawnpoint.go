@@ -124,6 +124,8 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 		return &Spawnpoint{Id: spawnpointId}, err
 	}
 
+	spawnpointCache.Set(spawnpointId, &spawnpoint, ttlcache.DefaultTTL)
+
 	return &spawnpoint, nil
 }
 

@@ -273,6 +273,8 @@ func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappab
 	if err != nil {
 		return nil, err
 	}
+
+	tappableCache.Set(id, &tappable, ttlcache.DefaultTTL)
 	return &tappable, nil
 }
 
