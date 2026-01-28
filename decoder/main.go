@@ -58,15 +58,15 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *ttlcache.Cache[string, *Pokestop]
+var pokestopCache *ShardedCache[string, *Pokestop]
 var gymCache *ttlcache.Cache[string, *Gym]
 var stationCache *ttlcache.Cache[string, *Station]
 var tappableCache *ttlcache.Cache[uint64, *Tappable]
 var weatherCache *ttlcache.Cache[int64, *Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
 var s2CellCache *ttlcache.Cache[uint64, *S2Cell]
-var spawnpointCache *ttlcache.Cache[int64, *Spawnpoint]
-var pokemonCache []*ttlcache.Cache[uint64, *Pokemon]
+var spawnpointCache *ShardedCache[int64, *Spawnpoint]
+var pokemonCache *ShardedCache[uint64, *Pokemon]
 var incidentCache *ttlcache.Cache[string, *Incident]
 var playerCache *ttlcache.Cache[string, *Player]
 var routeCache *ttlcache.Cache[string, *Route]
@@ -101,27 +101,25 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
-func getPokemonCache(key uint64) *ttlcache.Cache[uint64, *Pokemon] {
-	return pokemonCache[key%uint64(len(pokemonCache))]
-}
-
 func setPokemonCache(key uint64, value *Pokemon, ttl time.Duration) {
-	getPokemonCache(key).Set(key, value, ttl)
+	pokemonCache.Set(key, value, ttl)
 }
 
 func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, *Pokemon] {
-	return getPokemonCache(key).Get(key)
+	return pokemonCache.Get(key)
 }
 
 func deletePokemonFromCache(key uint64) {
-	getPokemonCache(key).Delete(key)
+	pokemonCache.Delete(key)
 }
 
 func initDataCache() {
-	pokestopCache = ttlcache.New[string, *Pokestop](
-		ttlcache.WithTTL[string, *Pokestop](60 * time.Minute),
-	)
-	go pokestopCache.Start()
+	// Sharded caches for high-concurrency tables
+	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: StringKeyToShard,
+	})
 
 	gymCache = ttlcache.New[string, *Gym](
 		ttlcache.WithTTL[string, *Gym](60 * time.Minute),
@@ -153,21 +151,20 @@ func initDataCache() {
 	)
 	go s2CellCache.Start()
 
-	spawnpointCache = ttlcache.New[int64, *Spawnpoint](
-		ttlcache.WithTTL[int64, *Spawnpoint](60 * time.Minute),
-	)
-	go spawnpointCache.Start()
+	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: Int64KeyToShard,
+	})
 
-	// pokemon is the most active table. Use an array of caches to increase concurrency for querying ttlcache, which places a global lock for each Get/Set operation
-	// Initialize pokemon cache array: by picking it to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
-	pokemonCache = make([]*ttlcache.Cache[uint64, *Pokemon], runtime.NumCPU())
-	for i := 0; i < len(pokemonCache); i++ {
-		pokemonCache[i] = ttlcache.New[uint64, *Pokemon](
-			ttlcache.WithTTL[uint64, *Pokemon](60*time.Minute),
-			ttlcache.WithDisableTouchOnHit[uint64, *Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
-		)
-		go pokemonCache[i].Start()
-	}
+	// Pokemon cache: sharded for high concurrency
+	// By picking NumShards to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
+	pokemonCache = NewShardedCache(ShardedCacheConfig[uint64, *Pokemon]{
+		NumShards:         runtime.NumCPU(),
+		TTL:               60 * time.Minute,
+		KeyToShard:        Uint64KeyToShard,
+		DisableTouchOnHit: true, // Pokemon will last 60 mins from when we first see them not last see them
+	})
 	initPokemonRtree()
 	initFortRtree()
 

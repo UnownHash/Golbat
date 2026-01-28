@@ -50,14 +50,12 @@ var pokemonTree rtree.RTreeG[uint64]
 func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
 
-	// Set up OnEviction callbacks for each cache in the array
-	for i := range pokemonCache {
-		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
-			pokemon := v.Value()
-			removePokemonFromTree(pokemon.Id, pokemon.Lat, pokemon.Lon)
-			// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
-		})
-	}
+	// Set up OnEviction callback on all shards
+	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
+		pokemon := v.Value()
+		removePokemonFromTree(pokemon.Id, pokemon.Lat, pokemon.Lon)
+		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
+	})
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
