@@ -122,6 +122,24 @@ func hasChangesWeather(old *Weather, new *Weather) bool {
 		!floatAlmostEqual(old.Longitude, new.Longitude, floatTolerance)
 }
 
+type WeatherWebhook struct {
+	S2CellId           int64         `json:"s2_cell_id"`
+	Latitude           float64       `json:"latitude"`
+	Longitude          float64       `json:"longitude"`
+	Polygon            [4][2]float64 `json:"polygon"`
+	GameplayCondition  int64         `json:"gameplay_condition"`
+	WindDirection      int64         `json:"wind_direction"`
+	CloudLevel         int64         `json:"cloud_level"`
+	RainLevel          int64         `json:"rain_level"`
+	WindLevel          int64         `json:"wind_level"`
+	SnowLevel          int64         `json:"snow_level"`
+	FogLevel           int64         `json:"fog_level"`
+	SpecialEffectLevel int64         `json:"special_effect_level"`
+	Severity           int64         `json:"severity"`
+	WarnWeather        bool          `json:"warn_weather"`
+	Updated            int64         `json:"updated"`
+}
+
 func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 	if oldWeather == nil || oldWeather.GameplayCondition.ValueOrZero() != weather.GameplayCondition.ValueOrZero() ||
 		oldWeather.WarnWeather.ValueOrZero() != weather.WarnWeather.ValueOrZero() {
@@ -133,22 +151,23 @@ func createWeatherWebhooks(oldWeather *Weather, weather *Weather) {
 			latLng := s2.LatLngFromPoint(vertex)
 			polygon[i] = [...]float64{latLng.Lat.Degrees(), latLng.Lng.Degrees()}
 		}
-		weatherHook := map[string]interface{}{
-			"s2_cell_id":           weather.Id,
-			"latitude":             weather.Latitude,
-			"longitude":            weather.Longitude,
-			"polygon":              polygon,
-			"gameplay_condition":   weather.GameplayCondition.ValueOrZero(),
-			"wind_direction":       weather.WindDirection.ValueOrZero(),
-			"cloud_level":          weather.CloudLevel.ValueOrZero(),
-			"rain_level":           weather.RainLevel.ValueOrZero(),
-			"wind_level":           weather.WindLevel.ValueOrZero(),
-			"snow_level":           weather.SnowLevel.ValueOrZero(),
-			"fog_level":            weather.FogLevel.ValueOrZero(),
-			"special_effect_level": weather.SpecialEffectLevel.ValueOrZero(),
-			"severity":             weather.Severity.ValueOrZero(),
-			"warn_weather":         weather.WarnWeather.ValueOrZero(),
-			"updated":              weather.UpdatedMs / 1000,
+
+		weatherHook := WeatherWebhook{
+			S2CellId:           weather.Id,
+			Latitude:           weather.Latitude,
+			Longitude:          weather.Longitude,
+			Polygon:            polygon,
+			GameplayCondition:  weather.GameplayCondition.ValueOrZero(),
+			WindDirection:      weather.WindDirection.ValueOrZero(),
+			CloudLevel:         weather.CloudLevel.ValueOrZero(),
+			RainLevel:          weather.RainLevel.ValueOrZero(),
+			WindLevel:          weather.WindLevel.ValueOrZero(),
+			SnowLevel:          weather.SnowLevel.ValueOrZero(),
+			FogLevel:           weather.FogLevel.ValueOrZero(),
+			SpecialEffectLevel: weather.SpecialEffectLevel.ValueOrZero(),
+			Severity:           weather.Severity.ValueOrZero(),
+			WarnWeather:        weather.WarnWeather.ValueOrZero(),
+			Updated:            weather.UpdatedMs / 1000,
 		}
 		areas := MatchStatsGeofence(weather.Latitude, weather.Longitude)
 		webhooksSender.AddMessage(webhooks.Weather, weatherHook, areas)

@@ -660,81 +660,109 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
-	//nullString := func (v null.Int) interface{} {
-	//	if !v.Valid {
-	//		return "null"
-	//	}
-	//	return v.ValueOrZero()
-	//}
+type PokemonWebhook struct {
+	SpawnpointId          string          `json:"spawnpoint_id"`
+	PokestopId            string          `json:"pokestop_id"`
+	PokestopName          *string         `json:"pokestop_name"`
+	EncounterId           string          `json:"encounter_id"`
+	PokemonId             int16           `json:"pokemon_id"`
+	Latitude              float64         `json:"latitude"`
+	Longitude             float64         `json:"longitude"`
+	DisappearTime         int64           `json:"disappear_time"`
+	DisappearTimeVerified bool            `json:"disappear_time_verified"`
+	FirstSeen             int64           `json:"first_seen"`
+	LastModifiedTime      null.Int        `json:"last_modified_time"`
+	Gender                null.Int        `json:"gender"`
+	Cp                    null.Int        `json:"cp"`
+	Form                  null.Int        `json:"form"`
+	Costume               null.Int        `json:"costume"`
+	IndividualAttack      null.Int        `json:"individual_attack"`
+	IndividualDefense     null.Int        `json:"individual_defense"`
+	IndividualStamina     null.Int        `json:"individual_stamina"`
+	PokemonLevel          null.Int        `json:"pokemon_level"`
+	Move1                 null.Int        `json:"move_1"`
+	Move2                 null.Int        `json:"move_2"`
+	Weight                null.Float      `json:"weight"`
+	Size                  null.Int        `json:"size"`
+	Height                null.Float      `json:"height"`
+	Weather               null.Int        `json:"weather"`
+	Capture1              float64         `json:"capture_1"`
+	Capture2              float64         `json:"capture_2"`
+	Capture3              float64         `json:"capture_3"`
+	Shiny                 null.Bool       `json:"shiny"`
+	Username              null.String     `json:"username"`
+	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
+	IsEvent               int8            `json:"is_event"`
+	SeenType              null.String     `json:"seen_type"`
+	Pvp                   json.RawMessage `json:"pvp"`
+}
 
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
 	if pokemon.isNewRecord() ||
 		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
 		pokemon.oldValues.Weather != pokemon.Weather ||
 		pokemon.oldValues.Cp != pokemon.Cp {
-		pokemonHook := map[string]interface{}{
-			"spawnpoint_id": func() string {
-				if !pokemon.SpawnId.Valid {
-					return "None"
-				}
-				return strconv.FormatInt(pokemon.SpawnId.ValueOrZero(), 16)
-			}(),
-			"pokestop_id": func() string {
-				if !pokemon.PokestopId.Valid {
-					return "None"
-				} else {
-					return pokemon.PokestopId.ValueOrZero()
-				}
-			}(),
-			"pokestop_name": func() *string {
-				if !pokemon.PokestopId.Valid {
-					return nil
-				} else {
-					pokestop, _ := GetPokestopRecord(ctx, db, pokemon.PokestopId.String)
-					name := "Unknown"
-					if pokestop != nil {
-						name = pokestop.Name.ValueOrZero()
-					}
-					return &name
-				}
-			}(),
-			"encounter_id":            strconv.FormatUint(pokemon.Id, 10),
-			"pokemon_id":              pokemon.PokemonId,
-			"latitude":                pokemon.Lat,
-			"longitude":               pokemon.Lon,
-			"disappear_time":          pokemon.ExpireTimestamp.ValueOrZero(),
-			"disappear_time_verified": pokemon.ExpireTimestampVerified,
-			"first_seen":              pokemon.FirstSeenTimestamp,
-			"last_modified_time":      pokemon.Updated,
-			"gender":                  pokemon.Gender,
-			"cp":                      pokemon.Cp,
-			"form":                    pokemon.Form,
-			"costume":                 pokemon.Costume,
-			"individual_attack":       pokemon.AtkIv,
-			"individual_defense":      pokemon.DefIv,
-			"individual_stamina":      pokemon.StaIv,
-			"pokemon_level":           pokemon.Level,
-			"move_1":                  pokemon.Move1,
-			"move_2":                  pokemon.Move2,
-			"weight":                  pokemon.Weight,
-			"size":                    pokemon.Size,
-			"height":                  pokemon.Height,
-			"weather":                 pokemon.Weather,
-			"capture_1":               pokemon.Capture1.ValueOrZero(),
-			"capture_2":               pokemon.Capture2.ValueOrZero(),
-			"capture_3":               pokemon.Capture3.ValueOrZero(),
-			"shiny":                   pokemon.Shiny,
-			"username":                pokemon.Username,
-			"display_pokemon_id":      pokemon.DisplayPokemonId,
-			"is_event":                pokemon.IsEvent,
-			"seen_type":               pokemon.SeenType,
-			"pvp": func() interface{} {
-				if !pokemon.Pvp.Valid {
-					return nil
-				} else {
-					return json.RawMessage(pokemon.Pvp.ValueOrZero())
-				}
-			}(),
+
+		spawnpointId := "None"
+		if pokemon.SpawnId.Valid {
+			spawnpointId = strconv.FormatInt(pokemon.SpawnId.ValueOrZero(), 16)
+		}
+
+		pokestopId := "None"
+		if pokemon.PokestopId.Valid {
+			pokestopId = pokemon.PokestopId.ValueOrZero()
+		}
+
+		var pokestopName *string
+		if pokemon.PokestopId.Valid {
+			pokestop, _ := GetPokestopRecord(ctx, db, pokemon.PokestopId.String)
+			name := "Unknown"
+			if pokestop != nil {
+				name = pokestop.Name.ValueOrZero()
+			}
+			pokestopName = &name
+		}
+
+		var pvp json.RawMessage
+		if pokemon.Pvp.Valid {
+			pvp = json.RawMessage(pokemon.Pvp.ValueOrZero())
+		}
+
+		pokemonHook := PokemonWebhook{
+			SpawnpointId:          spawnpointId,
+			PokestopId:            pokestopId,
+			PokestopName:          pokestopName,
+			EncounterId:           strconv.FormatUint(pokemon.Id, 10),
+			PokemonId:             pokemon.PokemonId,
+			Latitude:              pokemon.Lat,
+			Longitude:             pokemon.Lon,
+			DisappearTime:         pokemon.ExpireTimestamp.ValueOrZero(),
+			DisappearTimeVerified: pokemon.ExpireTimestampVerified,
+			FirstSeen:             pokemon.FirstSeenTimestamp,
+			LastModifiedTime:      pokemon.Updated,
+			Gender:                pokemon.Gender,
+			Cp:                    pokemon.Cp,
+			Form:                  pokemon.Form,
+			Costume:               pokemon.Costume,
+			IndividualAttack:      pokemon.AtkIv,
+			IndividualDefense:     pokemon.DefIv,
+			IndividualStamina:     pokemon.StaIv,
+			PokemonLevel:          pokemon.Level,
+			Move1:                 pokemon.Move1,
+			Move2:                 pokemon.Move2,
+			Weight:                pokemon.Weight,
+			Size:                  pokemon.Size,
+			Height:                pokemon.Height,
+			Weather:               pokemon.Weather,
+			Capture1:              pokemon.Capture1.ValueOrZero(),
+			Capture2:              pokemon.Capture2.ValueOrZero(),
+			Capture3:              pokemon.Capture3.ValueOrZero(),
+			Shiny:                 pokemon.Shiny,
+			Username:              pokemon.Username,
+			DisplayPokemonId:      pokemon.DisplayPokemonId,
+			IsEvent:               pokemon.IsEvent,
+			SeenType:              pokemon.SeenType,
+			Pvp:                   pvp,
 		}
 
 		if pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid {

@@ -49,6 +49,30 @@ type Station struct {
 	StationedPokemon      null.String `db:"stationed_pokemon"`
 }
 
+type StationWebhook struct {
+	Id                     string   `json:"id"`
+	Latitude               float64  `json:"latitude"`
+	Longitude              float64  `json:"longitude"`
+	Name                   string   `json:"name"`
+	StartTime              int64    `json:"start_time"`
+	EndTime                int64    `json:"end_time"`
+	IsBattleAvailable      bool     `json:"is_battle_available"`
+	BattleLevel            null.Int `json:"battle_level"`
+	BattleStart            null.Int `json:"battle_start"`
+	BattleEnd              null.Int `json:"battle_end"`
+	BattlePokemonId        null.Int `json:"battle_pokemon_id"`
+	BattlePokemonForm      null.Int `json:"battle_pokemon_form"`
+	BattlePokemonCostume   null.Int `json:"battle_pokemon_costume"`
+	BattlePokemonGender    null.Int `json:"battle_pokemon_gender"`
+	BattlePokemonAlignment null.Int `json:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode null.Int `json:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1     null.Int `json:"battle_pokemon_move_1"`
+	BattlePokemonMove2     null.Int `json:"battle_pokemon_move_2"`
+	TotalStationedPokemon  null.Int `json:"total_stationed_pokemon"`
+	TotalStationedGmax     null.Int `json:"total_stationed_gmax"`
+	Updated                int64    `json:"updated"`
+}
+
 func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
 	inMemoryStation := stationCache.Get(stationId)
 	if inMemoryStation != nil {
@@ -317,28 +341,28 @@ func createStationWebhooks(oldStation *Station, station *Station) {
 		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
 		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
 		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
-		stationHook := map[string]any{
-			"id":                        station.Id,
-			"latitude":                  station.Lat,
-			"longitude":                 station.Lon,
-			"name":                      station.Name,
-			"start_time":                station.StartTime,
-			"end_time":                  station.EndTime,
-			"is_battle_available":       station.IsBattleAvailable,
-			"battle_level":              station.BattleLevel,
-			"battle_start":              station.BattleStart,
-			"battle_end":                station.BattleEnd,
-			"battle_pokemon_id":         station.BattlePokemonId,
-			"battle_pokemon_form":       station.BattlePokemonForm,
-			"battle_pokemon_costume":    station.BattlePokemonCostume,
-			"battle_pokemon_gender":     station.BattlePokemonGender,
-			"battle_pokemon_alignment":  station.BattlePokemonAlignment,
-			"battle_pokemon_bread_mode": station.BattlePokemonBreadMode,
-			"battle_pokemon_move_1":     station.BattlePokemonMove1,
-			"battle_pokemon_move_2":     station.BattlePokemonMove2,
-			"total_stationed_pokemon":   station.TotalStationedPokemon,
-			"total_stationed_gmax":      station.TotalStationedGmax,
-			"updated":                   station.Updated,
+		stationHook := StationWebhook{
+			Id:                     station.Id,
+			Latitude:               station.Lat,
+			Longitude:              station.Lon,
+			Name:                   station.Name,
+			StartTime:              station.StartTime,
+			EndTime:                station.EndTime,
+			IsBattleAvailable:      station.IsBattleAvailable,
+			BattleLevel:            station.BattleLevel,
+			BattleStart:            station.BattleStart,
+			BattleEnd:              station.BattleEnd,
+			BattlePokemonId:        station.BattlePokemonId,
+			BattlePokemonForm:      station.BattlePokemonForm,
+			BattlePokemonCostume:   station.BattlePokemonCostume,
+			BattlePokemonGender:    station.BattlePokemonGender,
+			BattlePokemonAlignment: station.BattlePokemonAlignment,
+			BattlePokemonBreadMode: station.BattlePokemonBreadMode,
+			BattlePokemonMove1:     station.BattlePokemonMove1,
+			BattlePokemonMove2:     station.BattlePokemonMove2,
+			TotalStationedPokemon:  station.TotalStationedPokemon,
+			TotalStationedGmax:     station.TotalStationedGmax,
+			Updated:                station.Updated,
 		}
 		areas := MatchStatsGeofence(station.Lat, station.Lon)
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)

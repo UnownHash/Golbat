@@ -27,6 +27,13 @@ type FortWebhook struct {
 	Location    Location `json:"location"`
 }
 
+type FortChangeWebhook struct {
+	ChangeType string       `json:"change_type"`
+	EditTypes  []string     `json:"edit_types,omitempty"`
+	Old        *FortWebhook `json:"old,omitempty"`
+	New        *FortWebhook `json:"new,omitempty"`
+}
+
 type FortChange string
 type FortType string
 
@@ -129,17 +136,17 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	if change == NEW {
 		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
-		hook := map[string]interface{}{
-			"change_type": change.String(),
-			"new":         new,
+		hook := FortChangeWebhook{
+			ChangeType: change.String(),
+			New:        new,
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "addition")
 	} else if change == REMOVAL {
 		areas := MatchStatsGeofence(old.Location.Latitude, old.Location.Longitude)
-		hook := map[string]interface{}{
-			"change_type": change.String(),
-			"old":         old,
+		hook := FortChangeWebhook{
+			ChangeType: change.String(),
+			Old:        old,
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "removal")
@@ -181,11 +188,11 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			editTypes = append(editTypes, "location")
 		}
 		if len(editTypes) > 0 {
-			hook := map[string]interface{}{
-				"change_type": change.String(),
-				"edit_types":  editTypes,
-				"old":         old,
-				"new":         new,
+			hook := FortChangeWebhook{
+				ChangeType: change.String(),
+				EditTypes:  editTypes,
+				Old:        old,
+				New:        new,
 			}
 			webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 			statsCollector.UpdateFortCount(areas, new.Type, "edit")
