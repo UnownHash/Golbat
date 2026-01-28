@@ -311,6 +311,8 @@ func main() {
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
 	apiGroup.GET("/devices/all", GetDevices)
+	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
+	apiGroup.GET("/fort-tracker/forts/:fort_id", GetFortTrackerFort)
 
 	debugGroup := r.Group("/debug")
 
