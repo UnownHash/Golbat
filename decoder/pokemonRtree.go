@@ -52,9 +52,9 @@ func initPokemonRtree() {
 
 	// Set up OnEviction callbacks for each cache in the array
 	for i := range pokemonCache {
-		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, Pokemon]) {
-			r := v.Value()
-			removePokemonFromTree(&r)
+		pokemonCache[i].OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
+			pokemon := v.Value()
+			removePokemonFromTree(pokemon.Id, pokemon.Lat, pokemon.Lon)
 			// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 		})
 	}
@@ -160,16 +160,15 @@ func addPokemonToTree(pokemon *Pokemon) {
 	pokemonTreeMutex.Unlock()
 }
 
-func removePokemonFromTree(pokemon *Pokemon) {
-	pokemonId := pokemon.Id
+func removePokemonFromTree(pokemonId uint64, lat, lon float64) {
 	pokemonTreeMutex.Lock()
 	beforeLen := pokemonTree.Len()
-	pokemonTree.Delete([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
+	pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, pokemonId)
 	afterLen := pokemonTree.Len()
 	pokemonTreeMutex.Unlock()
 	pokemonLookupCache.Delete(pokemonId)
 
 	if beforeLen != afterLen+1 {
-		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, pokemon.Lat, pokemon.Lon, beforeLen, afterLen, pokemonLookupCache.Size())
+		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, lat, lon, beforeLen, afterLen, pokemonLookupCache.Size())
 	}
 }

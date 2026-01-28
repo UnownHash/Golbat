@@ -76,6 +76,21 @@ type Pokemon struct {
 	IsEvent                 int8        `db:"is_event" json:"is_event"`
 
 	internal grpc.PokemonInternal
+
+	dirty bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	// Note: newRecord tracked via FirstSeenTimestamp == 0 (see isNewRecord method)
+
+	oldValues PokemonOldValues `db:"-" json:"-"` // Old values for webhook comparison and stats
+}
+
+// PokemonOldValues holds old field values for webhook comparison, stats, and R-tree updates
+type PokemonOldValues struct {
+	PokemonId int16
+	Weather   null.Int
+	Cp        null.Int
+	SeenType  null.String
+	Lat       float64
+	Lon       float64
 }
 
 //
@@ -131,12 +146,248 @@ type Pokemon struct {
 //KEY `ix_iv` (`iv`)
 //)
 
+// IsDirty returns true if any field has been modified
+func (pokemon *Pokemon) IsDirty() bool {
+	return pokemon.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (pokemon *Pokemon) ClearDirty() {
+	pokemon.dirty = false
+}
+
+// snapshotOldValues saves current values for webhook comparison, stats, and R-tree updates
+// Call this after loading from cache/DB but before modifications
+func (pokemon *Pokemon) snapshotOldValues() {
+	pokemon.oldValues = PokemonOldValues{
+		PokemonId: pokemon.PokemonId,
+		Weather:   pokemon.Weather,
+		Cp:        pokemon.Cp,
+		SeenType:  pokemon.SeenType,
+		Lat:       pokemon.Lat,
+		Lon:       pokemon.Lon,
+	}
+}
+
+// --- Set methods with dirty tracking ---
+
+func (pokemon *Pokemon) SetPokestopId(v null.String) {
+	if pokemon.PokestopId != v {
+		pokemon.PokestopId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetSpawnId(v null.Int) {
+	if pokemon.SpawnId != v {
+		pokemon.SpawnId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetLat(v float64) {
+	if !floatAlmostEqual(pokemon.Lat, v, floatTolerance) {
+		pokemon.Lat = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetLon(v float64) {
+	if !floatAlmostEqual(pokemon.Lon, v, floatTolerance) {
+		pokemon.Lon = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetPokemonId(v int16) {
+	if pokemon.PokemonId != v {
+		pokemon.PokemonId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetForm(v null.Int) {
+	if pokemon.Form != v {
+		pokemon.Form = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCostume(v null.Int) {
+	if pokemon.Costume != v {
+		pokemon.Costume = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetGender(v null.Int) {
+	if pokemon.Gender != v {
+		pokemon.Gender = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetWeather(v null.Int) {
+	if pokemon.Weather != v {
+		pokemon.Weather = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetIsStrong(v null.Bool) {
+	if pokemon.IsStrong != v {
+		pokemon.IsStrong = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetExpireTimestamp(v null.Int) {
+	if pokemon.ExpireTimestamp != v {
+		pokemon.ExpireTimestamp = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
+	if pokemon.ExpireTimestampVerified != v {
+		pokemon.ExpireTimestampVerified = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetSeenType(v null.String) {
+	if pokemon.SeenType != v {
+		pokemon.SeenType = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetUsername(v null.String) {
+	if pokemon.Username != v {
+		pokemon.Username = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCellId(v null.Int) {
+	if pokemon.CellId != v {
+		pokemon.CellId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetIsEvent(v int8) {
+	if pokemon.IsEvent != v {
+		pokemon.IsEvent = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetShiny(v null.Bool) {
+	if pokemon.Shiny != v {
+		pokemon.Shiny = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCp(v null.Int) {
+	if pokemon.Cp != v {
+		pokemon.Cp = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetLevel(v null.Int) {
+	if pokemon.Level != v {
+		pokemon.Level = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetMove1(v null.Int) {
+	if pokemon.Move1 != v {
+		pokemon.Move1 = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetMove2(v null.Int) {
+	if pokemon.Move2 != v {
+		pokemon.Move2 = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetHeight(v null.Float) {
+	if !nullFloatAlmostEqual(pokemon.Height, v, floatTolerance) {
+		pokemon.Height = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetWeight(v null.Float) {
+	if !nullFloatAlmostEqual(pokemon.Weight, v, floatTolerance) {
+		pokemon.Weight = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetSize(v null.Int) {
+	if pokemon.Size != v {
+		pokemon.Size = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetIsDitto(v bool) {
+	if pokemon.IsDitto != v {
+		pokemon.IsDitto = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetDisplayPokemonId(v null.Int) {
+	if pokemon.DisplayPokemonId != v {
+		pokemon.DisplayPokemonId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetPvp(v null.String) {
+	if pokemon.Pvp != v {
+		pokemon.Pvp = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCapture1(v null.Float) {
+	if !nullFloatAlmostEqual(pokemon.Capture1, v, floatTolerance) {
+		pokemon.Capture1 = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCapture2(v null.Float) {
+	if !nullFloatAlmostEqual(pokemon.Capture2, v, floatTolerance) {
+		pokemon.Capture2 = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetCapture3(v null.Float) {
+	if !nullFloatAlmostEqual(pokemon.Capture3, v, floatTolerance) {
+		pokemon.Capture3 = v
+		pokemon.dirty = true
+	}
+}
+
 func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
 	if db.UsePokemonCache {
 		inMemoryPokemon := getPokemonFromCache(encounterId)
 		if inMemoryPokemon != nil {
 			pokemon := inMemoryPokemon.Value()
-			return &pokemon, nil
+			pokemon.snapshotOldValues() // Snapshot for webhook comparison
+			return pokemon, nil
 		}
 	}
 	if config.Config.PokemonMemoryOnly {
@@ -160,8 +411,9 @@ func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) 
 		return nil, err
 	}
 
+	pokemon.snapshotOldValues() // Snapshot for webhook comparison
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, &pokemon, ttlcache.DefaultTTL)
 	}
 	pokemonRtreeUpdatePokemonOnGet(&pokemon)
 	return &pokemon, nil
@@ -174,7 +426,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	}
 	pokemon = &Pokemon{Id: encounterId}
 	if db.UsePokemonCache {
-		setPokemonCache(encounterId, *pokemon, ttlcache.DefaultTTL)
+		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
 	}
 	return pokemon, nil
 }
@@ -222,19 +474,12 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
-	oldPokemon, _ := getPokemonRecord(ctx, db, pokemon.Id)
-
-	if oldPokemon != nil && !hasChangesPokemon(oldPokemon, pokemon) {
+	if !pokemon.isNewRecord() && !pokemon.IsDirty() {
 		return
 	}
 
-	// Blank, non-persisted record are now inserted into the cache to save on DB calls
-	if oldPokemon != nil && oldPokemon.isNewRecord() {
-		oldPokemon = nil
-	}
-
 	// uncomment to debug excessive writes
-	//if oldPokemon != nil && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
+	//if !pokemon.isNewRecord() && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
 	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
 	//		ignoreNearFloats, ignoreNearNullFloats,
 	//		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
@@ -246,18 +491,17 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	pokemon.Updated = null.IntFrom(now)
-	if oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId || oldPokemon.Cp != pokemon.Cp {
+	if pokemon.isNewRecord() || pokemon.oldValues.PokemonId != pokemon.PokemonId || pokemon.oldValues.Cp != pokemon.Cp {
 		pokemon.Changed = now
 	}
 
 	changePvpField := false
 	var pvpResults map[string][]gohbem.PokemonEntry
 	if ohbem != nil {
-		// Calculating PVP data
-		if pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.PokemonId != pokemon.PokemonId ||
-			oldPokemon.Level != pokemon.Level || oldPokemon.Form != pokemon.Form ||
-			oldPokemon.Costume != pokemon.Costume || oldPokemon.Gender != pokemon.Gender ||
-			oldPokemon.Weather != pokemon.Weather) {
+		// Calculating PVP data - check for changes in pokemon properties that affect PVP rankings
+		// For new records, always calculate; for existing, check if relevant fields changed
+		shouldCalculatePvp := pokemon.AtkIv.Valid && (pokemon.isNewRecord() || pokemon.IsDirty())
+		if shouldCalculatePvp {
 			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
 				int(pokemon.Form.ValueOrZero()),
 				int(pokemon.Costume.ValueOrZero()),
@@ -274,19 +518,13 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				pvpResults = pvp
 			}
 		}
-		if !pokemon.AtkIv.Valid && (oldPokemon == nil || oldPokemon.AtkIv.Valid) {
+		if !pokemon.AtkIv.Valid && pokemon.isNewRecord() {
 			pokemon.Pvp = null.NewString("", false)
 			changePvpField = true
 		}
 	}
 
-	var oldSeenType string
-	if oldPokemon == nil {
-		oldSeenType = "n/a"
-	} else {
-		oldSeenType = oldPokemon.SeenType.ValueOrZero()
-	}
-	log.Debugf("Updating pokemon [%d] from %s->%s", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero())
+	log.Debugf("Updating pokemon [%d] to %s", pokemon.Id, pokemon.SeenType.ValueOrZero())
 	//log.Println(cmp.Diff(oldPokemon, pokemon))
 
 	if writeDB && !config.Config.PokemonMemoryOnly {
@@ -306,7 +544,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
 			}
 		}
-		if oldPokemon == nil {
+		if pokemon.isNewRecord() {
 			pvpField, pvpValue := "", ""
 			if changePvpField {
 				pvpField, pvpValue = "pvp, ", ":pvp, "
@@ -388,31 +626,32 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	// Update pokemon rtree
-	if oldPokemon == nil {
+	if pokemon.isNewRecord() {
 		addPokemonToTree(pokemon)
-	} else {
-		if pokemon.Lat != oldPokemon.Lat || pokemon.Lon != oldPokemon.Lon {
-			removePokemonFromTree(oldPokemon)
-			addPokemonToTree(pokemon)
-		}
+	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
+		// Position changed - update R-tree by removing from old position and adding to new
+		removePokemonFromTree(pokemon.Id, pokemon.oldValues.Lat, pokemon.oldValues.Lon)
+		addPokemonToTree(pokemon)
 	}
 
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
 
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	if webhook {
-		createPokemonWebhooks(ctx, db, oldPokemon, pokemon, areas)
+		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}
-	updatePokemonStats(oldPokemon, pokemon, areas, now)
+	updatePokemonStats(pokemon, areas, now)
+
+	pokemon.ClearDirty()
 
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		setPokemonCache(pokemon.Id, *pokemon, pokemon.remainingDuration(now))
+		setPokemonCache(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 	}
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, new *Pokemon, areas []geo.AreaName) {
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
 	//nullString := func (v null.Int) interface{} {
 	//	if !v.Valid {
 	//		return "null"
@@ -420,29 +659,29 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 	//	return v.ValueOrZero()
 	//}
 
-	if old == nil ||
-		old.PokemonId != new.PokemonId ||
-		old.Weather != new.Weather ||
-		old.Cp != new.Cp {
+	if pokemon.isNewRecord() ||
+		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
+		pokemon.oldValues.Weather != pokemon.Weather ||
+		pokemon.oldValues.Cp != pokemon.Cp {
 		pokemonHook := map[string]interface{}{
 			"spawnpoint_id": func() string {
-				if !new.SpawnId.Valid {
+				if !pokemon.SpawnId.Valid {
 					return "None"
 				}
-				return strconv.FormatInt(new.SpawnId.ValueOrZero(), 16)
+				return strconv.FormatInt(pokemon.SpawnId.ValueOrZero(), 16)
 			}(),
 			"pokestop_id": func() string {
-				if !new.PokestopId.Valid {
+				if !pokemon.PokestopId.Valid {
 					return "None"
 				} else {
-					return new.PokestopId.ValueOrZero()
+					return pokemon.PokestopId.ValueOrZero()
 				}
 			}(),
 			"pokestop_name": func() *string {
-				if !new.PokestopId.Valid {
+				if !pokemon.PokestopId.Valid {
 					return nil
 				} else {
-					pokestop, _ := GetPokestopRecord(ctx, db, new.PokestopId.String)
+					pokestop, _ := GetPokestopRecord(ctx, db, pokemon.PokestopId.String)
 					name := "Unknown"
 					if pokestop != nil {
 						name = pokestop.Name.ValueOrZero()
@@ -450,46 +689,46 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, old *Pokemon, n
 					return &name
 				}
 			}(),
-			"encounter_id":            strconv.FormatUint(new.Id, 10),
-			"pokemon_id":              new.PokemonId,
-			"latitude":                new.Lat,
-			"longitude":               new.Lon,
-			"disappear_time":          new.ExpireTimestamp.ValueOrZero(),
-			"disappear_time_verified": new.ExpireTimestampVerified,
-			"first_seen":              new.FirstSeenTimestamp,
-			"last_modified_time":      new.Updated,
-			"gender":                  new.Gender,
-			"cp":                      new.Cp,
-			"form":                    new.Form,
-			"costume":                 new.Costume,
-			"individual_attack":       new.AtkIv,
-			"individual_defense":      new.DefIv,
-			"individual_stamina":      new.StaIv,
-			"pokemon_level":           new.Level,
-			"move_1":                  new.Move1,
-			"move_2":                  new.Move2,
-			"weight":                  new.Weight,
-			"size":                    new.Size,
-			"height":                  new.Height,
-			"weather":                 new.Weather,
-			"capture_1":               new.Capture1.ValueOrZero(),
-			"capture_2":               new.Capture2.ValueOrZero(),
-			"capture_3":               new.Capture3.ValueOrZero(),
-			"shiny":                   new.Shiny,
-			"username":                new.Username,
-			"display_pokemon_id":      new.DisplayPokemonId,
-			"is_event":                new.IsEvent,
-			"seen_type":               new.SeenType,
+			"encounter_id":            strconv.FormatUint(pokemon.Id, 10),
+			"pokemon_id":              pokemon.PokemonId,
+			"latitude":                pokemon.Lat,
+			"longitude":               pokemon.Lon,
+			"disappear_time":          pokemon.ExpireTimestamp.ValueOrZero(),
+			"disappear_time_verified": pokemon.ExpireTimestampVerified,
+			"first_seen":              pokemon.FirstSeenTimestamp,
+			"last_modified_time":      pokemon.Updated,
+			"gender":                  pokemon.Gender,
+			"cp":                      pokemon.Cp,
+			"form":                    pokemon.Form,
+			"costume":                 pokemon.Costume,
+			"individual_attack":       pokemon.AtkIv,
+			"individual_defense":      pokemon.DefIv,
+			"individual_stamina":      pokemon.StaIv,
+			"pokemon_level":           pokemon.Level,
+			"move_1":                  pokemon.Move1,
+			"move_2":                  pokemon.Move2,
+			"weight":                  pokemon.Weight,
+			"size":                    pokemon.Size,
+			"height":                  pokemon.Height,
+			"weather":                 pokemon.Weather,
+			"capture_1":               pokemon.Capture1.ValueOrZero(),
+			"capture_2":               pokemon.Capture2.ValueOrZero(),
+			"capture_3":               pokemon.Capture3.ValueOrZero(),
+			"shiny":                   pokemon.Shiny,
+			"username":                pokemon.Username,
+			"display_pokemon_id":      pokemon.DisplayPokemonId,
+			"is_event":                pokemon.IsEvent,
+			"seen_type":               pokemon.SeenType,
 			"pvp": func() interface{} {
-				if !new.Pvp.Valid {
+				if !pokemon.Pvp.Valid {
 					return nil
 				} else {
-					return json.RawMessage(new.Pvp.ValueOrZero())
+					return json.RawMessage(pokemon.Pvp.ValueOrZero())
 				}
 			}(),
 		}
 
-		if new.AtkIv.Valid && new.DefIv.Valid && new.StaIv.Valid {
+		if pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid {
 			webhooksSender.AddMessage(webhooks.PokemonIV, pokemonHook, areas)
 		} else {
 			webhooksSender.AddMessage(webhooks.PokemonNoIV, pokemonHook, areas)
@@ -557,14 +796,14 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	if wildPokemon.EncounterId != pokemon.Id {
 		panic("Unmatched EncounterId")
 	}
-	pokemon.Lat = wildPokemon.Latitude
-	pokemon.Lon = wildPokemon.Longitude
+	pokemon.SetLat(wildPokemon.Latitude)
+	pokemon.SetLon(wildPokemon.Longitude)
 
 	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	if err != nil {
 		panic(err)
 	}
-	pokemon.SpawnId = null.IntFrom(spawnId)
+	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
 	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
@@ -587,15 +826,15 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 }
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
-	pokemon.IsEvent = 0
+	pokemon.SetIsEvent(0)
 	switch pokemon.SeenType.ValueOrZero() {
 	case "", SeenType_Cell, SeenType_NearbyStop:
-		pokemon.SeenType = null.StringFrom(SeenType_Wild)
+		pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.Username = null.StringFrom(username)
-	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.SetCellId(null.IntFrom(cellId))
 }
 
 func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
@@ -605,7 +844,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		return
 	}
 
-	pokemon.IsEvent = 0
+	pokemon.SetIsEvent(0)
 
 	pokemon.Id = mapPokemon.EncounterId
 
@@ -616,10 +855,10 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		// Unrecognised pokestop
 		return
 	}
-	pokemon.PokestopId = null.StringFrom(pokestop.Id)
-	pokemon.Lat = pokestop.Lat
-	pokemon.Lon = pokestop.Lon
-	pokemon.SeenType = null.StringFrom(SeenType_LureWild)
+	pokemon.SetPokestopId(null.StringFrom(pokestop.Id))
+	pokemon.SetLat(pokestop.Lat)
+	pokemon.SetLon(pokestop.Lon)
+	pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
 
 	if mapPokemon.PokemonDisplay != nil {
 		pokemon.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
@@ -630,34 +869,38 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 	}
 	if !pokemon.Username.Valid {
-		pokemon.Username = null.StringFrom(username)
+		pokemon.SetUsername(null.StringFrom(username))
 	}
 
 	if mapPokemon.ExpirationTimeMs > 0 && !pokemon.ExpireTimestampVerified {
-		pokemon.ExpireTimestamp = null.IntFrom(mapPokemon.ExpirationTimeMs / 1000)
-		pokemon.ExpireTimestampVerified = true
+		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.ExpirationTimeMs / 1000))
+		pokemon.SetExpireTimestampVerified(true)
 		// if we have cached an encounter for this pokemon, update the TTL.
 		encounterCache.UpdateTTL(pokemon.Id, pokemon.remainingDuration(timestampMs/1000))
 	} else {
-		pokemon.ExpireTimestampVerified = false
+		pokemon.SetExpireTimestampVerified(false)
 	}
 
-	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.SetCellId(null.IntFrom(cellId))
 }
 
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	pokemon.AtkIv = null.IntFrom(a)
-	pokemon.DefIv = null.IntFrom(d)
-	pokemon.StaIv = null.IntFrom(s)
-	pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
+	if pokemon.AtkIv.ValueOrZero() != a || pokemon.DefIv.ValueOrZero() != d || pokemon.StaIv.ValueOrZero() != s ||
+		!pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
+		pokemon.AtkIv = null.IntFrom(a)
+		pokemon.DefIv = null.IntFrom(d)
+		pokemon.StaIv = null.IntFrom(s)
+		pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
+		pokemon.dirty = true
+	}
 }
 
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
-	pokemon.IsEvent = 0
+	pokemon.SetIsEvent(0)
 	pokestopId := nearbyPokemon.FortId
 	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.Username = null.StringFrom(username)
+	pokemon.SetUsername(null.StringFrom(username))
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -675,8 +918,8 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
-			pokemon.SeenType = null.StringFrom(SeenType_NearbyStop)
-			pokemon.PokestopId = null.StringFrom(pokestopId)
+			pokemon.SetSeenType(null.StringFrom(SeenType_NearbyStop))
+			pokemon.SetPokestopId(null.StringFrom(pokestopId))
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
 		}
@@ -692,17 +935,18 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
-		pokemon.SeenType = null.StringFrom(SeenType_Cell)
+		pokemon.SetSeenType(null.StringFrom(SeenType_Cell))
 	}
 	if overrideLatLon {
-		pokemon.Lat, pokemon.Lon = lat, lon
+		pokemon.SetLat(lat)
+		pokemon.SetLon(lon)
 	} else {
 		midpoint := s2.LatLngFromPoint(s2.Point{s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
 			Add(s2.PointFromLatLng(s2.LatLngFromDegrees(lat, lon)).Vector)})
-		pokemon.Lat = midpoint.Lat.Degrees()
-		pokemon.Lon = midpoint.Lng.Degrees()
+		pokemon.SetLat(midpoint.Lat.Degrees())
+		pokemon.SetLon(midpoint.Lng.Degrees())
 	}
-	pokemon.CellId = null.IntFrom(cellId)
+	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
@@ -745,8 +989,8 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		if despawnOffset < 0 {
 			despawnOffset += 3600
 		}
-		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset))
-		pokemon.ExpireTimestampVerified = true
+		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+		pokemon.SetExpireTimestampVerified(true)
 	} else {
 		pokemon.setUnknownTimestamp(timestampMs / 1000)
 	}
@@ -754,10 +998,10 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 
 func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
 	if !pokemon.ExpireTimestamp.Valid {
-		pokemon.ExpireTimestamp = null.IntFrom(now + 20*60) // should be configurable, add on 20min
+		pokemon.SetExpireTimestamp(null.IntFrom(now + 20*60)) // should be configurable, add on 20min
 	} else {
 		if pokemon.ExpireTimestamp.Int64 < now {
-			pokemon.ExpireTimestamp = null.IntFrom(now + 10*60) // should be configurable, add on 10min
+			pokemon.SetExpireTimestamp(null.IntFrom(now + 10*60)) // should be configurable, add on 10min
 		}
 	}
 }
@@ -772,18 +1016,18 @@ func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
 func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
 	if isDitto {
 		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
-		pokemon.IsDitto = true
-		pokemon.DisplayPokemonId = null.IntFrom(int64(pokemon.PokemonId))
-		pokemon.PokemonId = int16(pogo.HoloPokemonId_DITTO)
+		pokemon.SetIsDitto(true)
+		pokemon.SetDisplayPokemonId(null.IntFrom(int64(pokemon.PokemonId)))
+		pokemon.SetPokemonId(int16(pogo.HoloPokemonId_DITTO))
 	} else {
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
 func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
 	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
-	pokemon.IsDitto = false
-	pokemon.DisplayPokemonId = null.NewInt(0, false)
-	pokemon.PokemonId = int16(pokemon.DisplayPokemonId.Int64)
+	pokemon.SetIsDitto(false)
+	pokemon.SetDisplayPokemonId(null.NewInt(0, false))
+	pokemon.SetPokemonId(int16(pokemon.DisplayPokemonId.Int64))
 	return new, checkScans(old, new)
 }
 
@@ -1085,6 +1329,9 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 }
 
 func (pokemon *Pokemon) clearIv(cp bool) {
+	if pokemon.AtkIv.Valid || pokemon.DefIv.Valid || pokemon.StaIv.Valid || pokemon.Iv.Valid {
+		pokemon.dirty = true
+	}
 	pokemon.AtkIv = null.NewInt(0, false)
 	pokemon.DefIv = null.NewInt(0, false)
 	pokemon.StaIv = null.NewInt(0, false)
@@ -1092,25 +1339,25 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	if cp {
 		switch pokemon.SeenType.ValueOrZero() {
 		case SeenType_LureEncounter:
-			pokemon.SeenType = null.StringFrom(SeenType_LureWild)
+			pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
 		case SeenType_Encounter:
-			pokemon.SeenType = null.StringFrom(SeenType_Wild)
+			pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
 		}
-		pokemon.Cp = null.NewInt(0, false)
-		pokemon.Pvp = null.NewString("", false)
+		pokemon.SetCp(null.NewInt(0, false))
+		pokemon.SetPvp(null.NewString("", false))
 	}
 }
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.Username = null.StringFrom(username)
-	pokemon.Shiny = null.BoolFrom(proto.PokemonDisplay.Shiny)
-	pokemon.Cp = null.IntFrom(int64(proto.Cp))
-	pokemon.Move1 = null.IntFrom(int64(proto.Move1))
-	pokemon.Move2 = null.IntFrom(int64(proto.Move2))
-	pokemon.Height = null.FloatFrom(float64(proto.HeightM))
-	pokemon.Size = null.IntFrom(int64(proto.Size))
-	pokemon.Weight = null.FloatFrom(float64(proto.WeightKg))
+	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
+	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
+	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
+	pokemon.SetMove2(null.IntFrom(int64(proto.Move2)))
+	pokemon.SetHeight(null.FloatFrom(float64(proto.HeightM)))
+	pokemon.SetSize(null.IntFrom(int64(proto.Size)))
+	pokemon.SetWeight(null.FloatFrom(float64(proto.WeightKg)))
 
 	scan := grpc.PokemonScan{
 		Weather:     int32(pokemon.Weather.Int64),
@@ -1146,10 +1393,10 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		log.Errorf("[POKEMON] Unexpected %d: %s", pokemon.Id, err)
 	}
 	if caughtIv == nil { // this can only happen for a 0P Ditto
-		pokemon.Level = null.IntFrom(int64(scan.Level - 5))
+		pokemon.SetLevel(null.IntFrom(int64(scan.Level - 5)))
 		pokemon.clearIv(false)
 	} else {
-		pokemon.Level = null.IntFrom(int64(caughtIv.Level))
+		pokemon.SetLevel(null.IntFrom(int64(caughtIv.Level)))
 		pokemon.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
 	}
 	if err == nil {
@@ -1175,18 +1422,18 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 }
 
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
-	pokemon.IsEvent = 0
+	pokemon.SetIsEvent(0)
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
 	// tappable encounter can also be available in seen as normal encounter once tapped
 	if pokemon.isSeenFromTappable() {
-		pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+		pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if pokemon.CellId.Valid == false {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
 		cellID := s2.CellIDFromLatLng(centerCoord).Parent(15)
-		pokemon.CellId = null.IntFrom(int64(cellID))
+		pokemon.SetCellId(null.IntFrom(int64(cellID)))
 	}
 }
 
@@ -1195,37 +1442,37 @@ func (pokemon *Pokemon) isSeenFromTappable() bool {
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
-	pokemon.IsEvent = 0
+	pokemon.SetIsEvent(0)
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
-	pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
+	pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
 func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
-	pokemon.IsEvent = 0
-	pokemon.Lat = request.LocationHintLat
-	pokemon.Lon = request.LocationHintLng
+	pokemon.SetIsEvent(0)
+	pokemon.SetLat(request.LocationHintLat)
+	pokemon.SetLon(request.LocationHintLng)
 
 	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
-		pokemon.SeenType = null.StringFrom(SeenType_TappableEncounter)
+		pokemon.SetSeenType(null.StringFrom(SeenType_TappableEncounter))
 
 		spawnId, err := strconv.ParseInt(spawnpointId, 16, 64)
 		if err != nil {
 			panic(err)
 		}
 
-		pokemon.SpawnId = null.IntFrom(spawnId)
+		pokemon.SetSpawnId(null.IntFrom(spawnId))
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
-		pokemon.SeenType = null.StringFrom(SeenType_TappableLureEncounter)
+		pokemon.SetSeenType(null.StringFrom(SeenType_TappableLureEncounter))
 
-		pokemon.PokestopId = null.StringFrom(fortId)
+		pokemon.SetPokestopId(null.StringFrom(fortId))
 		// we don't know any despawn times from lured/fort tappables
-		pokemon.ExpireTimestamp = null.IntFrom(int64(timestampMs)/1000 + int64(120))
-		pokemon.ExpireTimestampVerified = false
+		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
+		pokemon.SetExpireTimestampVerified(false)
 	}
 	if !pokemon.Username.Valid {
-		pokemon.Username = null.StringFrom(username)
+		pokemon.SetUsername(null.StringFrom(username))
 	}
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
@@ -1248,29 +1495,29 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemon.IsStrong.ValueOrZero(),
 				pokemonId, display.Form, display.Costume, display.Gender, display.IsStrongPokemon)
-			pokemon.Weight = null.NewFloat(0, false)
-			pokemon.Height = null.NewFloat(0, false)
-			pokemon.Size = null.NewInt(0, false)
-			pokemon.Move1 = null.NewInt(0, false)
-			pokemon.Move2 = null.NewInt(0, false)
-			pokemon.Cp = null.NewInt(0, false)
-			pokemon.Shiny = null.NewBool(false, false)
-			pokemon.IsDitto = false
-			pokemon.DisplayPokemonId = null.NewInt(0, false)
-			pokemon.Pvp = null.NewString("", false)
+			pokemon.SetWeight(null.NewFloat(0, false))
+			pokemon.SetHeight(null.NewFloat(0, false))
+			pokemon.SetSize(null.NewInt(0, false))
+			pokemon.SetMove1(null.NewInt(0, false))
+			pokemon.SetMove2(null.NewInt(0, false))
+			pokemon.SetCp(null.NewInt(0, false))
+			pokemon.SetShiny(null.NewBool(false, false))
+			pokemon.SetIsDitto(false)
+			pokemon.SetDisplayPokemonId(null.NewInt(0, false))
+			pokemon.SetPvp(null.NewString("", false))
 		}
 	}
 	if pokemon.isNewRecord() || !pokemon.IsDitto {
-		pokemon.PokemonId = pokemonId
+		pokemon.SetPokemonId(pokemonId)
 	}
-	pokemon.Gender = null.IntFrom(int64(display.Gender))
-	pokemon.Form = null.IntFrom(int64(display.Form))
-	pokemon.Costume = null.IntFrom(int64(display.Costume))
+	pokemon.SetGender(null.IntFrom(int64(display.Gender)))
+	pokemon.SetForm(null.IntFrom(int64(display.Form)))
+	pokemon.SetCostume(null.IntFrom(int64(display.Costume)))
 	if !pokemon.isNewRecord() {
 		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
 	}
-	pokemon.Weather = null.IntFrom(int64(display.WeatherBoostedCondition))
-	pokemon.IsStrong = null.BoolFrom(display.IsStrongPokemon)
+	pokemon.SetWeather(null.IntFrom(int64(display.WeatherBoostedCondition)))
+	pokemon.SetIsStrong(null.BoolFrom(display.IsStrongPokemon))
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
@@ -1296,7 +1543,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	matchingScan, isBoostedMatches := pokemon.locateScan(isStrong, isBoosted)
 	var oldAtk, oldDef, oldSta int64
 	if matchingScan == nil {
-		pokemon.Level = null.NewInt(0, false)
+		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {
 		oldLevel := pokemon.Level.ValueOrZero()
@@ -1309,29 +1556,30 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 			oldDef = -1
 			oldSta = -1
 		}
-		pokemon.Level = null.IntFrom(int64(matchingScan.Level))
+		newLevel := int64(matchingScan.Level)
 		if isBoostedMatches || isStrong { // strong Pokemon IV is unaffected by weather
 			pokemon.calculateIv(int64(matchingScan.Attack), int64(matchingScan.Defense), int64(matchingScan.Stamina))
 			switch pokemon.SeenType.ValueOrZero() {
 			case SeenType_LureWild:
-				pokemon.SeenType = null.StringFrom(SeenType_LureEncounter)
+				pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
 			case SeenType_Wild:
-				pokemon.SeenType = null.StringFrom(SeenType_Encounter)
+				pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
 			}
 		} else {
 			pokemon.clearIv(true)
 		}
 		if !isBoostedMatches {
 			if isBoosted {
-				pokemon.Level.Int64 += 5
+				newLevel += 5
 			} else {
-				pokemon.Level.Int64 -= 5
+				newLevel -= 5
 			}
 		}
-		if pokemon.Level.Int64 != oldLevel || pokemon.AtkIv.Valid &&
+		pokemon.SetLevel(null.IntFrom(newLevel))
+		if newLevel != oldLevel || pokemon.AtkIv.Valid &&
 			(pokemon.AtkIv.Int64 != oldAtk || pokemon.DefIv.Int64 != oldDef || pokemon.StaIv.Int64 != oldSta) {
-			pokemon.Cp = null.NewInt(0, false)
-			pokemon.Pvp = null.NewString("", false)
+			pokemon.SetCp(null.NewInt(0, false))
+			pokemon.SetPvp(null.NewString("", false))
 		}
 	}
 }
@@ -1387,7 +1635,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			float64(pokemon.Level.Int64))
 	}
 	if err == nil {
-		pokemon.Cp = null.IntFrom(int64(cp))
+		pokemon.SetCp(null.IntFrom(int64(cp)))
 	} else {
 		log.Warnf("Pokemon %d %d CP unset due to error %s", pokemon.Id, displayPokemon, err)
 	}

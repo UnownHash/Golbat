@@ -118,7 +118,7 @@ func GetPokemonInArea3(retrieveParameters ApiPokemonScan3) *PokemonScan3Result {
 				continue
 			}
 
-			apiPokemon := buildApiPokemonResult(&pokemon)
+			apiPokemon := buildApiPokemonResult(pokemon)
 
 			results = append(results, &apiPokemon)
 		}

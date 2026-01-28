@@ -230,7 +230,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
 			pokemon := pokemonCacheEntry.Value()
 
-			apiPokemon := buildApiPokemonResult(&pokemon)
+			apiPokemon := buildApiPokemonResult(pokemon)
 			results = append(results, &apiPokemon)
 		}
 	}

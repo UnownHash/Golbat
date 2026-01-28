@@ -71,57 +71,60 @@ type Pokestop struct {
 	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 
-	// Old values for webhook comparison (populated when loading from cache/DB)
-	oldQuestType            null.Int    `db:"-" json:"-"`
-	oldAlternativeQuestType null.Int    `db:"-" json:"-"`
-	oldLureExpireTimestamp  null.Int    `db:"-" json:"-"`
-	oldLureId               int16       `db:"-" json:"-"`
-	oldPowerUpEndTimestamp  null.Int    `db:"-" json:"-"`
-	oldName                 null.String `db:"-" json:"-"`
-	oldUrl                  null.String `db:"-" json:"-"`
-	oldDescription          null.String `db:"-" json:"-"`
-	oldLat                  float64     `db:"-" json:"-"`
-	oldLon                  float64     `db:"-" json:"-"`
-
-	//`id` varchar(35) NOT NULL,
-	//`lat` double(18,14) NOT NULL,
-	//`lon` double(18,14) NOT NULL,
-	//`name` varchar(128) DEFAULT NULL,
-	//`url` varchar(200) DEFAULT NULL,
-	//`lure_expire_timestamp` int unsigned DEFAULT NULL,
-	//`last_modified_timestamp` int unsigned DEFAULT NULL,
-	//`updated` int unsigned NOT NULL,
-	//`enabled` tinyint unsigned DEFAULT NULL,
-	//`quest_type` int unsigned DEFAULT NULL,
-	//`quest_timestamp` int unsigned DEFAULT NULL,
-	//`quest_target` smallint unsigned DEFAULT NULL,
-	//`quest_conditions` text,
-	//`quest_rewards` text,
-	//`quest_template` varchar(100) DEFAULT NULL,
-	//`quest_title` varchar(100) DEFAULT NULL,
-	//`quest_reward_type` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].type'),_utf8mb4'$[0]')) VIRTUAL,
-	//`quest_item_id` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.item_id'),_utf8mb4'$[0]')) VIRTUAL,
-	//`quest_reward_amount` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.amount'),_utf8mb4'$[0]')) VIRTUAL,
-	//`cell_id` bigint unsigned DEFAULT NULL,
-	//`deleted` tinyint unsigned NOT NULL DEFAULT '0',
-	//`lure_id` smallint DEFAULT '0',
-	//`first_seen_timestamp` int unsigned NOT NULL,
-	//`sponsor_id` smallint unsigned DEFAULT NULL,
-	//`partner_id` varchar(35) DEFAULT NULL,
-	//`quest_pokemon_id` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.pokemon_id'),_utf8mb4'$[0]')) VIRTUAL,
-	//`ar_scan_eligible` tinyint unsigned DEFAULT NULL,
-	//`power_up_level` smallint unsigned DEFAULT NULL,
-	//`power_up_points` int unsigned DEFAULT NULL,
-	//`power_up_end_timestamp` int unsigned DEFAULT NULL,
-	//`alternative_quest_type` int unsigned DEFAULT NULL,
-	//`alternative_quest_timestamp` int unsigned DEFAULT NULL,
-	//`alternative_quest_target` smallint unsigned DEFAULT NULL,
-	//`alternative_quest_conditions` text,
-	//`alternative_quest_rewards` text,
-	//`alternative_quest_template` varchar(100) DEFAULT NULL,
-	//`alternative_quest_title` varchar(100) DEFAULT NULL,
-
+	oldValues PokestopOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
+
+// PokestopOldValues holds old field values for webhook comparison (populated when loading from cache/DB)
+type PokestopOldValues struct {
+	QuestType            null.Int
+	AlternativeQuestType null.Int
+	LureExpireTimestamp  null.Int
+	LureId               int16
+	PowerUpEndTimestamp  null.Int
+	Name                 null.String
+	Url                  null.String
+	Description          null.String
+	Lat                  float64
+	Lon                  float64
+}
+
+//`id` varchar(35) NOT NULL,
+//`lat` double(18,14) NOT NULL,
+//`lon` double(18,14) NOT NULL,
+//`name` varchar(128) DEFAULT NULL,
+//`url` varchar(200) DEFAULT NULL,
+//`lure_expire_timestamp` int unsigned DEFAULT NULL,
+//`last_modified_timestamp` int unsigned DEFAULT NULL,
+//`updated` int unsigned NOT NULL,
+//`enabled` tinyint unsigned DEFAULT NULL,
+//`quest_type` int unsigned DEFAULT NULL,
+//`quest_timestamp` int unsigned DEFAULT NULL,
+//`quest_target` smallint unsigned DEFAULT NULL,
+//`quest_conditions` text,
+//`quest_rewards` text,
+//`quest_template` varchar(100) DEFAULT NULL,
+//`quest_title` varchar(100) DEFAULT NULL,
+//`quest_reward_type` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].type'),_utf8mb4'$[0]')) VIRTUAL,
+//`quest_item_id` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.item_id'),_utf8mb4'$[0]')) VIRTUAL,
+//`quest_reward_amount` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.amount'),_utf8mb4'$[0]')) VIRTUAL,
+//`cell_id` bigint unsigned DEFAULT NULL,
+//`deleted` tinyint unsigned NOT NULL DEFAULT '0',
+//`lure_id` smallint DEFAULT '0',
+//`first_seen_timestamp` int unsigned NOT NULL,
+//`sponsor_id` smallint unsigned DEFAULT NULL,
+//`partner_id` varchar(35) DEFAULT NULL,
+//`quest_pokemon_id` smallint unsigned GENERATED ALWAYS AS (json_extract(json_extract(`quest_rewards`,_utf8mb4'$[*].info.pokemon_id'),_utf8mb4'$[0]')) VIRTUAL,
+//`ar_scan_eligible` tinyint unsigned DEFAULT NULL,
+//`power_up_level` smallint unsigned DEFAULT NULL,
+//`power_up_points` int unsigned DEFAULT NULL,
+//`power_up_end_timestamp` int unsigned DEFAULT NULL,
+//`alternative_quest_type` int unsigned DEFAULT NULL,
+//`alternative_quest_timestamp` int unsigned DEFAULT NULL,
+//`alternative_quest_target` smallint unsigned DEFAULT NULL,
+//`alternative_quest_conditions` text,
+//`alternative_quest_rewards` text,
+//`alternative_quest_template` varchar(100) DEFAULT NULL,
+//`alternative_quest_title` varchar(100) DEFAULT NULL,
 
 // IsDirty returns true if any field has been modified
 func (p *Pokestop) IsDirty() bool {
@@ -141,16 +144,18 @@ func (p *Pokestop) IsNewRecord() bool {
 // snapshotOldValues saves current values for webhook comparison
 // Call this after loading from cache/DB but before modifications
 func (p *Pokestop) snapshotOldValues() {
-	p.oldQuestType = p.QuestType
-	p.oldAlternativeQuestType = p.AlternativeQuestType
-	p.oldLureExpireTimestamp = p.LureExpireTimestamp
-	p.oldLureId = p.LureId
-	p.oldPowerUpEndTimestamp = p.PowerUpEndTimestamp
-	p.oldName = p.Name
-	p.oldUrl = p.Url
-	p.oldDescription = p.Description
-	p.oldLat = p.Lat
-	p.oldLon = p.Lon
+	p.oldValues = PokestopOldValues{
+		QuestType:            p.QuestType,
+		AlternativeQuestType: p.AlternativeQuestType,
+		LureExpireTimestamp:  p.LureExpireTimestamp,
+		LureId:               p.LureId,
+		PowerUpEndTimestamp:  p.PowerUpEndTimestamp,
+		Name:                 p.Name,
+		Url:                  p.Url,
+		Description:          p.Description,
+		Lat:                  p.Lat,
+		Lon:                  p.Lon,
+	}
 }
 
 // --- Set methods with dirty tracking ---
@@ -958,10 +963,10 @@ func createPokestopFortWebhooks(stop *Pokestop) {
 		oldFort := &FortWebhook{
 			Type:        POKESTOP.String(),
 			Id:          stop.Id,
-			Name:        stop.oldName.Ptr(),
-			ImageUrl:    stop.oldUrl.Ptr(),
-			Description: stop.oldDescription.Ptr(),
-			Location:    Location{Latitude: stop.oldLat, Longitude: stop.oldLon},
+			Name:        stop.oldValues.Name.Ptr(),
+			ImageUrl:    stop.oldValues.Url.Ptr(),
+			Description: stop.oldValues.Description.Ptr(),
+			Location:    Location{Latitude: stop.oldValues.Lat, Longitude: stop.oldValues.Lon},
 		}
 		CreateFortWebHooks(oldFort, fort, EDIT)
 	}
@@ -971,7 +976,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 
 	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
 
-	if stop.AlternativeQuestType.Valid && (stop.newRecord || stop.AlternativeQuestType != stop.oldAlternativeQuestType) {
+	if stop.AlternativeQuestType.Valid && (stop.newRecord || stop.AlternativeQuestType != stop.oldValues.AlternativeQuestType) {
 		questHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
@@ -997,7 +1002,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
 
-	if stop.QuestType.Valid && (stop.newRecord || stop.QuestType != stop.oldQuestType) {
+	if stop.QuestType.Valid && (stop.newRecord || stop.QuestType != stop.oldValues.QuestType) {
 		questHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,
@@ -1022,7 +1027,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
-	if (stop.newRecord && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (!stop.newRecord && ((stop.LureExpireTimestamp != stop.oldLureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != stop.oldPowerUpEndTimestamp)) {
+	if (stop.newRecord && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (!stop.newRecord && ((stop.LureExpireTimestamp != stop.oldValues.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != stop.oldValues.PowerUpEndTimestamp)) {
 		pokestopHook := map[string]any{
 			"pokestop_id": stop.Id,
 			"latitude":    stop.Lat,

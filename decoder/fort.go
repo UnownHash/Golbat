@@ -217,28 +217,28 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 // copySharedFieldsFrom copies shared fields from a pokestop to a gym during conversion
 func (gym *Gym) copySharedFieldsFrom(pokestop *Pokestop) {
 	if pokestop.Name.Valid && !gym.Name.Valid {
-		gym.Name = pokestop.Name
+		gym.SetName(pokestop.Name)
 	}
 	if pokestop.Url.Valid && !gym.Url.Valid {
-		gym.Url = pokestop.Url
+		gym.SetUrl(pokestop.Url)
 	}
 	if pokestop.Description.Valid && !gym.Description.Valid {
-		gym.Description = pokestop.Description
+		gym.SetDescription(pokestop.Description)
 	}
 	if pokestop.PartnerId.Valid && !gym.PartnerId.Valid {
-		gym.PartnerId = pokestop.PartnerId
+		gym.SetPartnerId(pokestop.PartnerId)
 	}
 	if pokestop.ArScanEligible.Valid && !gym.ArScanEligible.Valid {
-		gym.ArScanEligible = pokestop.ArScanEligible
+		gym.SetArScanEligible(pokestop.ArScanEligible)
 	}
 	if pokestop.PowerUpLevel.Valid && !gym.PowerUpLevel.Valid {
-		gym.PowerUpLevel = pokestop.PowerUpLevel
+		gym.SetPowerUpLevel(pokestop.PowerUpLevel)
 	}
 	if pokestop.PowerUpPoints.Valid && !gym.PowerUpPoints.Valid {
-		gym.PowerUpPoints = pokestop.PowerUpPoints
+		gym.SetPowerUpPoints(pokestop.PowerUpPoints)
 	}
 	if pokestop.PowerUpEndTimestamp.Valid && !gym.PowerUpEndTimestamp.Valid {
-		gym.PowerUpEndTimestamp = pokestop.PowerUpEndTimestamp
+		gym.SetPowerUpEndTimestamp(pokestop.PowerUpEndTimestamp)
 	}
 }
 

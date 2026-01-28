@@ -67,44 +67,66 @@ type Gym struct {
 	Description            null.String `db:"description" json:"description"`
 	Defenders              null.String `db:"defenders" json:"defenders"`
 	Rsvps                  null.String `db:"rsvps" json:"rsvps"`
-	//`id` varchar(35) NOT NULL,
-	//`lat` double(18,14) NOT NULL,
-	//`lon` double(18,14) NOT NULL,
-	//`name` varchar(128) DEFAULT NULL,
-	//`url` varchar(200) DEFAULT NULL,
-	//`last_modified_timestamp` int unsigned DEFAULT NULL,
-	//`raid_end_timestamp` int unsigned DEFAULT NULL,
-	//`raid_spawn_timestamp` int unsigned DEFAULT NULL,
-	//`raid_battle_timestamp` int unsigned DEFAULT NULL,
-	//`updated` int unsigned NOT NULL,
-	//`raid_pokemon_id` smallint unsigned DEFAULT NULL,
-	//`guarding_pokemon_id` smallint unsigned DEFAULT NULL,
-	//`available_slots` smallint unsigned DEFAULT NULL,
-	//`availble_slots` smallint unsigned GENERATED ALWAYS AS (`available_slots`) VIRTUAL,
-	//`team_id` tinyint unsigned DEFAULT NULL,
-	//`raid_level` tinyint unsigned DEFAULT NULL,
-	//`enabled` tinyint unsigned DEFAULT NULL,
-	//`ex_raid_eligible` tinyint unsigned DEFAULT NULL,
-	//`in_battle` tinyint unsigned DEFAULT NULL,
-	//`raid_pokemon_move_1` smallint unsigned DEFAULT NULL,
-	//`raid_pokemon_move_2` smallint unsigned DEFAULT NULL,
-	//`raid_pokemon_form` smallint unsigned DEFAULT NULL,
-	//`raid_pokemon_cp` int unsigned DEFAULT NULL,
-	//`raid_is_exclusive` tinyint unsigned DEFAULT NULL,
-	//`cell_id` bigint unsigned DEFAULT NULL,
-	//`deleted` tinyint unsigned NOT NULL DEFAULT '0',
-	//`total_cp` int unsigned DEFAULT NULL,
-	//`first_seen_timestamp` int unsigned NOT NULL,
-	//`raid_pokemon_gender` tinyint unsigned DEFAULT NULL,
-	//`sponsor_id` smallint unsigned DEFAULT NULL,
-	//`partner_id` varchar(35) DEFAULT NULL,
-	//`raid_pokemon_costume` smallint unsigned DEFAULT NULL,
-	//`raid_pokemon_evolution` tinyint unsigned DEFAULT NULL,
-	//`ar_scan_eligible` tinyint unsigned DEFAULT NULL,
-	//`power_up_level` smallint unsigned DEFAULT NULL,
-	//`power_up_points` int unsigned DEFAULT NULL,
-	//`power_up_end_timestamp` int unsigned DEFAULT NULL,
+
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+
+	oldValues GymOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
+
+// GymOldValues holds old field values for webhook comparison (populated when loading from cache/DB)
+type GymOldValues struct {
+	Name               null.String
+	Url                null.String
+	Description        null.String
+	Lat                float64
+	Lon                float64
+	TeamId             null.Int
+	AvailableSlots     null.Int
+	RaidLevel          null.Int
+	RaidPokemonId      null.Int
+	RaidSpawnTimestamp null.Int
+	Rsvps              null.String
+	InBattle           null.Int
+}
+
+//`id` varchar(35) NOT NULL,
+//`lat` double(18,14) NOT NULL,
+//`lon` double(18,14) NOT NULL,
+//`name` varchar(128) DEFAULT NULL,
+//`url` varchar(200) DEFAULT NULL,
+//`last_modified_timestamp` int unsigned DEFAULT NULL,
+//`raid_end_timestamp` int unsigned DEFAULT NULL,
+//`raid_spawn_timestamp` int unsigned DEFAULT NULL,
+//`raid_battle_timestamp` int unsigned DEFAULT NULL,
+//`updated` int unsigned NOT NULL,
+//`raid_pokemon_id` smallint unsigned DEFAULT NULL,
+//`guarding_pokemon_id` smallint unsigned DEFAULT NULL,
+//`available_slots` smallint unsigned DEFAULT NULL,
+//`availble_slots` smallint unsigned GENERATED ALWAYS AS (`available_slots`) VIRTUAL,
+//`team_id` tinyint unsigned DEFAULT NULL,
+//`raid_level` tinyint unsigned DEFAULT NULL,
+//`enabled` tinyint unsigned DEFAULT NULL,
+//`ex_raid_eligible` tinyint unsigned DEFAULT NULL,
+//`in_battle` tinyint unsigned DEFAULT NULL,
+//`raid_pokemon_move_1` smallint unsigned DEFAULT NULL,
+//`raid_pokemon_move_2` smallint unsigned DEFAULT NULL,
+//`raid_pokemon_form` smallint unsigned DEFAULT NULL,
+//`raid_pokemon_cp` int unsigned DEFAULT NULL,
+//`raid_is_exclusive` tinyint unsigned DEFAULT NULL,
+//`cell_id` bigint unsigned DEFAULT NULL,
+//`deleted` tinyint unsigned NOT NULL DEFAULT '0',
+//`total_cp` int unsigned DEFAULT NULL,
+//`first_seen_timestamp` int unsigned NOT NULL,
+//`raid_pokemon_gender` tinyint unsigned DEFAULT NULL,
+//`sponsor_id` smallint unsigned DEFAULT NULL,
+//`partner_id` varchar(35) DEFAULT NULL,
+//`raid_pokemon_costume` smallint unsigned DEFAULT NULL,
+//`raid_pokemon_evolution` tinyint unsigned DEFAULT NULL,
+//`ar_scan_eligible` tinyint unsigned DEFAULT NULL,
+//`power_up_level` smallint unsigned DEFAULT NULL,
+//`power_up_points` int unsigned DEFAULT NULL,
+//`power_up_end_timestamp` int unsigned DEFAULT NULL,
 
 //
 //SELECT CONCAT("'", GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR "', '"), "'") AS columns
@@ -115,11 +137,323 @@ type Gym struct {
 //FROM information_schema.columns
 //WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
+// IsDirty returns true if any field has been modified
+func (gym *Gym) IsDirty() bool {
+	return gym.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (gym *Gym) ClearDirty() {
+	gym.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (gym *Gym) IsNewRecord() bool {
+	return gym.newRecord
+}
+
+// snapshotOldValues saves current values for webhook comparison
+// Call this after loading from cache/DB but before modifications
+func (gym *Gym) snapshotOldValues() {
+	gym.oldValues = GymOldValues{
+		Name:               gym.Name,
+		Url:                gym.Url,
+		Description:        gym.Description,
+		Lat:                gym.Lat,
+		Lon:                gym.Lon,
+		TeamId:             gym.TeamId,
+		AvailableSlots:     gym.AvailableSlots,
+		RaidLevel:          gym.RaidLevel,
+		RaidPokemonId:      gym.RaidPokemonId,
+		RaidSpawnTimestamp: gym.RaidSpawnTimestamp,
+		Rsvps:              gym.Rsvps,
+		InBattle:           gym.InBattle,
+	}
+}
+
+// --- Set methods with dirty tracking ---
+
+func (gym *Gym) SetId(v string) {
+	if gym.Id != v {
+		gym.Id = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetLat(v float64) {
+	if !floatAlmostEqual(gym.Lat, v, floatTolerance) {
+		gym.Lat = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetLon(v float64) {
+	if !floatAlmostEqual(gym.Lon, v, floatTolerance) {
+		gym.Lon = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetName(v null.String) {
+	if gym.Name != v {
+		gym.Name = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetUrl(v null.String) {
+	if gym.Url != v {
+		gym.Url = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetLastModifiedTimestamp(v null.Int) {
+	if gym.LastModifiedTimestamp != v {
+		gym.LastModifiedTimestamp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidEndTimestamp(v null.Int) {
+	if gym.RaidEndTimestamp != v {
+		gym.RaidEndTimestamp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidSpawnTimestamp(v null.Int) {
+	if gym.RaidSpawnTimestamp != v {
+		gym.RaidSpawnTimestamp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidBattleTimestamp(v null.Int) {
+	if gym.RaidBattleTimestamp != v {
+		gym.RaidBattleTimestamp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonId(v null.Int) {
+	if gym.RaidPokemonId != v {
+		gym.RaidPokemonId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetGuardingPokemonId(v null.Int) {
+	if gym.GuardingPokemonId != v {
+		gym.GuardingPokemonId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetGuardingPokemonDisplay(v null.String) {
+	if gym.GuardingPokemonDisplay != v {
+		gym.GuardingPokemonDisplay = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetAvailableSlots(v null.Int) {
+	if gym.AvailableSlots != v {
+		gym.AvailableSlots = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetTeamId(v null.Int) {
+	if gym.TeamId != v {
+		gym.TeamId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidLevel(v null.Int) {
+	if gym.RaidLevel != v {
+		gym.RaidLevel = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetEnabled(v null.Int) {
+	if gym.Enabled != v {
+		gym.Enabled = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetExRaidEligible(v null.Int) {
+	if gym.ExRaidEligible != v {
+		gym.ExRaidEligible = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetInBattle(v null.Int) {
+	if gym.InBattle != v {
+		gym.InBattle = v
+		//Do not set to dirty, as don't trigger an update
+		//gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonMove1(v null.Int) {
+	if gym.RaidPokemonMove1 != v {
+		gym.RaidPokemonMove1 = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonMove2(v null.Int) {
+	if gym.RaidPokemonMove2 != v {
+		gym.RaidPokemonMove2 = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonForm(v null.Int) {
+	if gym.RaidPokemonForm != v {
+		gym.RaidPokemonForm = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonAlignment(v null.Int) {
+	if gym.RaidPokemonAlignment != v {
+		gym.RaidPokemonAlignment = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonCp(v null.Int) {
+	if gym.RaidPokemonCp != v {
+		gym.RaidPokemonCp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidIsExclusive(v null.Int) {
+	if gym.RaidIsExclusive != v {
+		gym.RaidIsExclusive = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetCellId(v null.Int) {
+	if gym.CellId != v {
+		gym.CellId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetDeleted(v bool) {
+	if gym.Deleted != v {
+		gym.Deleted = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetTotalCp(v null.Int) {
+	if gym.TotalCp != v {
+		gym.TotalCp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonGender(v null.Int) {
+	if gym.RaidPokemonGender != v {
+		gym.RaidPokemonGender = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetSponsorId(v null.Int) {
+	if gym.SponsorId != v {
+		gym.SponsorId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetPartnerId(v null.String) {
+	if gym.PartnerId != v {
+		gym.PartnerId = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonCostume(v null.Int) {
+	if gym.RaidPokemonCostume != v {
+		gym.RaidPokemonCostume = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonEvolution(v null.Int) {
+	if gym.RaidPokemonEvolution != v {
+		gym.RaidPokemonEvolution = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetArScanEligible(v null.Int) {
+	if gym.ArScanEligible != v {
+		gym.ArScanEligible = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetPowerUpLevel(v null.Int) {
+	if gym.PowerUpLevel != v {
+		gym.PowerUpLevel = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetPowerUpPoints(v null.Int) {
+	if gym.PowerUpPoints != v {
+		gym.PowerUpPoints = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetPowerUpEndTimestamp(v null.Int) {
+	if gym.PowerUpEndTimestamp != v {
+		gym.PowerUpEndTimestamp = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetDescription(v null.String) {
+	if gym.Description != v {
+		gym.Description = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetDefenders(v null.String) {
+	if gym.Defenders != v {
+		gym.Defenders = v
+		//Do not set to dirty, as don't trigger an update
+		//gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRsvps(v null.String) {
+	if gym.Rsvps != v {
+		gym.Rsvps = v
+		gym.dirty = true
+	}
+}
+
 func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
 	inMemoryGym := gymCache.Get(fortId)
 	if inMemoryGym != nil {
 		gym := inMemoryGym.Value()
-		return &gym, nil
+		gym.snapshotOldValues() // Snapshot for webhook comparison
+		return gym, nil
 	}
 	gym := Gym{}
 	err := db.GeneralDb.GetContext(ctx, &gym, "SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, guarding_pokemon_display, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description, defenders, rsvps FROM gym WHERE id = ?", fortId)
@@ -133,7 +467,8 @@ func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, er
 		return nil, err
 	}
 
-	gymCache.Set(fortId, gym, ttlcache.DefaultTTL)
+	gym.snapshotOldValues() // Snapshot for webhook comparison
+	gymCache.Set(fortId, &gym, ttlcache.DefaultTTL)
 	if config.Config.TestFortInMemory {
 		fortRtreeUpdateGymOnGet(&gym)
 	}
@@ -183,13 +518,13 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		Badge                 int    `json:"badge,omitempty"`
 		Background            *int64 `json:"background,omitempty"`
 	}
-	gym.Id = fortData.FortId
-	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
-	gym.Lon = fortData.Longitude //fmt.Sprintf("%f", fortData.Longitude)
-	gym.Enabled = null.IntFrom(util.BoolToInt[int64](fortData.Enabled))
-	gym.GuardingPokemonId = null.IntFrom(int64(fortData.GuardPokemonId))
+	gym.SetId(fortData.FortId)
+	gym.SetLat(fortData.Latitude)
+	gym.SetLon(fortData.Longitude)
+	gym.SetEnabled(null.IntFrom(util.BoolToInt[int64](fortData.Enabled)))
+	gym.SetGuardingPokemonId(null.IntFrom(int64(fortData.GuardPokemonId)))
 	if fortData.GuardPokemonDisplay == nil {
-		gym.GuardingPokemonDisplay = null.NewString("", false)
+		gym.SetGuardingPokemonDisplay(null.NewString("", false))
 	} else {
 		display, _ := json.Marshal(pokemonDisplay{
 			Form:                  int(fortData.GuardPokemonDisplay.Form),
@@ -202,90 +537,91 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 			Badge:                 int(fortData.GuardPokemonDisplay.PokemonBadge),
 			Background:            util.ExtractBackgroundFromDisplay(fortData.GuardPokemonDisplay),
 		})
-		gym.GuardingPokemonDisplay = null.StringFrom(string(display))
+		gym.SetGuardingPokemonDisplay(null.StringFrom(string(display)))
 	}
-	gym.TeamId = null.IntFrom(int64(fortData.Team))
+	gym.SetTeamId(null.IntFrom(int64(fortData.Team)))
 	if fortData.GymDisplay != nil {
-		gym.AvailableSlots = null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable))
+		gym.SetAvailableSlots(null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable)))
 	} else {
-		gym.AvailableSlots = null.IntFrom(6) // this may be an incorrect assumption
+		gym.SetAvailableSlots(null.IntFrom(6)) // this may be an incorrect assumption
 	}
-	gym.LastModifiedTimestamp = null.IntFrom(fortData.LastModifiedMs / 1000)
-	gym.ExRaidEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsExRaidEligible))
+	gym.SetLastModifiedTimestamp(null.IntFrom(fortData.LastModifiedMs / 1000))
+	gym.SetExRaidEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsExRaidEligible)))
 
 	if fortData.ImageUrl != "" {
-		gym.Url = null.StringFrom(fortData.ImageUrl)
+		gym.SetUrl(null.StringFrom(fortData.ImageUrl))
 	}
-	gym.InBattle = null.IntFrom(util.BoolToInt[int64](fortData.IsInBattle))
-	gym.ArScanEligible = null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible))
-	gym.PowerUpPoints = null.IntFrom(int64(fortData.PowerUpProgressPoints))
+	gym.SetInBattle(null.IntFrom(util.BoolToInt[int64](fortData.IsInBattle)))
+	gym.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible)))
+	gym.SetPowerUpPoints(null.IntFrom(int64(fortData.PowerUpProgressPoints)))
 
-	gym.PowerUpLevel, gym.PowerUpEndTimestamp = calculatePowerUpPoints(fortData)
+	powerUpLevel, powerUpEndTimestamp := calculatePowerUpPoints(fortData)
+	gym.SetPowerUpLevel(powerUpLevel)
+	gym.SetPowerUpEndTimestamp(powerUpEndTimestamp)
 
 	if fortData.PartnerId == "" {
-		gym.PartnerId = null.NewString("", false)
+		gym.SetPartnerId(null.NewString("", false))
 	} else {
-		gym.PartnerId = null.StringFrom(fortData.PartnerId)
+		gym.SetPartnerId(null.StringFrom(fortData.PartnerId))
 	}
 
 	if fortData.ImageUrl != "" {
-		gym.Url = null.StringFrom(fortData.ImageUrl)
-
+		gym.SetUrl(null.StringFrom(fortData.ImageUrl))
 	}
 	if fortData.Team == 0 { // check!!
-		gym.TotalCp = null.IntFrom(0)
+		gym.SetTotalCp(null.IntFrom(0))
 	} else {
 		if fortData.GymDisplay != nil {
 			totalCp := int64(fortData.GymDisplay.TotalGymCp)
 			if gym.TotalCp.Int64-totalCp > 100 || totalCp-gym.TotalCp.Int64 > 100 {
-				gym.TotalCp = null.IntFrom(totalCp)
+				gym.SetTotalCp(null.IntFrom(totalCp))
 			}
 		} else {
-			gym.TotalCp = null.IntFrom(0)
+			gym.SetTotalCp(null.IntFrom(0))
 		}
 	}
 
 	if fortData.RaidInfo != nil {
-		gym.RaidEndTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000)
-		gym.RaidSpawnTimestamp = null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000)
+		gym.SetRaidEndTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000))
+		gym.SetRaidSpawnTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000))
 		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs) / 1000
 
 		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {
 			// We are reporting a new raid, clear rsvp data
-			gym.Rsvps = null.NewString("", false)
+			gym.SetRsvps(null.NewString("", false))
 		}
-		gym.RaidBattleTimestamp = null.IntFrom(raidBattleTimestamp)
+		gym.SetRaidBattleTimestamp(null.IntFrom(raidBattleTimestamp))
 
-		gym.RaidLevel = null.IntFrom(int64(fortData.RaidInfo.RaidLevel))
+		gym.SetRaidLevel(null.IntFrom(int64(fortData.RaidInfo.RaidLevel)))
 		if fortData.RaidInfo.RaidPokemon != nil {
-			gym.RaidPokemonId = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId))
-			gym.RaidPokemonMove1 = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move1))
-			gym.RaidPokemonMove2 = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move2))
-			gym.RaidPokemonForm = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Form))
-			gym.RaidPokemonAlignment = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Alignment))
-			gym.RaidPokemonCp = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Cp))
-			gym.RaidPokemonGender = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Gender))
-			gym.RaidPokemonCostume = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Costume))
-			gym.RaidPokemonEvolution = null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.CurrentTempEvolution))
+			gym.SetRaidPokemonId(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId)))
+			gym.SetRaidPokemonMove1(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move1)))
+			gym.SetRaidPokemonMove2(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move2)))
+			gym.SetRaidPokemonForm(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Form)))
+			gym.SetRaidPokemonAlignment(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Alignment)))
+			gym.SetRaidPokemonCp(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Cp)))
+			gym.SetRaidPokemonGender(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Gender)))
+			gym.SetRaidPokemonCostume(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Costume)))
+			gym.SetRaidPokemonEvolution(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.CurrentTempEvolution)))
 		} else {
-			gym.RaidPokemonId = null.IntFrom(0)
-			gym.RaidPokemonMove1 = null.IntFrom(0)
-			gym.RaidPokemonMove2 = null.IntFrom(0)
-			gym.RaidPokemonForm = null.IntFrom(0)
-			gym.RaidPokemonAlignment = null.IntFrom(0)
-			gym.RaidPokemonCp = null.IntFrom(0)
-			gym.RaidPokemonGender = null.IntFrom(0)
-			gym.RaidPokemonCostume = null.IntFrom(0)
-			gym.RaidPokemonEvolution = null.IntFrom(0)
+			gym.SetRaidPokemonId(null.IntFrom(0))
+			gym.SetRaidPokemonMove1(null.IntFrom(0))
+			gym.SetRaidPokemonMove2(null.IntFrom(0))
+			gym.SetRaidPokemonForm(null.IntFrom(0))
+			gym.SetRaidPokemonAlignment(null.IntFrom(0))
+			gym.SetRaidPokemonCp(null.IntFrom(0))
+			gym.SetRaidPokemonGender(null.IntFrom(0))
+			gym.SetRaidPokemonCostume(null.IntFrom(0))
+			gym.SetRaidPokemonEvolution(null.IntFrom(0))
 		}
 
-		gym.RaidIsExclusive = null.IntFrom(0) //null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
+		gym.SetRaidIsExclusive(null.IntFrom(0)) //null.IntFrom(util.BoolToInt[int64](fortData.RaidInfo.IsExclusive))
 	}
 
-	gym.CellId = null.IntFrom(int64(cellId))
+	gym.SetCellId(null.IntFrom(int64(cellId)))
 
 	if gym.Deleted {
-		gym.Deleted = false
+		gym.SetDeleted(false)
 		log.Warnf("Cleared Gym with id '%s' is found again in GMO, therefore un-deleted", gym.Id)
 		// Restore in fort tracker if enabled
 		if fortTracker != nil {
@@ -297,32 +633,32 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 }
 
 func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym {
-	gym.Id = fortData.Id
-	gym.Lat = fortData.Latitude  //fmt.Sprintf("%f", fortData.Latitude)
-	gym.Lon = fortData.Longitude //fmt.Sprintf("%f", fortData.Longitude)
+	gym.SetId(fortData.Id)
+	gym.SetLat(fortData.Latitude)
+	gym.SetLon(fortData.Longitude)
 	if len(fortData.ImageUrl) > 0 {
-		gym.Url = null.StringFrom(fortData.ImageUrl[0])
+		gym.SetUrl(null.StringFrom(fortData.ImageUrl[0]))
 	}
-	gym.Name = null.StringFrom(fortData.Name)
+	gym.SetName(null.StringFrom(fortData.Name))
 
 	return gym
 }
 
 func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *Gym {
-	gym.Id = gymData.GymStatusAndDefenders.PokemonFortProto.FortId
-	gym.Lat = gymData.GymStatusAndDefenders.PokemonFortProto.Latitude
-	gym.Lon = gymData.GymStatusAndDefenders.PokemonFortProto.Longitude
+	gym.SetId(gymData.GymStatusAndDefenders.PokemonFortProto.FortId)
+	gym.SetLat(gymData.GymStatusAndDefenders.PokemonFortProto.Latitude)
+	gym.SetLon(gymData.GymStatusAndDefenders.PokemonFortProto.Longitude)
 
 	// This will have gym defenders in it...
 	if len(gymData.Url) > 0 {
-		gym.Url = null.StringFrom(gymData.Url)
+		gym.SetUrl(null.StringFrom(gymData.Url))
 	}
-	gym.Name = null.StringFrom(gymData.Name)
+	gym.SetName(null.StringFrom(gymData.Name))
 
 	if gymData.Description == "" {
-		gym.Description = null.NewString("", false)
+		gym.SetDescription(null.NewString("", false))
 	} else {
-		gym.Description = null.StringFrom(gymData.Description)
+		gym.SetDescription(null.StringFrom(gymData.Description))
 	}
 
 	type pokemonGymDefender struct {
@@ -377,22 +713,22 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		defenders = append(defenders, defender)
 	}
 	bDefenders, _ := json.Marshal(defenders)
-	gym.Defenders = null.StringFrom(string(bDefenders))
+	gym.SetDefenders(null.StringFrom(string(bDefenders)))
 	//	log.Debugf("Gym %s defenders %s ", gym.Id, string(bDefenders))
 
 	return gym
 }
 
 func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Gym {
-	gym.Id = fortData.Id
-	gym.Lat = fortData.Latitude
-	gym.Lon = fortData.Longitude
+	gym.SetId(fortData.Id)
+	gym.SetLat(fortData.Latitude)
+	gym.SetLon(fortData.Longitude)
 
 	if len(fortData.Image) > 0 {
-		gym.Url = null.StringFrom(fortData.Image[0].Url)
+		gym.SetUrl(null.StringFrom(fortData.Image[0].Url))
 	}
 	if !skipName {
-		gym.Name = null.StringFrom(fortData.Name)
+		gym.SetName(null.StringFrom(fortData.Name))
 	}
 
 	if gym.Deleted {
@@ -422,14 +758,14 @@ func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gy
 	}
 
 	if len(timeslots) == 0 {
-		gym.Rsvps = null.NewString("", false)
+		gym.SetRsvps(null.NewString("", false))
 	} else {
 		slices.SortFunc(timeslots, func(a, b rsvpTimeslot) int {
 			return cmp.Compare(a.Timeslot, b.Timeslot)
 		})
 
 		bRsvps, _ := json.Marshal(timeslots)
-		gym.Rsvps = null.StringFrom(string(bRsvps))
+		gym.SetRsvps(null.StringFrom(string(bRsvps)))
 	}
 
 	return gym
@@ -524,19 +860,27 @@ type GymDetailsWebhook struct {
 	//"ar_scan_eligible": arScanEligible ?? 0
 }
 
-func createGymFortWebhooks(oldGym *Gym, gym *Gym) {
+func createGymFortWebhooks(gym *Gym) {
 	fort := InitWebHookFortFromGym(gym)
-	oldFort := InitWebHookFortFromGym(oldGym)
-	if oldGym == nil {
-		CreateFortWebHooks(oldFort, fort, NEW)
+	if gym.newRecord {
+		CreateFortWebHooks(nil, fort, NEW)
 	} else {
+		// Build old fort from saved old values
+		oldFort := &FortWebhook{
+			Type:        GYM.String(),
+			Id:          gym.Id,
+			Name:        gym.oldValues.Name.Ptr(),
+			ImageUrl:    gym.oldValues.Url.Ptr(),
+			Description: gym.oldValues.Description.Ptr(),
+			Location:    Location{Latitude: gym.oldValues.Lat, Longitude: gym.oldValues.Lon},
+		}
 		CreateFortWebHooks(oldFort, fort, EDIT)
 	}
 }
 
-func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
-	if oldGym == nil ||
-		(oldGym.AvailableSlots != gym.AvailableSlots || oldGym.TeamId != gym.TeamId || oldGym.InBattle != gym.InBattle) {
+func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
+	if gym.newRecord ||
+		(gym.oldValues.AvailableSlots != gym.AvailableSlots || gym.oldValues.TeamId != gym.TeamId || gym.oldValues.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
 			Id:             gym.Id,
 			Name:           gym.Name.ValueOrZero(),
@@ -567,9 +911,9 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 	}
 
 	if gym.RaidSpawnTimestamp.ValueOrZero() > 0 &&
-		(oldGym == nil || oldGym.RaidLevel != gym.RaidLevel ||
-			oldGym.RaidPokemonId != gym.RaidPokemonId ||
-			oldGym.RaidSpawnTimestamp != gym.RaidSpawnTimestamp || oldGym.Rsvps != gym.Rsvps) {
+		(gym.newRecord || gym.oldValues.RaidLevel != gym.RaidLevel ||
+			gym.oldValues.RaidPokemonId != gym.RaidPokemonId ||
+			gym.oldValues.RaidSpawnTimestamp != gym.RaidSpawnTimestamp || gym.oldValues.Rsvps != gym.Rsvps) {
 		raidBattleTime := gym.RaidBattleTimestamp.ValueOrZero()
 		raidEndTime := gym.RaidEndTimestamp.ValueOrZero()
 		now := time.Now().Unix()
@@ -626,30 +970,16 @@ func createGymWebhooks(oldGym *Gym, gym *Gym, areas []geo.AreaName) {
 }
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
-	oldGym, _ := GetGymRecord(ctx, db, gym.Id)
-
 	now := time.Now().Unix()
-	if oldGym != nil && !hasChangesGym(oldGym, gym) {
-		if oldGym.Updated > now-900 {
-			// if a gym is unchanged, and we are within 15 minutes don't make any changes
-			// however, gym battle toggle a chance to trigger a web hook and make sure we
-			// save defender changes to internal cache
-
-			if hasInternalChangesGym(oldGym, gym) {
-				areas := MatchStatsGeofence(gym.Lat, gym.Lon)
-				createGymWebhooks(oldGym, gym, areas)
-
-				gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
-			}
-
+	if !gym.IsNewRecord() && !gym.IsDirty() {
+		if gym.Updated > now-900 {
+			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
 			return
 		}
 	}
-
 	gym.Updated = now
 
-	//log.Traceln(cmp.Diff(oldGym, gym))
-	if oldGym == nil {
+	if gym.IsNewRecord() {
 		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
@@ -710,11 +1040,13 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		_, _ = res, err
 	}
 
-	gymCache.Set(gym.Id, *gym, ttlcache.DefaultTTL)
+	gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
 	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
-	createGymWebhooks(oldGym, gym, areas)
-	createGymFortWebhooks(oldGym, gym)
-	updateRaidStats(oldGym, gym, areas)
+	createGymWebhooks(gym, areas)
+	createGymFortWebhooks(gym)
+	updateRaidStats(gym, areas)
+	gym.newRecord = false // After saving, it's no longer a new record
+	gym.ClearDirty()
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
@@ -738,7 +1070,7 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 	}
 
 	if gym == nil {
-		gym = &Gym{}
+		gym = &Gym{newRecord: true}
 	}
 	gym.updateGymFromFortProto(fort)
 
@@ -759,7 +1091,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 	}
 
 	if gym == nil {
-		gym = &Gym{}
+		gym = &Gym{newRecord: true}
 	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 
@@ -825,7 +1157,7 @@ func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
 	}
 
 	if gym.Rsvps.Valid {
-		gym.Rsvps = null.NewString("", false)
+		gym.SetRsvps(null.NewString("", false))
 
 		saveGymRecord(ctx, db, gym)
 	}
