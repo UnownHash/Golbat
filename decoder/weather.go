@@ -210,6 +210,7 @@ func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*W
 
 	weather.UpdatedMs *= 1000
 	weather.snapshotOldValues()
+	weatherCache.Set(weatherId, &weather, ttlcache.DefaultTTL)
 	return &weather, nil
 }
 
