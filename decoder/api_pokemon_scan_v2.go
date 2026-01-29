@@ -110,7 +110,7 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 				continue
 			}
 
-			apiPokemon := buildApiPokemonResult(&pokemon)
+			apiPokemon := buildApiPokemonResult(pokemon)
 
 			results = append(results, &apiPokemon)
 		}

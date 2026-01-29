@@ -203,7 +203,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	pokemonLocked := 0
 	pokemonUpdated := 0
 	pokemonCpUpdated := 0
-	var pokemon Pokemon
+	var pokemon *Pokemon
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
 		if !weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(min[1], min[0]))) {
 			return true
@@ -237,7 +237,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 					})
-					savePokemonRecordAsAtTime(ctx, db, &pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, timestamp)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, timestamp)
 					pokemonUpdated++
 					if pokemon.Cp.Valid {
 						pokemonCpUpdated++

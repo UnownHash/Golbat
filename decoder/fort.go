@@ -27,6 +27,13 @@ type FortWebhook struct {
 	Location    Location `json:"location"`
 }
 
+type FortChangeWebhook struct {
+	ChangeType string       `json:"change_type"`
+	EditTypes  []string     `json:"edit_types,omitempty"`
+	Old        *FortWebhook `json:"old,omitempty"`
+	New        *FortWebhook `json:"new,omitempty"`
+}
+
 type FortChange string
 type FortType string
 
@@ -129,17 +136,17 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	if change == NEW {
 		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
-		hook := map[string]interface{}{
-			"change_type": change.String(),
-			"new":         new,
+		hook := FortChangeWebhook{
+			ChangeType: change.String(),
+			New:        new,
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "addition")
 	} else if change == REMOVAL {
 		areas := MatchStatsGeofence(old.Location.Latitude, old.Location.Longitude)
-		hook := map[string]interface{}{
-			"change_type": change.String(),
-			"old":         old,
+		hook := FortChangeWebhook{
+			ChangeType: change.String(),
+			Old:        old,
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "removal")
@@ -181,11 +188,11 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			editTypes = append(editTypes, "location")
 		}
 		if len(editTypes) > 0 {
-			hook := map[string]interface{}{
-				"change_type": change.String(),
-				"edit_types":  editTypes,
-				"old":         old,
-				"new":         new,
+			hook := FortChangeWebhook{
+				ChangeType: change.String(),
+				EditTypes:  editTypes,
+				Old:        old,
+				New:        new,
 			}
 			webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 			statsCollector.UpdateFortCount(areas, new.Type, "edit")
@@ -217,55 +224,55 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 // copySharedFieldsFrom copies shared fields from a pokestop to a gym during conversion
 func (gym *Gym) copySharedFieldsFrom(pokestop *Pokestop) {
 	if pokestop.Name.Valid && !gym.Name.Valid {
-		gym.Name = pokestop.Name
+		gym.SetName(pokestop.Name)
 	}
 	if pokestop.Url.Valid && !gym.Url.Valid {
-		gym.Url = pokestop.Url
+		gym.SetUrl(pokestop.Url)
 	}
 	if pokestop.Description.Valid && !gym.Description.Valid {
-		gym.Description = pokestop.Description
+		gym.SetDescription(pokestop.Description)
 	}
 	if pokestop.PartnerId.Valid && !gym.PartnerId.Valid {
-		gym.PartnerId = pokestop.PartnerId
+		gym.SetPartnerId(pokestop.PartnerId)
 	}
 	if pokestop.ArScanEligible.Valid && !gym.ArScanEligible.Valid {
-		gym.ArScanEligible = pokestop.ArScanEligible
+		gym.SetArScanEligible(pokestop.ArScanEligible)
 	}
 	if pokestop.PowerUpLevel.Valid && !gym.PowerUpLevel.Valid {
-		gym.PowerUpLevel = pokestop.PowerUpLevel
+		gym.SetPowerUpLevel(pokestop.PowerUpLevel)
 	}
 	if pokestop.PowerUpPoints.Valid && !gym.PowerUpPoints.Valid {
-		gym.PowerUpPoints = pokestop.PowerUpPoints
+		gym.SetPowerUpPoints(pokestop.PowerUpPoints)
 	}
 	if pokestop.PowerUpEndTimestamp.Valid && !gym.PowerUpEndTimestamp.Valid {
-		gym.PowerUpEndTimestamp = pokestop.PowerUpEndTimestamp
+		gym.SetPowerUpEndTimestamp(pokestop.PowerUpEndTimestamp)
 	}
 }
 
 // copySharedFieldsFrom copies shared fields from a gym to a pokestop during conversion
 func (stop *Pokestop) copySharedFieldsFrom(gym *Gym) {
 	if gym.Name.Valid && !stop.Name.Valid {
-		stop.Name = gym.Name
+		stop.SetName(gym.Name)
 	}
 	if gym.Url.Valid && !stop.Url.Valid {
-		stop.Url = gym.Url
+		stop.SetUrl(gym.Url)
 	}
 	if gym.Description.Valid && !stop.Description.Valid {
-		stop.Description = gym.Description
+		stop.SetDescription(gym.Description)
 	}
 	if gym.PartnerId.Valid && !stop.PartnerId.Valid {
-		stop.PartnerId = gym.PartnerId
+		stop.SetPartnerId(gym.PartnerId)
 	}
 	if gym.ArScanEligible.Valid && !stop.ArScanEligible.Valid {
-		stop.ArScanEligible = gym.ArScanEligible
+		stop.SetArScanEligible(gym.ArScanEligible)
 	}
 	if gym.PowerUpLevel.Valid && !stop.PowerUpLevel.Valid {
-		stop.PowerUpLevel = gym.PowerUpLevel
+		stop.SetPowerUpLevel(gym.PowerUpLevel)
 	}
 	if gym.PowerUpPoints.Valid && !stop.PowerUpPoints.Valid {
-		stop.PowerUpPoints = gym.PowerUpPoints
+		stop.SetPowerUpPoints(gym.PowerUpPoints)
 	}
 	if gym.PowerUpEndTimestamp.Valid && !stop.PowerUpEndTimestamp.Valid {
-		stop.PowerUpEndTimestamp = gym.PowerUpEndTimestamp
+		stop.SetPowerUpEndTimestamp(gym.PowerUpEndTimestamp)
 	}
 }

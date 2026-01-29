@@ -58,29 +58,29 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *ttlcache.Cache[string, Pokestop]
-var gymCache *ttlcache.Cache[string, Gym]
-var stationCache *ttlcache.Cache[string, Station]
-var tappableCache *ttlcache.Cache[uint64, Tappable]
-var weatherCache *ttlcache.Cache[int64, Weather]
+var pokestopCache *ShardedCache[string, *Pokestop]
+var gymCache *ttlcache.Cache[string, *Gym]
+var stationCache *ttlcache.Cache[string, *Station]
+var tappableCache *ttlcache.Cache[uint64, *Tappable]
+var weatherCache *ttlcache.Cache[int64, *Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
-var s2CellCache *ttlcache.Cache[uint64, S2Cell]
-var spawnpointCache *ttlcache.Cache[int64, Spawnpoint]
-var pokemonCache []*ttlcache.Cache[uint64, Pokemon]
-var incidentCache *ttlcache.Cache[string, Incident]
-var playerCache *ttlcache.Cache[string, Player]
-var routeCache *ttlcache.Cache[string, Route]
+var s2CellCache *ttlcache.Cache[uint64, *S2Cell]
+var spawnpointCache *ShardedCache[int64, *Spawnpoint]
+var pokemonCache *ShardedCache[uint64, *Pokemon]
+var incidentCache *ttlcache.Cache[string, *Incident]
+var playerCache *ttlcache.Cache[string, *Player]
+var routeCache *ttlcache.Cache[string, *Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
-var gymStripedMutex = stripedmutex.New(128)
-var pokestopStripedMutex = stripedmutex.New(128)
-var stationStripedMutex = stripedmutex.New(128)
+var gymStripedMutex = stripedmutex.New(1103)
+var pokestopStripedMutex = stripedmutex.New(1103)
+var stationStripedMutex = stripedmutex.New(1103)
 var tappableStripedMutex = intstripedmutex.New(563)
-var incidentStripedMutex = stripedmutex.New(128)
+var incidentStripedMutex = stripedmutex.New(157)
 var pokemonStripedMutex = intstripedmutex.New(1103)
 var weatherStripedMutex = intstripedmutex.New(157)
-var routeStripedMutex = stripedmutex.New(128)
+var routeStripedMutex = stripedmutex.New(157)
 
 var ProactiveIVSwitchSem chan bool
 
@@ -101,45 +101,43 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
-func getPokemonCache(key uint64) *ttlcache.Cache[uint64, Pokemon] {
-	return pokemonCache[key%uint64(len(pokemonCache))]
+func setPokemonCache(key uint64, value *Pokemon, ttl time.Duration) {
+	pokemonCache.Set(key, value, ttl)
 }
 
-func setPokemonCache(key uint64, value Pokemon, ttl time.Duration) {
-	getPokemonCache(key).Set(key, value, ttl)
-}
-
-func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, Pokemon] {
-	return getPokemonCache(key).Get(key)
+func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, *Pokemon] {
+	return pokemonCache.Get(key)
 }
 
 func deletePokemonFromCache(key uint64) {
-	getPokemonCache(key).Delete(key)
+	pokemonCache.Delete(key)
 }
 
 func initDataCache() {
-	pokestopCache = ttlcache.New[string, Pokestop](
-		ttlcache.WithTTL[string, Pokestop](60 * time.Minute),
-	)
-	go pokestopCache.Start()
+	// Sharded caches for high-concurrency tables
+	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: StringKeyToShard,
+	})
 
-	gymCache = ttlcache.New[string, Gym](
-		ttlcache.WithTTL[string, Gym](60 * time.Minute),
+	gymCache = ttlcache.New[string, *Gym](
+		ttlcache.WithTTL[string, *Gym](60 * time.Minute),
 	)
 	go gymCache.Start()
 
-	stationCache = ttlcache.New[string, Station](
-		ttlcache.WithTTL[string, Station](60 * time.Minute),
+	stationCache = ttlcache.New[string, *Station](
+		ttlcache.WithTTL[string, *Station](60 * time.Minute),
 	)
 	go stationCache.Start()
 
-	tappableCache = ttlcache.New[uint64, Tappable](
-		ttlcache.WithTTL[uint64, Tappable](60 * time.Minute),
+	tappableCache = ttlcache.New[uint64, *Tappable](
+		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),
 	)
 	go tappableCache.Start()
 
-	weatherCache = ttlcache.New[int64, Weather](
-		ttlcache.WithTTL[int64, Weather](60 * time.Minute),
+	weatherCache = ttlcache.New[int64, *Weather](
+		ttlcache.WithTTL[int64, *Weather](60 * time.Minute),
 	)
 	go weatherCache.Start()
 
@@ -148,36 +146,35 @@ func initDataCache() {
 	)
 	go weatherConsensusCache.Start()
 
-	s2CellCache = ttlcache.New[uint64, S2Cell](
-		ttlcache.WithTTL[uint64, S2Cell](60 * time.Minute),
+	s2CellCache = ttlcache.New[uint64, *S2Cell](
+		ttlcache.WithTTL[uint64, *S2Cell](60 * time.Minute),
 	)
 	go s2CellCache.Start()
 
-	spawnpointCache = ttlcache.New[int64, Spawnpoint](
-		ttlcache.WithTTL[int64, Spawnpoint](60 * time.Minute),
-	)
-	go spawnpointCache.Start()
+	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: Int64KeyToShard,
+	})
 
-	// pokemon is the most active table. Use an array of caches to increase concurrency for querying ttlcache, which places a global lock for each Get/Set operation
-	// Initialize pokemon cache array: by picking it to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
-	pokemonCache = make([]*ttlcache.Cache[uint64, Pokemon], runtime.NumCPU())
-	for i := 0; i < len(pokemonCache); i++ {
-		pokemonCache[i] = ttlcache.New[uint64, Pokemon](
-			ttlcache.WithTTL[uint64, Pokemon](60*time.Minute),
-			ttlcache.WithDisableTouchOnHit[uint64, Pokemon](), // Pokemon will last 60 mins from when we first see them not last see them
-		)
-		go pokemonCache[i].Start()
-	}
+	// Pokemon cache: sharded for high concurrency
+	// By picking NumShards to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
+	pokemonCache = NewShardedCache(ShardedCacheConfig[uint64, *Pokemon]{
+		NumShards:         runtime.NumCPU(),
+		TTL:               60 * time.Minute,
+		KeyToShard:        Uint64KeyToShard,
+		DisableTouchOnHit: true, // Pokemon will last 60 mins from when we first see them not last see them
+	})
 	initPokemonRtree()
 	initFortRtree()
 
-	incidentCache = ttlcache.New[string, Incident](
-		ttlcache.WithTTL[string, Incident](60 * time.Minute),
+	incidentCache = ttlcache.New[string, *Incident](
+		ttlcache.WithTTL[string, *Incident](60 * time.Minute),
 	)
 	go incidentCache.Start()
 
-	playerCache = ttlcache.New[string, Player](
-		ttlcache.WithTTL[string, Player](60 * time.Minute),
+	playerCache = ttlcache.New[string, *Player](
+		ttlcache.WithTTL[string, *Player](60 * time.Minute),
 	)
 	go playerCache.Start()
 
@@ -193,8 +190,8 @@ func initDataCache() {
 	)
 	go getMapFortsCache.Start()
 
-	routeCache = ttlcache.New[string, Route](
-		ttlcache.WithTTL[string, Route](60 * time.Minute),
+	routeCache = ttlcache.New[string, *Route](
+		ttlcache.WithTTL[string, *Route](60 * time.Minute),
 	)
 	go routeCache.Start()
 }
@@ -297,14 +294,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			isNewPokestop := pokestop == nil
-			if isNewPokestop {
-				pokestop = &Pokestop{}
+			if pokestop == nil {
+				pokestop = &Pokestop{newRecord: true}
 			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 
 			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
-			if isNewPokestop {
+			if pokestop.IsNewRecord() {
 				gym, _ := GetGymRecord(ctx, db, fortId)
 				if gym != nil {
 					pokestop.copySharedFieldsFrom(gym)
@@ -332,6 +328,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 					if incident == nil {
 						incident = &Incident{
 							PokestopId: fortId,
+							newRecord:  true,
 						}
 					}
 					incident.updateFromPokestopIncidentDisplay(incidentProto)
@@ -354,15 +351,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			isNewGym := gym == nil
-			if isNewGym {
-				gym = &Gym{}
+			if gym == nil {
+				gym = &Gym{newRecord: true}
 			}
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
 
 			// If this is a new gym, check if it was converted from a pokestop and copy shared fields
-			if isNewGym {
+			if gym.IsNewRecord() {
 				pokestop, _ := GetPokestopRecord(ctx, db, fortId)
 				if pokestop != nil {
 					gym.copySharedFieldsFrom(pokestop)
@@ -387,7 +383,7 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			continue
 		}
 		if station == nil {
-			station = &Station{}
+			station = &Station{newRecord: true}
 		}
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
 		saveStationRecord(ctx, db, station)
@@ -415,27 +411,17 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			} else {
 				updateTime := wild.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
-					go func(wildPokemon *pogo.WildPokemonProto, cellId int64, timestampMs int64) {
-						time.Sleep(15 * time.Second)
-						pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-						pokemonMutex.Lock()
-						defer pokemonMutex.Unlock()
-
-						ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-						defer cancel()
-
-						if pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId); err != nil {
-							log.Errorf("getOrCreatePokemonRecord: %s", err)
-						} else {
-							// Update if there is still a change required & this update is the most recent
-							if pokemon.wildSignificantUpdate(wildPokemon, updateTime) && pokemon.Updated.ValueOrZero() < updateTime {
-								log.Debugf("DELAYED UPDATE: Updating pokemon %d from wild", encounterId)
-
-								pokemon.updateFromWild(ctx, db, wildPokemon, cellId, weatherLookup, timestampMs, username)
-								savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
-							}
-						}
-					}(wild.Data, int64(wild.Cell), wild.Timestamp)
+					// The sweeper will process it after timeout if no encounter arrives
+					pending := &PendingPokemon{
+						EncounterId:   encounterId,
+						WildPokemon:   wild.Data,
+						CellId:        int64(wild.Cell),
+						TimestampMs:   wild.Timestamp,
+						UpdateTime:    updateTime,
+						WeatherLookup: weatherLookup,
+						Username:      username,
+					}
+					pokemonPendingQueue.AddPending(pending)
 				}
 			}
 		}
@@ -452,8 +438,11 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			if err != nil {
 				log.Printf("getOrCreatePokemonRecord: %s", err)
 			} else {
-				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+				updateTime := nearby.Timestamp / 1000
+				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
+					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+				}
 			}
 
 			pokemonMutex.Unlock()
@@ -501,12 +490,12 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 						publishProto = weatherProto
 					}
 					if weather == nil {
-						weather = &Weather{}
+						weather = &Weather{newRecord: true}
 					}
 					weather.UpdatedMs = timestampMs
-					oldWeather := weather.updateWeatherFromClientWeatherProto(publishProto)
+					weather.updateWeatherFromClientWeatherProto(publishProto)
 					saveWeatherRecord(ctx, db, weather)
-					if oldWeather != weather.GameplayCondition {
+					if weather.oldValues.GameplayCondition != weather.GameplayCondition {
 						updates = append(updates, WeatherUpdate{
 							S2CellId:   publishProto.S2CellId,
 							NewWeather: int32(publishProto.GetGameplayWeather().GetGameplayCondition()),
@@ -539,6 +528,7 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 		incident = &Incident{
 			Id:         protoReq.IncidentLookup.IncidentId,
 			PokestopId: protoReq.IncidentLookup.FortId,
+			newRecord:  true,
 		}
 	}
 	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
@@ -562,6 +552,7 @@ func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartInci
 		incident = &Incident{
 			Id:         proto.Incident.IncidentId,
 			PokestopId: proto.Incident.FortId,
+			newRecord:  true,
 		}
 	}
 	incident.updateFromStartIncidentOut(proto)
