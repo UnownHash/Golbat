@@ -213,8 +213,8 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
 	spawnpoint := inMemorySpawnpoint.Value()
 	now := time.Now().Unix()
 
-	// update at least every 6 hours
-	if now-spawnpoint.LastSeen > 21600 {
+	// update at least every 6 hours (21600s). If reduce_updates is enabled, use 12 hours.
+	if now-spawnpoint.LastSeen > GetUpdateThreshold(21600) {
 		spawnpoint.LastSeen = now
 
 		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+

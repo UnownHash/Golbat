@@ -1306,7 +1306,8 @@ func createPokestopWebhooks(stop *Pokestop) {
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
 	now := time.Now().Unix()
 	if !pokestop.IsNewRecord() && !pokestop.IsDirty() {
-		if pokestop.Updated > now-900 {
+		// default debounce is 15 minutes (900s). If reduce_updates is enabled, use 12 hours.
+		if pokestop.Updated > now-GetUpdateThreshold(900) {
 			// if a pokestop is unchanged, but we did see it again after 15 minutes, then save again
 			return
 		}
@@ -1343,12 +1344,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		statsCollector.IncDbQuery("insert pokestop", err)
 		//log.Debugf("Insert pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
-			log.Errorf("insert pokestop %s: %s", pokestop.Id, err)
+			log.Errorf("insert pokestop: %s", err)
 			return
 		}
-		_ = res
+
+		_, _ = res, err
 	} else {
-		// Existing record - UPDATE
 		if dbDebugEnabled {
 			dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
 		}

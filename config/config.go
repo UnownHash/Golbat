@@ -27,6 +27,7 @@ type configDefinition struct {
 	Weather                        weather    `koanf:"weather"`
 	ScanRules                      []scanRule `koanf:"scan_rules"`
 	MaxConcurrentProactiveIVSwitch int        `koanf:"max_concurrent_proactive_iv_switch"`
+	ReduceUpdates                  bool       `koanf:"reduce_updates"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {

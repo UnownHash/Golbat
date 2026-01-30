@@ -551,3 +551,13 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 func SetStatsCollector(collector stats_collector.StatsCollector) {
 	statsCollector = collector
 }
+
+// GetUpdateThreshold returns the number of seconds that should be used as a
+// debounce/last-seen threshold. Pass the default seconds for normal operation
+// If ReduceUpdates is enabled in the loaded config.Config, this returns 43200 (12 hours).
+func GetUpdateThreshold(defaultSeconds int64) int64 {
+	if config.Config.ReduceUpdates {
+		return 43200 // 12 hours
+	}
+	return defaultSeconds
+}

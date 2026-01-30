@@ -416,7 +416,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
 	if !station.IsDirty() && !station.IsNewRecord() {
-		if station.Updated > now-900 {
+		if station.Updated > now-GetUpdateThreshold(900) {
 			return
 		}
 	}
