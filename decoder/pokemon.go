@@ -494,6 +494,18 @@ func peekPokemonRecordReadOnly(encounterId uint64) (*Pokemon, func(), error) {
 	return nil, nil, nil
 }
 
+func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId uint64, pokemon *Pokemon) error {
+	err := db.PokemonDb.GetContext(ctx, pokemon,
+		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, "+
+			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
+			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
+			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
+			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
+	statsCollector.IncDbQuery("select pokemon", err)
+
+	return err
+}
+
 // getPokemonRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks, but will cause a backing database lookup
 // Caller MUST call returned unlock function.
@@ -511,13 +523,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	}
 
 	dbPokemon := Pokemon{}
-	err := db.PokemonDb.GetContext(ctx, &dbPokemon,
-		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, "+
-			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
-			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
-			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
-	statsCollector.IncDbQuery("select pokemon", err)
+	err := loadPokemonFromDatabase(ctx, db, encounterId, &dbPokemon)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil
 	}
@@ -552,17 +558,31 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 // getOrCreatePokemonRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
-	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId)
-	if pokemon != nil || err != nil {
-		return pokemon, unlock, err
-	}
-
 	// Create new Pokemon atomically - function only called if key doesn't exist
-	pokemon = pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	pokemon := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		return &Pokemon{Id: encounterId, newRecord: true}
 	}, ttlcache.DefaultTTL)
-
 	pokemon.Lock()
+
+	if config.Config.PokemonMemoryOnly {
+		pokemon.snapshotOldValues()
+		return pokemon, func() { pokemon.Unlock() }, nil
+	}
+
+	if pokemon.newRecord {
+		// We should attempt to load from database
+		err := loadPokemonFromDatabase(ctx, db, encounterId, pokemon)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				pokemon.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded
+			pokemon.newRecord = false
+		}
+	}
+
 	pokemon.snapshotOldValues()
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
