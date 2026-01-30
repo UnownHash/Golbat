@@ -235,9 +235,10 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {
 	ta.SetExpireTimestampVerified(false)
 	if spawnId := ta.SpawnId.ValueOrZero(); spawnId != 0 {
-		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+		spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId)
 		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 			despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
+			unlock()
 
 			date := time.Unix(timestampMs/1000, 0)
 			secondOfHour := date.Second() + date.Minute()*60
@@ -249,6 +250,9 @@ func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, tim
 			ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
 			ta.SetExpireTimestampVerified(true)
 		} else {
+			if unlock != nil {
+				unlock()
+			}
 			ta.setUnknownTimestamp(timestampMs / 1000)
 		}
 	} else if fortId := ta.FortId.ValueOrZero(); fortId != "" {

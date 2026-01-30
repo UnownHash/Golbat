@@ -1221,9 +1221,10 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 
 	pokemon.ExpireTimestampVerified = false
-	spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
+	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId)
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
+		unlock()
 
 		date := time.Unix(timestampMs/1000, 0)
 		secondOfHour := date.Second() + date.Minute()*60
@@ -1235,6 +1236,9 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
 		pokemon.SetExpireTimestampVerified(true)
 	} else {
+		if unlock != nil {
+			unlock()
+		}
 		pokemon.setUnknownTimestamp(timestampMs / 1000)
 	}
 }
