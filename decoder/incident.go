@@ -292,8 +292,10 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	updateIncidentStats(incident, areas)
 
 	incident.ClearDirty()
-	incident.newRecord = false
-	//incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+	if incident.IsNewRecord() {
+		incident.newRecord = false
+		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+	}
 }
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Incident) {

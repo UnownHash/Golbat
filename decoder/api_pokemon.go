@@ -154,7 +154,6 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 			unlock()
 		}
 	}
-	pokemonMatched++
 
 	return apiResults, nil
 }
