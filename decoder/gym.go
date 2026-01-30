@@ -309,9 +309,20 @@ func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym 
 }
 
 func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *Gym {
-	gym.Id = gymData.GymStatusAndDefenders.PokemonFortProto.FortId
-	gym.Lat = gymData.GymStatusAndDefenders.PokemonFortProto.Latitude
-	gym.Lon = gymData.GymStatusAndDefenders.PokemonFortProto.Longitude
+	status := gymData.GetGymStatusAndDefenders()
+	gym.Id = status.PokemonFortProto.FortId
+	gym.Lat = status.PokemonFortProto.Latitude
+	gym.Lon = status.PokemonFortProto.Longitude
+	previousCell := gym.CellId
+	var cellId uint64
+	if previousCell.Valid {
+		cellId = uint64(previousCell.Int64)
+	}
+	gym.updateGymFromFort(status.PokemonFortProto, cellId)
+	if !previousCell.Valid {
+		// Preserve the unknown state if we did not previously know the cell.
+		gym.CellId = null.NewInt(0, false)
+	}
 
 	// This will have gym defenders in it...
 	if len(gymData.Url) > 0 {
@@ -348,7 +359,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 
 	var defenders []pokemonGymDefender
 	now := time.Now()
-	for _, protoDefender := range gymData.GymStatusAndDefenders.GymDefender {
+	for _, protoDefender := range status.GymDefender {
 		motivatedPokemon := protoDefender.MotivatedPokemon
 		pokemonDisplay := motivatedPokemon.Pokemon.PokemonDisplay
 		deploymentTotals := protoDefender.DeploymentTotals
