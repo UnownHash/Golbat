@@ -5,9 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"golbat/geo"
@@ -26,6 +28,8 @@ import (
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                     string      `db:"id" json:"id"`
 	Lat                    float64     `db:"lat" json:"lat"`
 	Lon                    float64     `db:"lon" json:"lon"`
@@ -177,6 +181,16 @@ func (gym *Gym) snapshotOldValues() {
 		Rsvps:              gym.Rsvps,
 		InBattle:           gym.InBattle,
 	}
+}
+
+// Lock acquires the Gym's mutex
+func (gym *Gym) Lock() {
+	gym.mu.Lock()
+}
+
+// Unlock releases the Gym's mutex
+func (gym *Gym) Unlock() {
+	gym.mu.Unlock()
 }
 
 // --- Set methods with dirty tracking ---
@@ -567,31 +581,116 @@ func (gym *Gym) SetRsvps(v null.String) {
 	}
 }
 
-func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
-	inMemoryGym := gymCache.Get(fortId)
-	if inMemoryGym != nil {
-		gym := inMemoryGym.Value()
-		gym.snapshotOldValues() // Snapshot for webhook comparison
-		return gym, nil
-	}
-	gym := Gym{}
-	err := db.GeneralDb.GetContext(ctx, &gym, "SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, guarding_pokemon_display, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description, defenders, rsvps FROM gym WHERE id = ?", fortId)
-
+func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
+	err := db.GeneralDb.GetContext(ctx, gym, "SELECT id, lat, lon, name, url, last_modified_timestamp, raid_end_timestamp, raid_spawn_timestamp, raid_battle_timestamp, updated, raid_pokemon_id, guarding_pokemon_id, guarding_pokemon_display, available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1, raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points, power_up_end_timestamp, description, defenders, rsvps FROM gym WHERE id = ?", fortId)
 	statsCollector.IncDbQuery("select gym", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	return err
+}
+
+// PeekGymRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func PeekGymRecord(fortId string) (*Gym, func(), error) {
+	if item := gymCache.Get(fortId); item != nil {
+		gym := item.Value()
+		gym.Lock()
+		return gym, func() { gym.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getGymRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
+	// Check cache first
+	if item := gymCache.Get(fortId); item != nil {
+		gym := item.Value()
+		gym.Lock()
+		return gym, func() { gym.Unlock() }, nil
 	}
 
+	dbGym := Gym{}
+	err := loadGymFromDatabase(ctx, db, fortId, &dbGym)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Atomically cache the loaded Gym - if another goroutine raced us,
+	// we'll get their Gym and use that instead (ensuring same mutex)
+	existingGym, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
+		// Only called if key doesn't exist - our Pokestop wins
+		if config.Config.TestFortInMemory {
+			fortRtreeUpdateGymOnGet(&dbGym)
+		}
+		return &dbGym
+	})
+
+	gym := existingGym.Value()
+	gym.Lock()
+	return gym, func() { gym.Unlock() }, nil
+}
+
+// getGymRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Use when modifying the Gym.
+// Caller MUST call returned unlock function if non-nil.
+func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
+	gym, unlock, err := getGymRecordReadOnly(ctx, db, fortId)
+	if err != nil || gym == nil {
+		return nil, nil, err
+	}
+	gym.snapshotOldValues()
+	return gym, unlock, nil
+}
+
+// getOrCreateGymRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
+	// Create new Gym atomically - function only called if key doesn't exist
+	gymItem, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
+		return &Gym{Id: fortId, newRecord: true}
+	})
+
+	gym := gymItem.Value()
+	gym.Lock()
+
+	if gym.newRecord {
+		// We should attempt to load from database
+		err := loadGymFromDatabase(ctx, db, fortId, gym)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				gym.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			gym.newRecord = false
+			if config.Config.TestFortInMemory {
+				fortRtreeUpdateGymOnGet(gym)
+			}
+		}
+	}
+
+	gym.snapshotOldValues()
+	return gym, func() { gym.Unlock() }, nil
+}
+
+// GetGymRecord returns a copy of the Gym for external/API use.
+// For internal use, prefer getGymRecordReadOnly or getGymRecordForUpdate.
+func GetGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, error) {
+	gym, unlock, err := getGymRecordReadOnly(ctx, db, fortId)
 	if err != nil {
 		return nil, err
 	}
-
-	gym.snapshotOldValues() // Snapshot for webhook comparison
-	gymCache.Set(fortId, &gym, ttlcache.DefaultTTL)
-	if config.Config.TestFortInMemory {
-		fortRtreeUpdateGymOnGet(&gym)
+	if gym == nil {
+		return nil, nil
 	}
-	return &gym, nil
+	// Make a copy for safe external use
+	gymCopy := *gym
+	unlock()
+	return &gymCopy, nil
 }
 
 func escapeLike(s string) string {
@@ -1205,18 +1304,12 @@ func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 }
 
 func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	gymMutex, _ := gymStripedMutex.GetLock(fort.Id)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gym, err := GetGymRecord(ctx, db, fort.Id) // should check error
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, fort.Id)
 	if err != nil {
 		return err.Error()
 	}
+	defer unlock()
 
-	if gym == nil {
-		gym = &Gym{newRecord: true}
-	}
 	gym.updateGymFromFortProto(fort)
 
 	updateGymGetMapFortCache(gym, true)
@@ -1226,18 +1319,12 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 }
 
 func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
-	gymMutex, _ := gymStripedMutex.GetLock(gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gym, err := GetGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId) // should check error
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
 	if err != nil {
 		return err.Error()
 	}
+	defer unlock()
 
-	if gym == nil {
-		gym = &Gym{newRecord: true}
-	}
 	gym.updateGymFromGymInfoOutProto(gymInfo)
 
 	updateGymGetMapFortCache(gym, true)
@@ -1246,11 +1333,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 }
 
 func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	gymMutex, _ := gymStripedMutex.GetLock(mapFort.Id)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gym, err := GetGymRecord(ctx, db, mapFort.Id)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, mapFort.Id)
 	if err != nil {
 		return false, err.Error()
 	}
@@ -1259,6 +1342,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	if gym == nil {
 		return false, ""
 	}
+	defer unlock()
 
 	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
 	saveGymRecord(ctx, db, gym)
@@ -1266,11 +1350,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 }
 
 func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pogo.RaidDetails, resp *pogo.GetEventRsvpsOutProto) string {
-	gymMutex, _ := gymStripedMutex.GetLock(req.FortId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gym, err := GetGymRecord(ctx, db, req.FortId)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, req.FortId)
 	if err != nil {
 		return err.Error()
 	}
@@ -1279,6 +1359,8 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 		// Do not add RSVP details to unknown gyms
 		return fmt.Sprintf("%s Gym not present", req.FortId)
 	}
+	defer unlock()
+
 	gym.updateGymFromRsvpProto(resp)
 
 	saveGymRecord(ctx, db, gym)
@@ -1287,11 +1369,7 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 }
 
 func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
-	gymMutex, _ := gymStripedMutex.GetLock(fortId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gym, err := GetGymRecord(ctx, db, fortId)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, fortId)
 	if err != nil {
 		return err.Error()
 	}
@@ -1300,6 +1378,7 @@ func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
 		// Do not add RSVP details to unknown gyms
 		return fmt.Sprintf("%s Gym not present", fortId)
 	}
+	defer unlock()
 
 	if gym.Rsvps.Valid {
 		gym.SetRsvps(null.NewString("", false))

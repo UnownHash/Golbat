@@ -99,14 +99,17 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []string, fortType FortType, change FortChange) {
 	if fortType == GYM {
 		for _, id := range ids {
-			gym, err := GetGymRecord(ctx, dbDetails, id)
+			gym, unlock, err := getGymRecordReadOnly(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}
 			if gym == nil {
 				continue
 			}
+
 			fort := InitWebHookFortFromGym(gym)
+			unlock()
+
 			CreateFortWebHooks(fort, &FortWebhook{}, change)
 		}
 	}

@@ -409,11 +409,13 @@ func GetFortTracker() *FortTracker {
 	return fortTracker
 }
 
-// clearGymWithLock marks a gym as deleted while holding the striped mutex
+// clearGymWithLock marks a gym as deleted while holding the object-level mutex
 func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
-	gymMutex, _ := gymStripedMutex.GetLock(gymId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
+	// Lock the gym if it exists in cache
+	gym, unlock, _ := PeekGymRecord(gymId)
+	if gym != nil {
+		defer unlock()
+	}
 
 	gymCache.Delete(gymId)
 	if err := db.ClearOldGyms(ctx, dbDetails, []string{gymId}); err != nil {

@@ -96,14 +96,13 @@ func (sc *ShardedCache[K, V]) DeleteAll() {
 	}
 }
 
-// GetOrSetFunc atomically gets an existing item or creates and sets a new one.
-// If key exists, returns existing value (createFunc NOT called).
-// If key doesn't exist, calls createFunc to create value, sets it, and returns it.
-// This prevents race conditions and avoids creating objects unnecessarily.
-func (sc *ShardedCache[K, V]) GetOrSetFunc(key K, createFunc func() V, ttl time.Duration) V {
-	shard := sc.getShard(key)
-	item, _ := shard.GetOrSetFunc(key, createFunc, ttlcache.WithTTL[K, V](ttl))
-	return item.Value()
+// GetOrSetFunc retrieves an item from the cache by the provided key.
+// If the element is not found, it is created by executing the fn function
+// with the provided options and then returned.
+// The bool return value is true if the item was found, false if created
+// during the execution of the method.
+func (sc *ShardedCache[K, V]) GetOrSetFunc(key K, createFunc func() V, opts ...ttlcache.Option[K, V]) (*ttlcache.Item[K, V], bool) {
+	return sc.getShard(key).GetOrSetFunc(key, createFunc, opts...)
 }
 
 // --- Key conversion helpers ---

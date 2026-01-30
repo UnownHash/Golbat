@@ -73,7 +73,6 @@ var routeCache *ttlcache.Cache[string, *Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
-var gymStripedMutex = stripedmutex.New(1103)
 var stationStripedMutex = stripedmutex.New(1103)
 var tappableStripedMutex = intstripedmutex.New(563)
 var incidentStripedMutex = stripedmutex.New(157)
@@ -280,9 +279,10 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
 			if pokestop.IsNewRecord() {
-				gym, _ := GetGymRecord(ctx, db, fortId)
+				gym, gymUnlock, _ := getGymRecordReadOnly(ctx, db, fortId)
 				if gym != nil {
 					pokestop.copySharedFieldsFrom(gym)
+					gymUnlock()
 				}
 			}
 
@@ -320,18 +320,10 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 		}
 
 		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
-			gymMutex, _ := gymStripedMutex.GetLock(fortId)
-
-			gymMutex.Lock()
-			gym, err := GetGymRecord(ctx, db, fortId)
+			gym, gymUnlock, err := getOrCreateGymRecord(ctx, db, fortId)
 			if err != nil {
-				log.Errorf("GetGymRecord: %s", err)
-				gymMutex.Unlock()
+				log.Errorf("getOrCreateGymRecord: %s", err)
 				continue
-			}
-
-			if gym == nil {
-				gym = &Gym{newRecord: true}
 			}
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
@@ -346,7 +338,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			}
 
 			saveGymRecord(ctx, db, gym)
-			gymMutex.Unlock()
+			gymUnlock()
 		}
 	}
 }

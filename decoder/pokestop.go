@@ -685,14 +685,15 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 
 	// Atomically cache the loaded Pokestop - if another goroutine raced us,
 	// we'll get their Pokestop and use that instead (ensuring same mutex)
-	pokestop := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+	existingPokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		// Only called if key doesn't exist - our Pokestop wins
 		if config.Config.TestFortInMemory {
 			fortRtreeUpdatePokestopOnGet(&dbPokestop)
 		}
 		return &dbPokestop
-	}, ttlcache.DefaultTTL)
+	})
 
+	pokestop := existingPokestop.Value()
 	pokestop.Lock()
 	return pokestop, func() { pokestop.Unlock() }, nil
 }
@@ -713,10 +714,11 @@ func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId str
 // Caller MUST call returned unlock function.
 func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
 	// Create new Pokestop atomically - function only called if key doesn't exist
-	pokestop := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+	pokestopItem, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		return &Pokestop{Id: fortId, newRecord: true}
-	}, ttlcache.DefaultTTL)
+	})
 
+	pokestop := pokestopItem.Value()
 	pokestop.Lock()
 
 	if pokestop.newRecord {

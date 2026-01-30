@@ -71,7 +71,10 @@ func LoadAllGyms(details db.DbDetails) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		GetGymRecord(context.Background(), details, place.Id)
+		_, unlock, _ := getGymRecordReadOnly(context.Background(), details, place.Id)
+		if unlock != nil {
+			unlock()
+		}
 	}
 	log.Infof("Loaded %d gyms [finished]", count)
 }

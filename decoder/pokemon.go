@@ -533,12 +533,13 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
-	pokemon := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	existingPokemon, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		// Only called if key doesn't exist - our Pokemon wins
 		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 		return &dbPokemon
-	}, ttlcache.DefaultTTL)
+	})
 
+	pokemon := existingPokemon.Value()
 	pokemon.Lock()
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
@@ -559,10 +560,11 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 // Caller MUST call returned unlock function.
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
-	pokemon := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		return &Pokemon{Id: encounterId, newRecord: true}
-	}, ttlcache.DefaultTTL)
+	})
 
+	pokemon := pokemonItem.Value()
 	pokemon.Lock()
 
 	if config.Config.PokemonMemoryOnly {
