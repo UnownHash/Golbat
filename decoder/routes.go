@@ -293,7 +293,7 @@ func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
 func saveRouteRecord(db db.DbDetails, route *Route) error {
 	// Skip save if not dirty and not new, unless 15-minute debounce expired
 	if !route.IsDirty() && !route.IsNewRecord() {
-		if route.Updated > time.Now().Unix()-900 {
+		if route.Updated > time.Now().Unix()-GetUpdateThreshold(900) {
 			// if a route is unchanged, but we did see it again after 15 minutes, then save again
 			return nil
 		}

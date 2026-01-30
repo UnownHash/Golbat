@@ -1202,8 +1202,9 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	now := time.Now().Unix()
 	if !gym.IsNewRecord() && !gym.IsDirty() && !gym.IsInternalDirty() {
-		if gym.Updated > now-900 {
-			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
+		// default debounce is 15 minutes (900s). If reduce_updates is enabled, use 12 hours.
+		if gym.Updated > now-GetUpdateThreshold(900) {
+			// if a gym is unchanged and was seen recently, skip saving
 			return
 		}
 	}

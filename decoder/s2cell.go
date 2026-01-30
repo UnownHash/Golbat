@@ -41,7 +41,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
-			if cachedCell.Updated > now-900 {
+			if cachedCell.Updated > now-GetUpdateThreshold(900) {
 				continue
 			}
 			s2Cell = cachedCell
