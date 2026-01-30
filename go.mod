@@ -31,7 +31,7 @@ require (
 	github.com/tidwall/rtree v1.10.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
 	google.golang.org/grpc v1.74.2
-	google.golang.org/protobuf v1.36.7
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/guregu/null.v4 v4.0.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

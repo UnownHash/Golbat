@@ -560,9 +560,10 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
 	pokemon := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
-		return &Pokemon{Id: encounterId, newRecord: true}
+		p := &Pokemon{Id: encounterId, newRecord: true}
+		p.Lock()
+		return p
 	}, ttlcache.DefaultTTL)
-	pokemon.Lock()
 
 	if config.Config.PokemonMemoryOnly {
 		pokemon.snapshotOldValues()
@@ -580,6 +581,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 		} else {
 			// We loaded
 			pokemon.newRecord = false
+			pokemonRtreeUpdatePokemonOnGet(pokemon)
 		}
 	}
 

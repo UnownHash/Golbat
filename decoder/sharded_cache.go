@@ -121,6 +121,6 @@ func Int64KeyToShard(key int64) uint64 {
 // StringKeyToShard hashes string keys to uint64 for sharding using FNV-1a
 func StringKeyToShard(key string) uint64 {
 	h := fnv.New64a()
-	h.Write([]byte(key))
+	_, _ = h.Write([]byte(key))
 	return h.Sum64()
 }
