@@ -7,11 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"golbat/intstripedmutex"
-
 	"github.com/UnownHash/gohbem"
 	"github.com/jellydator/ttlcache/v3"
-	stripedmutex "github.com/nmvalera/striped-mutex"
 	log "github.com/sirupsen/logrus"
 	"gopkg.in/guregu/null.v4"
 
@@ -72,12 +69,6 @@ var playerCache *ttlcache.Cache[string, *Player]
 var routeCache *ttlcache.Cache[string, *Route]
 var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
-
-var stationStripedMutex = stripedmutex.New(1103)
-var tappableStripedMutex = intstripedmutex.New(563)
-var incidentStripedMutex = stripedmutex.New(157)
-var weatherStripedMutex = intstripedmutex.New(157)
-var routeStripedMutex = stripedmutex.New(157)
 
 var ProactiveIVSwitchSem chan bool
 
@@ -296,25 +287,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
-					incidentMutex, _ := incidentStripedMutex.GetLock(incidentProto.IncidentId)
-
-					incidentMutex.Lock()
-					incident, err := getIncidentRecord(ctx, db, incidentProto.IncidentId)
+					incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId)
 					if err != nil {
-						log.Errorf("getIncident: %s", err)
-						incidentMutex.Unlock()
+						log.Errorf("getOrCreateIncidentRecord: %s", err)
 						continue
-					}
-					if incident == nil {
-						incident = &Incident{
-							PokestopId: fortId,
-							newRecord:  true,
-						}
 					}
 					incident.updateFromPokestopIncidentDisplay(incidentProto)
 					saveIncidentRecord(ctx, db, incident)
-
-					incidentMutex.Unlock()
+					unlock()
 				}
 			}
 		}
@@ -346,20 +326,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
 		stationId := stationProto.Data.Id
-		stationMutex, _ := stationStripedMutex.GetLock(stationId)
-		stationMutex.Lock()
-		station, err := getStationRecord(ctx, db, stationId)
+		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId)
 		if err != nil {
-			log.Errorf("getStationRecord: %s", err)
-			stationMutex.Unlock()
+			log.Errorf("getOrCreateStationRecord: %s", err)
 			continue
-		}
-		if station == nil {
-			station = &Station{newRecord: true}
 		}
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
 		saveStationRecord(ctx, db, station)
-		stationMutex.Unlock()
+		unlock()
 	}
 }
 
@@ -452,22 +426,19 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64, account string) (updates []WeatherUpdate) {
 	hourKey := timestampMs / time.Hour.Milliseconds()
 	for _, weatherProto := range p {
-		weatherMutex, _ := weatherStripedMutex.GetLock(uint64(weatherProto.S2CellId))
-		weatherMutex.Lock()
-
-		weather, err := getWeatherRecord(ctx, db, weatherProto.S2CellId)
+		weather, unlock, err := getOrCreateWeatherRecord(ctx, db, weatherProto.S2CellId)
 		if err != nil {
-			log.Printf("getWeatherRecord: %s", err)
-		} else if weather == nil || timestampMs >= weather.UpdatedMs {
+			log.Printf("getOrCreateWeatherRecord: %s", err)
+			continue
+		}
+
+		if weather.newRecord || timestampMs >= weather.UpdatedMs {
 			state := getWeatherConsensusState(weatherProto.S2CellId, hourKey)
 			if state != nil {
 				publish, publishProto := state.applyObservation(hourKey, account, weatherProto)
 				if publish {
 					if publishProto == nil {
 						publishProto = weatherProto
-					}
-					if weather == nil {
-						weather = &Weather{newRecord: true}
 					}
 					weather.UpdatedMs = timestampMs
 					weather.updateWeatherFromClientWeatherProto(publishProto)
@@ -482,7 +453,7 @@ func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.Cl
 			}
 		}
 
-		weatherMutex.Unlock()
+		unlock()
 	}
 	return updates
 }
@@ -492,55 +463,34 @@ func UpdateClientMapS2CellBatch(ctx context.Context, db db.DbDetails, cellIds []
 }
 
 func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.OpenInvasionCombatSessionProto, protoRes *pogo.OpenInvasionCombatSessionOutProto) string {
-	incidentMutex, _ := incidentStripedMutex.GetLock(protoReq.IncidentLookup.IncidentId)
-
-	incidentMutex.Lock()
-	incident, err := getIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId)
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId, protoReq.IncidentLookup.FortId)
 	if err != nil {
-		incidentMutex.Unlock()
-		return fmt.Sprintf("getIncident: %s", err)
+		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
 	}
-	if incident == nil {
+	defer unlock()
+
+	if incident.newRecord {
 		log.Debugf("Updating lineup before it was saved: %s", protoReq.IncidentLookup.IncidentId)
-		incident = &Incident{
-			Id:         protoReq.IncidentLookup.IncidentId,
-			PokestopId: protoReq.IncidentLookup.FortId,
-			newRecord:  true,
-		}
 	}
 	incident.updateFromOpenInvasionCombatSessionOut(protoRes)
 
 	saveIncidentRecord(ctx, db, incident)
-	incidentMutex.Unlock()
 	return ""
 }
 
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
-	incidentMutex, _ := incidentStripedMutex.GetLock(proto.Incident.IncidentId)
-
-	incidentMutex.Lock()
-	incident, err := getIncidentRecord(ctx, db, proto.Incident.IncidentId)
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, proto.Incident.IncidentId, proto.Incident.FortId)
 	if err != nil {
-		incidentMutex.Unlock()
-		return fmt.Sprintf("getIncident: %s", err)
+		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
 	}
-	if incident == nil {
+	defer unlock()
+
+	if incident.newRecord {
 		log.Debugf("Confirming incident before it was saved: %s", proto.Incident.IncidentId)
-		incident = &Incident{
-			Id:         proto.Incident.IncidentId,
-			PokestopId: proto.Incident.FortId,
-			newRecord:  true,
-		}
 	}
 	incident.updateFromStartIncidentOut(proto)
 
-	if incident == nil {
-		incidentMutex.Unlock()
-		// I only saw this once during testing but I couldn't reproduce it so just in case
-		return "Unable to process incident"
-	}
 	saveIncidentRecord(ctx, db, incident)
-	incidentMutex.Unlock()
 	return ""
 }
 

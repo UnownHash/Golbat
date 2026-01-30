@@ -617,6 +617,7 @@ func getGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (
 	if err != nil {
 		return nil, nil, err
 	}
+	dbGym.ClearDirty()
 
 	// Atomically cache the loaded Gym - if another goroutine raced us,
 	// we'll get their Gym and use that instead (ensuring same mutex)
@@ -667,6 +668,7 @@ func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string) (
 		} else {
 			// We loaded from DB
 			gym.newRecord = false
+			gym.ClearDirty()
 			if config.Config.TestFortInMemory {
 				fortRtreeUpdateGymOnGet(gym)
 			}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"golbat/db"
@@ -19,6 +20,8 @@ import (
 // Tappable struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Tappable struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                      uint64      `db:"id" json:"id"`
 	Lat                     float64     `db:"lat" json:"lat"`
 	Lon                     float64     `db:"lon" json:"lon"`
@@ -50,6 +53,16 @@ func (ta *Tappable) ClearDirty() {
 // IsNewRecord returns true if this is a new record (not yet in DB)
 func (ta *Tappable) IsNewRecord() bool {
 	return ta.newRecord
+}
+
+// Lock acquires the Tappable's mutex
+func (ta *Tappable) Lock() {
+	ta.mu.Lock()
+}
+
+// Unlock releases the Tappable's mutex
+func (ta *Tappable) Unlock() {
+	ta.mu.Unlock()
 }
 
 // --- Set methods with dirty tracking ---
@@ -254,28 +267,98 @@ func (ta *Tappable) setUnknownTimestamp(now int64) {
 	}
 }
 
-func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, error) {
-	inMemoryTappable := tappableCache.Get(id)
-	if inMemoryTappable != nil {
-		tappable := inMemoryTappable.Value()
-		return tappable, nil
-	}
-	tappable := Tappable{}
-	err := db.GeneralDb.GetContext(ctx, &tappable,
+func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
+	err := db.GeneralDb.GetContext(ctx, tappable,
 		`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
-         FROM tappable
-         WHERE id = ?`, strconv.FormatUint(id, 10))
+         FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
 	statsCollector.IncDbQuery("select tappable", err)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	return err
+}
+
+// peekTappableRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekTappableRecord(id uint64) (*Tappable, func(), error) {
+	if item := tappableCache.Get(id); item != nil {
+		tappable := item.Value()
+		tappable.Lock()
+		return tappable, func() { tappable.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getTappableRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, func(), error) {
+	// Check cache first
+	if item := tappableCache.Get(id); item != nil {
+		tappable := item.Value()
+		tappable.Lock()
+		return tappable, func() { tappable.Unlock() }, nil
 	}
 
+	dbTappable := Tappable{}
+	err := loadTappableFromDatabase(ctx, db, id, &dbTappable)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	dbTappable.ClearDirty()
+
+	// Atomically cache the loaded Tappable - if another goroutine raced us,
+	// we'll get their Tappable and use that instead (ensuring same mutex)
+	existingTappable, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
+		return &dbTappable
+	})
+
+	tappable := existingTappable.Value()
+	tappable.Lock()
+	return tappable, func() { tappable.Unlock() }, nil
+}
+
+// getOrCreateTappableRecord gets existing or creates new, locked.
+// Caller MUST call returned unlock function.
+func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, func(), error) {
+	// Create new Tappable atomically - function only called if key doesn't exist
+	tappableItem, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
+		return &Tappable{Id: id, newRecord: true}
+	})
+
+	tappable := tappableItem.Value()
+	tappable.Lock()
+
+	if tappable.newRecord {
+		// We should attempt to load from database
+		err := loadTappableFromDatabase(ctx, db, id, tappable)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				tappable.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			tappable.newRecord = false
+			tappable.ClearDirty()
+		}
+	}
+
+	return tappable, func() { tappable.Unlock() }, nil
+}
+
+// GetTappableRecord is an exported function for API use.
+// Returns a tappable if found, nil if not found.
+func GetTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, error) {
+	tappable, unlock, err := getTappableRecordReadOnly(ctx, db, id)
 	if err != nil {
 		return nil, err
 	}
-
-	tappableCache.Set(id, &tappable, ttlcache.DefaultTTL)
-	return &tappable, nil
+	if tappable == nil {
+		return nil, nil
+	}
+	defer unlock()
+	return tappable, nil
 }
 
 func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
@@ -342,19 +425,13 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto, timestampMs int64) string {
 	id := request.GetEncounterId()
-	tappableMutex, _ := tappableStripedMutex.GetLock(id)
-	tappableMutex.Lock()
-	defer tappableMutex.Unlock()
 
-	tappable, err := GetTappableRecord(ctx, db, id)
+	tappable, unlock, err := getOrCreateTappableRecord(ctx, db, id)
 	if err != nil {
-		log.Printf("Get tappable %s", err)
+		log.Printf("getOrCreateTappableRecord: %s", err)
 		return "Error getting tappable"
 	}
-
-	if tappable == nil {
-		tappable = &Tappable{newRecord: true}
-	}
+	defer unlock()
 
 	tappable.updateFromProcessTappableProto(ctx, db, tappableDetails, request, timestampMs)
 	saveTappableRecord(ctx, db, tappable)

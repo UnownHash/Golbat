@@ -3,6 +3,8 @@ package decoder
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"sync"
 
 	"golbat/db"
 	"golbat/pogo"
@@ -17,6 +19,8 @@ import (
 // Weather struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Weather struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                 int64     `db:"id"`
 	Latitude           float64   `db:"latitude"`
 	Longitude          float64   `db:"longitude"`
@@ -77,6 +81,16 @@ func (weather *Weather) ClearDirty() {
 // IsNewRecord returns true if this is a new record (not yet in DB)
 func (weather *Weather) IsNewRecord() bool {
 	return weather.newRecord
+}
+
+// Lock acquires the Weather's mutex
+func (weather *Weather) Lock() {
+	weather.mu.Lock()
+}
+
+// Unlock releases the Weather's mutex
+func (weather *Weather) Unlock() {
+	weather.mu.Unlock()
 }
 
 // snapshotOldValues saves current values for webhook comparison
@@ -188,30 +202,98 @@ func (weather *Weather) SetWarnWeather(v null.Bool) {
 	}
 }
 
-func getWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, error) {
-	inMemoryWeather := weatherCache.Get(weatherId)
-	if inMemoryWeather != nil {
-		weather := inMemoryWeather.Value()
-		weather.snapshotOldValues()
-		return weather, nil
-	}
-	weather := Weather{}
-
-	err := db.GeneralDb.GetContext(ctx, &weather, "SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
-
+func loadWeatherFromDatabase(ctx context.Context, db db.DbDetails, weatherId int64, weather *Weather) error {
+	err := db.GeneralDb.GetContext(ctx, weather,
+		"SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
 	statsCollector.IncDbQuery("select weather", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	if err == nil {
+		weather.UpdatedMs *= 1000
+	}
+	return err
+}
+
+// peekWeatherRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekWeatherRecord(weatherId int64) (*Weather, func(), error) {
+	if item := weatherCache.Get(weatherId); item != nil {
+		weather := item.Value()
+		weather.Lock()
+		return weather, func() { weather.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getWeatherRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getWeatherRecordReadOnly(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, func(), error) {
+	// Check cache first
+	if item := weatherCache.Get(weatherId); item != nil {
+		weather := item.Value()
+		weather.Lock()
+		return weather, func() { weather.Unlock() }, nil
 	}
 
+	dbWeather := Weather{}
+	err := loadWeatherFromDatabase(ctx, db, weatherId, &dbWeather)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	dbWeather.ClearDirty()
+
+	// Atomically cache the loaded Weather - if another goroutine raced us,
+	// we'll get their Weather and use that instead (ensuring same mutex)
+	existingWeather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+		return &dbWeather
+	})
+
+	weather := existingWeather.Value()
+	weather.Lock()
+	return weather, func() { weather.Unlock() }, nil
+}
+
+// getWeatherRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Caller MUST call returned unlock function if non-nil.
+func getWeatherRecordForUpdate(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, func(), error) {
+	weather, unlock, err := getWeatherRecordReadOnly(ctx, db, weatherId)
+	if err != nil || weather == nil {
+		return nil, nil, err
+	}
+	weather.snapshotOldValues()
+	return weather, unlock, nil
+}
+
+// getOrCreateWeatherRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreateWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64) (*Weather, func(), error) {
+	// Create new Weather atomically - function only called if key doesn't exist
+	weatherItem, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+		return &Weather{Id: weatherId, newRecord: true}
+	})
+
+	weather := weatherItem.Value()
+	weather.Lock()
+
+	if weather.newRecord {
+		// We should attempt to load from database
+		err := loadWeatherFromDatabase(ctx, db, weatherId, weather)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				weather.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			weather.newRecord = false
+			weather.ClearDirty()
+		}
 	}
 
-	weather.UpdatedMs *= 1000
 	weather.snapshotOldValues()
-	weatherCache.Set(weatherId, &weather, ttlcache.DefaultTTL)
-	return &weather, nil
+	return weather, func() { weather.Unlock() }, nil
 }
 
 func weatherCellIdFromLatLon(lat, lon float64) int64 {

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"golbat/db"
@@ -21,6 +22,8 @@ import (
 // Station struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Station struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                string  `db:"id"`
 	Lat               float64 `db:"lat"`
 	Lon               float64 `db:"lon"`
@@ -82,6 +85,16 @@ func (station *Station) ClearDirty() {
 // IsNewRecord returns true if this is a new record (not yet in DB)
 func (station *Station) IsNewRecord() bool {
 	return station.newRecord
+}
+
+// Lock acquires the Station's mutex
+func (station *Station) Lock() {
+	station.mu.Lock()
+}
+
+// Unlock releases the Station's mutex
+func (station *Station) Unlock() {
+	station.mu.Unlock()
 }
 
 // snapshotOldValues saves current values for webhook comparison
@@ -384,31 +397,96 @@ type StationWebhook struct {
 	Updated                int64    `json:"updated"`
 }
 
-func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
-	inMemoryStation := stationCache.Get(stationId)
-	if inMemoryStation != nil {
-		station := inMemoryStation.Value()
-		station.snapshotOldValues()
-		return station, nil
-	}
-	station := Station{}
-	err := db.GeneralDb.GetContext(ctx, &station,
-		`
-			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
-			FROM station WHERE id = ?
-		`, stationId)
+func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
+	err := db.GeneralDb.GetContext(ctx, station,
+		`SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
+		FROM station WHERE id = ?`, stationId)
 	statsCollector.IncDbQuery("select station", err)
+	return err
+}
 
+// peekStationRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekStationRecord(stationId string) (*Station, func(), error) {
+	if item := stationCache.Get(stationId); item != nil {
+		station := item.Value()
+		station.Lock()
+		return station, func() { station.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getStationRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
+	// Check cache first
+	if item := stationCache.Get(stationId); item != nil {
+		station := item.Value()
+		station.Lock()
+		return station, func() { station.Unlock() }, nil
+	}
+
+	dbStation := Station{}
+	err := loadStationFromDatabase(ctx, db, stationId, &dbStation)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	dbStation.ClearDirty()
+
+	// Atomically cache the loaded Station - if another goroutine raced us,
+	// we'll get their Station and use that instead (ensuring same mutex)
+	existingStation, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
+		return &dbStation
+	})
+
+	station := existingStation.Value()
+	station.Lock()
+	return station, func() { station.Unlock() }, nil
+}
+
+// getStationRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Caller MUST call returned unlock function if non-nil.
+func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
+	station, unlock, err := getStationRecordReadOnly(ctx, db, stationId)
+	if err != nil || station == nil {
+		return nil, nil, err
+	}
+	station.snapshotOldValues()
+	return station, unlock, nil
+}
+
+// getOrCreateStationRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
+	// Create new Station atomically - function only called if key doesn't exist
+	stationItem, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
+		return &Station{Id: stationId, newRecord: true}
+	})
+
+	station := stationItem.Value()
+	station.Lock()
+
+	if station.newRecord {
+		// We should attempt to load from database
+		err := loadStationFromDatabase(ctx, db, stationId, station)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				station.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			station.newRecord = false
+			station.ClearDirty()
+		}
 	}
 
-	if err != nil {
-		return nil, err
-	}
-	stationCache.Set(stationId, &station, ttlcache.DefaultTTL)
 	station.snapshotOldValues()
-	return &station, nil
+	return station, func() { station.Unlock() }, nil
 }
 
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
@@ -590,11 +668,8 @@ func (station *Station) resetStationedPokemonFromStationDetailsNotFound() *Stati
 
 func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto) string {
 	stationId := request.StationId
-	stationMutex, _ := stationStripedMutex.GetLock(stationId)
-	stationMutex.Lock()
-	defer stationMutex.Unlock()
 
-	station, err := getStationRecord(ctx, db, stationId)
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId)
 	if err != nil {
 		log.Printf("Get station %s", err)
 		return "Error getting station"
@@ -604,6 +679,7 @@ func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.
 		log.Infof("Stationed pokemon details for station %s not found", stationId)
 		return fmt.Sprintf("Stationed pokemon details for station %s not found", stationId)
 	}
+	defer unlock()
 
 	station.resetStationedPokemonFromStationDetailsNotFound()
 	saveStationRecord(ctx, db, station)
@@ -612,11 +688,8 @@ func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.
 
 func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
 	stationId := request.StationId
-	stationMutex, _ := stationStripedMutex.GetLock(stationId)
-	stationMutex.Lock()
-	defer stationMutex.Unlock()
 
-	station, err := getStationRecord(ctx, db, stationId)
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId)
 	if err != nil {
 		log.Printf("Get station %s", err)
 		return "Error getting station"
@@ -626,6 +699,7 @@ func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, reque
 		log.Infof("Stationed pokemon details for station %s not found", stationId)
 		return fmt.Sprintf("Stationed pokemon details for station %s not found", stationId)
 	}
+	defer unlock()
 
 	station.updateFromGetStationedPokemonDetailsOutProto(stationDetails)
 	saveStationRecord(ctx, db, station)

@@ -1,9 +1,12 @@
 package decoder
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"golbat/db"
@@ -18,6 +21,8 @@ import (
 // Route struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Route struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id               string      `db:"id"`
 	Name             string      `db:"name"`
 	Shortcode        string      `db:"shortcode"`
@@ -44,6 +49,13 @@ type Route struct {
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+
+	oldValues RouteOldValues `db:"-" json:"-"` // Old values for webhook comparison
+}
+
+// RouteOldValues holds old field values for webhook comparison
+type RouteOldValues struct {
+	Version int64
 }
 
 // IsDirty returns true if any field has been modified
@@ -59,6 +71,24 @@ func (r *Route) ClearDirty() {
 // IsNewRecord returns true if this is a new record (not yet in DB)
 func (r *Route) IsNewRecord() bool {
 	return r.newRecord
+}
+
+// Lock acquires the Route's mutex
+func (r *Route) Lock() {
+	r.mu.Lock()
+}
+
+// Unlock releases the Route's mutex
+func (r *Route) Unlock() {
+	r.mu.Unlock()
+}
+
+// snapshotOldValues saves current values for webhook comparison
+// Call this after loading from cache/DB but before modifications
+func (r *Route) snapshotOldValues() {
+	r.oldValues = RouteOldValues{
+		Version: r.Version,
+	}
 }
 
 // --- Set methods with dirty tracking ---
@@ -263,34 +293,98 @@ func (r *Route) SetWaypoints(v string) {
 	}
 }
 
-func getRouteRecord(db db.DbDetails, id string) (*Route, error) {
-	inMemoryRoute := routeCache.Get(id)
-	if inMemoryRoute != nil {
-		route := inMemoryRoute.Value()
-		return route, nil
-	}
-
-	route := Route{}
-	err := db.GeneralDb.Get(&route,
-		`
-		SELECT *
-		FROM route
-		WHERE route.id = ?
-		`,
-		id,
-	)
+func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string, route *Route) error {
+	err := db.GeneralDb.GetContext(ctx, route,
+		`SELECT * FROM route WHERE route.id = ?`, routeId)
 	statsCollector.IncDbQuery("select route", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	} else if err != nil {
-		return nil, err
-	}
-
-	routeCache.Set(id, &route, ttlcache.DefaultTTL)
-	return &route, nil
+	return err
 }
 
-func saveRouteRecord(db db.DbDetails, route *Route) error {
+// peekRouteRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekRouteRecord(routeId string) (*Route, func(), error) {
+	if item := routeCache.Get(routeId); item != nil {
+		route := item.Value()
+		route.Lock()
+		return route, func() { route.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getRouteRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
+	// Check cache first
+	if item := routeCache.Get(routeId); item != nil {
+		route := item.Value()
+		route.Lock()
+		return route, func() { route.Unlock() }, nil
+	}
+
+	dbRoute := Route{}
+	err := loadRouteFromDatabase(ctx, db, routeId, &dbRoute)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	dbRoute.ClearDirty()
+
+	// Atomically cache the loaded Route - if another goroutine raced us,
+	// we'll get their Route and use that instead (ensuring same mutex)
+	existingRoute, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
+		return &dbRoute
+	})
+
+	route := existingRoute.Value()
+	route.Lock()
+	return route, func() { route.Unlock() }, nil
+}
+
+// getRouteRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Caller MUST call returned unlock function if non-nil.
+func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
+	route, unlock, err := getRouteRecordReadOnly(ctx, db, routeId)
+	if err != nil || route == nil {
+		return nil, nil, err
+	}
+	route.snapshotOldValues()
+	return route, unlock, nil
+}
+
+// getOrCreateRouteRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreateRouteRecord(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
+	// Create new Route atomically - function only called if key doesn't exist
+	routeItem, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
+		return &Route{Id: routeId, newRecord: true}
+	})
+
+	route := routeItem.Value()
+	route.Lock()
+
+	if route.newRecord {
+		// We should attempt to load from database
+		err := loadRouteFromDatabase(ctx, db, routeId, route)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				route.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			route.newRecord = false
+			route.ClearDirty()
+		}
+	}
+
+	route.snapshotOldValues()
+	return route, func() { route.Unlock() }, nil
+}
+
+func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	// Skip save if not dirty and not new, unless 15-minute debounce expired
 	if !route.IsDirty() && !route.IsNewRecord() {
 		if route.Updated > time.Now().Unix()-GetUpdateThreshold(900) {
@@ -305,7 +399,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 		if dbDebugEnabled {
 			dbDebugLog("INSERT", "Route", route.Id, route.changedFields)
 		}
-		_, err := db.GeneralDb.NamedExec(
+		_, err := db.GeneralDb.NamedExecContext(ctx,
 			`
 			INSERT INTO route (
 			  id, name, shortcode, description, distance_meters,
@@ -337,7 +431,7 @@ func saveRouteRecord(db db.DbDetails, route *Route) error {
 		if dbDebugEnabled {
 			dbDebugLog("UPDATE", "Route", route.Id, route.changedFields)
 		}
-		_, err := db.GeneralDb.NamedExec(
+		_, err := db.GeneralDb.NamedExecContext(ctx,
 			`
 			UPDATE route SET
 				name = :name,
@@ -422,24 +516,14 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	}
 }
 
-func UpdateRouteRecordWithSharedRouteProto(db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
-	routeMutex, _ := routeStripedMutex.GetLock(sharedRouteProto.GetId())
-	routeMutex.Lock()
-	defer routeMutex.Unlock()
-
-	route, err := getRouteRecord(db, sharedRouteProto.GetId())
+func UpdateRouteRecordWithSharedRouteProto(ctx context.Context, db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
+	route, unlock, err := getOrCreateRouteRecord(ctx, db, sharedRouteProto.GetId())
 	if err != nil {
 		return err
 	}
-
-	if route == nil {
-		route = &Route{
-			Id:        sharedRouteProto.GetId(),
-			newRecord: true,
-		}
-	}
+	defer unlock()
 
 	route.updateFromSharedRouteProto(sharedRouteProto)
-	saveError := saveRouteRecord(db, route)
+	saveError := saveRouteRecord(ctx, db, route)
 	return saveError
 }

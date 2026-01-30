@@ -530,6 +530,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	if err != nil {
 		return nil, nil, err
 	}
+	dbPokemon.ClearDirty()
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
@@ -583,6 +584,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 		} else {
 			// We loaded
 			pokemon.newRecord = false
+			pokemon.ClearDirty()
 			pokemonRtreeUpdatePokemonOnGet(pokemon)
 		}
 	}
@@ -1613,11 +1615,14 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		Form:        int32(proto.PokemonDisplay.Form),
 	}
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
-		weather, err := getWeatherRecord(ctx, db, weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon))
-		if err != nil || weather == nil || !weather.GameplayCondition.Valid {
+		weather, unlock, err := peekWeatherRecord(weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon))
+		if weather == nil || !weather.GameplayCondition.Valid {
 			log.Warnf("Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 		} else {
 			scan.CellWeather = int32(weather.GameplayCondition.Int64)
+		}
+		if unlock != nil {
+			unlock()
 		}
 	}
 	if proto.CpMultiplier < 0.734 {
@@ -1838,13 +1843,16 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
 			cellWeather, found := weather[cellId]
 			if !found {
-				record, err := getWeatherRecord(ctx, db, cellId)
+				record, unlock, err := getWeatherRecordReadOnly(ctx, db, cellId)
 				if err != nil || record == nil || !record.GameplayCondition.Valid {
 					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 				} else {
 					log.Warnf("[POKEMON] Weather not found locally for %d at %d", pokemon.Id, cellId)
 					cellWeather = pogo.GameplayWeatherProto_WeatherCondition(record.GameplayCondition.Int64)
 					found = true
+				}
+				if unlock != nil {
+					unlock()
 				}
 			}
 			if found && cellWeather == pogo.GameplayWeatherProto_PARTLY_CLOUDY {

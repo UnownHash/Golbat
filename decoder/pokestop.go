@@ -683,6 +683,8 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 		return nil, nil, err
 	}
 
+	dbPokestop.ClearDirty()
+
 	// Atomically cache the loaded Pokestop - if another goroutine raced us,
 	// we'll get their Pokestop and use that instead (ensuring same mutex)
 	existingPokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
@@ -732,6 +734,7 @@ func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId stri
 		} else {
 			// We loaded from DB
 			pokestop.newRecord = false
+			pokestop.ClearDirty()
 			if config.Config.TestFortInMemory {
 				fortRtreeUpdatePokestopOnGet(pokestop)
 			}

@@ -454,7 +454,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeGetMapForts(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_ROUTES:
-		result = decodeGetRoutes(protoData.Data)
+		result = decodeGetRoutes(ctx, protoData.Data)
 		processed = true
 	case pogo.Method_METHOD_GET_CONTEST_DATA:
 		if getScanParameters(protoData).ProcessPokestops {
@@ -690,7 +690,7 @@ func decodeGetMapForts(ctx context.Context, sDec []byte) string {
 	return "No forts updated"
 }
 
-func decodeGetRoutes(payload []byte) string {
+func decodeGetRoutes(ctx context.Context, payload []byte) string {
 	getRoutesOutProto := &pogo.GetRoutesOutProto{}
 	if err := proto.Unmarshal(payload, getRoutesOutProto); err != nil {
 		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
@@ -711,7 +711,7 @@ func decodeGetRoutes(payload []byte) string {
 				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", routeSubmissionStatus.String())
 				continue
 			}
-			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(dbDetails, route)
+			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(ctx, dbDetails, route)
 			if decodeError != nil {
 				if decodeErrors[route.Id] != true {
 					decodeErrors[route.Id] = true
