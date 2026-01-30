@@ -78,7 +78,6 @@ var pokestopStripedMutex = stripedmutex.New(1103)
 var stationStripedMutex = stripedmutex.New(1103)
 var tappableStripedMutex = intstripedmutex.New(563)
 var incidentStripedMutex = stripedmutex.New(157)
-var pokemonStripedMutex = intstripedmutex.New(1103)
 var weatherStripedMutex = intstripedmutex.New(157)
 var routeStripedMutex = stripedmutex.New(157)
 
@@ -99,18 +98,6 @@ type gohbemLogger struct{}
 
 func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
-}
-
-func setPokemonCache(key uint64, value *Pokemon, ttl time.Duration) {
-	pokemonCache.Set(key, value, ttl)
-}
-
-func getPokemonFromCache(key uint64) *ttlcache.Item[uint64, *Pokemon] {
-	return pokemonCache.Get(key)
-}
-
-func deletePokemonFromCache(key uint64) {
-	pokemonCache.Delete(key)
 }
 
 func initDataCache() {
@@ -399,76 +386,81 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 	for _, wild := range wildPokemonList {
 		encounterId := wild.Data.EncounterId
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-		pokemonMutex.Lock()
 
+		// spawnpointUpdateFromWild doesn't need Pokemon lock
 		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
 
 		if scanParameters.ProcessWild {
-			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+			// Use read-only getter - we're only checking if update is needed, then queuing
+			pokemon, unlock, err := getPokemonRecordReadOnly(ctx, db, encounterId)
 			if err != nil {
-				log.Errorf("getOrCreatePokemonRecord: %s", err)
-			} else {
-				updateTime := wild.Timestamp / 1000
-				if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
-					// The sweeper will process it after timeout if no encounter arrives
-					pending := &PendingPokemon{
-						EncounterId:   encounterId,
-						WildPokemon:   wild.Data,
-						CellId:        int64(wild.Cell),
-						TimestampMs:   wild.Timestamp,
-						UpdateTime:    updateTime,
-						WeatherLookup: weatherLookup,
-						Username:      username,
-					}
-					pokemonPendingQueue.AddPending(pending)
+				log.Errorf("getPokemonRecordReadOnly: %s", err)
+				continue
+			}
+
+			updateTime := wild.Timestamp / 1000
+			shouldQueue := pokemon == nil || pokemon.wildSignificantUpdate(wild.Data, updateTime)
+
+			if unlock != nil {
+				unlock()
+			}
+
+			if shouldQueue {
+				// The sweeper will process it after timeout if no encounter arrives
+				pending := &PendingPokemon{
+					EncounterId:   encounterId,
+					WildPokemon:   wild.Data,
+					CellId:        int64(wild.Cell),
+					TimestampMs:   wild.Timestamp,
+					UpdateTime:    updateTime,
+					WeatherLookup: weatherLookup,
+					Username:      username,
 				}
+				pokemonPendingQueue.AddPending(pending)
 			}
 		}
-		pokemonMutex.Unlock()
 	}
 
 	if scanParameters.ProcessNearby {
 		for _, nearby := range nearbyPokemonList {
 			encounterId := nearby.Data.EncounterId
-			pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-			pokemonMutex.Lock()
 
-			pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+			pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
 				log.Printf("getOrCreatePokemonRecord: %s", err)
-			} else {
-				updateTime := nearby.Timestamp / 1000
-				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
-					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
-				}
+				continue
 			}
 
-			pokemonMutex.Unlock()
+			updateTime := nearby.Timestamp / 1000
+			if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
+				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+			}
+
+			unlock()
 		}
 	}
 
 	for _, mapPokemon := range mapPokemonList {
 		encounterId := mapPokemon.Data.EncounterId
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-		pokemonMutex.Lock()
 
-		pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
-		} else {
-			pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
-			storedDiskEncounter := diskEncounterCache.Get(encounterId)
-			if storedDiskEncounter != nil {
-				diskEncounter := storedDiskEncounter.Value()
-				diskEncounterCache.Delete(encounterId)
-				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
-				//log.Infof("Processed stored disk encounter")
-			}
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
+			continue
 		}
-		pokemonMutex.Unlock()
+
+		pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
+		storedDiskEncounter := diskEncounterCache.Get(encounterId)
+		if storedDiskEncounter != nil {
+			diskEncounter := storedDiskEncounter.Value()
+			diskEncounterCache.Delete(encounterId)
+			pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
+			//log.Infof("Processed stored disk encounter")
+		}
+		savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
+
+		unlock()
 	}
 }
 

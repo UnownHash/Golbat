@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"golbat/db"
-	"golbat/pogo"
 	"net/http"
 	"os"
 	"reflect"
 	"time"
+
+	"golbat/db"
+	"golbat/pogo"
 
 	"github.com/golang/geo/s2"
 	log "github.com/sirupsen/logrus"
@@ -203,7 +204,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	pokemonLocked := 0
 	pokemonUpdated := 0
 	pokemonCpUpdated := 0
-	var pokemon *Pokemon
+	//var pokemon *Pokemon
 	pokemonTree2.Search([2]float64{cellLo.Lng.Degrees(), cellLo.Lat.Degrees()}, [2]float64{cellHi.Lng.Degrees(), cellHi.Lat.Degrees()}, func(min, max [2]float64, pokemonId uint64) bool {
 		if !weatherCell.ContainsPoint(s2.PointFromLatLng(s2.LatLngFromDegrees(min[1], min[0]))) {
 			return true
@@ -224,13 +225,12 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather {
 			return true
 		}
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(pokemonId)
-		pokemonMutex.Lock()
-		pokemonLocked++
-		pokemonEntry := getPokemonFromCache(pokemonId)
-		if pokemonEntry != nil {
-			pokemon = pokemonEntry.Value()
+
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(pokemonId)
+		if pokemon != nil {
+			pokemonLocked++
 			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix && pokemon.Updated.ValueOrZero() < timestamp {
+				pokemon.snapshotOldValues()
 				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
 					pokemon.Weather = null.IntFrom(int64(newWeather))
@@ -244,8 +244,8 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 					}
 				}
 			}
+			unlock()
 		}
-		pokemonMutex.Unlock()
 		return true
 	})
 	if pokemonCpUpdated > 0 {

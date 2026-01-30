@@ -35,6 +35,8 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                      uint64      `db:"id" json:"id,string"`
 	PokestopId              null.String `db:"pokestop_id" json:"pokestop_id"`
 	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
@@ -168,6 +170,16 @@ func (pokemon *Pokemon) snapshotOldValues() {
 		Lat:       pokemon.Lat,
 		Lon:       pokemon.Lon,
 	}
+}
+
+// Lock acquires the Pokemon's mutex
+func (pokemon *Pokemon) Lock() {
+	pokemon.mu.Lock()
+}
+
+// Unlock releases the Pokemon's mutex
+func (pokemon *Pokemon) Unlock() {
+	pokemon.mu.Unlock()
 }
 
 // --- Set methods with dirty tracking ---
@@ -469,54 +481,90 @@ func (pokemon *Pokemon) SetCapture3(v null.Float) {
 	}
 }
 
-func getPokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
-	if db.UsePokemonCache {
-		inMemoryPokemon := getPokemonFromCache(encounterId)
-		if inMemoryPokemon != nil {
-			pokemon := inMemoryPokemon.Value()
-			pokemon.snapshotOldValues() // Snapshot for webhook comparison
-			return pokemon, nil
-		}
+// peekPokemonRecordReadOnly acquires lock, does NOT take snapshot.
+// Use for read-only checks which will not cause a backing database lookup
+// Caller must use returned unlock function
+func peekPokemonRecordReadOnly(encounterId uint64) (*Pokemon, func(), error) {
+	if item := pokemonCache.Get(encounterId); item != nil {
+		pokemon := item.Value()
+		pokemon.Lock()
+		return pokemon, func() { pokemon.Unlock() }, nil
 	}
-	if config.Config.PokemonMemoryOnly {
-		return nil, nil
-	}
-	pokemon := Pokemon{}
 
-	err := db.PokemonDb.GetContext(ctx, &pokemon,
+	return nil, nil, nil
+}
+
+// getPokemonRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks, but will cause a backing database lookup
+// Caller MUST call returned unlock function.
+func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
+	// If we are in-memory only, this is identical to peek
+	if config.Config.PokemonMemoryOnly {
+		return peekPokemonRecordReadOnly(encounterId)
+	}
+
+	// Check cache first
+	if item := pokemonCache.Get(encounterId); item != nil {
+		pokemon := item.Value()
+		pokemon.Lock()
+		return pokemon, func() { pokemon.Unlock() }, nil
+	}
+
+	dbPokemon := Pokemon{}
+	err := db.PokemonDb.GetContext(ctx, &dbPokemon,
 		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, "+
 			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
 			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
 			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
 			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
-
 	statsCollector.IncDbQuery("select pokemon", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
 	}
-
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	pokemon.snapshotOldValues() // Snapshot for webhook comparison
-	if db.UsePokemonCache {
-		setPokemonCache(encounterId, &pokemon, ttlcache.DefaultTTL)
-	}
-	pokemonRtreeUpdatePokemonOnGet(&pokemon)
-	return &pokemon, nil
+	// Atomically cache the loaded Pokemon - if another goroutine raced us,
+	// we'll get their Pokemon and use that instead (ensuring same mutex)
+	pokemon := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+		// Only called if key doesn't exist - our Pokemon wins
+		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
+		return &dbPokemon
+	}, ttlcache.DefaultTTL)
+
+	pokemon.Lock()
+	return pokemon, func() { pokemon.Unlock() }, nil
 }
 
-func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, error) {
-	pokemon, err := getPokemonRecord(ctx, db, encounterId)
+// getPokemonRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Use when modifying the Pokemon.
+// Caller MUST call returned unlock function.
+func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
+	pokemon, unlock, err := getPokemonRecordReadOnly(ctx, db, encounterId)
+	if err != nil || pokemon == nil {
+		return nil, nil, err
+	}
+	pokemon.snapshotOldValues()
+	return pokemon, unlock, nil
+}
+
+// getOrCreatePokemonRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
+	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId)
 	if pokemon != nil || err != nil {
-		return pokemon, err
+		return pokemon, unlock, err
 	}
-	pokemon = &Pokemon{Id: encounterId, newRecord: true}
-	if db.UsePokemonCache {
-		setPokemonCache(encounterId, pokemon, ttlcache.DefaultTTL)
-	}
-	return pokemon, nil
+
+	// Create new Pokemon atomically - function only called if key doesn't exist
+	pokemon = pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+		return &Pokemon{Id: encounterId, newRecord: true}
+	}, ttlcache.DefaultTTL)
+
+	pokemon.Lock()
+	pokemon.snapshotOldValues()
+	return pokemon, func() { pokemon.Unlock() }, nil
 }
 
 // hasChangesPokemon compares two Pokemon structs
@@ -662,7 +710,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
-				deletePokemonFromCache(pokemon.Id) // Force reload of pokemon from database
+				pokemonCache.Delete(pokemon.Id)
+				// Force reload of pokemon from database
 				return
 			}
 
@@ -718,7 +767,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if err != nil {
 				log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
 				log.Errorf("Full structure: %+v", pokemon)
-				deletePokemonFromCache(pokemon.Id) // Force reload of pokemon from database
+				pokemonCache.Delete(pokemon.Id)
+				// Force reload of pokemon from database
 
 				return
 			}
@@ -753,7 +803,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		setPokemonCache(pokemon.Id, pokemon, pokemon.remainingDuration(now))
+		pokemonCache.Set(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 	}
 }
 
@@ -1817,15 +1867,12 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 		pokemonPendingQueue.Remove(encounterId)
 	}
 
-	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-	pokemonMutex.Lock()
-	defer pokemonMutex.Unlock()
-
-	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
+	defer unlock()
 
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000)
@@ -1843,21 +1890,22 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 
 	encounterId := uint64(encounter.Pokemon.PokemonDisplay.DisplayId)
 
-	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-	pokemonMutex.Lock()
-	defer pokemonMutex.Unlock()
-
-	pokemon, err := getPokemonRecord(ctx, db, encounterId)
+	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
 
 	if pokemon == nil || pokemon.isNewRecord() {
-		// No pokemon found
+		// No pokemon found - unlock not set when pokemon is nil
+		if unlock != nil {
+			unlock()
+		}
 		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
+	defer unlock()
+
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
@@ -1870,15 +1918,13 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string, timestampMs int64) string {
 	encounterId := request.GetEncounterId()
 
-	pokemonMutex, _ := pokemonStripedMutex.GetLock(encounterId)
-	pokemonMutex.Lock()
-	defer pokemonMutex.Unlock()
-
-	pokemon, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
 	}
+	defer unlock()
+
 	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username, timestampMs)
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called

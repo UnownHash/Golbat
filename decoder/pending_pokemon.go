@@ -124,16 +124,12 @@ func (q *PokemonPendingQueue) StartSweeper(ctx context.Context, interval time.Du
 // processExpired handles pokemon that didn't receive an encounter within the timeout
 func (q *PokemonPendingQueue) processExpired(ctx context.Context, dbDetails db.DbDetails, expired []*PendingPokemon) {
 	for _, p := range expired {
-		pokemonMutex, _ := pokemonStripedMutex.GetLock(p.EncounterId)
-		pokemonMutex.Lock()
-
 		processCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 
-		pokemon, err := getOrCreatePokemonRecord(processCtx, dbDetails, p.EncounterId)
+		pokemon, unlock, err := getOrCreatePokemonRecord(processCtx, dbDetails, p.EncounterId)
 		if err != nil {
 			log.Errorf("getOrCreatePokemonRecord in sweeper: %s", err)
 			cancel()
-			pokemonMutex.Unlock()
 			continue
 		}
 
@@ -145,8 +141,8 @@ func (q *PokemonPendingQueue) processExpired(ctx context.Context, dbDetails db.D
 			savePokemonRecordAsAtTime(processCtx, dbDetails, pokemon, false, true, true, p.UpdateTime)
 		}
 
+		unlock()
 		cancel()
-		pokemonMutex.Unlock()
 	}
 }
 

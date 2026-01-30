@@ -96,6 +96,16 @@ func (sc *ShardedCache[K, V]) DeleteAll() {
 	}
 }
 
+// GetOrSetFunc atomically gets an existing item or creates and sets a new one.
+// If key exists, returns existing value (createFunc NOT called).
+// If key doesn't exist, calls createFunc to create value, sets it, and returns it.
+// This prevents race conditions and avoids creating objects unnecessarily.
+func (sc *ShardedCache[K, V]) GetOrSetFunc(key K, createFunc func() V, ttl time.Duration) V {
+	shard := sc.getShard(key)
+	item, _ := shard.GetOrSetFunc(key, createFunc, ttlcache.WithTTL[K, V](ttl))
+	return item.Value()
+}
+
 // --- Key conversion helpers ---
 
 // Uint64KeyToShard is the identity function for uint64 keys
