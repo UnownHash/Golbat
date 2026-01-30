@@ -97,8 +97,6 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 }
 
 func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []string, fortType FortType, change FortChange) {
-	var gyms []Gym
-	var stops []Pokestop
 	if fortType == GYM {
 		for _, id := range ids {
 			gym, err := GetGymRecord(ctx, dbDetails, id)
@@ -108,28 +106,25 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 			if gym == nil {
 				continue
 			}
-			gyms = append(gyms, *gym)
+			fort := InitWebHookFortFromGym(gym)
+			CreateFortWebHooks(fort, &FortWebhook{}, change)
 		}
 	}
 	if fortType == POKESTOP {
 		for _, id := range ids {
-			stop, err := GetPokestopRecord(ctx, dbDetails, id)
+			stop, unlock, err := getPokestopRecordReadOnly(ctx, dbDetails, id)
 			if err != nil {
 				continue
 			}
 			if stop == nil {
 				continue
 			}
-			stops = append(stops, *stop)
+
+			fort := InitWebHookFortFromPokestop(stop)
+			unlock()
+
+			CreateFortWebHooks(fort, &FortWebhook{}, change)
 		}
-	}
-	for _, gym := range gyms {
-		fort := InitWebHookFortFromGym(&gym)
-		CreateFortWebHooks(fort, &FortWebhook{}, change)
-	}
-	for _, stop := range stops {
-		fort := InitWebHookFortFromPokestop(&stop)
-		CreateFortWebHooks(fort, &FortWebhook{}, change)
 	}
 }
 
@@ -149,7 +144,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 			Old:        old,
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
-		statsCollector.UpdateFortCount(areas, new.Type, "removal")
+		statsCollector.UpdateFortCount(areas, old.Type, "removal")
 	} else if change == EDIT {
 		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
 		var editTypes []string

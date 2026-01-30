@@ -884,10 +884,11 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 
 		var pokestopName *string
 		if pokemon.PokestopId.Valid {
-			pokestop, _ := GetPokestopRecord(ctx, db, pokemon.PokestopId.String)
+			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.String)
 			name := "Unknown"
 			if pokestop != nil {
 				name = pokestop.Name.ValueOrZero()
+				unlock()
 			}
 			pokestopName = &name
 		}
@@ -1086,7 +1087,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	spawnpointId := mapPokemon.SpawnpointId
 
-	pokestop, _ := GetPokestopRecord(ctx, db, spawnpointId)
+	pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, spawnpointId)
 	if pokestop == nil {
 		// Unrecognised pokestop
 		return
@@ -1095,6 +1096,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SetLat(pokestop.Lat)
 	pokemon.SetLon(pokestop.Lon)
 	pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
+	unlock()
 
 	if mapPokemon.PokemonDisplay != nil {
 		pokemon.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
@@ -1149,7 +1151,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		pokestop, _ := GetPokestopRecord(ctx, db, pokestopId)
+		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokestopId)
 		if pokestop == nil {
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
@@ -1158,6 +1160,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			pokemon.SetPokestopId(null.StringFrom(pokestopId))
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
+			unlock()
 		}
 	}
 	if useCellLatLon {

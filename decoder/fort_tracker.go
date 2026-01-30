@@ -431,11 +431,13 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 	}
 }
 
-// clearPokestopWithLock marks a pokestop as deleted while holding the striped mutex
+// clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
 func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(stopId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
+	// Lock the pokestop if it exists in cache
+	pokestop, unlock, _ := PeekPokestopRecord(stopId)
+	if pokestop != nil {
+		defer unlock()
+	}
 
 	pokestopCache.Delete(stopId)
 	if err := db.ClearOldPokestops(ctx, dbDetails, []string{stopId}); err != nil {

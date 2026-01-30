@@ -489,9 +489,12 @@ func GetPokestopPositions(c *gin.Context) {
 func GetPokestop(c *gin.Context) {
 	fortId := c.Param("fort_id")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	pokestop, err := decoder.GetPokestopRecord(ctx, dbDetails, fortId)
-	cancel()
+	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pokestop, unlock, err := decoder.PeekPokestopRecord(fortId)
+	if unlock != nil {
+		defer unlock()
+	}
+	//cancel()
 	if err != nil {
 		log.Warnf("GET /api/pokestop/id/:fort_id/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)

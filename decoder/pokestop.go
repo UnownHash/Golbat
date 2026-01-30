@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
@@ -24,6 +25,8 @@ import (
 
 // Pokestop struct.
 type Pokestop struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
 	Id                         string      `db:"id" json:"id"`
 	Lat                        float64     `db:"lat" json:"lat"`
 	Lon                        float64     `db:"lon" json:"lon"`
@@ -157,6 +160,16 @@ func (p *Pokestop) snapshotOldValues() {
 		Lat:                  p.Lat,
 		Lon:                  p.Lon,
 	}
+}
+
+// Lock acquires the Pokestop's mutex
+func (p *Pokestop) Lock() {
+	p.mu.Lock()
+}
+
+// Unlock releases the Pokestop's mutex
+func (p *Pokestop) Unlock() {
+	p.mu.Unlock()
 }
 
 // --- Set methods with dirty tracking ---
@@ -622,16 +635,8 @@ type PokestopWebhook struct {
 	ShowcaseRankings        json.RawMessage `json:"showcase_rankings"`
 }
 
-func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, error) {
-	stop := pokestopCache.Get(fortId)
-	if stop != nil {
-		//log.Debugf("GetPokestopRecord %s (from cache)", fortId)
-		pokestop := stop.Value()
-		pokestop.snapshotOldValues() // Snapshot for webhook comparison
-		return pokestop, nil
-	}
-	pokestop := Pokestop{}
-	err := db.GeneralDb.GetContext(ctx, &pokestop,
+func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
+	err := db.GeneralDb.GetContext(ctx, pokestop,
 		`SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,
 			pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,
 			quest_rewards, quest_template, quest_title,
@@ -643,22 +648,96 @@ func GetPokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Po
 			showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
 			FROM pokestop
 			WHERE pokestop.id = ? `, fortId)
-	//log.Debugf("GetPokestopRecord %s (from db)", fortId)
-
 	statsCollector.IncDbQuery("select pokestop", err)
+	return err
+}
+
+// PeekPokestopRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func PeekPokestopRecord(fortId string) (*Pokestop, func(), error) {
+	if item := pokestopCache.Get(fortId); item != nil {
+		pokestop := item.Value()
+		pokestop.Lock()
+		return pokestop, func() { pokestop.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getPokestopRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
+	// Check cache first
+	if item := pokestopCache.Get(fortId); item != nil {
+		pokestop := item.Value()
+		pokestop.Lock()
+		return pokestop, func() { pokestop.Unlock() }, nil
+	}
+
+	dbPokestop := Pokestop{}
+	err := loadPokestopFromDatabase(ctx, db, fortId, &dbPokestop)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	pokestop.snapshotOldValues() // Snapshot for webhook comparison
-	pokestopCache.Set(fortId, &pokestop, ttlcache.DefaultTTL)
-	if config.Config.TestFortInMemory {
-		fortRtreeUpdatePokestopOnGet(&pokestop)
+	// Atomically cache the loaded Pokestop - if another goroutine raced us,
+	// we'll get their Pokestop and use that instead (ensuring same mutex)
+	pokestop := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+		// Only called if key doesn't exist - our Pokestop wins
+		if config.Config.TestFortInMemory {
+			fortRtreeUpdatePokestopOnGet(&dbPokestop)
+		}
+		return &dbPokestop
+	}, ttlcache.DefaultTTL)
+
+	pokestop.Lock()
+	return pokestop, func() { pokestop.Unlock() }, nil
+}
+
+// getPokestopRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Use when modifying the Pokestop.
+// Caller MUST call returned unlock function if non-nil.
+func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
+	pokestop, unlock, err := getPokestopRecordReadOnly(ctx, db, fortId)
+	if err != nil || pokestop == nil {
+		return nil, nil, err
 	}
-	return &pokestop, nil
+	pokestop.snapshotOldValues()
+	return pokestop, unlock, nil
+}
+
+// getOrCreatePokestopRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
+	// Create new Pokestop atomically - function only called if key doesn't exist
+	pokestop := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+		return &Pokestop{Id: fortId, newRecord: true}
+	}, ttlcache.DefaultTTL)
+
+	pokestop.Lock()
+
+	if pokestop.newRecord {
+		// We should attempt to load from database
+		err := loadPokestopFromDatabase(ctx, db, fortId, pokestop)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				pokestop.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			pokestop.newRecord = false
+			if config.Config.TestFortInMemory {
+				fortRtreeUpdatePokestopOnGet(pokestop)
+			}
+		}
+	}
+
+	pokestop.snapshotOldValues()
+	return pokestop, func() { pokestop.Unlock() }, nil
 }
 
 var LureTime int64 = 1800
@@ -1351,19 +1430,13 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 }
 
 func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(fort.Id)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestop, err := GetPokestopRecord(ctx, db, fort.Id) // should check error
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.Id)
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
 	}
+	defer unlock()
 
-	if pokestop == nil {
-		pokestop = &Pokestop{newRecord: true}
-	}
 	pokestop.updatePokestopFromFortDetailsProto(fort)
 
 	updatePokestopGetMapFortCache(pokestop)
@@ -1383,19 +1456,14 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	}
 
 	statsCollector.IncDecodeQuest("ok", haveArStr)
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(quest.FortId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
 
-	pokestop, err := GetPokestopRecord(ctx, db, quest.FortId)
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId)
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
 	}
+	defer unlock()
 
-	if pokestop == nil {
-		pokestop = &Pokestop{newRecord: true}
-	}
 	questTitle := pokestop.updatePokestopFromQuestProto(quest, haveAr)
 
 	updatePokestopGetMapFortCache(pokestop)
@@ -1428,11 +1496,7 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 }
 
 func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(mapFort.Id)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestop, err := GetPokestopRecord(ctx, db, mapFort.Id)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.Id)
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -1441,6 +1505,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	if pokestop == nil {
 		return false, ""
 	}
+	defer unlock()
 
 	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
 	savePokestopRecord(ctx, db, pokestop)
@@ -1474,11 +1539,7 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 
 	contest := contestData.ContestIncident.Contests[0]
 
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestop, err := GetPokestopRecord(ctx, db, fortId)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId)
 	if err != nil {
 		log.Printf("Get pokestop %s", err)
 		return "Error getting pokestop"
@@ -1488,6 +1549,7 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 		log.Infof("Contest data for pokestop %s not found", fortId)
 		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
 	}
+	defer unlock()
 
 	pokestop.updatePokestopFromGetContestDataOutProto(contest)
 	savePokestopRecord(ctx, db, pokestop)
@@ -1502,11 +1564,7 @@ func getFortIdFromContest(id string) string {
 func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
 	fortId := getFortIdFromContest(request.GetContestId())
 
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestop, err := GetPokestopRecord(ctx, db, fortId)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId)
 	if err != nil {
 		log.Printf("Get pokestop %s", err)
 		return "Error getting pokestop"
@@ -1516,6 +1574,7 @@ func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDeta
 		log.Infof("Contest data for pokestop %s not found", fortId)
 		return fmt.Sprintf("Contest data for pokestop %s not found", fortId)
 	}
+	defer unlock()
 
 	pokestop.updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData)
 	savePokestopRecord(ctx, db, pokestop)

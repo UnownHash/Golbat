@@ -74,7 +74,6 @@ var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var gymStripedMutex = stripedmutex.New(1103)
-var pokestopStripedMutex = stripedmutex.New(1103)
 var stationStripedMutex = stripedmutex.New(1103)
 var tappableStripedMutex = intstripedmutex.New(563)
 var incidentStripedMutex = stripedmutex.New(157)
@@ -271,19 +270,12 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	for _, fort := range p {
 		fortId := fort.Data.FortId
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
-			pokestopMutex, _ := pokestopStripedMutex.GetLock(fortId)
-
-			pokestopMutex.Lock()
-			pokestop, err := GetPokestopRecord(ctx, db, fortId) // should check error
+			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId)
 			if err != nil {
-				log.Errorf("getPokestopRecord: %s", err)
-				pokestopMutex.Unlock()
+				log.Errorf("getOrCreatePokestopRecord: %s", err)
 				continue
 			}
 
-			if pokestop == nil {
-				pokestop = &Pokestop{newRecord: true}
-			}
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
 
 			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
@@ -295,6 +287,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			}
 
 			savePokestopRecord(ctx, db, pokestop)
+			unlock()
 
 			incidents := fort.Data.PokestopDisplays
 			if incidents == nil && fort.Data.PokestopDisplay != nil {
@@ -324,7 +317,6 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 					incidentMutex.Unlock()
 				}
 			}
-			pokestopMutex.Unlock()
 		}
 
 		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
@@ -346,9 +338,10 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			// If this is a new gym, check if it was converted from a pokestop and copy shared fields
 			if gym.IsNewRecord() {
-				pokestop, _ := GetPokestopRecord(ctx, db, fortId)
+				pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId)
 				if pokestop != nil {
 					gym.copySharedFieldsFrom(pokestop)
+					unlock()
 				}
 			}
 

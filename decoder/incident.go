@@ -281,12 +281,14 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	createIncidentWebhooks(ctx, db, incident)
 
-	stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
-	if stop == nil {
-		stop = &Pokestop{}
+	var stopLat, stopLon float64
+	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
+	if stop != nil {
+		stopLat, stopLon = stop.Lat, stop.Lon
+		unlock()
 	}
 
-	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
+	areas := MatchStatsGeofence(stopLat, stopLon)
 	updateIncidentStats(incident, areas)
 
 	incident.ClearDirty()
@@ -299,14 +301,19 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 	isNew := incident.IsNewRecord()
 
 	if isNew || (old.ExpirationTime != incident.ExpirationTime || old.Character != incident.Character || old.Confirmed != incident.Confirmed || old.Slot1PokemonId != incident.Slot1PokemonId) {
-		stop, _ := GetPokestopRecord(ctx, db, incident.PokestopId)
-		if stop == nil {
-			stop = &Pokestop{}
+		var pokestopName, stopUrl string
+		var stopLat, stopLon float64
+		var stopEnabled bool
+		stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
+		if stop != nil {
+			pokestopName = stop.Name.ValueOrZero()
+			stopLat, stopLon = stop.Lat, stop.Lon
+			stopUrl = stop.Url.ValueOrZero()
+			stopEnabled = stop.Enabled.ValueOrZero()
+			unlock()
 		}
-
-		pokestopName := "Unknown"
-		if stop.Name.Valid {
-			pokestopName = stop.Name.String
+		if pokestopName == "" {
+			pokestopName = "Unknown"
 		}
 
 		var lineup []webhookLineup
@@ -333,11 +340,11 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 		incidentHook := IncidentWebhook{
 			Id:                      incident.Id,
 			PokestopId:              incident.PokestopId,
-			Latitude:                stop.Lat,
-			Longitude:               stop.Lon,
+			Latitude:                stopLat,
+			Longitude:               stopLon,
 			PokestopName:            pokestopName,
-			Url:                     stop.Url.ValueOrZero(),
-			Enabled:                 stop.Enabled.ValueOrZero(),
+			Url:                     stopUrl,
+			Enabled:                 stopEnabled,
 			Start:                   incident.StartTime,
 			IncidentExpireTimestamp: incident.ExpirationTime,
 			Expiration:              incident.ExpirationTime,
