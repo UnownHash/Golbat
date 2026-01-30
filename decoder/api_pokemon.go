@@ -11,6 +11,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
+	"github.com/jellydator/ttlcache/v3"
 )
 
 const earthRadiusKm = 6371
@@ -157,4 +158,43 @@ func GetOnePokemon(pokemonId uint64) *ApiPokemonResult {
 		return &apiPokemon
 	}
 	return nil
+}
+
+type ApiPokemonLiveStatsResult struct {
+	PokemonActive      int `json:"pokemon_active"`
+	PokemonActiveIv    int `json:"pokemon_active_iv"`
+	PokemonActive100iv int `json:"pokemon_active_100iv"`
+	PokemonActiveShiny int `json:"pokemon_active_shiny"`
+}
+
+func GetLiveStatsPokemon() *ApiPokemonLiveStatsResult {
+	start := time.Now()
+	now := time.Now().Unix()
+
+	liveStats := &ApiPokemonLiveStatsResult{
+		0,
+		0,
+		0,
+		0,
+	}
+
+	pokemonCache.Range(func(pokemonCacheEntry *ttlcache.Item[string, Pokemon]) bool {
+	    pokemon := pokemonCacheEntry.Value()
+		if int64(valueOrMinus1(pokemon.ExpireTimestamp)) > now {
+			liveStats.PokemonActive++
+			if !pokemon.Iv.IsZero() {
+				liveStats.PokemonActiveIv++
+			}
+			if bool(pokemon.Shiny.ValueOrZero()) {
+				liveStats.PokemonActiveShiny++
+			}
+			if int(pokemon.Iv.ValueOrZero()) == 100 {
+				liveStats.PokemonActive100iv++
+			}
+		}
+		return true
+	})
+
+	log.Infof("apiLiveStats - %d pokemon_active, %d pokemon_active_iv, %d pokemon_active_100iv, %d pokemon_active_shiny, total time %s", liveStats.PokemonActive, liveStats.PokemonActiveIv, liveStats.PokemonActive100iv, liveStats.PokemonActiveShiny, time.Since(start))
+	return liveStats
 }
