@@ -486,11 +486,11 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		station.changedFields = station.changedFields[:0]
 	}
 	station.ClearDirty()
+	createStationWebhooks(station)
 	if station.IsNewRecord() {
 		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
 		station.newRecord = false
 	}
-	createStationWebhooks(station)
 }
 
 func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {

@@ -1207,7 +1207,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 			ArScanEligible:          stop.ArScanEligible.ValueOrZero(),
 			PowerUpLevel:            stop.PowerUpLevel.ValueOrZero(),
 			PowerUpPoints:           stop.PowerUpPoints.ValueOrZero(),
-			PowerUpEndTimestamp:     stop.PowerUpPoints.ValueOrZero(),
+			PowerUpEndTimestamp:     stop.PowerUpEndTimestamp.ValueOrZero(),
 			Updated:                 stop.Updated,
 			ShowcaseFocus:           stop.ShowcaseFocus,
 			ShowcasePokemonId:       stop.ShowcasePokemon,
@@ -1329,14 +1329,15 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	if dbDebugEnabled {
 		pokestop.changedFields = pokestop.changedFields[:0]
 	}
+
+	createPokestopWebhooks(pokestop)
+	createPokestopFortWebhooks(pokestop)
 	if pokestop.IsNewRecord() {
 		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
 		pokestop.newRecord = false
 	}
 	pokestop.ClearDirty()
 
-	createPokestopWebhooks(pokestop)
-	createPokestopFortWebhooks(pokestop)
 }
 
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {

@@ -68,7 +68,8 @@ type Gym struct {
 	Defenders              null.String `db:"defenders" json:"defenders"`
 	Rsvps                  null.String `db:"rsvps" json:"rsvps"`
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (to db)
+	internalDirty bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (in memory only)
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 
@@ -143,9 +144,15 @@ func (gym *Gym) IsDirty() bool {
 	return gym.dirty
 }
 
+// IsInternalDirty returns true if any field has been modified for in-memory
+func (gym *Gym) IsInternalDirty() bool {
+	return gym.internalDirty
+}
+
 // ClearDirty resets the dirty flag (call after saving to DB)
 func (gym *Gym) ClearDirty() {
 	gym.dirty = false
+	gym.internalDirty = false
 }
 
 // IsNewRecord returns true if this is a new record (not yet in DB)
@@ -348,7 +355,7 @@ func (gym *Gym) SetInBattle(v null.Int) {
 	if gym.InBattle != v {
 		gym.InBattle = v
 		//Do not set to dirty, as don't trigger an update
-		//gym.dirty = true
+		gym.internalDirty = true
 	}
 }
 
@@ -546,7 +553,7 @@ func (gym *Gym) SetDefenders(v null.String) {
 	if gym.Defenders != v {
 		gym.Defenders = v
 		//Do not set to dirty, as don't trigger an update
-		//gym.dirty = true
+		gym.internalDirty = true
 	}
 }
 
@@ -1095,7 +1102,7 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 
 func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	now := time.Now().Unix()
-	if !gym.IsNewRecord() && !gym.IsDirty() {
+	if !gym.IsNewRecord() && !gym.IsDirty() && !gym.IsInternalDirty() {
 		if gym.Updated > now-900 {
 			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
 			return
@@ -1103,71 +1110,73 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	}
 	gym.Updated = now
 
-	if gym.IsNewRecord() {
-		if dbDebugEnabled {
-			dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
-		}
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
+	if gym.IsDirty() {
+		if gym.IsNewRecord() {
+			if dbDebugEnabled {
+				dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
+			}
+			res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
+				"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
-		statsCollector.IncDbQuery("insert gym", err)
-		if err != nil {
-			log.Errorf("insert gym: %s", err)
-			return
-		}
+			statsCollector.IncDbQuery("insert gym", err)
+			if err != nil {
+				log.Errorf("insert gym: %s", err)
+				return
+			}
 
-		_, _ = res, err
-	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+			_, _ = res, err
+		} else {
+			if dbDebugEnabled {
+				dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+			}
+			res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
+				"lat = :lat, "+
+				"lon = :lon, "+
+				"name = :name, "+
+				"url = :url, "+
+				"last_modified_timestamp = :last_modified_timestamp, "+
+				"raid_end_timestamp = :raid_end_timestamp, "+
+				"raid_spawn_timestamp = :raid_spawn_timestamp, "+
+				"raid_battle_timestamp = :raid_battle_timestamp, "+
+				"updated = :updated, "+
+				"raid_pokemon_id = :raid_pokemon_id, "+
+				"guarding_pokemon_id = :guarding_pokemon_id, "+
+				"guarding_pokemon_display = :guarding_pokemon_display, "+
+				"available_slots = :available_slots, "+
+				"team_id = :team_id, "+
+				"raid_level = :raid_level, "+
+				"enabled = :enabled, "+
+				"ex_raid_eligible = :ex_raid_eligible, "+
+				"in_battle = :in_battle, "+
+				"raid_pokemon_move_1 = :raid_pokemon_move_1, "+
+				"raid_pokemon_move_2 = :raid_pokemon_move_2, "+
+				"raid_pokemon_form = :raid_pokemon_form, "+
+				"raid_pokemon_alignment = :raid_pokemon_alignment, "+
+				"raid_pokemon_cp = :raid_pokemon_cp, "+
+				"raid_is_exclusive = :raid_is_exclusive, "+
+				"cell_id = :cell_id, "+
+				"deleted = :deleted, "+
+				"total_cp = :total_cp, "+
+				"raid_pokemon_gender = :raid_pokemon_gender, "+
+				"sponsor_id = :sponsor_id, "+
+				"partner_id = :partner_id, "+
+				"raid_pokemon_costume = :raid_pokemon_costume, "+
+				"raid_pokemon_evolution = :raid_pokemon_evolution, "+
+				"ar_scan_eligible = :ar_scan_eligible, "+
+				"power_up_level = :power_up_level, "+
+				"power_up_points = :power_up_points, "+
+				"power_up_end_timestamp = :power_up_end_timestamp,"+
+				"description = :description,"+
+				"defenders = :defenders,"+
+				"rsvps = :rsvps "+
+				"WHERE id = :id", gym,
+			)
+			statsCollector.IncDbQuery("update gym", err)
+			if err != nil {
+				log.Errorf("Update gym %s", err)
+			}
+			_, _ = res, err
 		}
-		res, err := db.GeneralDb.NamedExecContext(ctx, "UPDATE gym SET "+
-			"lat = :lat, "+
-			"lon = :lon, "+
-			"name = :name, "+
-			"url = :url, "+
-			"last_modified_timestamp = :last_modified_timestamp, "+
-			"raid_end_timestamp = :raid_end_timestamp, "+
-			"raid_spawn_timestamp = :raid_spawn_timestamp, "+
-			"raid_battle_timestamp = :raid_battle_timestamp, "+
-			"updated = :updated, "+
-			"raid_pokemon_id = :raid_pokemon_id, "+
-			"guarding_pokemon_id = :guarding_pokemon_id, "+
-			"guarding_pokemon_display = :guarding_pokemon_display, "+
-			"available_slots = :available_slots, "+
-			"team_id = :team_id, "+
-			"raid_level = :raid_level, "+
-			"enabled = :enabled, "+
-			"ex_raid_eligible = :ex_raid_eligible, "+
-			"in_battle = :in_battle, "+
-			"raid_pokemon_move_1 = :raid_pokemon_move_1, "+
-			"raid_pokemon_move_2 = :raid_pokemon_move_2, "+
-			"raid_pokemon_form = :raid_pokemon_form, "+
-			"raid_pokemon_alignment = :raid_pokemon_alignment, "+
-			"raid_pokemon_cp = :raid_pokemon_cp, "+
-			"raid_is_exclusive = :raid_is_exclusive, "+
-			"cell_id = :cell_id, "+
-			"deleted = :deleted, "+
-			"total_cp = :total_cp, "+
-			"raid_pokemon_gender = :raid_pokemon_gender, "+
-			"sponsor_id = :sponsor_id, "+
-			"partner_id = :partner_id, "+
-			"raid_pokemon_costume = :raid_pokemon_costume, "+
-			"raid_pokemon_evolution = :raid_pokemon_evolution, "+
-			"ar_scan_eligible = :ar_scan_eligible, "+
-			"power_up_level = :power_up_level, "+
-			"power_up_points = :power_up_points, "+
-			"power_up_end_timestamp = :power_up_end_timestamp,"+
-			"description = :description,"+
-			"defenders = :defenders,"+
-			"rsvps = :rsvps "+
-			"WHERE id = :id", gym,
-		)
-		statsCollector.IncDbQuery("update gym", err)
-		if err != nil {
-			log.Errorf("Update gym %s", err)
-		}
-		_, _ = res, err
 	}
 
 	//gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
@@ -1183,7 +1192,6 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		gym.newRecord = false
 	}
 	gym.ClearDirty()
-
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
