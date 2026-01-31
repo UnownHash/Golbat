@@ -124,6 +124,12 @@ func (q *PokemonPendingQueue) StartSweeper(ctx context.Context, interval time.Du
 // processExpired handles pokemon that didn't receive an encounter within the timeout
 func (q *PokemonPendingQueue) processExpired(ctx context.Context, dbDetails db.DbDetails, expired []*PendingPokemon) {
 	for _, p := range expired {
+		// Check for shutdown signal between iterations
+		if ctx.Err() != nil {
+			log.Debug("Context cancelled, stopping expired pokemon processing")
+			return
+		}
+
 		processCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 
 		pokemon, unlock, err := getOrCreatePokemonRecord(processCtx, dbDetails, p.EncounterId)

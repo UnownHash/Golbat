@@ -3,13 +3,13 @@ package decoder
 import (
 	"sync"
 
-	null "github.com/guregu/null/v6"
+	"github.com/guregu/null/v6"
 )
 
 // Incident struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Incident struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
 	Id             string   `db:"id"`
 	PokestopId     string   `db:"pokestop_id"`
@@ -27,10 +27,10 @@ type Incident struct {
 	Slot3PokemonId null.Int `db:"slot_3_pokemon_id"`
 	Slot3Form      null.Int `db:"slot_3_form"`
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	dirty     bool `db:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
 
-	oldValues IncidentOldValues `db:"-" json:"-"` // Old values for webhook comparison
+	oldValues IncidentOldValues `db:"-"` // Old values for webhook comparison
 }
 
 // IncidentOldValues holds old field values for webhook comparison and stats
