@@ -9,24 +9,24 @@ import (
 // Tappable struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Tappable struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                      uint64      `db:"id" json:"id"`
-	Lat                     float64     `db:"lat" json:"lat"`
-	Lon                     float64     `db:"lon" json:"lon"`
-	FortId                  null.String `db:"fort_id" json:"fort_id"` // either fortId or spawnpointId are given
-	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
-	Type                    string      `db:"type" json:"type"`
-	Encounter               null.Int    `db:"pokemon_id" json:"pokemon_id"`
-	ItemId                  null.Int    `db:"item_id" json:"item_id"`
-	Count                   null.Int    `db:"count" json:"count"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
-	Updated                 int64       `db:"updated" json:"updated"`
+	Id                      uint64      `db:"id"`
+	Lat                     float64     `db:"lat"`
+	Lon                     float64     `db:"lon"`
+	FortId                  null.String `db:"fort_id"` // either fortId or spawnpointId are given
+	SpawnId                 null.Int    `db:"spawn_id"`
+	Type                    string      `db:"type"`
+	Encounter               null.Int    `db:"pokemon_id"`
+	ItemId                  null.Int    `db:"item_id"`
+	Count                   null.Int    `db:"count"`
+	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
+	Updated                 int64       `db:"updated"`
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 }
 
 // IsDirty returns true if any field has been modified

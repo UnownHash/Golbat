@@ -8,57 +8,57 @@ import (
 
 // Pokestop struct.
 type Pokestop struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                         string      `db:"id" json:"id"`
-	Lat                        float64     `db:"lat" json:"lat"`
-	Lon                        float64     `db:"lon" json:"lon"`
-	Name                       null.String `db:"name" json:"name"`
-	Url                        null.String `db:"url" json:"url"`
-	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp" json:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
-	Updated                    int64       `db:"updated" json:"updated"`
-	Enabled                    null.Bool   `db:"enabled" json:"enabled"`
-	QuestType                  null.Int    `db:"quest_type" json:"quest_type"`
-	QuestTimestamp             null.Int    `db:"quest_timestamp" json:"quest_timestamp"`
-	QuestTarget                null.Int    `db:"quest_target" json:"quest_target"`
-	QuestConditions            null.String `db:"quest_conditions" json:"quest_conditions"`
-	QuestRewards               null.String `db:"quest_rewards" json:"quest_rewards"`
-	QuestTemplate              null.String `db:"quest_template" json:"quest_template"`
-	QuestTitle                 null.String `db:"quest_title" json:"quest_title"`
-	QuestExpiry                null.Int    `db:"quest_expiry" json:"quest_expiry"`
-	CellId                     null.Int    `db:"cell_id" json:"cell_id"`
-	Deleted                    bool        `db:"deleted" json:"deleted"`
-	LureId                     int16       `db:"lure_id" json:"lure_id"`
-	FirstSeenTimestamp         int16       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
-	SponsorId                  null.Int    `db:"sponsor_id" json:"sponsor_id"`
-	PartnerId                  null.String `db:"partner_id" json:"partner_id"`
-	ArScanEligible             null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"` // is an 8
-	PowerUpLevel               null.Int    `db:"power_up_level" json:"power_up_level"`
-	PowerUpPoints              null.Int    `db:"power_up_points" json:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `db:"alternative_quest_type" json:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp" json:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target" json:"alternative_quest_target"`
-	AlternativeQuestConditions null.String `db:"alternative_quest_conditions" json:"alternative_quest_conditions"`
-	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards" json:"alternative_quest_rewards"`
-	AlternativeQuestTemplate   null.String `db:"alternative_quest_template" json:"alternative_quest_template"`
-	AlternativeQuestTitle      null.String `db:"alternative_quest_title" json:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry" json:"alternative_quest_expiry"`
-	Description                null.String `db:"description" json:"description"`
-	ShowcaseFocus              null.String `db:"showcase_focus" json:"showcase_focus"`
-	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id" json:"showcase_pokemon_id"`
-	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id" json:"showcase_pokemon_form_id"`
-	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id" json:"showcase_pokemon_type_id"`
-	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard" json:"showcase_ranking_standard"`
-	ShowcaseExpiry             null.Int    `db:"showcase_expiry" json:"showcase_expiry"`
-	ShowcaseRankings           null.String `db:"showcase_rankings" json:"showcase_rankings"`
+	Id                         string      `db:"id"`
+	Lat                        float64     `db:"lat"`
+	Lon                        float64     `db:"lon"`
+	Name                       null.String `db:"name"`
+	Url                        null.String `db:"url"`
+	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp"`
+	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp"`
+	Updated                    int64       `db:"updated"`
+	Enabled                    null.Bool   `db:"enabled"`
+	QuestType                  null.Int    `db:"quest_type"`
+	QuestTimestamp             null.Int    `db:"quest_timestamp"`
+	QuestTarget                null.Int    `db:"quest_target"`
+	QuestConditions            null.String `db:"quest_conditions"`
+	QuestRewards               null.String `db:"quest_rewards"`
+	QuestTemplate              null.String `db:"quest_template"`
+	QuestTitle                 null.String `db:"quest_title"`
+	QuestExpiry                null.Int    `db:"quest_expiry"`
+	CellId                     null.Int    `db:"cell_id"`
+	Deleted                    bool        `db:"deleted"`
+	LureId                     int16       `db:"lure_id"`
+	FirstSeenTimestamp         int16       `db:"first_seen_timestamp"`
+	SponsorId                  null.Int    `db:"sponsor_id"`
+	PartnerId                  null.String `db:"partner_id"`
+	ArScanEligible             null.Int    `db:"ar_scan_eligible"` // is an 8
+	PowerUpLevel               null.Int    `db:"power_up_level"`
+	PowerUpPoints              null.Int    `db:"power_up_points"`
+	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp"`
+	AlternativeQuestType       null.Int    `db:"alternative_quest_type"`
+	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp"`
+	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target"`
+	AlternativeQuestConditions null.String `db:"alternative_quest_conditions"`
+	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards"`
+	AlternativeQuestTemplate   null.String `db:"alternative_quest_template"`
+	AlternativeQuestTitle      null.String `db:"alternative_quest_title"`
+	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry"`
+	Description                null.String `db:"description"`
+	ShowcaseFocus              null.String `db:"showcase_focus"`
+	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id"`
+	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id"`
+	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id"`
+	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard"`
+	ShowcaseExpiry             null.Int    `db:"showcase_expiry"`
+	ShowcaseRankings           null.String `db:"showcase_rankings"`
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 
-	oldValues PokestopOldValues `db:"-" json:"-"` // Old values for webhook comparison
+	oldValues PokestopOldValues `db:"-"` // Old values for webhook comparison
 }
 
 // PokestopOldValues holds old field values for webhook comparison (populated when loading from cache/DB)

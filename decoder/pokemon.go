@@ -17,55 +17,55 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                      uint64      `db:"id" json:"id,string"`
-	PokestopId              null.String `db:"pokestop_id" json:"pokestop_id"`
-	SpawnId                 null.Int    `db:"spawn_id" json:"spawn_id"`
-	Lat                     float64     `db:"lat" json:"lat"`
-	Lon                     float64     `db:"lon" json:"lon"`
-	Weight                  null.Float  `db:"weight" json:"weight"`
-	Size                    null.Int    `db:"size" json:"size"`
-	Height                  null.Float  `db:"height" json:"height"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp" json:"expire_timestamp"`
-	Updated                 null.Int    `db:"updated" json:"updated"`
-	PokemonId               int16       `db:"pokemon_id" json:"pokemon_id"`
-	Move1                   null.Int    `db:"move_1" json:"move_1"`
-	Move2                   null.Int    `db:"move_2" json:"move_2"`
-	Gender                  null.Int    `db:"gender" json:"gender"`
-	Cp                      null.Int    `db:"cp" json:"cp"`
-	AtkIv                   null.Int    `db:"atk_iv" json:"atk_iv"`
-	DefIv                   null.Int    `db:"def_iv" json:"def_iv"`
-	StaIv                   null.Int    `db:"sta_iv" json:"sta_iv"`
-	GolbatInternal          []byte      `db:"golbat_internal" json:"golbat_internal"`
-	Iv                      null.Float  `db:"iv" json:"iv"`
-	Form                    null.Int    `db:"form" json:"form"`
-	Level                   null.Int    `db:"level" json:"level"`
-	IsStrong                null.Bool   `db:"strong" json:"strong"`
-	Weather                 null.Int    `db:"weather" json:"weather"`
-	Costume                 null.Int    `db:"costume" json:"costume"`
-	FirstSeenTimestamp      int64       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
-	Changed                 int64       `db:"changed" json:"changed"`
-	CellId                  null.Int    `db:"cell_id" json:"cell_id"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified" json:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int    `db:"display_pokemon_id" json:"display_pokemon_id"`
-	IsDitto                 bool        `db:"is_ditto" json:"is_ditto"`
-	SeenType                null.String `db:"seen_type" json:"seen_type"`
-	Shiny                   null.Bool   `db:"shiny" json:"shiny"`
-	Username                null.String `db:"username" json:"username"`
-	Capture1                null.Float  `db:"capture_1" json:"capture_1"`
-	Capture2                null.Float  `db:"capture_2" json:"capture_2"`
-	Capture3                null.Float  `db:"capture_3" json:"capture_3"`
-	Pvp                     null.String `db:"pvp" json:"pvp"`
-	IsEvent                 int8        `db:"is_event" json:"is_event"`
+	Id                      uint64      `db:"id"`
+	PokestopId              null.String `db:"pokestop_id"`
+	SpawnId                 null.Int    `db:"spawn_id"`
+	Lat                     float64     `db:"lat"`
+	Lon                     float64     `db:"lon"`
+	Weight                  null.Float  `db:"weight"`
+	Size                    null.Int    `db:"size"`
+	Height                  null.Float  `db:"height"`
+	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
+	Updated                 null.Int    `db:"updated"`
+	PokemonId               int16       `db:"pokemon_id"`
+	Move1                   null.Int    `db:"move_1"`
+	Move2                   null.Int    `db:"move_2"`
+	Gender                  null.Int    `db:"gender"`
+	Cp                      null.Int    `db:"cp"`
+	AtkIv                   null.Int    `db:"atk_iv"`
+	DefIv                   null.Int    `db:"def_iv"`
+	StaIv                   null.Int    `db:"sta_iv"`
+	GolbatInternal          []byte      `db:"golbat_internal"`
+	Iv                      null.Float  `db:"iv"`
+	Form                    null.Int    `db:"form"`
+	Level                   null.Int    `db:"level"`
+	IsStrong                null.Bool   `db:"strong"`
+	Weather                 null.Int    `db:"weather"`
+	Costume                 null.Int    `db:"costume"`
+	FirstSeenTimestamp      int64       `db:"first_seen_timestamp"`
+	Changed                 int64       `db:"changed"`
+	CellId                  null.Int    `db:"cell_id"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
+	DisplayPokemonId        null.Int    `db:"display_pokemon_id"`
+	IsDitto                 bool        `db:"is_ditto"`
+	SeenType                null.String `db:"seen_type"`
+	Shiny                   null.Bool   `db:"shiny"`
+	Username                null.String `db:"username"`
+	Capture1                null.Float  `db:"capture_1"`
+	Capture2                null.Float  `db:"capture_2"`
+	Capture3                null.Float  `db:"capture_3"`
+	Pvp                     null.String `db:"pvp"`
+	IsEvent                 int8        `db:"is_event"`
 
 	internal grpc.PokemonInternal
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord     bool     `db:"-" json:"-"`
-	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-"`
+	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 
-	oldValues PokemonOldValues `db:"-" json:"-"` // Old values for webhook comparison and stats
+	oldValues PokemonOldValues `db:"-"` // Old values for webhook comparison and stats
 }
 
 // PokemonOldValues holds old field values for webhook comparison, stats, and R-tree updates

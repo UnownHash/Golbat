@@ -9,56 +9,56 @@ import (
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                     string      `db:"id" json:"id"`
-	Lat                    float64     `db:"lat" json:"lat"`
-	Lon                    float64     `db:"lon" json:"lon"`
-	Name                   null.String `db:"name" json:"name"`
-	Url                    null.String `db:"url" json:"url"`
-	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp" json:"last_modified_timestamp"`
-	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp" json:"raid_end_timestamp"`
-	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp" json:"raid_spawn_timestamp"`
-	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp" json:"raid_battle_timestamp"`
-	Updated                int64       `db:"updated" json:"updated"`
-	RaidPokemonId          null.Int    `db:"raid_pokemon_id" json:"raid_pokemon_id"`
-	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id" json:"guarding_pokemon_id"`
-	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display" json:"guarding_pokemon_display"`
-	AvailableSlots         null.Int    `db:"available_slots" json:"available_slots"`
-	TeamId                 null.Int    `db:"team_id" json:"team_id"`
-	RaidLevel              null.Int    `db:"raid_level" json:"raid_level"`
-	Enabled                null.Int    `db:"enabled" json:"enabled"`
-	ExRaidEligible         null.Int    `db:"ex_raid_eligible" json:"ex_raid_eligible"`
-	InBattle               null.Int    `db:"in_battle" json:"in_battle"`
-	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1" json:"raid_pokemon_move_1"`
-	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2" json:"raid_pokemon_move_2"`
-	RaidPokemonForm        null.Int    `db:"raid_pokemon_form" json:"raid_pokemon_form"`
-	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment" json:"raid_pokemon_alignment"`
-	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp" json:"raid_pokemon_cp"`
-	RaidIsExclusive        null.Int    `db:"raid_is_exclusive" json:"raid_is_exclusive"`
-	CellId                 null.Int    `db:"cell_id" json:"cell_id"`
-	Deleted                bool        `db:"deleted" json:"deleted"`
-	TotalCp                null.Int    `db:"total_cp" json:"total_cp"`
-	FirstSeenTimestamp     int64       `db:"first_seen_timestamp" json:"first_seen_timestamp"`
-	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender" json:"raid_pokemon_gender"`
-	SponsorId              null.Int    `db:"sponsor_id" json:"sponsor_id"`
-	PartnerId              null.String `db:"partner_id" json:"partner_id"`
-	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume" json:"raid_pokemon_costume"`
-	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution" json:"raid_pokemon_evolution"`
-	ArScanEligible         null.Int    `db:"ar_scan_eligible" json:"ar_scan_eligible"`
-	PowerUpLevel           null.Int    `db:"power_up_level" json:"power_up_level"`
-	PowerUpPoints          null.Int    `db:"power_up_points" json:"power_up_points"`
-	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp" json:"power_up_end_timestamp"`
-	Description            null.String `db:"description" json:"description"`
-	Defenders              null.String `db:"defenders" json:"defenders"`
-	Rsvps                  null.String `db:"rsvps" json:"rsvps"`
+	Id                     string      `db:"id"`
+	Lat                    float64     `db:"lat"`
+	Lon                    float64     `db:"lon"`
+	Name                   null.String `db:"name"`
+	Url                    null.String `db:"url"`
+	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp"`
+	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp"`
+	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp"`
+	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp"`
+	Updated                int64       `db:"updated"`
+	RaidPokemonId          null.Int    `db:"raid_pokemon_id"`
+	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id"`
+	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display"`
+	AvailableSlots         null.Int    `db:"available_slots"`
+	TeamId                 null.Int    `db:"team_id"`
+	RaidLevel              null.Int    `db:"raid_level"`
+	Enabled                null.Int    `db:"enabled"`
+	ExRaidEligible         null.Int    `db:"ex_raid_eligible"`
+	InBattle               null.Int    `db:"in_battle"`
+	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1"`
+	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2"`
+	RaidPokemonForm        null.Int    `db:"raid_pokemon_form"`
+	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment"`
+	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp"`
+	RaidIsExclusive        null.Int    `db:"raid_is_exclusive"`
+	CellId                 null.Int    `db:"cell_id"`
+	Deleted                bool        `db:"deleted"`
+	TotalCp                null.Int    `db:"total_cp"`
+	FirstSeenTimestamp     int64       `db:"first_seen_timestamp"`
+	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender"`
+	SponsorId              null.Int    `db:"sponsor_id"`
+	PartnerId              null.String `db:"partner_id"`
+	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume"`
+	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution"`
+	ArScanEligible         null.Int    `db:"ar_scan_eligible"`
+	PowerUpLevel           null.Int    `db:"power_up_level"`
+	PowerUpPoints          null.Int    `db:"power_up_points"`
+	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
+	Description            null.String `db:"description"`
+	Defenders              null.String `db:"defenders"`
+	Rsvps                  null.String `db:"rsvps"`
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (to db)
-	internalDirty bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (in memory only)
-	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
+	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
+	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 
-	oldValues GymOldValues `db:"-" json:"-"` // Old values for webhook comparison
+	oldValues GymOldValues `db:"-"` // Old values for webhook comparison
 }
 
 // GymOldValues holds old field values for webhook comparison (populated when loading from cache/DB)
