@@ -2,13 +2,16 @@ package decoder
 
 import (
 	"context"
-	"golbat/db"
+	"strconv"
+	"strings"
 	"time"
 
+	"golbat/db"
+
 	"github.com/golang/geo/s2"
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type S2Cell struct {
@@ -30,24 +33,27 @@ type S2Cell struct {
 
 func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	now := time.Now().Unix()
-	outputCellIds := []S2Cell{}
+	var outputCellIds []*S2Cell
 
 	// prepare list of cells to update
 	for _, cellId := range cellIds {
-		var s2Cell = S2Cell{}
+		var s2Cell *S2Cell
 
 		if c := s2CellCache.Get(cellId); c != nil {
 			cachedCell := c.Value()
-			if cachedCell.Updated > now-900 {
+			if cachedCell.Updated > now-GetUpdateThreshold(900) {
 				continue
 			}
 			s2Cell = cachedCell
 		} else {
 			mapS2Cell := s2.CellFromCellID(s2.CellID(cellId))
+			s2Cell = &S2Cell{}
 			s2Cell.Id = cellId
 			s2Cell.Latitude = mapS2Cell.CapBound().RectBound().Center().Lat.Degrees()
 			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
 			s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
+
+			s2CellCache.Set(s2Cell.Id, s2Cell, ttlcache.DefaultTTL)
 		}
 		s2Cell.Updated = now
 
@@ -56,6 +62,14 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 
 	if len(outputCellIds) == 0 {
 		return
+	}
+
+	if dbDebugEnabled {
+		var updatedCells []string
+		for _, s2cell := range outputCellIds {
+			updatedCells = append(updatedCells, strconv.FormatUint(s2cell.Id, 10))
+		}
+		log.Debugf("[DB_S2CELL] Updated cells: %s", strings.Join(updatedCells, ","))
 	}
 
 	// run bulk query
@@ -71,8 +85,8 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 		return
 	}
 
-	// set cache
-	for _, cellId := range outputCellIds {
-		s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
-	}
+	// since cache is now a pointer, ttl will already have been updated
+	//for _, cellId := range outputCellIds {
+	//	s2CellCache.Set(cellId.Id, cellId, ttlcache.DefaultTTL)
+	//}
 }

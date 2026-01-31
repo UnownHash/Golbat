@@ -2,13 +2,14 @@ package stats_collector
 
 import (
 	"database/sql"
-	"golbat/util"
 	"strconv"
 	"sync"
 	"time"
 
+	"golbat/util"
+
+	"github.com/guregu/null/v6"
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/guregu/null.v4"
 
 	"golbat/geo"
 )

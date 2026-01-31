@@ -62,6 +62,7 @@ func ReadConfig() (configDefinition, error) {
 			LevelCaps: []int{50, 51},
 		},
 		MaxConcurrentProactiveIVSwitch: 6,
+		ReduceUpdates:                  false,
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))

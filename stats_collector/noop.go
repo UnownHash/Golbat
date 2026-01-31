@@ -1,7 +1,7 @@
 package stats_collector
 
 import (
-	"gopkg.in/guregu/null.v4"
+	"github.com/guregu/null/v6"
 
 	"golbat/geo"
 )

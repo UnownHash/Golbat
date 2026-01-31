@@ -3,6 +3,12 @@ port = 9001             # Listening port for golbat
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
+# When enabled, reduce_updates will make fort update debounce windows much longer
+# to reduce database churn. Specifically, gym/pokestop/station debounce will be
+# extended from 15 minutes (900s) to 12 hours (43200s) and spawnpoint last_seen
+# will be updated every 12 hours instead of the default 6 hours.
+reduce_updates = false
+
 pokemon_memory_only = false  # Use in-memory storage for pokemon only
 
 [koji]
