@@ -10,8 +10,8 @@ import (
 	pb "golbat/grpc"
 
 	"github.com/UnownHash/gohbem"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type ApiPokemonDnfId struct {

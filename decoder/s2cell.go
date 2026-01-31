@@ -9,9 +9,9 @@ import (
 	"golbat/db"
 
 	"github.com/golang/geo/s2"
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type S2Cell struct {

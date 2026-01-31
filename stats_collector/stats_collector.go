@@ -6,8 +6,8 @@ import (
 
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type StatsCollector interface {

@@ -8,11 +8,11 @@ import (
 	"golbat/config"
 
 	"github.com/UnownHash/gohbem"
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
-	"gopkg.in/guregu/null.v4"
 )
 
 type PokemonLookupCacheItem struct {

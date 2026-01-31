@@ -3,8 +3,8 @@ package decoder
 import (
 	"golbat/pogo"
 
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type contestFocusType string

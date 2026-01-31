@@ -71,7 +71,7 @@ func LoadAllGyms(details db.DbDetails) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		_, unlock, _ := getGymRecordReadOnly(context.Background(), details, place.Id)
+		_, unlock, _ := GetGymRecordReadOnly(context.Background(), details, place.Id)
 		if unlock != nil {
 			unlock()
 		}

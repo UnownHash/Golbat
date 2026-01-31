@@ -9,9 +9,9 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 // Player struct. Name is the primary key.

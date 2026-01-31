@@ -501,14 +501,22 @@ func GetPokestop(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, pokestop)
+	if pokestop == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildPokestopResult(pokestop)
+	c.JSON(http.StatusAccepted, result)
 }
 
 func GetGym(c *gin.Context) {
 	gymId := c.Param("gym_id")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	gym, err := decoder.GetGymRecord(ctx, dbDetails, gymId)
+	gym, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, gymId)
+	if unlock != nil {
+		defer unlock()
+	}
 	cancel()
 	if err != nil {
 		log.Warnf("GET /api/gym/id/:gym_id/ Error during post retrieve %v", err)
@@ -516,7 +524,12 @@ func GetGym(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gym)
+	if gym == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildGymResult(gym)
+	c.JSON(http.StatusAccepted, result)
 }
 
 // POST /api/gym/query
@@ -561,23 +574,29 @@ func GetGyms(c *gin.Context) {
 	}
 
 	if len(ids) == 0 {
-		c.JSON(http.StatusOK, []decoder.Gym{})
+		c.JSON(http.StatusOK, []decoder.ApiGymResult{})
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	out := make([]*decoder.Gym, 0, len(ids))
+	out := make([]decoder.ApiGymResult, 0, len(ids))
 	for _, id := range ids {
-		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
 		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
 			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 		if g != nil {
-			out = append(out, g)
+			out = append(out, decoder.BuildGymResult(g))
+		}
+		if unlock != nil {
+			unlock()
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)
@@ -691,13 +710,16 @@ func SearchGyms(c *gin.Context) {
 		return
 	}
 
-	out := make([]*decoder.Gym, 0, len(ids))
+	out := make([]decoder.ApiGymResult, 0, len(ids))
 	for _, id := range ids {
 		if id == "" {
 			continue
 		}
-		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
 		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				log.Warnf("timed out while fetching %s: %v", id, err)
 				c.Status(http.StatusGatewayTimeout)
@@ -708,7 +730,10 @@ func SearchGyms(c *gin.Context) {
 			return
 		}
 		if g != nil {
-			out = append(out, g)
+			out = append(out, decoder.BuildGymResult(g))
+		}
+		if unlock != nil {
+			unlock()
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)
@@ -727,16 +752,21 @@ func GetTappable(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	tappable, err := decoder.GetTappableRecord(ctx, dbDetails, tappableId)
-	cancel()
+	tappable, unlock, err := decoder.PeekTappableRecord(tappableId)
+	if unlock != nil {
+		defer unlock()
+	}
 	if err != nil {
 		log.Warnf("GET /api/tappable/id/:tappable_id/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-
-	c.JSON(http.StatusAccepted, tappable)
+	if tappable == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildTappableResult(tappable)
+	c.JSON(http.StatusAccepted, result)
 }
 
 func GetDevices(c *gin.Context) {

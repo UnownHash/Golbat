@@ -13,8 +13,8 @@ import (
 	"golbat/pogo"
 
 	"github.com/golang/geo/s2"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 const masterFileURL = "https://raw.githubusercontent.com/WatWowMap/Masterfile-Generator/master/master-latest-rdm.json"
