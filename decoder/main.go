@@ -77,7 +77,7 @@ func init() {
 }
 
 func InitProactiveIVSwitchSem() {
-	ProactiveIVSwitchSem = make(chan bool, config.Config.MaxConcurrentProactiveIVSwitch)
+	ProactiveIVSwitchSem = make(chan bool, config.Config.Tuning.MaxConcurrentProactiveIVSwitch)
 }
 
 type gohbemLogger struct{}
@@ -258,7 +258,7 @@ func SetStatsCollector(collector stats_collector.StatsCollector) {
 // debounce/last-seen threshold. Pass the default seconds for normal operation
 // If ReduceUpdates is enabled in the loaded config.Config, this returns 43200 (12 hours).
 func GetUpdateThreshold(defaultSeconds int64) int64 {
-	if config.Config.ReduceUpdates {
+	if config.Config.Tuning.ReduceUpdates {
 		return 43200 // 12 hours
 	}
 	return defaultSeconds

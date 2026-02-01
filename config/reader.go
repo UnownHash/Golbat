@@ -51,8 +51,10 @@ func ReadConfig() (configDefinition, error) {
 			MaxPool: 100,
 		},
 		Tuning: tuning{
-			MaxPokemonResults:  3000,
-			MaxPokemonDistance: 100,
+			MaxPokemonResults:              3000,
+			MaxPokemonDistance:             100,
+			MaxConcurrentProactiveIVSwitch: 6,
+			ReduceUpdates:                  false,
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
@@ -61,8 +63,6 @@ func ReadConfig() (configDefinition, error) {
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
 		},
-		MaxConcurrentProactiveIVSwitch: 6,
-		ReduceUpdates:                  false,
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))
