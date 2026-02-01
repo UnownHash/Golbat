@@ -114,6 +114,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	incident.SetUpdated(time.Now().Unix())
 
 	if incident.IsNewRecord() {
+		if dbDebugEnabled {
+			dbDebugLog("INSERT", "Incident", incident.Id, incident.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+
 			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, :slot_2_form, :slot_3_pokemon_id, :slot_3_form)", incident)
 
@@ -124,6 +127,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 		statsCollector.IncDbQuery("insert incident", err)
 		_, _ = res, err
 	} else {
+		if dbDebugEnabled {
+			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
+		}
 		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
 			"start = :start, "+
 			"expiration = :expiration, "+

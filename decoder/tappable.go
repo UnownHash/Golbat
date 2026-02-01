@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/guregu/null/v6"
@@ -58,110 +59,110 @@ func (ta *Tappable) Unlock() {
 
 func (ta *Tappable) SetLat(v float64) {
 	if !floatAlmostEqual(ta.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Lat:%f->%f", ta.Lat, v))
+		}
 		ta.Lat = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Lat")
-		}
 	}
 }
 
 func (ta *Tappable) SetLon(v float64) {
 	if !floatAlmostEqual(ta.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Lon:%f->%f", ta.Lon, v))
+		}
 		ta.Lon = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Lon")
-		}
 	}
 }
 
 func (ta *Tappable) SetFortId(v null.String) {
 	if ta.FortId != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("FortId:%v->%v", ta.FortId, v))
+		}
 		ta.FortId = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "FortId")
-		}
 	}
 }
 
 func (ta *Tappable) SetSpawnId(v null.Int) {
 	if ta.SpawnId != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("SpawnId:%v->%v", ta.SpawnId, v))
+		}
 		ta.SpawnId = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "SpawnId")
-		}
 	}
 }
 
 func (ta *Tappable) SetType(v string) {
 	if ta.Type != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Type:%s->%s", ta.Type, v))
+		}
 		ta.Type = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Type")
-		}
 	}
 }
 
 func (ta *Tappable) SetEncounter(v null.Int) {
 	if ta.Encounter != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Encounter:%v->%v", ta.Encounter, v))
+		}
 		ta.Encounter = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Encounter")
-		}
 	}
 }
 
 func (ta *Tappable) SetItemId(v null.Int) {
 	if ta.ItemId != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ItemId:%v->%v", ta.ItemId, v))
+		}
 		ta.ItemId = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "ItemId")
-		}
 	}
 }
 
 func (ta *Tappable) SetCount(v null.Int) {
 	if ta.Count != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Count:%v->%v", ta.Count, v))
+		}
 		ta.Count = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Count")
-		}
 	}
 }
 
 func (ta *Tappable) SetExpireTimestamp(v null.Int) {
 	if ta.ExpireTimestamp != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ExpireTimestamp:%v->%v", ta.ExpireTimestamp, v))
+		}
 		ta.ExpireTimestamp = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "ExpireTimestamp")
-		}
 	}
 }
 
 func (ta *Tappable) SetExpireTimestampVerified(v bool) {
 	if ta.ExpireTimestampVerified != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ExpireTimestampVerified:%t->%t", ta.ExpireTimestampVerified, v))
+		}
 		ta.ExpireTimestampVerified = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "ExpireTimestampVerified")
-		}
 	}
 }
 
 func (ta *Tappable) SetUpdated(v int64) {
 	if ta.Updated != v {
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Updated:%d->%d", ta.Updated, v))
+		}
 		ta.Updated = v
 		ta.dirty = true
-		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, "Updated")
-		}
 	}
 }

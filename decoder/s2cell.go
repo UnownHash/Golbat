@@ -69,7 +69,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 		for _, s2cell := range outputCellIds {
 			updatedCells = append(updatedCells, strconv.FormatUint(s2cell.Id, 10))
 		}
-		log.Debugf("[DB_S2CELL] Updated cells: %s", strings.Join(updatedCells, ","))
+		log.Debugf("[DB_UPDATE] S2Cell Updated cells: %s", strings.Join(updatedCells, ","))
 	}
 
 	// run bulk query

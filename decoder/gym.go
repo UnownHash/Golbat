@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/guregu/null/v6"
@@ -178,176 +179,179 @@ func (gym *Gym) Unlock() {
 
 func (gym *Gym) SetId(v string) {
 	if gym.Id != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Id:%s->%s", gym.Id, v))
+		}
 		gym.Id = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Id")
-		}
 	}
 }
 
 func (gym *Gym) SetLat(v float64) {
 	if !floatAlmostEqual(gym.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Lat:%f->%f", gym.Lat, v))
+		}
 		gym.Lat = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Lat")
-		}
 	}
 }
 
 func (gym *Gym) SetLon(v float64) {
 	if !floatAlmostEqual(gym.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Lon:%f->%f", gym.Lon, v))
+		}
 		gym.Lon = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Lon")
-		}
 	}
 }
 
 func (gym *Gym) SetName(v null.String) {
 	if gym.Name != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Name:%v->%v", gym.Name, v))
+		}
 		gym.Name = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Name")
-		}
 	}
 }
 
 func (gym *Gym) SetUrl(v null.String) {
 	if gym.Url != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Url:%v->%v", gym.Url, v))
+		}
 		gym.Url = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Url")
-		}
 	}
 }
 
 func (gym *Gym) SetLastModifiedTimestamp(v null.Int) {
 	if gym.LastModifiedTimestamp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("LastModifiedTimestamp:%v->%v", gym.LastModifiedTimestamp, v))
+		}
 		gym.LastModifiedTimestamp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "LastModifiedTimestamp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidEndTimestamp(v null.Int) {
 	if gym.RaidEndTimestamp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidEndTimestamp:%v->%v", gym.RaidEndTimestamp, v))
+		}
 		gym.RaidEndTimestamp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidEndTimestamp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidSpawnTimestamp(v null.Int) {
 	if gym.RaidSpawnTimestamp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSpawnTimestamp:%v->%v", gym.RaidSpawnTimestamp, v))
+		}
 		gym.RaidSpawnTimestamp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidSpawnTimestamp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidBattleTimestamp(v null.Int) {
 	if gym.RaidBattleTimestamp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidBattleTimestamp:%v->%v", gym.RaidBattleTimestamp, v))
+		}
 		gym.RaidBattleTimestamp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidBattleTimestamp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonId(v null.Int) {
 	if gym.RaidPokemonId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonId:%v->%v", gym.RaidPokemonId, v))
+		}
 		gym.RaidPokemonId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonId")
-		}
 	}
 }
 
 func (gym *Gym) SetGuardingPokemonId(v null.Int) {
 	if gym.GuardingPokemonId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonId:%v->%v", gym.GuardingPokemonId, v))
+		}
 		gym.GuardingPokemonId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "GuardingPokemonId")
-		}
 	}
 }
 
 func (gym *Gym) SetGuardingPokemonDisplay(v null.String) {
 	if gym.GuardingPokemonDisplay != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonDisplay:%v->%v", gym.GuardingPokemonDisplay, v))
+		}
 		gym.GuardingPokemonDisplay = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "GuardingPokemonDisplay")
-		}
 	}
 }
 
 func (gym *Gym) SetAvailableSlots(v null.Int) {
 	if gym.AvailableSlots != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("AvailableSlots:%v->%v", gym.AvailableSlots, v))
+		}
 		gym.AvailableSlots = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "AvailableSlots")
-		}
 	}
 }
 
 func (gym *Gym) SetTeamId(v null.Int) {
 	if gym.TeamId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TeamId:%v->%v", gym.TeamId, v))
+		}
 		gym.TeamId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "TeamId")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidLevel(v null.Int) {
 	if gym.RaidLevel != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidLevel:%v->%v", gym.RaidLevel, v))
+		}
 		gym.RaidLevel = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidLevel")
-		}
 	}
 }
 
 func (gym *Gym) SetEnabled(v null.Int) {
 	if gym.Enabled != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Enabled:%v->%v", gym.Enabled, v))
+		}
 		gym.Enabled = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Enabled")
-		}
 	}
 }
 
 func (gym *Gym) SetExRaidEligible(v null.Int) {
 	if gym.ExRaidEligible != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ExRaidEligible:%v->%v", gym.ExRaidEligible, v))
+		}
 		gym.ExRaidEligible = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "ExRaidEligible")
-		}
 	}
 }
 
 func (gym *Gym) SetInBattle(v null.Int) {
 	if gym.InBattle != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("InBattle:%v->%v", gym.InBattle, v))
+		}
 		gym.InBattle = v
 		//Do not set to dirty, as don't trigger an update
 		gym.internalDirty = true
@@ -356,196 +360,199 @@ func (gym *Gym) SetInBattle(v null.Int) {
 
 func (gym *Gym) SetRaidPokemonMove1(v null.Int) {
 	if gym.RaidPokemonMove1 != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove1:%v->%v", gym.RaidPokemonMove1, v))
+		}
 		gym.RaidPokemonMove1 = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonMove1")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonMove2(v null.Int) {
 	if gym.RaidPokemonMove2 != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove2:%v->%v", gym.RaidPokemonMove2, v))
+		}
 		gym.RaidPokemonMove2 = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonMove2")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonForm(v null.Int) {
 	if gym.RaidPokemonForm != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonForm:%v->%v", gym.RaidPokemonForm, v))
+		}
 		gym.RaidPokemonForm = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonForm")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonAlignment(v null.Int) {
 	if gym.RaidPokemonAlignment != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonAlignment:%v->%v", gym.RaidPokemonAlignment, v))
+		}
 		gym.RaidPokemonAlignment = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonAlignment")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonCp(v null.Int) {
 	if gym.RaidPokemonCp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCp:%v->%v", gym.RaidPokemonCp, v))
+		}
 		gym.RaidPokemonCp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonCp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidIsExclusive(v null.Int) {
 	if gym.RaidIsExclusive != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidIsExclusive:%v->%v", gym.RaidIsExclusive, v))
+		}
 		gym.RaidIsExclusive = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidIsExclusive")
-		}
 	}
 }
 
 func (gym *Gym) SetCellId(v null.Int) {
 	if gym.CellId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("CellId:%v->%v", gym.CellId, v))
+		}
 		gym.CellId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "CellId")
-		}
 	}
 }
 
 func (gym *Gym) SetDeleted(v bool) {
 	if gym.Deleted != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Deleted:%t->%t", gym.Deleted, v))
+		}
 		gym.Deleted = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Deleted")
-		}
 	}
 }
 
 func (gym *Gym) SetTotalCp(v null.Int) {
 	if gym.TotalCp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TotalCp:%v->%v", gym.TotalCp, v))
+		}
 		gym.TotalCp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "TotalCp")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonGender(v null.Int) {
 	if gym.RaidPokemonGender != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonGender:%v->%v", gym.RaidPokemonGender, v))
+		}
 		gym.RaidPokemonGender = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonGender")
-		}
 	}
 }
 
 func (gym *Gym) SetSponsorId(v null.Int) {
 	if gym.SponsorId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("SponsorId:%v->%v", gym.SponsorId, v))
+		}
 		gym.SponsorId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "SponsorId")
-		}
 	}
 }
 
 func (gym *Gym) SetPartnerId(v null.String) {
 	if gym.PartnerId != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PartnerId:%v->%v", gym.PartnerId, v))
+		}
 		gym.PartnerId = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "PartnerId")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonCostume(v null.Int) {
 	if gym.RaidPokemonCostume != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCostume:%v->%v", gym.RaidPokemonCostume, v))
+		}
 		gym.RaidPokemonCostume = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonCostume")
-		}
 	}
 }
 
 func (gym *Gym) SetRaidPokemonEvolution(v null.Int) {
 	if gym.RaidPokemonEvolution != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonEvolution:%v->%v", gym.RaidPokemonEvolution, v))
+		}
 		gym.RaidPokemonEvolution = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "RaidPokemonEvolution")
-		}
 	}
 }
 
 func (gym *Gym) SetArScanEligible(v null.Int) {
 	if gym.ArScanEligible != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ArScanEligible:%v->%v", gym.ArScanEligible, v))
+		}
 		gym.ArScanEligible = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "ArScanEligible")
-		}
 	}
 }
 
 func (gym *Gym) SetPowerUpLevel(v null.Int) {
 	if gym.PowerUpLevel != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpLevel:%v->%v", gym.PowerUpLevel, v))
+		}
 		gym.PowerUpLevel = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "PowerUpLevel")
-		}
 	}
 }
 
 func (gym *Gym) SetPowerUpPoints(v null.Int) {
 	if gym.PowerUpPoints != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpPoints:%v->%v", gym.PowerUpPoints, v))
+		}
 		gym.PowerUpPoints = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "PowerUpPoints")
-		}
 	}
 }
 
 func (gym *Gym) SetPowerUpEndTimestamp(v null.Int) {
 	if gym.PowerUpEndTimestamp != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpEndTimestamp:%v->%v", gym.PowerUpEndTimestamp, v))
+		}
 		gym.PowerUpEndTimestamp = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "PowerUpEndTimestamp")
-		}
 	}
 }
 
 func (gym *Gym) SetDescription(v null.String) {
 	if gym.Description != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Description:%v->%v", gym.Description, v))
+		}
 		gym.Description = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Description")
-		}
 	}
 }
 
 func (gym *Gym) SetDefenders(v null.String) {
 	if gym.Defenders != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Defenders:%v->%v", gym.Defenders, v))
+		}
 		gym.Defenders = v
 		//Do not set to dirty, as don't trigger an update
 		gym.internalDirty = true
@@ -554,20 +561,20 @@ func (gym *Gym) SetDefenders(v null.String) {
 
 func (gym *Gym) SetRsvps(v null.String) {
 	if gym.Rsvps != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Rsvps:%v->%v", gym.Rsvps, v))
+		}
 		gym.Rsvps = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Rsvps")
-		}
 	}
 }
 
 func (gym *Gym) SetUpdated(v int64) {
 	if gym.Updated != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Updated:%d->%d", gym.Updated, v))
+		}
 		gym.Updated = v
 		gym.dirty = true
-		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, "Updated")
-		}
 	}
 }

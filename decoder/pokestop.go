@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/guregu/null/v6"
@@ -159,430 +160,430 @@ func (p *Pokestop) Unlock() {
 
 func (p *Pokestop) SetId(v string) {
 	if p.Id != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Id:%s->%s", p.Id, v))
+		}
 		p.Id = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Id")
-		}
 	}
 }
 
 func (p *Pokestop) SetLat(v float64) {
 	if !floatAlmostEqual(p.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Lat:%f->%f", p.Lat, v))
+		}
 		p.Lat = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Lat")
-		}
 	}
 }
 
 func (p *Pokestop) SetLon(v float64) {
 	if !floatAlmostEqual(p.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Lon:%f->%f", p.Lon, v))
+		}
 		p.Lon = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Lon")
-		}
 	}
 }
 
 func (p *Pokestop) SetName(v null.String) {
 	if p.Name != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Name:%v->%v", p.Name, v))
+		}
 		p.Name = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Name")
-		}
 	}
 }
 
 func (p *Pokestop) SetUrl(v null.String) {
 	if p.Url != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Url:%v->%v", p.Url, v))
+		}
 		p.Url = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Url")
-		}
 	}
 }
 
 func (p *Pokestop) SetLureExpireTimestamp(v null.Int) {
 	if p.LureExpireTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LureExpireTimestamp:%v->%v", p.LureExpireTimestamp, v))
+		}
 		p.LureExpireTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "LureExpireTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetLastModifiedTimestamp(v null.Int) {
 	if p.LastModifiedTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LastModifiedTimestamp:%v->%v", p.LastModifiedTimestamp, v))
+		}
 		p.LastModifiedTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "LastModifiedTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetEnabled(v null.Bool) {
 	if p.Enabled != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Enabled:%v->%v", p.Enabled, v))
+		}
 		p.Enabled = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Enabled")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestType(v null.Int) {
 	if p.QuestType != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestType:%v->%v", p.QuestType, v))
+		}
 		p.QuestType = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestType")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestTimestamp(v null.Int) {
 	if p.QuestTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestTimestamp:%v->%v", p.QuestTimestamp, v))
+		}
 		p.QuestTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestTarget(v null.Int) {
 	if p.QuestTarget != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestTarget:%v->%v", p.QuestTarget, v))
+		}
 		p.QuestTarget = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestTarget")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestConditions(v null.String) {
 	if p.QuestConditions != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestConditions:%v->%v", p.QuestConditions, v))
+		}
 		p.QuestConditions = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestConditions")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestRewards(v null.String) {
 	if p.QuestRewards != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestRewards:%v->%v", p.QuestRewards, v))
+		}
 		p.QuestRewards = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestRewards")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestTemplate(v null.String) {
 	if p.QuestTemplate != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestTemplate:%v->%v", p.QuestTemplate, v))
+		}
 		p.QuestTemplate = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestTemplate")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestTitle(v null.String) {
 	if p.QuestTitle != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestTitle:%v->%v", p.QuestTitle, v))
+		}
 		p.QuestTitle = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestTitle")
-		}
 	}
 }
 
 func (p *Pokestop) SetQuestExpiry(v null.Int) {
 	if p.QuestExpiry != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestExpiry:%v->%v", p.QuestExpiry, v))
+		}
 		p.QuestExpiry = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "QuestExpiry")
-		}
 	}
 }
 
 func (p *Pokestop) SetCellId(v null.Int) {
 	if p.CellId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CellId:%v->%v", p.CellId, v))
+		}
 		p.CellId = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "CellId")
-		}
 	}
 }
 
 func (p *Pokestop) SetDeleted(v bool) {
 	if p.Deleted != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Deleted:%t->%t", p.Deleted, v))
+		}
 		p.Deleted = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Deleted")
-		}
 	}
 }
 
 func (p *Pokestop) SetLureId(v int16) {
 	if p.LureId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LureId:%d->%d", p.LureId, v))
+		}
 		p.LureId = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "LureId")
-		}
 	}
 }
 
 func (p *Pokestop) SetFirstSeenTimestamp(v int16) {
 	if p.FirstSeenTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("FirstSeenTimestamp:%d->%d", p.FirstSeenTimestamp, v))
+		}
 		p.FirstSeenTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "FirstSeenTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetSponsorId(v null.Int) {
 	if p.SponsorId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("SponsorId:%v->%v", p.SponsorId, v))
+		}
 		p.SponsorId = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "SponsorId")
-		}
 	}
 }
 
 func (p *Pokestop) SetPartnerId(v null.String) {
 	if p.PartnerId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PartnerId:%v->%v", p.PartnerId, v))
+		}
 		p.PartnerId = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "PartnerId")
-		}
 	}
 }
 
 func (p *Pokestop) SetArScanEligible(v null.Int) {
 	if p.ArScanEligible != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ArScanEligible:%v->%v", p.ArScanEligible, v))
+		}
 		p.ArScanEligible = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ArScanEligible")
-		}
 	}
 }
 
 func (p *Pokestop) SetPowerUpLevel(v null.Int) {
 	if p.PowerUpLevel != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PowerUpLevel:%v->%v", p.PowerUpLevel, v))
+		}
 		p.PowerUpLevel = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "PowerUpLevel")
-		}
 	}
 }
 
 func (p *Pokestop) SetPowerUpPoints(v null.Int) {
 	if p.PowerUpPoints != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PowerUpPoints:%v->%v", p.PowerUpPoints, v))
+		}
 		p.PowerUpPoints = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "PowerUpPoints")
-		}
 	}
 }
 
 func (p *Pokestop) SetPowerUpEndTimestamp(v null.Int) {
 	if p.PowerUpEndTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PowerUpEndTimestamp:%v->%v", p.PowerUpEndTimestamp, v))
+		}
 		p.PowerUpEndTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "PowerUpEndTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestType(v null.Int) {
 	if p.AlternativeQuestType != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestType:%v->%v", p.AlternativeQuestType, v))
+		}
 		p.AlternativeQuestType = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestType")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestTimestamp(v null.Int) {
 	if p.AlternativeQuestTimestamp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestTimestamp:%v->%v", p.AlternativeQuestTimestamp, v))
+		}
 		p.AlternativeQuestTimestamp = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestTimestamp")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestTarget(v null.Int) {
 	if p.AlternativeQuestTarget != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestTarget:%v->%v", p.AlternativeQuestTarget, v))
+		}
 		p.AlternativeQuestTarget = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestTarget")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestConditions(v null.String) {
 	if p.AlternativeQuestConditions != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestConditions:%v->%v", p.AlternativeQuestConditions, v))
+		}
 		p.AlternativeQuestConditions = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestConditions")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestRewards(v null.String) {
 	if p.AlternativeQuestRewards != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestRewards:%v->%v", p.AlternativeQuestRewards, v))
+		}
 		p.AlternativeQuestRewards = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestRewards")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestTemplate(v null.String) {
 	if p.AlternativeQuestTemplate != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestTemplate:%v->%v", p.AlternativeQuestTemplate, v))
+		}
 		p.AlternativeQuestTemplate = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestTemplate")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestTitle(v null.String) {
 	if p.AlternativeQuestTitle != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestTitle:%v->%v", p.AlternativeQuestTitle, v))
+		}
 		p.AlternativeQuestTitle = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestTitle")
-		}
 	}
 }
 
 func (p *Pokestop) SetAlternativeQuestExpiry(v null.Int) {
 	if p.AlternativeQuestExpiry != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestExpiry:%v->%v", p.AlternativeQuestExpiry, v))
+		}
 		p.AlternativeQuestExpiry = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "AlternativeQuestExpiry")
-		}
 	}
 }
 
 func (p *Pokestop) SetDescription(v null.String) {
 	if p.Description != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Description:%v->%v", p.Description, v))
+		}
 		p.Description = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Description")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcaseFocus(v null.String) {
 	if p.ShowcaseFocus != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcaseFocus:%v->%v", p.ShowcaseFocus, v))
+		}
 		p.ShowcaseFocus = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcaseFocus")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcasePokemon(v null.Int) {
 	if p.ShowcasePokemon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcasePokemon:%v->%v", p.ShowcasePokemon, v))
+		}
 		p.ShowcasePokemon = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcasePokemon")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcasePokemonForm(v null.Int) {
 	if p.ShowcasePokemonForm != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcasePokemonForm:%v->%v", p.ShowcasePokemonForm, v))
+		}
 		p.ShowcasePokemonForm = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcasePokemonForm")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcasePokemonType(v null.Int) {
 	if p.ShowcasePokemonType != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcasePokemonType:%v->%v", p.ShowcasePokemonType, v))
+		}
 		p.ShowcasePokemonType = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcasePokemonType")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcaseRankingStandard(v null.Int) {
 	if p.ShowcaseRankingStandard != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcaseRankingStandard:%v->%v", p.ShowcaseRankingStandard, v))
+		}
 		p.ShowcaseRankingStandard = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcaseRankingStandard")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcaseExpiry(v null.Int) {
 	if p.ShowcaseExpiry != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcaseExpiry:%v->%v", p.ShowcaseExpiry, v))
+		}
 		p.ShowcaseExpiry = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcaseExpiry")
-		}
 	}
 }
 
 func (p *Pokestop) SetShowcaseRankings(v null.String) {
 	if p.ShowcaseRankings != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("ShowcaseRankings:%v->%v", p.ShowcaseRankings, v))
+		}
 		p.ShowcaseRankings = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "ShowcaseRankings")
-		}
 	}
 }
 
 func (p *Pokestop) SetUpdated(v int64) {
 	if p.Updated != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Updated:%d->%d", p.Updated, v))
+		}
 		p.Updated = v
 		p.dirty = true
-		if dbDebugEnabled {
-			p.changedFields = append(p.changedFields, "Updated")
-		}
 	}
 }

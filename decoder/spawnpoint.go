@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -28,8 +29,9 @@ type Spawnpoint struct {
 	LastSeen   int64    `db:"last_seen"`
 	DespawnSec null.Int `db:"despawn_sec"`
 
-	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -74,6 +76,9 @@ func (s *Spawnpoint) Unlock() {
 
 func (s *Spawnpoint) SetLat(v float64) {
 	if !floatAlmostEqual(s.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Lat:%f->%f", s.Lat, v))
+		}
 		s.Lat = v
 		s.dirty = true
 	}
@@ -81,6 +86,9 @@ func (s *Spawnpoint) SetLat(v float64) {
 
 func (s *Spawnpoint) SetLon(v float64) {
 	if !floatAlmostEqual(s.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Lon:%f->%f", s.Lon, v))
+		}
 		s.Lon = v
 		s.dirty = true
 	}
@@ -90,6 +98,9 @@ func (s *Spawnpoint) SetLon(v float64) {
 func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	// Handle validity changes
 	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%v->%v", s.DespawnSec, v))
+		}
 		s.DespawnSec = v
 		s.dirty = true
 		return
@@ -114,6 +125,9 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 
 	// Allow 2-second tolerance for despawn time
 	if Abs(oldVal-newVal) > 2 {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%v->%v", s.DespawnSec, v))
+		}
 		s.DespawnSec = v
 		s.dirty = true
 	}
@@ -121,6 +135,9 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 
 func (s *Spawnpoint) SetUpdated(v int64) {
 	if s.Updated != v {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Updated:%d->%d", s.Updated, v))
+		}
 		s.Updated = v
 		s.dirty = true
 	}
@@ -128,6 +145,9 @@ func (s *Spawnpoint) SetUpdated(v int64) {
 
 func (s *Spawnpoint) SetLastSeen(v int64) {
 	if s.LastSeen != v {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("LastSeen:%d->%d", s.LastSeen, v))
+		}
 		s.LastSeen = v
 		s.dirty = true
 	}
@@ -265,6 +285,14 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 
 	spawnpoint.SetUpdated(time.Now().Unix())  // ensure future updates are set correctly
 	spawnpoint.SetLastSeen(time.Now().Unix()) // ensure future updates are set correctly
+
+	if dbDebugEnabled {
+		if spawnpoint.IsNewRecord() {
+			dbDebugLog("INSERT", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+		}
+	}
 
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+

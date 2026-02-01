@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/guregu/null/v6"
@@ -102,270 +103,270 @@ func (station *Station) snapshotOldValues() {
 
 func (station *Station) SetId(v string) {
 	if station.Id != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Id:%s->%s", station.Id, v))
+		}
 		station.Id = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "Id")
-		}
 	}
 }
 
 func (station *Station) SetLat(v float64) {
 	if !floatAlmostEqual(station.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Lat:%f->%f", station.Lat, v))
+		}
 		station.Lat = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "Lat")
-		}
 	}
 }
 
 func (station *Station) SetLon(v float64) {
 	if !floatAlmostEqual(station.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Lon:%f->%f", station.Lon, v))
+		}
 		station.Lon = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "Lon")
-		}
 	}
 }
 
 func (station *Station) SetName(v string) {
 	if station.Name != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Name:%s->%s", station.Name, v))
+		}
 		station.Name = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "Name")
-		}
 	}
 }
 
 func (station *Station) SetCellId(v int64) {
 	if station.CellId != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("CellId:%d->%d", station.CellId, v))
+		}
 		station.CellId = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "CellId")
-		}
 	}
 }
 
 func (station *Station) SetStartTime(v int64) {
 	if station.StartTime != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("StartTime:%d->%d", station.StartTime, v))
+		}
 		station.StartTime = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "StartTime")
-		}
 	}
 }
 
 func (station *Station) SetEndTime(v int64) {
 	if station.EndTime != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("EndTime:%d->%d", station.EndTime, v))
+		}
 		station.EndTime = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "EndTime")
-		}
 	}
 }
 
 func (station *Station) SetCooldownComplete(v int64) {
 	if station.CooldownComplete != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("CooldownComplete:%d->%d", station.CooldownComplete, v))
+		}
 		station.CooldownComplete = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "CooldownComplete")
-		}
 	}
 }
 
 func (station *Station) SetIsBattleAvailable(v bool) {
 	if station.IsBattleAvailable != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("IsBattleAvailable:%t->%t", station.IsBattleAvailable, v))
+		}
 		station.IsBattleAvailable = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "IsBattleAvailable")
-		}
 	}
 }
 
 func (station *Station) SetIsInactive(v bool) {
 	if station.IsInactive != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("IsInactive:%t->%t", station.IsInactive, v))
+		}
 		station.IsInactive = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "IsInactive")
-		}
 	}
 }
 
 func (station *Station) SetBattleLevel(v null.Int) {
 	if station.BattleLevel != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleLevel:%v->%v", station.BattleLevel, v))
+		}
 		station.BattleLevel = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattleLevel")
-		}
 	}
 }
 
 func (station *Station) SetBattleStart(v null.Int) {
 	if station.BattleStart != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleStart:%v->%v", station.BattleStart, v))
+		}
 		station.BattleStart = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattleStart")
-		}
 	}
 }
 
 func (station *Station) SetBattleEnd(v null.Int) {
 	if station.BattleEnd != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleEnd:%v->%v", station.BattleEnd, v))
+		}
 		station.BattleEnd = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattleEnd")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonId(v null.Int) {
 	if station.BattlePokemonId != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonId:%v->%v", station.BattlePokemonId, v))
+		}
 		station.BattlePokemonId = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonId")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonForm(v null.Int) {
 	if station.BattlePokemonForm != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonForm:%v->%v", station.BattlePokemonForm, v))
+		}
 		station.BattlePokemonForm = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonForm")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonCostume(v null.Int) {
 	if station.BattlePokemonCostume != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCostume:%v->%v", station.BattlePokemonCostume, v))
+		}
 		station.BattlePokemonCostume = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonCostume")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonGender(v null.Int) {
 	if station.BattlePokemonGender != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonGender:%v->%v", station.BattlePokemonGender, v))
+		}
 		station.BattlePokemonGender = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonGender")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonAlignment(v null.Int) {
 	if station.BattlePokemonAlignment != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonAlignment:%v->%v", station.BattlePokemonAlignment, v))
+		}
 		station.BattlePokemonAlignment = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonAlignment")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonBreadMode(v null.Int) {
 	if station.BattlePokemonBreadMode != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonBreadMode:%v->%v", station.BattlePokemonBreadMode, v))
+		}
 		station.BattlePokemonBreadMode = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonBreadMode")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonMove1(v null.Int) {
 	if station.BattlePokemonMove1 != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove1:%v->%v", station.BattlePokemonMove1, v))
+		}
 		station.BattlePokemonMove1 = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonMove1")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonMove2(v null.Int) {
 	if station.BattlePokemonMove2 != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove2:%v->%v", station.BattlePokemonMove2, v))
+		}
 		station.BattlePokemonMove2 = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonMove2")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonStamina(v null.Int) {
 	if station.BattlePokemonStamina != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonStamina:%v->%v", station.BattlePokemonStamina, v))
+		}
 		station.BattlePokemonStamina = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonStamina")
-		}
 	}
 }
 
 func (station *Station) SetBattlePokemonCpMultiplier(v null.Float) {
 	if !nullFloatAlmostEqual(station.BattlePokemonCpMultiplier, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCpMultiplier:%v->%v", station.BattlePokemonCpMultiplier, v))
+		}
 		station.BattlePokemonCpMultiplier = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "BattlePokemonCpMultiplier")
-		}
 	}
 }
 
 func (station *Station) SetTotalStationedPokemon(v null.Int) {
 	if station.TotalStationedPokemon != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedPokemon:%v->%v", station.TotalStationedPokemon, v))
+		}
 		station.TotalStationedPokemon = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "TotalStationedPokemon")
-		}
 	}
 }
 
 func (station *Station) SetTotalStationedGmax(v null.Int) {
 	if station.TotalStationedGmax != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedGmax:%v->%v", station.TotalStationedGmax, v))
+		}
 		station.TotalStationedGmax = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "TotalStationedGmax")
-		}
 	}
 }
 
 func (station *Station) SetStationedPokemon(v null.String) {
 	if station.StationedPokemon != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("StationedPokemon:%v->%v", station.StationedPokemon, v))
+		}
 		station.StationedPokemon = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "StationedPokemon")
-		}
 	}
 }
 
 func (station *Station) SetUpdated(v int64) {
 	if station.Updated != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Updated:%d->%d", station.Updated, v))
+		}
 		station.Updated = v
 		station.dirty = true
-		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, "Updated")
-		}
 	}
 }

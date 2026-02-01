@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/guregu/null/v6"
@@ -83,210 +84,210 @@ func (r *Route) snapshotOldValues() {
 
 func (r *Route) SetName(v string) {
 	if r.Name != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Name:%s->%s", r.Name, v))
+		}
 		r.Name = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Name")
-		}
 	}
 }
 
 func (r *Route) SetShortcode(v string) {
 	if r.Shortcode != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Shortcode:%s->%s", r.Shortcode, v))
+		}
 		r.Shortcode = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Shortcode")
-		}
 	}
 }
 
 func (r *Route) SetDescription(v string) {
 	if r.Description != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Description:%s->%s", r.Description, v))
+		}
 		r.Description = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Description")
-		}
 	}
 }
 
 func (r *Route) SetDistanceMeters(v int64) {
 	if r.DistanceMeters != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("DistanceMeters:%d->%d", r.DistanceMeters, v))
+		}
 		r.DistanceMeters = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "DistanceMeters")
-		}
 	}
 }
 
 func (r *Route) SetDurationSeconds(v int64) {
 	if r.DurationSeconds != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("DurationSeconds:%d->%d", r.DurationSeconds, v))
+		}
 		r.DurationSeconds = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "DurationSeconds")
-		}
 	}
 }
 
 func (r *Route) SetEndFortId(v string) {
 	if r.EndFortId != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("EndFortId:%s->%s", r.EndFortId, v))
+		}
 		r.EndFortId = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "EndFortId")
-		}
 	}
 }
 
 func (r *Route) SetEndImage(v string) {
 	if r.EndImage != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("EndImage:%s->%s", r.EndImage, v))
+		}
 		r.EndImage = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "EndImage")
-		}
 	}
 }
 
 func (r *Route) SetEndLat(v float64) {
 	if !floatAlmostEqual(r.EndLat, v, floatTolerance) {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("EndLat:%f->%f", r.EndLat, v))
+		}
 		r.EndLat = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "EndLat")
-		}
 	}
 }
 
 func (r *Route) SetEndLon(v float64) {
 	if !floatAlmostEqual(r.EndLon, v, floatTolerance) {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("EndLon:%f->%f", r.EndLon, v))
+		}
 		r.EndLon = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "EndLon")
-		}
 	}
 }
 
 func (r *Route) SetImage(v string) {
 	if r.Image != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Image:%s->%s", r.Image, v))
+		}
 		r.Image = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Image")
-		}
 	}
 }
 
 func (r *Route) SetImageBorderColor(v string) {
 	if r.ImageBorderColor != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("ImageBorderColor:%s->%s", r.ImageBorderColor, v))
+		}
 		r.ImageBorderColor = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "ImageBorderColor")
-		}
 	}
 }
 
 func (r *Route) SetReversible(v bool) {
 	if r.Reversible != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Reversible:%t->%t", r.Reversible, v))
+		}
 		r.Reversible = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Reversible")
-		}
 	}
 }
 
 func (r *Route) SetStartFortId(v string) {
 	if r.StartFortId != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("StartFortId:%s->%s", r.StartFortId, v))
+		}
 		r.StartFortId = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "StartFortId")
-		}
 	}
 }
 
 func (r *Route) SetStartImage(v string) {
 	if r.StartImage != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("StartImage:%s->%s", r.StartImage, v))
+		}
 		r.StartImage = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "StartImage")
-		}
 	}
 }
 
 func (r *Route) SetStartLat(v float64) {
 	if !floatAlmostEqual(r.StartLat, v, floatTolerance) {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("StartLat:%f->%f", r.StartLat, v))
+		}
 		r.StartLat = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "StartLat")
-		}
 	}
 }
 
 func (r *Route) SetStartLon(v float64) {
 	if !floatAlmostEqual(r.StartLon, v, floatTolerance) {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("StartLon:%f->%f", r.StartLon, v))
+		}
 		r.StartLon = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "StartLon")
-		}
 	}
 }
 
 func (r *Route) SetTags(v null.String) {
 	if r.Tags != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Tags:%v->%v", r.Tags, v))
+		}
 		r.Tags = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Tags")
-		}
 	}
 }
 
 func (r *Route) SetType(v int8) {
 	if r.Type != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Type:%d->%d", r.Type, v))
+		}
 		r.Type = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Type")
-		}
 	}
 }
 
 func (r *Route) SetVersion(v int64) {
 	if r.Version != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Version:%d->%d", r.Version, v))
+		}
 		r.Version = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Version")
-		}
 	}
 }
 
 func (r *Route) SetWaypoints(v string) {
 	if r.Waypoints != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Waypoints:%s->%s", r.Waypoints, v))
+		}
 		r.Waypoints = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Waypoints")
-		}
 	}
 }
 
 func (r *Route) SetUpdated(v int64) {
 	if r.Updated != v {
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Updated:%d->%d", r.Updated, v))
+		}
 		r.Updated = v
 		r.dirty = true
-		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, "Updated")
-		}
 	}
 }

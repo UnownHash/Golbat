@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"sync"
 
 	"golbat/grpc"
@@ -168,131 +169,131 @@ func (pokemon *Pokemon) Unlock() {
 
 func (pokemon *Pokemon) SetPokestopId(v null.String) {
 	if pokemon.PokestopId != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("PokestopId:%v->%v", pokemon.PokestopId, v))
+		}
 		pokemon.PokestopId = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "PokestopId")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetSpawnId(v null.Int) {
 	if pokemon.SpawnId != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("SpawnId:%v->%v", pokemon.SpawnId, v))
+		}
 		pokemon.SpawnId = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "SpawnId")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetLat(v float64) {
 	if !floatAlmostEqual(pokemon.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Lat:%f->%f", pokemon.Lat, v))
+		}
 		pokemon.Lat = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Lat")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetLon(v float64) {
 	if !floatAlmostEqual(pokemon.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Lon:%f->%f", pokemon.Lon, v))
+		}
 		pokemon.Lon = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Lon")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetPokemonId(v int16) {
 	if pokemon.PokemonId != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("PokemonId:%d->%d", pokemon.PokemonId, v))
+		}
 		pokemon.PokemonId = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "PokemonId")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetForm(v null.Int) {
 	if pokemon.Form != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Form:%v->%v", pokemon.Form, v))
+		}
 		pokemon.Form = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Form")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetCostume(v null.Int) {
 	if pokemon.Costume != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Costume:%v->%v", pokemon.Costume, v))
+		}
 		pokemon.Costume = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Costume")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetGender(v null.Int) {
 	if pokemon.Gender != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Gender:%v->%v", pokemon.Gender, v))
+		}
 		pokemon.Gender = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Gender")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetWeather(v null.Int) {
 	if pokemon.Weather != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weather:%v->%v", pokemon.Weather, v))
+		}
 		pokemon.Weather = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Weather")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetIsStrong(v null.Bool) {
 	if pokemon.IsStrong != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("IsStrong:%v->%v", pokemon.IsStrong, v))
+		}
 		pokemon.IsStrong = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "IsStrong")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetExpireTimestamp(v null.Int) {
 	if pokemon.ExpireTimestamp != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("ExpireTimestamp:%v->%v", pokemon.ExpireTimestamp, v))
+		}
 		pokemon.ExpireTimestamp = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "ExpireTimestamp")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 	if pokemon.ExpireTimestampVerified != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("ExpireTimestampVerified:%t->%t", pokemon.ExpireTimestampVerified, v))
+		}
 		pokemon.ExpireTimestampVerified = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "ExpireTimestampVerified")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetSeenType(v null.String) {
 	if pokemon.SeenType != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("SeenType:%v->%v", pokemon.SeenType, v))
+		}
 		pokemon.SeenType = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "SeenType")
-		}
 	}
 }
 
@@ -305,180 +306,180 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 
 func (pokemon *Pokemon) SetCellId(v null.Int) {
 	if pokemon.CellId != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("CellId:%v->%v", pokemon.CellId, v))
+		}
 		pokemon.CellId = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "CellId")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetIsEvent(v int8) {
 	if pokemon.IsEvent != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("IsEvent:%d->%d", pokemon.IsEvent, v))
+		}
 		pokemon.IsEvent = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "IsEvent")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetShiny(v null.Bool) {
 	if pokemon.Shiny != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Shiny:%v->%v", pokemon.Shiny, v))
+		}
 		pokemon.Shiny = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Shiny")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetCp(v null.Int) {
 	if pokemon.Cp != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Cp:%v->%v", pokemon.Cp, v))
+		}
 		pokemon.Cp = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Cp")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetLevel(v null.Int) {
 	if pokemon.Level != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Level:%v->%v", pokemon.Level, v))
+		}
 		pokemon.Level = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Level")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetMove1(v null.Int) {
 	if pokemon.Move1 != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move1:%v->%v", pokemon.Move1, v))
+		}
 		pokemon.Move1 = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Move1")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetMove2(v null.Int) {
 	if pokemon.Move2 != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move2:%v->%v", pokemon.Move2, v))
+		}
 		pokemon.Move2 = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Move2")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetHeight(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Height, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Height:%v->%v", pokemon.Height, v))
+		}
 		pokemon.Height = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Height")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetWeight(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Weight, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weight:%v->%v", pokemon.Weight, v))
+		}
 		pokemon.Weight = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Weight")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetSize(v null.Int) {
 	if pokemon.Size != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Size:%v->%v", pokemon.Size, v))
+		}
 		pokemon.Size = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Size")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetIsDitto(v bool) {
 	if pokemon.IsDitto != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("IsDitto:%t->%t", pokemon.IsDitto, v))
+		}
 		pokemon.IsDitto = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "IsDitto")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetDisplayPokemonId(v null.Int) {
 	if pokemon.DisplayPokemonId != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonId:%v->%v", pokemon.DisplayPokemonId, v))
+		}
 		pokemon.DisplayPokemonId = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "DisplayPokemonId")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetPvp(v null.String) {
 	if pokemon.Pvp != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Pvp:%v->%v", pokemon.Pvp, v))
+		}
 		pokemon.Pvp = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Pvp")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetCapture1(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture1, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture1:%v->%v", pokemon.Capture1, v))
+		}
 		pokemon.Capture1 = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Capture1")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetCapture2(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture2, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture2:%v->%v", pokemon.Capture2, v))
+		}
 		pokemon.Capture2 = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Capture2")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetCapture3(v null.Float) {
 	if !nullFloatAlmostEqual(pokemon.Capture3, v, floatTolerance) {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture3:%v->%v", pokemon.Capture3, v))
+		}
 		pokemon.Capture3 = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Capture3")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetUpdated(v null.Int) {
 	if pokemon.Updated != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Updated:%v->%v", pokemon.Updated, v))
+		}
 		pokemon.Updated = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Updated")
-		}
 	}
 }
 
 func (pokemon *Pokemon) SetChanged(v int64) {
 	if pokemon.Changed != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Changed:%d->%d", pokemon.Changed, v))
+		}
 		pokemon.Changed = v
 		pokemon.dirty = true
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, "Changed")
-		}
 	}
 }

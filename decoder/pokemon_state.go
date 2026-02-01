@@ -339,6 +339,10 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			rows, rowsErr := res.RowsAffected()
 			log.Debugf("Updating pokemon [%d] after update res = %d %v", pokemon.Id, rows, rowsErr)
 		}
+	} else {
+		if dbDebugEnabled {
+			dbDebugLog("MEMORY", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+		}
 	}
 
 	// Update pokemon rtree
