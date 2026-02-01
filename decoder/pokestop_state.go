@@ -276,7 +276,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			return
 		}
 	}
-	pokestop.Updated = now
+	pokestop.SetUpdated(now)
 
 	if pokestop.IsNewRecord() {
 		if dbDebugEnabled {

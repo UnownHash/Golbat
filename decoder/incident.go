@@ -213,3 +213,10 @@ func (incident *Incident) SetSlot3Form(v null.Int) {
 		incident.dirty = true
 	}
 }
+
+func (incident *Incident) SetUpdated(v int64) {
+	if incident.Updated != v {
+		incident.Updated = v
+		incident.dirty = true
+	}
+}

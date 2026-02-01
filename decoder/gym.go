@@ -561,3 +561,13 @@ func (gym *Gym) SetRsvps(v null.String) {
 		}
 	}
 }
+
+func (gym *Gym) SetUpdated(v int64) {
+	if gym.Updated != v {
+		gym.Updated = v
+		gym.dirty = true
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, "Updated")
+		}
+	}
+}

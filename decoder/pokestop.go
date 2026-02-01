@@ -576,3 +576,13 @@ func (p *Pokestop) SetShowcaseRankings(v null.String) {
 		}
 	}
 }
+
+func (p *Pokestop) SetUpdated(v int64) {
+	if p.Updated != v {
+		p.Updated = v
+		p.dirty = true
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, "Updated")
+		}
+	}
+}

@@ -101,7 +101,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 
 	now := time.Now().Unix()
-	tappable.Updated = now
+	tappable.SetUpdated(now)
 
 	if tappable.IsNewRecord() {
 		if dbDebugEnabled {

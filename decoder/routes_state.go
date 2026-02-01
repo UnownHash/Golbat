@@ -112,7 +112,7 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 		}
 	}
 
-	route.Updated = time.Now().Unix()
+	route.SetUpdated(time.Now().Unix())
 
 	if route.IsNewRecord() {
 		if dbDebugEnabled {

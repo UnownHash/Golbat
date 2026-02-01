@@ -280,3 +280,13 @@ func (r *Route) SetWaypoints(v string) {
 		}
 	}
 }
+
+func (r *Route) SetUpdated(v int64) {
+	if r.Updated != v {
+		r.Updated = v
+		r.dirty = true
+		if dbDebugEnabled {
+			r.changedFields = append(r.changedFields, "Updated")
+		}
+	}
+}

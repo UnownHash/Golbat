@@ -633,6 +633,13 @@ func (p *Player) SetCaughtFairy(v null.Int) {
 	}
 }
 
+func (p *Player) SetLastSeen(v int64) {
+	if p.LastSeen != v {
+		p.LastSeen = v
+		p.dirty = true
+	}
+}
+
 var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 	//pogo.HoloBadgeType_BADGE_TRAVEL_KM:       "KmWalked",
 	pogo.HoloBadgeType_BADGE_POKEDEX_ENTRIES: "DexGen1",
@@ -782,7 +789,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		return
 	}
 
-	player.LastSeen = time.Now().Unix()
+	player.SetLastSeen(time.Now().Unix())
 
 	if player.IsNewRecord() {
 		_, err := db.GeneralDb.NamedExec(

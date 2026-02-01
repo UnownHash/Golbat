@@ -190,9 +190,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		pokemon.FirstSeenTimestamp = now
 	}
 
-	pokemon.Updated = null.IntFrom(now)
+	pokemon.SetUpdated(null.IntFrom(now))
 	if pokemon.isNewRecord() || pokemon.oldValues.PokemonId != pokemon.PokemonId || pokemon.oldValues.Cp != pokemon.Cp {
-		pokemon.Changed = now
+		pokemon.SetChanged(now)
 	}
 
 	changePvpField := false

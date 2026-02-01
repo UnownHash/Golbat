@@ -333,7 +333,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 			return
 		}
 	}
-	gym.Updated = now
+	gym.SetUpdated(now)
 
 	if gym.IsDirty() {
 		if gym.IsNewRecord() {

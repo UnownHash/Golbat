@@ -111,7 +111,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 		return
 	}
 
-	incident.Updated = time.Now().Unix()
+	incident.SetUpdated(time.Now().Unix())
 
 	if incident.IsNewRecord() {
 		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+

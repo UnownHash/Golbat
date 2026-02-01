@@ -359,3 +359,13 @@ func (station *Station) SetStationedPokemon(v null.String) {
 		}
 	}
 }
+
+func (station *Station) SetUpdated(v int64) {
+	if station.Updated != v {
+		station.Updated = v
+		station.dirty = true
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, "Updated")
+		}
+	}
+}

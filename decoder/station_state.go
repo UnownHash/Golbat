@@ -140,7 +140,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		}
 	}
 
-	station.Updated = now
+	station.SetUpdated(now)
 
 	if station.IsNewRecord() {
 		if dbDebugEnabled {

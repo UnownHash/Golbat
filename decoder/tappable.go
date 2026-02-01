@@ -155,3 +155,13 @@ func (ta *Tappable) SetExpireTimestampVerified(v bool) {
 		}
 	}
 }
+
+func (ta *Tappable) SetUpdated(v int64) {
+	if ta.Updated != v {
+		ta.Updated = v
+		ta.dirty = true
+		if dbDebugEnabled {
+			ta.changedFields = append(ta.changedFields, "Updated")
+		}
+	}
+}

@@ -462,3 +462,23 @@ func (pokemon *Pokemon) SetCapture3(v null.Float) {
 		}
 	}
 }
+
+func (pokemon *Pokemon) SetUpdated(v null.Int) {
+	if pokemon.Updated != v {
+		pokemon.Updated = v
+		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Updated")
+		}
+	}
+}
+
+func (pokemon *Pokemon) SetChanged(v int64) {
+	if pokemon.Changed != v {
+		pokemon.Changed = v
+		pokemon.dirty = true
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, "Changed")
+		}
+	}
+}

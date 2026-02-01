@@ -119,6 +119,20 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	}
 }
 
+func (s *Spawnpoint) SetUpdated(v int64) {
+	if s.Updated != v {
+		s.Updated = v
+		s.dirty = true
+	}
+}
+
+func (s *Spawnpoint) SetLastSeen(v int64) {
+	if s.LastSeen != v {
+		s.LastSeen = v
+		s.dirty = true
+	}
+}
+
 func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
 	err := db.GeneralDb.GetContext(ctx, spawnpoint,
 		"SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
@@ -249,8 +263,8 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		return
 	}
 
-	spawnpoint.Updated = time.Now().Unix()  // ensure future updates are set correctly
-	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
+	spawnpoint.SetUpdated(time.Now().Unix())  // ensure future updates are set correctly
+	spawnpoint.SetLastSeen(time.Now().Unix()) // ensure future updates are set correctly
 
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+
@@ -281,7 +295,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint
 
 	// update at least every 6 hours (21600s). If reduce_updates is enabled, use 12 hours.
 	if now-spawnpoint.LastSeen > GetUpdateThreshold(21600) {
-		spawnpoint.LastSeen = now
+		spawnpoint.SetLastSeen(now)
 
 		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
 			"SET last_seen=? "+
