@@ -134,6 +134,7 @@ type scanRule struct {
 	ProcessPokemon           *bool          `koanf:"pokemon"`
 	ProcessWilds             *bool          `koanf:"wild_pokemon"`
 	ProcessNearby            *bool          `koanf:"nearby_pokemon"`
+	ProcessNearbyCell        *bool          `koanf:"nearby_cell_pokemon"`
 	ProcessWeather           *bool          `koanf:"weather"`
 	ProcessCells             *bool          `koanf:"cells"`
 	ProcessPokestops         *bool          `koanf:"pokestops"`

@@ -145,19 +145,21 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		for _, nearby := range nearbyPokemonList {
 			encounterId := nearby.Data.EncounterId
 
-			pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
-			if err != nil {
-				log.Printf("getOrCreatePokemonRecord: %s", err)
-				continue
-			}
+			if nearby.Data.FortId != "" || scanParameters.ProcessNearbyCell {
+				pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+				if err != nil {
+					log.Printf("getOrCreatePokemonRecord: %s", err)
+					continue
+				}
 
-			updateTime := nearby.Timestamp / 1000
-			if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
-				pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
-			}
+				updateTime := nearby.Timestamp / 1000
+				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
+					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+				}
 
-			unlock()
+				unlock()
+			}
 		}
 	}
 
