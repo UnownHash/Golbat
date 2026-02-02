@@ -210,7 +210,7 @@ func (gym *Gym) SetLon(v float64) {
 func (gym *Gym) SetName(v null.String) {
 	if gym.Name != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Name:%v->%v", gym.Name, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Name:%s->%s", FormatNull(gym.Name), FormatNull(v)))
 		}
 		gym.Name = v
 		gym.dirty = true
@@ -220,7 +220,7 @@ func (gym *Gym) SetName(v null.String) {
 func (gym *Gym) SetUrl(v null.String) {
 	if gym.Url != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Url:%v->%v", gym.Url, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Url:%s->%s", FormatNull(gym.Url), FormatNull(v)))
 		}
 		gym.Url = v
 		gym.dirty = true
@@ -230,7 +230,7 @@ func (gym *Gym) SetUrl(v null.String) {
 func (gym *Gym) SetLastModifiedTimestamp(v null.Int) {
 	if gym.LastModifiedTimestamp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("LastModifiedTimestamp:%v->%v", gym.LastModifiedTimestamp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("LastModifiedTimestamp:%s->%s", FormatNull(gym.LastModifiedTimestamp), FormatNull(v)))
 		}
 		gym.LastModifiedTimestamp = v
 		gym.dirty = true
@@ -240,7 +240,7 @@ func (gym *Gym) SetLastModifiedTimestamp(v null.Int) {
 func (gym *Gym) SetRaidEndTimestamp(v null.Int) {
 	if gym.RaidEndTimestamp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidEndTimestamp:%v->%v", gym.RaidEndTimestamp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidEndTimestamp:%s->%s", FormatNull(gym.RaidEndTimestamp), FormatNull(v)))
 		}
 		gym.RaidEndTimestamp = v
 		gym.dirty = true
@@ -250,7 +250,7 @@ func (gym *Gym) SetRaidEndTimestamp(v null.Int) {
 func (gym *Gym) SetRaidSpawnTimestamp(v null.Int) {
 	if gym.RaidSpawnTimestamp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSpawnTimestamp:%v->%v", gym.RaidSpawnTimestamp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSpawnTimestamp:%s->%s", FormatNull(gym.RaidSpawnTimestamp), FormatNull(v)))
 		}
 		gym.RaidSpawnTimestamp = v
 		gym.dirty = true
@@ -260,7 +260,7 @@ func (gym *Gym) SetRaidSpawnTimestamp(v null.Int) {
 func (gym *Gym) SetRaidBattleTimestamp(v null.Int) {
 	if gym.RaidBattleTimestamp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidBattleTimestamp:%v->%v", gym.RaidBattleTimestamp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidBattleTimestamp:%s->%s", FormatNull(gym.RaidBattleTimestamp), FormatNull(v)))
 		}
 		gym.RaidBattleTimestamp = v
 		gym.dirty = true
@@ -270,7 +270,7 @@ func (gym *Gym) SetRaidBattleTimestamp(v null.Int) {
 func (gym *Gym) SetRaidPokemonId(v null.Int) {
 	if gym.RaidPokemonId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonId:%v->%v", gym.RaidPokemonId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonId:%s->%s", FormatNull(gym.RaidPokemonId), FormatNull(v)))
 		}
 		gym.RaidPokemonId = v
 		gym.dirty = true
@@ -280,7 +280,7 @@ func (gym *Gym) SetRaidPokemonId(v null.Int) {
 func (gym *Gym) SetGuardingPokemonId(v null.Int) {
 	if gym.GuardingPokemonId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonId:%v->%v", gym.GuardingPokemonId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonId:%s->%s", FormatNull(gym.GuardingPokemonId), FormatNull(v)))
 		}
 		gym.GuardingPokemonId = v
 		gym.dirty = true
@@ -290,7 +290,7 @@ func (gym *Gym) SetGuardingPokemonId(v null.Int) {
 func (gym *Gym) SetGuardingPokemonDisplay(v null.String) {
 	if gym.GuardingPokemonDisplay != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonDisplay:%v->%v", gym.GuardingPokemonDisplay, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("GuardingPokemonDisplay:%s->%s", FormatNull(gym.GuardingPokemonDisplay), FormatNull(v)))
 		}
 		gym.GuardingPokemonDisplay = v
 		gym.dirty = true
@@ -300,7 +300,7 @@ func (gym *Gym) SetGuardingPokemonDisplay(v null.String) {
 func (gym *Gym) SetAvailableSlots(v null.Int) {
 	if gym.AvailableSlots != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("AvailableSlots:%v->%v", gym.AvailableSlots, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("AvailableSlots:%s->%s", FormatNull(gym.AvailableSlots), FormatNull(v)))
 		}
 		gym.AvailableSlots = v
 		gym.dirty = true
@@ -310,7 +310,7 @@ func (gym *Gym) SetAvailableSlots(v null.Int) {
 func (gym *Gym) SetTeamId(v null.Int) {
 	if gym.TeamId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TeamId:%v->%v", gym.TeamId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TeamId:%s->%s", FormatNull(gym.TeamId), FormatNull(v)))
 		}
 		gym.TeamId = v
 		gym.dirty = true
@@ -320,7 +320,7 @@ func (gym *Gym) SetTeamId(v null.Int) {
 func (gym *Gym) SetRaidLevel(v null.Int) {
 	if gym.RaidLevel != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidLevel:%v->%v", gym.RaidLevel, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidLevel:%s->%s", FormatNull(gym.RaidLevel), FormatNull(v)))
 		}
 		gym.RaidLevel = v
 		gym.dirty = true
@@ -330,7 +330,7 @@ func (gym *Gym) SetRaidLevel(v null.Int) {
 func (gym *Gym) SetEnabled(v null.Int) {
 	if gym.Enabled != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Enabled:%v->%v", gym.Enabled, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Enabled:%s->%s", FormatNull(gym.Enabled), FormatNull(v)))
 		}
 		gym.Enabled = v
 		gym.dirty = true
@@ -340,7 +340,7 @@ func (gym *Gym) SetEnabled(v null.Int) {
 func (gym *Gym) SetExRaidEligible(v null.Int) {
 	if gym.ExRaidEligible != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ExRaidEligible:%v->%v", gym.ExRaidEligible, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ExRaidEligible:%s->%s", FormatNull(gym.ExRaidEligible), FormatNull(v)))
 		}
 		gym.ExRaidEligible = v
 		gym.dirty = true
@@ -350,7 +350,7 @@ func (gym *Gym) SetExRaidEligible(v null.Int) {
 func (gym *Gym) SetInBattle(v null.Int) {
 	if gym.InBattle != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("InBattle:%v->%v", gym.InBattle, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("InBattle:%s->%s", FormatNull(gym.InBattle), FormatNull(v)))
 		}
 		gym.InBattle = v
 		//Do not set to dirty, as don't trigger an update
@@ -361,7 +361,7 @@ func (gym *Gym) SetInBattle(v null.Int) {
 func (gym *Gym) SetRaidPokemonMove1(v null.Int) {
 	if gym.RaidPokemonMove1 != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove1:%v->%v", gym.RaidPokemonMove1, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove1:%s->%s", FormatNull(gym.RaidPokemonMove1), FormatNull(v)))
 		}
 		gym.RaidPokemonMove1 = v
 		gym.dirty = true
@@ -371,7 +371,7 @@ func (gym *Gym) SetRaidPokemonMove1(v null.Int) {
 func (gym *Gym) SetRaidPokemonMove2(v null.Int) {
 	if gym.RaidPokemonMove2 != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove2:%v->%v", gym.RaidPokemonMove2, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonMove2:%s->%s", FormatNull(gym.RaidPokemonMove2), FormatNull(v)))
 		}
 		gym.RaidPokemonMove2 = v
 		gym.dirty = true
@@ -381,7 +381,7 @@ func (gym *Gym) SetRaidPokemonMove2(v null.Int) {
 func (gym *Gym) SetRaidPokemonForm(v null.Int) {
 	if gym.RaidPokemonForm != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonForm:%v->%v", gym.RaidPokemonForm, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonForm:%s->%s", FormatNull(gym.RaidPokemonForm), FormatNull(v)))
 		}
 		gym.RaidPokemonForm = v
 		gym.dirty = true
@@ -391,7 +391,7 @@ func (gym *Gym) SetRaidPokemonForm(v null.Int) {
 func (gym *Gym) SetRaidPokemonAlignment(v null.Int) {
 	if gym.RaidPokemonAlignment != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonAlignment:%v->%v", gym.RaidPokemonAlignment, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonAlignment:%s->%s", FormatNull(gym.RaidPokemonAlignment), FormatNull(v)))
 		}
 		gym.RaidPokemonAlignment = v
 		gym.dirty = true
@@ -401,7 +401,7 @@ func (gym *Gym) SetRaidPokemonAlignment(v null.Int) {
 func (gym *Gym) SetRaidPokemonCp(v null.Int) {
 	if gym.RaidPokemonCp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCp:%v->%v", gym.RaidPokemonCp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCp:%s->%s", FormatNull(gym.RaidPokemonCp), FormatNull(v)))
 		}
 		gym.RaidPokemonCp = v
 		gym.dirty = true
@@ -411,7 +411,7 @@ func (gym *Gym) SetRaidPokemonCp(v null.Int) {
 func (gym *Gym) SetRaidIsExclusive(v null.Int) {
 	if gym.RaidIsExclusive != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidIsExclusive:%v->%v", gym.RaidIsExclusive, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidIsExclusive:%s->%s", FormatNull(gym.RaidIsExclusive), FormatNull(v)))
 		}
 		gym.RaidIsExclusive = v
 		gym.dirty = true
@@ -421,7 +421,7 @@ func (gym *Gym) SetRaidIsExclusive(v null.Int) {
 func (gym *Gym) SetCellId(v null.Int) {
 	if gym.CellId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("CellId:%v->%v", gym.CellId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("CellId:%s->%s", FormatNull(gym.CellId), FormatNull(v)))
 		}
 		gym.CellId = v
 		gym.dirty = true
@@ -441,7 +441,7 @@ func (gym *Gym) SetDeleted(v bool) {
 func (gym *Gym) SetTotalCp(v null.Int) {
 	if gym.TotalCp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TotalCp:%v->%v", gym.TotalCp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("TotalCp:%s->%s", FormatNull(gym.TotalCp), FormatNull(v)))
 		}
 		gym.TotalCp = v
 		gym.dirty = true
@@ -451,7 +451,7 @@ func (gym *Gym) SetTotalCp(v null.Int) {
 func (gym *Gym) SetRaidPokemonGender(v null.Int) {
 	if gym.RaidPokemonGender != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonGender:%v->%v", gym.RaidPokemonGender, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonGender:%s->%s", FormatNull(gym.RaidPokemonGender), FormatNull(v)))
 		}
 		gym.RaidPokemonGender = v
 		gym.dirty = true
@@ -461,7 +461,7 @@ func (gym *Gym) SetRaidPokemonGender(v null.Int) {
 func (gym *Gym) SetSponsorId(v null.Int) {
 	if gym.SponsorId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("SponsorId:%v->%v", gym.SponsorId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("SponsorId:%s->%s", FormatNull(gym.SponsorId), FormatNull(v)))
 		}
 		gym.SponsorId = v
 		gym.dirty = true
@@ -471,7 +471,7 @@ func (gym *Gym) SetSponsorId(v null.Int) {
 func (gym *Gym) SetPartnerId(v null.String) {
 	if gym.PartnerId != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PartnerId:%v->%v", gym.PartnerId, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PartnerId:%s->%s", FormatNull(gym.PartnerId), FormatNull(v)))
 		}
 		gym.PartnerId = v
 		gym.dirty = true
@@ -481,7 +481,7 @@ func (gym *Gym) SetPartnerId(v null.String) {
 func (gym *Gym) SetRaidPokemonCostume(v null.Int) {
 	if gym.RaidPokemonCostume != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCostume:%v->%v", gym.RaidPokemonCostume, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCostume:%s->%s", FormatNull(gym.RaidPokemonCostume), FormatNull(v)))
 		}
 		gym.RaidPokemonCostume = v
 		gym.dirty = true
@@ -491,7 +491,7 @@ func (gym *Gym) SetRaidPokemonCostume(v null.Int) {
 func (gym *Gym) SetRaidPokemonEvolution(v null.Int) {
 	if gym.RaidPokemonEvolution != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonEvolution:%v->%v", gym.RaidPokemonEvolution, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonEvolution:%s->%s", FormatNull(gym.RaidPokemonEvolution), FormatNull(v)))
 		}
 		gym.RaidPokemonEvolution = v
 		gym.dirty = true
@@ -501,7 +501,7 @@ func (gym *Gym) SetRaidPokemonEvolution(v null.Int) {
 func (gym *Gym) SetArScanEligible(v null.Int) {
 	if gym.ArScanEligible != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ArScanEligible:%v->%v", gym.ArScanEligible, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ArScanEligible:%s->%s", FormatNull(gym.ArScanEligible), FormatNull(v)))
 		}
 		gym.ArScanEligible = v
 		gym.dirty = true
@@ -511,7 +511,7 @@ func (gym *Gym) SetArScanEligible(v null.Int) {
 func (gym *Gym) SetPowerUpLevel(v null.Int) {
 	if gym.PowerUpLevel != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpLevel:%v->%v", gym.PowerUpLevel, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpLevel:%s->%s", FormatNull(gym.PowerUpLevel), FormatNull(v)))
 		}
 		gym.PowerUpLevel = v
 		gym.dirty = true
@@ -521,7 +521,7 @@ func (gym *Gym) SetPowerUpLevel(v null.Int) {
 func (gym *Gym) SetPowerUpPoints(v null.Int) {
 	if gym.PowerUpPoints != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpPoints:%v->%v", gym.PowerUpPoints, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpPoints:%s->%s", FormatNull(gym.PowerUpPoints), FormatNull(v)))
 		}
 		gym.PowerUpPoints = v
 		gym.dirty = true
@@ -531,7 +531,7 @@ func (gym *Gym) SetPowerUpPoints(v null.Int) {
 func (gym *Gym) SetPowerUpEndTimestamp(v null.Int) {
 	if gym.PowerUpEndTimestamp != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpEndTimestamp:%v->%v", gym.PowerUpEndTimestamp, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("PowerUpEndTimestamp:%s->%s", FormatNull(gym.PowerUpEndTimestamp), FormatNull(v)))
 		}
 		gym.PowerUpEndTimestamp = v
 		gym.dirty = true
@@ -541,7 +541,7 @@ func (gym *Gym) SetPowerUpEndTimestamp(v null.Int) {
 func (gym *Gym) SetDescription(v null.String) {
 	if gym.Description != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Description:%v->%v", gym.Description, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Description:%s->%s", FormatNull(gym.Description), FormatNull(v)))
 		}
 		gym.Description = v
 		gym.dirty = true
@@ -551,7 +551,7 @@ func (gym *Gym) SetDescription(v null.String) {
 func (gym *Gym) SetDefenders(v null.String) {
 	if gym.Defenders != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Defenders:%v->%v", gym.Defenders, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Defenders:%s->%s", FormatNull(gym.Defenders), FormatNull(v)))
 		}
 		gym.Defenders = v
 		//Do not set to dirty, as don't trigger an update
@@ -562,7 +562,7 @@ func (gym *Gym) SetDefenders(v null.String) {
 func (gym *Gym) SetRsvps(v null.String) {
 	if gym.Rsvps != v {
 		if dbDebugEnabled {
-			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Rsvps:%v->%v", gym.Rsvps, v))
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Rsvps:%s->%s", FormatNull(gym.Rsvps), FormatNull(v)))
 		}
 		gym.Rsvps = v
 		gym.dirty = true

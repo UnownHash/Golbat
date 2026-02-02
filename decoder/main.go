@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"fmt"
 	"math"
 	"runtime"
 	"time"
@@ -244,6 +245,20 @@ func nullFloatAlmostEqual(a, b null.Float, tolerance float64) bool {
 	} else {
 		return !b.Valid
 	}
+}
+
+// Ptrable is an interface for any type that has a Ptr() method returning *T
+// specifically these are the null objects
+type Ptrable[T any] interface {
+	Ptr() *T
+}
+
+// FormatNull returns "NULL" if the nullable value is not valid, otherwise formats the value
+func FormatNull[T any](n Ptrable[T]) string {
+	if ptr := n.Ptr(); ptr != nil {
+		return fmt.Sprintf("%v", *ptr)
+	}
+	return "NULL"
 }
 
 func SetWebhooksSender(whSender webhooksSenderInterface) {

@@ -245,7 +245,7 @@ func (r *Route) SetStartLon(v float64) {
 func (r *Route) SetTags(v null.String) {
 	if r.Tags != v {
 		if dbDebugEnabled {
-			r.changedFields = append(r.changedFields, fmt.Sprintf("Tags:%v->%v", r.Tags, v))
+			r.changedFields = append(r.changedFields, fmt.Sprintf("Tags:%s->%s", FormatNull(r.Tags), FormatNull(v)))
 		}
 		r.Tags = v
 		r.dirty = true

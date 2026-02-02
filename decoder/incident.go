@@ -201,7 +201,7 @@ func (incident *Incident) SetConfirmed(v bool) {
 func (incident *Incident) SetSlot1PokemonId(v null.Int) {
 	if incident.Slot1PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1PokemonId:%v->%v", incident.Slot1PokemonId, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1PokemonId:%s->%s", FormatNull(incident.Slot1PokemonId), FormatNull(v)))
 		}
 		incident.Slot1PokemonId = v
 		incident.dirty = true
@@ -211,7 +211,7 @@ func (incident *Incident) SetSlot1PokemonId(v null.Int) {
 func (incident *Incident) SetSlot1Form(v null.Int) {
 	if incident.Slot1Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1Form:%v->%v", incident.Slot1Form, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1Form:%s->%s", FormatNull(incident.Slot1Form), FormatNull(v)))
 		}
 		incident.Slot1Form = v
 		incident.dirty = true
@@ -221,7 +221,7 @@ func (incident *Incident) SetSlot1Form(v null.Int) {
 func (incident *Incident) SetSlot2PokemonId(v null.Int) {
 	if incident.Slot2PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2PokemonId:%v->%v", incident.Slot2PokemonId, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2PokemonId:%s->%s", FormatNull(incident.Slot2PokemonId), FormatNull(v)))
 		}
 		incident.Slot2PokemonId = v
 		incident.dirty = true
@@ -231,7 +231,7 @@ func (incident *Incident) SetSlot2PokemonId(v null.Int) {
 func (incident *Incident) SetSlot2Form(v null.Int) {
 	if incident.Slot2Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2Form:%v->%v", incident.Slot2Form, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2Form:%s->%s", FormatNull(incident.Slot2Form), FormatNull(v)))
 		}
 		incident.Slot2Form = v
 		incident.dirty = true
@@ -241,7 +241,7 @@ func (incident *Incident) SetSlot2Form(v null.Int) {
 func (incident *Incident) SetSlot3PokemonId(v null.Int) {
 	if incident.Slot3PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3PokemonId:%v->%v", incident.Slot3PokemonId, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3PokemonId:%s->%s", FormatNull(incident.Slot3PokemonId), FormatNull(v)))
 		}
 		incident.Slot3PokemonId = v
 		incident.dirty = true
@@ -251,7 +251,7 @@ func (incident *Incident) SetSlot3PokemonId(v null.Int) {
 func (incident *Incident) SetSlot3Form(v null.Int) {
 	if incident.Slot3Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3Form:%v->%v", incident.Slot3Form, v))
+			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3Form:%s->%s", FormatNull(incident.Slot3Form), FormatNull(v)))
 		}
 		incident.Slot3Form = v
 		incident.dirty = true

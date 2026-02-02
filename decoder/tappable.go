@@ -80,7 +80,7 @@ func (ta *Tappable) SetLon(v float64) {
 func (ta *Tappable) SetFortId(v null.String) {
 	if ta.FortId != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("FortId:%v->%v", ta.FortId, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("FortId:%s->%s", FormatNull(ta.FortId), FormatNull(v)))
 		}
 		ta.FortId = v
 		ta.dirty = true
@@ -90,7 +90,7 @@ func (ta *Tappable) SetFortId(v null.String) {
 func (ta *Tappable) SetSpawnId(v null.Int) {
 	if ta.SpawnId != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("SpawnId:%v->%v", ta.SpawnId, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("SpawnId:%s->%s", FormatNull(ta.SpawnId), FormatNull(v)))
 		}
 		ta.SpawnId = v
 		ta.dirty = true
@@ -110,7 +110,7 @@ func (ta *Tappable) SetType(v string) {
 func (ta *Tappable) SetEncounter(v null.Int) {
 	if ta.Encounter != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Encounter:%v->%v", ta.Encounter, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Encounter:%s->%s", FormatNull(ta.Encounter), FormatNull(v)))
 		}
 		ta.Encounter = v
 		ta.dirty = true
@@ -120,7 +120,7 @@ func (ta *Tappable) SetEncounter(v null.Int) {
 func (ta *Tappable) SetItemId(v null.Int) {
 	if ta.ItemId != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ItemId:%v->%v", ta.ItemId, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ItemId:%s->%s", FormatNull(ta.ItemId), FormatNull(v)))
 		}
 		ta.ItemId = v
 		ta.dirty = true
@@ -130,7 +130,7 @@ func (ta *Tappable) SetItemId(v null.Int) {
 func (ta *Tappable) SetCount(v null.Int) {
 	if ta.Count != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Count:%v->%v", ta.Count, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("Count:%s->%s", FormatNull(ta.Count), FormatNull(v)))
 		}
 		ta.Count = v
 		ta.dirty = true
@@ -140,7 +140,7 @@ func (ta *Tappable) SetCount(v null.Int) {
 func (ta *Tappable) SetExpireTimestamp(v null.Int) {
 	if ta.ExpireTimestamp != v {
 		if dbDebugEnabled {
-			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ExpireTimestamp:%v->%v", ta.ExpireTimestamp, v))
+			ta.changedFields = append(ta.changedFields, fmt.Sprintf("ExpireTimestamp:%s->%s", FormatNull(ta.ExpireTimestamp), FormatNull(v)))
 		}
 		ta.ExpireTimestamp = v
 		ta.dirty = true

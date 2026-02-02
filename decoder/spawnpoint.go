@@ -99,7 +99,7 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	// Handle validity changes
 	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%v->%v", s.DespawnSec, v))
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
 		}
 		s.DespawnSec = v
 		s.dirty = true
@@ -126,7 +126,7 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	// Allow 2-second tolerance for despawn time
 	if Abs(oldVal-newVal) > 2 {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%v->%v", s.DespawnSec, v))
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
 		}
 		s.DespawnSec = v
 		s.dirty = true

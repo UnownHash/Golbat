@@ -204,7 +204,7 @@ func (station *Station) SetIsInactive(v bool) {
 func (station *Station) SetBattleLevel(v null.Int) {
 	if station.BattleLevel != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleLevel:%v->%v", station.BattleLevel, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleLevel:%s->%s", FormatNull(station.BattleLevel), FormatNull(v)))
 		}
 		station.BattleLevel = v
 		station.dirty = true
@@ -214,7 +214,7 @@ func (station *Station) SetBattleLevel(v null.Int) {
 func (station *Station) SetBattleStart(v null.Int) {
 	if station.BattleStart != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleStart:%v->%v", station.BattleStart, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleStart:%s->%s", FormatNull(station.BattleStart), FormatNull(v)))
 		}
 		station.BattleStart = v
 		station.dirty = true
@@ -224,7 +224,7 @@ func (station *Station) SetBattleStart(v null.Int) {
 func (station *Station) SetBattleEnd(v null.Int) {
 	if station.BattleEnd != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleEnd:%v->%v", station.BattleEnd, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleEnd:%s->%s", FormatNull(station.BattleEnd), FormatNull(v)))
 		}
 		station.BattleEnd = v
 		station.dirty = true
@@ -234,7 +234,7 @@ func (station *Station) SetBattleEnd(v null.Int) {
 func (station *Station) SetBattlePokemonId(v null.Int) {
 	if station.BattlePokemonId != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonId:%v->%v", station.BattlePokemonId, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonId:%s->%s", FormatNull(station.BattlePokemonId), FormatNull(v)))
 		}
 		station.BattlePokemonId = v
 		station.dirty = true
@@ -244,7 +244,7 @@ func (station *Station) SetBattlePokemonId(v null.Int) {
 func (station *Station) SetBattlePokemonForm(v null.Int) {
 	if station.BattlePokemonForm != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonForm:%v->%v", station.BattlePokemonForm, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonForm:%s->%s", FormatNull(station.BattlePokemonForm), FormatNull(v)))
 		}
 		station.BattlePokemonForm = v
 		station.dirty = true
@@ -254,7 +254,7 @@ func (station *Station) SetBattlePokemonForm(v null.Int) {
 func (station *Station) SetBattlePokemonCostume(v null.Int) {
 	if station.BattlePokemonCostume != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCostume:%v->%v", station.BattlePokemonCostume, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCostume:%s->%s", FormatNull(station.BattlePokemonCostume), FormatNull(v)))
 		}
 		station.BattlePokemonCostume = v
 		station.dirty = true
@@ -264,7 +264,7 @@ func (station *Station) SetBattlePokemonCostume(v null.Int) {
 func (station *Station) SetBattlePokemonGender(v null.Int) {
 	if station.BattlePokemonGender != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonGender:%v->%v", station.BattlePokemonGender, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonGender:%s->%s", FormatNull(station.BattlePokemonGender), FormatNull(v)))
 		}
 		station.BattlePokemonGender = v
 		station.dirty = true
@@ -274,7 +274,7 @@ func (station *Station) SetBattlePokemonGender(v null.Int) {
 func (station *Station) SetBattlePokemonAlignment(v null.Int) {
 	if station.BattlePokemonAlignment != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonAlignment:%v->%v", station.BattlePokemonAlignment, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonAlignment:%s->%s", FormatNull(station.BattlePokemonAlignment), FormatNull(v)))
 		}
 		station.BattlePokemonAlignment = v
 		station.dirty = true
@@ -284,7 +284,7 @@ func (station *Station) SetBattlePokemonAlignment(v null.Int) {
 func (station *Station) SetBattlePokemonBreadMode(v null.Int) {
 	if station.BattlePokemonBreadMode != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonBreadMode:%v->%v", station.BattlePokemonBreadMode, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonBreadMode:%s->%s", FormatNull(station.BattlePokemonBreadMode), FormatNull(v)))
 		}
 		station.BattlePokemonBreadMode = v
 		station.dirty = true
@@ -294,7 +294,7 @@ func (station *Station) SetBattlePokemonBreadMode(v null.Int) {
 func (station *Station) SetBattlePokemonMove1(v null.Int) {
 	if station.BattlePokemonMove1 != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove1:%v->%v", station.BattlePokemonMove1, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove1:%s->%s", FormatNull(station.BattlePokemonMove1), FormatNull(v)))
 		}
 		station.BattlePokemonMove1 = v
 		station.dirty = true
@@ -304,7 +304,7 @@ func (station *Station) SetBattlePokemonMove1(v null.Int) {
 func (station *Station) SetBattlePokemonMove2(v null.Int) {
 	if station.BattlePokemonMove2 != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove2:%v->%v", station.BattlePokemonMove2, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove2:%s->%s", FormatNull(station.BattlePokemonMove2), FormatNull(v)))
 		}
 		station.BattlePokemonMove2 = v
 		station.dirty = true
@@ -314,7 +314,7 @@ func (station *Station) SetBattlePokemonMove2(v null.Int) {
 func (station *Station) SetBattlePokemonStamina(v null.Int) {
 	if station.BattlePokemonStamina != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonStamina:%v->%v", station.BattlePokemonStamina, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonStamina:%s->%s", FormatNull(station.BattlePokemonStamina), FormatNull(v)))
 		}
 		station.BattlePokemonStamina = v
 		station.dirty = true
@@ -324,7 +324,7 @@ func (station *Station) SetBattlePokemonStamina(v null.Int) {
 func (station *Station) SetBattlePokemonCpMultiplier(v null.Float) {
 	if !nullFloatAlmostEqual(station.BattlePokemonCpMultiplier, v, floatTolerance) {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCpMultiplier:%v->%v", station.BattlePokemonCpMultiplier, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCpMultiplier:%s->%s", FormatNull(station.BattlePokemonCpMultiplier), FormatNull(v)))
 		}
 		station.BattlePokemonCpMultiplier = v
 		station.dirty = true
@@ -334,7 +334,7 @@ func (station *Station) SetBattlePokemonCpMultiplier(v null.Float) {
 func (station *Station) SetTotalStationedPokemon(v null.Int) {
 	if station.TotalStationedPokemon != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedPokemon:%v->%v", station.TotalStationedPokemon, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedPokemon:%s->%s", FormatNull(station.TotalStationedPokemon), FormatNull(v)))
 		}
 		station.TotalStationedPokemon = v
 		station.dirty = true
@@ -344,7 +344,7 @@ func (station *Station) SetTotalStationedPokemon(v null.Int) {
 func (station *Station) SetTotalStationedGmax(v null.Int) {
 	if station.TotalStationedGmax != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedGmax:%v->%v", station.TotalStationedGmax, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedGmax:%s->%s", FormatNull(station.TotalStationedGmax), FormatNull(v)))
 		}
 		station.TotalStationedGmax = v
 		station.dirty = true
@@ -354,7 +354,7 @@ func (station *Station) SetTotalStationedGmax(v null.Int) {
 func (station *Station) SetStationedPokemon(v null.String) {
 	if station.StationedPokemon != v {
 		if dbDebugEnabled {
-			station.changedFields = append(station.changedFields, fmt.Sprintf("StationedPokemon:%v->%v", station.StationedPokemon, v))
+			station.changedFields = append(station.changedFields, fmt.Sprintf("StationedPokemon:%s->%s", FormatNull(station.StationedPokemon), FormatNull(v)))
 		}
 		station.StationedPokemon = v
 		station.dirty = true
