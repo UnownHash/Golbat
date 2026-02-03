@@ -55,8 +55,8 @@ type webhooksSenderInterface interface {
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
 var pokestopCache *ShardedCache[string, *Pokestop]
-var gymCache *ttlcache.Cache[string, *Gym]
-var stationCache *ttlcache.Cache[string, *Station]
+var gymCache *ShardedCache[string, *Gym]
+var stationCache *ShardedCache[string, *Station]
 var tappableCache *ttlcache.Cache[uint64, *Tappable]
 var weatherCache *ttlcache.Cache[int64, *Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
@@ -102,21 +102,23 @@ func initDataCache() {
 		})
 	}
 
-	gymCache = ttlcache.New[string, *Gym](
-		ttlcache.WithTTL[string, *Gym](60 * time.Minute),
-	)
+	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: StringKeyToShard,
+	})
 	if config.Config.FortInMemory {
 		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
 			g := item.Value()
 			removeFortFromTree(g.Id, g.Lat, g.Lon)
 		})
 	}
-	go gymCache.Start()
 
-	stationCache = ttlcache.New[string, *Station](
-		ttlcache.WithTTL[string, *Station](60 * time.Minute),
-	)
-	go stationCache.Start()
+	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
+		NumShards:  runtime.NumCPU(),
+		TTL:        60 * time.Minute,
+		KeyToShard: StringKeyToShard,
+	})
 
 	tappableCache = ttlcache.New[uint64, *Tappable](
 		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),
