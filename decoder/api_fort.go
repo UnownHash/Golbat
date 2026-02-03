@@ -76,17 +76,17 @@ type ApiFortDnfMinMax16 struct {
 }
 
 type ApiGymScanResult struct {
-	Gyms     []*Gym `json:"gyms"`
-	Examined int    `json:"examined"`
-	Skipped  int    `json:"skipped"`
-	Total    int    `json:"total"`
+	Gyms     []*ApiGymResult `json:"gyms"`
+	Examined int             `json:"examined"`
+	Skipped  int             `json:"skipped"`
+	Total    int             `json:"total"`
 }
 
 type ApiPokestopScanResult struct {
-	Pokestops []*Pokestop `json:"pokestops"`
-	Examined  int         `json:"examined"`
-	Skipped   int         `json:"skipped"`
-	Total     int         `json:"total"`
+	Pokestops []*ApiPokestopResult `json:"pokestops"`
+	Examined  int                  `json:"examined"`
+	Skipped   int                  `json:"skipped"`
+	Total     int                  `json:"total"`
 }
 
 func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDnfFilter) bool {
@@ -345,14 +345,14 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 
 func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiGymScanResult {
 	returnKeys, examined, skipped, total := internalGetForts(GYM, retrieveParameters)
-	results := make([]*Gym, 0, len(returnKeys))
+	results := make([]*ApiGymResult, 0, len(returnKeys))
 	start := time.Now()
 
 	for _, key := range returnKeys {
 		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key)
 		if err == nil && gym != nil {
 			// Make a copy to avoid holding locks
-			gymCopy := *gym
+			gymCopy := buildGymResult(gym)
 			results = append(results, &gymCopy)
 		}
 		if unlock != nil {
@@ -371,14 +371,14 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 
 func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiPokestopScanResult {
 	returnKeys, examined, skipped, total := internalGetForts(POKESTOP, retrieveParameters)
-	results := make([]*Pokestop, 0, len(returnKeys))
+	results := make([]*ApiPokestopResult, 0, len(returnKeys))
 	start := time.Now()
 
 	for _, key := range returnKeys {
 		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key)
 		if err == nil && pokestop != nil {
 			// Make a copy to avoid holding locks
-			pokestopCopy := *pokestop
+			pokestopCopy := buildPokestopResult(pokestop)
 			results = append(results, &pokestopCopy)
 		}
 		if unlock != nil {
