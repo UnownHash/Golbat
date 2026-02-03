@@ -150,10 +150,43 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 
 	station.SetUpdated(now)
 
-	if station.IsNewRecord() {
-		if dbDebugEnabled {
+	// Capture isNewRecord before state changes
+	isNewRecord := station.IsNewRecord()
+
+	// Debug logging before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Station", station.Id, station.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Station", station.Id, station.changedFields)
 		}
+	}
+
+	// Queue the write through the write-behind system
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(station, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = stationWriteDB(db, station, isNewRecord)
+	}
+
+	if dbDebugEnabled {
+		station.changedFields = station.changedFields[:0]
+	}
+	station.ClearDirty()
+	createStationWebhooks(station)
+	if isNewRecord {
+		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
+		station.newRecord = false
+	}
+}
+
+// stationWriteDB performs the actual database INSERT/UPDATE for a Station
+// This is called by both direct writes and the write-behind queue
+func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
+	ctx := context.Background()
+
+	if isNewRecord {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			`
 			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
@@ -163,13 +196,10 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		statsCollector.IncDbQuery("insert station", err)
 		if err != nil {
 			log.Errorf("insert station: %s", err)
-			return
+			return err
 		}
 		_, _ = res, err
 	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Station", station.Id, station.changedFields)
-		}
 		res, err := db.GeneralDb.NamedExecContext(ctx, `
 			UPDATE station
 			SET
@@ -205,19 +235,11 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		statsCollector.IncDbQuery("update station", err)
 		if err != nil {
 			log.Errorf("Update station %s", err)
+			return err
 		}
 		_, _ = res, err
 	}
-
-	if dbDebugEnabled {
-		station.changedFields = station.changedFields[:0]
-	}
-	station.ClearDirty()
-	createStationWebhooks(station)
-	if station.IsNewRecord() {
-		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
-		station.newRecord = false
-	}
+	return nil
 }
 
 func createStationWebhooks(station *Station) {

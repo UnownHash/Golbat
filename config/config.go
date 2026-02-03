@@ -126,6 +126,9 @@ type tuning struct {
 	ProfileRoutes                  bool    `koanf:"profile_routes"`
 	MaxConcurrentProactiveIVSwitch int     `koanf:"max_concurrent_proactive_iv_switch"`
 	ReduceUpdates                  bool    `koanf:"reduce_updates"`
+	WriteBehindStartupDelay        int     `koanf:"write_behind_startup_delay"`  // seconds, default: 120
+	WriteBehindRateLimit           int     `koanf:"write_behind_rate_limit"`     // writes/sec, 0=unlimited
+	WriteBehindBurstCapacity       int     `koanf:"write_behind_burst_capacity"` // default: 100
 }
 
 type scanRule struct {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"golbat/config"
 	"golbat/db"
@@ -18,6 +19,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
+
+// wildPokemonDelay is how long wild Pokemon wait for encounter data before writing
+const wildPokemonDelay = 30 * time.Second
 
 // peekPokemonRecordReadOnly acquires lock, does NOT take snapshot.
 // Use for read-only checks which will not cause a backing database lookup
@@ -178,14 +182,6 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		return
 	}
 
-	// uncomment to debug excessive writes
-	//if !pokemon.isNewRecord() && oldPokemon.AtkIv == pokemon.AtkIv && oldPokemon.DefIv == pokemon.DefIv && oldPokemon.StaIv == pokemon.StaIv && oldPokemon.Level == pokemon.Level && oldPokemon.ExpireTimestampVerified == pokemon.ExpireTimestampVerified && oldPokemon.PokemonId == pokemon.PokemonId && oldPokemon.ExpireTimestamp == pokemon.ExpireTimestamp && oldPokemon.PokestopId == pokemon.PokestopId && math.Abs(pokemon.Lat-oldPokemon.Lat) < .000001 && math.Abs(pokemon.Lon-oldPokemon.Lon) < .000001 {
-	//	log.Errorf("Why are we updating this? %s", cmp.Diff(oldPokemon, pokemon, cmp.Options{
-	//		ignoreNearFloats, ignoreNearNullFloats,
-	//		cmpopts.IgnoreFields(Pokemon{}, "Username", "Iv", "Pvp"),
-	//	}))
-	//}
-
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = now
 	}
@@ -232,9 +228,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	log.Debugf("Updating pokemon [%d] from %s->%s - newRecord: %t", pokemon.Id, oldSeenType, pokemon.SeenType.ValueOrZero(), pokemon.isNewRecord())
-	//log.Println(cmp.Diff(oldPokemon, pokemon))
+
+	// Capture isNewRecord before any state changes
+	isNewRecord := pokemon.isNewRecord()
 
 	if writeDB && !config.Config.PokemonMemoryOnly {
+		// Prepare internal data if needed (must happen before queueing)
 		if isEncounter && config.Config.PokemonInternalToDb {
 			unboosted, boosted, strong := pokemon.locateAllScans()
 			if unboosted != nil && boosted != nil {
@@ -251,93 +250,30 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
 			}
 		}
-		if pokemon.isNewRecord() {
-			if dbDebugEnabled {
+
+		// Debug logging happens here, before queueing
+		if dbDebugEnabled {
+			if isNewRecord {
 				dbDebugLog("INSERT", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
-			}
-			pvpField, pvpValue := "", ""
-			if changePvpField {
-				pvpField, pvpValue = "pvp, ", ":pvp, "
-			}
-			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
-				"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, move_1, move_2,"+
-				"gender, form, cp, level, strong, weather, costume, weight, height, size,"+
-				"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
-				"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
-				"VALUES (\"%d\", :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
-				":golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather, :costume,"+
-				":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
-				":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
-				":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
-
-			statsCollector.IncDbQuery("insert pokemon", err)
-			if err != nil {
-				log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
-				log.Errorf("Full structure: %+v", pokemon)
-				pokemonCache.Delete(pokemon.Id)
-				// Force reload of pokemon from database
-				return
-			}
-
-			rows, rowsErr := res.RowsAffected()
-			log.Debugf("Inserting pokemon [%d] after insert res = %d %v", pokemon.Id, rows, rowsErr)
-		} else {
-			if dbDebugEnabled {
+			} else {
 				dbDebugLog("UPDATE", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
 			}
-			pvpUpdate := ""
-			if changePvpField {
-				pvpUpdate = "pvp = :pvp, "
-			}
-			res, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
-				"pokestop_id = :pokestop_id, "+
-				"spawn_id = :spawn_id, "+
-				"lat = :lat, "+
-				"lon = :lon, "+
-				"weight = :weight, "+
-				"height = :height, "+
-				"size = :size, "+
-				"expire_timestamp = :expire_timestamp, "+
-				"updated = :updated, "+
-				"pokemon_id = :pokemon_id, "+
-				"move_1 = :move_1, "+
-				"move_2 = :move_2, "+
-				"gender = :gender, "+
-				"cp = :cp, "+
-				"atk_iv = :atk_iv, "+
-				"def_iv = :def_iv, "+
-				"sta_iv = :sta_iv, "+
-				"golbat_internal = :golbat_internal,"+
-				"iv = :iv,"+
-				"form = :form, "+
-				"level = :level, "+
-				"strong = :strong, "+
-				"weather = :weather, "+
-				"costume = :costume, "+
-				"first_seen_timestamp = :first_seen_timestamp, "+
-				"changed = :changed, "+
-				"cell_id = :cell_id, "+
-				"expire_timestamp_verified = :expire_timestamp_verified, "+
-				"display_pokemon_id = :display_pokemon_id, "+
-				"is_ditto = :is_ditto, "+
-				"seen_type = :seen_type, "+
-				"shiny = :shiny, "+
-				"username = :username, "+
-				"%s"+
-				"is_event = :is_event "+
-				"WHERE id = \"%d\"", pvpUpdate, pokemon.Id), pokemon,
-			)
-			statsCollector.IncDbQuery("update pokemon", err)
-			if err != nil {
-				log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
-				log.Errorf("Full structure: %+v", pokemon)
-				pokemonCache.Delete(pokemon.Id)
-				// Force reload of pokemon from database
+		}
 
-				return
+		// Queue the write through the write-behind system
+		if writeBehindQueue != nil {
+			// Determine delay based on seen type
+			// Wild/nearby Pokemon wait for potential encounter data, encounter writes immediately
+			delay := time.Duration(0)
+			seenType := pokemon.SeenType.ValueOrZero()
+			if seenType == SeenType_Wild || seenType == SeenType_LureWild ||
+				seenType == SeenType_Cell || seenType == SeenType_NearbyStop {
+				delay = wildPokemonDelay
 			}
-			rows, rowsErr := res.RowsAffected()
-			log.Debugf("Updating pokemon [%d] after update res = %d %v", pokemon.Id, rows, rowsErr)
+			writeBehindQueue.Enqueue(pokemon, isNewRecord, delay)
+		} else {
+			// Fallback to direct write if queue not initialized
+			_ = pokemonWriteDB(db, pokemon, isNewRecord)
 		}
 	} else {
 		if dbDebugEnabled {
@@ -345,8 +281,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
-	// Update pokemon rtree
-	if pokemon.isNewRecord() {
+	// Update pokemon rtree (immediate, not queued)
+	if isNewRecord {
 		addPokemonToTree(pokemon)
 	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
 		// Position changed - update R-tree by removing from old position and adding to new
@@ -356,6 +292,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
 
+	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
@@ -373,6 +310,88 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	if db.UsePokemonCache {
 		pokemonCache.Set(pokemon.Id, pokemon, pokemon.remainingDuration(now))
 	}
+}
+
+// pokemonWriteDB performs the actual database INSERT or UPDATE for a Pokemon
+// This is called by both direct writes and the write-behind queue
+func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
+	ctx := context.Background()
+
+	if isNewRecord {
+		// Always include PVP field for inserts if it's set
+		pvpField, pvpValue := "", ""
+		if pokemon.Pvp.Valid {
+			pvpField, pvpValue = "pvp, ", ":pvp, "
+		}
+		_, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
+			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, move_1, move_2,"+
+			"gender, form, cp, level, strong, weather, costume, weight, height, size,"+
+			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
+			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
+			"VALUES (\"%d\", :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
+			":golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather, :costume,"+
+			":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
+			":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
+
+		statsCollector.IncDbQuery("insert pokemon", err)
+		if err != nil {
+			log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
+			pokemonCache.Delete(pokemon.Id)
+			return err
+		}
+	} else {
+		// Always include PVP field for updates if it's set
+		pvpUpdate := ""
+		if pokemon.Pvp.Valid {
+			pvpUpdate = "pvp = :pvp, "
+		}
+		_, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+
+			"pokestop_id = :pokestop_id, "+
+			"spawn_id = :spawn_id, "+
+			"lat = :lat, "+
+			"lon = :lon, "+
+			"weight = :weight, "+
+			"height = :height, "+
+			"size = :size, "+
+			"expire_timestamp = :expire_timestamp, "+
+			"updated = :updated, "+
+			"pokemon_id = :pokemon_id, "+
+			"move_1 = :move_1, "+
+			"move_2 = :move_2, "+
+			"gender = :gender, "+
+			"cp = :cp, "+
+			"atk_iv = :atk_iv, "+
+			"def_iv = :def_iv, "+
+			"sta_iv = :sta_iv, "+
+			"golbat_internal = :golbat_internal,"+
+			"iv = :iv,"+
+			"form = :form, "+
+			"level = :level, "+
+			"strong = :strong, "+
+			"weather = :weather, "+
+			"costume = :costume, "+
+			"first_seen_timestamp = :first_seen_timestamp, "+
+			"changed = :changed, "+
+			"cell_id = :cell_id, "+
+			"expire_timestamp_verified = :expire_timestamp_verified, "+
+			"display_pokemon_id = :display_pokemon_id, "+
+			"is_ditto = :is_ditto, "+
+			"seen_type = :seen_type, "+
+			"shiny = :shiny, "+
+			"username = :username, "+
+			"%s"+
+			"is_event = :is_event "+
+			"WHERE id = \"%d\"", pvpUpdate, pokemon.Id), pokemon,
+		)
+		statsCollector.IncDbQuery("update pokemon", err)
+		if err != nil {
+			log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
+			pokemonCache.Delete(pokemon.Id)
+			return err
+		}
+	}
+	return nil
 }
 
 type PokemonWebhook struct {

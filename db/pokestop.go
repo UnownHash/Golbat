@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"database/sql"
-	"errors"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/orb/geojson"
@@ -47,94 +46,6 @@ func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation
 	}
 
 	return areas, nil
-}
-
-func RemoveQuests(ctx context.Context, db DbDetails, fence *geojson.Feature) (int64, error) {
-	const updateChunkSize = 500
-
-	//goland:noinspection GoPreferNilSlice
-	allIdsToUpdate := []string{}
-	var removedQuestsCount int64
-
-	bbox := fence.Geometry.Bound()
-	bytes, err := fence.MarshalJSON()
-	if err != nil {
-		statsCollector.IncDbQuery("remove quests", err)
-		return removedQuestsCount, err
-	}
-
-	idQueryString := "SELECT `id` FROM `pokestop` " +
-		"WHERE lat >= ? and lon >= ? and lat <= ? and lon <= ? and enabled = 1 " +
-		"AND ST_CONTAINS(ST_GeomFromGeoJSON('" + string(bytes) + "', 2, 0), POINT(lon, lat))"
-
-	//log.Debugf("Clear quests query: %s", idQueryString)
-
-	// collect allIdsToUpdate
-	err = db.GeneralDb.Select(&allIdsToUpdate, idQueryString,
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon(),
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		statsCollector.IncDbQuery("remove quests", err)
-		return removedQuestsCount, nil
-	}
-
-	if err != nil {
-		statsCollector.IncDbQuery("remove quests", err)
-		return removedQuestsCount, err
-	}
-
-	for {
-		// take at most updateChunkSize elements from allIdsToUpdate
-		updateIdsCount := len(allIdsToUpdate)
-
-		if updateIdsCount == 0 {
-			break
-		}
-
-		if updateIdsCount > updateChunkSize {
-			updateIdsCount = updateChunkSize
-		}
-
-		updateIds := allIdsToUpdate[:updateIdsCount]
-
-		// remove processed elements from allIdsToUpdate
-		allIdsToUpdate = allIdsToUpdate[updateIdsCount:]
-
-		query, args, _ := sqlx.In("UPDATE pokestop "+
-			"SET "+
-			"quest_type = NULL,"+
-			"quest_timestamp = NULL,"+
-			"quest_target = NULL,"+
-			"quest_conditions = NULL,"+
-			"quest_rewards = NULL,"+
-			"quest_template = NULL,"+
-			"quest_title = NULL, "+
-			"quest_expiry = NULL, "+
-			"alternative_quest_type = NULL,"+
-			"alternative_quest_timestamp = NULL,"+
-			"alternative_quest_target = NULL,"+
-			"alternative_quest_conditions = NULL,"+
-			"alternative_quest_rewards = NULL,"+
-			"alternative_quest_template = NULL,"+
-			"alternative_quest_title = NULL, "+
-			"alternative_quest_expiry = NULL "+
-			"WHERE id IN (?)", updateIds)
-
-		query = db.GeneralDb.Rebind(query)
-		res, err := db.GeneralDb.ExecContext(ctx, query, args...)
-
-		if err != nil {
-			statsCollector.IncDbQuery("remove quests", err)
-			return removedQuestsCount, err
-		}
-
-		rowsAffected, _ := res.RowsAffected()
-		removedQuestsCount += rowsAffected
-	}
-
-	statsCollector.IncDbQuery("remove quests", err)
-	return removedQuestsCount, err
 }
 
 func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) error {

@@ -13,6 +13,8 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
+	"golbat/db"
+	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -70,6 +72,12 @@ var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
+
+// writeBehindQueue is the global write-behind queue for database writes
+var writeBehindQueue *writebehind.Queue
+
+// s2CellAccumulator is the global S2Cell batch accumulator
+var s2CellAccumulator *writebehind.S2CellAccumulator
 
 var ohbem *gohbem.Ohbem
 
@@ -282,6 +290,61 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 
 func SetStatsCollector(collector stats_collector.StatsCollector) {
 	statsCollector = collector
+}
+
+// InitWriteBehindQueue initializes the write-behind queue
+// Should be called after SetStatsCollector
+func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
+	cfg := writebehind.QueueConfig{
+		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
+		RateLimit:           config.Config.Tuning.WriteBehindRateLimit,
+		BurstCapacity:       config.Config.Tuning.WriteBehindBurstCapacity,
+	}
+
+	writeBehindQueue = writebehind.NewQueue(cfg, dbDetails, statsCollector)
+
+	log.Infof("Write-behind queue initialized: startup_delay=%ds, rate_limit=%d/s, burst=%d",
+		cfg.StartupDelaySeconds, cfg.RateLimit, cfg.BurstCapacity)
+
+	// Start the processing loop in a goroutine
+	go writeBehindQueue.ProcessLoop(ctx)
+}
+
+// GetWriteBehindQueue returns the global write-behind queue
+func GetWriteBehindQueue() *writebehind.Queue {
+	return writeBehindQueue
+}
+
+// FlushWriteBehindQueue flushes all pending writes (for shutdown)
+func FlushWriteBehindQueue() {
+	if writeBehindQueue != nil {
+		writeBehindQueue.Flush()
+	}
+}
+
+// InitS2CellAccumulator initializes the S2Cell batch accumulator
+// Should be called after SetStatsCollector
+func InitS2CellAccumulator(ctx context.Context, dbDetails db.DbDetails) {
+	cfg := writebehind.QueueConfig{
+		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
+		RateLimit:           config.Config.Tuning.WriteBehindRateLimit,
+		BurstCapacity:       config.Config.Tuning.WriteBehindBurstCapacity,
+	}
+
+	s2CellAccumulator = writebehind.NewS2CellAccumulator(cfg, dbDetails, statsCollector, s2CellBatchWrite)
+
+	log.Infof("S2Cell accumulator initialized: startup_delay=%ds, rate_limit=%d/s, burst=%d",
+		cfg.StartupDelaySeconds, cfg.RateLimit, cfg.BurstCapacity)
+
+	// Start the processing loop
+	s2CellAccumulator.Start(ctx)
+}
+
+// FlushS2CellAccumulator flushes all pending S2Cell writes (for shutdown)
+func FlushS2CellAccumulator() {
+	if s2CellAccumulator != nil {
+		s2CellAccumulator.Flush()
+	}
 }
 
 // GetUpdateThreshold returns the number of seconds that should be used as a

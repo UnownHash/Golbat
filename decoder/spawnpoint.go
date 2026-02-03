@@ -290,13 +290,41 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	spawnpoint.SetUpdated(time.Now().Unix())  // ensure future updates are set correctly
 	spawnpoint.SetLastSeen(time.Now().Unix()) // ensure future updates are set correctly
 
+	// Capture isNewRecord before state changes
+	isNewRecord := spawnpoint.IsNewRecord()
+
+	// Debug logging happens here, before queueing
 	if dbDebugEnabled {
-		if spawnpoint.IsNewRecord() {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
 		} else {
 			dbDebugLog("UPDATE", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
 		}
 	}
+
+	// Queue the write through the write-behind system (no delay for spawnpoints)
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(spawnpoint, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = spawnpointWriteDB(db, spawnpoint)
+	}
+
+	if dbDebugEnabled {
+		spawnpoint.changedFields = spawnpoint.changedFields[:0]
+	}
+	spawnpoint.ClearDirty()
+	if isNewRecord {
+		spawnpoint.newRecord = false
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+	}
+}
+
+// spawnpointWriteDB performs the actual database INSERT/UPDATE for a Spawnpoint
+// This is called by both direct writes and the write-behind queue
+// Spawnpoint uses UPSERT pattern so isNewRecord is not needed
+func spawnpointWriteDB(db db.DbDetails, spawnpoint *Spawnpoint) error {
+	ctx := context.Background()
 
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+
@@ -310,14 +338,9 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	statsCollector.IncDbQuery("insert spawnpoint", err)
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
-		return
+		return err
 	}
-
-	spawnpoint.ClearDirty()
-	if spawnpoint.IsNewRecord() {
-		spawnpoint.newRecord = false
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
-	}
+	return nil
 }
 
 // spawnpointSeen updates the last_seen timestamp for a spawnpoint.

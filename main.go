@@ -207,7 +207,8 @@ func main() {
 		_ = decoder.WatchMasterFileData()
 	}
 	decoder.LoadStatsGeofences()
-	decoder.InitPokemonPendingQueue(ctx, dbDetails, 30*time.Second, 5*time.Second)
+	decoder.InitWriteBehindQueue(ctx, dbDetails)
+	decoder.InitS2CellAccumulator(ctx, dbDetails)
 	InitDeviceCache()
 
 	wg.Add(1)
@@ -243,7 +244,7 @@ func main() {
 	}
 
 	if cfg.Cleanup.Quests == true {
-		StartQuestExpiry(db)
+		StartQuestExpiry(dbDetails)
 	}
 
 	if cfg.Cleanup.Stats == true {
@@ -394,7 +395,11 @@ func main() {
 	log.Info("http server is shutdown, waiting for other go routines to exit...")
 	wg.Wait()
 
-	log.Info("go routines have exited, flushing webhooks now...")
+	log.Info("go routines have exited, flushing write-behind queue...")
+	decoder.FlushS2CellAccumulator()
+	decoder.FlushWriteBehindQueue()
+
+	log.Info("flushing webhooks now...")
 	webhooksSender.Flush()
 
 	log.Info("Golbat exiting!")

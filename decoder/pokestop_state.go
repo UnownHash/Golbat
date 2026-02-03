@@ -9,6 +9,7 @@ import (
 
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -284,11 +285,52 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	}
 	pokestop.SetUpdated(now)
 
-	if pokestop.IsNewRecord() {
-		if dbDebugEnabled {
+	// Capture isNewRecord before state changes
+	isNewRecord := pokestop.IsNewRecord()
+
+	// Debug logging happens here, before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
 		}
-		res, err := db.GeneralDb.NamedExecContext(ctx, `
+	}
+
+	// Queue the write through the write-behind system (no delay for pokestops)
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(pokestop, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = pokestopWriteDB(db, pokestop, isNewRecord)
+	}
+
+	if dbDebugEnabled {
+		pokestop.changedFields = pokestop.changedFields[:0]
+	}
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdatePokestopOnSave(pokestop)
+	}
+
+	// Webhooks happen immediately (not queued)
+	createPokestopWebhooks(pokestop)
+	createPokestopFortWebhooks(pokestop)
+
+	if isNewRecord {
+		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
+		pokestop.newRecord = false
+	}
+	pokestop.ClearDirty()
+}
+
+// pokestopWriteDB performs the actual database INSERT or UPDATE for a Pokestop
+// This is called by both direct writes and the write-behind queue
+func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) error {
+	ctx := context.Background()
+
+	if isNewRecord {
+		_, err := db.GeneralDb.NamedExecContext(ctx, `
 			INSERT INTO pokestop (
 				id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,
 				quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,
@@ -318,18 +360,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop)
 
 		statsCollector.IncDbQuery("insert pokestop", err)
-		//log.Debugf("Insert pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
 			log.Errorf("insert pokestop: %s", err)
-			return
+			return err
 		}
-
-		_, _ = res, err
 	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
-		}
-		res, err := db.GeneralDb.NamedExecContext(ctx, `
+		_, err := db.GeneralDb.NamedExecContext(ctx, `
 			UPDATE pokestop SET
 				lat = :lat,
 				lon = :lon,
@@ -386,29 +422,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			pokestop,
 		)
 		statsCollector.IncDbQuery("update pokestop", err)
-		//log.Debugf("Update pokestop %s %+v", pokestop.Id, pokestop)
 		if err != nil {
 			log.Errorf("update pokestop %s: %s", pokestop.Id, err)
-			return
+			return err
 		}
-		_ = res
 	}
-	if dbDebugEnabled {
-		pokestop.changedFields = pokestop.changedFields[:0]
-	}
-
-	if config.Config.FortInMemory {
-		fortRtreeUpdatePokestopOnSave(pokestop)
-	}
-
-	createPokestopWebhooks(pokestop)
-	createPokestopFortWebhooks(pokestop)
-	if pokestop.IsNewRecord() {
-		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
-		pokestop.newRecord = false
-	}
-	pokestop.ClearDirty()
-
+	return nil
 }
 
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {
@@ -419,4 +438,170 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
 		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
 	}
+}
+
+// RemoveQuestsWithinGeofence clears all quest fields for pokestops within a geofence
+// Uses cache and write-behind queue for consistency
+func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) (int, error) {
+	bbox := geofence.Geometry.Bound()
+	bytes, err := geofence.MarshalJSON()
+	if err != nil {
+		return 0, err
+	}
+
+	// Query for pokestop IDs within the geofence
+	var pokestopIds []string
+	err = dbDetails.GeneralDb.SelectContext(ctx, &pokestopIds,
+		"SELECT id FROM pokestop "+
+			"WHERE lat >= ? AND lon >= ? AND lat <= ? AND lon <= ? AND enabled = 1 "+
+			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
+		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
+	statsCollector.IncDbQuery("select pokestops for quest removal", err)
+	if err != nil {
+		return 0, err
+	}
+
+	clearedCount := 0
+
+	for _, id := range pokestopIds {
+		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id)
+		if err != nil {
+			log.Errorf("RemoveQuestsWithinGeofence: failed to get pokestop %s: %v", id, err)
+			continue
+		}
+
+		// Clear regular quest fields
+		pokestop.SetQuestType(null.Int{})
+		pokestop.SetQuestTimestamp(null.Int{})
+		pokestop.SetQuestTarget(null.Int{})
+		pokestop.SetQuestConditions(null.String{})
+		pokestop.SetQuestRewards(null.String{})
+		pokestop.SetQuestTemplate(null.String{})
+		pokestop.SetQuestTitle(null.String{})
+		pokestop.SetQuestExpiry(null.Int{})
+		pokestop.SetQuestRewardType(null.Int{})
+		pokestop.SetQuestItemId(null.Int{})
+		pokestop.SetQuestRewardAmount(null.Int{})
+		pokestop.SetQuestPokemonId(null.Int{})
+		pokestop.SetQuestPokemonFormId(null.Int{})
+
+		// Clear alternative quest fields
+		pokestop.SetAlternativeQuestType(null.Int{})
+		pokestop.SetAlternativeQuestTimestamp(null.Int{})
+		pokestop.SetAlternativeQuestTarget(null.Int{})
+		pokestop.SetAlternativeQuestConditions(null.String{})
+		pokestop.SetAlternativeQuestRewards(null.String{})
+		pokestop.SetAlternativeQuestTemplate(null.String{})
+		pokestop.SetAlternativeQuestTitle(null.String{})
+		pokestop.SetAlternativeQuestExpiry(null.Int{})
+		pokestop.SetAlternativeQuestRewardType(null.Int{})
+		pokestop.SetAlternativeQuestItemId(null.Int{})
+		pokestop.SetAlternativeQuestRewardAmount(null.Int{})
+		pokestop.SetAlternativeQuestPokemonId(null.Int{})
+		pokestop.SetAlternativeQuestPokemonFormId(null.Int{})
+
+		if pokestop.IsDirty() {
+			savePokestopRecord(ctx, dbDetails, pokestop)
+			clearedCount++
+		}
+		unlock()
+	}
+
+	return clearedCount, nil
+}
+
+// ExpireQuests finds pokestops with expired quests, clears quest fields, and saves through write-behind queue
+func ExpireQuests(ctx context.Context, dbDetails db.DbDetails) (int, error) {
+	now := time.Now().Unix()
+
+	// Query for pokestop IDs with expired regular quests
+	var expiredQuestIds []string
+	err := dbDetails.GeneralDb.SelectContext(ctx, &expiredQuestIds,
+		"SELECT id FROM pokestop WHERE quest_expiry IS NOT NULL AND quest_expiry < ?", now)
+	statsCollector.IncDbQuery("select expired quests", err)
+	if err != nil {
+		return 0, err
+	}
+
+	// Query for pokestop IDs with expired alternative quests
+	var expiredAltQuestIds []string
+	err = dbDetails.GeneralDb.SelectContext(ctx, &expiredAltQuestIds,
+		"SELECT id FROM pokestop WHERE alternative_quest_expiry IS NOT NULL AND alternative_quest_expiry < ?", now)
+	statsCollector.IncDbQuery("select expired alt quests", err)
+	if err != nil {
+		return 0, err
+	}
+
+	// Build sets for quick lookup
+	hasExpiredQuest := make(map[string]bool, len(expiredQuestIds))
+	for _, id := range expiredQuestIds {
+		hasExpiredQuest[id] = true
+	}
+
+	hasExpiredAltQuest := make(map[string]bool, len(expiredAltQuestIds))
+	for _, id := range expiredAltQuestIds {
+		hasExpiredAltQuest[id] = true
+	}
+
+	// Combine and deduplicate IDs
+	allIds := make(map[string]bool, len(expiredQuestIds)+len(expiredAltQuestIds))
+	for _, id := range expiredQuestIds {
+		allIds[id] = true
+	}
+	for _, id := range expiredAltQuestIds {
+		allIds[id] = true
+	}
+
+	expiredCount := 0
+
+	// Process each pokestop once, clearing both quest types if needed
+	for id := range allIds {
+		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id)
+		if err != nil {
+			log.Errorf("ExpireQuests: failed to get pokestop %s: %v", id, err)
+			continue
+		}
+
+		// Clear regular quest fields if expired
+		if hasExpiredQuest[id] {
+			pokestop.SetQuestType(null.Int{})
+			pokestop.SetQuestTimestamp(null.Int{})
+			pokestop.SetQuestTarget(null.Int{})
+			pokestop.SetQuestConditions(null.String{})
+			pokestop.SetQuestRewards(null.String{})
+			pokestop.SetQuestTemplate(null.String{})
+			pokestop.SetQuestTitle(null.String{})
+			pokestop.SetQuestExpiry(null.Int{})
+			pokestop.SetQuestRewardType(null.Int{})
+			pokestop.SetQuestItemId(null.Int{})
+			pokestop.SetQuestRewardAmount(null.Int{})
+			pokestop.SetQuestPokemonId(null.Int{})
+			pokestop.SetQuestPokemonFormId(null.Int{})
+		}
+
+		// Clear alternative quest fields if expired
+		if hasExpiredAltQuest[id] {
+			pokestop.SetAlternativeQuestType(null.Int{})
+			pokestop.SetAlternativeQuestTimestamp(null.Int{})
+			pokestop.SetAlternativeQuestTarget(null.Int{})
+			pokestop.SetAlternativeQuestConditions(null.String{})
+			pokestop.SetAlternativeQuestRewards(null.String{})
+			pokestop.SetAlternativeQuestTemplate(null.String{})
+			pokestop.SetAlternativeQuestTitle(null.String{})
+			pokestop.SetAlternativeQuestExpiry(null.Int{})
+			pokestop.SetAlternativeQuestRewardType(null.Int{})
+			pokestop.SetAlternativeQuestItemId(null.Int{})
+			pokestop.SetAlternativeQuestRewardAmount(null.Int{})
+			pokestop.SetAlternativeQuestPokemonId(null.Int{})
+			pokestop.SetAlternativeQuestPokemonFormId(null.Int{})
+		}
+
+		if pokestop.IsDirty() {
+			savePokestopRecord(ctx, dbDetails, pokestop)
+			expiredCount++
+		}
+		unlock()
+	}
+
+	return expiredCount, nil
 }

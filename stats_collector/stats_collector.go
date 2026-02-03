@@ -50,6 +50,17 @@ type StatsCollector interface {
 	DecPokemons(hasIv bool, seenType null.String)
 	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
 	IncFortChange(changeType string)
+
+	// Write-behind queue metrics
+	SetWriteBehindQueueDepth(entityType string, depth float64)
+	IncWriteBehindSquashed(entityType string)
+	IncWriteBehindRateLimited(entityType string)
+	IncWriteBehindErrors(entityType string)
+	IncWriteBehindWrites(entityType string)
+	ObserveWriteBehindLatency(entityType string, seconds float64)
+
+	// S2Cell batch metrics
+	SetS2CellBatchSize(size int)
 }
 
 type Config interface {

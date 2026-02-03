@@ -61,13 +61,12 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 
 func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
 	started := time.Now()
-	rows, err := db.RemoveQuests(ctx, dbDetails, geofence)
+	count, err := RemoveQuestsWithinGeofence(ctx, dbDetails, geofence)
 	if err != nil {
 		log.Errorf("ClearQuest: Error removing quests: %s", err)
 		return
 	}
-	ClearPokestopCache()
-	log.Infof("ClearQuest: Removed quests from %d pokestops in %s", rows, time.Since(started))
+	log.Infof("ClearQuest: Removed quests from %d pokestops in %s", count, time.Since(started))
 }
 
 func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Feature) db.QuestStatus {

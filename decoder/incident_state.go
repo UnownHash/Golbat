@@ -116,23 +116,62 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	incident.SetUpdated(time.Now().Unix())
 
-	if incident.IsNewRecord() {
-		if dbDebugEnabled {
+	// Capture isNewRecord before state changes
+	isNewRecord := incident.IsNewRecord()
+
+	// Debug logging before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Incident", incident.Id, incident.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
 		}
+	}
+
+	// Queue the write through the write-behind system
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(incident, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = incidentWriteDB(db, incident, isNewRecord)
+	}
+
+	createIncidentWebhooks(ctx, db, incident)
+
+	var stopLat, stopLon float64
+	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
+	if stop != nil {
+		stopLat, stopLon = stop.Lat, stop.Lon
+		unlock()
+	}
+
+	areas := MatchStatsGeofence(stopLat, stopLon)
+	updateIncidentStats(incident, areas)
+
+	if dbDebugEnabled {
+		incident.changedFields = incident.changedFields[:0]
+	}
+	incident.ClearDirty()
+	if isNewRecord {
+		incident.newRecord = false
+		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+	}
+}
+
+// incidentWriteDB performs the actual database INSERT/UPDATE for an Incident
+// This is called by both direct writes and the write-behind queue
+func incidentWriteDB(db db.DbDetails, incident *Incident, isNewRecord bool) error {
+	if isNewRecord {
 		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+
 			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, :slot_2_form, :slot_3_pokemon_id, :slot_3_form)", incident)
 
+		statsCollector.IncDbQuery("insert incident", err)
 		if err != nil {
 			log.Errorf("insert incident: %s", err)
-			return
+			return err
 		}
-		statsCollector.IncDbQuery("insert incident", err)
 		_, _ = res, err
 	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
-		}
 		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
 			"start = :start, "+
 			"expiration = :expiration, "+
@@ -152,27 +191,11 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 		statsCollector.IncDbQuery("update incident", err)
 		if err != nil {
 			log.Errorf("Update incident %s", err)
+			return err
 		}
 		_, _ = res, err
 	}
-
-	createIncidentWebhooks(ctx, db, incident)
-
-	var stopLat, stopLon float64
-	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
-	if stop != nil {
-		stopLat, stopLon = stop.Lat, stop.Lon
-		unlock()
-	}
-
-	areas := MatchStatsGeofence(stopLat, stopLon)
-	updateIncidentStats(incident, areas)
-
-	incident.ClearDirty()
-	if incident.IsNewRecord() {
-		incident.newRecord = false
-		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
-	}
+	return nil
 }
 
 func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Incident) {

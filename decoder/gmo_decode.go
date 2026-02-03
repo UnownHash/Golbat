@@ -111,33 +111,18 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
 
 		if scanParameters.ProcessWild {
-			// Use read-only getter - we're only checking if update is needed, then queuing
-			pokemon, unlock, err := getPokemonRecordReadOnly(ctx, db, encounterId)
+			pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 			if err != nil {
-				log.Errorf("getPokemonRecordReadOnly: %s", err)
+				log.Errorf("getOrCreatePokemonRecord: %s", err)
 				continue
 			}
 
 			updateTime := wild.Timestamp / 1000
-			shouldQueue := pokemon == nil || pokemon.wildSignificantUpdate(wild.Data, updateTime)
-
-			if unlock != nil {
-				unlock()
+			if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
+				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
 			}
-
-			if shouldQueue {
-				// The sweeper will process it after timeout if no encounter arrives
-				pending := &PendingPokemon{
-					EncounterId:   encounterId,
-					WildPokemon:   wild.Data,
-					CellId:        int64(wild.Cell),
-					TimestampMs:   wild.Timestamp,
-					UpdateTime:    updateTime,
-					WeatherLookup: weatherLookup,
-					Username:      username,
-				}
-				pokemonPendingQueue.AddPending(pending)
-			}
+			unlock()
 		}
 	}
 

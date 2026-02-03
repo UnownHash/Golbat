@@ -103,10 +103,42 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	now := time.Now().Unix()
 	tappable.SetUpdated(now)
 
-	if tappable.IsNewRecord() {
-		if dbDebugEnabled {
+	// Capture isNewRecord before state changes
+	isNewRecord := tappable.IsNewRecord()
+
+	// Debug logging before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
 		}
+	}
+
+	// Queue the write through the write-behind system
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(tappable, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = tappableWriteDB(details, tappable, isNewRecord)
+	}
+
+	if dbDebugEnabled {
+		tappable.changedFields = tappable.changedFields[:0]
+	}
+	tappable.ClearDirty()
+	if isNewRecord {
+		tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
+		tappable.newRecord = false
+	}
+}
+
+// tappableWriteDB performs the actual database INSERT/UPDATE for a Tappable
+// This is called by both direct writes and the write-behind queue
+func tappableWriteDB(details db.DbDetails, tappable *Tappable, isNewRecord bool) error {
+	ctx := context.Background()
+
+	if isNewRecord {
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
 				id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
@@ -117,13 +149,10 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		statsCollector.IncDbQuery("insert tappable", err)
 		if err != nil {
 			log.Errorf("insert tappable %d: %s", tappable.Id, err)
-			return
+			return err
 		}
 		_ = res
 	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
-		}
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			UPDATE tappable SET
 				lat = :lat,
@@ -142,16 +171,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		statsCollector.IncDbQuery("update tappable", err)
 		if err != nil {
 			log.Errorf("update tappable %d: %s", tappable.Id, err)
-			return
+			return err
 		}
 		_ = res
 	}
-	if dbDebugEnabled {
-		tappable.changedFields = tappable.changedFields[:0]
-	}
-	tappable.ClearDirty()
-	if tappable.IsNewRecord() {
-		tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
-		tappable.newRecord = false
-	}
+	return nil
 }

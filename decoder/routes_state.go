@@ -114,10 +114,45 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 
 	route.SetUpdated(time.Now().Unix())
 
-	if route.IsNewRecord() {
-		if dbDebugEnabled {
+	// Capture isNewRecord before state changes
+	isNewRecord := route.IsNewRecord()
+
+	// Debug logging before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
 			dbDebugLog("INSERT", "Route", route.Id, route.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Route", route.Id, route.changedFields)
 		}
+	}
+
+	// Queue the write through the write-behind system
+	if writeBehindQueue != nil {
+		writeBehindQueue.Enqueue(route, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		if err := routeWriteDB(db, route, isNewRecord); err != nil {
+			return err
+		}
+	}
+
+	if dbDebugEnabled {
+		route.changedFields = route.changedFields[:0]
+	}
+	route.ClearDirty()
+	if isNewRecord {
+		routeCache.Set(route.Id, route, ttlcache.DefaultTTL)
+		route.newRecord = false
+	}
+	return nil
+}
+
+// routeWriteDB performs the actual database INSERT/UPDATE for a Route
+// This is called by both direct writes and the write-behind queue
+func routeWriteDB(db db.DbDetails, route *Route, isNewRecord bool) error {
+	ctx := context.Background()
+
+	if isNewRecord {
 		_, err := db.GeneralDb.NamedExecContext(ctx,
 			`
 			INSERT INTO route (
@@ -147,9 +182,6 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 			return fmt.Errorf("insert route error: %w", err)
 		}
 	} else {
-		if dbDebugEnabled {
-			dbDebugLog("UPDATE", "Route", route.Id, route.changedFields)
-		}
 		_, err := db.GeneralDb.NamedExecContext(ctx,
 			`
 			UPDATE route SET
@@ -182,15 +214,6 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 		if err != nil {
 			return fmt.Errorf("update route error %w", err)
 		}
-	}
-
-	if dbDebugEnabled {
-		route.changedFields = route.changedFields[:0]
-	}
-	route.ClearDirty()
-	if route.IsNewRecord() {
-		routeCache.Set(route.Id, route, ttlcache.DefaultTTL)
-		route.newRecord = false
 	}
 	return nil
 }

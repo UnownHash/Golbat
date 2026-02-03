@@ -19,11 +19,6 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	encounterId := encounter.Pokemon.EncounterId
 
-	// Remove from pending queue - encounter arrived so no need for delayed wild update
-	if pokemonPendingQueue != nil {
-		pokemonPendingQueue.Remove(encounterId)
-	}
-
 	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)

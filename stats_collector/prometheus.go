@@ -335,6 +335,66 @@ var (
 		},
 		[]string{"change_type"},
 	)
+
+	// Write-behind queue metrics
+	writeBehindQueueDepth = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "write_behind_queue_depth",
+			Help:      "Current write-behind queue depth",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindSquashed = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "write_behind_squashed_total",
+			Help:      "Total number of updates squashed in write-behind queue",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindRateLimited = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "write_behind_rate_limited_total",
+			Help:      "Total number of rate limit hits in write-behind queue",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "write_behind_errors_total",
+			Help:      "Total number of write errors in write-behind queue",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindWrites = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "write_behind_writes_total",
+			Help:      "Total number of successful writes from write-behind queue",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "write_behind_latency_seconds",
+			Help:      "Write latency in seconds for write-behind queue",
+			Buckets:   []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10},
+		},
+		[]string{"entity_type"},
+	)
+
+	// S2Cell batch metrics
+	s2CellBatchSize = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "s2cell_batch_size",
+			Help:      "Number of S2Cells written in the last batch flush",
+		},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -596,6 +656,34 @@ func (col *promCollector) IncFortChange(changeType string) {
 	fortChange.WithLabelValues(changeType).Inc()
 }
 
+func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
+	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
+}
+
+func (col *promCollector) IncWriteBehindSquashed(entityType string) {
+	writeBehindSquashed.WithLabelValues(entityType).Inc()
+}
+
+func (col *promCollector) IncWriteBehindRateLimited(entityType string) {
+	writeBehindRateLimited.WithLabelValues(entityType).Inc()
+}
+
+func (col *promCollector) IncWriteBehindErrors(entityType string) {
+	writeBehindErrors.WithLabelValues(entityType).Inc()
+}
+
+func (col *promCollector) IncWriteBehindWrites(entityType string) {
+	writeBehindWrites.WithLabelValues(entityType).Inc()
+}
+
+func (col *promCollector) ObserveWriteBehindLatency(entityType string, seconds float64) {
+	writeBehindLatency.WithLabelValues(entityType).Observe(seconds)
+}
+
+func (col *promCollector) SetS2CellBatchSize(size int) {
+	s2CellBatchSize.Set(float64(size))
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
@@ -611,6 +699,10 @@ func initPrometheus() {
 		duplicateEncounters, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,
+
+		writeBehindQueueDepth, writeBehindSquashed, writeBehindRateLimited,
+		writeBehindErrors, writeBehindWrites, writeBehindLatency,
+		s2CellBatchSize,
 	)
 }
 
