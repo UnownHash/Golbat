@@ -16,19 +16,25 @@ import (
 	"golbat/webhooks"
 )
 
+// pokestopSelectColumns defines the columns for pokestop queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,
+	updated, quest_type, quest_timestamp, quest_target, quest_conditions,
+	quest_rewards, quest_template, quest_title, quest_expiry,
+	quest_reward_type, quest_item_id, quest_reward_amount, quest_pokemon_id, quest_pokemon_form_id,
+	alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
+	alternative_quest_conditions, alternative_quest_rewards,
+	alternative_quest_template, alternative_quest_title, alternative_quest_expiry,
+	alternative_quest_reward_type, alternative_quest_item_id, alternative_quest_reward_amount,
+	alternative_quest_pokemon_id, alternative_quest_pokemon_form_id,
+	cell_id, deleted, lure_id, sponsor_id, partner_id,
+	ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
+	description, showcase_pokemon_id, showcase_pokemon_form_id,
+	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
+
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
 	err := db.GeneralDb.GetContext(ctx, pokestop,
-		`SELECT pokestop.id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp,
-			pokestop.updated, quest_type, quest_timestamp, quest_target, quest_conditions,
-			quest_rewards, quest_template, quest_title,
-			alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
-			alternative_quest_conditions, alternative_quest_rewards,
-			alternative_quest_template, alternative_quest_title, cell_id, deleted, lure_id, sponsor_id, partner_id,
-			ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
-			quest_expiry, alternative_quest_expiry, description, showcase_pokemon_id, showcase_pokemon_form_id,
-			showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
-			FROM pokestop
-			WHERE pokestop.id = ? `, fortId)
+		`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
 	statsCollector.IncDbQuery("select pokestop", err)
 	return err
 }
@@ -70,7 +76,7 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 	// we'll get their Pokestop and use that instead (ensuring same mutex)
 	existingPokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		// Only called if key doesn't exist - our Pokestop wins
-		if config.Config.TestFortInMemory {
+		if config.Config.FortInMemory {
 			fortRtreeUpdatePokestopOnGet(&dbPokestop)
 		}
 		return &dbPokestop
@@ -116,7 +122,7 @@ func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId stri
 			// We loaded from DB
 			pokestop.newRecord = false
 			pokestop.ClearDirty()
-			if config.Config.TestFortInMemory {
+			if config.Config.FortInMemory {
 				fortRtreeUpdatePokestopOnGet(pokestop)
 			}
 		}
@@ -286,22 +292,28 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 			INSERT INTO pokestop (
 				id, lat, lon, name, url, enabled, lure_expire_timestamp, last_modified_timestamp, quest_type,
 				quest_timestamp, quest_target, quest_conditions, quest_rewards, quest_template, quest_title,
+				quest_expiry, quest_reward_type, quest_item_id, quest_reward_amount, quest_pokemon_id, quest_pokemon_form_id,
 				alternative_quest_type, alternative_quest_timestamp, alternative_quest_target,
 				alternative_quest_conditions, alternative_quest_rewards, alternative_quest_template,
-				alternative_quest_title, cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,
+				alternative_quest_title, alternative_quest_expiry, alternative_quest_reward_type, alternative_quest_item_id,
+				alternative_quest_reward_amount, alternative_quest_pokemon_id, alternative_quest_pokemon_form_id,
+				cell_id, lure_id, sponsor_id, partner_id, ar_scan_eligible,
 				power_up_points, power_up_level, power_up_end_timestamp, updated, first_seen_timestamp,
-				quest_expiry, alternative_quest_expiry, description, showcase_focus, showcase_pokemon_id,
+				description, showcase_focus, showcase_pokemon_id,
 				showcase_pokemon_form_id, showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings
 				)
 				VALUES (
 				:id, :lat, :lon, :name, :url, :enabled, :lure_expire_timestamp, :last_modified_timestamp, :quest_type,
 				:quest_timestamp, :quest_target, :quest_conditions, :quest_rewards, :quest_template, :quest_title,
+				:quest_expiry, :quest_reward_type, :quest_item_id, :quest_reward_amount, :quest_pokemon_id, :quest_pokemon_form_id,
 				:alternative_quest_type, :alternative_quest_timestamp, :alternative_quest_target,
 				:alternative_quest_conditions, :alternative_quest_rewards, :alternative_quest_template,
-				:alternative_quest_title, :cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,
+				:alternative_quest_title, :alternative_quest_expiry, :alternative_quest_reward_type, :alternative_quest_item_id,
+				:alternative_quest_reward_amount, :alternative_quest_pokemon_id, :alternative_quest_pokemon_form_id,
+				:cell_id, :lure_id, :sponsor_id, :partner_id, :ar_scan_eligible,
 				:power_up_points, :power_up_level, :power_up_end_timestamp,
 				UNIX_TIMESTAMP(), UNIX_TIMESTAMP(),
-				:quest_expiry, :alternative_quest_expiry, :description, :showcase_focus, :showcase_pokemon_id,
+				:description, :showcase_focus, :showcase_pokemon_id,
 				:showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)`,
 			pokestop)
 
@@ -334,6 +346,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				quest_rewards = :quest_rewards,
 				quest_template = :quest_template,
 				quest_title = :quest_title,
+				quest_expiry = :quest_expiry,
+				quest_reward_type = :quest_reward_type,
+				quest_item_id = :quest_item_id,
+				quest_reward_amount = :quest_reward_amount,
+				quest_pokemon_id = :quest_pokemon_id,
+				quest_pokemon_form_id = :quest_pokemon_form_id,
 				alternative_quest_type = :alternative_quest_type,
 				alternative_quest_timestamp = :alternative_quest_timestamp,
 				alternative_quest_target = :alternative_quest_target,
@@ -341,6 +359,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				alternative_quest_rewards = :alternative_quest_rewards,
 				alternative_quest_template = :alternative_quest_template,
 				alternative_quest_title = :alternative_quest_title,
+				alternative_quest_expiry = :alternative_quest_expiry,
+				alternative_quest_reward_type = :alternative_quest_reward_type,
+				alternative_quest_item_id = :alternative_quest_item_id,
+				alternative_quest_reward_amount = :alternative_quest_reward_amount,
+				alternative_quest_pokemon_id = :alternative_quest_pokemon_id,
+				alternative_quest_pokemon_form_id = :alternative_quest_pokemon_form_id,
 				cell_id = :cell_id,
 				lure_id = :lure_id,
 				deleted = :deleted,
@@ -350,8 +374,6 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 				power_up_points = :power_up_points,
 				power_up_level = :power_up_level,
 				power_up_end_timestamp = :power_up_end_timestamp,
-				quest_expiry = :quest_expiry,
-				alternative_quest_expiry = :alternative_quest_expiry,
 				description = :description,
 				showcase_focus = :showcase_focus,
 				showcase_pokemon_id = :showcase_pokemon_id,
@@ -371,9 +393,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		}
 		_ = res
 	}
-	//pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
 	if dbDebugEnabled {
 		pokestop.changedFields = pokestop.changedFields[:0]
+	}
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdatePokestopOnSave(pokestop)
 	}
 
 	createPokestopWebhooks(pokestop)

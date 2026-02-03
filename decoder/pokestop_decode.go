@@ -238,34 +238,68 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		conditions = append(conditions, condition)
 	}
 
-	for _, rewardData := range questData.QuestRewards {
+	// Extract first reward details for indexed columns
+	var rewardType, rewardAmount, rewardItemId, rewardPokemonId, rewardPokemonFormId null.Int
+
+	for i, rewardData := range questData.QuestRewards {
 		reward := make(map[string]any)
 		infoData := make(map[string]any)
 		reward["type"] = int(rewardData.Type)
+
+		// For the first reward, also populate the indexed column values
+		isFirst := i == 0
+		if isFirst {
+			rewardType = null.IntFrom(int64(rewardData.Type))
+		}
+
 		switch rewardData.Type {
 		case pogo.QuestRewardProto_EXPERIENCE:
 			infoData["amount"] = rewardData.GetExp()
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(rewardData.GetExp()))
+			}
 		case pogo.QuestRewardProto_ITEM:
 			info := rewardData.GetItem()
 			infoData["amount"] = info.Amount
 			infoData["item_id"] = int(info.Item)
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+				rewardItemId = null.IntFrom(int64(info.Item))
+			}
 		case pogo.QuestRewardProto_STARDUST:
 			infoData["amount"] = rewardData.GetStardust()
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(rewardData.GetStardust()))
+			}
 		case pogo.QuestRewardProto_CANDY:
 			info := rewardData.GetCandy()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+				rewardPokemonId = null.IntFrom(int64(info.PokemonId))
+			}
 		case pogo.QuestRewardProto_XL_CANDY:
 			info := rewardData.GetXlCandy()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+				rewardPokemonId = null.IntFrom(int64(info.PokemonId))
+			}
 		case pogo.QuestRewardProto_POKEMON_ENCOUNTER:
 			info := rewardData.GetPokemonEncounter()
 			if info.IsHiddenDitto {
 				infoData["pokemon_id"] = 132
 				infoData["pokemon_id_display"] = int(info.GetPokemonId())
+				if isFirst {
+					rewardPokemonId = null.IntFrom(132)
+				}
 			} else {
 				infoData["pokemon_id"] = int(info.GetPokemonId())
+				if isFirst {
+					rewardPokemonId = null.IntFrom(int64(info.GetPokemonId()))
+				}
 			}
 			if info.ShinyProbability > 0.0 {
 				infoData["shiny_probability"] = info.ShinyProbability
@@ -276,6 +310,9 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				}
 				if formId := int(display.Form); formId != 0 {
 					infoData["form_id"] = formId
+					if isFirst {
+						rewardPokemonFormId = null.IntFrom(int64(formId))
+					}
 				}
 				if genderId := int(display.Gender); genderId != 0 {
 					infoData["gender_id"] = genderId
@@ -289,19 +326,27 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				if breadMode := int(display.BreadModeEnum); breadMode != 0 {
 					infoData["bread_mode"] = breadMode
 				}
-			} else {
-
 			}
 		case pogo.QuestRewardProto_POKECOIN:
 			infoData["amount"] = rewardData.GetPokecoin()
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(rewardData.GetPokecoin()))
+			}
 		case pogo.QuestRewardProto_STICKER:
 			info := rewardData.GetSticker()
 			infoData["amount"] = info.Amount
 			infoData["sticker_id"] = info.StickerId
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+			}
 		case pogo.QuestRewardProto_MEGA_RESOURCE:
 			info := rewardData.GetMegaResource()
 			infoData["amount"] = info.Amount
 			infoData["pokemon_id"] = int(info.PokemonId)
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+				rewardPokemonId = null.IntFrom(int64(info.PokemonId))
+			}
 		case pogo.QuestRewardProto_AVATAR_CLOTHING:
 		case pogo.QuestRewardProto_QUEST:
 		case pogo.QuestRewardProto_LEVEL_CAP:
@@ -309,7 +354,6 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		case pogo.QuestRewardProto_PLAYER_ATTRIBUTE:
 		default:
 			break
-
 		}
 		reward["info"] = infoData
 		rewards = append(rewards, reward)
@@ -347,6 +391,11 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.SetAlternativeQuestRewards(null.StringFrom(string(questRewards)))
 		stop.SetAlternativeQuestTimestamp(null.IntFrom(questTimestamp))
 		stop.SetAlternativeQuestExpiry(questExpiry)
+		stop.SetAlternativeQuestRewardType(rewardType)
+		stop.SetAlternativeQuestItemId(rewardItemId)
+		stop.SetAlternativeQuestRewardAmount(rewardAmount)
+		stop.SetAlternativeQuestPokemonId(rewardPokemonId)
+		stop.SetAlternativeQuestPokemonFormId(rewardPokemonFormId)
 	} else {
 		stop.SetQuestType(null.IntFrom(questType))
 		stop.SetQuestTarget(null.IntFrom(questTarget))
@@ -356,6 +405,11 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.SetQuestRewards(null.StringFrom(string(questRewards)))
 		stop.SetQuestTimestamp(null.IntFrom(questTimestamp))
 		stop.SetQuestExpiry(questExpiry)
+		stop.SetQuestRewardType(rewardType)
+		stop.SetQuestItemId(rewardItemId)
+		stop.SetQuestRewardAmount(rewardAmount)
+		stop.SetQuestPokemonId(rewardPokemonId)
+		stop.SetQuestPokemonFormId(rewardPokemonFormId)
 	}
 
 	return questTitle

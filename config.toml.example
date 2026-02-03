@@ -11,6 +11,12 @@ reduce_updates = false
 
 pokemon_memory_only = false  # Use in-memory storage for pokemon only
 
+# Fort loading options:
+# preload_forts: Pre-load all forts into cache on startup (faster initial responses)
+# fort_in_memory: Keep forts in memory with rtree for spatial lookups
+preload_forts = false
+fort_in_memory = false
+
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
 bearer_token = "secret"

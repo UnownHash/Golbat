@@ -256,13 +256,23 @@ func main() {
 		staleThreshold = 3600 // def 1 hour
 	}
 	decoder.InitFortTracker(staleThreshold)
-	if err := decoder.LoadFortsFromDB(ctx, dbDetails); err != nil {
-		log.Errorf("failed to load forts into tracker: %s", err)
-	}
 
-	if cfg.TestFortInMemory {
-		go decoder.LoadAllPokestops(dbDetails)
-		go decoder.LoadAllGyms(dbDetails)
+	// Determine fort loading strategy
+	// FortInMemory enables rtree spatial lookups; PreloadForts just warms the cache
+	// TestFortInMemory is deprecated but still supported (treated as FortInMemory)
+	fortInMemory := cfg.FortInMemory
+	fullPreload := cfg.PreloadForts || fortInMemory
+
+	if fullPreload {
+		// Full preload: loads into cache, registers with fort tracker, optionally builds rtree
+		if err := decoder.PreloadForts(dbDetails, fortInMemory); err != nil {
+			log.Errorf("failed to preload forts: %s", err)
+		}
+	} else {
+		// No preload: fort tracker loads its own minimal data
+		if err := decoder.LoadFortsFromDB(ctx, dbDetails); err != nil {
+			log.Errorf("failed to load forts into tracker: %s", err)
+		}
 	}
 
 	// Start the GRPC receiver
@@ -296,6 +306,8 @@ func main() {
 	apiGroup.GET("/gym/id/:gym_id", GetGym)
 	apiGroup.POST("/gym/query", GetGyms)
 	apiGroup.POST("/gym/search", SearchGyms)
+	apiGroup.POST("/gym/scan", GymScan)
+	apiGroup.POST("/pokestop/scan", PokestopScan)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 

@@ -199,6 +199,27 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 	return cell
 }
 
+// RegisterFort registers a fort during bulk loading (e.g., from preload).
+// Unlike UpdateFort, this uses the provided timestamp rather than "now".
+func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if isGym {
+		cell.gyms[fortId] = struct{}{}
+	} else {
+		cell.pokestops[fortId] = struct{}{}
+	}
+
+	ft.forts[fortId] = &FortTrackerLastSeen{
+		cellId:   cellId,
+		lastSeen: updatedTimestamp,
+		isGym:    isGym,
+	}
+}
+
 // UpdateFort updates tracking for a single fort seen in GMO
 func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now int64) {
 	ft.mu.Lock()

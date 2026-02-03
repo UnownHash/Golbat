@@ -744,6 +744,42 @@ func SearchGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+// POST /api/gym/scan
+// In-memory fort scan with DNF filters (requires fort_in_memory=true)
+func GymScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.GymScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
+// POST /api/pokestop/scan
+// In-memory fort scan with DNF filters (requires fort_in_memory=true)
+func PokestopScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.PokestopScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
 func GetTappable(c *gin.Context) {
 	id := c.Param("tappable_id")
 	tappableId, err := strconv.ParseUint(id, 10, 64)

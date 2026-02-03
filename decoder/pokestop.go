@@ -11,49 +11,59 @@ import (
 type Pokestop struct {
 	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                         string      `db:"id"`
-	Lat                        float64     `db:"lat"`
-	Lon                        float64     `db:"lon"`
-	Name                       null.String `db:"name"`
-	Url                        null.String `db:"url"`
-	LureExpireTimestamp        null.Int    `db:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `db:"last_modified_timestamp"`
-	Updated                    int64       `db:"updated"`
-	Enabled                    null.Bool   `db:"enabled"`
-	QuestType                  null.Int    `db:"quest_type"`
-	QuestTimestamp             null.Int    `db:"quest_timestamp"`
-	QuestTarget                null.Int    `db:"quest_target"`
-	QuestConditions            null.String `db:"quest_conditions"`
-	QuestRewards               null.String `db:"quest_rewards"`
-	QuestTemplate              null.String `db:"quest_template"`
-	QuestTitle                 null.String `db:"quest_title"`
-	QuestExpiry                null.Int    `db:"quest_expiry"`
-	CellId                     null.Int    `db:"cell_id"`
-	Deleted                    bool        `db:"deleted"`
-	LureId                     int16       `db:"lure_id"`
-	FirstSeenTimestamp         int16       `db:"first_seen_timestamp"`
-	SponsorId                  null.Int    `db:"sponsor_id"`
-	PartnerId                  null.String `db:"partner_id"`
-	ArScanEligible             null.Int    `db:"ar_scan_eligible"` // is an 8
-	PowerUpLevel               null.Int    `db:"power_up_level"`
-	PowerUpPoints              null.Int    `db:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `db:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `db:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `db:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `db:"alternative_quest_target"`
-	AlternativeQuestConditions null.String `db:"alternative_quest_conditions"`
-	AlternativeQuestRewards    null.String `db:"alternative_quest_rewards"`
-	AlternativeQuestTemplate   null.String `db:"alternative_quest_template"`
-	AlternativeQuestTitle      null.String `db:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `db:"alternative_quest_expiry"`
-	Description                null.String `db:"description"`
-	ShowcaseFocus              null.String `db:"showcase_focus"`
-	ShowcasePokemon            null.Int    `db:"showcase_pokemon_id"`
-	ShowcasePokemonForm        null.Int    `db:"showcase_pokemon_form_id"`
-	ShowcasePokemonType        null.Int    `db:"showcase_pokemon_type_id"`
-	ShowcaseRankingStandard    null.Int    `db:"showcase_ranking_standard"`
-	ShowcaseExpiry             null.Int    `db:"showcase_expiry"`
-	ShowcaseRankings           null.String `db:"showcase_rankings"`
+	Id                            string      `db:"id"`
+	Lat                           float64     `db:"lat"`
+	Lon                           float64     `db:"lon"`
+	Name                          null.String `db:"name"`
+	Url                           null.String `db:"url"`
+	LureExpireTimestamp           null.Int    `db:"lure_expire_timestamp"`
+	LastModifiedTimestamp         null.Int    `db:"last_modified_timestamp"`
+	Updated                       int64       `db:"updated"`
+	Enabled                       null.Bool   `db:"enabled"`
+	QuestType                     null.Int    `db:"quest_type"`
+	QuestTimestamp                null.Int    `db:"quest_timestamp"`
+	QuestTarget                   null.Int    `db:"quest_target"`
+	QuestConditions               null.String `db:"quest_conditions"`
+	QuestRewards                  null.String `db:"quest_rewards"`
+	QuestTemplate                 null.String `db:"quest_template"`
+	QuestTitle                    null.String `db:"quest_title"`
+	QuestExpiry                   null.Int    `db:"quest_expiry"`
+	QuestRewardType               null.Int    `db:"quest_reward_type"`
+	QuestItemId                   null.Int    `db:"quest_item_id"`
+	QuestRewardAmount             null.Int    `db:"quest_reward_amount"`
+	QuestPokemonId                null.Int    `db:"quest_pokemon_id"`
+	QuestPokemonFormId            null.Int    `db:"quest_pokemon_form_id"`
+	CellId                        null.Int    `db:"cell_id"`
+	Deleted                       bool        `db:"deleted"`
+	LureId                        int16       `db:"lure_id"`
+	FirstSeenTimestamp            int16       `db:"first_seen_timestamp"`
+	SponsorId                     null.Int    `db:"sponsor_id"`
+	PartnerId                     null.String `db:"partner_id"`
+	ArScanEligible                null.Int    `db:"ar_scan_eligible"` // is an 8
+	PowerUpLevel                  null.Int    `db:"power_up_level"`
+	PowerUpPoints                 null.Int    `db:"power_up_points"`
+	PowerUpEndTimestamp           null.Int    `db:"power_up_end_timestamp"`
+	AlternativeQuestType          null.Int    `db:"alternative_quest_type"`
+	AlternativeQuestTimestamp     null.Int    `db:"alternative_quest_timestamp"`
+	AlternativeQuestTarget        null.Int    `db:"alternative_quest_target"`
+	AlternativeQuestConditions    null.String `db:"alternative_quest_conditions"`
+	AlternativeQuestRewards       null.String `db:"alternative_quest_rewards"`
+	AlternativeQuestTemplate      null.String `db:"alternative_quest_template"`
+	AlternativeQuestTitle         null.String `db:"alternative_quest_title"`
+	AlternativeQuestExpiry        null.Int    `db:"alternative_quest_expiry"`
+	AlternativeQuestRewardType    null.Int    `db:"alternative_quest_reward_type"`
+	AlternativeQuestItemId        null.Int    `db:"alternative_quest_item_id"`
+	AlternativeQuestRewardAmount  null.Int    `db:"alternative_quest_reward_amount"`
+	AlternativeQuestPokemonId     null.Int    `db:"alternative_quest_pokemon_id"`
+	AlternativeQuestPokemonFormId null.Int    `db:"alternative_quest_pokemon_form_id"`
+	Description                   null.String `db:"description"`
+	ShowcaseFocus                 null.String `db:"showcase_focus"`
+	ShowcasePokemon               null.Int    `db:"showcase_pokemon_id"`
+	ShowcasePokemonForm           null.Int    `db:"showcase_pokemon_form_id"`
+	ShowcasePokemonType           null.Int    `db:"showcase_pokemon_type_id"`
+	ShowcaseRankingStandard       null.Int    `db:"showcase_ranking_standard"`
+	ShowcaseExpiry                null.Int    `db:"showcase_expiry"`
+	ShowcaseRankings              null.String `db:"showcase_rankings"`
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
@@ -318,6 +328,56 @@ func (p *Pokestop) SetQuestExpiry(v null.Int) {
 	}
 }
 
+func (p *Pokestop) SetQuestRewardType(v null.Int) {
+	if p.QuestRewardType != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestRewardType:%s->%s", FormatNull(p.QuestRewardType), FormatNull(v)))
+		}
+		p.QuestRewardType = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetQuestItemId(v null.Int) {
+	if p.QuestItemId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestItemId:%s->%s", FormatNull(p.QuestItemId), FormatNull(v)))
+		}
+		p.QuestItemId = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetQuestRewardAmount(v null.Int) {
+	if p.QuestRewardAmount != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestRewardAmount:%s->%s", FormatNull(p.QuestRewardAmount), FormatNull(v)))
+		}
+		p.QuestRewardAmount = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetQuestPokemonId(v null.Int) {
+	if p.QuestPokemonId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestPokemonId:%s->%s", FormatNull(p.QuestPokemonId), FormatNull(v)))
+		}
+		p.QuestPokemonId = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetQuestPokemonFormId(v null.Int) {
+	if p.QuestPokemonFormId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestPokemonFormId:%s->%s", FormatNull(p.QuestPokemonFormId), FormatNull(v)))
+		}
+		p.QuestPokemonFormId = v
+		p.dirty = true
+	}
+}
+
 func (p *Pokestop) SetCellId(v null.Int) {
 	if p.CellId != v {
 		if dbDebugEnabled {
@@ -494,6 +554,56 @@ func (p *Pokestop) SetAlternativeQuestExpiry(v null.Int) {
 			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestExpiry:%s->%s", FormatNull(p.AlternativeQuestExpiry), FormatNull(v)))
 		}
 		p.AlternativeQuestExpiry = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetAlternativeQuestRewardType(v null.Int) {
+	if p.AlternativeQuestRewardType != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestRewardType:%s->%s", FormatNull(p.AlternativeQuestRewardType), FormatNull(v)))
+		}
+		p.AlternativeQuestRewardType = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetAlternativeQuestItemId(v null.Int) {
+	if p.AlternativeQuestItemId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestItemId:%s->%s", FormatNull(p.AlternativeQuestItemId), FormatNull(v)))
+		}
+		p.AlternativeQuestItemId = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetAlternativeQuestRewardAmount(v null.Int) {
+	if p.AlternativeQuestRewardAmount != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestRewardAmount:%s->%s", FormatNull(p.AlternativeQuestRewardAmount), FormatNull(v)))
+		}
+		p.AlternativeQuestRewardAmount = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetAlternativeQuestPokemonId(v null.Int) {
+	if p.AlternativeQuestPokemonId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestPokemonId:%s->%s", FormatNull(p.AlternativeQuestPokemonId), FormatNull(v)))
+		}
+		p.AlternativeQuestPokemonId = v
+		p.dirty = true
+	}
+}
+
+func (p *Pokestop) SetAlternativeQuestPokemonFormId(v null.Int) {
+	if p.AlternativeQuestPokemonFormId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestPokemonFormId:%s->%s", FormatNull(p.AlternativeQuestPokemonFormId), FormatNull(v)))
+		}
+		p.AlternativeQuestPokemonFormId = v
 		p.dirty = true
 	}
 }

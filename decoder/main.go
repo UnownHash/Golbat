@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"runtime"
@@ -94,10 +95,22 @@ func initDataCache() {
 		TTL:        60 * time.Minute,
 		KeyToShard: StringKeyToShard,
 	})
+	if config.Config.FortInMemory {
+		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
+			p := item.Value()
+			removeFortFromTree(p.Id, p.Lat, p.Lon)
+		})
+	}
 
 	gymCache = ttlcache.New[string, *Gym](
 		ttlcache.WithTTL[string, *Gym](60 * time.Minute),
 	)
+	if config.Config.FortInMemory {
+		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
+			g := item.Value()
+			removeFortFromTree(g.Id, g.Lat, g.Lon)
+		})
+	}
 	go gymCache.Start()
 
 	stationCache = ttlcache.New[string, *Station](

@@ -17,7 +17,8 @@ type configDefinition struct {
 	Prometheus          Prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly   bool       `koanf:"pokemon_memory_only"`
 	PokemonInternalToDb bool       `koanf:"pokemon_internal_to_db"`
-	TestFortInMemory    bool       `koanf:"test_fort_in_memory"`
+	PreloadForts        bool       `koanf:"preload_forts"`  // Pre-load all forts into cache on startup
+	FortInMemory        bool       `koanf:"fort_in_memory"` // Keep forts in memory with rtree for spatial lookups
 	Cleanup             cleanup    `koanf:"cleanup"`
 	RawBearer           string     `koanf:"raw_bearer"`
 	ApiSecret           string     `koanf:"api_secret"`
