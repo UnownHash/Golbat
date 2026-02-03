@@ -17,6 +17,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// spawnpointSelectColumns defines the columns for spawnpoint queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const spawnpointSelectColumns = `id, lat, lon, updated, last_seen, despawn_sec`
+
 // Spawnpoint struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
@@ -155,7 +159,7 @@ func (s *Spawnpoint) SetLastSeen(v int64) {
 
 func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
 	err := db.GeneralDb.GetContext(ctx, spawnpoint,
-		"SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
+		"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
 	statsCollector.IncDbQuery("select spawnpoint", err)
 	return err
 }

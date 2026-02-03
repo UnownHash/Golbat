@@ -257,15 +257,18 @@ func main() {
 	}
 	decoder.InitFortTracker(staleThreshold)
 
-	// Determine fort loading strategy
-	// FortInMemory enables rtree spatial lookups; PreloadForts just warms the cache
-	// TestFortInMemory is deprecated but still supported (treated as FortInMemory)
+	// Determine loading strategy
+	// Preload: warms cache for forts, stations, and recent spawnpoints
+	// FortInMemory: enables rtree spatial lookups (only loads forts)
 	fortInMemory := cfg.FortInMemory
-	fullPreload := cfg.PreloadForts || fortInMemory
 
-	if fullPreload {
-		// Full preload: loads into cache, registers with fort tracker, optionally builds rtree
-		if err := decoder.PreloadForts(dbDetails, fortInMemory); err != nil {
+	if cfg.Preload {
+		// Full preload: loads forts, stations, spawnpoints into cache
+		// Registers forts with fort tracker, optionally builds rtree
+		decoder.Preload(dbDetails, fortInMemory)
+	} else if fortInMemory {
+		// Fort in memory only: loads forts into cache with rtree
+		if err := decoder.PreloadForts(dbDetails, true); err != nil {
 			log.Errorf("failed to preload forts: %s", err)
 		}
 	} else {

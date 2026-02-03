@@ -14,6 +14,15 @@ import (
 	"golbat/webhooks"
 )
 
+// stationSelectColumns defines the columns for station queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const stationSelectColumns = `id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete,
+	is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end,
+	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
+	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
+	battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax,
+	stationed_pokemon`
+
 type StationWebhook struct {
 	Id                     string   `json:"id"`
 	Latitude               float64  `json:"latitude"`
@@ -40,8 +49,7 @@ type StationWebhook struct {
 
 func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
 	err := db.GeneralDb.GetContext(ctx, station,
-		`SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
-		FROM station WHERE id = ?`, stationId)
+		`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
 	statsCollector.IncDbQuery("select station", err)
 	return err
 }
