@@ -13,10 +13,13 @@ import (
 	"golbat/webhooks"
 )
 
+// incidentSelectColumns defines the columns for incident queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const incidentSelectColumns = "id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form"
+
 func loadIncidentFromDatabase(ctx context.Context, db db.DbDetails, incidentId string, incident *Incident) error {
 	err := db.GeneralDb.GetContext(ctx, incident,
-		"SELECT id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form "+
-			"FROM incident WHERE incident.id = ?", incidentId)
+		"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
 	statsCollector.IncDbQuery("select incident", err)
 	return err
 }

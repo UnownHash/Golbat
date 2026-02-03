@@ -11,15 +11,15 @@ import (
 	"golbat/db"
 )
 
-// Preload loads forts, stations, and recent spawnpoints from DB into cache.
+// Preload loads forts, stations, active incidents, and recent spawnpoints from DB into cache.
 // If populateRtree is true, also builds the rtree index for forts.
 func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
-	var pokestopCount, gymCount, stationCount, spawnpointCount int32
+	var pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount int32
 
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		pokestopCount = preloadPokestops(dbDetails, populateRtree)
@@ -34,12 +34,16 @@ func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	}()
 	go func() {
 		defer wg.Done()
+		incidentCount = preloadIncidents(dbDetails)
+	}()
+	go func() {
+		defer wg.Done()
 		spawnpointCount = preloadSpawnpoints(dbDetails)
 	}()
 	wg.Wait()
 
-	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d spawnpoints in %v (rtree=%v)",
-		pokestopCount, gymCount, stationCount, spawnpointCount, time.Since(startTime), populateRtree)
+	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d incidents, %d spawnpoints in %v (rtree=%v)",
+		pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount, time.Since(startTime), populateRtree)
 }
 
 // PreloadForts loads all forts from DB into cache.
@@ -226,6 +230,53 @@ func preloadStations(dbDetails db.DbDetails) int32 {
 			continue
 		}
 		jobs <- &station
+	}
+	close(jobs)
+	wg.Wait()
+
+	return count
+}
+
+func preloadIncidents(dbDetails db.DbDetails) int32 {
+	// Load active incidents (not yet expired)
+	now := time.Now().Unix()
+	query := "SELECT " + incidentSelectColumns + " FROM incident WHERE expiration > ?"
+	rows, err := dbDetails.GeneralDb.Queryx(query, now)
+	if err != nil {
+		log.Errorf("Preload: failed to query incidents - %s", err)
+		return 0
+	}
+	defer rows.Close()
+
+	numWorkers := runtime.NumCPU()
+	jobs := make(chan *Incident, 100)
+	var wg sync.WaitGroup
+	var count int32
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for incident := range jobs {
+				// Add to cache
+				incidentCache.Set(incident.Id, incident, 0) // 0 = use default TTL
+
+				c := atomic.AddInt32(&count, 1)
+				if c%10000 == 0 {
+					log.Infof("Preload: loaded %d incidents...", c)
+				}
+			}
+		}()
+	}
+
+	for rows.Next() {
+		var incident Incident
+		err := rows.StructScan(&incident)
+		if err != nil {
+			log.Errorf("Preload: incident scan error - %s", err)
+			continue
+		}
+		jobs <- &incident
 	}
 	close(jobs)
 	wg.Wait()
