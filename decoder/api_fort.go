@@ -21,42 +21,42 @@ type ApiFortScan struct {
 
 type ApiFortDnfFilter struct {
 	PowerUpLevel     *ApiFortDnfMinMax8 `json:"power_up_level"`
-	IsArScanEligible bool               `json:"is_ar_scan_eligible"`
+	IsArScanEligible *bool              `json:"is_ar_scan_eligible"`
 
 	AvailableSlots *ApiFortDnfMinMax8 `json:"available_slots"`
-	TeamId         []*int8            `json:"team_id"`
+	TeamId         []int8             `json:"team_id"`
 	InBattle       bool               `json:"in_battle"`
-	RaidLevel      []*int8            `json:"raid_level"`
+	RaidLevel      []int8             `json:"raid_level"`
 	RaidPokemon    []ApiDnfId         `json:"raid_pokemon_id"`
 
-	LureId []*int16 `json:"lure_id"`
+	LureId []int16 `json:"lure_id"`
 
-	ArQuestRewardType    []*int16            `json:"ar_quest_reward_type"`
+	ArQuestRewardType    []int16             `json:"ar_quest_reward_type"`
 	ArQuestRewardAmount  *ApiFortDnfMinMax16 `json:"ar_quest_reward_amount"`
-	ArQuestRewardItemId  []*int16            `json:"ar_quest_reward_item_id"`
+	ArQuestRewardItemId  []int16             `json:"ar_quest_reward_item_id"`
 	ArQuestRewardPokemon []ApiDnfId          `json:"ar_quest_reward_pokemon"`
-	ArQuestType          []*int16            `json:"ar_quest_type"`
-	ArQuestTarget        []*int16            `json:"ar_quest_target"`
+	ArQuestType          []int16             `json:"ar_quest_type"`
+	ArQuestTarget        []int16             `json:"ar_quest_target"`
 	ArQuestTemplate      []string            `json:"ar_quest_template"`
 
-	NoArQuestRewardType    []*int16            `json:"noar_quest_reward_type"`
+	NoArQuestRewardType    []int16             `json:"noar_quest_reward_type"`
 	NoArQuestRewardAmount  *ApiFortDnfMinMax16 `json:"noar_quest_reward_amount"`
-	NoArQuestRewardItemId  []*int16            `json:"noar_quest_reward_item_id"`
+	NoArQuestRewardItemId  []int16             `json:"noar_quest_reward_item_id"`
 	NoArQuestRewardPokemon []ApiDnfId          `json:"noar_quest_reward_pokemon"`
-	NoArQuestType          []*int16            `json:"noar_quest_type"`
-	NoArQuestTarget        []*int16            `json:"noar_quest_target"`
+	NoArQuestType          []int16             `json:"noar_quest_type"`
+	NoArQuestTarget        []int16             `json:"noar_quest_target"`
 	NoArQuestTemplate      []string            `json:"noar_quest_template"`
 
-	IncidentDisplayType    []*int8             `json:"incident_display_type"`
-	IncidentStyle          []*int8             `json:"incident_style"`
-	IncidentCharacter      []*int16            `json:"incident_character"`
+	IncidentDisplayType    []int8              `json:"incident_display_type"`
+	IncidentStyle          []int8              `json:"incident_style"`
+	IncidentCharacter      []int16             `json:"incident_character"`
 	IncidentSlot1          []ApiDnfId          `json:"incident_slot_1"`
 	IncidentSlot2          []ApiDnfId          `json:"incident_slot_2"`
 	IncidentSlot3          []ApiDnfId          `json:"incident_slot_3"`
 	ContestPokemon         []ApiDnfId          `json:"contest_pokemon"`
-	ContestPokemonType1    []*int8             `json:"contest_pokemon_type_1"`
-	ContestPokemonType2    []*int8             `json:"contest_pokemon_type_2"`
-	ContestRankingStandard []*int8             `json:"contest_ranking_standard"`
+	ContestPokemonType1    []int8              `json:"contest_pokemon_type_1"`
+	ContestPokemonType2    []int8              `json:"contest_pokemon_type_2"`
+	ContestRankingStandard []int8              `json:"contest_ranking_standard"`
 	ContestTotalEntries    *ApiFortDnfMinMax16 `json:"contest_total_entries"`
 }
 
@@ -96,7 +96,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 	if filter.PowerUpLevel != nil && (fortLookup.PowerUpLevel < filter.PowerUpLevel.Min || fortLookup.PowerUpLevel > filter.PowerUpLevel.Max) {
 		return false
 	}
-	if filter.IsArScanEligible && !fortLookup.IsArScanEligible {
+	if filter.IsArScanEligible != nil && !fortLookup.IsArScanEligible {
 		return false
 	}
 
@@ -104,13 +104,13 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		if filter.AvailableSlots != nil && (fortLookup.AvailableSlots < filter.AvailableSlots.Min || fortLookup.AvailableSlots > filter.AvailableSlots.Max) {
 			return false
 		}
-		if filter.TeamId != nil && !slices.Contains(filter.TeamId, &fortLookup.TeamId) {
+		if filter.TeamId != nil && !slices.Contains(filter.TeamId, fortLookup.TeamId) {
 			return false
 		}
 		if filter.InBattle && !fortLookup.InBattle {
 			return false
 		}
-		if filter.RaidLevel != nil && !slices.Contains(filter.RaidLevel, &fortLookup.RaidLevel) {
+		if filter.RaidLevel != nil && !slices.Contains(filter.RaidLevel, fortLookup.RaidLevel) {
 			return false
 		}
 		if filter.RaidPokemon != nil {
@@ -126,23 +126,23 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			}
 		}
 	} else if fortLookup.FortType == POKESTOP {
-		if filter.LureId != nil && !slices.Contains(filter.LureId, &fortLookup.LureId) {
+		if filter.LureId != nil && !slices.Contains(filter.LureId, fortLookup.LureId) {
 			return false
 		}
 		// AR Quest Filters
-		if filter.ArQuestRewardType != nil && !slices.Contains(filter.ArQuestRewardType, &fortLookup.QuestArRewardType) {
+		if filter.ArQuestRewardType != nil && !slices.Contains(filter.ArQuestRewardType, fortLookup.QuestArRewardType) {
 			return false
 		}
 		if filter.ArQuestRewardAmount != nil && (fortLookup.QuestArRewardAmount < filter.ArQuestRewardAmount.Min || fortLookup.QuestArRewardAmount > filter.ArQuestRewardAmount.Max) {
 			return false
 		}
-		if filter.ArQuestRewardItemId != nil && !slices.Contains(filter.ArQuestRewardItemId, &fortLookup.QuestArRewardItemId) {
+		if filter.ArQuestRewardItemId != nil && !slices.Contains(filter.ArQuestRewardItemId, fortLookup.QuestArRewardItemId) {
 			return false
 		}
-		if filter.ArQuestType != nil && !slices.Contains(filter.ArQuestType, &fortLookup.QuestArType) {
+		if filter.ArQuestType != nil && !slices.Contains(filter.ArQuestType, fortLookup.QuestArType) {
 			return false
 		}
-		if filter.ArQuestTarget != nil && !slices.Contains(filter.ArQuestTarget, &fortLookup.QuestArTarget) {
+		if filter.ArQuestTarget != nil && !slices.Contains(filter.ArQuestTarget, fortLookup.QuestArTarget) {
 			return false
 		}
 		if filter.ArQuestTemplate != nil && !slices.Contains(filter.ArQuestTemplate, fortLookup.QuestArTemplate) {
@@ -162,19 +162,19 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 
 		// No-AR Quest Filters
-		if filter.NoArQuestRewardType != nil && !slices.Contains(filter.NoArQuestRewardType, &fortLookup.QuestNoArRewardType) {
+		if filter.NoArQuestRewardType != nil && !slices.Contains(filter.NoArQuestRewardType, fortLookup.QuestNoArRewardType) {
 			return false
 		}
 		if filter.NoArQuestRewardAmount != nil && (fortLookup.QuestNoArRewardAmount < filter.NoArQuestRewardAmount.Min || fortLookup.QuestNoArRewardAmount > filter.NoArQuestRewardAmount.Max) {
 			return false
 		}
-		if filter.NoArQuestRewardItemId != nil && !slices.Contains(filter.NoArQuestRewardItemId, &fortLookup.QuestNoArRewardItemId) {
+		if filter.NoArQuestRewardItemId != nil && !slices.Contains(filter.NoArQuestRewardItemId, fortLookup.QuestNoArRewardItemId) {
 			return false
 		}
-		if filter.NoArQuestType != nil && !slices.Contains(filter.NoArQuestType, &fortLookup.QuestNoArType) {
+		if filter.NoArQuestType != nil && !slices.Contains(filter.NoArQuestType, fortLookup.QuestNoArType) {
 			return false
 		}
-		if filter.NoArQuestTarget != nil && !slices.Contains(filter.NoArQuestTarget, &fortLookup.QuestNoArTarget) {
+		if filter.NoArQuestTarget != nil && !slices.Contains(filter.NoArQuestTarget, fortLookup.QuestNoArTarget) {
 			return false
 		}
 		if filter.NoArQuestTemplate != nil && !slices.Contains(filter.NoArQuestTemplate, fortLookup.QuestNoArTemplate) {
@@ -194,13 +194,13 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 
 		// Contest Filters
-		if filter.ContestPokemonType1 != nil && !slices.Contains(filter.ContestPokemonType1, &fortLookup.ContestPokemonType1) {
+		if filter.ContestPokemonType1 != nil && !slices.Contains(filter.ContestPokemonType1, fortLookup.ContestPokemonType1) {
 			return false
 		}
-		if filter.ContestPokemonType2 != nil && !slices.Contains(filter.ContestPokemonType2, &fortLookup.ContestPokemonType2) {
+		if filter.ContestPokemonType2 != nil && !slices.Contains(filter.ContestPokemonType2, fortLookup.ContestPokemonType2) {
 			return false
 		}
-		if filter.ContestRankingStandard != nil && !slices.Contains(filter.ContestRankingStandard, &fortLookup.ContestRankingStandard) {
+		if filter.ContestRankingStandard != nil && !slices.Contains(filter.ContestRankingStandard, fortLookup.ContestRankingStandard) {
 			return false
 		}
 		if filter.ContestTotalEntries != nil && (fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
@@ -224,13 +224,13 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			incidentMatch := false
 			for _, incident := range fortLookup.Incidents {
 				incidentFilterMatch := true
-				if filter.IncidentDisplayType != nil && !slices.Contains(filter.IncidentDisplayType, &incident.DisplayType) {
+				if filter.IncidentDisplayType != nil && !slices.Contains(filter.IncidentDisplayType, incident.DisplayType) {
 					incidentFilterMatch = false
 				}
-				if incidentFilterMatch && filter.IncidentStyle != nil && !slices.Contains(filter.IncidentStyle, &incident.Style) {
+				if incidentFilterMatch && filter.IncidentStyle != nil && !slices.Contains(filter.IncidentStyle, incident.Style) {
 					incidentFilterMatch = false
 				}
-				if incidentFilterMatch && filter.IncidentCharacter != nil && !slices.Contains(filter.IncidentCharacter, &incident.Character) {
+				if incidentFilterMatch && filter.IncidentCharacter != nil && !slices.Contains(filter.IncidentCharacter, incident.Character) {
 					incidentFilterMatch = false
 				}
 				if incidentFilterMatch && filter.IncidentSlot1 != nil {
