@@ -297,14 +297,21 @@ func SetStatsCollector(collector stats_collector.StatsCollector) {
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
 	cfg := writebehind.QueueConfig{
 		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
-		RateLimit:           config.Config.Tuning.WriteBehindRateLimit,
-		BurstCapacity:       config.Config.Tuning.WriteBehindBurstCapacity,
+		WorkerCount:         config.Config.Tuning.WriteBehindWorkerCount,
 	}
 
 	writeBehindQueue = writebehind.NewQueue(cfg, dbDetails, statsCollector)
 
-	log.Infof("Write-behind queue initialized: startup_delay=%ds, rate_limit=%d/s, burst=%d",
-		cfg.StartupDelaySeconds, cfg.RateLimit, cfg.BurstCapacity)
+	log.Infof("Write-behind queue initialized: startup_delay=%ds, workers=%d",
+		cfg.StartupDelaySeconds, cfg.WorkerCount)
+
+	// Warn if worker count exceeds half of database pool size
+	maxPool := config.Config.Database.MaxPool
+	if cfg.WorkerCount > maxPool/2 {
+		log.Warnf("Write-behind worker count (%d) exceeds half of database pool size (%d). "+
+			"Consider increasing database.max_pool or reducing tuning.write_behind_worker_count",
+			cfg.WorkerCount, maxPool)
+	}
 
 	// Start the processing loop in a goroutine
 	go writeBehindQueue.ProcessLoop(ctx)
@@ -327,14 +334,11 @@ func FlushWriteBehindQueue() {
 func InitS2CellAccumulator(ctx context.Context, dbDetails db.DbDetails) {
 	cfg := writebehind.QueueConfig{
 		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
-		RateLimit:           config.Config.Tuning.WriteBehindRateLimit,
-		BurstCapacity:       config.Config.Tuning.WriteBehindBurstCapacity,
 	}
 
 	s2CellAccumulator = writebehind.NewS2CellAccumulator(cfg, dbDetails, statsCollector, s2CellBatchWrite)
 
-	log.Infof("S2Cell accumulator initialized: startup_delay=%ds, rate_limit=%d/s, burst=%d",
-		cfg.StartupDelaySeconds, cfg.RateLimit, cfg.BurstCapacity)
+	log.Infof("S2Cell accumulator initialized: startup_delay=%ds", cfg.StartupDelaySeconds)
 
 	// Start the processing loop
 	s2CellAccumulator.Start(ctx)

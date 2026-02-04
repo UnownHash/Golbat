@@ -12,11 +12,12 @@ import (
 
 // Queue is the write-behind queue that buffers database writes
 type Queue struct {
-	mu          sync.RWMutex
-	pending     map[string]*QueueEntry // key -> entry for O(1) lookup
-	orderedKeys []string               // FIFO order for processing
+	mu      sync.Mutex
+	pending map[string]*QueueEntry // key -> entry for squashing
 
-	rateLimiter    *TokenBucket
+	workChan chan *QueueEntry // buffered channel for workers
+
+	workerCount    int
 	warmupComplete bool
 	startTime      time.Time
 
@@ -27,10 +28,14 @@ type Queue struct {
 
 // NewQueue creates a new write-behind queue
 func NewQueue(cfg QueueConfig, dbDetails db.DbDetails, stats stats_collector.StatsCollector) *Queue {
+	if cfg.WorkerCount <= 0 {
+		cfg.WorkerCount = 50 // default
+	}
+
 	return &Queue{
 		pending:        make(map[string]*QueueEntry),
-		orderedKeys:    make([]string, 0, 1024),
-		rateLimiter:    NewTokenBucket(cfg.RateLimit, cfg.BurstCapacity),
+		workChan:       make(chan *QueueEntry, cfg.WorkerCount*10), // buffer 10x worker count
+		workerCount:    cfg.WorkerCount,
 		warmupComplete: false,
 		startTime:      time.Now(),
 		config:         cfg,
@@ -39,8 +44,9 @@ func NewQueue(cfg QueueConfig, dbDetails db.DbDetails, stats stats_collector.Sta
 	}
 }
 
-// Enqueue adds or updates an entity write with a specified delay
+// Enqueue adds or updates an entity write
 // If an entry already exists for the same key:
+// - Entity is replaced with the newer one
 // - IsNewRecord is preserved if either is true (INSERT takes priority)
 // - Delay is updated to the minimum of existing and new delay (0 means immediate)
 // - QueuedAt is preserved (for total time tracking)
@@ -71,23 +77,22 @@ func (q *Queue) Enqueue(entity Writeable, isNewRecord bool, delay time.Duration)
 			IsNewRecord: isNewRecord,
 			Delay:       delay,
 		}
-		q.orderedKeys = append(q.orderedKeys, key)
 	}
 
 	q.stats.SetWriteBehindQueueDepth(entity.WriteType(), float64(len(q.pending)))
 }
 
-// Size returns the current queue size
+// Size returns the current pending queue size
 func (q *Queue) Size() int {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	return len(q.pending)
 }
 
 // IsWarmupComplete returns true if the warmup period has elapsed
 func (q *Queue) IsWarmupComplete() bool {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
+	q.mu.Lock()
+	defer q.mu.Unlock()
 	return q.warmupComplete
 }
 
@@ -104,54 +109,13 @@ func (q *Queue) checkWarmup() bool {
 			q.warmupComplete = true
 			queueSize := len(q.pending)
 			q.mu.Unlock()
-			log.Infof("Write-behind warmup complete, processing %d queued writes", queueSize)
+			log.Infof("Write-behind warmup complete, processing %d queued writes with %d workers", queueSize, q.workerCount)
 			return true
 		}
 		q.mu.Unlock()
 		return true
 	}
 	return false
-}
-
-// getReadyEntries returns entries that are ready to be written
-// An entry is ready if its delay has elapsed since QueuedAt
-func (q *Queue) getReadyEntries(maxCount int) []*QueueEntry {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-
-	if len(q.orderedKeys) == 0 {
-		return nil
-	}
-
-	ready := make([]*QueueEntry, 0, maxCount)
-	remainingKeys := make([]string, 0, len(q.orderedKeys))
-	now := time.Now()
-
-	for _, key := range q.orderedKeys {
-		if len(ready) >= maxCount {
-			remainingKeys = append(remainingKeys, key)
-			continue
-		}
-
-		entry, ok := q.pending[key]
-		if !ok {
-			continue
-		}
-
-		// Check if delay has elapsed
-		if now.Sub(entry.QueuedAt) < entry.Delay {
-			remainingKeys = append(remainingKeys, key)
-			continue
-		}
-
-		// Entry is ready
-		ready = append(ready, entry)
-		delete(q.pending, key)
-	}
-
-	q.orderedKeys = remainingKeys
-
-	return ready
 }
 
 // Flush writes all pending entries immediately (used during shutdown)
@@ -162,7 +126,6 @@ func (q *Queue) Flush() {
 		entries = append(entries, entry)
 	}
 	q.pending = make(map[string]*QueueEntry)
-	q.orderedKeys = q.orderedKeys[:0]
 	q.mu.Unlock()
 
 	if len(entries) == 0 {
@@ -171,7 +134,7 @@ func (q *Queue) Flush() {
 
 	log.Infof("Write-behind flushing %d entries", len(entries))
 
-	// Write all entries without rate limiting
+	// Write all entries directly (bypass channel during shutdown)
 	for _, entry := range entries {
 		q.writeEntry(entry)
 	}

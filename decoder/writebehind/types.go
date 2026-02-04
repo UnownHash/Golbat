@@ -32,6 +32,5 @@ type QueueEntry struct {
 // QueueConfig holds configuration for the write-behind queue
 type QueueConfig struct {
 	StartupDelaySeconds int // Delay before processing starts (warmup period)
-	RateLimit           int // Writes per second, 0 = unlimited
-	BurstCapacity       int // Token bucket burst capacity
+	WorkerCount         int // Number of concurrent write workers (default 100)
 }

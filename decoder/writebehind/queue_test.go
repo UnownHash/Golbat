@@ -26,9 +26,8 @@ func (m *mockWriteable) WriteToDB(db db.DbDetails, isNewRecord bool) error {
 func TestQueueEnqueue(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
 	cfg := QueueConfig{
-		StartupDelaySeconds: 0, // No delay for tests
-		RateLimit:           0, // Unlimited
-		BurstCapacity:       100,
+		StartupDelaySeconds: 0,  // No delay for tests
+		WorkerCount:         10, // 10 workers for tests
 	}
 	q := NewQueue(cfg, db.DbDetails{}, stats)
 
@@ -44,8 +43,7 @@ func TestQueueSquashing(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
 	cfg := QueueConfig{
 		StartupDelaySeconds: 0,
-		RateLimit:           0,
-		BurstCapacity:       100,
+		WorkerCount:         10,
 	}
 	q := NewQueue(cfg, db.DbDetails{}, stats)
 
@@ -63,9 +61,9 @@ func TestQueueSquashing(t *testing.T) {
 	}
 
 	// The entry should use the newer entity (replaces old)
-	q.mu.RLock()
+	q.mu.Lock()
 	entry := q.pending["test:1"]
-	q.mu.RUnlock()
+	q.mu.Unlock()
 
 	if entry.Entity.(*mockWriteable).quality != 2 {
 		t.Errorf("Expected entity quality 2 (newer), got %d", entry.Entity.(*mockWriteable).quality)
@@ -81,8 +79,7 @@ func TestQueueNewRecordPreservation(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
 	cfg := QueueConfig{
 		StartupDelaySeconds: 0,
-		RateLimit:           0,
-		BurstCapacity:       100,
+		WorkerCount:         10,
 	}
 	q := NewQueue(cfg, db.DbDetails{}, stats)
 
@@ -94,9 +91,9 @@ func TestQueueNewRecordPreservation(t *testing.T) {
 	entity2 := &mockWriteable{key: "test:1", writeType: "test", quality: 2}
 	q.Enqueue(entity2, false, 0)
 
-	q.mu.RLock()
+	q.mu.Lock()
 	entry := q.pending["test:1"]
-	q.mu.RUnlock()
+	q.mu.Unlock()
 
 	if !entry.IsNewRecord {
 		t.Error("IsNewRecord should be preserved as true when first entry was new")
@@ -107,8 +104,7 @@ func TestQueueDelayHandling(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
 	cfg := QueueConfig{
 		StartupDelaySeconds: 0,
-		RateLimit:           0,
-		BurstCapacity:       100,
+		WorkerCount:         10,
 	}
 	q := NewQueue(cfg, db.DbDetails{}, stats)
 
@@ -116,9 +112,9 @@ func TestQueueDelayHandling(t *testing.T) {
 	entity1 := &mockWriteable{key: "test:1", writeType: "test", quality: 1}
 	q.Enqueue(entity1, true, 1*time.Second)
 
-	q.mu.RLock()
+	q.mu.Lock()
 	entry := q.pending["test:1"]
-	q.mu.RUnlock()
+	q.mu.Unlock()
 
 	if entry.Delay != 1*time.Second {
 		t.Errorf("Expected delay of 1s, got %v", entry.Delay)
@@ -128,50 +124,12 @@ func TestQueueDelayHandling(t *testing.T) {
 	entity2 := &mockWriteable{key: "test:1", writeType: "test", quality: 2}
 	q.Enqueue(entity2, false, 0)
 
-	q.mu.RLock()
+	q.mu.Lock()
 	entry = q.pending["test:1"]
-	q.mu.RUnlock()
+	q.mu.Unlock()
 
 	if entry.Delay != 0 {
 		t.Errorf("Expected delay reduced to 0, got %v", entry.Delay)
-	}
-}
-
-func TestTokenBucketUnlimited(t *testing.T) {
-	tb := NewTokenBucket(0, 100) // 0 = unlimited
-
-	if !tb.IsUnlimited() {
-		t.Error("Expected unlimited bucket")
-	}
-
-	// Should always succeed
-	for i := 0; i < 1000; i++ {
-		if !tb.TryAcquire(1) {
-			t.Errorf("TryAcquire failed on iteration %d for unlimited bucket", i)
-		}
-	}
-}
-
-func TestTokenBucketRateLimited(t *testing.T) {
-	tb := NewTokenBucket(10, 5) // 10/sec, burst of 5
-
-	// Should succeed for burst capacity
-	for i := 0; i < 5; i++ {
-		if !tb.TryAcquire(1) {
-			t.Errorf("TryAcquire should succeed for burst, failed on %d", i)
-		}
-	}
-
-	// Should fail after burst exhausted
-	if tb.TryAcquire(1) {
-		t.Error("TryAcquire should fail after burst exhausted")
-	}
-
-	// Wait for refill
-	time.Sleep(150 * time.Millisecond) // Should get ~1.5 tokens
-
-	if !tb.TryAcquire(1) {
-		t.Error("TryAcquire should succeed after refill")
 	}
 }
 
@@ -179,8 +137,7 @@ func TestQueueWarmup(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
 	cfg := QueueConfig{
 		StartupDelaySeconds: 1, // 1 second delay
-		RateLimit:           0,
-		BurstCapacity:       100,
+		WorkerCount:         10,
 	}
 	q := NewQueue(cfg, db.DbDetails{}, stats)
 

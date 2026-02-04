@@ -56,8 +56,7 @@ func ReadConfig() (configDefinition, error) {
 			MaxConcurrentProactiveIVSwitch: 6,
 			ReduceUpdates:                  false,
 			WriteBehindStartupDelay:        120, // 2 minutes
-			WriteBehindRateLimit:           0,   // unlimited
-			WriteBehindBurstCapacity:       100,
+			WriteBehindWorkerCount:         50,  // concurrent writers
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
