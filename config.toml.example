@@ -3,18 +3,11 @@ port = 9001             # Listening port for golbat
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
-# When enabled, reduce_updates will make fort update debounce windows much longer
-# to reduce database churn. Specifically, gym/pokestop/station debounce will be
-# extended from 15 minutes (900s) to 12 hours (43200s) and spawnpoint last_seen
-# will be updated every 12 hours instead of the default 6 hours.
-reduce_updates = false
-
 pokemon_memory_only = false  # Use in-memory storage for pokemon only
 
-# Fort loading options:
-# preload_forts: Pre-load all forts into cache on startup (faster initial responses)
+# preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
 # fort_in_memory: Keep forts in memory with rtree for spatial lookups
-preload_forts = false
+preload = false
 fort_in_memory = false
 
 [koji]
@@ -75,8 +68,16 @@ url = "http://localhost:4201"
 [tuning]
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
-extended_timeout = false
-profile_routes = false
+extended_timeout = false    # Extend timeouts for processing, hopefully not needed
+profile_routes = false      # Turn on debugging endpoints
+
+# When enabled, reduce_updates will make fort update debounce windows much longer
+# to reduce database churn. Specifically, gym/pokestop/station debounce will be
+# extended from 15 minutes (900s) to 12 hours (43200s) and spawnpoint last_seen
+# will be updated every 12 hours instead of the default 6 hours.
+reduce_updates = false
+write_behind_startup_delay = 120
+write_behind_worker_count = 50
 
 [weather]
 proactive_iv_switching = true       # Enable proactive IV switching upon weather changes (default: true)

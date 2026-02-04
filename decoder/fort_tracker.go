@@ -432,17 +432,22 @@ func GetFortTracker() *FortTracker {
 
 // clearGymWithLock marks a gym as deleted while holding the object-level mutex
 func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
-	// Lock the gym if it exists in cache
-	gym, unlock, _ := PeekGymRecord(gymId)
-	if gym != nil {
-		defer unlock()
-	}
-
-	gymCache.Delete(gymId)
-	if err := db.ClearOldGyms(ctx, dbDetails, []string{gymId}); err != nil {
-		log.Errorf("FortTracker: failed to clear gym %s - %s", gymId, err)
+	// Load gym through cache (will load from DB if not cached)
+	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load gym %s - %s", gymId, err)
 		return
 	}
+	if gym == nil {
+		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	gym.SetDeleted(true)
+	saveGymRecord(ctx, dbDetails, gym)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(gymId)
 		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
@@ -456,17 +461,22 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 
 // clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
 func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
-	// Lock the pokestop if it exists in cache
-	pokestop, unlock, _ := PeekPokestopRecord(stopId)
-	if pokestop != nil {
-		defer unlock()
-	}
-
-	pokestopCache.Delete(stopId)
-	if err := db.ClearOldPokestops(ctx, dbDetails, []string{stopId}); err != nil {
-		log.Errorf("FortTracker: failed to clear pokestop %s - %s", stopId, err)
+	// Load pokestop through cache (will load from DB if not cached)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load pokestop %s - %s", stopId, err)
 		return
 	}
+	if pokestop == nil {
+		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	pokestop.SetDeleted(true)
+	savePokestopRecord(ctx, dbDetails, pokestop)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(stopId)
 		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)

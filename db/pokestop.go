@@ -1,10 +1,8 @@
 package db
 
 import (
-	"context"
 	"database/sql"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/paulmach/orb/geojson"
 )
 
@@ -46,18 +44,6 @@ func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation
 	}
 
 	return areas, nil
-}
-
-func ClearOldPokestops(ctx context.Context, db DbDetails, stopIds []string) error {
-	query, args, _ := sqlx.In("UPDATE pokestop SET deleted = 1 WHERE id IN (?);", stopIds)
-	query = db.GeneralDb.Rebind(query)
-
-	_, err := db.GeneralDb.ExecContext(ctx, query, args...)
-	statsCollector.IncDbQuery("clear old-pokestops", err)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func GetQuestStatus(db DbDetails, fence *geojson.Feature) (QuestStatus, error) {
