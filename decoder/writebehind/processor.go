@@ -56,7 +56,9 @@ func (q *Queue) dispatcher(ctx context.Context) {
 		case <-statusTicker.C:
 			queueSize := q.Size()
 			channelLen := len(q.workChan)
-			log.Infof("Write-behind queue: %d pending, %d in channel", queueSize, channelLen)
+			avgWriteTime, avgLatency, writeCount := q.GetAndResetMetrics()
+			log.Infof("Write-behind queue: %d pending, %d in channel, %d writes (avg write: %.1fms, avg latency: %.1fms)",
+				queueSize, channelLen, writeCount, avgWriteTime, avgLatency)
 		case <-ticker.C:
 			if q.checkWarmup() {
 				q.dispatchReady()
@@ -78,8 +80,8 @@ func (q *Queue) dispatchReady() {
 	dispatched := 0
 
 	for key, entry := range q.pending {
-		// Check if delay has elapsed
-		if now.Sub(entry.QueuedAt) < entry.Delay {
+		// Check if delay has elapsed (entry is ready when now >= ReadyAt)
+		if now.Before(entry.ReadyAt) {
 			continue
 		}
 

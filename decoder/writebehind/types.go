@@ -25,6 +25,7 @@ type QueueEntry struct {
 	Entity      Writeable
 	QueuedAt    time.Time
 	UpdatedAt   time.Time
+	ReadyAt     time.Time     // When the entry became ready to write (set by dispatcher)
 	IsNewRecord bool          // Track if this needs INSERT (preserved across updates)
 	Delay       time.Duration // Minimum delay before writing (0 = immediate)
 }
