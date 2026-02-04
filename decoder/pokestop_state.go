@@ -148,6 +148,7 @@ type QuestWebhook struct {
 	ArScanEligible int64           `json:"ar_scan_eligible"`
 	PokestopUrl    string          `json:"pokestop_url"`
 	WithAr         bool            `json:"with_ar"`
+	QuestSeed      null.Int        `json:"quest_seed"`
 }
 
 type PokestopWebhook struct {
@@ -217,6 +218,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
 			PokestopUrl:    stop.Url.ValueOrZero(),
 			WithAr:         false,
+			QuestSeed:      stop.AlternativeQuestSeed,
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
@@ -237,6 +239,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
 			PokestopUrl:    stop.Url.ValueOrZero(),
 			WithAr:         true,
+			QuestSeed:      stop.QuestSeed,
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
@@ -276,10 +279,10 @@ func createPokestopWebhooks(stop *Pokestop) {
 
 func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop) {
 	now := time.Now().Unix()
-	if !pokestop.IsNewRecord() && !pokestop.IsDirty() {
+	if !pokestop.IsNewRecord() && !pokestop.IsDirty() && !pokestop.IsInternalDirty() {
 		// default debounce is 15 minutes (900s). If reduce_updates is enabled, use 12 hours.
 		if pokestop.Updated > now-GetUpdateThreshold(900) {
-			// if a pokestop is unchanged, but we did see it again after 15 minutes, then save again
+			// if a pokestop is unchanged and was seen recently, skip saving
 			return
 		}
 	}
@@ -290,19 +293,26 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 
 	// Debug logging happens here, before queueing
 	if dbDebugEnabled {
-		if isNewRecord {
-			dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.changedFields)
+		if pokestop.IsDirty() {
+			if isNewRecord {
+				dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.changedFields)
+			} else {
+				dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
+			}
 		} else {
-			dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
+			dbDebugLog("MEMORY", "Pokestop", pokestop.Id, pokestop.changedFields)
 		}
 	}
 
 	// Queue the write through the write-behind system (no delay for pokestops)
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(pokestop, isNewRecord, 0)
-	} else {
-		// Fallback to direct write if queue not initialized
-		_ = pokestopWriteDB(db, pokestop, isNewRecord)
+	// Only queue if dirty (not just internalDirty)
+	if pokestop.IsDirty() {
+		if writeBehindQueue != nil {
+			writeBehindQueue.Enqueue(pokestop, isNewRecord, 0)
+		} else {
+			// Fallback to direct write if queue not initialized
+			_ = pokestopWriteDB(db, pokestop, isNewRecord)
+		}
 	}
 
 	if dbDebugEnabled {

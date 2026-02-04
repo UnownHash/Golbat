@@ -54,6 +54,9 @@ type Gym struct {
 	Defenders              null.String `db:"defenders"`
 	Rsvps                  null.String `db:"rsvps"`
 
+	// Memory-only fields (not persisted to DB)
+	RaidSeed null.String `db:"-"` // Raid seed (memory only, sent in webhook)
+
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
 	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
 	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
@@ -566,6 +569,18 @@ func (gym *Gym) SetRsvps(v null.String) {
 		}
 		gym.Rsvps = v
 		gym.dirty = true
+	}
+}
+
+// SetRaidSeed sets the raid seed (memory only, not saved to DB)
+func (gym *Gym) SetRaidSeed(v null.String) {
+	if gym.RaidSeed != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSeed:%s->%s", FormatNull(gym.RaidSeed), FormatNull(v)))
+		}
+		gym.RaidSeed = v
+		// Do not set dirty, as this doesn't trigger a DB update
+		gym.internalDirty = true
 	}
 }
 

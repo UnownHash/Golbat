@@ -7,13 +7,14 @@ import (
 	"errors"
 	"time"
 
+	"github.com/guregu/null/v6"
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
 	"golbat/webhooks"
-
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
 )
 
 // gymSelectColumns defines the columns for gym queries.
@@ -225,6 +226,7 @@ type RaidWebhook struct {
 	PowerUpEndTimestamp int64           `json:"power_up_end_timestamp"`
 	ArScanEligible      int64           `json:"ar_scan_eligible"`
 	Rsvps               json.RawMessage `json:"rsvps"`
+	RaidSeed            null.String     `json:"raid_seed"`
 }
 
 func createGymFortWebhooks(gym *Gym) {
@@ -326,6 +328,7 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 				PowerUpEndTimestamp: gym.PowerUpEndTimestamp.ValueOrZero(),
 				ArScanEligible:      gym.ArScanEligible.ValueOrZero(),
 				Rsvps:               rsvps,
+				RaidSeed:            gym.RaidSeed,
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
@@ -350,19 +353,25 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 
 	// Debug logging before queueing
 	if dbDebugEnabled {
-		if isNewRecord {
-			dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
-		} else if gym.IsDirty() {
-			dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+		if gym.IsDirty() {
+			if isNewRecord {
+				dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
+			} else {
+				dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+			}
+		} else {
+			dbDebugLog("MEMORY", "Gym", gym.Id, gym.changedFields)
 		}
 	}
 
-	// Queue the write through the write-behind system
-	if writeBehindQueue != nil && gym.IsDirty() {
-		writeBehindQueue.Enqueue(gym, isNewRecord, 0)
-	} else if gym.IsDirty() {
-		// Fallback to direct write if queue not initialized
-		_ = gymWriteDB(db, gym, isNewRecord)
+	if gym.IsDirty() {
+		// Queue the write through the write-behind system
+		if writeBehindQueue != nil {
+			writeBehindQueue.Enqueue(gym, isNewRecord, 0)
+		} else {
+			// Fallback to direct write if queue not initialized
+			_ = gymWriteDB(db, gym, isNewRecord)
+		}
 	}
 
 	if config.Config.FortInMemory {

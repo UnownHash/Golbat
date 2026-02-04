@@ -65,7 +65,12 @@ type Pokestop struct {
 	ShowcaseExpiry                null.Int    `db:"showcase_expiry"`
 	ShowcaseRankings              null.String `db:"showcase_rankings"`
 
+	// Memory-only fields (not persisted to DB)
+	QuestSeed            null.Int `db:"-"` // Quest seed for AR quest (memory only, sent in webhook)
+	AlternativeQuestSeed null.Int `db:"-"` // Quest seed for non-AR quest (memory only, sent in webhook)
+
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
+	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
 	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 
@@ -129,9 +134,15 @@ func (p *Pokestop) IsDirty() bool {
 	return p.dirty
 }
 
+// IsInternalDirty returns true if any field has been modified for in-memory
+func (p *Pokestop) IsInternalDirty() bool {
+	return p.internalDirty
+}
+
 // ClearDirty resets the dirty flag (call after saving to DB)
 func (p *Pokestop) ClearDirty() {
 	p.dirty = false
+	p.internalDirty = false
 }
 
 // IsNewRecord returns true if this is a new record (not yet in DB)
@@ -695,5 +706,29 @@ func (p *Pokestop) SetUpdated(v int64) {
 		}
 		p.Updated = v
 		p.dirty = true
+	}
+}
+
+// SetQuestSeed sets the quest seed (memory only, not saved to DB)
+func (p *Pokestop) SetQuestSeed(v null.Int) {
+	if p.QuestSeed != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("QuestSeed:%s->%s", FormatNull(p.QuestSeed), FormatNull(v)))
+		}
+		p.QuestSeed = v
+		// Do not set dirty, as this doesn't trigger a DB update
+		p.internalDirty = true
+	}
+}
+
+// SetAlternativeQuestSeed sets the alternative quest seed (memory only, not saved to DB)
+func (p *Pokestop) SetAlternativeQuestSeed(v null.Int) {
+	if p.AlternativeQuestSeed != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("AlternativeQuestSeed:%s->%s", FormatNull(p.AlternativeQuestSeed), FormatNull(v)))
+		}
+		p.AlternativeQuestSeed = v
+		// Do not set dirty, as this doesn't trigger a DB update
+		p.internalDirty = true
 	}
 }

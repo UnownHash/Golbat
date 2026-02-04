@@ -382,6 +382,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		questExpiry = null.IntFrom(time.Now().Unix() + 24*60*60) // Set expiry to 24 hours from now
 	}
 
+	questSeed := null.IntFrom(questData.QuestSeed)
+
 	if !haveAr {
 		stop.SetAlternativeQuestType(null.IntFrom(questType))
 		stop.SetAlternativeQuestTarget(null.IntFrom(questTarget))
@@ -396,6 +398,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.SetAlternativeQuestRewardAmount(rewardAmount)
 		stop.SetAlternativeQuestPokemonId(rewardPokemonId)
 		stop.SetAlternativeQuestPokemonFormId(rewardPokemonFormId)
+		stop.SetAlternativeQuestSeed(questSeed)
 	} else {
 		stop.SetQuestType(null.IntFrom(questType))
 		stop.SetQuestTarget(null.IntFrom(questTarget))
@@ -410,6 +413,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		stop.SetQuestRewardAmount(rewardAmount)
 		stop.SetQuestPokemonId(rewardPokemonId)
 		stop.SetQuestPokemonFormId(rewardPokemonFormId)
+		stop.SetQuestSeed(questSeed)
 	}
 
 	return questTitle
