@@ -127,7 +127,7 @@ type tuning struct {
 	MaxConcurrentProactiveIVSwitch int     `koanf:"max_concurrent_proactive_iv_switch"`
 	ReduceUpdates                  bool    `koanf:"reduce_updates"`
 	WriteBehindStartupDelay        int     `koanf:"write_behind_startup_delay"` // seconds, default: 120
-	WriteBehindWorkerCount         int     `koanf:"write_behind_worker_count"`  // concurrent writers, default: 100
+	WriteBehindWorkerCount         int     `koanf:"write_behind_worker_count"`  // concurrent writers, default: 50
 }
 
 type scanRule struct {
