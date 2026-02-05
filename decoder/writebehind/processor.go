@@ -27,14 +27,20 @@ func (q *Queue) ProcessLoop(ctx context.Context) {
 	q.dispatcher(ctx)
 }
 
-// worker reads from the work channel and writes entries to DB
+// worker reads from the work channel and routes to batch writers
 func (q *Queue) worker(ctx context.Context, id int) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case entry := <-q.workChan:
-			q.writeEntry(entry)
+			// Route to batch writer if registered, otherwise write directly
+			tableType := entry.Entity.WriteType()
+			if bw := q.getBatchWriter(tableType); bw != nil {
+				bw.Add(entry)
+			} else {
+				q.writeEntry(entry)
+			}
 		}
 	}
 }

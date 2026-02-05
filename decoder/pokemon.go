@@ -20,7 +20,7 @@ import (
 type Pokemon struct {
 	mu sync.Mutex `db:"-"` // Object-level mutex
 
-	Id                      uint64      `db:"id"`
+	Id                      Uint64Str   `db:"id"`
 	PokestopId              null.String `db:"pokestop_id"`
 	SpawnId                 null.Int    `db:"spawn_id"`
 	Lat                     float64     `db:"lat"`

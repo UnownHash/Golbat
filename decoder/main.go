@@ -298,12 +298,17 @@ func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
 	cfg := writebehind.QueueConfig{
 		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
 		WorkerCount:         config.Config.Tuning.WriteBehindWorkerCount,
+		BatchSize:           config.Config.Tuning.WriteBehindBatchSize,
+		BatchTimeout:        time.Duration(config.Config.Tuning.WriteBehindBatchTimeoutMs) * time.Millisecond,
 	}
 
 	writeBehindQueue = writebehind.NewQueue(cfg, dbDetails, statsCollector)
 
-	log.Infof("Write-behind queue initialized: startup_delay=%ds, workers=%d",
-		cfg.StartupDelaySeconds, cfg.WorkerCount)
+	// Register batch writers for each entity type
+	RegisterBatchWriters(writeBehindQueue)
+
+	log.Infof("Write-behind queue initialized: startup_delay=%ds, workers=%d, batch_size=%d, batch_timeout=%dms",
+		cfg.StartupDelaySeconds, cfg.WorkerCount, cfg.BatchSize, cfg.BatchTimeout.Milliseconds())
 
 	// Warn if worker count exceeds half of database pool size
 	maxPool := config.Config.Database.MaxPool

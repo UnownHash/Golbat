@@ -1,6 +1,7 @@
 package writebehind
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -15,7 +16,11 @@ type Queue struct {
 	mu      sync.Mutex
 	pending map[string]*QueueEntry // key -> entry for squashing
 
-	workChan chan *QueueEntry // buffered channel for workers
+	workChan chan *QueueEntry // buffered channel for dispatcher
+
+	// Batch writers per table type
+	batchWriters   map[string]*BatchWriter
+	batchWritersMu sync.RWMutex
 
 	workerCount    int
 	warmupComplete bool
@@ -38,10 +43,17 @@ func NewQueue(cfg QueueConfig, dbDetails db.DbDetails, stats stats_collector.Sta
 	if cfg.WorkerCount <= 0 {
 		cfg.WorkerCount = 50 // default
 	}
+	if cfg.BatchSize <= 0 {
+		cfg.BatchSize = 50 // default
+	}
+	if cfg.BatchTimeout <= 0 {
+		cfg.BatchTimeout = 100 * time.Millisecond // default
+	}
 
 	return &Queue{
 		pending:        make(map[string]*QueueEntry),
 		workChan:       make(chan *QueueEntry, cfg.WorkerCount*10), // buffer 10x worker count
+		batchWriters:   make(map[string]*BatchWriter),
 		workerCount:    cfg.WorkerCount,
 		warmupComplete: false,
 		startTime:      time.Now(),
@@ -49,6 +61,29 @@ func NewQueue(cfg QueueConfig, dbDetails db.DbDetails, stats stats_collector.Sta
 		db:             dbDetails,
 		stats:          stats,
 	}
+}
+
+// RegisterBatchWriter registers a batch writer for a specific table type
+func (q *Queue) RegisterBatchWriter(tableType string, flushFunc func(ctx context.Context, db db.DbDetails, entries []*QueueEntry) error) {
+	q.batchWritersMu.Lock()
+	defer q.batchWritersMu.Unlock()
+
+	q.batchWriters[tableType] = NewBatchWriter(BatchWriterConfig{
+		BatchSize: q.config.BatchSize,
+		Timeout:   q.config.BatchTimeout,
+		TableType: tableType,
+		FlushFunc: flushFunc,
+		Db:        q.db,
+		Stats:     q.stats,
+		Queue:     q, // Pass queue reference for metrics
+	})
+}
+
+// getBatchWriter returns the batch writer for a table type, or nil if not registered
+func (q *Queue) getBatchWriter(tableType string) *BatchWriter {
+	q.batchWritersMu.RLock()
+	defer q.batchWritersMu.RUnlock()
+	return q.batchWriters[tableType]
 }
 
 // Enqueue adds or updates an entity write
@@ -171,15 +206,31 @@ func (q *Queue) Flush() {
 	q.mu.Unlock()
 
 	if len(entries) == 0 {
-		return
+		log.Info("Write-behind flush: no pending entries")
+	} else {
+		log.Infof("Write-behind flushing %d pending entries", len(entries))
+
+		// Route entries to batch writers or write directly
+		for _, entry := range entries {
+			tableType := entry.Entity.WriteType()
+			if bw := q.getBatchWriter(tableType); bw != nil {
+				bw.Add(entry)
+			} else {
+				q.writeEntry(entry)
+			}
+		}
 	}
 
-	log.Infof("Write-behind flushing %d entries", len(entries))
-
-	// Write all entries directly (bypass channel during shutdown)
-	for _, entry := range entries {
-		q.writeEntry(entry)
+	// Flush all batch writers
+	q.batchWritersMu.RLock()
+	for tableType, bw := range q.batchWriters {
+		size := bw.Size()
+		if size > 0 {
+			log.Infof("Write-behind flushing %d %s batch entries", size, tableType)
+		}
+		bw.Flush()
 	}
+	q.batchWritersMu.RUnlock()
 
 	log.Info("Write-behind flush complete")
 }

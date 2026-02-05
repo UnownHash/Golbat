@@ -32,6 +32,8 @@ type QueueEntry struct {
 
 // QueueConfig holds configuration for the write-behind queue
 type QueueConfig struct {
-	StartupDelaySeconds int // Delay before processing starts (warmup period)
-	WorkerCount         int // Number of concurrent write workers (default 100)
+	StartupDelaySeconds int           // Delay before processing starts (warmup period)
+	WorkerCount         int           // Number of concurrent write workers (default 50)
+	BatchSize           int           // Number of entries per batch (default 50)
+	BatchTimeout        time.Duration // Max time to wait for a full batch (default 100ms)
 }

@@ -53,13 +53,13 @@ func initPokemonRtree() {
 	// Set up OnEviction callback on all shards
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
 		pokemon := v.Value()
-		removePokemonFromTree(pokemon.Id, pokemon.Lat, pokemon.Lon)
+		removePokemonFromTree(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
 		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
 	})
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
-	pokemonId := pokemon.Id
+	pokemonId := uint64(pokemon.Id)
 
 	_, inMap := pokemonLookupCache.Load(pokemonId)
 
@@ -78,7 +78,7 @@ func valueOrMinus1(n null.Int) int {
 }
 
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
-	pokemonId := pokemon.Id
+	pokemonId := uint64(pokemon.Id)
 
 	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
 
@@ -151,7 +151,7 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 }
 
 func addPokemonToTree(pokemon *Pokemon) {
-	pokemonId := pokemon.Id
+	pokemonId := uint64(pokemon.Id)
 
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)

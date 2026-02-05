@@ -57,6 +57,8 @@ func ReadConfig() (configDefinition, error) {
 			ReduceUpdates:                  false,
 			WriteBehindStartupDelay:        120, // 2 minutes
 			WriteBehindWorkerCount:         50,  // concurrent writers
+			WriteBehindBatchSize:           50,  // entries per batch
+			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,

@@ -104,7 +104,7 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
 	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
-		return &Pokemon{Id: encounterId, newRecord: true}
+		return &Pokemon{Id: Uint64Str(encounterId), newRecord: true}
 	})
 
 	pokemon := pokemonItem.Value()
@@ -254,9 +254,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		// Debug logging happens here, before queueing
 		if dbDebugEnabled {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+				dbDebugLog("INSERT", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
 			} else {
-				dbDebugLog("UPDATE", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+				dbDebugLog("UPDATE", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
 			}
 		}
 
@@ -277,7 +277,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	} else {
 		if dbDebugEnabled {
-			dbDebugLog("MEMORY", "Pokemon", strconv.FormatUint(pokemon.Id, 10), pokemon.changedFields)
+			dbDebugLog("MEMORY", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
 		}
 	}
 
@@ -286,7 +286,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		addPokemonToTree(pokemon)
 	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
 		// Position changed - update R-tree by removing from old position and adding to new
-		removePokemonFromTree(pokemon.Id, pokemon.oldValues.Lat, pokemon.oldValues.Lon)
+		removePokemonFromTree(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
 		addPokemonToTree(pokemon)
 	}
 
@@ -308,7 +308,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	pokemon.Pvp = null.NewString("", false) // Reset PVP field to avoid keeping it in memory cache
 
 	if db.UsePokemonCache {
-		pokemonCache.Set(pokemon.Id, pokemon, pokemon.remainingDuration(now))
+		pokemonCache.Set(uint64(pokemon.Id), pokemon, pokemon.remainingDuration(now))
 	}
 }
 
@@ -337,7 +337,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 		statsCollector.IncDbQuery("insert pokemon", err)
 		if err != nil {
 			log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
-			pokemonCache.Delete(pokemon.Id)
+			pokemonCache.Delete(uint64(pokemon.Id))
 			return err
 		}
 	} else {
@@ -387,7 +387,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 		statsCollector.IncDbQuery("update pokemon", err)
 		if err != nil {
 			log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
-			pokemonCache.Delete(pokemon.Id)
+			pokemonCache.Delete(uint64(pokemon.Id))
 			return err
 		}
 	}
@@ -467,7 +467,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			SpawnpointId:          spawnpointId,
 			PokestopId:            pokestopId,
 			PokestopName:          pokestopName,
-			EncounterId:           strconv.FormatUint(pokemon.Id, 10),
+			EncounterId:           pokemon.Id.String(),
 			PokemonId:             pokemon.PokemonId,
 			Latitude:              pokemon.Lat,
 			Longitude:             pokemon.Lon,

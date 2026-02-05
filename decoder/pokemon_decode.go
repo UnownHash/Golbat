@@ -77,7 +77,7 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
-	if wildPokemon.EncounterId != pokemon.Id {
+	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
 	pokemon.SetLat(wildPokemon.Latitude)
@@ -160,7 +160,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	pokemon.SetIsEvent(0)
 
-	pokemon.Id = mapPokemon.EncounterId
+	pokemon.Id = Uint64Str(mapPokemon.EncounterId)
 
 	spawnpointId := mapPokemon.SpawnpointId
 
@@ -191,7 +191,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.ExpirationTimeMs / 1000))
 		pokemon.SetExpireTimestampVerified(true)
 		// if we have cached an encounter for this pokemon, update the TTL.
-		encounterCache.UpdateTTL(pokemon.Id, pokemon.remainingDuration(timestampMs/1000))
+		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.remainingDuration(timestampMs/1000))
 	} else {
 		pokemon.SetExpireTimestampVerified(false)
 	}

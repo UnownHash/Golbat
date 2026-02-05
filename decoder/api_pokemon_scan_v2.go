@@ -187,7 +187,7 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 		if pokemon != nil {
 			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
 				apiPokemon := pb.PokemonDetails{
-					Id:         pokemon.Id,
+					Id:         uint64(pokemon.Id),
 					PokestopId: pokemon.PokestopId.Ptr(),
 					SpawnId:    pokemon.SpawnId.Ptr(),
 					Lat:        pokemon.Lat,
