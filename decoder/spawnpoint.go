@@ -276,6 +276,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			spawnpointUpdate(ctx, db, spawnpoint)
 		} else {
 			spawnpointSeen(ctx, db, spawnpoint)
+			spawnpointUpdate(ctx, db, spawnpoint)
 		}
 		unlock()
 	}
@@ -351,15 +352,14 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint
 	// update at least every 6 hours (21600s). If reduce_updates is enabled, use 12 hours.
 	if now-spawnpoint.LastSeen > GetUpdateThreshold(21600) {
 		spawnpoint.SetLastSeen(now)
-
-		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
-			"SET last_seen=? "+
-			"WHERE id = ? ", now, spawnpoint.Id)
-		statsCollector.IncDbQuery("update spawnpoint", err)
-		if err != nil {
-			log.Printf("Error updating spawnpoint last seen %s", err)
-			return
-		}
+		//_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
+		//	"SET last_seen=? "+
+		//	"WHERE id = ? ", now, spawnpoint.Id)
+		//statsCollector.IncDbQuery("update spawnpoint", err)
+		//if err != nil {
+		//	log.Printf("Error updating spawnpoint last seen %s", err)
+		//	return
+		//}
 		// Cache already contains a pointer, no need to update
 	}
 }
