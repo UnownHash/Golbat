@@ -329,7 +329,7 @@ ON DUPLICATE KEY UPDATE
 
 const spawnpointBatchUpsertQuery = `
 INSERT INTO spawnpoint (
-	id, lat, lon, updated, despawn_sec
+	id, lat, lon, updated, last_seen, despawn_sec
 )
 VALUES (
 	:id, :lat, :lon, :updated, :last_seen, :despawn_sec
