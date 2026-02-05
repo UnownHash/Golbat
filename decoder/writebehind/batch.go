@@ -110,7 +110,7 @@ func (bw *BatchWriter) flushLocked() {
 		bw.stats.ObserveWriteBehindBatchSize(bw.tableType, float64(entryCount))
 		bw.stats.ObserveWriteBehindBatchTime(bw.tableType, batchTime)
 
-		log.Debugf("Write-behind batch wrote %d %s entries in %.1fms", entryCount, bw.tableType, batchTime*1000)
+		//log.Debugf("Write-behind batch wrote %d %s entries in %.1fms", entryCount, bw.tableType, batchTime*1000)
 	}
 
 	// Track batch metrics on the parent queue
