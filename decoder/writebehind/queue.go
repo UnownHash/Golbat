@@ -27,11 +27,18 @@ type Queue struct {
 	startTime      time.Time
 
 	// Metrics tracking (protected by metricsMu)
-	metricsMu      sync.Mutex
-	totalWriteTime float64 // sum of write durations in seconds
-	writeCount     int64   // number of writes completed
-	totalLatency   float64 // sum of latencies (ready to complete) in seconds
-	latencyCount   int64   // number of latency samples
+	metricsMu sync.Mutex
+	// Single write metrics
+	singleWriteCount   int64   // number of single entries written
+	singleWriteTime    float64 // sum of single write durations in seconds
+	singleLatency      float64 // sum of single write latencies in seconds
+	singleLatencyCount int64   // number of single latency samples
+	// Batch write metrics
+	batchCount        int64   // number of batches executed
+	batchEntryCount   int64   // total entries written via batches
+	batchWriteTime    float64 // sum of batch execution times in seconds
+	batchLatency      float64 // sum of batch entry latencies in seconds
+	batchLatencyCount int64   // number of batch latency samples
 
 	config QueueConfig
 	db     db.DbDetails
@@ -141,29 +148,62 @@ func (q *Queue) Size() int {
 	return len(q.pending)
 }
 
-// GetAndResetMetrics returns average write time and latency, then resets counters
-// Returns (avgWriteTime, avgLatency, count) - times in milliseconds
-func (q *Queue) GetAndResetMetrics() (float64, float64, int64) {
+// WriteMetrics holds the metrics returned by GetAndResetMetrics
+type WriteMetrics struct {
+	// Single write metrics
+	SingleEntryCount   int64   // number of entries written via single writes
+	SingleAvgWriteMs   float64 // average write time per single entry in milliseconds
+	SingleAvgLatencyMs float64 // average latency per single entry in milliseconds
+	// Batch write metrics
+	BatchCount        int64   // number of batches executed
+	BatchEntryCount   int64   // total entries written via batches
+	BatchAvgWriteMs   float64 // average time per batch in milliseconds
+	BatchAvgLatencyMs float64 // average latency per batch entry in milliseconds
+}
+
+// GetAndResetMetrics returns write metrics then resets counters
+func (q *Queue) GetAndResetMetrics() WriteMetrics {
 	q.metricsMu.Lock()
 	defer q.metricsMu.Unlock()
 
-	var avgWriteTime, avgLatency float64
-	count := q.writeCount
+	var singleAvgWrite, singleAvgLatency float64
+	var batchAvgWrite, batchAvgLatency float64
 
-	if q.writeCount > 0 {
-		avgWriteTime = (q.totalWriteTime / float64(q.writeCount)) * 1000 // convert to ms
+	if q.singleWriteCount > 0 {
+		singleAvgWrite = (q.singleWriteTime / float64(q.singleWriteCount)) * 1000
 	}
-	if q.latencyCount > 0 {
-		avgLatency = (q.totalLatency / float64(q.latencyCount)) * 1000 // convert to ms
+	if q.singleLatencyCount > 0 {
+		singleAvgLatency = (q.singleLatency / float64(q.singleLatencyCount)) * 1000
+	}
+	if q.batchCount > 0 {
+		batchAvgWrite = (q.batchWriteTime / float64(q.batchCount)) * 1000
+	}
+	if q.batchLatencyCount > 0 {
+		batchAvgLatency = (q.batchLatency / float64(q.batchLatencyCount)) * 1000
+	}
+
+	metrics := WriteMetrics{
+		SingleEntryCount:   q.singleWriteCount,
+		SingleAvgWriteMs:   singleAvgWrite,
+		SingleAvgLatencyMs: singleAvgLatency,
+		BatchCount:         q.batchCount,
+		BatchEntryCount:    q.batchEntryCount,
+		BatchAvgWriteMs:    batchAvgWrite,
+		BatchAvgLatencyMs:  batchAvgLatency,
 	}
 
 	// Reset counters
-	q.totalWriteTime = 0
-	q.writeCount = 0
-	q.totalLatency = 0
-	q.latencyCount = 0
+	q.singleWriteCount = 0
+	q.singleWriteTime = 0
+	q.singleLatency = 0
+	q.singleLatencyCount = 0
+	q.batchCount = 0
+	q.batchEntryCount = 0
+	q.batchWriteTime = 0
+	q.batchLatency = 0
+	q.batchLatencyCount = 0
 
-	return avgWriteTime, avgLatency, count
+	return metrics
 }
 
 // IsWarmupComplete returns true if the warmup period has elapsed
@@ -235,30 +275,30 @@ func (q *Queue) Flush() {
 	log.Info("Write-behind flush complete")
 }
 
-// writeEntry performs the actual database write for an entry
+// writeEntry performs the actual database write for an entry (single write path)
 func (q *Queue) writeEntry(entry *QueueEntry) {
 	start := time.Now()
 
 	err := entry.Entity.WriteToDB(q.db, entry.IsNewRecord)
 	writeTime := time.Since(start).Seconds()
 
+	entityType := entry.Entity.WriteType()
 	if err != nil {
-		q.stats.IncWriteBehindErrors(entry.Entity.WriteType())
+		q.stats.IncWriteBehindErrors(entityType)
 		log.Errorf("Write-behind error for %s: %v", entry.Key, err)
 	} else {
-		q.stats.IncWriteBehindWrites(entry.Entity.WriteType())
+		q.stats.IncWriteBehindWrites(entityType)
 	}
 
-	q.stats.ObserveWriteBehindLatency(entry.Entity.WriteType(), writeTime)
-
-	// Track metrics for status logging
 	// Latency is from when entry became ready (ReadyAt) to write completion
 	latency := time.Since(entry.ReadyAt).Seconds()
+	q.stats.ObserveWriteBehindLatency(entityType, latency)
 
+	// Track single write metrics for status logging
 	q.metricsMu.Lock()
-	q.totalWriteTime += writeTime
-	q.writeCount++
-	q.totalLatency += latency
-	q.latencyCount++
+	q.singleWriteCount++
+	q.singleWriteTime += writeTime
+	q.singleLatency += latency
+	q.singleLatencyCount++
 	q.metricsMu.Unlock()
 }

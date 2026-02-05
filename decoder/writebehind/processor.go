@@ -62,9 +62,11 @@ func (q *Queue) dispatcher(ctx context.Context) {
 		case <-statusTicker.C:
 			queueSize := q.Size()
 			channelLen := len(q.workChan)
-			avgWriteTime, avgLatency, writeCount := q.GetAndResetMetrics()
-			log.Infof("Write-behind queue: %d pending, %d in channel, %d writes (avg write: %.1fms, avg latency: %.1fms)",
-				queueSize, channelLen, writeCount, avgWriteTime, avgLatency)
+			metrics := q.GetAndResetMetrics()
+			log.Infof("Write-behind queue: %d pending, %d in channel | single: %d entries (avg write: %.1fms, avg latency: %.1fms) | batch: %d entries in %d batches (avg write: %.1fms, avg latency: %.1fms)",
+				queueSize, channelLen,
+				metrics.SingleEntryCount, metrics.SingleAvgWriteMs, metrics.SingleAvgLatencyMs,
+				metrics.BatchEntryCount, metrics.BatchCount, metrics.BatchAvgWriteMs, metrics.BatchAvgLatencyMs)
 		case <-ticker.C:
 			if q.checkWarmup() {
 				q.dispatchReady()

@@ -386,6 +386,32 @@ var (
 		},
 		[]string{"entity_type"},
 	)
+	writeBehindBatches = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "write_behind_batches_total",
+			Help:      "Total number of batches written by write-behind queue",
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindBatchSize = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "write_behind_batch_size",
+			Help:      "Number of entries per batch write",
+			Buckets:   []float64{1, 5, 10, 25, 50, 100, 250, 500, 1000},
+		},
+		[]string{"entity_type"},
+	)
+	writeBehindBatchTime = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "write_behind_batch_time_seconds",
+			Help:      "Time to execute a batch write in seconds",
+			Buckets:   []float64{.001, .005, .01, .025, .05, .1, .25, .5, 1, 2.5, 5, 10},
+		},
+		[]string{"entity_type"},
+	)
 
 	// S2Cell batch metrics
 	s2CellBatchSize = prometheus.NewGauge(
@@ -680,6 +706,18 @@ func (col *promCollector) ObserveWriteBehindLatency(entityType string, seconds f
 	writeBehindLatency.WithLabelValues(entityType).Observe(seconds)
 }
 
+func (col *promCollector) IncWriteBehindBatches(entityType string) {
+	writeBehindBatches.WithLabelValues(entityType).Inc()
+}
+
+func (col *promCollector) ObserveWriteBehindBatchSize(entityType string, size float64) {
+	writeBehindBatchSize.WithLabelValues(entityType).Observe(size)
+}
+
+func (col *promCollector) ObserveWriteBehindBatchTime(entityType string, seconds float64) {
+	writeBehindBatchTime.WithLabelValues(entityType).Observe(seconds)
+}
+
 func (col *promCollector) SetS2CellBatchSize(size int) {
 	s2CellBatchSize.Set(float64(size))
 }
@@ -702,6 +740,7 @@ func initPrometheus() {
 
 		writeBehindQueueDepth, writeBehindSquashed, writeBehindRateLimited,
 		writeBehindErrors, writeBehindWrites, writeBehindLatency,
+		writeBehindBatches, writeBehindBatchSize, writeBehindBatchTime,
 		s2CellBatchSize,
 	)
 }

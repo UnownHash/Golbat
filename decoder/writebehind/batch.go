@@ -94,27 +94,36 @@ func (bw *BatchWriter) flushLocked() {
 	start := time.Now()
 	ctx := context.Background()
 	err := bw.flushFunc(ctx, bw.db, entries)
-	writeTime := time.Since(start).Seconds()
+	batchTime := time.Since(start).Seconds()
+	entryCount := len(entries)
 
 	if err != nil {
 		bw.stats.IncWriteBehindErrors(bw.tableType)
-		log.Errorf("Write-behind batch error for %s (%d entries): %v", bw.tableType, len(entries), err)
+		log.Errorf("Write-behind batch error for %s (%d entries): %v", bw.tableType, entryCount, err)
 	} else {
 		// Increment write count by number of entries in batch
 		for range entries {
 			bw.stats.IncWriteBehindWrites(bw.tableType)
 		}
-		log.Debugf("Write-behind batch wrote %d %s entries in %.1fms", len(entries), bw.tableType, writeTime*1000)
+		// Record batch metrics in Prometheus
+		bw.stats.IncWriteBehindBatches(bw.tableType)
+		bw.stats.ObserveWriteBehindBatchSize(bw.tableType, float64(entryCount))
+		bw.stats.ObserveWriteBehindBatchTime(bw.tableType, batchTime)
+
+		log.Debugf("Write-behind batch wrote %d %s entries in %.1fms", entryCount, bw.tableType, batchTime*1000)
 	}
 
-	// Track metrics on the parent queue
+	// Track batch metrics on the parent queue
 	bw.queue.metricsMu.Lock()
-	bw.queue.totalWriteTime += writeTime
-	bw.queue.writeCount += int64(len(entries))
+	bw.queue.batchCount++
+	bw.queue.batchEntryCount += int64(entryCount)
+	bw.queue.batchWriteTime += batchTime
 	for _, entry := range entries {
 		latency := time.Since(entry.ReadyAt).Seconds()
-		bw.queue.totalLatency += latency
-		bw.queue.latencyCount++
+		bw.queue.batchLatency += latency
+		bw.queue.batchLatencyCount++
+		// Also record per-entry latency in Prometheus
+		bw.stats.ObserveWriteBehindLatency(bw.tableType, latency)
 	}
 	bw.queue.metricsMu.Unlock()
 

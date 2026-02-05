@@ -58,6 +58,9 @@ type StatsCollector interface {
 	IncWriteBehindErrors(entityType string)
 	IncWriteBehindWrites(entityType string)
 	ObserveWriteBehindLatency(entityType string, seconds float64)
+	IncWriteBehindBatches(entityType string)
+	ObserveWriteBehindBatchSize(entityType string, size float64)
+	ObserveWriteBehindBatchTime(entityType string, seconds float64)
 
 	// S2Cell batch metrics
 	SetS2CellBatchSize(size int)
