@@ -2,6 +2,7 @@ package writebehind
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -86,6 +87,11 @@ func (bw *BatchWriter) flushLocked() {
 	// Take ownership of entries slice
 	entries := bw.entries
 	bw.entries = make([]*QueueEntry, 0, bw.batchSize)
+
+	// Sort entries by key to ensure consistent lock ordering and prevent deadlocks
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Key < entries[j].Key
+	})
 
 	// Release lock before doing I/O
 	bw.mu.Unlock()

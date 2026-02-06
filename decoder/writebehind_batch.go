@@ -32,14 +32,14 @@ func flushPokestopBatch(ctx context.Context, dbDetails db.DbDetails, entries []*
 		pokestopBatchUpsertQuery,
 		pokestops,
 		func() func() {
-			// Lock all pokestops
+			// Lock all pokestops in sorted order
 			for _, p := range pokestops {
 				p.Lock()
 			}
-			// Return unlock function
+			// Return unlock function (unlock in reverse order)
 			return func() {
-				for _, p := range pokestops {
-					p.Unlock()
+				for i := len(pokestops) - 1; i >= 0; i-- {
+					pokestops[i].Unlock()
 				}
 			}
 		},
@@ -59,12 +59,14 @@ func flushGymBatch(ctx context.Context, dbDetails db.DbDetails, entries []*write
 		gymBatchUpsertQuery,
 		gyms,
 		func() func() {
+			// Lock all gyms in sorted order
 			for _, g := range gyms {
 				g.Lock()
 			}
+			// Return unlock function (unlock in reverse order)
 			return func() {
-				for _, g := range gyms {
-					g.Unlock()
+				for i := len(gyms) - 1; i >= 0; i-- {
+					gyms[i].Unlock()
 				}
 			}
 		},
@@ -84,12 +86,14 @@ func flushPokemonBatch(ctx context.Context, dbDetails db.DbDetails, entries []*w
 		pokemonBatchUpsertQuery,
 		pokemon,
 		func() func() {
+			// Lock all pokemon in sorted order
 			for _, p := range pokemon {
 				p.Lock()
 			}
+			// Return unlock function (unlock in reverse order)
 			return func() {
-				for _, p := range pokemon {
-					p.Unlock()
+				for i := len(pokemon) - 1; i >= 0; i-- {
+					pokemon[i].Unlock()
 				}
 			}
 		},
@@ -109,12 +113,14 @@ func flushSpawnpointBatch(ctx context.Context, dbDetails db.DbDetails, entries [
 		spawnpointBatchUpsertQuery,
 		spawnpoints,
 		func() func() {
+			// Lock all spawnpoints in sorted order
 			for _, s := range spawnpoints {
 				s.Lock()
 			}
+			// Return unlock function (unlock in reverse order)
 			return func() {
-				for _, s := range spawnpoints {
-					s.Unlock()
+				for i := len(spawnpoints) - 1; i >= 0; i-- {
+					spawnpoints[i].Unlock()
 				}
 			}
 		},
