@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"golbat/db"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -24,7 +24,7 @@ const spawnpointSelectColumns = `id, lat, lon, updated, last_seen, despawn_sec`
 // Spawnpoint struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu deadlock.Mutex `db:"-" json:"-"` // Object-level mutex
 
 	Id         int64    `db:"id"`
 	Lat        float64  `db:"lat"`

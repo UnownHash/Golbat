@@ -2,11 +2,11 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"golbat/grpc"
 
 	"github.com/guregu/null/v6"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Pokemon struct.
@@ -18,7 +18,7 @@ import (
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
 
 	Id                      Uint64Str   `db:"id"`
 	PokestopId              null.String `db:"pokestop_id"`

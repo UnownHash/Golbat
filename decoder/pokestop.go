@@ -2,14 +2,14 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Pokestop struct.
 type Pokestop struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
 
 	Id                            string      `db:"id"`
 	Lat                           float64     `db:"lat"`

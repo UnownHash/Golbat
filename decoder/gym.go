@@ -2,15 +2,15 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
+	"github.com/sasha-s/go-deadlock"
 )
 
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
 
 	Id                     string      `db:"id"`
 	Lat                    float64     `db:"lat"`
