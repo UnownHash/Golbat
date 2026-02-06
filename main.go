@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/pprof"
+	"runtime"
 	"sync"
 	"time"
 	_ "time/tzdata"
@@ -337,7 +338,7 @@ func main() {
 			pprof.Index(c.Writer, c.Request)
 		})
 		pprofGroup.GET("/block", func(c *gin.Context) {
-			pprof.Index(c.Writer, c.Request)
+			pprof.Handler("block").ServeHTTP(c.Writer, c.Request)
 		})
 		pprofGroup.GET("/mutex", func(c *gin.Context) {
 			pprof.Index(c.Writer, c.Request)
@@ -351,6 +352,11 @@ func main() {
 		pprofGroup.GET("/symbol", func(c *gin.Context) {
 			pprof.Symbol(c.Writer, c.Request)
 		})
+		pprofGroup.GET("/goroutine", func(c *gin.Context) {
+			pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request)
+		})
+		runtime.SetBlockProfileRate(1)
+		runtime.SetMutexProfileFraction(1)
 	}
 
 	srv := &http.Server{
