@@ -33,6 +33,23 @@ func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gy
 	return err
 }
 
+// DoesGymExist checks if a gym exists in cache or database without acquiring a lock.
+// This is useful for checking if a fort was converted from a gym before doing cross-entity updates.
+func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
+	// Check cache first (fast path)
+	if item := gymCache.Get(fortId); item != nil {
+		return true
+	}
+
+	// Check database
+	var exists bool
+	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM gym WHERE id = ?)", fortId)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
 // PeekGymRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func PeekGymRecord(fortId string) (*Gym, func(), error) {

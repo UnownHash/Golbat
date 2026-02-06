@@ -51,6 +51,23 @@ func PeekPokestopRecord(fortId string) (*Pokestop, func(), error) {
 	return nil, nil, nil
 }
 
+// DoesPokestopExist checks if a pokestop exists in cache or database without acquiring a lock.
+// This is useful for checking if a fort was converted from a pokestop before doing cross-entity updates.
+func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool {
+	// Check cache first (fast path)
+	if item := pokestopCache.Get(fortId); item != nil {
+		return true
+	}
+
+	// Check database
+	var exists bool
+	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
+	if err != nil {
+		return false
+	}
+	return exists
+}
+
 // getPokestopRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.

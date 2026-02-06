@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
@@ -219,58 +220,103 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	return status, output
 }
 
-// copySharedFieldsFrom copies shared fields from a pokestop to a gym during conversion
-func (gym *Gym) copySharedFieldsFrom(pokestop *Pokestop) {
-	if pokestop.Name.Valid && !gym.Name.Valid {
-		gym.SetName(pokestop.Name)
-	}
-	if pokestop.Url.Valid && !gym.Url.Valid {
-		gym.SetUrl(pokestop.Url)
-	}
-	if pokestop.Description.Valid && !gym.Description.Valid {
-		gym.SetDescription(pokestop.Description)
-	}
-	if pokestop.PartnerId.Valid && !gym.PartnerId.Valid {
-		gym.SetPartnerId(pokestop.PartnerId)
-	}
-	if pokestop.ArScanEligible.Valid && !gym.ArScanEligible.Valid {
-		gym.SetArScanEligible(pokestop.ArScanEligible)
-	}
-	if pokestop.PowerUpLevel.Valid && !gym.PowerUpLevel.Valid {
-		gym.SetPowerUpLevel(pokestop.PowerUpLevel)
-	}
-	if pokestop.PowerUpPoints.Valid && !gym.PowerUpPoints.Valid {
-		gym.SetPowerUpPoints(pokestop.PowerUpPoints)
-	}
-	if pokestop.PowerUpEndTimestamp.Valid && !gym.PowerUpEndTimestamp.Valid {
-		gym.SetPowerUpEndTimestamp(pokestop.PowerUpEndTimestamp)
+// SharedFortFields holds fields shared between gyms and pokestops for safe cross-entity copying.
+// This allows copying data without holding locks on both entities simultaneously.
+type SharedFortFields struct {
+	Name                null.String
+	Url                 null.String
+	Description         null.String
+	PartnerId           null.String
+	ArScanEligible      null.Int64
+	PowerUpLevel        null.Int64
+	PowerUpPoints       null.Int64
+	PowerUpEndTimestamp null.Int64
+}
+
+// GetSharedFields returns a copy of shared fields from a Gym.
+// Safe to call while holding the gym lock.
+func (gym *Gym) GetSharedFields() SharedFortFields {
+	return SharedFortFields{
+		Name:                gym.Name,
+		Url:                 gym.Url,
+		Description:         gym.Description,
+		PartnerId:           gym.PartnerId,
+		ArScanEligible:      gym.ArScanEligible,
+		PowerUpLevel:        gym.PowerUpLevel,
+		PowerUpPoints:       gym.PowerUpPoints,
+		PowerUpEndTimestamp: gym.PowerUpEndTimestamp,
 	}
 }
 
-// copySharedFieldsFrom copies shared fields from a gym to a pokestop during conversion
-func (stop *Pokestop) copySharedFieldsFrom(gym *Gym) {
-	if gym.Name.Valid && !stop.Name.Valid {
-		stop.SetName(gym.Name)
+// GetSharedFields returns a copy of shared fields from a Pokestop.
+// Safe to call while holding the pokestop lock.
+func (stop *Pokestop) GetSharedFields() SharedFortFields {
+	return SharedFortFields{
+		Name:                stop.Name,
+		Url:                 stop.Url,
+		Description:         stop.Description,
+		PartnerId:           stop.PartnerId,
+		ArScanEligible:      stop.ArScanEligible,
+		PowerUpLevel:        stop.PowerUpLevel,
+		PowerUpPoints:       stop.PowerUpPoints,
+		PowerUpEndTimestamp: stop.PowerUpEndTimestamp,
 	}
-	if gym.Url.Valid && !stop.Url.Valid {
-		stop.SetUrl(gym.Url)
+}
+
+// ApplySharedFields applies shared fields to a Gym if not already set.
+// Safe to call while holding only the gym lock.
+func (gym *Gym) ApplySharedFields(fields SharedFortFields) {
+	if fields.Name.Valid && !gym.Name.Valid {
+		gym.SetName(fields.Name)
 	}
-	if gym.Description.Valid && !stop.Description.Valid {
-		stop.SetDescription(gym.Description)
+	if fields.Url.Valid && !gym.Url.Valid {
+		gym.SetUrl(fields.Url)
 	}
-	if gym.PartnerId.Valid && !stop.PartnerId.Valid {
-		stop.SetPartnerId(gym.PartnerId)
+	if fields.Description.Valid && !gym.Description.Valid {
+		gym.SetDescription(fields.Description)
 	}
-	if gym.ArScanEligible.Valid && !stop.ArScanEligible.Valid {
-		stop.SetArScanEligible(gym.ArScanEligible)
+	if fields.PartnerId.Valid && !gym.PartnerId.Valid {
+		gym.SetPartnerId(fields.PartnerId)
 	}
-	if gym.PowerUpLevel.Valid && !stop.PowerUpLevel.Valid {
-		stop.SetPowerUpLevel(gym.PowerUpLevel)
+	if fields.ArScanEligible.Valid && !gym.ArScanEligible.Valid {
+		gym.SetArScanEligible(fields.ArScanEligible)
 	}
-	if gym.PowerUpPoints.Valid && !stop.PowerUpPoints.Valid {
-		stop.SetPowerUpPoints(gym.PowerUpPoints)
+	if fields.PowerUpLevel.Valid && !gym.PowerUpLevel.Valid {
+		gym.SetPowerUpLevel(fields.PowerUpLevel)
 	}
-	if gym.PowerUpEndTimestamp.Valid && !stop.PowerUpEndTimestamp.Valid {
-		stop.SetPowerUpEndTimestamp(gym.PowerUpEndTimestamp)
+	if fields.PowerUpPoints.Valid && !gym.PowerUpPoints.Valid {
+		gym.SetPowerUpPoints(fields.PowerUpPoints)
+	}
+	if fields.PowerUpEndTimestamp.Valid && !gym.PowerUpEndTimestamp.Valid {
+		gym.SetPowerUpEndTimestamp(fields.PowerUpEndTimestamp)
+	}
+}
+
+// ApplySharedFields applies shared fields to a Pokestop if not already set.
+// Safe to call while holding only the pokestop lock.
+func (stop *Pokestop) ApplySharedFields(fields SharedFortFields) {
+	if fields.Name.Valid && !stop.Name.Valid {
+		stop.SetName(fields.Name)
+	}
+	if fields.Url.Valid && !stop.Url.Valid {
+		stop.SetUrl(fields.Url)
+	}
+	if fields.Description.Valid && !stop.Description.Valid {
+		stop.SetDescription(fields.Description)
+	}
+	if fields.PartnerId.Valid && !stop.PartnerId.Valid {
+		stop.SetPartnerId(fields.PartnerId)
+	}
+	if fields.ArScanEligible.Valid && !stop.ArScanEligible.Valid {
+		stop.SetArScanEligible(fields.ArScanEligible)
+	}
+	if fields.PowerUpLevel.Valid && !stop.PowerUpLevel.Valid {
+		stop.SetPowerUpLevel(fields.PowerUpLevel)
+	}
+	if fields.PowerUpPoints.Valid && !stop.PowerUpPoints.Valid {
+		stop.SetPowerUpPoints(fields.PowerUpPoints)
+	}
+	if fields.PowerUpEndTimestamp.Valid && !stop.PowerUpEndTimestamp.Valid {
+		stop.SetPowerUpEndTimestamp(fields.PowerUpEndTimestamp)
 	}
 }

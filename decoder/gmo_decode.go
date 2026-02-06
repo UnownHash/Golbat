@@ -28,18 +28,31 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			}
 
 			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
-
-			// If this is a new pokestop, check if it was converted from a gym and copy shared fields
-			if pokestop.IsNewRecord() {
-				gym, gymUnlock, _ := GetGymRecordReadOnly(ctx, db, fortId)
-				if gym != nil {
-					pokestop.copySharedFieldsFrom(gym)
-					gymUnlock()
-				}
-			}
+			isNewRecord := pokestop.IsNewRecord()
 
 			savePokestopRecord(ctx, db, pokestop)
 			unlock()
+
+			// If this was a new pokestop, check if it was converted from a gym and copy shared fields.
+			// To avoid deadlock, we do this after releasing the pokestop lock.
+			if isNewRecord && DoesGymExist(ctx, db, fortId) {
+				// Get shared fields from gym (with gym lock only)
+				gym, gymUnlock, _ := GetGymRecordReadOnly(ctx, db, fortId)
+				if gym != nil {
+					sharedFields := gym.GetSharedFields()
+					gymUnlock()
+
+					// Re-acquire pokestop lock to apply shared fields
+					pokestop, unlock, err = getPokestopRecordForUpdate(ctx, db, fortId)
+					if err != nil {
+						log.Errorf("getPokestopRecordForUpdate (shared fields): %s", err)
+					} else if pokestop != nil {
+						pokestop.ApplySharedFields(sharedFields)
+						savePokestopRecord(ctx, db, pokestop)
+						unlock()
+					}
+				}
+			}
 
 			incidents := fort.Data.PokestopDisplays
 			if incidents == nil && fort.Data.PokestopDisplay != nil {
@@ -68,18 +81,31 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			}
 
 			gym.updateGymFromFort(fort.Data, fort.Cell)
-
-			// If this is a new gym, check if it was converted from a pokestop and copy shared fields
-			if gym.IsNewRecord() {
-				pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId)
-				if pokestop != nil {
-					gym.copySharedFieldsFrom(pokestop)
-					unlock()
-				}
-			}
+			isNewRecord := gym.IsNewRecord()
 
 			saveGymRecord(ctx, db, gym)
 			gymUnlock()
+
+			// If this was a new gym, check if it was converted from a pokestop and copy shared fields.
+			// To avoid deadlock, we do this after releasing the gym lock.
+			if isNewRecord && DoesPokestopExist(ctx, db, fortId) {
+				// Get shared fields from pokestop (with pokestop lock only)
+				pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId)
+				if pokestop != nil {
+					sharedFields := pokestop.GetSharedFields()
+					unlock()
+
+					// Re-acquire gym lock to apply shared fields
+					gym, gymUnlock, err = getGymRecordForUpdate(ctx, db, fortId)
+					if err != nil {
+						log.Errorf("getGymRecordForUpdate (shared fields): %s", err)
+					} else if gym != nil {
+						gym.ApplySharedFields(sharedFields)
+						saveGymRecord(ctx, db, gym)
+						gymUnlock()
+					}
+				}
+			}
 		}
 	}
 }
