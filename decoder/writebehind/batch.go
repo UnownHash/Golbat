@@ -16,7 +16,7 @@ import (
 // BatchWriter handles batched writes for a specific table type
 type BatchWriter struct {
 	mu        sync.Mutex
-	entries   []*QueueEntry
+	pending   map[string]*QueueEntry // key -> entry for deduplication
 	timer     *time.Timer
 	batchSize int
 	timeout   time.Duration
@@ -41,7 +41,7 @@ type BatchWriterConfig struct {
 // NewBatchWriter creates a new batch writer for a table type
 func NewBatchWriter(cfg BatchWriterConfig) *BatchWriter {
 	return &BatchWriter{
-		entries:   make([]*QueueEntry, 0, cfg.BatchSize),
+		pending:   make(map[string]*QueueEntry),
 		batchSize: cfg.BatchSize,
 		timeout:   cfg.Timeout,
 		flushFunc: cfg.FlushFunc,
@@ -52,21 +52,34 @@ func NewBatchWriter(cfg BatchWriterConfig) *BatchWriter {
 	}
 }
 
-// Add adds an entry to the batch, flushing if batch is full
+// Add adds an entry to the batch, flushing if batch is full.
+// Deduplicates by key - if the same key is added twice, the newer entry replaces the older one.
 func (bw *BatchWriter) Add(entry *QueueEntry) {
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
 
-	bw.entries = append(bw.entries, entry)
+	if existing, ok := bw.pending[entry.Key]; ok {
+		// Deduplicate: replace with newer entry, preserve IsNewRecord if either is true
+		entry.IsNewRecord = entry.IsNewRecord || existing.IsNewRecord
+		// Keep the earlier QueuedAt for latency tracking
+		if existing.QueuedAt.Before(entry.QueuedAt) {
+			entry.QueuedAt = existing.QueuedAt
+		}
+		if existing.ReadyAt.Before(entry.ReadyAt) {
+			entry.ReadyAt = existing.ReadyAt
+		}
+		bw.queue.stats.IncWriteBehindSquashed(bw.tableType)
+	}
+	bw.pending[entry.Key] = entry
 
-	if len(bw.entries) >= bw.batchSize {
+	if len(bw.pending) >= bw.batchSize {
 		bw.flushLocked()
 	} else if bw.timer == nil {
 		// Start timeout for partial batch
 		bw.timer = time.AfterFunc(bw.timeout, func() {
 			bw.mu.Lock()
 			defer bw.mu.Unlock()
-			if len(bw.entries) > 0 {
+			if len(bw.pending) > 0 {
 				bw.flushLocked()
 			}
 		})
@@ -80,13 +93,16 @@ func (bw *BatchWriter) flushLocked() {
 		bw.timer = nil
 	}
 
-	if len(bw.entries) == 0 {
+	if len(bw.pending) == 0 {
 		return
 	}
 
-	// Take ownership of entries slice
-	entries := bw.entries
-	bw.entries = make([]*QueueEntry, 0, bw.batchSize)
+	// Convert map to slice and sort by key for consistent lock ordering
+	entries := make([]*QueueEntry, 0, len(bw.pending))
+	for _, entry := range bw.pending {
+		entries = append(entries, entry)
+	}
+	bw.pending = make(map[string]*QueueEntry)
 
 	// Sort entries by key to ensure consistent lock ordering and prevent deadlocks
 	sort.Slice(entries, func(i, j int) bool {
@@ -141,7 +157,7 @@ func (bw *BatchWriter) flushLocked() {
 func (bw *BatchWriter) Flush() {
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
-	if len(bw.entries) > 0 {
+	if len(bw.pending) > 0 {
 		bw.flushLocked()
 	}
 }
@@ -150,7 +166,7 @@ func (bw *BatchWriter) Flush() {
 func (bw *BatchWriter) Size() int {
 	bw.mu.Lock()
 	defer bw.mu.Unlock()
-	return len(bw.entries)
+	return len(bw.pending)
 }
 
 // ExecuteBatchUpsert builds and executes a batch upsert using sqlx.Named
