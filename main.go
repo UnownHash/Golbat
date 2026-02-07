@@ -231,7 +231,7 @@ func main() {
 		log.Info("Extended timeout enabled")
 	}
 
-	if cfg.Cleanup.Pokemon == true && !cfg.PokemonMemoryOnly {
+	if cfg.Cleanup.Pokemon && (!cfg.PokemonMemoryOnly || cfg.PreserveInMemoryPokemon) {
 		StartDatabaseArchiver(db)
 	}
 
