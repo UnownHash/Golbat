@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"golbat/db"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/sasha-s/go-deadlock"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -35,7 +35,7 @@ type SpawnpointData struct {
 // Spawnpoint struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
-	mu deadlock.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
 
 	SpawnpointData // Embedded data fields - can be copied for write-behind queue
 

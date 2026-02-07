@@ -2,11 +2,11 @@ package decoder
 
 import (
 	"fmt"
+	"sync"
 
 	"golbat/grpc"
 
 	"github.com/guregu/null/v6"
-	"github.com/sasha-s/go-deadlock"
 )
 
 // PokemonData contains all database-persisted fields for Pokemon.
@@ -62,7 +62,7 @@ type PokemonData struct {
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
 	PokemonData // Embedded data fields - can be copied for write-behind queue
 

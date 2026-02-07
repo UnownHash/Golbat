@@ -2,9 +2,9 @@ package decoder
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/guregu/null/v6"
-	"github.com/sasha-s/go-deadlock"
 )
 
 // PokestopData contains all database-persisted fields for Pokestop.
@@ -67,7 +67,7 @@ type PokestopData struct {
 
 // Pokestop struct.
 type Pokestop struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
 	PokestopData // Embedded data fields - can be copied for write-behind queue
 

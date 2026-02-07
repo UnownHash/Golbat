@@ -2,9 +2,9 @@ package decoder
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/guregu/null/v6"
-	"github.com/sasha-s/go-deadlock"
 )
 
 // GymData contains all database-persisted fields for a Gym.
@@ -56,7 +56,7 @@ type GymData struct {
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
+	mu sync.Mutex `db:"-"` // Object-level mutex
 
 	GymData // Embedded data fields (all db columns)
 
