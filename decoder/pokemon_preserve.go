@@ -16,6 +16,19 @@ import (
 // preserveBatchSize is the number of pokemon to write per batch
 const preserveBatchSize = 1000
 
+// skipPreservePokemon is set via API to prevent PreservePokemonToDatabase on shutdown
+var skipPreservePokemon atomic.Bool
+
+// SetSkipPreservePokemon sets the flag to skip pokemon preservation on shutdown
+func SetSkipPreservePokemon(skip bool) {
+	skipPreservePokemon.Store(skip)
+}
+
+// ShouldPreservePokemon returns true if preservation should be performed
+func ShouldPreservePokemon() bool {
+	return !skipPreservePokemon.Load()
+}
+
 // PreservePokemonToDatabase writes all non-expired pokemon from cache to database.
 // Called during shutdown when preserve_pokemon is enabled.
 // Does not take locks since cache is no longer being modified at shutdown.

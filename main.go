@@ -330,6 +330,8 @@ func main() {
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
 	apiGroup.GET("/devices/all", GetDevices)
+	apiGroup.GET("/skip-preserve-pokemon", SkipPreservePokemon)
+	apiGroup.POST("/skip-preserve-pokemon", SkipPreservePokemon)
 
 	debugGroup := r.Group("/debug")
 
@@ -410,10 +412,14 @@ func main() {
 	log.Info("go routines have exited, flushing write-behind queue...")
 	decoder.FlushWriteBehindQueue()
 
-	// Preserve in-memory pokemon if enabled
+	// Preserve in-memory pokemon if enabled and not skipped via API
 	if cfg.PreserveInMemoryPokemon && cfg.PokemonMemoryOnly {
-		log.Info("preserving in-memory pokemon to database...")
-		decoder.PreservePokemonToDatabase(dbDetails)
+		if decoder.ShouldPreservePokemon() {
+			log.Info("preserving in-memory pokemon to database...")
+			decoder.PreservePokemonToDatabase(dbDetails)
+		} else {
+			log.Info("skipping pokemon preservation (disabled via API)")
+		}
 	}
 
 	log.Info("flushing webhooks now...")

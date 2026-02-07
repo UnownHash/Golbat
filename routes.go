@@ -808,3 +808,10 @@ func GetTappable(c *gin.Context) {
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
 }
+
+// SkipPreservePokemon sets a flag to prevent pokemon preservation on shutdown
+func SkipPreservePokemon(c *gin.Context) {
+	decoder.SetSkipPreservePokemon(true)
+	log.Info("Skip preserve pokemon flag set - pokemon will not be preserved on shutdown")
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Pokemon preservation will be skipped on shutdown"})
+}
