@@ -1,14 +1,11 @@
 port = 9001             # Listening port for golbat
-#grpc_port = 50001       # Listening port for grpc
+#grpc_port = 50001      # Listening port for grpc
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
-pokemon_memory_only = false  # Use in-memory storage for pokemon only
-
-# preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
-# fort_in_memory: Keep forts in memory with rtree for spatial lookups
-preload = false
-fort_in_memory = false
+pokemon_memory_only = true  # Use in-memory storage for pokemon only
+preload = false         # preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
+fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [experimental]
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
@@ -27,24 +24,28 @@ forts_stale_threshold = 3600    # Seconds before a fort is considered stale (def
 [logging]
 debug = false
 save_logs = true
-max_size = 50           # Size in MB
-max_backups = 10        # Amount of files to keep
-max_age = 30            # Day(s) to keep files
-compress = true         # Compress to gz archive
+max_size = 50                   # Size in MB
+max_backups = 10                # Amount of files to keep
+max_age = 30                    # Day(s) to keep files
+compress = true                 # Compress to gz archive
 
 [database]
 user = ""
 password = ""
 address = "127.0.0.1:3306"
 db = ""
+max_pool = 100                  # Maximum database connection pool size
 
 [pvp]
 enabled = true
 include_hundos_under_cap = false
+level_caps = [50, 51]           # Level caps used in PVP rankings
+#ranking_comparator = "prefer_higher_cp"  # Options: "prefer_higher_cp", "prefer_lower_cp" (default: tied rankings)
 
 # you can enable prometheus by uncommenting this section
 #[prometheus]
 #enabled = true
+#token = ""                 # Optional auth token for /metrics endpoint
 
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array
@@ -69,16 +70,39 @@ url = "http://localhost:4201"
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
 extended_timeout = false    # Extend timeouts for processing, hopefully not needed
+write_behind_startup_delay = 120    # Writes will be queued for this quiet time
+write_behind_worker_count = 50      # Maximum number of parallel batch writes
+write_behind_batch_size = 50        # Number of entries per batch write
+write_behind_batch_timeout = 100    # Max wait time in ms before flushing partial batch
 profile_routes = false      # Turn on debugging endpoints
+profile_contention = false  # Collect data for contention (use with above) - has a perf impact
 
 # When enabled, reduce_updates will make fort update debounce windows much longer
 # to reduce database churn. Specifically, gym/pokestop/station debounce will be
 # extended from 15 minutes (900s) to 12 hours (43200s) and spawnpoint last_seen
 # will be updated every 12 hours instead of the default 6 hours.
 reduce_updates = false
-write_behind_startup_delay = 120
-write_behind_worker_count = 50
 
 [weather]
 proactive_iv_switching = true       # Enable proactive IV switching upon weather changes (default: true)
 proactive_iv_switching_to_db = false # Write proactive IV changes to database (default: false)
+
+# Scan rules allow controlling which game objects are processed based on area or scanner context.
+# Rules are processed in order - first match applies.
+# Available options: pokemon, wild_pokemon, nearby_pokemon, nearby_cell_pokemon, weather, cells,
+#                   pokestops, gyms, stations, tappables, proactive_iv_switching
+#
+# Example: Disable nearby pokemon in MainArea, allow everything from Scout context, disable all pokemon elsewhere
+
+# Under heavy load you will gain an advantage from disabling nearby_pokemon
+# Contexts sent from dragonite are Fort, Pokemon, Quest, Scout, RarePokemon
+
+#[[scan_rules]]
+#areas = ["MainArea"]
+#nearby_pokemon = false
+#
+#[[scan_rules]]
+#context = ["Scout"]
+#
+#[[scan_rules]]
+#pokemon = false

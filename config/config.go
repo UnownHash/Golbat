@@ -124,6 +124,7 @@ type tuning struct {
 	MaxPokemonResults              int     `koanf:"max_pokemon_results"`
 	MaxPokemonDistance             float64 `koanf:"max_pokemon_distance"`
 	ProfileRoutes                  bool    `koanf:"profile_routes"`
+	ProfileContention              bool    `koanf:"profile_contention"` // Enable mutex/block profiling (has overhead)
 	MaxConcurrentProactiveIVSwitch int     `koanf:"max_concurrent_proactive_iv_switch"`
 	ReduceUpdates                  bool    `koanf:"reduce_updates"`
 	WriteBehindStartupDelay        int     `koanf:"write_behind_startup_delay"` // seconds, default: 120

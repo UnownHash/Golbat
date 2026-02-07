@@ -354,8 +354,10 @@ func main() {
 		pprofGroup.GET("/goroutine", func(c *gin.Context) {
 			pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request)
 		})
-		runtime.SetBlockProfileRate(1)
-		runtime.SetMutexProfileFraction(1)
+		if config.Config.Tuning.ProfileContention {
+			runtime.SetBlockProfileRate(1)
+			runtime.SetMutexProfileFraction(1)
+		}
 	}
 
 	srv := &http.Server{
