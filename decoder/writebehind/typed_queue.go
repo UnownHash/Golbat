@@ -190,7 +190,7 @@ func (q *TypedQueue[K, T]) ProcessLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			log.Infof("Write-behind [%s] shutting down, flushing...", q.name)
-			q.Flush(ctx)
+			q.Flush(context.Background())
 			return
 		case <-ticker.C:
 			if q.checkWarmup() {
