@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/util"
 )
 
 // PokestopData contains all database-persisted fields for Pokestop.
@@ -216,6 +218,12 @@ func (p *Pokestop) SetLon(v float64) {
 }
 
 func (p *Pokestop) SetName(v null.String) {
+	// Truncate to 128 runes to fit database column
+	if v.Valid {
+		if truncated, changed := util.TruncateUTF8(v.String, 128); changed {
+			v = null.StringFrom(truncated)
+		}
+	}
 	if p.Name != v {
 		if dbDebugEnabled {
 			p.changedFields = append(p.changedFields, fmt.Sprintf("Name:%s->%s", FormatNull(p.Name), FormatNull(v)))

@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/util"
 )
 
 // GymData contains all database-persisted fields for a Gym.
@@ -170,6 +172,12 @@ func (gym *Gym) SetLon(v float64) {
 }
 
 func (gym *Gym) SetName(v null.String) {
+	// Truncate to 128 runes to fit database column
+	if v.Valid {
+		if truncated, changed := util.TruncateUTF8(v.String, 128); changed {
+			v = null.StringFrom(truncated)
+		}
+	}
 	if gym.Name != v {
 		if dbDebugEnabled {
 			gym.changedFields = append(gym.changedFields, fmt.Sprintf("Name:%s->%s", FormatNull(gym.Name), FormatNull(v)))
