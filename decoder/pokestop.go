@@ -7,10 +7,9 @@ import (
 	"github.com/sasha-s/go-deadlock"
 )
 
-// Pokestop struct.
-type Pokestop struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
-
+// PokestopData contains all database-persisted fields for Pokestop.
+// This struct is embedded in Pokestop and can be safely copied for write-behind queueing.
+type PokestopData struct {
 	Id                            string      `db:"id"`
 	Lat                           float64     `db:"lat"`
 	Lon                           float64     `db:"lon"`
@@ -64,6 +63,13 @@ type Pokestop struct {
 	ShowcaseRankingStandard       null.Int    `db:"showcase_ranking_standard"`
 	ShowcaseExpiry                null.Int    `db:"showcase_expiry"`
 	ShowcaseRankings              null.String `db:"showcase_rankings"`
+}
+
+// Pokestop struct.
+type Pokestop struct {
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
+
+	PokestopData // Embedded data fields - can be copied for write-behind queue
 
 	// Memory-only fields (not persisted to DB)
 	QuestSeed            null.Int `db:"-"` // Quest seed for AR quest (memory only, sent in webhook)

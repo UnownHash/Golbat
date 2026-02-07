@@ -161,7 +161,7 @@ func TestWebhooksFull(t *testing.T) {
 		defer wg.Done()
 		err := sender.Run(ctx)
 		if err != nil {
-			t.Fatalf("unexpected error starting webhooksSender: %s", err)
+			t.Errorf("unexpected error starting webhooksSender: %s", err)
 		}
 	}()
 

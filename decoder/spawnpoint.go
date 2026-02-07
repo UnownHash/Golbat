@@ -21,17 +21,23 @@ import (
 // Used by both single-row and bulk load queries to keep them in sync.
 const spawnpointSelectColumns = `id, lat, lon, updated, last_seen, despawn_sec`
 
-// Spawnpoint struct.
-// REMINDER! Dirty flag pattern - use setter methods to modify fields
-type Spawnpoint struct {
-	mu deadlock.Mutex `db:"-" json:"-"` // Object-level mutex
-
+// SpawnpointData contains all database-persisted fields for Spawnpoint.
+// This struct is embedded in Spawnpoint and can be safely copied for write-behind queueing.
+type SpawnpointData struct {
 	Id         int64    `db:"id"`
 	Lat        float64  `db:"lat"`
 	Lon        float64  `db:"lon"`
 	Updated    int64    `db:"updated"`
 	LastSeen   int64    `db:"last_seen"`
 	DespawnSec null.Int `db:"despawn_sec"`
+}
+
+// Spawnpoint struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Spawnpoint struct {
+	mu deadlock.Mutex `db:"-" json:"-"` // Object-level mutex
+
+	SpawnpointData // Embedded data fields - can be copied for write-behind queue
 
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
@@ -211,7 +217,7 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, func(), error) {
 	// Create new Spawnpoint atomically - function only called if key doesn't exist
 	spawnpointItem, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
-		return &Spawnpoint{Id: spawnpointId, newRecord: true}
+		return &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnpointId}, newRecord: true}
 	})
 
 	spawnpoint := spawnpointItem.Value()
@@ -303,9 +309,9 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 		}
 	}
 
-	// Queue the write through the write-behind system (no delay for spawnpoints)
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(spawnpoint, isNewRecord, 0)
+	// Queue the write through the typed write-behind queue (no delay for spawnpoints)
+	if spawnpointQueue != nil {
+		spawnpointQueue.Enqueue(spawnpoint.SpawnpointData, isNewRecord, 0)
 	} else {
 		// Fallback to direct write if queue not initialized
 		_ = spawnpointWriteDB(db, spawnpoint)

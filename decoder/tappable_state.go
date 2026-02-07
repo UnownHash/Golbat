@@ -70,7 +70,7 @@ func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64) 
 func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, func(), error) {
 	// Create new Tappable atomically - function only called if key doesn't exist
 	tappableItem, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
-		return &Tappable{Id: id, newRecord: true}
+		return &Tappable{TappableData: TappableData{Id: id}, newRecord: true}
 	})
 
 	tappable := tappableItem.Value()
@@ -115,9 +115,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		}
 	}
 
-	// Queue the write through the write-behind system
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(tappable, isNewRecord, 0)
+	// Queue the write through the typed write-behind queue
+	if tappableQueue != nil {
+		tappableQueue.Enqueue(tappable.TappableData, isNewRecord, 0)
 	} else {
 		// Fallback to direct write if queue not initialized
 		_ = tappableWriteDB(details, tappable, isNewRecord)

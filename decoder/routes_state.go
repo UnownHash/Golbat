@@ -78,7 +78,7 @@ func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId strin
 func getOrCreateRouteRecord(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
 	// Create new Route atomically - function only called if key doesn't exist
 	routeItem, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
-		return &Route{Id: routeId, newRecord: true}
+		return &Route{RouteData: RouteData{Id: routeId}, newRecord: true}
 	})
 
 	route := routeItem.Value()
@@ -126,9 +126,9 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 		}
 	}
 
-	// Queue the write through the write-behind system
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(route, isNewRecord, 0)
+	// Queue the write through the typed write-behind queue
+	if routeQueue != nil {
+		routeQueue.Enqueue(route.RouteData, isNewRecord, 0)
 	} else {
 		// Fallback to direct write if queue not initialized
 		if err := routeWriteDB(db, route, isNewRecord); err != nil {

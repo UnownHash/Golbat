@@ -2,129 +2,260 @@ package decoder
 
 import (
 	"context"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 
+	"golbat/config"
 	"golbat/db"
 	"golbat/decoder/writebehind"
+	"golbat/stats_collector"
 )
 
-// RegisterBatchWriters registers all batch writers with the write-behind queue
-func RegisterBatchWriters(queue *writebehind.Queue) {
-	queue.RegisterBatchWriter("pokestop", flushPokestopBatch)
-	queue.RegisterBatchWriter("gym", flushGymBatch)
-	queue.RegisterBatchWriter("pokemon", flushPokemonBatch)
-	queue.RegisterBatchWriter("spawnpoint", flushSpawnpointBatch)
-
-	log.Info("Write-behind batch writers registered for: pokestop, gym, pokemon, spawnpoint")
+// S2CellData holds the data needed for an S2Cell write
+type S2CellData struct {
+	Id        uint64  `db:"id"`
+	Latitude  float64 `db:"center_lat"`
+	Longitude float64 `db:"center_lon"`
+	Level     int64   `db:"level"`
+	Updated   int64   `db:"updated"`
 }
 
-// flushPokestopBatch writes a batch of pokestops using INSERT ... ON DUPLICATE KEY UPDATE
-func flushPokestopBatch(ctx context.Context, dbDetails db.DbDetails, entries []*writebehind.QueueEntry) error {
-	pokestops := make([]*Pokestop, len(entries))
-	for i, e := range entries {
-		pokestops[i] = e.Entity.(*Pokestop)
+// Typed queues for each entity type - using native key types for efficiency
+var (
+	pokestopQueue   *writebehind.TypedQueue[string, PokestopData]
+	gymQueue        *writebehind.TypedQueue[string, GymData]
+	pokemonQueue    *writebehind.TypedQueue[uint64, PokemonData]
+	spawnpointQueue *writebehind.TypedQueue[int64, SpawnpointData]
+	routeQueue      *writebehind.TypedQueue[string, RouteData]
+	tappableQueue   *writebehind.TypedQueue[uint64, TappableData]
+	stationQueue    *writebehind.TypedQueue[string, StationData]
+	incidentQueue   *writebehind.TypedQueue[string, IncidentData]
+	s2cellQueue     *writebehind.TypedQueue[uint64, S2CellData]
+
+	// QueueManager coordinates all queues
+	queueManager *writebehind.QueueManager
+)
+
+// InitTypedQueues initializes all typed write-behind queues
+func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_collector.StatsCollector) {
+	startupDelay := config.Config.Tuning.WriteBehindStartupDelay
+	batchSize := config.Config.Tuning.WriteBehindBatchSize
+	batchTimeout := time.Duration(config.Config.Tuning.WriteBehindBatchTimeoutMs) * time.Millisecond
+	workerCount := config.Config.Tuning.WriteBehindWorkerCount
+
+	if batchSize <= 0 {
+		batchSize = 50
+	}
+	if batchTimeout <= 0 {
+		batchTimeout = 100 * time.Millisecond
+	}
+	if workerCount <= 0 {
+		workerCount = 50
 	}
 
-	return writebehind.ExecuteBatchUpsert(
-		ctx,
-		dbDetails.GeneralDb,
-		pokestopBatchUpsertQuery,
-		pokestops,
-		func() func() {
-			// Lock all pokestops in sorted order
-			for _, p := range pokestops {
-				p.Lock()
-			}
-			// Return unlock function (unlock in reverse order)
-			return func() {
-				for i := len(pokestops) - 1; i >= 0; i-- {
-					pokestops[i].Unlock()
-				}
-			}
-		},
-	)
+	// Shared limiter coordinates concurrency across all queues
+	limiter := writebehind.NewSharedLimiter(workerCount)
+
+	// Create queue manager
+	queueManager = writebehind.NewQueueManager(startupDelay)
+
+	// Create typed queues for each entity type - using native key types
+	pokestopQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, PokestopData]{
+		Name:                "pokestop",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushPokestopBatch,
+		KeyFunc:             func(d PokestopData) string { return d.Id },
+	})
+	queueManager.Register(pokestopQueue)
+
+	gymQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, GymData]{
+		Name:                "gym",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushGymBatch,
+		KeyFunc:             func(d GymData) string { return d.Id },
+	})
+	queueManager.Register(gymQueue)
+
+	pokemonQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[uint64, PokemonData]{
+		Name:                "pokemon",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushPokemonBatchTyped,
+		KeyFunc:             func(d PokemonData) uint64 { return uint64(d.Id) },
+	})
+	queueManager.Register(pokemonQueue)
+
+	spawnpointQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[int64, SpawnpointData]{
+		Name:                "spawnpoint",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushSpawnpointBatch,
+		KeyFunc:             func(d SpawnpointData) int64 { return d.Id },
+	})
+	queueManager.Register(spawnpointQueue)
+
+	routeQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, RouteData]{
+		Name:                "route",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushRouteBatch,
+		KeyFunc:             func(d RouteData) string { return d.Id },
+	})
+	queueManager.Register(routeQueue)
+
+	tappableQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[uint64, TappableData]{
+		Name:                "tappable",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushTappableBatch,
+		KeyFunc:             func(d TappableData) uint64 { return d.Id },
+	})
+	queueManager.Register(tappableQueue)
+
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
+		Name:                "station",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushStationBatch,
+		KeyFunc:             func(d StationData) string { return d.Id },
+	})
+	queueManager.Register(stationQueue)
+
+	incidentQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, IncidentData]{
+		Name:                "incident",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushIncidentBatch,
+		KeyFunc:             func(d IncidentData) string { return d.Id },
+	})
+	queueManager.Register(incidentQueue)
+
+	s2cellQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[uint64, S2CellData]{
+		Name:                "s2cell",
+		BatchSize:           100,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushS2CellBatch,
+		KeyFunc:             func(d S2CellData) uint64 { return d.Id },
+	})
+	queueManager.Register(s2cellQueue)
+
+	log.Infof("Typed write-behind queues initialized: startup_delay=%ds, batch_size=%d, batch_timeout=%dms, max_concurrent=%d",
+		startupDelay, batchSize, batchTimeout.Milliseconds(), workerCount)
+
+	// Warn if concurrency exceeds half of database pool size
+	maxPool := config.Config.Database.MaxPool
+	if workerCount > maxPool/2 {
+		log.Warnf("Write-behind concurrency (%d) exceeds half of database pool size (%d). "+
+			"Consider increasing database.max_pool or reducing tuning.write_behind_worker_count",
+			workerCount, maxPool)
+	}
+
+	// Start the queue manager
+	queueManager.Start(ctx)
 }
 
-// flushGymBatch writes a batch of gyms using INSERT ... ON DUPLICATE KEY UPDATE
-func flushGymBatch(ctx context.Context, dbDetails db.DbDetails, entries []*writebehind.QueueEntry) error {
-	gyms := make([]*Gym, len(entries))
-	for i, e := range entries {
-		gyms[i] = e.Entity.(*Gym)
+// FlushTypedQueues flushes all typed queues (for shutdown)
+func FlushTypedQueues() {
+	if queueManager != nil {
+		queueManager.Flush()
 	}
-
-	return writebehind.ExecuteBatchUpsert(
-		ctx,
-		dbDetails.GeneralDb,
-		gymBatchUpsertQuery,
-		gyms,
-		func() func() {
-			// Lock all gyms in sorted order
-			for _, g := range gyms {
-				g.Lock()
-			}
-			// Return unlock function (unlock in reverse order)
-			return func() {
-				for i := len(gyms) - 1; i >= 0; i-- {
-					gyms[i].Unlock()
-				}
-			}
-		},
-	)
 }
 
-// flushPokemonBatch writes a batch of pokemon using INSERT ... ON DUPLICATE KEY UPDATE
-func flushPokemonBatch(ctx context.Context, dbDetails db.DbDetails, entries []*writebehind.QueueEntry) error {
-	pokemon := make([]*Pokemon, len(entries))
-	for i, e := range entries {
-		pokemon[i] = e.Entity.(*Pokemon)
+// StopTypedQueues stops all typed queues gracefully
+func StopTypedQueues() {
+	if queueManager != nil {
+		queueManager.Stop()
 	}
-
-	return writebehind.ExecuteBatchUpsert(
-		ctx,
-		dbDetails.PokemonDb,
-		pokemonBatchUpsertQuery,
-		pokemon,
-		func() func() {
-			// Lock all pokemon in sorted order
-			for _, p := range pokemon {
-				p.Lock()
-			}
-			// Return unlock function (unlock in reverse order)
-			return func() {
-				for i := len(pokemon) - 1; i >= 0; i-- {
-					pokemon[i].Unlock()
-				}
-			}
-		},
-	)
 }
 
-// flushSpawnpointBatch writes a batch of spawnpoints using INSERT ... ON DUPLICATE KEY UPDATE
-func flushSpawnpointBatch(ctx context.Context, dbDetails db.DbDetails, entries []*writebehind.QueueEntry) error {
-	spawnpoints := make([]*Spawnpoint, len(entries))
-	for i, e := range entries {
-		spawnpoints[i] = e.Entity.(*Spawnpoint)
-	}
+// Flush functions for typed queues - receive []T directly, no type assertions needed
 
-	return writebehind.ExecuteBatchUpsert(
-		ctx,
-		dbDetails.GeneralDb,
-		spawnpointBatchUpsertQuery,
-		spawnpoints,
-		func() func() {
-			// Lock all spawnpoints in sorted order
-			for _, s := range spawnpoints {
-				s.Lock()
-			}
-			// Return unlock function (unlock in reverse order)
-			return func() {
-				for i := len(spawnpoints) - 1; i >= 0; i-- {
-					spawnpoints[i].Unlock()
-				}
-			}
-		},
-	)
+func flushPokestopBatch(ctx context.Context, dbDetails db.DbDetails, pokestops []PokestopData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, pokestopBatchUpsertQuery, pokestops)
+	return err
+}
+
+func flushGymBatch(ctx context.Context, dbDetails db.DbDetails, gyms []GymData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, gymBatchUpsertQuery, gyms)
+	return err
+}
+
+func flushPokemonBatchTyped(ctx context.Context, dbDetails db.DbDetails, pokemon []PokemonData) error {
+	_, err := dbDetails.PokemonDb.NamedExecContext(ctx, pokemonBatchUpsertQuery, pokemon)
+	return err
+}
+
+func flushSpawnpointBatch(ctx context.Context, dbDetails db.DbDetails, spawnpoints []SpawnpointData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, spawnpointBatchUpsertQuery, spawnpoints)
+	return err
+}
+
+func flushRouteBatch(ctx context.Context, dbDetails db.DbDetails, routes []RouteData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, routeBatchUpsertQuery, routes)
+	return err
+}
+
+func flushTappableBatch(ctx context.Context, dbDetails db.DbDetails, tappables []TappableData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, tappableBatchUpsertQuery, tappables)
+	return err
+}
+
+func flushStationBatch(ctx context.Context, dbDetails db.DbDetails, stations []StationData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, stationBatchUpsertQuery, stations)
+	return err
+}
+
+func flushIncidentBatch(ctx context.Context, dbDetails db.DbDetails, incidents []IncidentData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, incidentBatchUpsertQuery, incidents)
+	return err
+}
+
+func flushS2CellBatch(ctx context.Context, dbDetails db.DbDetails, cells []S2CellData) error {
+	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, s2cellBatchUpsertQuery, cells)
+	if err != nil {
+		log.Errorf("flushS2CellBatch: %s", err)
+	}
+	statsCollector.IncDbQuery("insert s2cell", err)
+	return err
 }
 
 // Batch upsert queries - using INSERT ... ON DUPLICATE KEY UPDATE
@@ -328,7 +459,7 @@ ON DUPLICATE KEY UPDATE
 	expire_timestamp_verified = VALUES(expire_timestamp_verified),
 	shiny = VALUES(shiny),
 	username = VALUES(username),
-	pvp = VALUES(pvp),
+	pvp = COALESCE(VALUES(pvp), pvp),
 	is_event = VALUES(is_event),
 	seen_type = VALUES(seen_type)
 `
@@ -346,4 +477,139 @@ ON DUPLICATE KEY UPDATE
 	updated = VALUES(updated),
 	last_seen=VALUES(last_seen),
 	despawn_sec = VALUES(despawn_sec)
+`
+
+const routeBatchUpsertQuery = `
+INSERT INTO route (
+	id, name, shortcode, description, distance_meters,
+	duration_seconds, end_fort_id, end_image, end_lat, end_lon,
+	image, image_border_color, reversible, start_fort_id, start_image,
+	start_lat, start_lon, tags, type, updated, version, waypoints
+)
+VALUES (
+	:id, :name, :shortcode, :description, :distance_meters,
+	:duration_seconds, :end_fort_id, :end_image, :end_lat, :end_lon,
+	:image, :image_border_color, :reversible, :start_fort_id, :start_image,
+	:start_lat, :start_lon, :tags, :type, :updated, :version, :waypoints
+)
+ON DUPLICATE KEY UPDATE
+	name = VALUES(name),
+	shortcode = VALUES(shortcode),
+	description = VALUES(description),
+	distance_meters = VALUES(distance_meters),
+	duration_seconds = VALUES(duration_seconds),
+	end_fort_id = VALUES(end_fort_id),
+	end_image = VALUES(end_image),
+	end_lat = VALUES(end_lat),
+	end_lon = VALUES(end_lon),
+	image = VALUES(image),
+	image_border_color = VALUES(image_border_color),
+	reversible = VALUES(reversible),
+	start_fort_id = VALUES(start_fort_id),
+	start_image = VALUES(start_image),
+	start_lat = VALUES(start_lat),
+	start_lon = VALUES(start_lon),
+	tags = VALUES(tags),
+	type = VALUES(type),
+	updated = VALUES(updated),
+	version = VALUES(version),
+	waypoints = VALUES(waypoints)
+`
+
+const tappableBatchUpsertQuery = `
+INSERT INTO tappable (
+	id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id,
+	count, expire_timestamp, expire_timestamp_verified, updated
+)
+VALUES (
+	:id, :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :item_id,
+	:count, :expire_timestamp, :expire_timestamp_verified, :updated
+)
+ON DUPLICATE KEY UPDATE
+	lat = VALUES(lat),
+	lon = VALUES(lon),
+	fort_id = VALUES(fort_id),
+	spawn_id = VALUES(spawn_id),
+	type = VALUES(type),
+	pokemon_id = VALUES(pokemon_id),
+	item_id = VALUES(item_id),
+	count = VALUES(count),
+	expire_timestamp = VALUES(expire_timestamp),
+	expire_timestamp_verified = VALUES(expire_timestamp_verified),
+	updated = VALUES(updated)
+`
+
+const stationBatchUpsertQuery = `
+INSERT INTO station (
+	id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete,
+	is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end,
+	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
+	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
+	battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon,
+	total_stationed_gmax, stationed_pokemon
+)
+VALUES (
+	:id, :lat, :lon, :name, :cell_id, :start_time, :end_time, :cooldown_complete,
+	:is_battle_available, :is_inactive, :updated, :battle_level, :battle_start, :battle_end,
+	:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
+	:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
+	:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :total_stationed_pokemon,
+	:total_stationed_gmax, :stationed_pokemon
+)
+ON DUPLICATE KEY UPDATE
+	lat = VALUES(lat),
+	lon = VALUES(lon),
+	name = VALUES(name),
+	cell_id = VALUES(cell_id),
+	start_time = VALUES(start_time),
+	end_time = VALUES(end_time),
+	cooldown_complete = VALUES(cooldown_complete),
+	is_battle_available = VALUES(is_battle_available),
+	is_inactive = VALUES(is_inactive),
+	updated = VALUES(updated),
+	battle_level = VALUES(battle_level),
+	battle_start = VALUES(battle_start),
+	battle_end = VALUES(battle_end),
+	battle_pokemon_id = VALUES(battle_pokemon_id),
+	battle_pokemon_form = VALUES(battle_pokemon_form),
+	battle_pokemon_costume = VALUES(battle_pokemon_costume),
+	battle_pokemon_gender = VALUES(battle_pokemon_gender),
+	battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
+	battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
+	battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
+	battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
+	battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
+	battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
+	total_stationed_pokemon = VALUES(total_stationed_pokemon),
+	total_stationed_gmax = VALUES(total_stationed_gmax),
+	stationed_pokemon = VALUES(stationed_pokemon)
+`
+
+const incidentBatchUpsertQuery = "INSERT INTO incident (" +
+	"id, pokestop_id, start, expiration, display_type, style, `character`, " +
+	"updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, " +
+	"slot_2_form, slot_3_pokemon_id, slot_3_form" +
+	") VALUES (" +
+	":id, :pokestop_id, :start, :expiration, :display_type, :style, :character, " +
+	":updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, " +
+	":slot_2_form, :slot_3_pokemon_id, :slot_3_form" +
+	") ON DUPLICATE KEY UPDATE " +
+	"start = VALUES(start), " +
+	"expiration = VALUES(expiration), " +
+	"display_type = VALUES(display_type), " +
+	"style = VALUES(style), " +
+	"`character` = VALUES(`character`), " +
+	"updated = VALUES(updated), " +
+	"confirmed = VALUES(confirmed), " +
+	"slot_1_pokemon_id = VALUES(slot_1_pokemon_id), " +
+	"slot_1_form = VALUES(slot_1_form), " +
+	"slot_2_pokemon_id = VALUES(slot_2_pokemon_id), " +
+	"slot_2_form = VALUES(slot_2_form), " +
+	"slot_3_pokemon_id = VALUES(slot_3_pokemon_id), " +
+	"slot_3_form = VALUES(slot_3_form)"
+
+const s2cellBatchUpsertQuery = `
+INSERT INTO s2cell (id, center_lat, center_lon, level, updated)
+VALUES (:id, :center_lat, :center_lon, :level, :updated)
+ON DUPLICATE KEY UPDATE updated = VALUES(updated)
 `

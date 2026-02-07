@@ -14,7 +14,6 @@ import (
 
 	"golbat/config"
 	"golbat/db"
-	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -72,12 +71,6 @@ var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
-
-// writeBehindQueue is the global write-behind queue for database writes
-var writeBehindQueue *writebehind.Queue
-
-// s2CellAccumulator is the global S2Cell batch accumulator
-var s2CellAccumulator *writebehind.S2CellAccumulator
 
 var ohbem *gohbem.Ohbem
 
@@ -292,68 +285,16 @@ func SetStatsCollector(collector stats_collector.StatsCollector) {
 	statsCollector = collector
 }
 
-// InitWriteBehindQueue initializes the write-behind queue
+// InitWriteBehindQueue initializes the typed write-behind queues
 // Should be called after SetStatsCollector
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
-	cfg := writebehind.QueueConfig{
-		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
-		WorkerCount:         config.Config.Tuning.WriteBehindWorkerCount,
-		BatchSize:           config.Config.Tuning.WriteBehindBatchSize,
-		BatchTimeout:        time.Duration(config.Config.Tuning.WriteBehindBatchTimeoutMs) * time.Millisecond,
-	}
-
-	writeBehindQueue = writebehind.NewQueue(cfg, dbDetails, statsCollector)
-
-	// Register batch writers for each entity type
-	RegisterBatchWriters(writeBehindQueue)
-
-	log.Infof("Write-behind queue initialized: startup_delay=%ds, workers=%d, batch_size=%d, batch_timeout=%dms",
-		cfg.StartupDelaySeconds, cfg.WorkerCount, cfg.BatchSize, cfg.BatchTimeout.Milliseconds())
-
-	// Warn if worker count exceeds half of database pool size
-	maxPool := config.Config.Database.MaxPool
-	if cfg.WorkerCount > maxPool/2 {
-		log.Warnf("Write-behind worker count (%d) exceeds half of database pool size (%d). "+
-			"Consider increasing database.max_pool or reducing tuning.write_behind_worker_count",
-			cfg.WorkerCount, maxPool)
-	}
-
-	// Start the processing loop in a goroutine
-	go writeBehindQueue.ProcessLoop(ctx)
-}
-
-// GetWriteBehindQueue returns the global write-behind queue
-func GetWriteBehindQueue() *writebehind.Queue {
-	return writeBehindQueue
+	// Use the new typed queue system
+	InitTypedQueues(ctx, dbDetails, statsCollector)
 }
 
 // FlushWriteBehindQueue flushes all pending writes (for shutdown)
 func FlushWriteBehindQueue() {
-	if writeBehindQueue != nil {
-		writeBehindQueue.Flush()
-	}
-}
-
-// InitS2CellAccumulator initializes the S2Cell batch accumulator
-// Should be called after SetStatsCollector
-func InitS2CellAccumulator(ctx context.Context, dbDetails db.DbDetails) {
-	cfg := writebehind.QueueConfig{
-		StartupDelaySeconds: config.Config.Tuning.WriteBehindStartupDelay,
-	}
-
-	s2CellAccumulator = writebehind.NewS2CellAccumulator(cfg, dbDetails, statsCollector, s2CellBatchWrite)
-
-	log.Infof("S2Cell accumulator initialized: startup_delay=%ds", cfg.StartupDelaySeconds)
-
-	// Start the processing loop
-	s2CellAccumulator.Start(ctx)
-}
-
-// FlushS2CellAccumulator flushes all pending S2Cell writes (for shutdown)
-func FlushS2CellAccumulator() {
-	if s2CellAccumulator != nil {
-		s2CellAccumulator.Flush()
-	}
+	FlushTypedQueues()
 }
 
 // GetUpdateThreshold returns the number of seconds that should be used as a

@@ -113,7 +113,7 @@ func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId s
 func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
 	// Create new Station atomically - function only called if key doesn't exist
 	stationItem, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
-		return &Station{Id: stationId, newRecord: true}
+		return &Station{StationData: StationData{Id: stationId}, newRecord: true}
 	})
 
 	station := stationItem.Value()
@@ -162,9 +162,9 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		}
 	}
 
-	// Queue the write through the write-behind system
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(station, isNewRecord, 0)
+	// Queue the write through the typed write-behind queue
+	if stationQueue != nil {
+		stationQueue.Enqueue(station.StationData, isNewRecord, 0)
 	} else {
 		// Fallback to direct write if queue not initialized
 		_ = stationWriteDB(db, station, isNewRecord)

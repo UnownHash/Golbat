@@ -9,17 +9,9 @@ import (
 	"github.com/sasha-s/go-deadlock"
 )
 
-// Pokemon struct.
-// REMINDER! Keep hasChangesPokemon updated after making changes
-//
-// AtkIv/DefIv/StaIv: Should not be set directly. Use calculateIv
-//
-// GolbatInternal: internal data not exposed to frontend/users
-//
-// FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
-type Pokemon struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
-
+// PokemonData contains all database-persisted fields for Pokemon.
+// This struct is embedded in Pokemon and can be safely copied for write-behind queueing.
+type PokemonData struct {
 	Id                      Uint64Str   `db:"id"`
 	PokestopId              null.String `db:"pokestop_id"`
 	SpawnId                 null.Int    `db:"spawn_id"`
@@ -59,8 +51,22 @@ type Pokemon struct {
 	Capture3                null.Float  `db:"capture_3"`
 	Pvp                     null.String `db:"pvp"`
 	IsEvent                 int8        `db:"is_event"`
+}
 
-	internal grpc.PokemonInternal
+// Pokemon struct.
+// REMINDER! Keep hasChangesPokemon updated after making changes
+//
+// AtkIv/DefIv/StaIv: Should not be set directly. Use calculateIv
+//
+// GolbatInternal: internal data not exposed to frontend/users
+//
+// FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
+type Pokemon struct {
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
+
+	PokemonData // Embedded data fields - can be copied for write-behind queue
+
+	internal grpc.PokemonInternal `db:"-"` // Memory-only internal state
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-"`

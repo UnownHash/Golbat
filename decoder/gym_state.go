@@ -114,7 +114,7 @@ func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) 
 func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
 	// Create new Gym atomically - function only called if key doesn't exist
 	gymItem, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
-		return &Gym{Id: fortId, newRecord: true}
+		return &Gym{GymData: GymData{Id: fortId}, newRecord: true}
 	})
 
 	gym := gymItem.Value()
@@ -382,9 +382,9 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	}
 
 	if gym.IsDirty() {
-		// Queue the write through the write-behind system
-		if writeBehindQueue != nil {
-			writeBehindQueue.Enqueue(gym, isNewRecord, 0)
+		// Queue the write through the typed write-behind queue
+		if gymQueue != nil {
+			gymQueue.Enqueue(gym.GymData, isNewRecord, 0)
 		} else {
 			// Fallback to direct write if queue not initialized
 			_ = gymWriteDB(db, gym, isNewRecord)

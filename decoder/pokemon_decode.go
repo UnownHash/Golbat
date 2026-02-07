@@ -257,7 +257,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		pokemon.SetLat(lat)
 		pokemon.SetLon(lon)
 	} else {
-		midpoint := s2.LatLngFromPoint(s2.Point{s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
+		midpoint := s2.LatLngFromPoint(s2.Point{Vector: s2.PointFromLatLng(s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)).
 			Add(s2.PointFromLatLng(s2.LatLngFromDegrees(lat, lon)).Vector)})
 		pokemon.SetLat(midpoint.Lat.Degrees())
 		pokemon.SetLon(midpoint.Lng.Degrees())

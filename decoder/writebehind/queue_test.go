@@ -1,6 +1,7 @@
 package writebehind
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,65 +9,66 @@ import (
 	"golbat/stats_collector"
 )
 
-// mockWriteable implements Writeable for testing
-type mockWriteable struct {
-	key       string
-	writeType string
-	quality   int
-	written   bool
+// testData is the data type for testing
+type testData struct {
+	key     string
+	quality int
 }
 
-func (m *mockWriteable) WriteKey() string  { return m.key }
-func (m *mockWriteable) WriteType() string { return m.writeType }
-func (m *mockWriteable) WriteToDB(db db.DbDetails, isNewRecord bool) error {
-	m.written = true
-	return nil
-}
-
-func TestQueueEnqueue(t *testing.T) {
+func TestTypedQueueEnqueue(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
-	cfg := QueueConfig{
-		StartupDelaySeconds: 0,  // No delay for tests
-		WorkerCount:         10, // 10 workers for tests
-	}
-	q := NewQueue(cfg, db.DbDetails{}, stats)
+	q := NewTypedQueue(TypedQueueConfig[string, testData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
+		StartupDelaySeconds: 0, // No delay for tests
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []testData) error { return nil },
+		KeyFunc:             func(d testData) string { return d.key },
+	})
 
-	entity := &mockWriteable{key: "test:1", writeType: "test", quality: 1}
-	q.Enqueue(entity, true, 0)
+	data := testData{key: "test:1", quality: 1}
+	q.Enqueue(data, true, 0)
 
 	if q.Size() != 1 {
 		t.Errorf("Expected queue size 1, got %d", q.Size())
 	}
 }
 
-func TestQueueSquashing(t *testing.T) {
+func TestTypedQueueSquashing(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
-	cfg := QueueConfig{
+	q := NewTypedQueue(TypedQueueConfig[string, testData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
 		StartupDelaySeconds: 0,
-		WorkerCount:         10,
-	}
-	q := NewQueue(cfg, db.DbDetails{}, stats)
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []testData) error { return nil },
+		KeyFunc:             func(d testData) string { return d.key },
+	})
 
 	// Enqueue first entity
-	entity1 := &mockWriteable{key: "test:1", writeType: "test", quality: 1}
-	q.Enqueue(entity1, true, 0)
+	data1 := testData{key: "test:1", quality: 1}
+	q.Enqueue(data1, true, 0)
 
 	// Enqueue second entity with same key
-	entity2 := &mockWriteable{key: "test:1", writeType: "test", quality: 2}
-	q.Enqueue(entity2, false, 0)
+	data2 := testData{key: "test:1", quality: 2}
+	q.Enqueue(data2, false, 0)
 
 	// Should still only have 1 entry (squashed)
 	if q.Size() != 1 {
 		t.Errorf("Expected queue size 1 after squash, got %d", q.Size())
 	}
 
-	// The entry should use the newer entity (replaces old)
+	// The entry should use the newer data (replaces old)
 	q.mu.Lock()
 	entry := q.pending["test:1"]
 	q.mu.Unlock()
 
-	if entry.Entity.(*mockWriteable).quality != 2 {
-		t.Errorf("Expected entity quality 2 (newer), got %d", entry.Entity.(*mockWriteable).quality)
+	if entry.Data.quality != 2 {
+		t.Errorf("Expected quality 2 (newer), got %d", entry.Data.quality)
 	}
 
 	// IsNewRecord should be preserved (true || false = true)
@@ -75,21 +77,26 @@ func TestQueueSquashing(t *testing.T) {
 	}
 }
 
-func TestQueueNewRecordPreservation(t *testing.T) {
+func TestTypedQueueNewRecordPreservation(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
-	cfg := QueueConfig{
+	q := NewTypedQueue(TypedQueueConfig[string, testData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
 		StartupDelaySeconds: 0,
-		WorkerCount:         10,
-	}
-	q := NewQueue(cfg, db.DbDetails{}, stats)
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []testData) error { return nil },
+		KeyFunc:             func(d testData) string { return d.key },
+	})
 
 	// Enqueue as new record
-	entity1 := &mockWriteable{key: "test:1", writeType: "test", quality: 1}
-	q.Enqueue(entity1, true, 0)
+	data1 := testData{key: "test:1", quality: 1}
+	q.Enqueue(data1, true, 0)
 
 	// Enqueue update (not new)
-	entity2 := &mockWriteable{key: "test:1", writeType: "test", quality: 2}
-	q.Enqueue(entity2, false, 0)
+	data2 := testData{key: "test:1", quality: 2}
+	q.Enqueue(data2, false, 0)
 
 	q.mu.Lock()
 	entry := q.pending["test:1"]
@@ -100,17 +107,22 @@ func TestQueueNewRecordPreservation(t *testing.T) {
 	}
 }
 
-func TestQueueDelayHandling(t *testing.T) {
+func TestTypedQueueDelayHandling(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
-	cfg := QueueConfig{
+	q := NewTypedQueue(TypedQueueConfig[string, testData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
 		StartupDelaySeconds: 0,
-		WorkerCount:         10,
-	}
-	q := NewQueue(cfg, db.DbDetails{}, stats)
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []testData) error { return nil },
+		KeyFunc:             func(d testData) string { return d.key },
+	})
 
 	// Enqueue with 1 second delay
-	entity1 := &mockWriteable{key: "test:1", writeType: "test", quality: 1}
-	q.Enqueue(entity1, true, 1*time.Second)
+	data1 := testData{key: "test:1", quality: 1}
+	q.Enqueue(data1, true, 1*time.Second)
 
 	q.mu.Lock()
 	entry := q.pending["test:1"]
@@ -121,8 +133,8 @@ func TestQueueDelayHandling(t *testing.T) {
 	}
 
 	// Enqueue same key with 0 delay (should reduce delay)
-	entity2 := &mockWriteable{key: "test:1", writeType: "test", quality: 2}
-	q.Enqueue(entity2, false, 0)
+	data2 := testData{key: "test:1", quality: 2}
+	q.Enqueue(data2, false, 0)
 
 	q.mu.Lock()
 	entry = q.pending["test:1"]
@@ -133,13 +145,18 @@ func TestQueueDelayHandling(t *testing.T) {
 	}
 }
 
-func TestQueueWarmup(t *testing.T) {
+func TestTypedQueueWarmup(t *testing.T) {
 	stats := stats_collector.NewNoopStatsCollector()
-	cfg := QueueConfig{
+	q := NewTypedQueue(TypedQueueConfig[string, testData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
 		StartupDelaySeconds: 1, // 1 second delay
-		WorkerCount:         10,
-	}
-	q := NewQueue(cfg, db.DbDetails{}, stats)
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []testData) error { return nil },
+		KeyFunc:             func(d testData) string { return d.key },
+	})
 
 	if q.IsWarmupComplete() {
 		t.Error("Warmup should not be complete immediately")
@@ -153,5 +170,49 @@ func TestQueueWarmup(t *testing.T) {
 
 	if !q.IsWarmupComplete() {
 		t.Error("Warmup should be complete after delay")
+	}
+}
+
+func TestTypedQueueIntegerKey(t *testing.T) {
+	stats := stats_collector.NewNoopStatsCollector()
+
+	type intKeyData struct {
+		id      uint64
+		quality int
+	}
+
+	q := NewTypedQueue(TypedQueueConfig[uint64, intKeyData]{
+		Name:                "test",
+		BatchSize:           50,
+		BatchTimeout:        100 * time.Millisecond,
+		StartupDelaySeconds: 0,
+		Db:                  db.DbDetails{},
+		Stats:               stats,
+		FlushFunc:           func(ctx context.Context, db db.DbDetails, entries []intKeyData) error { return nil },
+		KeyFunc:             func(d intKeyData) uint64 { return d.id },
+	})
+
+	// Enqueue with integer key
+	data1 := intKeyData{id: 12345678901234, quality: 1}
+	q.Enqueue(data1, true, 0)
+
+	if q.Size() != 1 {
+		t.Errorf("Expected queue size 1, got %d", q.Size())
+	}
+
+	// Enqueue same key, should squash
+	data2 := intKeyData{id: 12345678901234, quality: 2}
+	q.Enqueue(data2, false, 0)
+
+	if q.Size() != 1 {
+		t.Errorf("Expected queue size 1 after squash, got %d", q.Size())
+	}
+
+	q.mu.Lock()
+	entry := q.pending[uint64(12345678901234)]
+	q.mu.Unlock()
+
+	if entry.Data.quality != 2 {
+		t.Errorf("Expected quality 2 (newer), got %d", entry.Data.quality)
 	}
 }

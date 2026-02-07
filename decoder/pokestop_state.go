@@ -122,7 +122,7 @@ func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId str
 func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
 	// Create new Pokestop atomically - function only called if key doesn't exist
 	pokestopItem, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
-		return &Pokestop{Id: fortId, newRecord: true}
+		return &Pokestop{PokestopData: PokestopData{Id: fortId}, newRecord: true}
 	})
 
 	pokestop := pokestopItem.Value()
@@ -321,11 +321,11 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 		}
 	}
 
-	// Queue the write through the write-behind system (no delay for pokestops)
+	// Queue the write through the typed write-behind queue (no delay for pokestops)
 	// Only queue if dirty (not just internalDirty)
 	if pokestop.IsDirty() {
-		if writeBehindQueue != nil {
-			writeBehindQueue.Enqueue(pokestop, isNewRecord, 0)
+		if pokestopQueue != nil {
+			pokestopQueue.Enqueue(pokestop.PokestopData, isNewRecord, 0)
 		} else {
 			// Fallback to direct write if queue not initialized
 			_ = pokestopWriteDB(db, pokestop, isNewRecord)

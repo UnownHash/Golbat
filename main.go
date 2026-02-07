@@ -209,7 +209,6 @@ func main() {
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
-	decoder.InitS2CellAccumulator(ctx, dbDetails)
 	InitDeviceCache()
 
 	wg.Add(1)
@@ -402,7 +401,6 @@ func main() {
 	wg.Wait()
 
 	log.Info("go routines have exited, flushing write-behind queue...")
-	decoder.FlushS2CellAccumulator()
 	decoder.FlushWriteBehindQueue()
 
 	log.Info("flushing webhooks now...")

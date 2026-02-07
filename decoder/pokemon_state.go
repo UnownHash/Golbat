@@ -104,7 +104,7 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
 	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
-		return &Pokemon{Id: Uint64Str(encounterId), newRecord: true}
+		return &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encounterId)}, newRecord: true}
 	})
 
 	pokemon := pokemonItem.Value()
@@ -260,8 +260,8 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			}
 		}
 
-		// Queue the write through the write-behind system
-		if writeBehindQueue != nil {
+		// Queue the write through the typed write-behind queue
+		if pokemonQueue != nil {
 			// Determine delay based on seen type
 			// Wild/nearby Pokemon wait for potential encounter data, encounter writes immediately
 			delay := time.Duration(0)
@@ -270,7 +270,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 				seenType == SeenType_Cell || seenType == SeenType_NearbyStop {
 				delay = wildPokemonDelay
 			}
-			writeBehindQueue.Enqueue(pokemon, isNewRecord, delay)
+			pokemonQueue.Enqueue(pokemon.PokemonData, isNewRecord, delay)
 		} else {
 			// Fallback to direct write if queue not initialized
 			_ = pokemonWriteDB(db, pokemon, isNewRecord)

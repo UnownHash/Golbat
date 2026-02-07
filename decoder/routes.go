@@ -7,11 +7,9 @@ import (
 	"github.com/guregu/null/v6"
 )
 
-// Route struct.
-// REMINDER! Dirty flag pattern - use setter methods to modify fields
-type Route struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
-
+// RouteData contains all database-persisted fields for Route.
+// This struct is embedded in Route and can be safely copied for write-behind queueing.
+type RouteData struct {
 	Id               string      `db:"id"`
 	Name             string      `db:"name"`
 	Shortcode        string      `db:"shortcode"`
@@ -34,6 +32,14 @@ type Route struct {
 	Updated          int64       `db:"updated"`
 	Version          int64       `db:"version"`
 	Waypoints        string      `db:"waypoints"`
+}
+
+// Route struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Route struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
+	RouteData // Embedded data fields - can be copied for write-behind queue
 
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record

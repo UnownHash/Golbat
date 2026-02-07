@@ -2,12 +2,9 @@ package decoder
 
 import (
 	"context"
-	"strconv"
-	"strings"
 	"time"
 
 	"golbat/db"
-	"golbat/decoder/writebehind"
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
@@ -34,7 +31,6 @@ type S2Cell struct {
 
 func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	now := time.Now().Unix()
-	var cellsToWrite []*writebehind.S2CellData
 
 	// prepare list of cells to update
 	for _, cellId := range cellIds {
@@ -58,63 +54,19 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 		}
 		s2Cell.Updated = now
 
-		cellsToWrite = append(cellsToWrite, &writebehind.S2CellData{
-			Id:        s2Cell.Id,
-			Latitude:  s2Cell.Latitude,
-			Longitude: s2Cell.Longitude,
-			Level:     s2Cell.Level.ValueOrZero(),
-			Updated:   s2Cell.Updated,
-		})
-	}
-
-	if len(cellsToWrite) == 0 {
-		return
-	}
-
-	if dbDebugEnabled {
-		var updatedCells []string
-		for _, cell := range cellsToWrite {
-			updatedCells = append(updatedCells, strconv.FormatUint(cell.Id, 10))
+		if dbDebugEnabled {
+			log.Debugf("[DB_UPDATE] S2Cell Updated cell: %d", s2Cell.Id)
 		}
-		log.Debugf("[DB_UPDATE] S2Cell Updated cells: %s", strings.Join(updatedCells, ","))
-	}
 
-	// Queue through the accumulator if available
-	if s2CellAccumulator != nil {
-		s2CellAccumulator.Add(cellsToWrite)
-	} else {
-		// Fallback to direct write if accumulator not initialized
-		_ = s2CellBatchWrite(db, cellsToWrite)
-	}
-}
-
-// s2CellBatchWrite performs the actual batch database write for S2Cells
-// This is called by both direct writes and the accumulator
-func s2CellBatchWrite(db db.DbDetails, cells []*writebehind.S2CellData) error {
-	ctx := context.Background()
-
-	// Convert to slice of S2Cell for the query
-	s2Cells := make([]*S2Cell, len(cells))
-	for i, cell := range cells {
-		s2Cells[i] = &S2Cell{
-			Id:        cell.Id,
-			Latitude:  cell.Latitude,
-			Longitude: cell.Longitude,
-			Level:     null.IntFrom(cell.Level),
-			Updated:   cell.Updated,
+		// Queue through the typed queue
+		if s2cellQueue != nil {
+			s2cellQueue.Enqueue(S2CellData{
+				Id:        s2Cell.Id,
+				Latitude:  s2Cell.Latitude,
+				Longitude: s2Cell.Longitude,
+				Level:     s2Cell.Level.ValueOrZero(),
+				Updated:   s2Cell.Updated,
+			}, false, 0)
 		}
 	}
-
-	_, err := db.GeneralDb.NamedExecContext(ctx, `
-		INSERT INTO s2cell (id, center_lat, center_lon, level, updated)
-		VALUES (:id, :center_lat, :center_lon, :level, :updated)
-		ON DUPLICATE KEY UPDATE updated=VALUES(updated)
-	`, s2Cells)
-
-	statsCollector.IncDbQuery("insert s2cell", err)
-	if err != nil {
-		log.Errorf("s2CellBatchWrite: %s", err)
-		return err
-	}
-	return nil
 }

@@ -83,7 +83,7 @@ func getIncidentRecordForUpdate(ctx context.Context, db db.DbDetails, incidentId
 func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string, pokestopId string) (*Incident, func(), error) {
 	// Create new Incident atomically - function only called if key doesn't exist
 	incidentItem, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
-		return &Incident{Id: incidentId, PokestopId: pokestopId, newRecord: true}
+		return &Incident{IncidentData: IncidentData{Id: incidentId, PokestopId: pokestopId}, newRecord: true}
 	})
 
 	incident := incidentItem.Value()
@@ -128,9 +128,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 		}
 	}
 
-	// Queue the write through the write-behind system
-	if writeBehindQueue != nil {
-		writeBehindQueue.Enqueue(incident, isNewRecord, 0)
+	// Queue the write through the typed write-behind queue
+	if incidentQueue != nil {
+		incidentQueue.Enqueue(incident.IncidentData, isNewRecord, 0)
 	} else {
 		// Fallback to direct write if queue not initialized
 		_ = incidentWriteDB(db, incident, isNewRecord)

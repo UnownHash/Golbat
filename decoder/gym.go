@@ -7,11 +7,9 @@ import (
 	"github.com/sasha-s/go-deadlock"
 )
 
-// Gym struct.
-// REMINDER! Keep hasChangesGym updated after making changes
-type Gym struct {
-	mu deadlock.Mutex `db:"-"` // Object-level mutex
-
+// GymData contains all database-persisted fields for a Gym.
+// This struct is copyable and used for write-behind queue snapshots.
+type GymData struct {
 	Id                     string      `db:"id"`
 	Lat                    float64     `db:"lat"`
 	Lon                    float64     `db:"lon"`
@@ -53,6 +51,14 @@ type Gym struct {
 	Description            null.String `db:"description"`
 	Defenders              null.String `db:"defenders"`
 	Rsvps                  null.String `db:"rsvps"`
+}
+
+// Gym struct.
+// REMINDER! Keep hasChangesGym updated after making changes
+type Gym struct {
+	mu deadlock.Mutex `db:"-"` // Object-level mutex
+
+	GymData // Embedded data fields (all db columns)
 
 	// Memory-only fields (not persisted to DB)
 	RaidSeed null.String `db:"-"` // Raid seed (memory only, sent in webhook)
@@ -80,53 +86,6 @@ type GymOldValues struct {
 	Rsvps              null.String
 	InBattle           null.Int
 }
-
-//`id` varchar(35) NOT NULL,
-//`lat` double(18,14) NOT NULL,
-//`lon` double(18,14) NOT NULL,
-//`name` varchar(128) DEFAULT NULL,
-//`url` varchar(200) DEFAULT NULL,
-//`last_modified_timestamp` int unsigned DEFAULT NULL,
-//`raid_end_timestamp` int unsigned DEFAULT NULL,
-//`raid_spawn_timestamp` int unsigned DEFAULT NULL,
-//`raid_battle_timestamp` int unsigned DEFAULT NULL,
-//`updated` int unsigned NOT NULL,
-//`raid_pokemon_id` smallint unsigned DEFAULT NULL,
-//`guarding_pokemon_id` smallint unsigned DEFAULT NULL,
-//`available_slots` smallint unsigned DEFAULT NULL,
-//`availble_slots` smallint unsigned GENERATED ALWAYS AS (`available_slots`) VIRTUAL,
-//`team_id` tinyint unsigned DEFAULT NULL,
-//`raid_level` tinyint unsigned DEFAULT NULL,
-//`enabled` tinyint unsigned DEFAULT NULL,
-//`ex_raid_eligible` tinyint unsigned DEFAULT NULL,
-//`in_battle` tinyint unsigned DEFAULT NULL,
-//`raid_pokemon_move_1` smallint unsigned DEFAULT NULL,
-//`raid_pokemon_move_2` smallint unsigned DEFAULT NULL,
-//`raid_pokemon_form` smallint unsigned DEFAULT NULL,
-//`raid_pokemon_cp` int unsigned DEFAULT NULL,
-//`raid_is_exclusive` tinyint unsigned DEFAULT NULL,
-//`cell_id` bigint unsigned DEFAULT NULL,
-//`deleted` tinyint unsigned NOT NULL DEFAULT '0',
-//`total_cp` int unsigned DEFAULT NULL,
-//`first_seen_timestamp` int unsigned NOT NULL,
-//`raid_pokemon_gender` tinyint unsigned DEFAULT NULL,
-//`sponsor_id` smallint unsigned DEFAULT NULL,
-//`partner_id` varchar(35) DEFAULT NULL,
-//`raid_pokemon_costume` smallint unsigned DEFAULT NULL,
-//`raid_pokemon_evolution` tinyint unsigned DEFAULT NULL,
-//`ar_scan_eligible` tinyint unsigned DEFAULT NULL,
-//`power_up_level` smallint unsigned DEFAULT NULL,
-//`power_up_points` int unsigned DEFAULT NULL,
-//`power_up_end_timestamp` int unsigned DEFAULT NULL,
-
-//
-//SELECT CONCAT("'", GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR "', '"), "'") AS columns
-//FROM information_schema.columns
-//WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
-//
-//SELECT CONCAT("'", GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR "', '"), " = ", "'") AS columns
-//FROM information_schema.columns
-//WHERE table_schema = 'db_name' AND table_name = 'tbl_name'
 
 // IsDirty returns true if any field has been modified
 func (gym *Gym) IsDirty() bool {

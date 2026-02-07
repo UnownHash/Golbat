@@ -7,11 +7,9 @@ import (
 	"github.com/guregu/null/v6"
 )
 
-// Tappable struct.
-// REMINDER! Dirty flag pattern - use setter methods to modify fields
-type Tappable struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
-
+// TappableData contains all database-persisted fields for Tappable.
+// This struct is embedded in Tappable and can be safely copied for write-behind queueing.
+type TappableData struct {
 	Id                      uint64      `db:"id"`
 	Lat                     float64     `db:"lat"`
 	Lon                     float64     `db:"lon"`
@@ -24,6 +22,14 @@ type Tappable struct {
 	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
 	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
 	Updated                 int64       `db:"updated"`
+}
+
+// Tappable struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Tappable struct {
+	mu sync.Mutex `db:"-"` // Object-level mutex
+
+	TappableData // Embedded data fields - can be copied for write-behind queue
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record

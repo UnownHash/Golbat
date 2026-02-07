@@ -7,11 +7,9 @@ import (
 	"github.com/guregu/null/v6"
 )
 
-// Station struct.
-// REMINDER! Dirty flag pattern - use setter methods to modify fields
-type Station struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
-
+// StationData contains all database-persisted fields for Station.
+// This struct is embedded in Station and can be safely copied for write-behind queueing.
+type StationData struct {
 	Id                string  `db:"id"`
 	Lat               float64 `db:"lat"`
 	Lon               float64 `db:"lon"`
@@ -41,6 +39,14 @@ type Station struct {
 	TotalStationedPokemon null.Int    `db:"total_stationed_pokemon"`
 	TotalStationedGmax    null.Int    `db:"total_stationed_gmax"`
 	StationedPokemon      null.String `db:"stationed_pokemon"`
+}
+
+// Station struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Station struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
+	StationData // Embedded data fields - can be copied for write-behind queue
 
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
