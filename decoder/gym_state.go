@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -345,7 +346,12 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 				PowerUpEndTimestamp: gym.PowerUpEndTimestamp.ValueOrZero(),
 				ArScanEligible:      gym.ArScanEligible.ValueOrZero(),
 				Rsvps:               rsvps,
-				RaidSeed:            gym.RaidSeed,
+				RaidSeed: func() null.String {
+					if gym.RaidSeed.Valid {
+						return null.StringFrom(strconv.FormatInt(gym.RaidSeed.Int64, 10))
+					}
+					return null.String{}
+				}(),
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)

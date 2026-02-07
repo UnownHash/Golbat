@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -165,7 +166,7 @@ type QuestWebhook struct {
 	ArScanEligible int64           `json:"ar_scan_eligible"`
 	PokestopUrl    string          `json:"pokestop_url"`
 	WithAr         bool            `json:"with_ar"`
-	QuestSeed      null.Int        `json:"quest_seed"`
+	QuestSeed      null.String     `json:"quest_seed"`
 }
 
 type PokestopWebhook struct {
@@ -235,7 +236,12 @@ func createPokestopWebhooks(stop *Pokestop) {
 			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
 			PokestopUrl:    stop.Url.ValueOrZero(),
 			WithAr:         false,
-			QuestSeed:      stop.AlternativeQuestSeed,
+			QuestSeed: func() null.String {
+				if stop.AlternativeQuestSeed.Valid {
+					return null.StringFrom(strconv.FormatInt(stop.AlternativeQuestSeed.Int64, 10))
+				}
+				return null.String{}
+			}(),
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
@@ -256,7 +262,12 @@ func createPokestopWebhooks(stop *Pokestop) {
 			ArScanEligible: stop.ArScanEligible.ValueOrZero(),
 			PokestopUrl:    stop.Url.ValueOrZero(),
 			WithAr:         true,
-			QuestSeed:      stop.QuestSeed,
+			QuestSeed: func() null.String {
+				if stop.QuestSeed.Valid {
+					return null.StringFrom(strconv.FormatInt(stop.QuestSeed.Int64, 10))
+				}
+				return null.String{}
+			}(),
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}

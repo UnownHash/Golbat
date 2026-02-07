@@ -61,7 +61,7 @@ type Gym struct {
 	GymData // Embedded data fields (all db columns)
 
 	// Memory-only fields (not persisted to DB)
-	RaidSeed null.String `db:"-"` // Raid seed (memory only, sent in webhook)
+	RaidSeed null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
 	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
@@ -532,7 +532,7 @@ func (gym *Gym) SetRsvps(v null.String) {
 }
 
 // SetRaidSeed sets the raid seed (memory only, not saved to DB)
-func (gym *Gym) SetRaidSeed(v null.String) {
+func (gym *Gym) SetRaidSeed(v null.Int) {
 	if gym.RaidSeed != v {
 		if dbDebugEnabled {
 			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSeed:%s->%s", FormatNull(gym.RaidSeed), FormatNull(v)))

@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"encoding/json"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -124,7 +123,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	if fortData.RaidInfo != nil {
 		gym.SetRaidEndTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000))
 		gym.SetRaidSpawnTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000))
-		gym.SetRaidSeed(null.StringFrom(strconv.FormatInt(fortData.RaidInfo.RaidSeed, 10)))
+		gym.SetRaidSeed(null.IntFrom(fortData.RaidInfo.RaidSeed))
 		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs) / 1000
 
 		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {

@@ -407,14 +407,14 @@ func main() {
 	log.Info("http server is shutdown, waiting for other go routines to exit...")
 	wg.Wait()
 
+	log.Info("go routines have exited, flushing write-behind queue...")
+	decoder.FlushWriteBehindQueue()
+
 	// Preserve in-memory pokemon if enabled
 	if cfg.PreserveInMemoryPokemon && cfg.PokemonMemoryOnly {
 		log.Info("preserving in-memory pokemon to database...")
 		decoder.PreservePokemonToDatabase(dbDetails)
 	}
-
-	log.Info("go routines have exited, flushing write-behind queue...")
-	decoder.FlushWriteBehindQueue()
 
 	log.Info("flushing webhooks now...")
 	webhooksSender.Flush()
