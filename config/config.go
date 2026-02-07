@@ -7,26 +7,27 @@ import (
 )
 
 type configDefinition struct {
-	Port                int        `koanf:"port"`
-	GrpcPort            int        `koanf:"grpc_port"`
-	Webhooks            []Webhook  `koanf:"webhooks"`
-	Database            database   `koanf:"database"`
-	Logging             logging    `koanf:"logging"`
-	Sentry              sentry     `koanf:"sentry"`
-	Pyroscope           pyroscope  `koanf:"pyroscope"`
-	Prometheus          Prometheus `koanf:"prometheus"`
-	PokemonMemoryOnly   bool       `koanf:"pokemon_memory_only"`
-	PokemonInternalToDb bool       `koanf:"pokemon_internal_to_db"`
-	Preload             bool       `koanf:"preload"`        // Pre-load forts, stations, spawnpoints into cache on startup
-	FortInMemory        bool       `koanf:"fort_in_memory"` // Keep forts in memory with rtree for spatial lookups
-	Cleanup             cleanup    `koanf:"cleanup"`
-	RawBearer           string     `koanf:"raw_bearer"`
-	ApiSecret           string     `koanf:"api_secret"`
-	Pvp                 pvp        `koanf:"pvp"`
-	Koji                koji       `koanf:"koji"`
-	Tuning              tuning     `koanf:"tuning"`
-	Weather             weather    `koanf:"weather"`
-	ScanRules           []scanRule `koanf:"scan_rules"`
+	Port                    int        `koanf:"port"`
+	GrpcPort                int        `koanf:"grpc_port"`
+	Webhooks                []Webhook  `koanf:"webhooks"`
+	Database                database   `koanf:"database"`
+	Logging                 logging    `koanf:"logging"`
+	Sentry                  sentry     `koanf:"sentry"`
+	Pyroscope               pyroscope  `koanf:"pyroscope"`
+	Prometheus              Prometheus `koanf:"prometheus"`
+	PokemonMemoryOnly       bool       `koanf:"pokemon_memory_only"`
+	PokemonInternalToDb     bool       `koanf:"pokemon_internal_to_db"`
+	PreserveInMemoryPokemon bool       `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
+	Preload                 bool       `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
+	FortInMemory            bool       `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
+	Cleanup                 cleanup    `koanf:"cleanup"`
+	RawBearer               string     `koanf:"raw_bearer"`
+	ApiSecret               string     `koanf:"api_secret"`
+	Pvp                     pvp        `koanf:"pvp"`
+	Koji                    koji       `koanf:"koji"`
+	Tuning                  tuning     `koanf:"tuning"`
+	Weather                 weather    `koanf:"weather"`
+	ScanRules               []scanRule `koanf:"scan_rules"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {

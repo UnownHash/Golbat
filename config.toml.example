@@ -4,6 +4,7 @@ raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 
 pokemon_memory_only = true  # Use in-memory storage for pokemon only
+#preserve_pokemon = false   # Save pokemon to DB on shutdown, restore on startup (for memory-only mode)
 preload = false         # preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
 fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [experimental]
 

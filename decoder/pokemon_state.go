@@ -23,6 +23,13 @@ import (
 // wildPokemonDelay is how long wild Pokemon wait for encounter data before writing
 const wildPokemonDelay = 30 * time.Second
 
+// pokemonSelectColumns defines the columns for pokemon queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const pokemonSelectColumns = `id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv,
+	golbat_internal, iv, move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size,
+	display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,
+	expire_timestamp_verified, shiny, username, pvp, is_event, seen_type`
+
 // peekPokemonRecordReadOnly acquires lock, does NOT take snapshot.
 // Use for read-only checks which will not cause a backing database lookup
 // Caller must use returned unlock function
@@ -38,11 +45,8 @@ func peekPokemonRecordReadOnly(encounterId uint64) (*Pokemon, func(), error) {
 
 func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId uint64, pokemon *Pokemon) error {
 	err := db.PokemonDb.GetContext(ctx, pokemon,
-		"SELECT id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, "+
-			"move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size, "+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id, "+
-			"expire_timestamp_verified, shiny, username, pvp, is_event, seen_type "+
-			"FROM pokemon WHERE id = ?", strconv.FormatUint(encounterId, 10))
+		"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
+		strconv.FormatUint(encounterId, 10))
 	statsCollector.IncDbQuery("select pokemon", err)
 
 	return err
