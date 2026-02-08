@@ -5,6 +5,8 @@ import (
 	"sync"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/util"
 )
 
 // RouteData contains all database-persisted fields for Route.
@@ -89,6 +91,8 @@ func (r *Route) snapshotOldValues() {
 // --- Set methods with dirty tracking ---
 
 func (r *Route) SetName(v string) {
+	// Truncate to 50 runes to fit database column
+	v, _ = util.TruncateUTF8(v, 50)
 	if r.Name != v {
 		if dbDebugEnabled {
 			r.changedFields = append(r.changedFields, fmt.Sprintf("Name:%s->%s", r.Name, v))
