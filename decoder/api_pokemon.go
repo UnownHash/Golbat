@@ -22,32 +22,17 @@ type ApiPokemonAvailableResult struct {
 }
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
-	type pokemonFormKey struct {
-		pokemonId int16
-		form      int16
-	}
-
-	start := time.Now()
-
-	pkmnMap := make(map[pokemonFormKey]int)
-	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
-		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
+	var available []*ApiPokemonAvailableResult
+	pokemonFormCount.Range(func(key pokemonFormKey, count int64) bool {
+		if count > 0 {
+			available = append(available, &ApiPokemonAvailableResult{
+				PokemonId: key.pokemonId,
+				Form:      key.form,
+				Count:     int(count),
+			})
+		}
 		return true
 	})
-
-	var available []*ApiPokemonAvailableResult
-	for key, count := range pkmnMap {
-
-		pkmn := &ApiPokemonAvailableResult{
-			PokemonId: key.pokemonId,
-			Form:      key.form,
-			Count:     count,
-		}
-		available = append(available, pkmn)
-	}
-
-	log.Infof("GetAvailablePokemon - total time %s (locked time --)", time.Since(start))
-
 	return available
 }
 

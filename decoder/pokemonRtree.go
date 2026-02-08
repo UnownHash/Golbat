@@ -43,12 +43,26 @@ type PokemonPvpLookup struct {
 	Ultra  int16
 }
 
+type pokemonFormKey struct {
+	pokemonId int16
+	form      int16
+}
+
 var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
+var pokemonFormCount *xsync.MapOf[pokemonFormKey, int64]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
+func adjustPokemonFormCount(key pokemonFormKey, delta int64) {
+	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, bool) {
+		newValue := oldValue + delta
+		return newValue, newValue <= 0 // delete entry when count reaches zero
+	})
+}
+
 func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
+	pokemonFormCount = xsync.NewMapOf[pokemonFormKey, int64]()
 
 	// Set up OnEviction callback on all shards
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
@@ -80,7 +94,13 @@ func valueOrMinus1(n null.Int) int {
 func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
 	pokemonId := uint64(pokemon.Id)
 
-	pokemonLookupCacheItem, _ := pokemonLookupCache.Load(pokemonId)
+	pokemonLookupCacheItem, existed := pokemonLookupCache.Load(pokemonId)
+
+	// Track old form key so we can adjust counts
+	var oldKey pokemonFormKey
+	if existed && pokemonLookupCacheItem.PokemonLookup != nil {
+		oldKey = pokemonFormKey{pokemonLookupCacheItem.PokemonLookup.PokemonId, pokemonLookupCacheItem.PokemonLookup.Form}
+	}
 
 	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
@@ -109,6 +129,15 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	}
 
 	pokemonLookupCache.Store(pokemonId, pokemonLookupCacheItem)
+
+	// Update form counts
+	newKey := pokemonFormKey{pokemonLookupCacheItem.PokemonLookup.PokemonId, pokemonLookupCacheItem.PokemonLookup.Form}
+	if existed && oldKey != newKey {
+		adjustPokemonFormCount(oldKey, -1)
+	}
+	if !existed || oldKey != newKey {
+		adjustPokemonFormCount(newKey, 1)
+	}
 }
 
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
@@ -164,7 +193,9 @@ func removePokemonFromTree(pokemonId uint64, lat, lon float64) {
 	pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, pokemonId)
 	afterLen := pokemonTree.Len()
 	pokemonTreeMutex.Unlock()
-	pokemonLookupCache.Delete(pokemonId)
+	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
+		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
+	}
 
 	if beforeLen != afterLen+1 {
 		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, lat, lon, beforeLen, afterLen, pokemonLookupCache.Size())
