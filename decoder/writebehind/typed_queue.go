@@ -1,18 +1,26 @@
 package writebehind
 
 import (
+	"cmp"
 	"context"
+	"slices"
 	"sync"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
 	"golbat/stats_collector"
 )
 
+const (
+	mysqlDeadlock   = 1213
+	deadlockRetries = 3
+)
+
 // Entry represents a pending write in a typed queue
-type Entry[K comparable, T any] struct {
+type Entry[K cmp.Ordered, T any] struct {
 	Key         K
 	Data        T
 	QueuedAt    time.Time
@@ -23,7 +31,7 @@ type Entry[K comparable, T any] struct {
 }
 
 // TypedQueueConfig holds configuration for a typed queue
-type TypedQueueConfig[K comparable, T any] struct {
+type TypedQueueConfig[K cmp.Ordered, T any] struct {
 	Name                string
 	BatchSize           int
 	BatchTimeout        time.Duration
@@ -38,7 +46,7 @@ type TypedQueueConfig[K comparable, T any] struct {
 }
 
 // TypedQueue is a type-safe write-behind queue for a specific entity type
-type TypedQueue[K comparable, T any] struct {
+type TypedQueue[K cmp.Ordered, T any] struct {
 	mu      sync.Mutex
 	pending map[K]*Entry[K, T] // key -> entry for squashing
 
@@ -71,7 +79,7 @@ type TypedQueue[K comparable, T any] struct {
 }
 
 // NewTypedQueue creates a new type-safe write-behind queue
-func NewTypedQueue[K comparable, T any](cfg TypedQueueConfig[K, T]) *TypedQueue[K, T] {
+func NewTypedQueue[K cmp.Ordered, T any](cfg TypedQueueConfig[K, T]) *TypedQueue[K, T] {
 	if cfg.BatchSize <= 0 {
 		cfg.BatchSize = 50
 	}
@@ -292,6 +300,11 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		defer q.limiter.Release()
 	}
 
+	// Sort entries by key to ensure consistent lock ordering and avoid deadlocks
+	slices.SortFunc(entries, func(a, b *Entry[K, T]) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+
 	// Execute batch write
 	start := time.Now()
 	data := make([]T, len(entries))
@@ -299,7 +312,19 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		data[i] = entry.Data
 	}
 
-	err := q.flushFunc(ctx, q.db, data)
+	var err error
+	for attempt := 0; attempt <= deadlockRetries; attempt++ {
+		err = q.flushFunc(ctx, q.db, data)
+		if err == nil {
+			break
+		}
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlock && attempt < deadlockRetries {
+			log.Warnf("Write-behind [%s] deadlock on attempt %d/%d (%d entries), retrying...", q.name, attempt+1, deadlockRetries, len(entries))
+			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+			continue
+		}
+		break
+	}
 	batchTime := time.Since(start).Seconds()
 	entryCount := len(entries)
 
