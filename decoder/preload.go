@@ -19,7 +19,10 @@ func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	var wg sync.WaitGroup
 	var pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount int32
 
-	wg.Add(5)
+	// Phase 1: Load forts and spawnpoints in parallel.
+	// Forts must be loaded before incidents so that the fort lookup cache
+	// has entries for incidents to update.
+	wg.Add(4)
 	go func() {
 		defer wg.Done()
 		pokestopCount = preloadPokestops(dbDetails, populateRtree)
@@ -30,17 +33,16 @@ func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	}()
 	go func() {
 		defer wg.Done()
-		stationCount = preloadStations(dbDetails)
-	}()
-	go func() {
-		defer wg.Done()
-		incidentCount = preloadIncidents(dbDetails)
+		stationCount = preloadStations(dbDetails, populateRtree)
 	}()
 	go func() {
 		defer wg.Done()
 		spawnpointCount = preloadSpawnpoints(dbDetails)
 	}()
 	wg.Wait()
+
+	// Phase 2: Load incidents (needs pokestop lookup entries to exist)
+	incidentCount = preloadIncidents(dbDetails, populateRtree)
 
 	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d incidents, %d spawnpoints in %v (rtree=%v)",
 		pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount, time.Since(startTime), populateRtree)
@@ -192,7 +194,7 @@ func preloadGyms(dbDetails db.DbDetails, populateRtree bool) int32 {
 	return count
 }
 
-func preloadStations(dbDetails db.DbDetails) int32 {
+func preloadStations(dbDetails db.DbDetails, populateRtree bool) int32 {
 	query := "SELECT " + stationSelectColumns + " FROM station"
 	rows, err := dbDetails.GeneralDb.Queryx(query)
 	if err != nil {
@@ -213,6 +215,11 @@ func preloadStations(dbDetails db.DbDetails) int32 {
 			for station := range jobs {
 				// Add to cache
 				stationCache.Set(station.Id, station, 0) // 0 = use default TTL
+
+				// Update rtree if enabled
+				if populateRtree {
+					fortRtreeUpdateStationOnSave(station)
+				}
 
 				c := atomic.AddInt32(&count, 1)
 				if c%10000 == 0 {
@@ -237,7 +244,7 @@ func preloadStations(dbDetails db.DbDetails) int32 {
 	return count
 }
 
-func preloadIncidents(dbDetails db.DbDetails) int32 {
+func preloadIncidents(dbDetails db.DbDetails, populateRtree bool) int32 {
 	// Load active incidents (not yet expired)
 	now := time.Now().Unix()
 	query := "SELECT " + incidentSelectColumns + " FROM incident WHERE expiration > ?"
@@ -260,6 +267,11 @@ func preloadIncidents(dbDetails db.DbDetails) int32 {
 			for incident := range jobs {
 				// Add to cache
 				incidentCache.Set(incident.Id, incident, 0) // 0 = use default TTL
+
+				// Update fort rtree with incident data
+				if populateRtree {
+					updatePokestopIncidentLookup(incident.PokestopId, incident)
+				}
 
 				c := atomic.AddInt32(&count, 1)
 				if c%10000 == 0 {

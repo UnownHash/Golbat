@@ -36,7 +36,7 @@ type FortChangeWebhook struct {
 }
 
 type FortChange string
-type FortType string
+type FortType int8
 
 func (f FortType) String() string {
 	switch f {
@@ -44,6 +44,8 @@ func (f FortType) String() string {
 		return "pokestop"
 	case GYM:
 		return "gym"
+	case STATION:
+		return "station"
 	}
 	return "unknown"
 }
@@ -65,8 +67,9 @@ const (
 	REMOVAL FortChange = "removal"
 	EDIT    FortChange = "edit"
 
-	POKESTOP FortType = "pokestop"
-	GYM      FortType = "gym"
+	POKESTOP FortType = iota + 1
+	GYM
+	STATION
 )
 
 func InitWebHookFortFromGym(gym *Gym) *FortWebhook {

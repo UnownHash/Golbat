@@ -10,6 +10,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/config"
 	"golbat/db"
 	"golbat/webhooks"
 )
@@ -89,6 +90,9 @@ func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	// Atomically cache the loaded Station - if another goroutine raced us,
 	// we'll get their Station and use that instead (ensuring same mutex)
 	existingStation, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
+		if config.Config.FortInMemory {
+			fortRtreeUpdateStationOnGet(&dbStation)
+		}
 		return &dbStation
 	})
 
@@ -131,6 +135,9 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 			// We loaded from DB
 			station.newRecord = false
 			station.ClearDirty()
+			if config.Config.FortInMemory {
+				fortRtreeUpdateStationOnGet(station)
+			}
 		}
 	}
 
@@ -178,6 +185,9 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	if isNewRecord {
 		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
 		station.newRecord = false
+	}
+	if config.Config.FortInMemory {
+		fortRtreeUpdateStationOnSave(station)
 	}
 }
 

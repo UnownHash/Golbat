@@ -91,35 +91,48 @@ func (cl *gohbemLogger) Print(message string) {
 
 func initDataCache() {
 	// Sharded caches for high-concurrency tables
+	// When fort_in_memory is enabled, extend TTL to 25 hours so that the
+	// rtree stays populated between daily quest resets.
+	fortCacheTTL := 60 * time.Minute
+	if config.Config.FortInMemory {
+		fortCacheTTL = 25 * time.Hour
+	}
+
 	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
 		NumShards:  runtime.NumCPU(),
-		TTL:        60 * time.Minute,
+		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
 	if config.Config.FortInMemory {
 		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
 			p := item.Value()
-			removeFortFromTree(p.Id, p.Lat, p.Lon)
+			evictFortFromTree(p.Id, p.Lat, p.Lon)
 		})
 	}
 
 	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
 		NumShards:  runtime.NumCPU(),
-		TTL:        60 * time.Minute,
+		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
 	if config.Config.FortInMemory {
 		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
 			g := item.Value()
-			removeFortFromTree(g.Id, g.Lat, g.Lon)
+			evictFortFromTree(g.Id, g.Lat, g.Lon)
 		})
 	}
 
 	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
 		NumShards:  runtime.NumCPU(),
-		TTL:        60 * time.Minute,
+		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
+	if config.Config.FortInMemory {
+		stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
+			s := item.Value()
+			evictFortFromTree(s.Id, s.Lat, s.Lon)
+		})
+	}
 
 	tappableCache = ttlcache.New[uint64, *Tappable](
 		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),

@@ -9,6 +9,7 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/config"
 	"golbat/db"
 	"golbat/webhooks"
 )
@@ -59,6 +60,9 @@ func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId 
 	// Atomically cache the loaded Incident - if another goroutine raced us,
 	// we'll get their Incident and use that instead (ensuring same mutex)
 	existingIncident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
+		if config.Config.FortInMemory {
+			updatePokestopIncidentLookup(dbIncident.PokestopId, &dbIncident)
+		}
 		return &dbIncident
 	})
 
@@ -101,6 +105,9 @@ func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId 
 			// We loaded from DB
 			incident.newRecord = false
 			incident.ClearDirty()
+			if config.Config.FortInMemory {
+				updatePokestopIncidentLookup(incident.PokestopId, incident)
+			}
 		}
 	}
 
@@ -147,6 +154,10 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	areas := MatchStatsGeofence(stopLat, stopLon)
 	updateIncidentStats(incident, areas)
+
+	if config.Config.FortInMemory {
+		updatePokestopIncidentLookup(incident.PokestopId, incident)
+	}
 
 	if dbDebugEnabled {
 		incident.changedFields = incident.changedFields[:0]
