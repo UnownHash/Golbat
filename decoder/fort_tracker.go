@@ -370,7 +370,15 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
 	}
 
-	// Update cell fort sets with current GMO data
+	// Keep pending forts in cell tracking so they are checked again on subsequent scans
+	for _, stopId := range pendingPokestops {
+		currentPokestops[stopId] = struct{}{}
+	}
+	for _, gymId := range pendingGyms {
+		currentGyms[gymId] = struct{}{}
+	}
+
+	// Update cell fort sets with current GMO data (including pending forts)
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
 
