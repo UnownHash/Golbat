@@ -104,3 +104,50 @@ func TestProcessCellUpdate_PendingGymBecomesStaleAfterMultipleScans(t *testing.T
 	// cleanup
 	InitFortTracker(3600)
 }
+
+func TestProcessCellUpdate_NewFortOnFirstScanTrackedForFutureStaleCheck(t *testing.T) {
+	// This tests the bug where forts seen on first scan weren't added to cell tracking
+	InitFortTracker(1) // 1 second stale threshold
+	ft := GetFortTracker()
+	if ft == nil {
+		t.Fatal("fortTracker is nil after InitFortTracker")
+	}
+
+	cellId := uint64(99999)
+	gymId := "new_gym_first_scan"
+
+	// First scan: cell is new (lastSeen=0), gym appears
+	result1 := ft.ProcessCellUpdate(cellId, []string{}, []string{gymId}, 1000)
+	if result1 == nil {
+		t.Fatal("ProcessCellUpdate returned nil on first scan")
+	}
+
+	// Verify gym is tracked in cell.gyms (this was the bug - it wasn't being added)
+	ft.mu.RLock()
+	_, inCell := ft.cells[cellId].gyms[gymId]
+	ft.mu.RUnlock()
+	if !inCell {
+		t.Fatal("new gym from first scan was not added to cell tracking - this is the bug!")
+	}
+
+	// Second scan: gym missing, not yet stale
+	result2 := ft.ProcessCellUpdate(cellId, []string{}, []string{}, 1500)
+	if result2 == nil {
+		t.Fatal("ProcessCellUpdate returned nil on second scan")
+	}
+	if len(result2.StaleGyms) != 0 {
+		t.Fatalf("gym should not be stale yet (only 500ms), got: %v", result2.StaleGyms)
+	}
+
+	// Third scan: gym still missing, now stale (2 seconds since lastSeen)
+	result3 := ft.ProcessCellUpdate(cellId, []string{}, []string{}, 3500)
+	if result3 == nil {
+		t.Fatal("ProcessCellUpdate returned nil on third scan")
+	}
+	if len(result3.StaleGyms) != 1 || result3.StaleGyms[0] != gymId {
+		t.Fatalf("expected gym %s to be stale, got: %v", gymId, result3.StaleGyms)
+	}
+
+	// cleanup
+	InitFortTracker(3600)
+}

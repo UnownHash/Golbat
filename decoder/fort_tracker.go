@@ -328,7 +328,10 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	cell.lastSeen = timestamp
 
 	// Skip stale check on first scan - we need at least one prior scan to compare against
+	// But still update cell fort sets so new forts are tracked for future scans
 	if firstScan {
+		cell.pokestops = currentPokestops
+		cell.gyms = currentGyms
 		return &result
 	}
 
