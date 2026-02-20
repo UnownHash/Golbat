@@ -222,7 +222,7 @@ func InitialiseOhbem() {
 		}
 
 		gohbemLogger := &gohbemLogger{}
-		cacheFileLocation := "cache/master-latest-basics.json"
+		cacheFileLocation := masterFileCachePath
 		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
 			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
 			MasterFileCachePath:   cacheFileLocation, Logger: gohbemLogger}
@@ -235,22 +235,32 @@ func InitialiseOhbem() {
 			o.RankingComparator = gohbem.RankingComparatorDefault
 		}
 
-		if err := o.FetchPokemonData(); err != nil {
-			if err2 := o.LoadPokemonData(cacheFileLocation); err2 != nil {
-				_ = o.LoadPokemonData("pogo/master-latest-basics.json")
-				log.Errorf("ohbem.FetchPokemonData failed. ohbem.LoadPokemonData from cache failed: %s. Loading from pogo/master-latest-basics.json instead.", err2)
-			} else {
-				log.Warnf("ohbem.FetchPokemonData failed, loaded from cache: %s", err)
+		if err := o.LoadPokemonData(cacheFileLocation); err != nil {
+			log.Warnf("ohbem.LoadPokemonData from cache failed: %v", err)
+			if errFetch := o.FetchPokemonData(); errFetch != nil {
+				log.Warnf("ohbem.FetchPokemonData failed: %v", errFetch)
+				if errFallback := o.LoadPokemonData("pogo/master-latest-basics.json"); errFallback != nil {
+					log.Errorf("ohbem.LoadPokemonData from fallback failed: %v", errFallback)
+					return
+				}
+				log.Warnf("ohbem.LoadPokemonData loaded from pogo/master-latest-basics.json instead.")
+			} else if errSave := o.SavePokemonData(cacheFileLocation); errSave != nil {
+				log.Warnf("ohbem.SavePokemonData to cache failed: %v", errSave)
 			}
 		}
 
-		if o.PokemonData.Initialized == true {
-			_ = o.SavePokemonData(cacheFileLocation)
-		}
-
-		_ = o.WatchPokemonData()
-
 		ohbem = o
+	}
+}
+
+func reloadOhbemFromMasterFile() {
+	if ohbem == nil {
+		return
+	}
+	if err := ohbem.LoadPokemonData(masterFileCachePath); err != nil {
+		log.Warnf("ohbem reload from MasterFile failed: %v", err)
+	} else {
+		log.Infof("ohbem reloaded from MasterFile cache")
 	}
 }
 
