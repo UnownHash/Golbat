@@ -190,24 +190,25 @@ func main() {
 		go db2.PromLiveStatsUpdater(dbDetails, cfg.Prometheus.LiveStatsSleep)
 	}
 
-	decoder.InitialiseOhbem()
+	needsOhbem := cfg.Pvp.Enabled
+	needsMasterfile := needsOhbem || cfg.Weather.ProactiveIVSwitching
+	if needsMasterfile {
+		if err := decoder.EnsureMasterFileData(); err != nil {
+			log.Fatalf("Unable to initialise MasterFile: %v", err)
+		}
+	}
+
+	if needsOhbem {
+		decoder.InitialiseOhbem()
+	}
 	if cfg.Weather.ProactiveIVSwitching {
 		decoder.InitProactiveIVSwitchSem()
+	}
 
-		// Try to fetch from remote first, fallback to cache, then fallback to bundled file
-		if err := decoder.FetchMasterFileData(); err != nil {
-			if err2 := decoder.LoadMasterFileData(""); err2 != nil {
-				_ = decoder.LoadMasterFileData("pogo/master-latest-rdm.json")
-				log.Errorf("Weather MasterFile fetch failed. Loading from cache failed: %s. Loading from pogo/master-latest-rdm.json instead.", err2)
-			} else {
-				log.Warnf("Weather MasterFile fetch failed, loaded from cache: %s", err)
-			}
-		} else {
-			// Save to cache if successfully fetched
-			_ = decoder.SaveMasterFileData()
+	if needsMasterfile {
+		if err := decoder.WatchMasterFileData(); err != nil {
+			log.Warnf("MasterFile watcher failed: %v", err)
 		}
-
-		_ = decoder.WatchMasterFileData()
 	}
 	decoder.LoadStatsGeofences()
 	InitDeviceCache()
