@@ -426,7 +426,9 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		result = decodeGMO(ctx, protoData, getScanParameters(protoData))
 		processed = true
 	case pogo.Method_METHOD_GYM_GET_INFO:
-		result = decodeGetGymInfo(ctx, protoData.Data)
+		if getScanParameters(protoData).ProcessGyms {
+			result = decodeGetGymInfo(ctx, protoData.Data)
+		}
 		processed = true
 	case pogo.Method_METHOD_ENCOUNTER:
 		if getScanParameters(protoData).ProcessPokemon {
