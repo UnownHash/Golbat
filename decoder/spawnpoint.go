@@ -3,25 +3,45 @@ package decoder
 import (
 	"context"
 	"database/sql"
-	"golbat/db"
-	"golbat/pogo"
+	"errors"
+	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
+	"golbat/db"
+	"golbat/pogo"
+
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
-// Spawnpoint struct.
-// REMINDER! Keep hasChangesSpawnpoint updated after making changes
-type Spawnpoint struct {
+// spawnpointSelectColumns defines the columns for spawnpoint queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const spawnpointSelectColumns = `id, lat, lon, updated, last_seen, despawn_sec`
+
+// SpawnpointData contains all database-persisted fields for Spawnpoint.
+// This struct is embedded in Spawnpoint and can be safely copied for write-behind queueing.
+type SpawnpointData struct {
 	Id         int64    `db:"id"`
 	Lat        float64  `db:"lat"`
 	Lon        float64  `db:"lon"`
 	Updated    int64    `db:"updated"`
 	LastSeen   int64    `db:"last_seen"`
 	DespawnSec null.Int `db:"despawn_sec"`
+}
+
+// Spawnpoint struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Spawnpoint struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+
+	SpawnpointData // Embedded data fields - can be copied for write-behind queue
+
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -37,27 +57,188 @@ type Spawnpoint struct {
 //KEY `ix_last_seen` (`last_seen`)
 //)
 
-func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, error) {
-	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
-	if inMemorySpawnpoint != nil {
-		spawnpoint := inMemorySpawnpoint.Value()
-		return &spawnpoint, nil
+// IsDirty returns true if any field has been modified
+func (s *Spawnpoint) IsDirty() bool {
+	return s.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (s *Spawnpoint) ClearDirty() {
+	s.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (s *Spawnpoint) IsNewRecord() bool {
+	return s.newRecord
+}
+
+// Lock acquires the Spawnpoint's mutex
+func (s *Spawnpoint) Lock() {
+	s.mu.Lock()
+}
+
+// Unlock releases the Spawnpoint's mutex
+func (s *Spawnpoint) Unlock() {
+	s.mu.Unlock()
+}
+
+// --- Set methods with dirty tracking ---
+
+func (s *Spawnpoint) SetLat(v float64) {
+	if !floatAlmostEqual(s.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Lat:%f->%f", s.Lat, v))
+		}
+		s.Lat = v
+		s.dirty = true
 	}
-	spawnpoint := Spawnpoint{}
+}
 
-	err := db.GeneralDb.GetContext(ctx, &spawnpoint, "SELECT id, lat, lon, updated, last_seen, despawn_sec FROM spawnpoint WHERE id = ?", spawnpointId)
+func (s *Spawnpoint) SetLon(v float64) {
+	if !floatAlmostEqual(s.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Lon:%f->%f", s.Lon, v))
+		}
+		s.Lon = v
+		s.dirty = true
+	}
+}
 
+// SetDespawnSec sets despawn_sec with 2-second tolerance logic
+func (s *Spawnpoint) SetDespawnSec(v null.Int) {
+	// Handle validity changes
+	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
+		}
+		s.DespawnSec = v
+		s.dirty = true
+		return
+	}
+
+	// Both invalid - no change
+	if !s.DespawnSec.Valid && !v.Valid {
+		return
+	}
+
+	// Both valid - check with tolerance
+	oldVal := s.DespawnSec.Int64
+	newVal := v.Int64
+
+	// Handle wraparound at hour boundary (0/3600)
+	if oldVal <= 1 && newVal >= 3598 {
+		return
+	}
+	if newVal <= 1 && oldVal >= 3598 {
+		return
+	}
+
+	// Allow 2-second tolerance for despawn time
+	if Abs(oldVal-newVal) > 2 {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
+		}
+		s.DespawnSec = v
+		s.dirty = true
+	}
+}
+
+func (s *Spawnpoint) SetUpdated(v int64) {
+	if s.Updated != v {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("Updated:%d->%d", s.Updated, v))
+		}
+		s.Updated = v
+		s.dirty = true
+	}
+}
+
+func (s *Spawnpoint) SetLastSeen(v int64) {
+	if s.LastSeen != v {
+		if dbDebugEnabled {
+			s.changedFields = append(s.changedFields, fmt.Sprintf("LastSeen:%d->%d", s.LastSeen, v))
+		}
+		s.LastSeen = v
+		s.dirty = true
+	}
+}
+
+func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
+	err := db.GeneralDb.GetContext(ctx, spawnpoint,
+		"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
 	statsCollector.IncDbQuery("select spawnpoint", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
+	return err
+}
+
+// peekSpawnpointRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekSpawnpointRecord(spawnpointId int64) (*Spawnpoint, func(), error) {
+	if item := spawnpointCache.Get(spawnpointId); item != nil {
+		spawnpoint := item.Value()
+		spawnpoint.Lock()
+		return spawnpoint, func() { spawnpoint.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getSpawnpointRecord acquires lock. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, func(), error) {
+	// Check cache first
+	if item := spawnpointCache.Get(spawnpointId); item != nil {
+		spawnpoint := item.Value()
+		spawnpoint.Lock()
+		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
 
+	dbSpawnpoint := Spawnpoint{}
+	err := loadSpawnpointFromDatabase(ctx, db, spawnpointId, &dbSpawnpoint)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
 	if err != nil {
-		return &Spawnpoint{Id: spawnpointId}, err
+		return nil, nil, err
+	}
+	dbSpawnpoint.ClearDirty()
+
+	// Atomically cache the loaded Spawnpoint - if another goroutine raced us,
+	// we'll get their Spawnpoint and use that instead (ensuring same mutex)
+	existingSpawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+		return &dbSpawnpoint
+	})
+
+	spawnpoint := existingSpawnpoint.Value()
+	spawnpoint.Lock()
+	return spawnpoint, func() { spawnpoint.Unlock() }, nil
+}
+
+// getOrCreateSpawnpointRecord gets existing or creates new, locked.
+// Caller MUST call returned unlock function.
+func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, func(), error) {
+	// Create new Spawnpoint atomically - function only called if key doesn't exist
+	spawnpointItem, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+		return &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnpointId}, newRecord: true}
+	})
+
+	spawnpoint := spawnpointItem.Value()
+	spawnpoint.Lock()
+
+	if spawnpoint.newRecord {
+		// We should attempt to load from database
+		err := loadSpawnpointFromDatabase(ctx, db, spawnpointId, spawnpoint)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				spawnpoint.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			spawnpoint.newRecord = false
+			spawnpoint.ClearDirty()
+		}
 	}
 
-	spawnpointCache.Set(spawnpointId, spawnpoint, ttlcache.DefaultTTL)
-	return &spawnpoint, nil
+	return spawnpoint, func() { spawnpoint.Unlock() }, nil
 }
 
 func Abs(x int64) int64 {
@@ -65,31 +246,6 @@ func Abs(x int64) int64 {
 		return -x
 	}
 	return x
-}
-
-func hasChangesSpawnpoint(old *Spawnpoint, new *Spawnpoint) bool {
-	if !floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance) ||
-		(old.DespawnSec.Valid && !new.DespawnSec.Valid) ||
-		(!old.DespawnSec.Valid && new.DespawnSec.Valid) {
-		return true
-	}
-	if !old.DespawnSec.Valid && !new.DespawnSec.Valid {
-		return false
-	}
-
-	// Ignore small movements in despawn time
-	oldDespawnSec := old.DespawnSec.Int64
-	newDespawnSec := new.DespawnSec.Int64
-
-	if oldDespawnSec <= 1 && newDespawnSec >= 3598 {
-		return false
-	}
-	if newDespawnSec <= 1 && oldDespawnSec >= 3598 {
-		return false
-	}
-
-	return Abs(old.DespawnSec.Int64-new.DespawnSec.Int64) > 2
 }
 
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
@@ -103,39 +259,79 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 
 		date := time.Unix(expireTimeStamp, 0)
 		secondOfHour := date.Second() + date.Minute()*60
-		spawnpoint := Spawnpoint{
-			Id:         spawnId,
-			Lat:        wildPokemon.Latitude,
-			Lon:        wildPokemon.Longitude,
-			DespawnSec: null.IntFrom(int64(secondOfHour)),
+
+		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId)
+		if err != nil {
+			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
+			return
 		}
-		spawnpointUpdate(ctx, db, &spawnpoint)
+		spawnpoint.SetLat(wildPokemon.Latitude)
+		spawnpoint.SetLon(wildPokemon.Longitude)
+		spawnpoint.SetDespawnSec(null.IntFrom(int64(secondOfHour)))
+		spawnpointUpdate(ctx, db, spawnpoint)
+		unlock()
 	} else {
-		spawnPoint, _ := getSpawnpointRecord(ctx, db, spawnId)
-		if spawnPoint == nil {
-			spawnpoint := Spawnpoint{
-				Id:  spawnId,
-				Lat: wildPokemon.Latitude,
-				Lon: wildPokemon.Longitude,
-			}
-			spawnpointUpdate(ctx, db, &spawnpoint)
-		} else {
-			spawnpointSeen(ctx, db, spawnId)
+		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId)
+		if err != nil {
+			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
+			return
 		}
+		if spawnpoint.newRecord {
+			spawnpoint.SetLat(wildPokemon.Latitude)
+			spawnpoint.SetLon(wildPokemon.Longitude)
+			spawnpointUpdate(ctx, db, spawnpoint)
+		} else {
+			spawnpointSeen(ctx, db, spawnpoint)
+			spawnpointUpdate(ctx, db, spawnpoint)
+		}
+		unlock()
 	}
 }
 
 func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
-	oldSpawnpoint, _ := getSpawnpointRecord(ctx, db, spawnpoint.Id)
-
-	if oldSpawnpoint != nil && !hasChangesSpawnpoint(oldSpawnpoint, spawnpoint) {
+	// Skip save if not dirty and not new
+	if !spawnpoint.IsDirty() && !spawnpoint.IsNewRecord() {
 		return
 	}
 
-	//log.Println(cmp.Diff(oldSpawnpoint, spawnpoint))
+	spawnpoint.SetUpdated(time.Now().Unix())  // ensure future updates are set correctly
+	spawnpoint.SetLastSeen(time.Now().Unix()) // ensure future updates are set correctly
 
-	spawnpoint.Updated = time.Now().Unix()  // ensure future updates are set correctly
-	spawnpoint.LastSeen = time.Now().Unix() // ensure future updates are set correctly
+	// Capture isNewRecord before state changes
+	isNewRecord := spawnpoint.IsNewRecord()
+
+	// Debug logging happens here, before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
+			dbDebugLog("INSERT", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+		}
+	}
+
+	// Queue the write through the typed write-behind queue (no delay for spawnpoints)
+	if spawnpointQueue != nil {
+		spawnpointQueue.Enqueue(spawnpoint.SpawnpointData, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = spawnpointWriteDB(db, spawnpoint)
+	}
+
+	if dbDebugEnabled {
+		spawnpoint.changedFields = spawnpoint.changedFields[:0]
+	}
+	spawnpoint.ClearDirty()
+	if isNewRecord {
+		spawnpoint.newRecord = false
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+	}
+}
+
+// spawnpointWriteDB performs the actual database INSERT/UPDATE for a Spawnpoint
+// This is called by both direct writes and the write-behind queue
+// Spawnpoint uses UPSERT pattern so isNewRecord is not needed
+func spawnpointWriteDB(db db.DbDetails, spawnpoint *Spawnpoint) error {
+	ctx := context.Background()
 
 	_, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO spawnpoint (id, lat, lon, updated, last_seen, despawn_sec)"+
 		"VALUES (:id, :lat, :lon, :updated, :last_seen, :despawn_sec)"+
@@ -149,33 +345,27 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	statsCollector.IncDbQuery("insert spawnpoint", err)
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
-		return
+		return err
 	}
-
-	spawnpointCache.Set(spawnpoint.Id, *spawnpoint, ttlcache.DefaultTTL)
+	return nil
 }
 
-func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpointId int64) {
-	inMemorySpawnpoint := spawnpointCache.Get(spawnpointId)
-	if inMemorySpawnpoint == nil {
-		// This should never happen, since all routes here have previously created a spawnpoint in the cache
-		return
-	}
-
-	spawnpoint := inMemorySpawnpoint.Value()
+// spawnpointSeen updates the last_seen timestamp for a spawnpoint.
+// The spawnpoint must already be locked by the caller.
+func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
 	now := time.Now().Unix()
 
-	if now-spawnpoint.LastSeen > 3600 {
-		spawnpoint.LastSeen = now
-
-		_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
-			"SET last_seen=? "+
-			"WHERE id = ? ", now, spawnpointId)
-		statsCollector.IncDbQuery("update spawnpoint", err)
-		if err != nil {
-			log.Printf("Error updating spawnpoint last seen %s", err)
-			return
-		}
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+	// update at least every 6 hours (21600s). If reduce_updates is enabled, use 12 hours.
+	if now-spawnpoint.LastSeen > GetUpdateThreshold(21600) {
+		spawnpoint.SetLastSeen(now)
+		//_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
+		//	"SET last_seen=? "+
+		//	"WHERE id = ? ", now, spawnpoint.Id)
+		//statsCollector.IncDbQuery("update spawnpoint", err)
+		//if err != nil {
+		//	log.Printf("Error updating spawnpoint last seen %s", err)
+		//	return
+		//}
+		// Cache already contains a pointer, no need to update
 	}
 }

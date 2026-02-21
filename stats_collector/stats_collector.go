@@ -6,8 +6,8 @@ import (
 
 	"github.com/Depado/ginprom"
 	"github.com/gin-gonic/gin"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type StatsCollector interface {
@@ -50,6 +50,20 @@ type StatsCollector interface {
 	DecPokemons(hasIv bool, seenType null.String)
 	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
 	IncFortChange(changeType string)
+
+	// Write-behind queue metrics
+	SetWriteBehindQueueDepth(entityType string, depth float64)
+	IncWriteBehindSquashed(entityType string)
+	IncWriteBehindRateLimited(entityType string)
+	IncWriteBehindErrors(entityType string)
+	IncWriteBehindWrites(entityType string)
+	ObserveWriteBehindLatency(entityType string, seconds float64)
+	IncWriteBehindBatches(entityType string)
+	ObserveWriteBehindBatchSize(entityType string, size float64)
+	ObserveWriteBehindBatchTime(entityType string, seconds float64)
+
+	// S2Cell batch metrics
+	SetS2CellBatchSize(size int)
 }
 
 type Config interface {

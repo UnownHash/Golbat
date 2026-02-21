@@ -40,6 +40,10 @@ type InboundRawData struct {
 	HaveAr     *bool
 }
 
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
 func questsHeldHasARTask(quests_held any) *bool {
 	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
 
@@ -346,17 +350,13 @@ func ClearQuests(c *gin.Context) {
 	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
 	log.Infof("Clear quest took %s", time.Since(startTime))
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
 }
 
 func ReloadGeojson(c *gin.Context) {
 	decoder.ReloadGeofenceAndClearStats()
 
-	c.JSON(http.StatusAccepted, map[string]interface{}{
-		"status": "ok",
-	})
+	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
 }
 
 func PokemonScan(c *gin.Context) {
@@ -489,23 +489,34 @@ func GetPokestopPositions(c *gin.Context) {
 func GetPokestop(c *gin.Context) {
 	fortId := c.Param("fort_id")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	pokestop, err := decoder.GetPokestopRecord(ctx, dbDetails, fortId)
-	cancel()
+	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	pokestop, unlock, err := decoder.PeekPokestopRecord(fortId)
+	if unlock != nil {
+		defer unlock()
+	}
+	//cancel()
 	if err != nil {
 		log.Warnf("GET /api/pokestop/id/:fort_id/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusAccepted, pokestop)
+	if pokestop == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildPokestopResult(pokestop)
+	c.JSON(http.StatusAccepted, result)
 }
 
 func GetGym(c *gin.Context) {
 	gymId := c.Param("gym_id")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	gym, err := decoder.GetGymRecord(ctx, dbDetails, gymId)
+	gym, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, gymId)
+	if unlock != nil {
+		defer unlock()
+	}
 	cancel()
 	if err != nil {
 		log.Warnf("GET /api/gym/id/:gym_id/ Error during post retrieve %v", err)
@@ -513,7 +524,12 @@ func GetGym(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusAccepted, gym)
+	if gym == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildGymResult(gym)
+	c.JSON(http.StatusAccepted, result)
 }
 
 // POST /api/gym/query
@@ -558,23 +574,29 @@ func GetGyms(c *gin.Context) {
 	}
 
 	if len(ids) == 0 {
-		c.JSON(http.StatusOK, []decoder.Gym{})
+		c.JSON(http.StatusOK, []decoder.ApiGymResult{})
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	out := make([]*decoder.Gym, 0, len(ids))
+	out := make([]decoder.ApiGymResult, 0, len(ids))
 	for _, id := range ids {
-		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
 		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
 			log.Warnf("error retrieving gym %s: %v", id, err)
 			c.Status(http.StatusInternalServerError)
 			return
 		}
 		if g != nil {
-			out = append(out, g)
+			out = append(out, decoder.BuildGymResult(g))
+		}
+		if unlock != nil {
+			unlock()
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)
@@ -688,13 +710,16 @@ func SearchGyms(c *gin.Context) {
 		return
 	}
 
-	out := make([]*decoder.Gym, 0, len(ids))
+	out := make([]decoder.ApiGymResult, 0, len(ids))
 	for _, id := range ids {
 		if id == "" {
 			continue
 		}
-		g, err := decoder.GetGymRecord(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
 		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				log.Warnf("timed out while fetching %s: %v", id, err)
 				c.Status(http.StatusGatewayTimeout)
@@ -705,7 +730,10 @@ func SearchGyms(c *gin.Context) {
 			return
 		}
 		if g != nil {
-			out = append(out, g)
+			out = append(out, decoder.BuildGymResult(g))
+		}
+		if unlock != nil {
+			unlock()
 		}
 		if ctx.Err() != nil {
 			c.Status(http.StatusInternalServerError)
@@ -716,6 +744,78 @@ func SearchGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+// POST /api/gym/scan
+// In-memory fort scan with DNF filters (requires fort_in_memory=true)
+func GymScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.GymScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
+// POST /api/pokestop/scan
+// In-memory fort scan with DNF filters (requires fort_in_memory=true)
+func PokestopScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.PokestopScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
+// POST /api/fort/scan
+// Combined in-memory fort scan returning gyms, pokestops, and stations in a single rtree traversal
+func FortScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.FortCombinedScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
+// POST /api/station/scan
+// In-memory fort scan with DNF filters (requires fort_in_memory=true)
+func StationScan(c *gin.Context) {
+	if !config.Config.FortInMemory {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "fort_in_memory not enabled"})
+		return
+	}
+
+	var params decoder.ApiFortScan
+	if err := c.ShouldBindJSON(&params); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body"})
+		return
+	}
+
+	result := decoder.StationScanEndpoint(params, dbDetails)
+	c.JSON(http.StatusOK, result)
+}
+
 func GetTappable(c *gin.Context) {
 	id := c.Param("tappable_id")
 	tappableId, err := strconv.ParseUint(id, 10, 64)
@@ -724,18 +824,30 @@ func GetTappable(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	tappable, err := decoder.GetTappableRecord(ctx, dbDetails, tappableId)
-	cancel()
+	tappable, unlock, err := decoder.PeekTappableRecord(tappableId)
+	if unlock != nil {
+		defer unlock()
+	}
 	if err != nil {
 		log.Warnf("GET /api/tappable/id/:tappable_id/ Error during post retrieve %v", err)
 		c.Status(http.StatusInternalServerError)
 		return
 	}
-
-	c.JSON(http.StatusAccepted, tappable)
+	if tappable == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	result := decoder.BuildTappableResult(tappable)
+	c.JSON(http.StatusAccepted, result)
 }
 
 func GetDevices(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
+}
+
+// SkipPreservePokemon sets a flag to prevent pokemon preservation on shutdown
+func SkipPreservePokemon(c *gin.Context) {
+	decoder.SetSkipPreservePokemon(true)
+	log.Info("Skip preserve pokemon flag set - pokemon will not be preserved on shutdown")
+	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Pokemon preservation will be skipped on shutdown"})
 }

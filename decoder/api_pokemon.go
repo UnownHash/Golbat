@@ -22,32 +22,17 @@ type ApiPokemonAvailableResult struct {
 }
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
-	type pokemonFormKey struct {
-		pokemonId int16
-		form      int16
-	}
-
-	start := time.Now()
-
-	pkmnMap := make(map[pokemonFormKey]int)
-	pokemonLookupCache.Range(func(key uint64, pokemon PokemonLookupCacheItem) bool {
-		pkmnMap[pokemonFormKey{pokemon.PokemonLookup.PokemonId, pokemon.PokemonLookup.Form}]++
+	var available []*ApiPokemonAvailableResult
+	pokemonFormCount.Range(func(key pokemonFormKey, count int64) bool {
+		if count > 0 {
+			available = append(available, &ApiPokemonAvailableResult{
+				PokemonId: key.pokemonId,
+				Form:      key.form,
+				Count:     int(count),
+			})
+		}
 		return true
 	})
-
-	var available []*ApiPokemonAvailableResult
-	for key, count := range pkmnMap {
-
-		pkmn := &ApiPokemonAvailableResult{
-			PokemonId: key.pokemonId,
-			Form:      key.form,
-			Count:     count,
-		}
-		available = append(available, pkmn)
-	}
-
-	log.Infof("GetAvailablePokemon - total time %s (locked time --)", time.Since(start))
-
 	return available
 }
 
@@ -83,9 +68,9 @@ func haversine(start, end geo.Location) float64 {
 	return earthRadiusKm * c
 }
 
-func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
+func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 	start := time.Now()
-	results := make([]*Pokemon, 0, request.Limit)
+	results := make([]uint64, 0, request.Limit)
 	pokemonMatched := 0
 
 	if request.SearchIds == nil {
@@ -109,6 +94,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 	if maxDistance == 0 {
 		maxDistance = 10
 	}
+
 	pokemonTree2.Nearby(
 		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
@@ -128,15 +114,12 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
 
 			if found {
-				if pokemonCacheEntry := getPokemonFromCache(pokemonId); pokemonCacheEntry != nil {
-					pokemon := pokemonCacheEntry.Value()
-					results = append(results, &pokemon)
-					pokemonMatched++
+				results = append(results, pokemonId)
+				pokemonMatched++
 
-					if pokemonMatched > maxPokemon {
-						log.Infof("SearchPokemon - result would exceed maximum size (%d), stopping scan", maxPokemon)
-						return false
-					}
+				if pokemonMatched > maxPokemon {
+					log.Infof("SearchPokemon - result would exceed maximum size (%d), stopping scan", maxPokemon)
+					return false
 				}
 			}
 
@@ -145,15 +128,28 @@ func SearchPokemon(request ApiPokemonSearch) ([]*Pokemon, error) {
 	)
 
 	log.Infof("SearchPokemon - scanned %d pokemon, total time %s, %d returned", pokemonScanned, time.Since(start), len(results))
-	return results, nil
+
+	apiResults := make([]*ApiPokemonResult, 0, len(results))
+
+	for _, encounterId := range results {
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(encounterId)
+		if pokemon != nil {
+			apiPokemon := buildApiPokemonResult(pokemon)
+			apiResults = append(apiResults, &apiPokemon)
+			unlock()
+		}
+	}
+
+	return apiResults, nil
 }
 
 // Get one result
 
 func GetOnePokemon(pokemonId uint64) *ApiPokemonResult {
-	if item := getPokemonFromCache(pokemonId); item != nil {
-		pokemon := item.Value()
-		apiPokemon := buildApiPokemonResult(&pokemon)
+	item, unlock, _ := peekPokemonRecordReadOnly(pokemonId)
+	if item != nil {
+		apiPokemon := buildApiPokemonResult(item)
+		defer unlock()
 		return &apiPokemon
 	}
 	return nil

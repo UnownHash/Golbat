@@ -103,16 +103,14 @@ func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
-			pokemon := pokemonCacheEntry.Value()
-
-			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
-				continue
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key)
+		if pokemon != nil {
+			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
+				apiPokemon := buildApiPokemonResult(pokemon)
+				results = append(results, &apiPokemon)
 			}
+			unlock()
 
-			apiPokemon := buildApiPokemonResult(&pokemon)
-
-			results = append(results, &apiPokemon)
 		}
 	}
 
@@ -185,22 +183,20 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		if pokemonCacheEntry := getPokemonFromCache(key); pokemonCacheEntry != nil {
-			pokemon := pokemonCacheEntry.Value()
-
-			if pokemon.ExpireTimestamp.ValueOrZero() < startUnix {
-				continue
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key)
+		if pokemon != nil {
+			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
+				apiPokemon := pb.PokemonDetails{
+					Id:         uint64(pokemon.Id),
+					PokestopId: pokemon.PokestopId.Ptr(),
+					SpawnId:    pokemon.SpawnId.Ptr(),
+					Lat:        pokemon.Lat,
+					Lon:        pokemon.Lon,
+				}
+				results = append(results, &apiPokemon)
 			}
 
-			apiPokemon := pb.PokemonDetails{
-				Id:         pokemon.Id,
-				PokestopId: pokemon.PokestopId.Ptr(),
-				SpawnId:    pokemon.SpawnId.Ptr(),
-				Lat:        pokemon.Lat,
-				Lon:        pokemon.Lon,
-			}
-
-			results = append(results, &apiPokemon)
+			unlock()
 		}
 	}
 

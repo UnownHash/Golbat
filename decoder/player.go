@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"database/sql"
+	"fmt"
 	"reflect"
 	"strconv"
 	"time"
@@ -9,13 +10,13 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 
+	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 // Player struct. Name is the primary key.
-// REMINDER! Keep hasChangesPlayer updated after making changes
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Player struct {
 	// Name is the primary key
 	Name               string      `db:"name"`
@@ -102,6 +103,861 @@ type Player struct {
 	CaughtDragon       null.Int    `db:"caught_dragon"`
 	CaughtDark         null.Int    `db:"caught_dark"`
 	CaughtFairy        null.Int    `db:"caught_fairy"`
+
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+}
+
+// IsDirty returns true if any field has been modified
+func (p *Player) IsDirty() bool {
+	return p.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (p *Player) ClearDirty() {
+	p.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (p *Player) IsNewRecord() bool {
+	return p.newRecord
+}
+
+// setFieldDirty marks the dirty flag. Used by reflection-based updates.
+func (p *Player) setFieldDirty() {
+	p.dirty = true
+}
+
+// --- Set methods with dirty tracking ---
+
+func (p *Player) SetFriendshipId(v null.String) {
+	if p.FriendshipId != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("FriendshipId:%s->%s", FormatNull(p.FriendshipId), FormatNull(v)))
+		}
+		p.FriendshipId = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetFriendCode(v null.String) {
+	if p.FriendCode != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("FriendCode:%s->%s", FormatNull(p.FriendCode), FormatNull(v)))
+		}
+		p.FriendCode = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTeam(v null.Int) {
+	if p.Team != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Team:%s->%s", FormatNull(p.Team), FormatNull(v)))
+		}
+		p.Team = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLevel(v null.Int) {
+	if p.Level != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Level:%s->%s", FormatNull(p.Level), FormatNull(v)))
+		}
+		p.Level = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetXp(v null.Int) {
+	if p.Xp != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Xp:%s->%s", FormatNull(p.Xp), FormatNull(v)))
+		}
+		p.Xp = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetBattlesWon(v null.Int) {
+	if p.BattlesWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("BattlesWon:%s->%s", FormatNull(p.BattlesWon), FormatNull(v)))
+		}
+		p.BattlesWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetKmWalked(v null.Float) {
+	if !nullFloatAlmostEqual(p.KmWalked, v, 0.001) {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("KmWalked:%s->%s", FormatNull(p.KmWalked), FormatNull(v)))
+		}
+		p.KmWalked = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtPokemon(v null.Int) {
+	if p.CaughtPokemon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtPokemon:%s->%s", FormatNull(p.CaughtPokemon), FormatNull(v)))
+		}
+		p.CaughtPokemon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetGblRank(v null.Int) {
+	if p.GblRank != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("GblRank:%s->%s", FormatNull(p.GblRank), FormatNull(v)))
+		}
+		p.GblRank = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetGblRating(v null.Int) {
+	if p.GblRating != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("GblRating:%s->%s", FormatNull(p.GblRating), FormatNull(v)))
+		}
+		p.GblRating = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetEventBadges(v null.String) {
+	if p.EventBadges != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("EventBadges:%s->%s", FormatNull(p.EventBadges), FormatNull(v)))
+		}
+		p.EventBadges = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetStopsSpun(v null.Int) {
+	if p.StopsSpun != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("StopsSpun:%s->%s", FormatNull(p.StopsSpun), FormatNull(v)))
+		}
+		p.StopsSpun = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetEvolved(v null.Int) {
+	if p.Evolved != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Evolved:%s->%s", FormatNull(p.Evolved), FormatNull(v)))
+		}
+		p.Evolved = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetHatched(v null.Int) {
+	if p.Hatched != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Hatched:%s->%s", FormatNull(p.Hatched), FormatNull(v)))
+		}
+		p.Hatched = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetQuests(v null.Int) {
+	if p.Quests != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Quests:%s->%s", FormatNull(p.Quests), FormatNull(v)))
+		}
+		p.Quests = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTrades(v null.Int) {
+	if p.Trades != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Trades:%s->%s", FormatNull(p.Trades), FormatNull(v)))
+		}
+		p.Trades = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetPhotobombs(v null.Int) {
+	if p.Photobombs != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Photobombs:%s->%s", FormatNull(p.Photobombs), FormatNull(v)))
+		}
+		p.Photobombs = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetPurified(v null.Int) {
+	if p.Purified != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Purified:%s->%s", FormatNull(p.Purified), FormatNull(v)))
+		}
+		p.Purified = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetGruntsDefeated(v null.Int) {
+	if p.GruntsDefeated != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("GruntsDefeated:%s->%s", FormatNull(p.GruntsDefeated), FormatNull(v)))
+		}
+		p.GruntsDefeated = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetGymBattlesWon(v null.Int) {
+	if p.GymBattlesWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("GymBattlesWon:%s->%s", FormatNull(p.GymBattlesWon), FormatNull(v)))
+		}
+		p.GymBattlesWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetNormalRaidsWon(v null.Int) {
+	if p.NormalRaidsWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("NormalRaidsWon:%s->%s", FormatNull(p.NormalRaidsWon), FormatNull(v)))
+		}
+		p.NormalRaidsWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLegendaryRaidsWon(v null.Int) {
+	if p.LegendaryRaidsWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LegendaryRaidsWon:%s->%s", FormatNull(p.LegendaryRaidsWon), FormatNull(v)))
+		}
+		p.LegendaryRaidsWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTrainingsWon(v null.Int) {
+	if p.TrainingsWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("TrainingsWon:%s->%s", FormatNull(p.TrainingsWon), FormatNull(v)))
+		}
+		p.TrainingsWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetBerriesFed(v null.Int) {
+	if p.BerriesFed != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("BerriesFed:%s->%s", FormatNull(p.BerriesFed), FormatNull(v)))
+		}
+		p.BerriesFed = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetHoursDefended(v null.Int) {
+	if p.HoursDefended != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("HoursDefended:%s->%s", FormatNull(p.HoursDefended), FormatNull(v)))
+		}
+		p.HoursDefended = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetBestFriends(v null.Int) {
+	if p.BestFriends != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("BestFriends:%s->%s", FormatNull(p.BestFriends), FormatNull(v)))
+		}
+		p.BestFriends = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetBestBuddies(v null.Int) {
+	if p.BestBuddies != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("BestBuddies:%s->%s", FormatNull(p.BestBuddies), FormatNull(v)))
+		}
+		p.BestBuddies = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetGiovanniDefeated(v null.Int) {
+	if p.GiovanniDefeated != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("GiovanniDefeated:%s->%s", FormatNull(p.GiovanniDefeated), FormatNull(v)))
+		}
+		p.GiovanniDefeated = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetMegaEvos(v null.Int) {
+	if p.MegaEvos != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("MegaEvos:%s->%s", FormatNull(p.MegaEvos), FormatNull(v)))
+		}
+		p.MegaEvos = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCollectionsDone(v null.Int) {
+	if p.CollectionsDone != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CollectionsDone:%s->%s", FormatNull(p.CollectionsDone), FormatNull(v)))
+		}
+		p.CollectionsDone = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetUniqueStopsSpun(v null.Int) {
+	if p.UniqueStopsSpun != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("UniqueStopsSpun:%s->%s", FormatNull(p.UniqueStopsSpun), FormatNull(v)))
+		}
+		p.UniqueStopsSpun = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetUniqueMegaEvos(v null.Int) {
+	if p.UniqueMegaEvos != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("UniqueMegaEvos:%s->%s", FormatNull(p.UniqueMegaEvos), FormatNull(v)))
+		}
+		p.UniqueMegaEvos = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetUniqueRaidBosses(v null.Int) {
+	if p.UniqueRaidBosses != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("UniqueRaidBosses:%s->%s", FormatNull(p.UniqueRaidBosses), FormatNull(v)))
+		}
+		p.UniqueRaidBosses = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetUniqueUnown(v null.Int) {
+	if p.UniqueUnown != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("UniqueUnown:%s->%s", FormatNull(p.UniqueUnown), FormatNull(v)))
+		}
+		p.UniqueUnown = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetSevenDayStreaks(v null.Int) {
+	if p.SevenDayStreaks != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("SevenDayStreaks:%s->%s", FormatNull(p.SevenDayStreaks), FormatNull(v)))
+		}
+		p.SevenDayStreaks = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTradeKm(v null.Int) {
+	if p.TradeKm != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("TradeKm:%s->%s", FormatNull(p.TradeKm), FormatNull(v)))
+		}
+		p.TradeKm = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetRaidsWithFriends(v null.Int) {
+	if p.RaidsWithFriends != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("RaidsWithFriends:%s->%s", FormatNull(p.RaidsWithFriends), FormatNull(v)))
+		}
+		p.RaidsWithFriends = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtAtLure(v null.Int) {
+	if p.CaughtAtLure != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtAtLure:%s->%s", FormatNull(p.CaughtAtLure), FormatNull(v)))
+		}
+		p.CaughtAtLure = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetWayfarerAgreements(v null.Int) {
+	if p.WayfarerAgreements != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("WayfarerAgreements:%s->%s", FormatNull(p.WayfarerAgreements), FormatNull(v)))
+		}
+		p.WayfarerAgreements = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTrainersReferred(v null.Int) {
+	if p.TrainersReferred != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("TrainersReferred:%s->%s", FormatNull(p.TrainersReferred), FormatNull(v)))
+		}
+		p.TrainersReferred = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetRaidAchievements(v null.Int) {
+	if p.RaidAchievements != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("RaidAchievements:%s->%s", FormatNull(p.RaidAchievements), FormatNull(v)))
+		}
+		p.RaidAchievements = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetXlKarps(v null.Int) {
+	if p.XlKarps != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("XlKarps:%s->%s", FormatNull(p.XlKarps), FormatNull(v)))
+		}
+		p.XlKarps = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetXsRats(v null.Int) {
+	if p.XsRats != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("XsRats:%s->%s", FormatNull(p.XsRats), FormatNull(v)))
+		}
+		p.XsRats = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetPikachuCaught(v null.Int) {
+	if p.PikachuCaught != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PikachuCaught:%s->%s", FormatNull(p.PikachuCaught), FormatNull(v)))
+		}
+		p.PikachuCaught = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLeagueGreatWon(v null.Int) {
+	if p.LeagueGreatWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LeagueGreatWon:%s->%s", FormatNull(p.LeagueGreatWon), FormatNull(v)))
+		}
+		p.LeagueGreatWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLeagueUltraWon(v null.Int) {
+	if p.LeagueUltraWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LeagueUltraWon:%s->%s", FormatNull(p.LeagueUltraWon), FormatNull(v)))
+		}
+		p.LeagueUltraWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLeagueMasterWon(v null.Int) {
+	if p.LeagueMasterWon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LeagueMasterWon:%s->%s", FormatNull(p.LeagueMasterWon), FormatNull(v)))
+		}
+		p.LeagueMasterWon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTinyPokemonCaught(v null.Int) {
+	if p.TinyPokemonCaught != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("TinyPokemonCaught:%s->%s", FormatNull(p.TinyPokemonCaught), FormatNull(v)))
+		}
+		p.TinyPokemonCaught = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetJumboPokemonCaught(v null.Int) {
+	if p.JumboPokemonCaught != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("JumboPokemonCaught:%s->%s", FormatNull(p.JumboPokemonCaught), FormatNull(v)))
+		}
+		p.JumboPokemonCaught = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetVivillon(v null.Int) {
+	if p.Vivillon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("Vivillon:%s->%s", FormatNull(p.Vivillon), FormatNull(v)))
+		}
+		p.Vivillon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetMaxSizeFirstPlace(v null.Int) {
+	if p.MaxSizeFirstPlace != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("MaxSizeFirstPlace:%s->%s", FormatNull(p.MaxSizeFirstPlace), FormatNull(v)))
+		}
+		p.MaxSizeFirstPlace = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetTotalRoutePlay(v null.Int) {
+	if p.TotalRoutePlay != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("TotalRoutePlay:%s->%s", FormatNull(p.TotalRoutePlay), FormatNull(v)))
+		}
+		p.TotalRoutePlay = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetPartiesCompleted(v null.Int) {
+	if p.PartiesCompleted != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("PartiesCompleted:%s->%s", FormatNull(p.PartiesCompleted), FormatNull(v)))
+		}
+		p.PartiesCompleted = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetEventCheckIns(v null.Int) {
+	if p.EventCheckIns != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("EventCheckIns:%s->%s", FormatNull(p.EventCheckIns), FormatNull(v)))
+		}
+		p.EventCheckIns = v
+		p.dirty = true
+	}
+}
+func (p *Player) SetDexGen1(v null.Int) {
+	if p.DexGen1 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen1:%s->%s", FormatNull(p.DexGen1), FormatNull(v)))
+		}
+		p.DexGen1 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen2(v null.Int) {
+	if p.DexGen2 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen2:%s->%s", FormatNull(p.DexGen2), FormatNull(v)))
+		}
+		p.DexGen2 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen3(v null.Int) {
+	if p.DexGen3 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen3:%s->%s", FormatNull(p.DexGen3), FormatNull(v)))
+		}
+		p.DexGen3 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen4(v null.Int) {
+	if p.DexGen4 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen4:%s->%s", FormatNull(p.DexGen4), FormatNull(v)))
+		}
+		p.DexGen4 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen5(v null.Int) {
+	if p.DexGen5 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen5:%s->%s", FormatNull(p.DexGen5), FormatNull(v)))
+		}
+		p.DexGen5 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen6(v null.Int) {
+	if p.DexGen6 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen6:%s->%s", FormatNull(p.DexGen6), FormatNull(v)))
+		}
+		p.DexGen6 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen7(v null.Int) {
+	if p.DexGen7 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen7:%s->%s", FormatNull(p.DexGen7), FormatNull(v)))
+		}
+		p.DexGen7 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen8(v null.Int) {
+	if p.DexGen8 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen8:%s->%s", FormatNull(p.DexGen8), FormatNull(v)))
+		}
+		p.DexGen8 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen8A(v null.Int) {
+	if p.DexGen8A != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen8A:%s->%s", FormatNull(p.DexGen8A), FormatNull(v)))
+		}
+		p.DexGen8A = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetDexGen9(v null.Int) {
+	if p.DexGen9 != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("DexGen9:%s->%s", FormatNull(p.DexGen9), FormatNull(v)))
+		}
+		p.DexGen9 = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtNormal(v null.Int) {
+	if p.CaughtNormal != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtNormal:%s->%s", FormatNull(p.CaughtNormal), FormatNull(v)))
+		}
+		p.CaughtNormal = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtFighting(v null.Int) {
+	if p.CaughtFighting != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtFighting:%s->%s", FormatNull(p.CaughtFighting), FormatNull(v)))
+		}
+		p.CaughtFighting = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtFlying(v null.Int) {
+	if p.CaughtFlying != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtFlying:%s->%s", FormatNull(p.CaughtFlying), FormatNull(v)))
+		}
+		p.CaughtFlying = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtPoison(v null.Int) {
+	if p.CaughtPoison != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtPoison:%s->%s", FormatNull(p.CaughtPoison), FormatNull(v)))
+		}
+		p.CaughtPoison = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtGround(v null.Int) {
+	if p.CaughtGround != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtGround:%s->%s", FormatNull(p.CaughtGround), FormatNull(v)))
+		}
+		p.CaughtGround = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtRock(v null.Int) {
+	if p.CaughtRock != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtRock:%s->%s", FormatNull(p.CaughtRock), FormatNull(v)))
+		}
+		p.CaughtRock = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtBug(v null.Int) {
+	if p.CaughtBug != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtBug:%s->%s", FormatNull(p.CaughtBug), FormatNull(v)))
+		}
+		p.CaughtBug = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtGhost(v null.Int) {
+	if p.CaughtGhost != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtGhost:%s->%s", FormatNull(p.CaughtGhost), FormatNull(v)))
+		}
+		p.CaughtGhost = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtSteel(v null.Int) {
+	if p.CaughtSteel != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtSteel:%s->%s", FormatNull(p.CaughtSteel), FormatNull(v)))
+		}
+		p.CaughtSteel = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtFire(v null.Int) {
+	if p.CaughtFire != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtFire:%s->%s", FormatNull(p.CaughtFire), FormatNull(v)))
+		}
+		p.CaughtFire = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtWater(v null.Int) {
+	if p.CaughtWater != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtWater:%s->%s", FormatNull(p.CaughtWater), FormatNull(v)))
+		}
+		p.CaughtWater = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtGrass(v null.Int) {
+	if p.CaughtGrass != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtGrass:%s->%s", FormatNull(p.CaughtGrass), FormatNull(v)))
+		}
+		p.CaughtGrass = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtElectric(v null.Int) {
+	if p.CaughtElectric != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtElectric:%s->%s", FormatNull(p.CaughtElectric), FormatNull(v)))
+		}
+		p.CaughtElectric = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtPsychic(v null.Int) {
+	if p.CaughtPsychic != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtPsychic:%s->%s", FormatNull(p.CaughtPsychic), FormatNull(v)))
+		}
+		p.CaughtPsychic = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtIce(v null.Int) {
+	if p.CaughtIce != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtIce:%s->%s", FormatNull(p.CaughtIce), FormatNull(v)))
+		}
+		p.CaughtIce = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtDragon(v null.Int) {
+	if p.CaughtDragon != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtDragon:%s->%s", FormatNull(p.CaughtDragon), FormatNull(v)))
+		}
+		p.CaughtDragon = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtDark(v null.Int) {
+	if p.CaughtDark != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtDark:%s->%s", FormatNull(p.CaughtDark), FormatNull(v)))
+		}
+		p.CaughtDark = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetCaughtFairy(v null.Int) {
+	if p.CaughtFairy != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("CaughtFairy:%s->%s", FormatNull(p.CaughtFairy), FormatNull(v)))
+		}
+		p.CaughtFairy = v
+		p.dirty = true
+	}
+}
+
+func (p *Player) SetLastSeen(v int64) {
+	if p.LastSeen != v {
+		if dbDebugEnabled {
+			p.changedFields = append(p.changedFields, fmt.Sprintf("LastSeen:%d->%d", p.LastSeen, v))
+		}
+		p.LastSeen = v
+		p.dirty = true
+	}
 }
 
 var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
@@ -194,7 +1050,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 	inMemoryPlayer := playerCache.Get(name)
 	if inMemoryPlayer != nil {
 		player := inMemoryPlayer.Value()
-		return &player, nil
+		return player, nil
 	}
 
 	player := Player{}
@@ -202,7 +1058,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		`
 		SELECT *
 		FROM player
-		WHERE player.name = ? 
+		WHERE player.name = ?
 		`,
 		name,
 	)
@@ -213,7 +1069,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`
 				SELECT *
 				FROM player
-				WHERE player.friendship_id = ? 
+				WHERE player.friendship_id = ?
 				`,
 				friendshipId,
 			)
@@ -223,7 +1079,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`
 				SELECT *
 				FROM player
-				WHERE player.friend_code = ? 
+				WHERE player.friend_code = ?
 				`,
 				friendCode,
 			)
@@ -243,111 +1099,27 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		return nil, err
 	}
 
-	playerCache.Set(name, player, ttlcache.DefaultTTL)
+	playerCache.Set(name, &player, ttlcache.DefaultTTL)
 	return &player, nil
 }
 
-// hasChangesPlayer compares two Player structs
-// Float tolerance: KmWalked = 0.001
-func hasChangesPlayer(old *Player, new *Player) bool {
-	return old.Name != new.Name ||
-		old.FriendshipId != new.FriendshipId ||
-		old.LastSeen != new.LastSeen ||
-		old.FriendCode != new.FriendCode ||
-		old.Team != new.Team ||
-		old.Level != new.Level ||
-		old.Xp != new.Xp ||
-		old.BattlesWon != new.BattlesWon ||
-		old.CaughtPokemon != new.CaughtPokemon ||
-		old.GblRank != new.GblRank ||
-		old.GblRating != new.GblRating ||
-		old.EventBadges != new.EventBadges ||
-		old.StopsSpun != new.StopsSpun ||
-		old.Evolved != new.Evolved ||
-		old.Hatched != new.Hatched ||
-		old.Quests != new.Quests ||
-		old.Trades != new.Trades ||
-		old.Photobombs != new.Photobombs ||
-		old.Purified != new.Purified ||
-		old.GruntsDefeated != new.GruntsDefeated ||
-		old.GymBattlesWon != new.GymBattlesWon ||
-		old.NormalRaidsWon != new.NormalRaidsWon ||
-		old.LegendaryRaidsWon != new.LegendaryRaidsWon ||
-		old.TrainingsWon != new.TrainingsWon ||
-		old.BerriesFed != new.BerriesFed ||
-		old.HoursDefended != new.HoursDefended ||
-		old.BestFriends != new.BestFriends ||
-		old.BestBuddies != new.BestBuddies ||
-		old.GiovanniDefeated != new.GiovanniDefeated ||
-		old.MegaEvos != new.MegaEvos ||
-		old.CollectionsDone != new.CollectionsDone ||
-		old.UniqueStopsSpun != new.UniqueStopsSpun ||
-		old.UniqueMegaEvos != new.UniqueMegaEvos ||
-		old.UniqueRaidBosses != new.UniqueRaidBosses ||
-		old.UniqueUnown != new.UniqueUnown ||
-		old.SevenDayStreaks != new.SevenDayStreaks ||
-		old.TradeKm != new.TradeKm ||
-		old.RaidsWithFriends != new.RaidsWithFriends ||
-		old.CaughtAtLure != new.CaughtAtLure ||
-		old.WayfarerAgreements != new.WayfarerAgreements ||
-		old.TrainersReferred != new.TrainersReferred ||
-		old.RaidAchievements != new.RaidAchievements ||
-		old.XlKarps != new.XlKarps ||
-		old.XsRats != new.XsRats ||
-		old.PikachuCaught != new.PikachuCaught ||
-		old.LeagueGreatWon != new.LeagueGreatWon ||
-		old.LeagueUltraWon != new.LeagueUltraWon ||
-		old.LeagueMasterWon != new.LeagueMasterWon ||
-		old.TinyPokemonCaught != new.TinyPokemonCaught ||
-		old.JumboPokemonCaught != new.JumboPokemonCaught ||
-		old.Vivillon != new.Vivillon ||
-		old.MaxSizeFirstPlace != new.MaxSizeFirstPlace ||
-		old.TotalRoutePlay != new.TotalRoutePlay ||
-		old.PartiesCompleted != new.PartiesCompleted ||
-		old.EventCheckIns != new.EventCheckIns ||
-		old.DexGen1 != new.DexGen1 ||
-		old.DexGen2 != new.DexGen2 ||
-		old.DexGen3 != new.DexGen3 ||
-		old.DexGen4 != new.DexGen4 ||
-		old.DexGen5 != new.DexGen5 ||
-		old.DexGen6 != new.DexGen6 ||
-		old.DexGen7 != new.DexGen7 ||
-		old.DexGen8 != new.DexGen8 ||
-		old.DexGen8A != new.DexGen8A ||
-		old.DexGen9 != new.DexGen9 ||
-		old.CaughtNormal != new.CaughtNormal ||
-		old.CaughtFighting != new.CaughtFighting ||
-		old.CaughtFlying != new.CaughtFlying ||
-		old.CaughtPoison != new.CaughtPoison ||
-		old.CaughtGround != new.CaughtGround ||
-		old.CaughtRock != new.CaughtRock ||
-		old.CaughtBug != new.CaughtBug ||
-		old.CaughtGhost != new.CaughtGhost ||
-		old.CaughtSteel != new.CaughtSteel ||
-		old.CaughtFire != new.CaughtFire ||
-		old.CaughtWater != new.CaughtWater ||
-		old.CaughtGrass != new.CaughtGrass ||
-		old.CaughtElectric != new.CaughtElectric ||
-		old.CaughtPsychic != new.CaughtPsychic ||
-		old.CaughtIce != new.CaughtIce ||
-		old.CaughtDragon != new.CaughtDragon ||
-		old.CaughtDark != new.CaughtDark ||
-		old.CaughtFairy != new.CaughtFairy ||
-		!nullFloatAlmostEqual(old.KmWalked, new.KmWalked, 0.001)
-}
-
 func savePlayerRecord(db db.DbDetails, player *Player) {
-	oldPlayer, _ := getPlayerRecord(db, player.Name, player.FriendshipId.String, player.FriendCode.String)
-
-	if oldPlayer != nil && !hasChangesPlayer(oldPlayer, player) {
+	// Skip save if not dirty and not new
+	if !player.IsDirty() && !player.IsNewRecord() {
 		return
 	}
 
-	//log.Traceln(cmp.Diff(oldPlayer, player, transformNullFloats, ignoreApproxFloats))
+	player.SetLastSeen(time.Now().Unix())
 
-	player.LastSeen = time.Now().Unix()
+	if dbDebugEnabled {
+		if player.IsNewRecord() {
+			dbDebugLog("INSERT", "Player", player.Name, player.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Player", player.Name, player.changedFields)
+		}
+	}
 
-	if oldPlayer == nil {
+	if player.IsNewRecord() {
 		_, err := db.GeneralDb.NamedExec(
 			`
 			INSERT INTO player (name, friendship_id, friend_code, last_seen, team, level, xp, battles_won, km_walked, caught_pokemon, gbl_rank, gbl_rating,
@@ -384,88 +1156,88 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	} else {
 		_, err := db.GeneralDb.NamedExec(
 			`UPDATE player SET
-				friendship_id = :friendship_id, 
-				last_seen = :last_seen, 
-				team = :team, 
-				level = :level, 
-				xp = :xp, 
-				battles_won = :battles_won, 
-				km_walked = :km_walked, 
-				caught_pokemon = :caught_pokemon, 
-				gbl_rank = :gbl_rank, 
-				gbl_rating = :gbl_rating, 
-				event_badges = :event_badges, 
-				stops_spun = :stops_spun, 
-				evolved = :evolved, 
-				hatched = :hatched, 
-				quests = :quests, 
-				trades = :trades, 
-				photobombs = :photobombs, 
-				purified = :purified, 
-				grunts_defeated = :grunts_defeated, 
-				gym_battles_won = :gym_battles_won, 
-				normal_raids_won = :normal_raids_won, 
-				legendary_raids_won = :legendary_raids_won, 
-				trainings_won = :trainings_won, 
-				berries_fed = :berries_fed, 
-				hours_defended = :hours_defended, 
-				best_friends = :best_friends, 
-				best_buddies = :best_buddies, 
-				giovanni_defeated = :giovanni_defeated, 
-				mega_evos = :mega_evos, 
-				collections_done = :collections_done, 
-				unique_stops_spun = :unique_stops_spun, 
-				unique_mega_evos = :unique_mega_evos, 
-				unique_raid_bosses = :unique_raid_bosses, 
-				unique_unown = :unique_unown, 
-				seven_day_streaks = :seven_day_streaks, 
-				trade_km = :trade_km, 
-				raids_with_friends = :raids_with_friends, 
-				caught_at_lure = :caught_at_lure, 
-				wayfarer_agreements = :wayfarer_agreements, 
-				trainers_referred = :trainers_referred, 
-				raid_achievements = :raid_achievements, 
-				xl_karps = :xl_karps, 
-				xs_rats = :xs_rats, 
-				pikachu_caught = :pikachu_caught, 
-				league_great_won = :league_great_won, 
-				league_ultra_won = :league_ultra_won, 
-				league_master_won = :league_master_won, 
-				tiny_pokemon_caught = :tiny_pokemon_caught, 
-				jumbo_pokemon_caught = :jumbo_pokemon_caught, 
-				vivillon = :vivillon, 
+				friendship_id = :friendship_id,
+				last_seen = :last_seen,
+				team = :team,
+				level = :level,
+				xp = :xp,
+				battles_won = :battles_won,
+				km_walked = :km_walked,
+				caught_pokemon = :caught_pokemon,
+				gbl_rank = :gbl_rank,
+				gbl_rating = :gbl_rating,
+				event_badges = :event_badges,
+				stops_spun = :stops_spun,
+				evolved = :evolved,
+				hatched = :hatched,
+				quests = :quests,
+				trades = :trades,
+				photobombs = :photobombs,
+				purified = :purified,
+				grunts_defeated = :grunts_defeated,
+				gym_battles_won = :gym_battles_won,
+				normal_raids_won = :normal_raids_won,
+				legendary_raids_won = :legendary_raids_won,
+				trainings_won = :trainings_won,
+				berries_fed = :berries_fed,
+				hours_defended = :hours_defended,
+				best_friends = :best_friends,
+				best_buddies = :best_buddies,
+				giovanni_defeated = :giovanni_defeated,
+				mega_evos = :mega_evos,
+				collections_done = :collections_done,
+				unique_stops_spun = :unique_stops_spun,
+				unique_mega_evos = :unique_mega_evos,
+				unique_raid_bosses = :unique_raid_bosses,
+				unique_unown = :unique_unown,
+				seven_day_streaks = :seven_day_streaks,
+				trade_km = :trade_km,
+				raids_with_friends = :raids_with_friends,
+				caught_at_lure = :caught_at_lure,
+				wayfarer_agreements = :wayfarer_agreements,
+				trainers_referred = :trainers_referred,
+				raid_achievements = :raid_achievements,
+				xl_karps = :xl_karps,
+				xs_rats = :xs_rats,
+				pikachu_caught = :pikachu_caught,
+				league_great_won = :league_great_won,
+				league_ultra_won = :league_ultra_won,
+				league_master_won = :league_master_won,
+				tiny_pokemon_caught = :tiny_pokemon_caught,
+				jumbo_pokemon_caught = :jumbo_pokemon_caught,
+				vivillon = :vivillon,
 				showcase_max_size_first_place = :showcase_max_size_first_place,
 				total_route_play = :total_route_play,
 				parties_completed = :parties_completed,
-				event_check_ins = :event_check_ins, 
-				dex_gen1 = :dex_gen1, 
-				dex_gen2 = :dex_gen2, 
-				dex_gen3 = :dex_gen3, 
-				dex_gen4 = :dex_gen4, 
-				dex_gen5 = :dex_gen5, 
-				dex_gen6 = :dex_gen6, 
-				dex_gen7 = :dex_gen7, 
-				dex_gen8 = :dex_gen8, 
-				dex_gen8a = :dex_gen8a, 
+				event_check_ins = :event_check_ins,
+				dex_gen1 = :dex_gen1,
+				dex_gen2 = :dex_gen2,
+				dex_gen3 = :dex_gen3,
+				dex_gen4 = :dex_gen4,
+				dex_gen5 = :dex_gen5,
+				dex_gen6 = :dex_gen6,
+				dex_gen7 = :dex_gen7,
+				dex_gen8 = :dex_gen8,
+				dex_gen8a = :dex_gen8a,
 				dex_gen9 = :dex_gen9,
-				caught_normal = :caught_normal, 
-				caught_fighting = :caught_fighting, 
-				caught_flying = :caught_flying, 
-				caught_poison = :caught_poison, 
-				caught_ground = :caught_ground, 
-				caught_rock = :caught_rock, 
-				caught_bug = :caught_bug, 
-				caught_ghost = :caught_ghost, 
-				caught_steel = :caught_steel, 
-				caught_fire = :caught_fire, 
-				caught_water = :caught_water, 
-				caught_grass = :caught_grass, 
-				caught_electric = :caught_electric, 
-				caught_psychic = :caught_psychic, 
-				caught_ice = :caught_ice, 
-				caught_dragon = :caught_dragon, 
-				caught_dark = :caught_dark, 
-				caught_fairy = :caught_fairy 
+				caught_normal = :caught_normal,
+				caught_fighting = :caught_fighting,
+				caught_flying = :caught_flying,
+				caught_poison = :caught_poison,
+				caught_ground = :caught_ground,
+				caught_rock = :caught_rock,
+				caught_bug = :caught_bug,
+				caught_ghost = :caught_ghost,
+				caught_steel = :caught_steel,
+				caught_fire = :caught_fire,
+				caught_water = :caught_water,
+				caught_grass = :caught_grass,
+				caught_electric = :caught_electric,
+				caught_psychic = :caught_psychic,
+				caught_ice = :caught_ice,
+				caught_dragon = :caught_dragon,
+				caught_dark = :caught_dark,
+				caught_fairy = :caught_fairy
 				WHERE name = :name`,
 			player,
 		)
@@ -476,19 +1248,23 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		}
 	}
 
-	playerCache.Set(player.Name, *player, ttlcache.DefaultTTL)
+	player.ClearDirty()
+	if player.IsNewRecord() {
+		player.newRecord = false
+		playerCache.Set(player.Name, player, ttlcache.DefaultTTL)
+	}
 }
 
 func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicProfileProto) {
-	player.Name = publicProfile.GetName()
-	player.Team = null.IntFrom(int64(publicProfile.GetTeam()))
-	player.Level = null.IntFrom(int64(publicProfile.GetLevel()))
-	player.Xp = null.IntFrom(publicProfile.GetExperience())
-	player.BattlesWon = null.IntFrom(int64(publicProfile.GetBattlesWon()))
-	player.KmWalked = null.FloatFrom(float64(publicProfile.GetKmWalked()))
-	player.CaughtPokemon = null.IntFrom(int64(publicProfile.GetCaughtPokemon()))
-	player.GblRank = null.IntFrom(int64(publicProfile.GetCombatRank()))
-	player.GblRating = null.IntFrom(int64(publicProfile.GetCombatRating()))
+	player.Name = publicProfile.GetName() // Name is primary key, don't track as dirty
+	player.SetTeam(null.IntFrom(int64(publicProfile.GetTeam())))
+	player.SetLevel(null.IntFrom(int64(publicProfile.GetLevel())))
+	player.SetXp(null.IntFrom(publicProfile.GetExperience()))
+	player.SetBattlesWon(null.IntFrom(int64(publicProfile.GetBattlesWon())))
+	player.SetKmWalked(null.FloatFrom(float64(publicProfile.GetKmWalked())))
+	player.SetCaughtPokemon(null.IntFrom(int64(publicProfile.GetCaughtPokemon())))
+	player.SetGblRank(null.IntFrom(int64(publicProfile.GetCombatRank())))
+	player.SetGblRating(null.IntFrom(int64(publicProfile.GetCombatRating())))
 
 	eventBadges := ""
 
@@ -514,13 +1290,15 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 
 		field := reflect.ValueOf(player).Elem().FieldByName(playerKey)
 		if field.IsValid() && field.CanSet() {
-			field.Set(reflect.ValueOf(newValue))
+			oldValue := field.Interface().(null.Int)
+			if oldValue != newValue {
+				field.Set(reflect.ValueOf(newValue))
+				player.setFieldDirty()
+			}
 		}
 	}
 
-	if eventBadges != "" {
-		player.EventBadges = null.StringFrom(eventBadges)
-	}
+	player.SetEventBadges(null.StringFrom(eventBadges))
 }
 
 func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.InternalPlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
@@ -531,15 +1309,16 @@ func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.In
 
 	if player == nil {
 		player = &Player{
-			Name: playerSummary.GetCodename(),
+			Name:      playerSummary.GetCodename(),
+			newRecord: true,
 		}
 	}
 
 	if player.FriendshipId.IsZero() && friendshipId != "" {
-		player.FriendshipId = null.StringFrom(friendshipId)
+		player.SetFriendshipId(null.StringFrom(friendshipId))
 	}
 	if player.FriendCode.IsZero() && friendCode != "" {
-		player.FriendCode = null.StringFrom(friendCode)
+		player.SetFriendCode(null.StringFrom(friendCode))
 	}
 
 	player.updateFromPublicProfile(publicProfile)

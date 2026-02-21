@@ -1,7 +1,7 @@
 package stats_collector
 
 import (
-	"gopkg.in/guregu/null.v4"
+	"github.com/guregu/null/v6"
 
 	"golbat/geo"
 )
@@ -50,6 +50,18 @@ func (col *noopCollector) IncPokemons(bool, null.String)                        
 func (col *noopCollector) DecPokemons(bool, null.String)                         {}
 func (col *noopCollector) UpdateMaxBattleCount([]geo.AreaName, int64)            {}
 func (col *noopCollector) IncFortChange(string)                                  {}
+
+// Write-behind queue metrics (noop)
+func (col *noopCollector) SetWriteBehindQueueDepth(string, float64)    {}
+func (col *noopCollector) IncWriteBehindSquashed(string)               {}
+func (col *noopCollector) IncWriteBehindRateLimited(string)            {}
+func (col *noopCollector) IncWriteBehindErrors(string)                 {}
+func (col *noopCollector) IncWriteBehindWrites(string)                 {}
+func (col *noopCollector) ObserveWriteBehindLatency(string, float64)   {}
+func (col *noopCollector) IncWriteBehindBatches(string)                {}
+func (col *noopCollector) ObserveWriteBehindBatchSize(string, float64) {}
+func (col *noopCollector) ObserveWriteBehindBatchTime(string, float64) {}
+func (col *noopCollector) SetS2CellBatchSize(int)                      {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}

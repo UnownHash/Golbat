@@ -199,6 +199,27 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 	return cell
 }
 
+// RegisterFort registers a fort during bulk loading (e.g., from preload).
+// Unlike UpdateFort, this uses the provided timestamp rather than "now".
+func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if isGym {
+		cell.gyms[fortId] = struct{}{}
+	} else {
+		cell.pokestops[fortId] = struct{}{}
+	}
+
+	ft.forts[fortId] = &FortTrackerLastSeen{
+		cellId:   cellId,
+		lastSeen: updatedTimestamp,
+		isGym:    isGym,
+	}
+}
+
 // UpdateFort updates tracking for a single fort seen in GMO
 func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now int64) {
 	ft.mu.Lock()
@@ -409,17 +430,24 @@ func GetFortTracker() *FortTracker {
 	return fortTracker
 }
 
-// clearGymWithLock marks a gym as deleted while holding the striped mutex
+// clearGymWithLock marks a gym as deleted while holding the object-level mutex
 func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
-	gymMutex, _ := gymStripedMutex.GetLock(gymId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
-
-	gymCache.Delete(gymId)
-	if err := db.ClearOldGyms(ctx, dbDetails, []string{gymId}); err != nil {
-		log.Errorf("FortTracker: failed to clear gym %s - %s", gymId, err)
+	// Load gym through cache (will load from DB if not cached)
+	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load gym %s - %s", gymId, err)
 		return
 	}
+	if gym == nil {
+		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	gym.SetDeleted(true)
+	saveGymRecord(ctx, dbDetails, gym)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(gymId)
 		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
@@ -431,17 +459,24 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 	}
 }
 
-// clearPokestopWithLock marks a pokestop as deleted while holding the striped mutex
+// clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
 func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(stopId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestopCache.Delete(stopId)
-	if err := db.ClearOldPokestops(ctx, dbDetails, []string{stopId}); err != nil {
-		log.Errorf("FortTracker: failed to clear pokestop %s - %s", stopId, err)
+	// Load pokestop through cache (will load from DB if not cached)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load pokestop %s - %s", stopId, err)
 		return
 	}
+	if pokestop == nil {
+		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	pokestop.SetDeleted(true)
+	savePokestopRecord(ctx, dbDetails, pokestop)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(stopId)
 		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)

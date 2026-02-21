@@ -1,0 +1,277 @@
+package decoder
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"time"
+
+	"github.com/jellydator/ttlcache/v3"
+	log "github.com/sirupsen/logrus"
+
+	"golbat/config"
+	"golbat/db"
+	"golbat/webhooks"
+)
+
+// incidentSelectColumns defines the columns for incident queries.
+// Used by both single-row and bulk load queries to keep them in sync.
+const incidentSelectColumns = "id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form"
+
+func loadIncidentFromDatabase(ctx context.Context, db db.DbDetails, incidentId string, incident *Incident) error {
+	err := db.GeneralDb.GetContext(ctx, incident,
+		"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
+	statsCollector.IncDbQuery("select incident", err)
+	return err
+}
+
+// peekIncidentRecord - cache-only lookup, no DB fallback, returns locked.
+// Caller MUST call returned unlock function if non-nil.
+func peekIncidentRecord(incidentId string) (*Incident, func(), error) {
+	if item := incidentCache.Get(incidentId); item != nil {
+		incident := item.Value()
+		incident.Lock()
+		return incident, func() { incident.Unlock() }, nil
+	}
+	return nil, nil, nil
+}
+
+// getIncidentRecordReadOnly acquires lock but does NOT take snapshot.
+// Use for read-only checks. Will cause a backing database lookup.
+// Caller MUST call returned unlock function if non-nil.
+func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId string) (*Incident, func(), error) {
+	// Check cache first
+	if item := incidentCache.Get(incidentId); item != nil {
+		incident := item.Value()
+		incident.Lock()
+		return incident, func() { incident.Unlock() }, nil
+	}
+
+	dbIncident := Incident{}
+	err := loadIncidentFromDatabase(ctx, db, incidentId, &dbIncident)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	dbIncident.ClearDirty()
+
+	// Atomically cache the loaded Incident - if another goroutine raced us,
+	// we'll get their Incident and use that instead (ensuring same mutex)
+	existingIncident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
+		if config.Config.FortInMemory {
+			updatePokestopIncidentLookup(dbIncident.PokestopId, &dbIncident)
+		}
+		return &dbIncident
+	})
+
+	incident := existingIncident.Value()
+	incident.Lock()
+	return incident, func() { incident.Unlock() }, nil
+}
+
+// getIncidentRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
+// Caller MUST call returned unlock function if non-nil.
+func getIncidentRecordForUpdate(ctx context.Context, db db.DbDetails, incidentId string) (*Incident, func(), error) {
+	incident, unlock, err := getIncidentRecordReadOnly(ctx, db, incidentId)
+	if err != nil || incident == nil {
+		return nil, nil, err
+	}
+	incident.snapshotOldValues()
+	return incident, unlock, nil
+}
+
+// getOrCreateIncidentRecord gets existing or creates new, locked with snapshot.
+// Caller MUST call returned unlock function.
+func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string, pokestopId string) (*Incident, func(), error) {
+	// Create new Incident atomically - function only called if key doesn't exist
+	incidentItem, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
+		return &Incident{IncidentData: IncidentData{Id: incidentId, PokestopId: pokestopId}, newRecord: true}
+	})
+
+	incident := incidentItem.Value()
+	incident.Lock()
+
+	if incident.newRecord {
+		// We should attempt to load from database
+		err := loadIncidentFromDatabase(ctx, db, incidentId, incident)
+		if err != nil {
+			if !errors.Is(err, sql.ErrNoRows) {
+				incident.Unlock()
+				return nil, nil, err
+			}
+		} else {
+			// We loaded from DB
+			incident.newRecord = false
+			incident.ClearDirty()
+			if config.Config.FortInMemory {
+				updatePokestopIncidentLookup(incident.PokestopId, incident)
+			}
+		}
+	}
+
+	incident.snapshotOldValues()
+	return incident, func() { incident.Unlock() }, nil
+}
+
+func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident) {
+	// Skip save if not dirty and not new
+	if !incident.IsDirty() && !incident.IsNewRecord() {
+		return
+	}
+
+	incident.SetUpdated(time.Now().Unix())
+
+	// Capture isNewRecord before state changes
+	isNewRecord := incident.IsNewRecord()
+
+	// Debug logging before queueing
+	if dbDebugEnabled {
+		if isNewRecord {
+			dbDebugLog("INSERT", "Incident", incident.Id, incident.changedFields)
+		} else {
+			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
+		}
+	}
+
+	// Queue the write through the typed write-behind queue
+	if incidentQueue != nil {
+		incidentQueue.Enqueue(incident.IncidentData, isNewRecord, 0)
+	} else {
+		// Fallback to direct write if queue not initialized
+		_ = incidentWriteDB(db, incident, isNewRecord)
+	}
+
+	createIncidentWebhooks(ctx, db, incident)
+
+	var stopLat, stopLon float64
+	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
+	if stop != nil {
+		stopLat, stopLon = stop.Lat, stop.Lon
+		unlock()
+	}
+
+	areas := MatchStatsGeofence(stopLat, stopLon)
+	updateIncidentStats(incident, areas)
+
+	if config.Config.FortInMemory {
+		updatePokestopIncidentLookup(incident.PokestopId, incident)
+	}
+
+	if dbDebugEnabled {
+		incident.changedFields = incident.changedFields[:0]
+	}
+	incident.ClearDirty()
+	if isNewRecord {
+		incident.newRecord = false
+		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+	}
+}
+
+// incidentWriteDB performs the actual database INSERT/UPDATE for an Incident
+// This is called by both direct writes and the write-behind queue
+func incidentWriteDB(db db.DbDetails, incident *Incident, isNewRecord bool) error {
+	if isNewRecord {
+		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+
+			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, :slot_2_form, :slot_3_pokemon_id, :slot_3_form)", incident)
+
+		statsCollector.IncDbQuery("insert incident", err)
+		if err != nil {
+			log.Errorf("insert incident: %s", err)
+			return err
+		}
+		_, _ = res, err
+	} else {
+		res, err := db.GeneralDb.NamedExec("UPDATE incident SET "+
+			"start = :start, "+
+			"expiration = :expiration, "+
+			"display_type = :display_type, "+
+			"style = :style, "+
+			"`character` = :character, "+
+			"updated = :updated, "+
+			"confirmed = :confirmed, "+
+			"slot_1_pokemon_id = :slot_1_pokemon_id, "+
+			"slot_1_form = :slot_1_form, "+
+			"slot_2_pokemon_id = :slot_2_pokemon_id, "+
+			"slot_2_form = :slot_2_form, "+
+			"slot_3_pokemon_id = :slot_3_pokemon_id, "+
+			"slot_3_form = :slot_3_form "+
+			"WHERE id = :id", incident,
+		)
+		statsCollector.IncDbQuery("update incident", err)
+		if err != nil {
+			log.Errorf("Update incident %s", err)
+			return err
+		}
+		_, _ = res, err
+	}
+	return nil
+}
+
+func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Incident) {
+	old := &incident.oldValues
+	isNew := incident.IsNewRecord()
+
+	if isNew || (old.ExpirationTime != incident.ExpirationTime || old.Character != incident.Character || old.Confirmed != incident.Confirmed || old.Slot1PokemonId != incident.Slot1PokemonId) {
+		var pokestopName, stopUrl string
+		var stopLat, stopLon float64
+		var stopEnabled bool
+		stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
+		if stop != nil {
+			pokestopName = stop.Name.ValueOrZero()
+			stopLat, stopLon = stop.Lat, stop.Lon
+			stopUrl = stop.Url.ValueOrZero()
+			stopEnabled = stop.Enabled.ValueOrZero()
+			unlock()
+		}
+		if pokestopName == "" {
+			pokestopName = "Unknown"
+		}
+
+		var lineup []webhookLineup
+		if incident.Slot1PokemonId.Valid {
+			lineup = []webhookLineup{
+				{
+					Slot:      1,
+					PokemonId: incident.Slot1PokemonId,
+					Form:      incident.Slot1Form,
+				},
+				{
+					Slot:      2,
+					PokemonId: incident.Slot2PokemonId,
+					Form:      incident.Slot2Form,
+				},
+				{
+					Slot:      3,
+					PokemonId: incident.Slot3PokemonId,
+					Form:      incident.Slot3Form,
+				},
+			}
+		}
+
+		incidentHook := IncidentWebhook{
+			Id:                      incident.Id,
+			PokestopId:              incident.PokestopId,
+			Latitude:                stopLat,
+			Longitude:               stopLon,
+			PokestopName:            pokestopName,
+			Url:                     stopUrl,
+			Enabled:                 stopEnabled,
+			Start:                   incident.StartTime,
+			IncidentExpireTimestamp: incident.ExpirationTime,
+			Expiration:              incident.ExpirationTime,
+			DisplayType:             incident.DisplayType,
+			Style:                   incident.Style,
+			GruntType:               incident.Character,
+			Character:               incident.Character,
+			Updated:                 incident.Updated,
+			Confirmed:               incident.Confirmed,
+			Lineup:                  lineup,
+		}
+
+		areas := MatchStatsGeofence(stopLat, stopLon)
+		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
+		statsCollector.UpdateIncidentCount(areas)
+	}
+}

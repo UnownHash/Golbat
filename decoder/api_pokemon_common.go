@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"math"
-	"strconv"
 	"time"
 
 	"golbat/config"
@@ -10,8 +9,8 @@ import (
 	pb "golbat/grpc"
 
 	"github.com/UnownHash/gohbem"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type ApiPokemonDnfId struct {
@@ -71,7 +70,7 @@ type ApiPokemonResult struct {
 
 func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 	return ApiPokemonResult{
-		Id:                      strconv.FormatUint(pokemon.Id, 10),
+		Id:                      pokemon.Id.String(),
 		PokestopId:              pokemon.PokestopId,
 		SpawnId:                 pokemon.SpawnId,
 		Lat:                     pokemon.Lat,

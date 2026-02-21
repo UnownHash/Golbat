@@ -1,23 +1,15 @@
 package decoder
 
 import (
-	"context"
-	"database/sql"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"golbat/db"
-	"golbat/pogo"
-	"golbat/util"
-	"golbat/webhooks"
-	"time"
+	"sync"
 
-	"github.com/jellydator/ttlcache/v3"
-	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
+	"github.com/guregu/null/v6"
 )
 
-type Station struct {
+// StationData contains all database-persisted fields for Station.
+// This struct is embedded in Station and can be safely copied for write-behind queueing.
+type StationData struct {
 	Id                string  `db:"id"`
 	Lat               float64 `db:"lat"`
 	Lon               float64 `db:"lon"`
@@ -49,299 +41,338 @@ type Station struct {
 	StationedPokemon      null.String `db:"stationed_pokemon"`
 }
 
-func getStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, error) {
-	inMemoryStation := stationCache.Get(stationId)
-	if inMemoryStation != nil {
-		station := inMemoryStation.Value()
-		return &station, nil
-	}
-	station := Station{}
-	err := db.GeneralDb.GetContext(ctx, &station,
-		`
-			SELECT id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon
-			FROM station WHERE id = ?
-		`, stationId)
-	statsCollector.IncDbQuery("select station", err)
+// Station struct.
+// REMINDER! Dirty flag pattern - use setter methods to modify fields
+type Station struct {
+	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
 
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
+	StationData // Embedded data fields - can be copied for write-behind queue
 
-	if err != nil {
-		return nil, err
-	}
-	return &station, nil
+	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+
+	oldValues StationOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
 
-func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
-	oldStation, _ := getStationRecord(ctx, db, station.Id)
-	now := time.Now().Unix()
-	if oldStation != nil && !hasChangesStation(oldStation, station) {
-		if oldStation.Updated > now-900 {
-			// if a gym is unchanged, but we did see it again after 15 minutes, then save again
-			return
+// StationOldValues holds old field values for webhook comparison
+type StationOldValues struct {
+	EndTime                int64
+	BattleEnd              null.Int
+	BattlePokemonId        null.Int
+	BattlePokemonForm      null.Int
+	BattlePokemonCostume   null.Int
+	BattlePokemonGender    null.Int
+	BattlePokemonBreadMode null.Int
+}
+
+// IsDirty returns true if any field has been modified
+func (station *Station) IsDirty() bool {
+	return station.dirty
+}
+
+// ClearDirty resets the dirty flag (call after saving to DB)
+func (station *Station) ClearDirty() {
+	station.dirty = false
+}
+
+// IsNewRecord returns true if this is a new record (not yet in DB)
+func (station *Station) IsNewRecord() bool {
+	return station.newRecord
+}
+
+// Lock acquires the Station's mutex
+func (station *Station) Lock() {
+	station.mu.Lock()
+}
+
+// Unlock releases the Station's mutex
+func (station *Station) Unlock() {
+	station.mu.Unlock()
+}
+
+// snapshotOldValues saves current values for webhook comparison
+// Call this after loading from cache/DB but before modifications
+func (station *Station) snapshotOldValues() {
+	station.oldValues = StationOldValues{
+		EndTime:                station.EndTime,
+		BattleEnd:              station.BattleEnd,
+		BattlePokemonId:        station.BattlePokemonId,
+		BattlePokemonForm:      station.BattlePokemonForm,
+		BattlePokemonCostume:   station.BattlePokemonCostume,
+		BattlePokemonGender:    station.BattlePokemonGender,
+		BattlePokemonBreadMode: station.BattlePokemonBreadMode,
+	}
+}
+
+// --- Set methods with dirty tracking ---
+
+func (station *Station) SetId(v string) {
+	if station.Id != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Id:%s->%s", station.Id, v))
 		}
+		station.Id = v
+		station.dirty = true
 	}
+}
 
-	station.Updated = now
-
-	//log.Traceln(cmp.Diff(oldStation, station))
-	if oldStation == nil {
-		res, err := db.GeneralDb.NamedExecContext(ctx,
-			`
-			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
-			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_start,:battle_end,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:battle_pokemon_bread_mode,:battle_pokemon_move_1,:battle_pokemon_move_2,:battle_pokemon_stamina,:battle_pokemon_cp_multiplier,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
-			`, station)
-
-		statsCollector.IncDbQuery("insert station", err)
-		if err != nil {
-			log.Errorf("insert station: %s", err)
-			return
+func (station *Station) SetLat(v float64) {
+	if !floatAlmostEqual(station.Lat, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Lat:%f->%f", station.Lat, v))
 		}
-		_, _ = res, err
-	} else {
-		res, err := db.GeneralDb.NamedExecContext(ctx, `
-			UPDATE station
-			SET
-			    lat = :lat,
-			    lon = :lon,
-			    name = :name,
-			    cell_id = :cell_id,
-			    start_time = :start_time,
-			    end_time = :end_time,
-			    cooldown_complete = :cooldown_complete,
-			    is_battle_available = :is_battle_available,
-			    is_inactive = :is_inactive,
-			    updated = :updated,
-			    battle_level = :battle_level,
-			    battle_start = :battle_start,
-			    battle_end = :battle_end,
-			    battle_pokemon_id = :battle_pokemon_id,
-			    battle_pokemon_form = :battle_pokemon_form,
-			    battle_pokemon_costume = :battle_pokemon_costume,
-			    battle_pokemon_gender = :battle_pokemon_gender,
-			    battle_pokemon_alignment = :battle_pokemon_alignment,
-			    battle_pokemon_bread_mode = :battle_pokemon_bread_mode,
-			    battle_pokemon_move_1 = :battle_pokemon_move_1,
-			    battle_pokemon_move_2 = :battle_pokemon_move_2,
-			    battle_pokemon_stamina = :battle_pokemon_stamina,
-			    battle_pokemon_cp_multiplier = :battle_pokemon_cp_multiplier,
-			    total_stationed_pokemon = :total_stationed_pokemon,
-			    total_stationed_gmax = :total_stationed_gmax,
-			    stationed_pokemon = :stationed_pokemon
-			WHERE id = :id
-		`, station,
-		)
-		statsCollector.IncDbQuery("update station", err)
-		if err != nil {
-			log.Errorf("Update station %s", err)
+		station.Lat = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetLon(v float64) {
+	if !floatAlmostEqual(station.Lon, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Lon:%f->%f", station.Lon, v))
 		}
-		_, _ = res, err
+		station.Lon = v
+		station.dirty = true
 	}
-
-	stationCache.Set(station.Id, *station, ttlcache.DefaultTTL)
-	createStationWebhooks(oldStation, station)
-
 }
 
-// hasChangesStation compares two Station structs
-// Float tolerance: Lat, Lon
-func hasChangesStation(old *Station, new *Station) bool {
-	return old.Id != new.Id ||
-		old.Name != new.Name ||
-		old.StartTime != new.StartTime ||
-		old.EndTime != new.EndTime ||
-		old.StationedPokemon != new.StationedPokemon ||
-		old.CooldownComplete != new.CooldownComplete ||
-		old.IsBattleAvailable != new.IsBattleAvailable ||
-		old.BattleLevel != new.BattleLevel ||
-		old.BattleStart != new.BattleStart ||
-		old.BattleEnd != new.BattleEnd ||
-		old.BattlePokemonId != new.BattlePokemonId ||
-		old.BattlePokemonForm != new.BattlePokemonForm ||
-		old.BattlePokemonCostume != new.BattlePokemonCostume ||
-		old.BattlePokemonGender != new.BattlePokemonGender ||
-		old.BattlePokemonAlignment != new.BattlePokemonAlignment ||
-		old.BattlePokemonBreadMode != new.BattlePokemonBreadMode ||
-		old.BattlePokemonMove1 != new.BattlePokemonMove1 ||
-		old.BattlePokemonMove2 != new.BattlePokemonMove2 ||
-		old.BattlePokemonStamina != new.BattlePokemonStamina ||
-		old.BattlePokemonCpMultiplier != new.BattlePokemonCpMultiplier ||
-		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
-}
-
-func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
-	station.Id = stationProto.Id
-	station.Name = stationProto.Name
-	// NOTE: Some names have more than 255 runes, which won't fit in our
-	// varchar(255).
-	if truncateStr, truncated := util.TruncateUTF8(stationProto.Name, 255); truncated {
-		log.Warnf("truncating name for station id '%s'. Orig name: %s",
-			stationProto.Id,
-			stationProto.Name,
-		)
-		station.Name = truncateStr
-	}
-	station.Lat = stationProto.Lat
-	station.Lon = stationProto.Lng
-	station.StartTime = stationProto.StartTimeMs / 1000
-	station.EndTime = stationProto.EndTimeMs / 1000
-	station.CooldownComplete = stationProto.CooldownCompleteMs
-	station.IsBattleAvailable = stationProto.IsBreadBattleAvailable
-	if battleDetails := stationProto.BattleDetails; battleDetails != nil {
-		station.BattleLevel = null.IntFrom(int64(battleDetails.BattleLevel))
-		station.BattleStart = null.IntFrom(battleDetails.BattleWindowStartMs / 1000)
-		station.BattleEnd = null.IntFrom(battleDetails.BattleWindowEndMs / 1000)
-		if pokemon := battleDetails.BattlePokemon; pokemon != nil {
-			station.BattlePokemonId = null.IntFrom(int64(pokemon.PokemonId))
-			station.BattlePokemonMove1 = null.IntFrom(int64(pokemon.Move1))
-			station.BattlePokemonMove2 = null.IntFrom(int64(pokemon.Move2))
-			station.BattlePokemonForm = null.IntFrom(int64(pokemon.PokemonDisplay.Form))
-			station.BattlePokemonCostume = null.IntFrom(int64(pokemon.PokemonDisplay.Costume))
-			station.BattlePokemonGender = null.IntFrom(int64(pokemon.PokemonDisplay.Gender))
-			station.BattlePokemonAlignment = null.IntFrom(int64(pokemon.PokemonDisplay.Alignment))
-			station.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.PokemonDisplay.BreadModeEnum))
-			station.BattlePokemonStamina = null.IntFrom(int64(pokemon.Stamina))
-			station.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.CpMultiplier))
-			if rewardPokemon := battleDetails.RewardPokemon; rewardPokemon != nil && pokemon.PokemonId != rewardPokemon.PokemonId {
-				log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
-			}
+func (station *Station) SetName(v string) {
+	if station.Name != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Name:%s->%s", station.Name, v))
 		}
+		station.Name = v
+		station.dirty = true
 	}
-	station.CellId = int64(cellId)
-	return station
 }
 
-func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
-	type stationedPokemonDetail struct {
-		PokemonId             int    `json:"pokemon_id"`
-		Form                  int    `json:"form"`
-		Costume               int    `json:"costume"`
-		Gender                int    `json:"gender"`
-		Shiny                 bool   `json:"shiny,omitempty"`
-		TempEvolution         int    `json:"temp_evolution,omitempty"`
-		TempEvolutionFinishMs int64  `json:"temp_evolution_finish_ms,omitempty"`
-		Alignment             int    `json:"alignment,omitempty"`
-		Badge                 int    `json:"badge,omitempty"`
-		Background            *int64 `json:"background,omitempty"`
-		BreadMode             int    `json:"bread_mode"`
-	}
-
-	var stationedPokemon []stationedPokemonDetail
-	stationedGmax := int64(0)
-	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
-		pokemon := stationedPokemonDetails.Pokemon
-		display := pokemon.PokemonDisplay
-		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
-			PokemonId:             int(pokemon.PokemonId),
-			Form:                  int(display.Form),
-			Costume:               int(display.Costume),
-			Gender:                int(display.Gender),
-			Shiny:                 display.Shiny,
-			TempEvolution:         int(display.CurrentTempEvolution),
-			TempEvolutionFinishMs: display.TemporaryEvolutionFinishMs,
-			Alignment:             int(display.Alignment),
-			Badge:                 int(display.PokemonBadge),
-			Background:            util.ExtractBackgroundFromDisplay(display),
-			BreadMode:             int(display.BreadModeEnum),
-		})
-		if display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
-			stationedGmax++
+func (station *Station) SetCellId(v int64) {
+	if station.CellId != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("CellId:%d->%d", station.CellId, v))
 		}
+		station.CellId = v
+		station.dirty = true
 	}
-	jsonString, _ := json.Marshal(stationedPokemon)
-	station.StationedPokemon = null.StringFrom(string(jsonString))
-	station.TotalStationedPokemon = null.IntFrom(int64(stationProto.TotalNumStationedPokemon))
-	station.TotalStationedGmax = null.IntFrom(stationedGmax)
-	return station
 }
 
-func (station *Station) resetStationedPokemonFromStationDetailsNotFound() *Station {
-	jsonString, _ := json.Marshal([]string{})
-	station.StationedPokemon = null.StringFrom(string(jsonString))
-	station.TotalStationedPokemon = null.IntFrom(0)
-	station.TotalStationedGmax = null.IntFrom(0)
-	return station
-}
-
-func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto) string {
-	stationId := request.StationId
-	stationMutex, _ := stationStripedMutex.GetLock(stationId)
-	stationMutex.Lock()
-	defer stationMutex.Unlock()
-
-	station, err := getStationRecord(ctx, db, stationId)
-	if err != nil {
-		log.Printf("Get station %s", err)
-		return "Error getting station"
-	}
-
-	if station == nil {
-		log.Infof("Stationed pokemon details for station %s not found", stationId)
-		return fmt.Sprintf("Stationed pokemon details for station %s not found", stationId)
-	}
-
-	station.resetStationedPokemonFromStationDetailsNotFound()
-	saveStationRecord(ctx, db, station)
-	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
-}
-
-func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
-	stationId := request.StationId
-	stationMutex, _ := stationStripedMutex.GetLock(stationId)
-	stationMutex.Lock()
-	defer stationMutex.Unlock()
-
-	station, err := getStationRecord(ctx, db, stationId)
-	if err != nil {
-		log.Printf("Get station %s", err)
-		return "Error getting station"
-	}
-
-	if station == nil {
-		log.Infof("Stationed pokemon details for station %s not found", stationId)
-		return fmt.Sprintf("Stationed pokemon details for station %s not found", stationId)
-	}
-
-	station.updateFromGetStationedPokemonDetailsOutProto(stationDetails)
-	saveStationRecord(ctx, db, station)
-	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
-}
-
-func createStationWebhooks(oldStation *Station, station *Station) {
-	if oldStation == nil || station.BattlePokemonId.Valid && (oldStation.EndTime != station.EndTime ||
-		oldStation.BattleEnd != station.BattleEnd ||
-		oldStation.BattlePokemonId != station.BattlePokemonId ||
-		oldStation.BattlePokemonForm != station.BattlePokemonForm ||
-		oldStation.BattlePokemonCostume != station.BattlePokemonCostume ||
-		oldStation.BattlePokemonGender != station.BattlePokemonGender ||
-		oldStation.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
-		stationHook := map[string]any{
-			"id":                        station.Id,
-			"latitude":                  station.Lat,
-			"longitude":                 station.Lon,
-			"name":                      station.Name,
-			"start_time":                station.StartTime,
-			"end_time":                  station.EndTime,
-			"is_battle_available":       station.IsBattleAvailable,
-			"battle_level":              station.BattleLevel,
-			"battle_start":              station.BattleStart,
-			"battle_end":                station.BattleEnd,
-			"battle_pokemon_id":         station.BattlePokemonId,
-			"battle_pokemon_form":       station.BattlePokemonForm,
-			"battle_pokemon_costume":    station.BattlePokemonCostume,
-			"battle_pokemon_gender":     station.BattlePokemonGender,
-			"battle_pokemon_alignment":  station.BattlePokemonAlignment,
-			"battle_pokemon_bread_mode": station.BattlePokemonBreadMode,
-			"battle_pokemon_move_1":     station.BattlePokemonMove1,
-			"battle_pokemon_move_2":     station.BattlePokemonMove2,
-			"total_stationed_pokemon":   station.TotalStationedPokemon,
-			"total_stationed_gmax":      station.TotalStationedGmax,
-			"updated":                   station.Updated,
+func (station *Station) SetStartTime(v int64) {
+	if station.StartTime != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("StartTime:%d->%d", station.StartTime, v))
 		}
-		areas := MatchStatsGeofence(station.Lat, station.Lon)
-		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
+		station.StartTime = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetEndTime(v int64) {
+	if station.EndTime != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("EndTime:%d->%d", station.EndTime, v))
+		}
+		station.EndTime = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetCooldownComplete(v int64) {
+	if station.CooldownComplete != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("CooldownComplete:%d->%d", station.CooldownComplete, v))
+		}
+		station.CooldownComplete = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetIsBattleAvailable(v bool) {
+	if station.IsBattleAvailable != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("IsBattleAvailable:%t->%t", station.IsBattleAvailable, v))
+		}
+		station.IsBattleAvailable = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetIsInactive(v bool) {
+	if station.IsInactive != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("IsInactive:%t->%t", station.IsInactive, v))
+		}
+		station.IsInactive = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattleLevel(v null.Int) {
+	if station.BattleLevel != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleLevel:%s->%s", FormatNull(station.BattleLevel), FormatNull(v)))
+		}
+		station.BattleLevel = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattleStart(v null.Int) {
+	if station.BattleStart != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleStart:%s->%s", FormatNull(station.BattleStart), FormatNull(v)))
+		}
+		station.BattleStart = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattleEnd(v null.Int) {
+	if station.BattleEnd != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattleEnd:%s->%s", FormatNull(station.BattleEnd), FormatNull(v)))
+		}
+		station.BattleEnd = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonId(v null.Int) {
+	if station.BattlePokemonId != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonId:%s->%s", FormatNull(station.BattlePokemonId), FormatNull(v)))
+		}
+		station.BattlePokemonId = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonForm(v null.Int) {
+	if station.BattlePokemonForm != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonForm:%s->%s", FormatNull(station.BattlePokemonForm), FormatNull(v)))
+		}
+		station.BattlePokemonForm = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonCostume(v null.Int) {
+	if station.BattlePokemonCostume != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCostume:%s->%s", FormatNull(station.BattlePokemonCostume), FormatNull(v)))
+		}
+		station.BattlePokemonCostume = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonGender(v null.Int) {
+	if station.BattlePokemonGender != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonGender:%s->%s", FormatNull(station.BattlePokemonGender), FormatNull(v)))
+		}
+		station.BattlePokemonGender = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonAlignment(v null.Int) {
+	if station.BattlePokemonAlignment != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonAlignment:%s->%s", FormatNull(station.BattlePokemonAlignment), FormatNull(v)))
+		}
+		station.BattlePokemonAlignment = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonBreadMode(v null.Int) {
+	if station.BattlePokemonBreadMode != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonBreadMode:%s->%s", FormatNull(station.BattlePokemonBreadMode), FormatNull(v)))
+		}
+		station.BattlePokemonBreadMode = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonMove1(v null.Int) {
+	if station.BattlePokemonMove1 != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove1:%s->%s", FormatNull(station.BattlePokemonMove1), FormatNull(v)))
+		}
+		station.BattlePokemonMove1 = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonMove2(v null.Int) {
+	if station.BattlePokemonMove2 != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonMove2:%s->%s", FormatNull(station.BattlePokemonMove2), FormatNull(v)))
+		}
+		station.BattlePokemonMove2 = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonStamina(v null.Int) {
+	if station.BattlePokemonStamina != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonStamina:%s->%s", FormatNull(station.BattlePokemonStamina), FormatNull(v)))
+		}
+		station.BattlePokemonStamina = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetBattlePokemonCpMultiplier(v null.Float) {
+	if !nullFloatAlmostEqual(station.BattlePokemonCpMultiplier, v, floatTolerance) {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("BattlePokemonCpMultiplier:%s->%s", FormatNull(station.BattlePokemonCpMultiplier), FormatNull(v)))
+		}
+		station.BattlePokemonCpMultiplier = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetTotalStationedPokemon(v null.Int) {
+	if station.TotalStationedPokemon != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedPokemon:%s->%s", FormatNull(station.TotalStationedPokemon), FormatNull(v)))
+		}
+		station.TotalStationedPokemon = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetTotalStationedGmax(v null.Int) {
+	if station.TotalStationedGmax != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("TotalStationedGmax:%s->%s", FormatNull(station.TotalStationedGmax), FormatNull(v)))
+		}
+		station.TotalStationedGmax = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetStationedPokemon(v null.String) {
+	if station.StationedPokemon != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("StationedPokemon:%s->%s", FormatNull(station.StationedPokemon), FormatNull(v)))
+		}
+		station.StationedPokemon = v
+		station.dirty = true
+	}
+}
+
+func (station *Station) SetUpdated(v int64) {
+	if station.Updated != v {
+		if dbDebugEnabled {
+			station.changedFields = append(station.changedFields, fmt.Sprintf("Updated:%d->%d", station.Updated, v))
+		}
+		station.Updated = v
+		station.dirty = true
 	}
 }
