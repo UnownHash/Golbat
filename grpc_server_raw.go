@@ -23,6 +23,7 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		md, _ := metadata.FromIncomingContext(ctx)
 
 		if auth := md.Get("authorization"); len(auth) == 0 || auth[0] != config.Config.RawBearer {
+			statsCollector.IncRawRequests("error", "auth")
 			return &pb.RawProtoResponse{Message: "Incorrect authorisation received"}, nil
 		}
 	}
@@ -85,5 +86,6 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
 	}
 
+	statsCollector.IncRawRequests("ok", "")
 	return &pb.RawProtoResponse{Message: "Processed"}, nil
 }
