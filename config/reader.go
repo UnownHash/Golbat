@@ -67,6 +67,13 @@ func ReadConfig() (configDefinition, error) {
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
 		},
+		Stats: stats{
+			PokemonStatsIntervalMinutes:  1,
+			PokemonCountIntervalMinutes:  10,
+			RaidStatsIntervalMinutes:     10,
+			InvasionStatsIntervalMinutes: 15,
+			QuestStatsIntervalMinutes:    15,
+		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))
