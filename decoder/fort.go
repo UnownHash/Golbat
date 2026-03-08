@@ -26,6 +26,7 @@ type FortWebhook struct {
 	Description *string  `json:"description"`
 	ImageUrl    *string  `json:"image_url"`
 	Location    Location `json:"location"`
+	CellId      uint64   `json:"-"` // internal use only, not sent in webhook
 }
 
 type FortChangeWebhook struct {
@@ -83,6 +84,7 @@ func InitWebHookFortFromGym(gym *Gym) *FortWebhook {
 	fort.ImageUrl = gym.Url.Ptr()
 	fort.Description = gym.Description.Ptr()
 	fort.Location = Location{Latitude: gym.Lat, Longitude: gym.Lon}
+	fort.CellId = uint64(gym.CellId.ValueOrZero())
 	return fort
 }
 
@@ -97,6 +99,7 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 	fort.ImageUrl = stop.Url.Ptr()
 	fort.Description = stop.Description.Ptr()
 	fort.Location = Location{Latitude: stop.Lat, Longitude: stop.Lon}
+	fort.CellId = uint64(stop.CellId.ValueOrZero())
 	return fort
 }
 
@@ -137,7 +140,7 @@ func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []strin
 
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 	if change == NEW {
-		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
+		areas := MatchStatsGeofenceWithCell(new.Location.Latitude, new.Location.Longitude, new.CellId)
 		hook := FortChangeWebhook{
 			ChangeType: change.String(),
 			New:        new,
@@ -145,7 +148,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "addition")
 	} else if change == REMOVAL {
-		areas := MatchStatsGeofence(old.Location.Latitude, old.Location.Longitude)
+		areas := MatchStatsGeofenceWithCell(old.Location.Latitude, old.Location.Longitude, old.CellId)
 		hook := FortChangeWebhook{
 			ChangeType: change.String(),
 			Old:        old,
@@ -153,7 +156,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, old.Type, "removal")
 	} else if change == EDIT {
-		areas := MatchStatsGeofence(new.Location.Latitude, new.Location.Longitude)
+		areas := MatchStatsGeofenceWithCell(new.Location.Latitude, new.Location.Longitude, new.CellId)
 		var editTypes []string
 
 		// Check if Name has changed
