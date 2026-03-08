@@ -2,13 +2,16 @@ package decoder
 
 import (
 	"encoding/json"
-	"github.com/tidwall/rtree"
-	"golbat/geo"
 	"io/ioutil"
 	"net/http"
 
+	"golbat/config"
+	"golbat/geo"
+
+	"github.com/golang/geo/s2"
 	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
 )
 
 type KojiResponse struct {
@@ -21,6 +24,7 @@ type KojiResponse struct {
 
 var statsTree *rtree.RTreeG[*geojson.Feature]
 var nestTree *rtree.RTreeG[*geojson.Feature]
+var statsS2Lookup *geo.S2CellLookup
 var kojiUrl = ""
 var kojiBearerToken = ""
 
@@ -106,11 +110,23 @@ func ReadGeofences() error {
 	}
 
 	statsTree = geo.LoadRtree(statsFeatureCollection)
+	if config.Config.Tuning.S2CellLookup {
+		statsS2Lookup = geo.BuildS2LookupFromFeatures(statsFeatureCollection)
+	}
 
 	return nil
 }
 
 func MatchStatsGeofence(lat, lon float64) []geo.AreaName {
+	return MatchStatsGeofenceWithCell(lat, lon, 0)
+}
+
+func MatchStatsGeofenceWithCell(lat, lon float64, cellId uint64) []geo.AreaName {
+	if cellId != 0 && statsS2Lookup != nil {
+		if areas := statsS2Lookup.Lookup(s2.CellID(cellId)); len(areas) > 0 {
+			return areas
+		}
+	}
 	return geo.MatchGeofencesRtree(statsTree, lat, lon)
 }
 

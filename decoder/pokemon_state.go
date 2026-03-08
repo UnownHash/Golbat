@@ -297,7 +297,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	updatePokemonLookup(pokemon, changePvpField, pvpResults)
 
 	// Webhooks and stats happen immediately (not queued)
-	areas := MatchStatsGeofence(pokemon.Lat, pokemon.Lon)
+	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}

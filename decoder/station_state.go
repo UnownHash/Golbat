@@ -286,7 +286,7 @@ func createStationWebhooks(station *Station) {
 			TotalStationedGmax:     station.TotalStationedGmax,
 			Updated:                station.Updated,
 		}
-		areas := MatchStatsGeofence(station.Lat, station.Lon)
+		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
 		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
 	}

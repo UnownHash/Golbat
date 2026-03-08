@@ -401,7 +401,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		fortRtreeUpdateGymOnSave(gym)
 	}
 
-	areas := MatchStatsGeofence(gym.Lat, gym.Lon)
+	areas := MatchStatsGeofenceWithCell(gym.Lat, gym.Lon, uint64(gym.CellId.ValueOrZero()))
 	createGymWebhooks(gym, areas)
 	createGymFortWebhooks(gym)
 	updateRaidStats(gym, areas)

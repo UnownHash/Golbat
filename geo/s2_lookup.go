@@ -1,0 +1,142 @@
+package geo
+
+import (
+	"unsafe"
+
+	"github.com/golang/geo/s2"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
+	log "github.com/sirupsen/logrus"
+)
+
+const S2LookupLevel = 15
+
+type S2CellLookup struct {
+	cells     map[s2.CellID][]AreaName
+	edgeCells map[s2.CellID]struct{}
+}
+
+func NewS2CellLookup() *S2CellLookup {
+	return &S2CellLookup{
+		cells:     make(map[s2.CellID][]AreaName),
+		edgeCells: make(map[s2.CellID]struct{}),
+	}
+}
+
+func (l *S2CellLookup) addArea(cellID s2.CellID, area AreaName) {
+	l.cells[cellID] = append(l.cells[cellID], area)
+}
+
+func (l *S2CellLookup) addEdgeCell(cellID s2.CellID) {
+	l.edgeCells[cellID] = struct{}{}
+}
+
+func (l *S2CellLookup) removeEdgeCells() int {
+	removed := 0
+	for cellID := range l.edgeCells {
+		if _, exists := l.cells[cellID]; exists {
+			delete(l.cells, cellID)
+			removed++
+		}
+	}
+	l.edgeCells = nil // free memory
+	return removed
+}
+
+func (l *S2CellLookup) Lookup(cellID s2.CellID) []AreaName {
+	return l.cells[cellID]
+}
+
+func (l *S2CellLookup) SizeBytes() int64 {
+	var size int64
+
+	size += int64(unsafe.Sizeof(l.cells))
+
+	for cellID, areas := range l.cells {
+		size += int64(unsafe.Sizeof(cellID))
+		size += int64(unsafe.Sizeof(areas))
+		for _, area := range areas {
+			size += int64(unsafe.Sizeof(area))
+			size += int64(len(area.Name))
+			size += int64(len(area.Parent))
+		}
+	}
+
+	return size
+}
+
+func (l *S2CellLookup) CellCount() int {
+	return len(l.cells)
+}
+
+func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2CellLookup {
+	if featureCollection == nil {
+		return NewS2CellLookup()
+	}
+
+	lookup := NewS2CellLookup()
+
+	for _, f := range featureCollection.Features {
+		name := f.Properties.MustString("name", "unknown")
+		parent := f.Properties.MustString("parent", name)
+		area := AreaName{Parent: parent, Name: name}
+
+		geoType := f.Geometry.GeoJSONType()
+		switch geoType {
+		case "Polygon":
+			polygon := f.Geometry.(orb.Polygon)
+			processPolygon(lookup, polygon, area)
+		case "MultiPolygon":
+			multiPolygon := f.Geometry.(orb.MultiPolygon)
+			for _, polygon := range multiPolygon {
+				processPolygon(lookup, polygon, area)
+			}
+		}
+	}
+
+	removed := lookup.removeEdgeCells()
+	log.Infof("GEO: Removed %d edge cells from lookup", removed)
+
+	sizeMB := float64(lookup.SizeBytes()) / (1024 * 1024)
+	log.Infof("GEO: S2 lookup table built with %d cells, size: %.2f MB", lookup.CellCount(), sizeMB)
+
+	return lookup
+}
+
+func processPolygon(lookup *S2CellLookup, polygon orb.Polygon, area AreaName) {
+	if len(polygon) == 0 || len(polygon[0]) == 0 {
+		return
+	}
+
+	// Convert orb.Polygon to s2.Loop for efficient covering
+	ring := polygon[0] // outer ring
+	points := make([]s2.Point, len(ring))
+	for i, p := range ring {
+		points[i] = s2.PointFromLatLng(s2.LatLngFromDegrees(p.Lat(), p.Lon()))
+	}
+
+	loop := s2.LoopFromPoints(points)
+	s2Polygon := s2.PolygonFromLoops([]*s2.Loop{loop})
+
+	coverer := s2.RegionCoverer{
+		MinLevel: S2LookupLevel,
+		MaxLevel: S2LookupLevel,
+	}
+	covering := coverer.Covering(s2Polygon)
+
+	for _, cellID := range covering {
+		cell := s2.CellFromCellID(cellID)
+		allInside := true
+		for i := range 4 {
+			if !s2Polygon.ContainsPoint(cell.Vertex(i)) {
+				allInside = false
+				break
+			}
+		}
+		if allInside {
+			lookup.addArea(cellID, area)
+		} else {
+			lookup.addEdgeCell(cellID)
+		}
+	}
+}

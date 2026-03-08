@@ -213,7 +213,7 @@ func createPokestopFortWebhooks(stop *Pokestop) {
 
 func createPokestopWebhooks(stop *Pokestop) {
 
-	areas := MatchStatsGeofence(stop.Lat, stop.Lon)
+	areas := MatchStatsGeofenceWithCell(stop.Lat, stop.Lon, uint64(stop.CellId.ValueOrZero()))
 
 	pokestopName := "Unknown"
 	if stop.Name.Valid {
