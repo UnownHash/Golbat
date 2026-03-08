@@ -12,6 +12,7 @@ import (
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/config"
 	"golbat/encounter_cache"
 	"golbat/geo"
 )
@@ -100,7 +101,33 @@ func LoadStatsGeofences() {
 }
 
 func StartStatsWriter(statsDb *sqlx.DB) {
-	ticker := time.NewTicker(1 * time.Minute)
+	// Set default intervals if not configured
+	pokemonStatsInterval := 1
+	if config.Config.Stats.PokemonStatsIntervalMinutes > 0 {
+		pokemonStatsInterval = config.Config.Stats.PokemonStatsIntervalMinutes
+	}
+
+	pokemonCountInterval := 10
+	if config.Config.Stats.PokemonCountIntervalMinutes > 0 {
+		pokemonCountInterval = config.Config.Stats.PokemonCountIntervalMinutes
+	}
+
+	raidStatsInterval := 10
+	if config.Config.Stats.RaidStatsIntervalMinutes > 0 {
+		raidStatsInterval = config.Config.Stats.RaidStatsIntervalMinutes
+	}
+
+	invasionStatsInterval := 15
+	if config.Config.Stats.InvasionStatsIntervalMinutes > 0 {
+		invasionStatsInterval = config.Config.Stats.InvasionStatsIntervalMinutes
+	}
+
+	questStatsInterval := 15
+	if config.Config.Stats.QuestStatsIntervalMinutes > 0 {
+		questStatsInterval = config.Config.Stats.QuestStatsIntervalMinutes
+	}
+
+	ticker := time.NewTicker(time.Duration(pokemonStatsInterval) * time.Minute)
 	go func() {
 		for {
 			<-ticker.C
@@ -108,7 +135,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t2 := time.NewTicker(10 * time.Minute)
+	t2 := time.NewTicker(time.Duration(pokemonCountInterval) * time.Minute)
 	go func() {
 		for {
 			<-t2.C
@@ -116,7 +143,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t4 := time.NewTicker(10 * time.Minute)
+	t4 := time.NewTicker(time.Duration(raidStatsInterval) * time.Minute)
 	go func() {
 		for {
 			<-t4.C
@@ -124,7 +151,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t5 := time.NewTicker(15 * time.Minute)
+	t5 := time.NewTicker(time.Duration(invasionStatsInterval) * time.Minute)
 	go func() {
 		for {
 			<-t5.C
@@ -132,7 +159,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t6 := time.NewTicker(15 * time.Minute)
+	t6 := time.NewTicker(time.Duration(questStatsInterval) * time.Minute)
 	go func() {
 		for {
 			<-t6.C

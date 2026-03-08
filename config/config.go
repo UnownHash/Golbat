@@ -6,6 +6,7 @@ import (
 	"golbat/geo"
 )
 
+
 type configDefinition struct {
 	Port                    int        `koanf:"port"`
 	GrpcPort                int        `koanf:"grpc_port"`
@@ -28,6 +29,7 @@ type configDefinition struct {
 	Tuning                  tuning     `koanf:"tuning"`
 	Weather                 weather    `koanf:"weather"`
 	ScanRules               []scanRule `koanf:"scan_rules"`
+	Stats                   stats      `koanf:"stats"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
@@ -155,6 +157,14 @@ type scanRule struct {
 type weather struct {
 	ProactiveIVSwitching     bool `koanf:"proactive_iv_switching"`
 	ProactiveIVSwitchingToDB bool `koanf:"proactive_iv_switching_to_db"`
+}
+
+type stats struct {
+	PokemonStatsIntervalMinutes  int `koanf:"pokemon_stats_interval_minutes"`
+	PokemonCountIntervalMinutes  int `koanf:"pokemon_count_interval_minutes"`
+	RaidStatsIntervalMinutes     int `koanf:"raid_stats_interval_minutes"`
+	InvasionStatsIntervalMinutes int `koanf:"invasion_stats_interval_minutes"`
+	QuestStatsIntervalMinutes    int `koanf:"quest_stats_interval_minutes"`
 }
 
 var Config configDefinition
