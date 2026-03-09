@@ -36,13 +36,6 @@ type FortChangeWebhook struct {
 	New        *FortWebhook `json:"new,omitempty"`
 }
 
-type FortChangeWebhook struct {
-	ChangeType string       `json:"change_type"`
-	EditTypes  []string     `json:"edit_types,omitempty"`
-	Old        *FortWebhook `json:"old,omitempty"`
-	New        *FortWebhook `json:"new,omitempty"`
-}
-
 type FortChange string
 type FortType int8
 
