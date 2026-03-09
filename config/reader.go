@@ -67,7 +67,7 @@ func ReadConfig() (configDefinition, error) {
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
 		},
-		Stats: stats{
+		StatsIntervals: statsIntervals{
 			PokemonStatsIntervalMinutes:  1,
 			PokemonCountIntervalMinutes:  10,
 			RaidStatsIntervalMinutes:     10,

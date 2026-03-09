@@ -101,7 +101,7 @@ func LoadStatsGeofences() {
 }
 
 func StartStatsWriter(statsDb *sqlx.DB) {
-	ticker := time.NewTicker(time.Duration(config.Config.Stats.PokemonStatsIntervalMinutes) * time.Minute)
+	ticker := time.NewTicker(time.Duration(config.Config.StatsIntervals.PokemonStatsIntervalMinutes) * time.Minute)
 	go func() {
 		for {
 			<-ticker.C
@@ -109,7 +109,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t2 := time.NewTicker(time.Duration(config.Config.Stats.PokemonCountIntervalMinutes) * time.Minute)
+	t2 := time.NewTicker(time.Duration(config.Config.StatsIntervals.PokemonCountIntervalMinutes) * time.Minute)
 	go func() {
 		for {
 			<-t2.C
@@ -117,7 +117,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t4 := time.NewTicker(time.Duration(config.Config.Stats.RaidStatsIntervalMinutes) * time.Minute)
+	t4 := time.NewTicker(time.Duration(config.Config.StatsIntervals.RaidStatsIntervalMinutes) * time.Minute)
 	go func() {
 		for {
 			<-t4.C
@@ -125,7 +125,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t5 := time.NewTicker(time.Duration(config.Config.Stats.InvasionStatsIntervalMinutes) * time.Minute)
+	t5 := time.NewTicker(time.Duration(config.Config.StatsIntervals.InvasionStatsIntervalMinutes) * time.Minute)
 	go func() {
 		for {
 			<-t5.C
@@ -133,7 +133,7 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 		}
 	}()
 
-	t6 := time.NewTicker(time.Duration(config.Config.Stats.QuestStatsIntervalMinutes) * time.Minute)
+	t6 := time.NewTicker(time.Duration(config.Config.StatsIntervals.QuestStatsIntervalMinutes) * time.Minute)
 	go func() {
 		for {
 			<-t6.C
