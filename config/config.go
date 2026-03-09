@@ -6,30 +6,29 @@ import (
 	"golbat/geo"
 )
 
-
 type configDefinition struct {
-	Port                    int        `koanf:"port"`
-	GrpcPort                int        `koanf:"grpc_port"`
-	Webhooks                []Webhook  `koanf:"webhooks"`
-	Database                database   `koanf:"database"`
-	Logging                 logging    `koanf:"logging"`
-	Sentry                  sentry     `koanf:"sentry"`
-	Pyroscope               pyroscope  `koanf:"pyroscope"`
-	Prometheus              Prometheus `koanf:"prometheus"`
-	PokemonMemoryOnly       bool       `koanf:"pokemon_memory_only"`
-	PokemonInternalToDb     bool       `koanf:"pokemon_internal_to_db"`
-	PreserveInMemoryPokemon bool       `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
-	Preload                 bool       `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
-	FortInMemory            bool       `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
-	Cleanup                 cleanup    `koanf:"cleanup"`
-	RawBearer               string     `koanf:"raw_bearer"`
-	ApiSecret               string     `koanf:"api_secret"`
-	Pvp                     pvp        `koanf:"pvp"`
-	Koji                    koji       `koanf:"koji"`
-	Tuning                  tuning     `koanf:"tuning"`
-	Weather                 weather    `koanf:"weather"`
-	ScanRules               []scanRule `koanf:"scan_rules"`
-	Stats                   stats      `koanf:"stats"`
+	Port                    int            `koanf:"port"`
+	GrpcPort                int            `koanf:"grpc_port"`
+	Webhooks                []Webhook      `koanf:"webhooks"`
+	Database                database       `koanf:"database"`
+	Logging                 logging        `koanf:"logging"`
+	Sentry                  sentry         `koanf:"sentry"`
+	Pyroscope               pyroscope      `koanf:"pyroscope"`
+	Prometheus              Prometheus     `koanf:"prometheus"`
+	PokemonMemoryOnly       bool           `koanf:"pokemon_memory_only"`
+	PokemonInternalToDb     bool           `koanf:"pokemon_internal_to_db"`
+	PreserveInMemoryPokemon bool           `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
+	Preload                 bool           `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
+	FortInMemory            bool           `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
+	Cleanup                 cleanup        `koanf:"cleanup"`
+	RawBearer               string         `koanf:"raw_bearer"`
+	ApiSecret               string         `koanf:"api_secret"`
+	Pvp                     pvp            `koanf:"pvp"`
+	Koji                    koji           `koanf:"koji"`
+	Tuning                  tuning         `koanf:"tuning"`
+	Weather                 weather        `koanf:"weather"`
+	ScanRules               []scanRule     `koanf:"scan_rules"`
+	StatsIntervals          statsIntervals `koanf:"stats_intervals"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
@@ -160,7 +159,7 @@ type weather struct {
 	ProactiveIVSwitchingToDB bool `koanf:"proactive_iv_switching_to_db"`
 }
 
-type stats struct {
+type statsIntervals struct {
 	PokemonStatsIntervalMinutes  int `koanf:"pokemon_stats_interval_minutes"`
 	PokemonCountIntervalMinutes  int `koanf:"pokemon_count_interval_minutes"`
 	RaidStatsIntervalMinutes     int `koanf:"raid_stats_interval_minutes"`
