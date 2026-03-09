@@ -199,6 +199,13 @@ func updateEncounterStats(pokemon *Pokemon) {
 		formIdStr = strconv.Itoa(int(pokemon.Form.ValueOrZero()))
 	}
 
+	// For Ditto, set formId to 0. We won't be able to get it without catching
+	// and the remaining value is from the disguised pokemon
+	if pokemon.IsDitto {
+		formId = 0
+		formIdStr = "0"
+	}
+
 	// For the DB
 	func() {
 		areaName := geo.AreaName{Parent: "world", Name: "world"}
@@ -386,6 +393,13 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 			}
 
 			formId := int(pokemon.Form.ValueOrZero())
+
+			// For Ditto, set formId to 0. We won't be able to get it without catching
+			// and the remaining value is from the disguised pokemon
+			if pokemon.IsDitto {
+				formId = 0
+			}
+
 			pf := pokemonForm{pokemonId: pokemon.PokemonId, formId: formId}
 
 			if pokemon.isNewRecord() || pokemon.oldValues.PokemonId != pokemon.PokemonId { // pokemon is new or type has changed
