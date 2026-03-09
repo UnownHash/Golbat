@@ -333,6 +333,8 @@ func main() {
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
 	apiGroup.GET("/devices/all", GetDevices)
+	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
+	apiGroup.GET("/fort-tracker/forts/:fort_id", GetFortTrackerFort)
 	apiGroup.GET("/skip-preserve-pokemon", SkipPreservePokemon)
 	apiGroup.POST("/skip-preserve-pokemon", SkipPreservePokemon)
 
