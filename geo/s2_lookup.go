@@ -1,6 +1,8 @@
 package geo
 
 import (
+	"runtime"
+	"sync"
 	"unsafe"
 
 	"github.com/golang/geo/s2"
@@ -12,6 +14,7 @@ import (
 const S2LookupLevel = 15
 
 type S2CellLookup struct {
+	mu        sync.Mutex
 	cells     map[s2.CellID][]AreaName
 	edgeCells map[s2.CellID]struct{}
 }
@@ -24,11 +27,15 @@ func NewS2CellLookup() *S2CellLookup {
 }
 
 func (l *S2CellLookup) addArea(cellID s2.CellID, area AreaName) {
+	l.mu.Lock()
 	l.cells[cellID] = append(l.cells[cellID], area)
+	l.mu.Unlock()
 }
 
 func (l *S2CellLookup) addEdgeCell(cellID s2.CellID) {
+	l.mu.Lock()
 	l.edgeCells[cellID] = struct{}{}
+	l.mu.Unlock()
 }
 
 func (l *S2CellLookup) removeEdgeCells() int {
@@ -69,12 +76,30 @@ func (l *S2CellLookup) CellCount() int {
 	return len(l.cells)
 }
 
+type polygonWork struct {
+	polygon orb.Polygon
+	area    AreaName
+}
+
 func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2CellLookup {
 	if featureCollection == nil {
 		return NewS2CellLookup()
 	}
 
 	lookup := NewS2CellLookup()
+
+	numWorkers := max(runtime.NumCPU(), 4)
+
+	workChan := make(chan polygonWork, 100)
+	var wg sync.WaitGroup
+
+	for range numWorkers {
+		wg.Go(func() {
+			for work := range workChan {
+				processPolygon(lookup, work.polygon, work.area)
+			}
+		})
+	}
 
 	for _, f := range featureCollection.Features {
 		name := f.Properties.MustString("name", "unknown")
@@ -85,14 +110,17 @@ func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2
 		switch geoType {
 		case "Polygon":
 			polygon := f.Geometry.(orb.Polygon)
-			processPolygon(lookup, polygon, area)
+			workChan <- polygonWork{polygon: polygon, area: area}
 		case "MultiPolygon":
 			multiPolygon := f.Geometry.(orb.MultiPolygon)
 			for _, polygon := range multiPolygon {
-				processPolygon(lookup, polygon, area)
+				workChan <- polygonWork{polygon: polygon, area: area}
 			}
 		}
 	}
+
+	close(workChan)
+	wg.Wait()
 
 	removed := lookup.removeEdgeCells()
 	log.Infof("GEO: Removed %d edge cells from lookup", removed)
