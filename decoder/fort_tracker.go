@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -199,6 +200,27 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 	return cell
 }
 
+// RegisterFort registers a fort during bulk loading (e.g., from preload).
+// Unlike UpdateFort, this uses the provided timestamp rather than "now".
+func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if isGym {
+		cell.gyms[fortId] = struct{}{}
+	} else {
+		cell.pokestops[fortId] = struct{}{}
+	}
+
+	ft.forts[fortId] = &FortTrackerLastSeen{
+		cellId:   cellId,
+		lastSeen: updatedTimestamp,
+		isGym:    isGym,
+	}
+}
+
 // UpdateFort updates tracking for a single fort seen in GMO
 func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now int64) {
 	ft.mu.Lock()
@@ -327,7 +349,10 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	cell.lastSeen = timestamp
 
 	// Skip stale check on first scan - we need at least one prior scan to compare against
+	// But still update cell fort sets so new forts are tracked for future scans
 	if firstScan {
+		cell.pokestops = currentPokestops
+		cell.gyms = currentGyms
 		return &result
 	}
 
@@ -369,7 +394,15 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
 	}
 
-	// Update cell fort sets with current GMO data
+	// Keep pending forts in cell tracking so they are checked again on subsequent scans
+	for _, stopId := range pendingPokestops {
+		currentPokestops[stopId] = struct{}{}
+	}
+	for _, gymId := range pendingGyms {
+		currentGyms[gymId] = struct{}{}
+	}
+
+	// Update cell fort sets with current GMO data (including pending forts)
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
 
@@ -409,17 +442,94 @@ func GetFortTracker() *FortTracker {
 	return fortTracker
 }
 
-// clearGymWithLock marks a gym as deleted while holding the striped mutex
-func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
-	gymMutex, _ := gymStripedMutex.GetLock(gymId)
-	gymMutex.Lock()
-	defer gymMutex.Unlock()
+// CellFortInfo holds information about forts in a cell for API response
+type CellFortInfo struct {
+	CellId    string   `json:"cell_id"`
+	LastSeen  int64    `json:"last_seen"`
+	Pokestops []string `json:"pokestops"`
+	Gyms      []string `json:"gyms"`
+}
 
-	gymCache.Delete(gymId)
-	if err := db.ClearOldGyms(ctx, dbDetails, []string{gymId}); err != nil {
-		log.Errorf("FortTracker: failed to clear gym %s - %s", gymId, err)
+// FortTrackerInfo holds information about a fort for API response
+type FortTrackerInfo struct {
+	FortId   string `json:"fort_id"`
+	CellId   string `json:"cell_id"`
+	LastSeen int64  `json:"last_seen"`
+	IsGym    bool   `json:"is_gym"`
+}
+
+// GetCellInfo returns information about a specific cell
+func (ft *FortTracker) GetCellInfo(cellId uint64) *CellFortInfo {
+	if ft == nil {
+		return nil
+	}
+
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+
+	cell, exists := ft.cells[cellId]
+	if !exists {
+		return nil
+	}
+
+	pokestops := make([]string, 0, len(cell.pokestops))
+	for stopId := range cell.pokestops {
+		pokestops = append(pokestops, stopId)
+	}
+
+	gyms := make([]string, 0, len(cell.gyms))
+	for gymId := range cell.gyms {
+		gyms = append(gyms, gymId)
+	}
+
+	return &CellFortInfo{
+		CellId:    fmt.Sprintf("%d", cellId),
+		LastSeen:  cell.lastSeen,
+		Pokestops: pokestops,
+		Gyms:      gyms,
+	}
+}
+
+// GetFortInfo returns information about a specific fort
+func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
+	if ft == nil {
+		return nil
+	}
+
+	ft.mu.RLock()
+	defer ft.mu.RUnlock()
+
+	fort, exists := ft.forts[fortId]
+	if !exists {
+		return nil
+	}
+
+	return &FortTrackerInfo{
+		FortId:   fortId,
+		CellId:   fmt.Sprintf("%d", fort.cellId),
+		LastSeen: fort.lastSeen,
+		IsGym:    fort.isGym,
+	}
+}
+
+// clearGymWithLock marks a gym as deleted while holding the object-level mutex
+func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
+	// Load gym through cache (will load from DB if not cached)
+	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load gym %s - %s", gymId, err)
 		return
 	}
+	if gym == nil {
+		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	gym.SetDeleted(true)
+	saveGymRecord(ctx, dbDetails, gym)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(gymId)
 		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
@@ -431,17 +541,24 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 	}
 }
 
-// clearPokestopWithLock marks a pokestop as deleted while holding the striped mutex
+// clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
 func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
-	pokestopMutex, _ := pokestopStripedMutex.GetLock(stopId)
-	pokestopMutex.Lock()
-	defer pokestopMutex.Unlock()
-
-	pokestopCache.Delete(stopId)
-	if err := db.ClearOldPokestops(ctx, dbDetails, []string{stopId}); err != nil {
-		log.Errorf("FortTracker: failed to clear pokestop %s - %s", stopId, err)
+	// Load pokestop through cache (will load from DB if not cached)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId)
+	if err != nil {
+		log.Errorf("FortTracker: failed to load pokestop %s - %s", stopId, err)
 		return
 	}
+	if pokestop == nil {
+		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
+		return
+	}
+	defer unlock()
+
+	// Mark as deleted and save through write-behind queue
+	pokestop.SetDeleted(true)
+	savePokestopRecord(ctx, dbDetails, pokestop)
+
 	if removeFromTracker {
 		fortTracker.RemoveFort(stopId)
 		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)
