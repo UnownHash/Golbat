@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"golbat/config"
+	db2 "golbat/db"
 	"golbat/decoder"
 	"time"
 
@@ -215,61 +217,23 @@ func StartTappableExpiry(db *sqlx.DB) {
 	}()
 }
 
-func StartQuestExpiry(db *sqlx.DB) {
+func StartQuestExpiry(dbDetails db2.DbDetails) {
 	ticker := time.NewTicker(time.Hour + 1*time.Minute)
 	go func() {
 		for {
 			<-ticker.C
 			start := time.Now()
-			var totalRows int64 = 0
 
-			var result sql.Result
-			var err error
-
-			result, err = db.Exec("UPDATE pokestop " +
-				"SET " +
-				"quest_type = NULL," +
-				"quest_timestamp = NULL," +
-				"quest_target = NULL," +
-				"quest_conditions = NULL," +
-				"quest_rewards = NULL," +
-				"quest_template = NULL," +
-				"quest_title = NULL " +
-				"WHERE quest_expiry < UNIX_TIMESTAMP();")
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			count, err := decoder.ExpireQuests(ctx, dbDetails)
+			cancel()
 
 			if err != nil {
 				log.Errorf("DB - Cleanup of quest table error %s", err)
-			} else {
-				rows, _ := result.RowsAffected()
-				totalRows += rows
-				if rows > 0 {
-					decoder.ClearPokestopCache()
-				}
-			}
-
-			result, err = db.Exec("UPDATE pokestop " +
-				"SET " +
-				"alternative_quest_type = NULL," +
-				"alternative_quest_timestamp = NULL," +
-				"alternative_quest_target = NULL," +
-				"alternative_quest_conditions = NULL," +
-				"alternative_quest_rewards = NULL," +
-				"alternative_quest_template = NULL," +
-				"alternative_quest_title = NULL " +
-				"WHERE alternative_quest_expiry < UNIX_TIMESTAMP();")
-
-			if err != nil {
-				log.Errorf("DB - Cleanup of quest table error %s", err)
-			} else {
-				rows, _ := result.RowsAffected()
-				totalRows += rows
-				if rows > 0 {
-					decoder.ClearPokestopCache()
-				}
 			}
 
 			elapsed := time.Since(start)
-			log.Infof("DB - Cleanup of quest table took %s (%d quests)", elapsed, totalRows)
+			log.Infof("DB - Cleanup of quest table took %s (%d pokestops)", elapsed, count)
 		}
 	}()
 }
