@@ -7,26 +7,27 @@ import (
 )
 
 type configDefinition struct {
-	Port                           int        `koanf:"port"`
-	GrpcPort                       int        `koanf:"grpc_port"`
-	Webhooks                       []Webhook  `koanf:"webhooks"`
-	Database                       database   `koanf:"database"`
-	Logging                        logging    `koanf:"logging"`
-	Sentry                         sentry     `koanf:"sentry"`
-	Pyroscope                      pyroscope  `koanf:"pyroscope"`
-	Prometheus                     Prometheus `koanf:"prometheus"`
-	PokemonMemoryOnly              bool       `koanf:"pokemon_memory_only"`
-	PokemonInternalToDb            bool       `koanf:"pokemon_internal_to_db"`
-	TestFortInMemory               bool       `koanf:"test_fort_in_memory"`
-	Cleanup                        cleanup    `koanf:"cleanup"`
-	RawBearer                      string     `koanf:"raw_bearer"`
-	ApiSecret                      string     `koanf:"api_secret"`
-	Pvp                            pvp        `koanf:"pvp"`
-	Koji                           koji       `koanf:"koji"`
-	Tuning                         tuning     `koanf:"tuning"`
-	Weather                        weather    `koanf:"weather"`
-	ScanRules                      []scanRule `koanf:"scan_rules"`
-	MaxConcurrentProactiveIVSwitch int        `koanf:"max_concurrent_proactive_iv_switch"`
+	Port                    int        `koanf:"port"`
+	GrpcPort                int        `koanf:"grpc_port"`
+	Webhooks                []Webhook  `koanf:"webhooks"`
+	Database                database   `koanf:"database"`
+	Logging                 logging    `koanf:"logging"`
+	Sentry                  sentry     `koanf:"sentry"`
+	Pyroscope               pyroscope  `koanf:"pyroscope"`
+	Prometheus              Prometheus `koanf:"prometheus"`
+	PokemonMemoryOnly       bool       `koanf:"pokemon_memory_only"`
+	PokemonInternalToDb     bool       `koanf:"pokemon_internal_to_db"`
+	PreserveInMemoryPokemon bool       `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
+	Preload                 bool       `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
+	FortInMemory            bool       `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
+	Cleanup                 cleanup    `koanf:"cleanup"`
+	RawBearer               string     `koanf:"raw_bearer"`
+	ApiSecret               string     `koanf:"api_secret"`
+	Pvp                     pvp        `koanf:"pvp"`
+	Koji                    koji       `koanf:"koji"`
+	Tuning                  tuning     `koanf:"tuning"`
+	Weather                 weather    `koanf:"weather"`
+	ScanRules               []scanRule `koanf:"scan_rules"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
@@ -120,10 +121,17 @@ type database struct {
 }
 
 type tuning struct {
-	ExtendedTimeout    bool    `koanf:"extended_timeout"`
-	MaxPokemonResults  int     `koanf:"max_pokemon_results"`
-	MaxPokemonDistance float64 `koanf:"max_pokemon_distance"`
-	ProfileRoutes      bool    `koanf:"profile_routes"`
+	ExtendedTimeout                bool    `koanf:"extended_timeout"`
+	MaxPokemonResults              int     `koanf:"max_pokemon_results"`
+	MaxPokemonDistance             float64 `koanf:"max_pokemon_distance"`
+	ProfileRoutes                  bool    `koanf:"profile_routes"`
+	ProfileContention              bool    `koanf:"profile_contention"` // Enable mutex/block profiling (has overhead)
+	MaxConcurrentProactiveIVSwitch int     `koanf:"max_concurrent_proactive_iv_switch"`
+	ReduceUpdates                  bool    `koanf:"reduce_updates"`
+	WriteBehindStartupDelay        int     `koanf:"write_behind_startup_delay"` // seconds, default: 120
+	WriteBehindWorkerCount         int     `koanf:"write_behind_worker_count"`  // concurrent writers, default: 50
+	WriteBehindBatchSize           int     `koanf:"write_behind_batch_size"`    // entries per batch, default: 50
+	WriteBehindBatchTimeoutMs      int     `koanf:"write_behind_batch_timeout"` // max wait for batch in ms, default: 100
 }
 
 type scanRule struct {
@@ -133,6 +141,7 @@ type scanRule struct {
 	ProcessPokemon           *bool          `koanf:"pokemon"`
 	ProcessWilds             *bool          `koanf:"wild_pokemon"`
 	ProcessNearby            *bool          `koanf:"nearby_pokemon"`
+	ProcessNearbyCell        *bool          `koanf:"nearby_cell_pokemon"`
 	ProcessWeather           *bool          `koanf:"weather"`
 	ProcessCells             *bool          `koanf:"cells"`
 	ProcessPokestops         *bool          `koanf:"pokestops"`
