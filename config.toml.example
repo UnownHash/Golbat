@@ -107,3 +107,10 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 #
 #[[scan_rules]]
 #pokemon = false
+
+#[stats]
+#pokemon_stats_interval_minutes = 1     # Interval for writing pokemon stats (default: 1 minute)
+#pokemon_count_interval_minutes = 10    # Interval for writing pokemon count stats (default: 10 minutes)
+#raid_stats_interval_minutes = 10       # Interval for writing raid stats (default: 10 minutes)
+#invasion_stats_interval_minutes = 15   # Interval for writing invasion stats (default: 15 minutes)
+#quest_stats_interval_minutes = 15      # Interval for writing quest stats (default: 15 minutes)
