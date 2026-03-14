@@ -42,6 +42,7 @@ type PokemonData struct {
 	CellId                  null.Int    `db:"cell_id"`
 	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
 	DisplayPokemonId        null.Int    `db:"display_pokemon_id"`
+	DisplayPokemonForm      null.Int    `db:"display_pokemon_form"`
 	IsDitto                 bool        `db:"is_ditto"`
 	SeenType                null.String `db:"seen_type"`
 	Shiny                   null.Bool   `db:"shiny"`
@@ -426,6 +427,16 @@ func (pokemon *Pokemon) SetDisplayPokemonId(v null.Int) {
 			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonId:%s->%s", FormatNull(pokemon.DisplayPokemonId), FormatNull(v)))
 		}
 		pokemon.DisplayPokemonId = v
+		pokemon.dirty = true
+	}
+}
+
+func (pokemon *Pokemon) SetDisplayPokemonForm(v null.Int) {
+	if pokemon.DisplayPokemonForm != v {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonForm:%s->%s", FormatNull(pokemon.DisplayPokemonForm), FormatNull(v)))
+		}
+		pokemon.DisplayPokemonForm = v
 		pokemon.dirty = true
 	}
 }
