@@ -57,6 +57,7 @@ type ApiPokemonResult struct {
 	CellId                  null.Int    `json:"cell_id"`
 	ExpireTimestampVerified bool        `json:"expire_timestamp_verified"`
 	DisplayPokemonId        null.Int    `json:"display_pokemon_id"`
+	DisplayPokemonForm      null.Int    `json:"display_pokemon_form"`
 	IsDitto                 bool        `json:"is_ditto"`
 	SeenType                null.String `json:"seen_type"`
 	Shiny                   null.Bool   `json:"shiny"`
@@ -98,6 +99,7 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		CellId:                  pokemon.CellId,
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
 		DisplayPokemonId:        pokemon.DisplayPokemonId,
+		DisplayPokemonForm:      pokemon.DisplayPokemonForm,
 		IsDitto:                 pokemon.IsDitto,
 		SeenType:                pokemon.SeenType,
 		Shiny:                   pokemon.Shiny,
