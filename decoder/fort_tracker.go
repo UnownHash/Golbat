@@ -524,11 +524,11 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
 		return
 	}
-	defer unlock()
 
 	// Mark as deleted and save through write-behind queue
 	gym.SetDeleted(true)
 	saveGymRecord(ctx, dbDetails, gym)
+	unlock() // Release lock before CreateFortWebhooks which re-acquires it
 
 	if removeFromTracker {
 		fortTracker.RemoveFort(gymId)
@@ -553,11 +553,11 @@ func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId s
 		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
 		return
 	}
-	defer unlock()
 
 	// Mark as deleted and save through write-behind queue
 	pokestop.SetDeleted(true)
 	savePokestopRecord(ctx, dbDetails, pokestop)
+	unlock() // Release lock before CreateFortWebhooks which re-acquires it
 
 	if removeFromTracker {
 		fortTracker.RemoveFort(stopId)
