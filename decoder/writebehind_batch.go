@@ -415,14 +415,14 @@ const pokemonBatchUpsertQuery = `
 INSERT INTO pokemon (
 	id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv,
 	golbat_internal, iv, move_1, move_2, gender, form, cp, level, strong, weather,
-	costume, weight, height, size, display_pokemon_id, is_ditto, pokestop_id,
+	costume, weight, height, size, display_pokemon_id, display_pokemon_form, is_ditto, pokestop_id,
 	updated, first_seen_timestamp, changed, cell_id, expire_timestamp_verified,
 	shiny, username, pvp, is_event, seen_type
 )
 VALUES (
 	:id, :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,
 	:golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather,
-	:costume, :weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id,
+	:costume, :weight, :height, :size, :display_pokemon_id, :display_pokemon_form, :is_ditto, :pokestop_id,
 	:updated, :first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified,
 	:shiny, :username, :pvp, :is_event, :seen_type
 )
@@ -450,6 +450,7 @@ ON DUPLICATE KEY UPDATE
 	height = VALUES(height),
 	size = VALUES(size),
 	display_pokemon_id = VALUES(display_pokemon_id),
+	display_pokemon_form = VALUES(display_pokemon_form),
 	is_ditto = VALUES(is_ditto),
 	pokestop_id = VALUES(pokestop_id),
 	updated = VALUES(updated),

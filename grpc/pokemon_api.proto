@@ -128,4 +128,5 @@ message PokemonDetails {
   optional float capture_3 = 36;
   optional string pvp = 37;
   optional float distance = 38;
+  optional int32 display_pokemon_form = 39;
 }

@@ -338,7 +338,9 @@ func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *
 		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
 		pokemon.SetIsDitto(true)
 		pokemon.SetDisplayPokemonId(null.IntFrom(int64(pokemon.PokemonId)))
+		pokemon.SetDisplayPokemonForm(pokemon.Form)
 		pokemon.SetPokemonId(int16(pogo.HoloPokemonId_DITTO))
+		pokemon.SetForm(null.IntFrom(0))
 	} else {
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
@@ -346,8 +348,10 @@ func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *
 func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
 	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.SetIsDitto(false)
-	pokemon.SetDisplayPokemonId(null.NewInt(0, false))
 	pokemon.SetPokemonId(int16(pokemon.DisplayPokemonId.Int64))
+	pokemon.SetForm(pokemon.DisplayPokemonForm)
+	pokemon.SetDisplayPokemonId(null.NewInt(0, false))
+	pokemon.SetDisplayPokemonForm(null.NewInt(0, false))
 	return new, checkScans(old, new)
 }
 
@@ -805,12 +809,15 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
+		var oldForm null.Int
 		if pokemon.IsDitto {
 			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
+			oldForm = pokemon.DisplayPokemonForm
 		} else {
 			oldId = pokemon.PokemonId
+			oldForm = pokemon.Form
 		}
-		if oldId != pokemonId || pokemon.Form != null.IntFrom(int64(display.Form)) ||
+		if oldId != pokemonId || oldForm != null.IntFrom(int64(display.Form)) ||
 			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
 			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
 			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
@@ -827,14 +834,20 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.SetShiny(null.NewBool(false, false))
 			pokemon.SetIsDitto(false)
 			pokemon.SetDisplayPokemonId(null.NewInt(0, false))
+			pokemon.SetDisplayPokemonForm(null.NewInt(0, false))
 			pokemon.SetPvp(null.NewString("", false))
 		}
 	}
 	if pokemon.isNewRecord() || !pokemon.IsDitto {
 		pokemon.SetPokemonId(pokemonId)
 	}
+	if pokemon.IsDitto {
+		pokemon.SetDisplayPokemonForm(null.IntFrom(int64(display.Form)))
+		pokemon.SetForm(null.IntFrom(0))
+	} else {
+		pokemon.SetForm(null.IntFrom(int64(display.Form)))
+	}
 	pokemon.SetGender(null.IntFrom(int64(display.Gender)))
-	pokemon.SetForm(null.IntFrom(int64(display.Form)))
 	pokemon.SetCostume(null.IntFrom(int64(display.Costume)))
 	if !pokemon.isNewRecord() {
 		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
@@ -912,10 +925,12 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 		return
 	}
 	var displayPokemon int
+	var displayPokemonForm int
 	shouldOverrideIv := false
 	var overrideIv *grpc.PokemonScan
 	if pokemon.IsDitto {
 		displayPokemon = int(pokemon.DisplayPokemonId.Int64)
+		displayPokemonForm = int(pokemon.DisplayPokemonForm.Int64)
 		if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
 			cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
 			cellWeather, found := weather[cellId]
@@ -942,6 +957,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 		}
 	} else {
 		displayPokemon = int(pokemon.PokemonId)
+		displayPokemonForm = int(pokemon.Form.ValueOrZero())
 	}
 	var cp int
 	var err error
@@ -950,13 +966,13 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			return
 		}
 		// You should see boosted IV for 0P Ditto
-		cp, err = ohbem.CalculateCp(displayPokemon, int(pokemon.Form.ValueOrZero()), 0,
+		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
 	} else {
 		if !pokemon.AtkIv.Valid || !pokemon.Level.Valid {
 			return
 		}
-		cp, err = ohbem.CalculateCp(displayPokemon, int(pokemon.Form.ValueOrZero()), 0,
+		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
 			float64(pokemon.Level.Int64))
 	}

@@ -27,7 +27,7 @@ const wildPokemonDelay = 30 * time.Second
 // Used by both single-row and bulk load queries to keep them in sync.
 const pokemonSelectColumns = `id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv,
 	golbat_internal, iv, move_1, move_2, gender, form, cp, level, strong, weather, costume, weight, height, size,
-	display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,
+	display_pokemon_id, display_pokemon_form, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,
 	expire_timestamp_verified, shiny, username, pvp, is_event, seen_type`
 
 // peekPokemonRecordReadOnly acquires lock, does NOT take snapshot.
@@ -168,6 +168,7 @@ func hasChangesPokemon(old *Pokemon, new *Pokemon) bool {
 		old.CellId != new.CellId ||
 		old.ExpireTimestampVerified != new.ExpireTimestampVerified ||
 		old.DisplayPokemonId != new.DisplayPokemonId ||
+		old.DisplayPokemonForm != new.DisplayPokemonForm ||
 		old.IsDitto != new.IsDitto ||
 		old.SeenType != new.SeenType ||
 		old.Shiny != new.Shiny ||
@@ -330,11 +331,11 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 		_, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("INSERT INTO pokemon (id, pokemon_id, lat, lon,"+
 			"spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv, golbat_internal, iv, move_1, move_2,"+
 			"gender, form, cp, level, strong, weather, costume, weight, height, size,"+
-			"display_pokemon_id, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
+			"display_pokemon_id, display_pokemon_form, is_ditto, pokestop_id, updated, first_seen_timestamp, changed, cell_id,"+
 			"expire_timestamp_verified, shiny, username, %s is_event, seen_type) "+
 			"VALUES (\"%d\", :pokemon_id, :lat, :lon, :spawn_id, :expire_timestamp, :atk_iv, :def_iv, :sta_iv,"+
 			":golbat_internal, :iv, :move_1, :move_2, :gender, :form, :cp, :level, :strong, :weather, :costume,"+
-			":weight, :height, :size, :display_pokemon_id, :is_ditto, :pokestop_id, :updated,"+
+			":weight, :height, :size, :display_pokemon_id, :display_pokemon_form, :is_ditto, :pokestop_id, :updated,"+
 			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
 			":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
 
@@ -380,6 +381,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			"cell_id = :cell_id, "+
 			"expire_timestamp_verified = :expire_timestamp_verified, "+
 			"display_pokemon_id = :display_pokemon_id, "+
+			"display_pokemon_form = :display_pokemon_form, "+
 			"is_ditto = :is_ditto, "+
 			"seen_type = :seen_type, "+
 			"shiny = :shiny, "+
@@ -430,6 +432,7 @@ type PokemonWebhook struct {
 	Shiny                 null.Bool       `json:"shiny"`
 	Username              null.String     `json:"username"`
 	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
+	DisplayPokemonForm    null.Int        `json:"display_pokemon_form"`
 	IsEvent               int8            `json:"is_event"`
 	SeenType              null.String     `json:"seen_type"`
 	Pvp                   json.RawMessage `json:"pvp"`
@@ -499,6 +502,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Shiny:                 pokemon.Shiny,
 			Username:              pokemon.Username,
 			DisplayPokemonId:      pokemon.DisplayPokemonId,
+			DisplayPokemonForm:    pokemon.DisplayPokemonForm,
 			IsEvent:               pokemon.IsEvent,
 			SeenType:              pokemon.SeenType,
 			Pvp:                   pvp,
