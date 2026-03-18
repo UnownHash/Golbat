@@ -33,7 +33,18 @@ func (m *TrackedMutex[K]) Lock(caller, entityType string, id K) {
 		m.acquiredAt.Store(now.UnixNano())
 		return
 	}
-	// Contention path — holder/acquiredAt use atomics for race-detector safety.
+	// Contention path — exponential backoff TryLock before logging.
+	// Delays: 1, 2, 4, 8, 16, 32, 64, 128ms = 255ms total before warning.
+	for delay := time.Millisecond; delay <= 128*time.Millisecond; delay *= 2 {
+		time.Sleep(delay)
+		if m.mu.TryLock() {
+			now := time.Now()
+			m.holder.Store(caller)
+			m.acquiredAt.Store(now.UnixNano())
+			return
+		}
+	}
+	// Still contended after ~255ms — log and block.
 	holder := m.loadHolder()
 	start := time.Now()
 	heldFor := start.Sub(time.Unix(0, m.acquiredAt.Load()))
