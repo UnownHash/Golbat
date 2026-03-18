@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
 
@@ -58,7 +57,7 @@ type GymData struct {
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
 
 	GymData // Embedded data fields (all db columns)
 
@@ -129,9 +128,11 @@ func (gym *Gym) snapshotOldValues() {
 	}
 }
 
-// Lock acquires the Gym's mutex
-func (gym *Gym) Lock() {
-	gym.mu.Lock()
+// Lock acquires the Gym's mutex with caller tracking
+func (gym *Gym) Lock(caller string) {
+	gym.mu.entityType = "Gym"
+	gym.mu.entityId = gym.Id
+	gym.mu.Lock(caller)
 }
 
 // Unlock releases the Gym's mutex

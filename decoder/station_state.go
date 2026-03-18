@@ -57,10 +57,10 @@ func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId str
 
 // peekStationRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func peekStationRecord(stationId string) (*Station, func(), error) {
+func peekStationRecord(stationId string, caller string) (*Station, func(), error) {
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
-		station.Lock()
+		station.Lock(caller)
 		return station, func() { station.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -69,11 +69,11 @@ func peekStationRecord(stationId string) (*Station, func(), error) {
 // getStationRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
+func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
 	// Check cache first
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
-		station.Lock()
+		station.Lock(caller)
 		return station, func() { station.Unlock() }, nil
 	}
 
@@ -97,14 +97,14 @@ func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	})
 
 	station := existingStation.Value()
-	station.Lock()
+	station.Lock(caller)
 	return station, func() { station.Unlock() }, nil
 }
 
 // getStationRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Caller MUST call returned unlock function if non-nil.
-func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
-	station, unlock, err := getStationRecordReadOnly(ctx, db, stationId)
+func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
+	station, unlock, err := getStationRecordReadOnly(ctx, db, stationId, caller)
 	if err != nil || station == nil {
 		return nil, nil, err
 	}
@@ -114,14 +114,14 @@ func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId s
 
 // getOrCreateStationRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string) (*Station, func(), error) {
+func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
 	// Create new Station atomically - function only called if key doesn't exist
 	stationItem, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
 		return &Station{StationData: StationData{Id: stationId}, newRecord: true}
 	})
 
 	station := stationItem.Value()
-	station.Lock()
+	station.Lock(caller)
 
 	if station.newRecord {
 		// We should attempt to load from database

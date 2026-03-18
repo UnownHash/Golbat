@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
 
@@ -39,7 +38,7 @@ type RouteData struct {
 // Route struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Route struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	RouteData // Embedded data fields - can be copied for write-behind queue
 
@@ -70,9 +69,11 @@ func (r *Route) IsNewRecord() bool {
 	return r.newRecord
 }
 
-// Lock acquires the Route's mutex
-func (r *Route) Lock() {
-	r.mu.Lock()
+// Lock acquires the Route's mutex with caller tracking
+func (r *Route) Lock(caller string) {
+	r.mu.entityType = "Route"
+	r.mu.entityId = r.Id
+	r.mu.Lock(caller)
 }
 
 // Unlock releases the Route's mutex

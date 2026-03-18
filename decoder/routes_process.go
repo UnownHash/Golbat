@@ -8,7 +8,7 @@ import (
 )
 
 func UpdateRouteRecordWithSharedRouteProto(ctx context.Context, db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
-	route, unlock, err := getOrCreateRouteRecord(ctx, db, sharedRouteProto.GetId())
+	route, unlock, err := getOrCreateRouteRecord(ctx, db, sharedRouteProto.GetId(), "UpdateRouteRecord")
 	if err != nil {
 		return err
 	}

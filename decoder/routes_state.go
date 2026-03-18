@@ -21,10 +21,10 @@ func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string,
 
 // peekRouteRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func peekRouteRecord(routeId string) (*Route, func(), error) {
+func peekRouteRecord(routeId string, caller string) (*Route, func(), error) {
 	if item := routeCache.Get(routeId); item != nil {
 		route := item.Value()
-		route.Lock()
+		route.Lock(caller)
 		return route, func() { route.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -33,11 +33,11 @@ func peekRouteRecord(routeId string) (*Route, func(), error) {
 // getRouteRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
+func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string, caller string) (*Route, func(), error) {
 	// Check cache first
 	if item := routeCache.Get(routeId); item != nil {
 		route := item.Value()
-		route.Lock()
+		route.Lock(caller)
 		return route, func() { route.Unlock() }, nil
 	}
 
@@ -58,14 +58,14 @@ func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string
 	})
 
 	route := existingRoute.Value()
-	route.Lock()
+	route.Lock(caller)
 	return route, func() { route.Unlock() }, nil
 }
 
 // getRouteRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Caller MUST call returned unlock function if non-nil.
-func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
-	route, unlock, err := getRouteRecordReadOnly(ctx, db, routeId)
+func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId string, caller string) (*Route, func(), error) {
+	route, unlock, err := getRouteRecordReadOnly(ctx, db, routeId, caller)
 	if err != nil || route == nil {
 		return nil, nil, err
 	}
@@ -75,14 +75,14 @@ func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId strin
 
 // getOrCreateRouteRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateRouteRecord(ctx context.Context, db db.DbDetails, routeId string) (*Route, func(), error) {
+func getOrCreateRouteRecord(ctx context.Context, db db.DbDetails, routeId string, caller string) (*Route, func(), error) {
 	// Create new Route atomically - function only called if key doesn't exist
 	routeItem, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
 		return &Route{RouteData: RouteData{Id: routeId}, newRecord: true}
 	})
 
 	route := routeItem.Value()
-	route.Lock()
+	route.Lock(caller)
 
 	if route.newRecord {
 		// We should attempt to load from database

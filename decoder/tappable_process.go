@@ -13,7 +13,7 @@ import (
 func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto, timestampMs int64) string {
 	id := request.GetEncounterId()
 
-	tappable, unlock, err := getOrCreateTappableRecord(ctx, db, id)
+	tappable, unlock, err := getOrCreateTappableRecord(ctx, db, id, "UpdateTappableRecord")
 	if err != nil {
 		log.Printf("getOrCreateTappableRecord: %s", err)
 		return "Error getting tappable"

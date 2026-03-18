@@ -33,10 +33,10 @@ const pokemonSelectColumns = `id, pokemon_id, lat, lon, spawn_id, expire_timesta
 // peekPokemonRecordReadOnly acquires lock, does NOT take snapshot.
 // Use for read-only checks which will not cause a backing database lookup
 // Caller must use returned unlock function
-func peekPokemonRecordReadOnly(encounterId uint64) (*Pokemon, func(), error) {
+func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, func(), error) {
 	if item := pokemonCache.Get(encounterId); item != nil {
 		pokemon := item.Value()
-		pokemon.Lock()
+		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
 
@@ -55,16 +55,16 @@ func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId u
 // getPokemonRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks, but will cause a backing database lookup
 // Caller MUST call returned unlock function.
-func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
+func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId uint64, caller string) (*Pokemon, func(), error) {
 	// If we are in-memory only, this is identical to peek
 	if config.Config.PokemonMemoryOnly {
-		return peekPokemonRecordReadOnly(encounterId)
+		return peekPokemonRecordReadOnly(encounterId, caller)
 	}
 
 	// Check cache first
 	if item := pokemonCache.Get(encounterId); item != nil {
 		pokemon := item.Value()
-		pokemon.Lock()
+		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
 
@@ -87,15 +87,15 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	})
 
 	pokemon := existingPokemon.Value()
-	pokemon.Lock()
+	pokemon.Lock(caller)
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
 
 // getPokemonRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Use when modifying the Pokemon.
 // Caller MUST call returned unlock function.
-func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
-	pokemon, unlock, err := getPokemonRecordReadOnly(ctx, db, encounterId)
+func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId uint64, caller string) (*Pokemon, func(), error) {
+	pokemon, unlock, err := getPokemonRecordReadOnly(ctx, db, encounterId, caller)
 	if err != nil || pokemon == nil {
 		return nil, nil, err
 	}
@@ -105,14 +105,14 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 
 // getOrCreatePokemonRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64) (*Pokemon, func(), error) {
+func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64, caller string) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
 	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		return &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encounterId)}, newRecord: true}
 	})
 
 	pokemon := pokemonItem.Value()
-	pokemon.Lock()
+	pokemon.Lock(caller)
 
 	if config.Config.PokemonMemoryOnly {
 		pokemon.snapshotOldValues()
@@ -456,7 +456,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 
 		var pokestopName *string
 		if pokemon.PokestopId.Valid {
-			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.String)
+			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.String, "createPokemonWebhooks")
 			name := "Unknown"
 			if pokestop != nil {
 				name = pokestop.Name.ValueOrZero()

@@ -164,7 +164,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	spawnpointId := mapPokemon.SpawnpointId
 
-	pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, spawnpointId)
+	pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, spawnpointId, "updateFromMap")
 	if pokestop == nil {
 		// Unrecognised pokestop
 		return
@@ -228,7 +228,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokestopId)
+		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokestopId, "updateFromNearby")
 		if pokestop == nil {
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
@@ -294,7 +294,7 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 
 	pokemon.ExpireTimestampVerified = false
-	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId)
+	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "setExpireTimestampFromSpawnpoint")
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
@@ -696,7 +696,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		Form:        int32(proto.PokemonDisplay.Form),
 	}
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
-		weather, unlock, err := peekWeatherRecord(weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon))
+		weather, unlock, err := peekWeatherRecord(weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon), "addEncounterPokemon")
 		if weather == nil || !weather.GameplayCondition.Valid {
 			log.Warnf("Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 		} else {
@@ -935,7 +935,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
 			cellWeather, found := weather[cellId]
 			if !found {
-				record, unlock, err := getWeatherRecordReadOnly(ctx, db, cellId)
+				record, unlock, err := getWeatherRecordReadOnly(ctx, db, cellId, "recomputeCpIfNeeded")
 				if err != nil || record == nil || !record.GameplayCondition.Valid {
 					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
 				} else {

@@ -2,7 +2,7 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
+	"strconv"
 
 	"github.com/guregu/null/v6"
 )
@@ -27,7 +27,7 @@ type TappableData struct {
 // Tappable struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Tappable struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
 
 	TappableData // Embedded data fields - can be copied for write-behind queue
 
@@ -51,9 +51,11 @@ func (ta *Tappable) IsNewRecord() bool {
 	return ta.newRecord
 }
 
-// Lock acquires the Tappable's mutex
-func (ta *Tappable) Lock() {
-	ta.mu.Lock()
+// Lock acquires the Tappable's mutex with caller tracking
+func (ta *Tappable) Lock(caller string) {
+	ta.mu.entityType = "Tappable"
+	ta.mu.entityId = strconv.FormatUint(ta.Id, 10)
+	ta.mu.Lock(caller)
 }
 
 // Unlock releases the Tappable's mutex

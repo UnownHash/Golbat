@@ -11,7 +11,7 @@ import (
 )
 
 func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	gym, unlock, err := getOrCreateGymRecord(ctx, db, fort.Id)
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, fort.Id, "UpdateGymFromFortDetails")
 	if err != nil {
 		return err.Error()
 	}
@@ -26,7 +26,7 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 }
 
 func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
-	gym, unlock, err := getOrCreateGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId)
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId, "UpdateGymFromGymInfo")
 	if err != nil {
 		return err.Error()
 	}
@@ -40,7 +40,7 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 }
 
 func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, mapFort.Id)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, mapFort.Id, "UpdateGymFromGetMapForts")
 	if err != nil {
 		return false, err.Error()
 	}
@@ -57,7 +57,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 }
 
 func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pogo.RaidDetails, resp *pogo.GetEventRsvpsOutProto) string {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, req.FortId)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, req.FortId, "UpdateGymWithRsvp")
 	if err != nil {
 		return err.Error()
 	}
@@ -76,7 +76,7 @@ func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pog
 }
 
 func ClearGymRsvp(ctx context.Context, db db.DbDetails, fortId string) string {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, fortId)
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, fortId, "ClearGymRsvp")
 	if err != nil {
 		return err.Error()
 	}

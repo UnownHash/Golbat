@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
 )
@@ -44,7 +43,7 @@ type StationData struct {
 // Station struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Station struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	StationData // Embedded data fields - can be copied for write-behind queue
 
@@ -81,9 +80,11 @@ func (station *Station) IsNewRecord() bool {
 	return station.newRecord
 }
 
-// Lock acquires the Station's mutex
-func (station *Station) Lock() {
-	station.mu.Lock()
+// Lock acquires the Station's mutex with caller tracking
+func (station *Station) Lock(caller string) {
+	station.mu.entityType = "Station"
+	station.mu.entityId = station.Id
+	station.mu.Lock(caller)
 }
 
 // Unlock releases the Station's mutex

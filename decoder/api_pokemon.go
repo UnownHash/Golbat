@@ -132,7 +132,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 	apiResults := make([]*ApiPokemonResult, 0, len(results))
 
 	for _, encounterId := range results {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(encounterId)
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(encounterId, "API.Pokemon")
 		if pokemon != nil {
 			apiPokemon := buildApiPokemonResult(pokemon)
 			apiResults = append(apiResults, &apiPokemon)
@@ -146,7 +146,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 // Get one result
 
 func GetOnePokemon(pokemonId uint64) *ApiPokemonResult {
-	item, unlock, _ := peekPokemonRecordReadOnly(pokemonId)
+	item, unlock, _ := peekPokemonRecordReadOnly(pokemonId, "API.PokemonById")
 	if item != nil {
 		apiPokemon := buildApiPokemonResult(item)
 		defer unlock()

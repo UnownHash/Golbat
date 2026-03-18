@@ -515,7 +515,7 @@ func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
 // clearGymWithLock marks a gym as deleted while holding the object-level mutex
 func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
 	// Load gym through cache (will load from DB if not cached)
-	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId)
+	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId, "clearGymWithLock")
 	if err != nil {
 		log.Errorf("FortTracker: failed to load gym %s - %s", gymId, err)
 		return
@@ -550,7 +550,7 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 // clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
 func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
 	// Load pokestop through cache (will load from DB if not cached)
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId, "clearPokestopWithLock")
 	if err != nil {
 		log.Errorf("FortTracker: failed to load pokestop %s - %s", stopId, err)
 		return

@@ -19,7 +19,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 
 	encounterId := encounter.Pokemon.EncounterId
 
-	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonFromEncounter")
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
@@ -42,7 +42,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 
 	encounterId := uint64(encounter.Pokemon.PokemonDisplay.DisplayId)
 
-	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId)
+	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId, "UpdatePokemonFromDiskEncounter")
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)
@@ -70,7 +70,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string, timestampMs int64) string {
 	encounterId := request.GetEncounterId()
 
-	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonFromTappableEncounter")
 	if err != nil {
 		log.Errorf("Error pokemon [%d]: %s", encounterId, err)
 		return fmt.Sprintf("Error finding pokemon %s", err)

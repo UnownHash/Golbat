@@ -110,7 +110,7 @@ func GetPokemonInArea3(retrieveParameters ApiPokemonScan3) *PokemonScan3Result {
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key)
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v3")
 		if pokemon != nil {
 			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
 				apiPokemon := buildApiPokemonResult(pokemon)
@@ -200,7 +200,7 @@ func GrpcGetPokemonInArea3(retrieveParameters *pb.PokemonScanRequestV3) ([]*pb.P
 	startUnix := start.Unix()
 
 	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key)
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v3.pokemon")
 		if pokemon != nil {
 			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
 				apiPokemon := pb.PokemonDetails{
