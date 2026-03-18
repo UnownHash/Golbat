@@ -24,7 +24,7 @@ type KojiResponse struct {
 }
 
 var statsTree atomic.Value
-var nestTree *rtree.RTreeG[*geojson.Feature]
+var nestTree atomic.Value
 var statsS2Lookup atomic.Value
 var kojiUrl = ""
 var kojiBearerToken = ""
@@ -138,5 +138,6 @@ func MatchStatsGeofenceWithCell(lat, lon float64, cellId uint64) []geo.AreaName 
 }
 
 func MatchNestGeofence(lat, lon float64) []geo.AreaName {
-	return geo.MatchGeofencesRtree(nestTree, lat, lon)
+	tree, _ := nestTree.Load().(*rtree.RTreeG[*geojson.Feature])
+	return geo.MatchGeofencesRtree(tree, lat, lon)
 }

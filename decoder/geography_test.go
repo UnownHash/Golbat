@@ -88,9 +88,11 @@ func TestMatchStatsGeofenceWithCellVsRtree(t *testing.T) {
 	t.Logf("Rtree fallback: %d (%.2f%%)", rtreeHits, float64(rtreeHits)/float64(numPoints)*100)
 	t.Logf("Mismatches: %d (%.2f%%)", mismatches, float64(mismatches)/float64(numPoints)*100)
 
-	// Note: Mismatches are expected for edge cells where S2 lookup returns
-	// fewer areas than rtree (cell fully inside some polygons but on edge of others)
-	t.Logf("Note: S2 lookup may return fewer areas for edge cells - this is expected")
+	// Mismatches should be 0 — edge cells are excluded from the S2 lookup,
+	// so the rtree fallback always provides the complete result.
+	if mismatches > 0 {
+		t.Errorf("Expected 0 mismatches, got %d. Edge cells should be excluded from S2 lookup.", mismatches)
+	}
 
 	t.Logf("Timing: rtree only: %v (%.2f µs/call)", rtreeTime, float64(rtreeTime.Microseconds())/float64(numPoints))
 	t.Logf("Timing: lookup+fallback: %v (%.2f µs/call)", lookupTime, float64(lookupTime.Microseconds())/float64(numPoints))

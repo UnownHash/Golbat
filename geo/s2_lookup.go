@@ -14,7 +14,6 @@ import (
 const S2LookupLevel = 15
 
 type S2CellLookup struct {
-	mu        sync.Mutex
 	cells     map[s2.CellID][]AreaName
 	edgeCells map[s2.CellID]struct{}
 }
@@ -24,18 +23,6 @@ func NewS2CellLookup() *S2CellLookup {
 		cells:     make(map[s2.CellID][]AreaName),
 		edgeCells: make(map[s2.CellID]struct{}),
 	}
-}
-
-func (l *S2CellLookup) addArea(cellID s2.CellID, area AreaName) {
-	l.mu.Lock()
-	l.cells[cellID] = append(l.cells[cellID], area)
-	l.mu.Unlock()
-}
-
-func (l *S2CellLookup) addEdgeCell(cellID s2.CellID) {
-	l.mu.Lock()
-	l.edgeCells[cellID] = struct{}{}
-	l.mu.Unlock()
 }
 
 func (l *S2CellLookup) removeEdgeCells() int {
@@ -87,6 +74,20 @@ func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2
 	}
 
 	lookup := NewS2CellLookup()
+	var mu sync.Mutex // Only used during build phase
+
+	// Helper closures for thread-safe writes during build
+	addArea := func(cellID s2.CellID, area AreaName) {
+		mu.Lock()
+		lookup.cells[cellID] = append(lookup.cells[cellID], area)
+		mu.Unlock()
+	}
+
+	addEdgeCell := func(cellID s2.CellID) {
+		mu.Lock()
+		lookup.edgeCells[cellID] = struct{}{}
+		mu.Unlock()
+	}
 
 	numWorkers := max(runtime.NumCPU(), 4)
 
@@ -96,7 +97,7 @@ func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2
 	for range numWorkers {
 		wg.Go(func() {
 			for work := range workChan {
-				processPolygon(lookup, work.polygon, work.area)
+				processPolygon(work.polygon, work.area, addArea, addEdgeCell)
 			}
 		})
 	}
@@ -131,7 +132,12 @@ func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2
 	return lookup
 }
 
-func processPolygon(lookup *S2CellLookup, polygon orb.Polygon, area AreaName) {
+func processPolygon(
+	polygon orb.Polygon,
+	area AreaName,
+	addArea func(s2.CellID, AreaName),
+	addEdgeCell func(s2.CellID),
+) {
 	if len(polygon) == 0 || len(polygon[0]) == 0 {
 		return
 	}
@@ -162,9 +168,9 @@ func processPolygon(lookup *S2CellLookup, polygon orb.Polygon, area AreaName) {
 			}
 		}
 		if allInside {
-			lookup.addArea(cellID, area)
+			addArea(cellID, area)
 		} else {
-			lookup.addEdgeCell(cellID)
+			addEdgeCell(cellID)
 		}
 	}
 }
