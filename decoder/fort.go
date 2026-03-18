@@ -100,39 +100,13 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 	return fort
 }
 
-func CreateFortWebhooks(ctx context.Context, dbDetails db.DbDetails, ids []string, fortType FortType, change FortChange) {
-	if fortType == GYM {
-		for _, id := range ids {
-			gym, unlock, err := GetGymRecordReadOnly(ctx, dbDetails, id)
-			if err != nil || gym == nil {
-				if unlock != nil {
-					unlock()
-				}
-				continue
-			}
-
-			fort := InitWebHookFortFromGym(gym)
-			unlock()
-
-			CreateFortWebHooks(fort, &FortWebhook{}, change)
-		}
+// CreateFortChangeWebhooks dispatches a fort change webhook with a pre-built payload.
+// The caller is responsible for building the FortWebhook while holding the entity lock.
+func CreateFortChangeWebhooks(fort *FortWebhook, change FortChange) {
+	if fort == nil {
+		return
 	}
-	if fortType == POKESTOP {
-		for _, id := range ids {
-			stop, unlock, err := getPokestopRecordReadOnly(ctx, dbDetails, id)
-			if err != nil || stop == nil {
-				if unlock != nil {
-					unlock()
-				}
-				continue
-			}
-
-			fort := InitWebHookFortFromPokestop(stop)
-			unlock()
-
-			CreateFortWebHooks(fort, &FortWebhook{}, change)
-		}
-	}
+	CreateFortWebHooks(fort, &FortWebhook{}, change)
 }
 
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
