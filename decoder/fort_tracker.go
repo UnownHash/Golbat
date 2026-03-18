@@ -528,12 +528,18 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 	// Mark as deleted and save through write-behind queue
 	gym.SetDeleted(true)
 	saveGymRecord(ctx, dbDetails, gym)
-	unlock() // Release lock before CreateFortWebhooks which re-acquires it
+
+	// Build webhook payload while we still hold the lock
+	var fort *FortWebhook
+	if removeFromTracker {
+		fort = InitWebHookFortFromGym(gym)
+	}
+	unlock()
 
 	if removeFromTracker {
 		fortTracker.RemoveFort(gymId)
 		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
-		CreateFortWebhooks(ctx, dbDetails, []string{gymId}, GYM, REMOVAL)
+		CreateFortChangeWebhooks(fort, REMOVAL)
 		statsCollector.IncFortChange("gym_delete")
 	} else {
 		log.Infof("FortTracker: marked gym as deleted (converted to pokestop) in cell %d: %s", cellId, gymId)
@@ -557,12 +563,18 @@ func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId s
 	// Mark as deleted and save through write-behind queue
 	pokestop.SetDeleted(true)
 	savePokestopRecord(ctx, dbDetails, pokestop)
-	unlock() // Release lock before CreateFortWebhooks which re-acquires it
+
+	// Build webhook payload while we still hold the lock
+	var fort *FortWebhook
+	if removeFromTracker {
+		fort = InitWebHookFortFromPokestop(pokestop)
+	}
+	unlock()
 
 	if removeFromTracker {
 		fortTracker.RemoveFort(stopId)
 		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)
-		CreateFortWebhooks(ctx, dbDetails, []string{stopId}, POKESTOP, REMOVAL)
+		CreateFortChangeWebhooks(fort, REMOVAL)
 		statsCollector.IncFortChange("pokestop_delete")
 	} else {
 		log.Infof("FortTracker: marked pokestop as deleted (converted to gym) in cell %d: %s", cellId, stopId)
