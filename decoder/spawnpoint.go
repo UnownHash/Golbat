@@ -34,7 +34,7 @@ type SpawnpointData struct {
 // Spawnpoint struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
-	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[int64] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	SpawnpointData // Embedded data fields - can be copied for write-behind queue
 
@@ -73,14 +73,12 @@ func (s *Spawnpoint) IsNewRecord() bool {
 
 // Lock acquires the Spawnpoint's mutex with caller tracking
 func (s *Spawnpoint) Lock(caller string) {
-	s.mu.entityType = "Spawnpoint"
-	s.mu.entityId = strconv.FormatInt(s.Id, 10)
-	s.mu.Lock(caller)
+	s.mu.Lock(caller, "Spawnpoint", s.Id)
 }
 
 // Unlock releases the Spawnpoint's mutex
 func (s *Spawnpoint) Unlock() {
-	s.mu.Unlock()
+	s.mu.Unlock("Spawnpoint", s.Id)
 }
 
 // --- Set methods with dirty tracking ---

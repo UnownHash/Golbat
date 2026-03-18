@@ -2,50 +2,59 @@ package decoder
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
 )
 
 // TrackedMutex wraps sync.Mutex with contention detection and holder tracking.
-// Fast path cost: TryLock() + time.Now() + string pointer store ≈ 25ns.
-type TrackedMutex struct {
+// Generic over K (the entity ID type) so the fast path stores the native ID
+// and string formatting (%v) is deferred to the cold contention/warning paths.
+// Fast path cost: TryLock() + time.Now() + atomic store ≈ 25ns.
+type TrackedMutex[K any] struct {
 	mu         sync.Mutex
-	holder     string    // caller that holds the lock
-	acquiredAt time.Time // when lock was acquired
-	entityType string    // "Pokestop", "Gym", etc.
-	entityId   string    // the entity ID
+	holder     atomic.Value // string - caller that holds the lock
+	acquiredAt atomic.Int64 // UnixNano - when lock was acquired
+}
+
+func (m *TrackedMutex[K]) loadHolder() string {
+	h, _ := m.holder.Load().(string)
+	return h
 }
 
 // Lock attempts to acquire the mutex. If the lock is contended, it logs the
 // current holder and the waiting caller, then blocks until acquired.
-func (m *TrackedMutex) Lock(caller string) {
+// entityType and id are only used in log messages on the contention path.
+func (m *TrackedMutex[K]) Lock(caller, entityType string, id K) {
 	if m.mu.TryLock() {
-		m.holder = caller
-		m.acquiredAt = time.Now()
+		now := time.Now()
+		m.holder.Store(caller)
+		m.acquiredAt.Store(now.UnixNano())
 		return
 	}
-	// Contention path
-	holder := m.holder
-	heldFor := time.Since(m.acquiredAt)
-	log.Warnf("[LOCK_CONTENTION] %s id=%s waiter=%s holder=%s held_for=%s",
-		m.entityType, m.entityId, caller, holder, heldFor)
+	// Contention path — holder/acquiredAt use atomics for race-detector safety.
+	holder := m.loadHolder()
+	heldFor := time.Since(time.Unix(0, m.acquiredAt.Load()))
+	log.Warnf("[LOCK_CONTENTION] %s id=%v waiter=%s holder=%s held_for=%s",
+		entityType, id, caller, holder, heldFor)
 	start := time.Now()
 	m.mu.Lock()
-	log.Warnf("[LOCK_ACQUIRED] %s id=%s caller=%s waited=%s (holder was %s)",
-		m.entityType, m.entityId, caller, time.Since(start), holder)
-	m.holder = caller
-	m.acquiredAt = time.Now()
+	now := time.Now()
+	log.Warnf("[LOCK_ACQUIRED] %s id=%v caller=%s waited=%s (holder was %s)",
+		entityType, id, caller, now.Sub(start), holder)
+	m.holder.Store(caller)
+	m.acquiredAt.Store(now.UnixNano())
 }
 
 // Unlock releases the mutex. If the lock was held for more than 5 seconds, it
-// logs a warning.
-func (m *TrackedMutex) Unlock() {
-	held := time.Since(m.acquiredAt)
+// logs a warning. entityType and id are only used when the threshold is exceeded.
+func (m *TrackedMutex[K]) Unlock(entityType string, id K) {
+	held := time.Since(time.Unix(0, m.acquiredAt.Load()))
 	if held > 5*time.Second {
-		log.Warnf("[LOCK_HELD_LONG] %s id=%s holder=%s held_for=%s",
-			m.entityType, m.entityId, m.holder, held)
+		log.Warnf("[LOCK_HELD_LONG] %s id=%v holder=%s held_for=%s",
+			entityType, id, m.loadHolder(), held)
 	}
-	m.holder = ""
+	m.holder.Store("")
 	m.mu.Unlock()
 }

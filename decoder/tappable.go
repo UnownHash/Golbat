@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/guregu/null/v6"
 )
@@ -27,7 +26,7 @@ type TappableData struct {
 // Tappable struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Tappable struct {
-	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[uint64] `db:"-"` // Object-level mutex with contention tracking
 
 	TappableData // Embedded data fields - can be copied for write-behind queue
 
@@ -53,14 +52,12 @@ func (ta *Tappable) IsNewRecord() bool {
 
 // Lock acquires the Tappable's mutex with caller tracking
 func (ta *Tappable) Lock(caller string) {
-	ta.mu.entityType = "Tappable"
-	ta.mu.entityId = strconv.FormatUint(ta.Id, 10)
-	ta.mu.Lock(caller)
+	ta.mu.Lock(caller, "Tappable", ta.Id)
 }
 
 // Unlock releases the Tappable's mutex
 func (ta *Tappable) Unlock() {
-	ta.mu.Unlock()
+	ta.mu.Unlock("Tappable", ta.Id)
 }
 
 // --- Set methods with dirty tracking ---

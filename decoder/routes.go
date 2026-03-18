@@ -38,7 +38,7 @@ type RouteData struct {
 // Route struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Route struct {
-	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[string] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	RouteData // Embedded data fields - can be copied for write-behind queue
 
@@ -71,14 +71,12 @@ func (r *Route) IsNewRecord() bool {
 
 // Lock acquires the Route's mutex with caller tracking
 func (r *Route) Lock(caller string) {
-	r.mu.entityType = "Route"
-	r.mu.entityId = r.Id
-	r.mu.Lock(caller)
+	r.mu.Lock(caller, "Route", r.Id)
 }
 
 // Unlock releases the Route's mutex
 func (r *Route) Unlock() {
-	r.mu.Unlock()
+	r.mu.Unlock("Route", r.Id)
 }
 
 // snapshotOldValues saves current values for webhook comparison

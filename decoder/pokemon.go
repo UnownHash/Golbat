@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"strconv"
 
 	"golbat/grpc"
 
@@ -63,7 +62,7 @@ type PokemonData struct {
 //
 // FirstSeenTimestamp: This field is used in IsNewRecord. It should only be set in savePokemonRecord.
 type Pokemon struct {
-	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[uint64] `db:"-"` // Object-level mutex with contention tracking
 
 	PokemonData // Embedded data fields - can be copied for write-behind queue
 
@@ -164,14 +163,12 @@ func (pokemon *Pokemon) snapshotOldValues() {
 
 // Lock acquires the Pokemon's mutex with caller tracking
 func (pokemon *Pokemon) Lock(caller string) {
-	pokemon.mu.entityType = "Pokemon"
-	pokemon.mu.entityId = strconv.FormatUint(uint64(pokemon.Id), 10)
-	pokemon.mu.Lock(caller)
+	pokemon.mu.Lock(caller, "Pokemon", uint64(pokemon.Id))
 }
 
 // Unlock releases the Pokemon's mutex
 func (pokemon *Pokemon) Unlock() {
-	pokemon.mu.Unlock()
+	pokemon.mu.Unlock("Pokemon", uint64(pokemon.Id))
 }
 
 // --- Set methods with dirty tracking ---

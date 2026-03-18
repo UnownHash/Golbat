@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"strconv"
 
 	"golbat/db"
 	"golbat/pogo"
@@ -19,7 +18,7 @@ import (
 // Weather struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Weather struct {
-	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[int64] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	Id                 int64     `db:"id"`
 	Latitude           float64   `db:"latitude"`
@@ -85,14 +84,12 @@ func (weather *Weather) IsNewRecord() bool {
 
 // Lock acquires the Weather's mutex with caller tracking
 func (weather *Weather) Lock(caller string) {
-	weather.mu.entityType = "Weather"
-	weather.mu.entityId = strconv.FormatInt(weather.Id, 10)
-	weather.mu.Lock(caller)
+	weather.mu.Lock(caller, "Weather", weather.Id)
 }
 
 // Unlock releases the Weather's mutex
 func (weather *Weather) Unlock() {
-	weather.mu.Unlock()
+	weather.mu.Unlock("Weather", weather.Id)
 }
 
 // snapshotOldValues saves current values for webhook comparison

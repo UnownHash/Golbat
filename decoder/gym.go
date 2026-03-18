@@ -57,7 +57,7 @@ type GymData struct {
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
 
 	GymData // Embedded data fields (all db columns)
 
@@ -130,14 +130,12 @@ func (gym *Gym) snapshotOldValues() {
 
 // Lock acquires the Gym's mutex with caller tracking
 func (gym *Gym) Lock(caller string) {
-	gym.mu.entityType = "Gym"
-	gym.mu.entityId = gym.Id
-	gym.mu.Lock(caller)
+	gym.mu.Lock(caller, "Gym", gym.Id)
 }
 
 // Unlock releases the Gym's mutex
 func (gym *Gym) Unlock() {
-	gym.mu.Unlock()
+	gym.mu.Unlock("Gym", gym.Id)
 }
 
 // --- Set methods with dirty tracking ---

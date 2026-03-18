@@ -29,7 +29,7 @@ type IncidentData struct {
 // Incident struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Incident struct {
-	mu TrackedMutex `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
 
 	IncidentData // Embedded data fields - can be copied for write-behind queue
 
@@ -101,14 +101,12 @@ func (incident *Incident) IsNewRecord() bool {
 
 // Lock acquires the Incident's mutex with caller tracking
 func (incident *Incident) Lock(caller string) {
-	incident.mu.entityType = "Incident"
-	incident.mu.entityId = incident.Id
-	incident.mu.Lock(caller)
+	incident.mu.Lock(caller, "Incident", incident.Id)
 }
 
 // Unlock releases the Incident's mutex
 func (incident *Incident) Unlock() {
-	incident.mu.Unlock()
+	incident.mu.Unlock("Incident", incident.Id)
 }
 
 // snapshotOldValues saves current values for webhook comparison

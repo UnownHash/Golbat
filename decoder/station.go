@@ -43,7 +43,7 @@ type StationData struct {
 // Station struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Station struct {
-	mu TrackedMutex `db:"-" json:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[string] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	StationData // Embedded data fields - can be copied for write-behind queue
 
@@ -82,14 +82,12 @@ func (station *Station) IsNewRecord() bool {
 
 // Lock acquires the Station's mutex with caller tracking
 func (station *Station) Lock(caller string) {
-	station.mu.entityType = "Station"
-	station.mu.entityId = station.Id
-	station.mu.Lock(caller)
+	station.mu.Lock(caller, "Station", station.Id)
 }
 
 // Unlock releases the Station's mutex
 func (station *Station) Unlock() {
-	station.mu.Unlock()
+	station.mu.Unlock("Station", station.Id)
 }
 
 // snapshotOldValues saves current values for webhook comparison

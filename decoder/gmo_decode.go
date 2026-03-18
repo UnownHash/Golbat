@@ -61,6 +61,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
+					if incidentProto.IncidentId == "" {
+						continue
+					}
 					incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId, "UpdateFortBatch")
 					if err != nil {
 						log.Errorf("getOrCreateIncidentRecord: %s", err)
