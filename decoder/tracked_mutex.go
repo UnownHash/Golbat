@@ -35,10 +35,10 @@ func (m *TrackedMutex[K]) Lock(caller, entityType string, id K) {
 	}
 	// Contention path — holder/acquiredAt use atomics for race-detector safety.
 	holder := m.loadHolder()
-	heldFor := time.Since(time.Unix(0, m.acquiredAt.Load()))
+	start := time.Now()
+	heldFor := start.Sub(time.Unix(0, m.acquiredAt.Load()))
 	log.Warnf("[LOCK_CONTENTION] %s id=%v waiter=%s holder=%s held_for=%s",
 		entityType, id, caller, holder, heldFor)
-	start := time.Now()
 	m.mu.Lock()
 	now := time.Now()
 	log.Warnf("[LOCK_ACQUIRED] %s id=%v caller=%s waited=%s (holder was %s)",
