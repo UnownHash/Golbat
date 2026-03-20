@@ -158,7 +158,24 @@ Four access patterns, from lightest to heaviest:
 
 ### Lock Ordering
 
-When multiple entities must be locked (e.g., pokestop-to-gym conversion copying shared fields), the code releases the first lock before acquiring the second to avoid deadlocks. The pattern is: lock A → copy needed data → unlock A → lock B → apply data → unlock B.
+**Never hold two entity locks simultaneously.** When multiple entities must be accessed (e.g., pokestop-to-gym conversion copying shared fields), release the first lock before acquiring the second. The pattern is: lock A → copy needed data → unlock A → lock B → apply data → unlock B.
+
+If you must reason about lock priority (e.g., choosing which to acquire first), use this ordering by dependency:
+
+```
+1. Pokestop / Gym      (peers — never lock both at once)
+2. Station
+3. Incident             (references Pokestop for lat/lon/name)
+4. Pokemon              (references Pokestop, Spawnpoint)
+5. Spawnpoint
+6. Weather
+7. Route
+8. Tappable
+```
+
+In practice most code only locks a single entity. The cases where two interact:
+- **Incident/Pokemon save** → briefly locks Pokestop to copy lat/lon/name, then releases
+- **Fort type conversion** → copies shared fields from one fort type to the other with release-between
 
 ## Write-Behind Queues
 
@@ -180,7 +197,11 @@ Each entity type has a `TypedQueue[K, T]` that batches and coalesces writes:
 
 Wild and nearby pokemon use a 30-second write delay (`wildPokemonDelay`). When a wild pokemon is first seen in a GMO, it's enqueued with `delay = 30s`, giving time for an encounter request to arrive with IV/CP/level data. If an encounter arrives within the window, the queue entry is updated in-place with the richer data. Encounter-sourced pokemon write immediately (delay = 0).
 
-### Database Split
+### Database
+
+**Golbat targets MariaDB.** MySQL may work but is not tested. SQL syntax, migrations, and batch upsert queries are written for MariaDB compatibility.
+
+#### Connection Split
 
 `DbDetails` holds two connection pools:
 - **`PokemonDb`**: Dedicated pool for the pokemon table (highest write volume).
