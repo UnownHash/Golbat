@@ -146,13 +146,15 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	createIncidentWebhooks(ctx, db, incident)
 
 	var stopLat, stopLon float64
+	var stopCellId uint64
 	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
 	if stop != nil {
 		stopLat, stopLon = stop.Lat, stop.Lon
+		stopCellId = uint64(stop.CellId.ValueOrZero())
 		unlock()
 	}
 
-	areas := MatchStatsGeofence(stopLat, stopLon)
+	areas := MatchStatsGeofenceWithCell(stopLat, stopLon, stopCellId)
 	updateIncidentStats(incident, areas)
 
 	if config.Config.FortInMemory {
@@ -217,12 +219,14 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 		var pokestopName, stopUrl string
 		var stopLat, stopLon float64
 		var stopEnabled bool
+		var stopCellId uint64
 		stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId)
 		if stop != nil {
 			pokestopName = stop.Name.ValueOrZero()
 			stopLat, stopLon = stop.Lat, stop.Lon
 			stopUrl = stop.Url.ValueOrZero()
 			stopEnabled = stop.Enabled.ValueOrZero()
+			stopCellId = uint64(stop.CellId.ValueOrZero())
 			unlock()
 		}
 		if pokestopName == "" {
@@ -270,7 +274,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 			Lineup:                  lineup,
 		}
 
-		areas := MatchStatsGeofence(stopLat, stopLon)
+		areas := MatchStatsGeofenceWithCell(stopLat, stopLon, stopCellId)
 		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
 		statsCollector.UpdateIncidentCount(areas)
 	}

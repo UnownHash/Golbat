@@ -133,6 +133,7 @@ type tuning struct {
 	WriteBehindWorkerCount         int     `koanf:"write_behind_worker_count"`  // concurrent writers, default: 50
 	WriteBehindBatchSize           int     `koanf:"write_behind_batch_size"`    // entries per batch, default: 50
 	WriteBehindBatchTimeoutMs      int     `koanf:"write_behind_batch_timeout"` // max wait for batch in ms, default: 100
+	S2CellLookup                   bool    `koanf:"s2_cell_lookup"`             // Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups, default: false
 }
 
 type scanRule struct {

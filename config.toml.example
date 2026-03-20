@@ -77,6 +77,7 @@ write_behind_batch_size = 50        # Number of entries per batch write
 write_behind_batch_timeout = 100    # Max wait time in ms before flushing partial batch
 profile_routes = false      # Turn on debugging endpoints
 profile_contention = false  # Collect data for contention (use with above) - has a perf impact
+s2_cell_lookup = false      # Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups. (default: false)
 
 # When enabled, reduce_updates will make fort update debounce windows much longer
 # to reduce database churn. Specifically, gym/pokestop/station debounce will be
