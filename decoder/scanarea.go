@@ -1,15 +1,17 @@
 package decoder
 
 import (
+	"strings"
+
 	"golbat/config"
 	"golbat/geo"
-	"strings"
 )
 
 type ScanParameters struct {
 	ProcessPokemon           bool
 	ProcessWild              bool
 	ProcessNearby            bool
+	ProcessNearbyCell        bool
 	ProcessWeather           bool
 	ProcessPokestops         bool
 	ProcessGyms              bool
@@ -56,6 +58,16 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 			return *value
 		}
 
+		defaultTrueFirst := func(value *bool, value2 *bool) bool {
+			if value != nil {
+				return *value
+			}
+			if value2 != nil {
+				return *value2
+			}
+			return true
+		}
+
 		defaultFromWeatherConfig := func(value *bool, weatherDefault bool) bool {
 			if value == nil {
 				return weatherDefault
@@ -67,6 +79,7 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 			ProcessPokemon:           defaultTrue(rule.ProcessPokemon),
 			ProcessWild:              defaultTrue(rule.ProcessWilds),
 			ProcessNearby:            defaultTrue(rule.ProcessNearby),
+			ProcessNearbyCell:        defaultTrueFirst(rule.ProcessNearbyCell, rule.ProcessNearby),
 			ProcessCells:             defaultTrue(rule.ProcessCells),
 			ProcessWeather:           defaultTrue(rule.ProcessWeather),
 			ProcessPokestops:         defaultTrue(rule.ProcessPokestops),
@@ -82,6 +95,7 @@ func FindScanConfiguration(scanContext string, lat, lon float64) ScanParameters 
 		ProcessPokemon:           true,
 		ProcessWild:              true,
 		ProcessNearby:            true,
+		ProcessNearbyCell:        true,
 		ProcessCells:             true,
 		ProcessWeather:           true,
 		ProcessGyms:              true,

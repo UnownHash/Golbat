@@ -2,13 +2,17 @@ package decoder
 
 import (
 	"encoding/json"
-	"github.com/tidwall/rtree"
-	"golbat/geo"
 	"io/ioutil"
 	"net/http"
+	"sync/atomic"
 
+	"golbat/config"
+	"golbat/geo"
+
+	"github.com/golang/geo/s2"
 	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
+	"github.com/tidwall/rtree"
 )
 
 type KojiResponse struct {
@@ -19,8 +23,9 @@ type KojiResponse struct {
 	// Stats      KojiStats     `json:"stats"`
 }
 
-var statsTree *rtree.RTreeG[*geojson.Feature]
-var nestTree *rtree.RTreeG[*geojson.Feature]
+var statsTree atomic.Value
+var nestTree atomic.Value
+var statsS2Lookup atomic.Value
 var kojiUrl = ""
 var kojiBearerToken = ""
 
@@ -105,15 +110,34 @@ func ReadGeofences() error {
 		statsFeatureCollection = fc
 	}
 
-	statsTree = geo.LoadRtree(statsFeatureCollection)
+	newStatsTree := geo.LoadRtree(statsFeatureCollection)
+	var newStatsS2Lookup *geo.S2CellLookup
+	if config.Config.Tuning.S2CellLookup {
+		newStatsS2Lookup = geo.BuildS2LookupFromFeatures(statsFeatureCollection)
+	}
+
+	statsTree.Store(newStatsTree)
+	statsS2Lookup.Store(newStatsS2Lookup)
 
 	return nil
 }
 
 func MatchStatsGeofence(lat, lon float64) []geo.AreaName {
-	return geo.MatchGeofencesRtree(statsTree, lat, lon)
+	return MatchStatsGeofenceWithCell(lat, lon, 0)
+}
+
+func MatchStatsGeofenceWithCell(lat, lon float64, cellId uint64) []geo.AreaName {
+	lookup, _ := statsS2Lookup.Load().(*geo.S2CellLookup)
+	if cellId != 0 && lookup != nil {
+		if areas := lookup.Lookup(s2.CellID(cellId)); len(areas) > 0 {
+			return areas
+		}
+	}
+	tree, _ := statsTree.Load().(*rtree.RTreeG[*geojson.Feature])
+	return geo.MatchGeofencesRtree(tree, lat, lon)
 }
 
 func MatchNestGeofence(lat, lon float64) []geo.AreaName {
-	return geo.MatchGeofencesRtree(nestTree, lat, lon)
+	tree, _ := nestTree.Load().(*rtree.RTreeG[*geojson.Feature])
+	return geo.MatchGeofencesRtree(tree, lat, lon)
 }

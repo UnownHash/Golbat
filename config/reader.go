@@ -51,8 +51,14 @@ func ReadConfig() (configDefinition, error) {
 			MaxPool: 100,
 		},
 		Tuning: tuning{
-			MaxPokemonResults:  3000,
-			MaxPokemonDistance: 100,
+			MaxPokemonResults:              3000,
+			MaxPokemonDistance:             100,
+			MaxConcurrentProactiveIVSwitch: 6,
+			ReduceUpdates:                  false,
+			WriteBehindStartupDelay:        120, // 2 minutes
+			WriteBehindWorkerCount:         50,  // concurrent writers
+			WriteBehindBatchSize:           50,  // entries per batch
+			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
@@ -61,7 +67,13 @@ func ReadConfig() (configDefinition, error) {
 		Pvp: pvp{
 			LevelCaps: []int{50, 51},
 		},
-		MaxConcurrentProactiveIVSwitch: 6,
+		StatsIntervals: statsIntervals{
+			PokemonStatsIntervalMinutes:  1,
+			PokemonCountIntervalMinutes:  10,
+			RaidStatsIntervalMinutes:     10,
+			InvasionStatsIntervalMinutes: 15,
+			QuestStatsIntervalMinutes:    15,
+		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))

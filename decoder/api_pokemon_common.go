@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"math"
-	"strconv"
 	"time"
 
 	"golbat/config"
@@ -10,8 +9,8 @@ import (
 	pb "golbat/grpc"
 
 	"github.com/UnownHash/gohbem"
+	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"gopkg.in/guregu/null.v4"
 )
 
 type ApiPokemonDnfId struct {
@@ -58,6 +57,7 @@ type ApiPokemonResult struct {
 	CellId                  null.Int    `json:"cell_id"`
 	ExpireTimestampVerified bool        `json:"expire_timestamp_verified"`
 	DisplayPokemonId        null.Int    `json:"display_pokemon_id"`
+	DisplayPokemonForm      null.Int    `json:"display_pokemon_form"`
 	IsDitto                 bool        `json:"is_ditto"`
 	SeenType                null.String `json:"seen_type"`
 	Shiny                   null.Bool   `json:"shiny"`
@@ -71,7 +71,7 @@ type ApiPokemonResult struct {
 
 func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 	return ApiPokemonResult{
-		Id:                      strconv.FormatUint(pokemon.Id, 10),
+		Id:                      pokemon.Id.String(),
 		PokestopId:              pokemon.PokestopId,
 		SpawnId:                 pokemon.SpawnId,
 		Lat:                     pokemon.Lat,
@@ -99,6 +99,7 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		CellId:                  pokemon.CellId,
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
 		DisplayPokemonId:        pokemon.DisplayPokemonId,
+		DisplayPokemonForm:      pokemon.DisplayPokemonForm,
 		IsDitto:                 pokemon.IsDitto,
 		SeenType:                pokemon.SeenType,
 		Shiny:                   pokemon.Shiny,
