@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
 
@@ -69,7 +68,7 @@ type PokestopData struct {
 
 // Pokestop struct.
 type Pokestop struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
 
 	PokestopData // Embedded data fields - can be copied for write-behind queue
 
@@ -175,14 +174,14 @@ func (p *Pokestop) snapshotOldValues() {
 	}
 }
 
-// Lock acquires the Pokestop's mutex
-func (p *Pokestop) Lock() {
-	p.mu.Lock()
+// Lock acquires the Pokestop's mutex with caller tracking
+func (p *Pokestop) Lock(caller string) {
+	p.mu.Lock(caller, "Pokestop", p.Id)
 }
 
 // Unlock releases the Pokestop's mutex
 func (p *Pokestop) Unlock() {
-	p.mu.Unlock()
+	p.mu.Unlock("Pokestop", p.Id)
 }
 
 // --- Set methods with dirty tracking ---

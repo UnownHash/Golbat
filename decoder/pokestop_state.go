@@ -43,10 +43,10 @@ func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId strin
 
 // PeekPokestopRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func PeekPokestopRecord(fortId string) (*Pokestop, func(), error) {
+func PeekPokestopRecord(fortId string, caller string) (*Pokestop, func(), error) {
 	if item := pokestopCache.Get(fortId); item != nil {
 		pokestop := item.Value()
-		pokestop.Lock()
+		pokestop.Lock(caller)
 		return pokestop, func() { pokestop.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -72,11 +72,11 @@ func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool
 // getPokestopRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
+func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
 	// Check cache first
 	if item := pokestopCache.Get(fortId); item != nil {
 		pokestop := item.Value()
-		pokestop.Lock()
+		pokestop.Lock(caller)
 		return pokestop, func() { pokestop.Unlock() }, nil
 	}
 
@@ -102,15 +102,15 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 	})
 
 	pokestop := existingPokestop.Value()
-	pokestop.Lock()
+	pokestop.Lock(caller)
 	return pokestop, func() { pokestop.Unlock() }, nil
 }
 
 // getPokestopRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Use when modifying the Pokestop.
 // Caller MUST call returned unlock function if non-nil.
-func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
-	pokestop, unlock, err := getPokestopRecordReadOnly(ctx, db, fortId)
+func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
+	pokestop, unlock, err := getPokestopRecordReadOnly(ctx, db, fortId, caller)
 	if err != nil || pokestop == nil {
 		return nil, nil, err
 	}
@@ -120,14 +120,14 @@ func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId str
 
 // getOrCreatePokestopRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string) (*Pokestop, func(), error) {
+func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
 	// Create new Pokestop atomically - function only called if key doesn't exist
 	pokestopItem, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		return &Pokestop{PokestopData: PokestopData{Id: fortId}, newRecord: true}
 	})
 
 	pokestop := pokestopItem.Value()
-	pokestop.Lock()
+	pokestop.Lock(caller)
 
 	if pokestop.newRecord {
 		// We should attempt to load from database
@@ -502,7 +502,7 @@ func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geo
 	clearedCount := 0
 
 	for _, id := range pokestopIds {
-		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id)
+		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id, "RemoveQuestsWithinGeofence")
 		if err != nil {
 			log.Errorf("RemoveQuestsWithinGeofence: failed to get pokestop %s: %v", id, err)
 			continue
@@ -594,7 +594,7 @@ func ExpireQuests(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 
 	// Process each pokestop once, clearing both quest types if needed
 	for id := range allIds {
-		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id)
+		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id, "ExpireQuests")
 		if err != nil {
 			log.Errorf("ExpireQuests: failed to get pokestop %s: %v", id, err)
 			continue

@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/guregu/null/v6"
 )
@@ -30,7 +29,7 @@ type IncidentData struct {
 // Incident struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Incident struct {
-	mu sync.Mutex `db:"-"` // Object-level mutex
+	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
 
 	IncidentData // Embedded data fields - can be copied for write-behind queue
 
@@ -100,14 +99,14 @@ func (incident *Incident) IsNewRecord() bool {
 	return incident.newRecord
 }
 
-// Lock acquires the Incident's mutex
-func (incident *Incident) Lock() {
-	incident.mu.Lock()
+// Lock acquires the Incident's mutex with caller tracking
+func (incident *Incident) Lock(caller string) {
+	incident.mu.Lock(caller, "Incident", incident.Id)
 }
 
 // Unlock releases the Incident's mutex
 func (incident *Incident) Unlock() {
-	incident.mu.Unlock()
+	incident.mu.Unlock("Incident", incident.Id)
 }
 
 // snapshotOldValues saves current values for webhook comparison

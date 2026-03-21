@@ -13,7 +13,7 @@ import (
 func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto) string {
 	stationId := request.StationId
 
-	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId)
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "ResetStationedPokemon")
 	if err != nil {
 		log.Printf("Get station %s", err)
 		return "Error getting station"
@@ -33,7 +33,7 @@ func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.
 func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
 	stationId := request.StationId
 
-	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId)
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "UpdateStationWithDetails")
 	if err != nil {
 		log.Printf("Get station %s", err)
 		return "Error getting station"

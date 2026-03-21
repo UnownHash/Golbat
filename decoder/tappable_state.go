@@ -24,10 +24,10 @@ func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, t
 
 // PeekTappableRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func PeekTappableRecord(id uint64) (*Tappable, func(), error) {
+func PeekTappableRecord(id uint64, caller string) (*Tappable, func(), error) {
 	if item := tappableCache.Get(id); item != nil {
 		tappable := item.Value()
-		tappable.Lock()
+		tappable.Lock(caller)
 		return tappable, func() { tappable.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -36,11 +36,11 @@ func PeekTappableRecord(id uint64) (*Tappable, func(), error) {
 // getTappableRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, func(), error) {
+func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64, caller string) (*Tappable, func(), error) {
 	// Check cache first
 	if item := tappableCache.Get(id); item != nil {
 		tappable := item.Value()
-		tappable.Lock()
+		tappable.Lock(caller)
 		return tappable, func() { tappable.Unlock() }, nil
 	}
 
@@ -61,20 +61,20 @@ func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64) 
 	})
 
 	tappable := existingTappable.Value()
-	tappable.Lock()
+	tappable.Lock(caller)
 	return tappable, func() { tappable.Unlock() }, nil
 }
 
 // getOrCreateTappableRecord gets existing or creates new, locked.
 // Caller MUST call returned unlock function.
-func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64) (*Tappable, func(), error) {
+func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, caller string) (*Tappable, func(), error) {
 	// Create new Tappable atomically - function only called if key doesn't exist
 	tappableItem, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
 		return &Tappable{TappableData: TappableData{Id: id}, newRecord: true}
 	})
 
 	tappable := tappableItem.Value()
-	tappable.Lock()
+	tappable.Lock(caller)
 
 	if tappable.newRecord {
 		// We should attempt to load from database

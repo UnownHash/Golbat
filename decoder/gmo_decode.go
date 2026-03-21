@@ -21,7 +21,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	for _, fort := range p {
 		fortId := fort.Data.FortId
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
-			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId)
+			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
 				log.Errorf("getOrCreatePokestopRecord: %s", err)
 				continue
@@ -37,13 +37,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			// To avoid deadlock, we do this after releasing the pokestop lock.
 			if isNewRecord && DoesGymExist(ctx, db, fortId) {
 				// Get shared fields from gym (with gym lock only)
-				gym, gymUnlock, _ := GetGymRecordReadOnly(ctx, db, fortId)
+				gym, gymUnlock, _ := GetGymRecordReadOnly(ctx, db, fortId, "UpdateFortBatch.pokestopSharedFields")
 				if gym != nil {
 					sharedFields := gym.GetSharedFields()
 					gymUnlock()
 
 					// Re-acquire pokestop lock to apply shared fields
-					pokestop, unlock, err = getPokestopRecordForUpdate(ctx, db, fortId)
+					pokestop, unlock, err = getPokestopRecordForUpdate(ctx, db, fortId, "UpdateFortBatch.sharedFields")
 					if err != nil {
 						log.Errorf("getPokestopRecordForUpdate (shared fields): %s", err)
 					} else if pokestop != nil {
@@ -61,7 +61,10 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 			if incidents != nil {
 				for _, incidentProto := range incidents {
-					incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId)
+					if incidentProto.IncidentId == "" {
+						continue
+					}
+					incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId, "UpdateFortBatch")
 					if err != nil {
 						log.Errorf("getOrCreateIncidentRecord: %s", err)
 						continue
@@ -74,7 +77,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 		}
 
 		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
-			gym, gymUnlock, err := getOrCreateGymRecord(ctx, db, fortId)
+			gym, gymUnlock, err := getOrCreateGymRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
 				log.Errorf("getOrCreateGymRecord: %s", err)
 				continue
@@ -90,13 +93,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 			// To avoid deadlock, we do this after releasing the gym lock.
 			if isNewRecord && DoesPokestopExist(ctx, db, fortId) {
 				// Get shared fields from pokestop (with pokestop lock only)
-				pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId)
+				pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId, "UpdateFortBatch.gymSharedFields")
 				if pokestop != nil {
 					sharedFields := pokestop.GetSharedFields()
 					unlock()
 
 					// Re-acquire gym lock to apply shared fields
-					gym, gymUnlock, err = getGymRecordForUpdate(ctx, db, fortId)
+					gym, gymUnlock, err = getGymRecordForUpdate(ctx, db, fortId, "UpdateFortBatch.sharedFields")
 					if err != nil {
 						log.Errorf("getGymRecordForUpdate (shared fields): %s", err)
 					} else if gym != nil {
@@ -113,7 +116,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
 		stationId := stationProto.Data.Id
-		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId)
+		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId, "UpdateStationBatch")
 		if err != nil {
 			log.Errorf("getOrCreateStationRecord: %s", err)
 			continue
@@ -137,7 +140,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
 
 		if scanParameters.ProcessWild {
-			pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+			pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.wild")
 			if err != nil {
 				log.Errorf("getOrCreatePokemonRecord: %s", err)
 				continue
@@ -157,7 +160,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			encounterId := nearby.Data.EncounterId
 
 			if nearby.Data.FortId != "" || scanParameters.ProcessNearbyCell {
-				pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+				pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.nearby")
 				if err != nil {
 					log.Printf("getOrCreatePokemonRecord: %s", err)
 					continue
@@ -177,7 +180,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	for _, mapPokemon := range mapPokemonList {
 		encounterId := mapPokemon.Data.EncounterId
 
-		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId)
+		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.map")
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
 			continue
@@ -200,7 +203,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64, account string) (updates []WeatherUpdate) {
 	hourKey := timestampMs / time.Hour.Milliseconds()
 	for _, weatherProto := range p {
-		weather, unlock, err := getOrCreateWeatherRecord(ctx, db, weatherProto.S2CellId)
+		weather, unlock, err := getOrCreateWeatherRecord(ctx, db, weatherProto.S2CellId, "UpdateClientWeatherBatch")
 		if err != nil {
 			log.Printf("getOrCreateWeatherRecord: %s", err)
 			continue

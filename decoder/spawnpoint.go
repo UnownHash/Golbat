@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"sync"
 	"time"
 
 	"golbat/db"
@@ -35,7 +34,7 @@ type SpawnpointData struct {
 // Spawnpoint struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Spawnpoint struct {
-	mu sync.Mutex `db:"-" json:"-"` // Object-level mutex
+	mu TrackedMutex[int64] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	SpawnpointData // Embedded data fields - can be copied for write-behind queue
 
@@ -72,14 +71,14 @@ func (s *Spawnpoint) IsNewRecord() bool {
 	return s.newRecord
 }
 
-// Lock acquires the Spawnpoint's mutex
-func (s *Spawnpoint) Lock() {
-	s.mu.Lock()
+// Lock acquires the Spawnpoint's mutex with caller tracking
+func (s *Spawnpoint) Lock(caller string) {
+	s.mu.Lock(caller, "Spawnpoint", s.Id)
 }
 
 // Unlock releases the Spawnpoint's mutex
 func (s *Spawnpoint) Unlock() {
-	s.mu.Unlock()
+	s.mu.Unlock("Spawnpoint", s.Id)
 }
 
 // --- Set methods with dirty tracking ---
@@ -172,10 +171,10 @@ func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpoint
 
 // peekSpawnpointRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func peekSpawnpointRecord(spawnpointId int64) (*Spawnpoint, func(), error) {
+func peekSpawnpointRecord(spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	if item := spawnpointCache.Get(spawnpointId); item != nil {
 		spawnpoint := item.Value()
-		spawnpoint.Lock()
+		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -183,11 +182,11 @@ func peekSpawnpointRecord(spawnpointId int64) (*Spawnpoint, func(), error) {
 
 // getSpawnpointRecord acquires lock. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, func(), error) {
+func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Check cache first
 	if item := spawnpointCache.Get(spawnpointId); item != nil {
 		spawnpoint := item.Value()
-		spawnpoint.Lock()
+		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
 
@@ -208,20 +207,20 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 	})
 
 	spawnpoint := existingSpawnpoint.Value()
-	spawnpoint.Lock()
+	spawnpoint.Lock(caller)
 	return spawnpoint, func() { spawnpoint.Unlock() }, nil
 }
 
 // getOrCreateSpawnpointRecord gets existing or creates new, locked.
 // Caller MUST call returned unlock function.
-func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64) (*Spawnpoint, func(), error) {
+func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Create new Spawnpoint atomically - function only called if key doesn't exist
 	spawnpointItem, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
 		return &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnpointId}, newRecord: true}
 	})
 
 	spawnpoint := spawnpointItem.Value()
-	spawnpoint.Lock()
+	spawnpoint.Lock(caller)
 
 	if spawnpoint.newRecord {
 		// We should attempt to load from database
@@ -260,7 +259,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		date := time.Unix(expireTimeStamp, 0)
 		secondOfHour := date.Second() + date.Minute()*60
 
-		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId)
+		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWild")
 		if err != nil {
 			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
 			return
@@ -271,7 +270,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		spawnpointUpdate(ctx, db, spawnpoint)
 		unlock()
 	} else {
-		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId)
+		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromMap")
 		if err != nil {
 			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
 			return

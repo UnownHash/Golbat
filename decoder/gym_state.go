@@ -53,10 +53,10 @@ func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 
 // PeekGymRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func PeekGymRecord(fortId string) (*Gym, func(), error) {
+func PeekGymRecord(fortId string, caller string) (*Gym, func(), error) {
 	if item := gymCache.Get(fortId); item != nil {
 		gym := item.Value()
-		gym.Lock()
+		gym.Lock(caller)
 		return gym, func() { gym.Unlock() }, nil
 	}
 	return nil, nil, nil
@@ -65,11 +65,11 @@ func PeekGymRecord(fortId string) (*Gym, func(), error) {
 // GetGymRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
+func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
 	// Check cache first
 	if item := gymCache.Get(fortId); item != nil {
 		gym := item.Value()
-		gym.Lock()
+		gym.Lock(caller)
 		return gym, func() { gym.Unlock() }, nil
 	}
 
@@ -94,15 +94,15 @@ func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string) (
 	})
 
 	gym := existingGym.Value()
-	gym.Lock()
+	gym.Lock(caller)
 	return gym, func() { gym.Unlock() }, nil
 }
 
 // getGymRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Use when modifying the Gym.
 // Caller MUST call returned unlock function if non-nil.
-func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
-	gym, unlock, err := GetGymRecordReadOnly(ctx, db, fortId)
+func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
+	gym, unlock, err := GetGymRecordReadOnly(ctx, db, fortId, caller)
 	if err != nil || gym == nil {
 		return nil, nil, err
 	}
@@ -112,14 +112,14 @@ func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string) 
 
 // getOrCreateGymRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string) (*Gym, func(), error) {
+func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
 	// Create new Gym atomically - function only called if key doesn't exist
 	gymItem, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
 		return &Gym{GymData: GymData{Id: fortId}, newRecord: true}
 	})
 
 	gym := gymItem.Value()
-	gym.Lock()
+	gym.Lock(caller)
 
 	if gym.newRecord {
 		// We should attempt to load from database

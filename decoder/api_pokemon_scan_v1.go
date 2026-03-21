@@ -227,7 +227,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	results := make([]*ApiPokemonResult, 0, len(returnKeys))
 
 	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key)
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v1")
 		if pokemon != nil {
 			apiPokemon := buildApiPokemonResult(pokemon)
 			unlock()

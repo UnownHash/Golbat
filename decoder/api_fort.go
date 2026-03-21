@@ -281,7 +281,7 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 	start := time.Now()
 
 	for _, key := range returnKeys {
-		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key)
+		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanGym")
 		if err == nil && gym != nil {
 			gymCopy := buildGymResult(gym)
 			results = append(results, &gymCopy)
@@ -306,7 +306,7 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 	start := time.Now()
 
 	for _, key := range returnKeys {
-		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key)
+		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemon")
 		if err == nil && pokestop != nil {
 			pokestopCopy := buildPokestopResult(pokestop)
 			results = append(results, &pokestopCopy)
@@ -331,7 +331,7 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	start := time.Now()
 
 	for _, key := range returnKeys {
-		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key)
+		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStation")
 		if err == nil && station != nil {
 			stationCopy := buildStationResult(station)
 			results = append(results, &stationCopy)
@@ -356,7 +356,7 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 
 	gyms := make([]*ApiGymResult, 0, len(gymKeys))
 	for _, key := range gymKeys {
-		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key)
+		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanGymPokemon")
 		if err == nil && gym != nil {
 			gymCopy := buildGymResult(gym)
 			gyms = append(gyms, &gymCopy)
@@ -368,7 +368,7 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 
 	pokestops := make([]*ApiPokestopResult, 0, len(pokestopKeys))
 	for _, key := range pokestopKeys {
-		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key)
+		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemonPokemon")
 		if err == nil && pokestop != nil {
 			pokestopCopy := buildPokestopResult(pokestop)
 			pokestops = append(pokestops, &pokestopCopy)
@@ -380,7 +380,7 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 
 	stations := make([]*ApiStationResult, 0, len(stationKeys))
 	for _, key := range stationKeys {
-		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key)
+		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStationPokemon")
 		if err == nil && station != nil {
 			stationCopy := buildStationResult(station)
 			stations = append(stations, &stationCopy)

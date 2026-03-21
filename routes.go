@@ -490,7 +490,7 @@ func GetPokestop(c *gin.Context) {
 	fortId := c.Param("fort_id")
 
 	//ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	pokestop, unlock, err := decoder.PeekPokestopRecord(fortId)
+	pokestop, unlock, err := decoder.PeekPokestopRecord(fortId, "API.GetPokestop")
 	if unlock != nil {
 		defer unlock()
 	}
@@ -513,7 +513,7 @@ func GetGym(c *gin.Context) {
 	gymId := c.Param("gym_id")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	gym, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, gymId)
+	gym, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, gymId, "API.GetGym")
 	if unlock != nil {
 		defer unlock()
 	}
@@ -583,7 +583,7 @@ func GetGyms(c *gin.Context) {
 
 	out := make([]decoder.ApiGymResult, 0, len(ids))
 	for _, id := range ids {
-		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id, "API.GetGyms")
 		if err != nil {
 			if unlock != nil {
 				unlock()
@@ -715,7 +715,7 @@ func SearchGyms(c *gin.Context) {
 		if id == "" {
 			continue
 		}
-		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id)
+		g, unlock, err := decoder.GetGymRecordReadOnly(ctx, dbDetails, id, "API.GetFortTracker")
 		if err != nil {
 			if unlock != nil {
 				unlock()
@@ -824,7 +824,7 @@ func GetTappable(c *gin.Context) {
 		c.Status(http.StatusBadRequest)
 		return
 	}
-	tappable, unlock, err := decoder.PeekTappableRecord(tappableId)
+	tappable, unlock, err := decoder.PeekTappableRecord(tappableId, "API.GetTappable")
 	if unlock != nil {
 		defer unlock()
 	}

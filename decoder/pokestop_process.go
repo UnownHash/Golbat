@@ -14,7 +14,7 @@ import (
 )
 
 func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.Id)
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.Id, "UpdatePokestopFromFortDetails")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -41,7 +41,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 
 	statsCollector.IncDecodeQuest("ok", haveArStr)
 
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId)
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId, "UpdatePokestopWithQuest")
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -79,7 +79,7 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 }
 
 func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.Id)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.Id, "UpdatePokestopFromGetMapForts")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -122,7 +122,7 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 
 	contest := contestData.ContestIncident.Contests[0]
 
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopWithContestData")
 	if err != nil {
 		log.Printf("Get pokestop %s", err)
 		return "Error getting pokestop"
@@ -147,7 +147,7 @@ func getFortIdFromContest(id string) string {
 func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
 	fortId := getFortIdFromContest(request.GetContestId())
 
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId)
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopWithContestEntry")
 	if err != nil {
 		log.Printf("Get pokestop %s", err)
 		return "Error getting pokestop"

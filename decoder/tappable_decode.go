@@ -80,7 +80,7 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {
 	ta.SetExpireTimestampVerified(false)
 	if spawnId := ta.SpawnId.ValueOrZero(); spawnId != 0 {
-		spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId)
+		spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "updateFromTappableEncounter")
 		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 			despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 			unlock()
