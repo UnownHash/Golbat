@@ -607,6 +607,81 @@ func GetGyms(c *gin.Context) {
 	c.JSON(http.StatusOK, out)
 }
 
+// POST /api/station/query
+//
+//	{ "ids": ["stationid1", "stationid2", ...] }
+func GetStations(c *gin.Context) {
+	type idsPayload struct {
+		IDs []string `json:"ids"`
+	}
+
+	var payload idsPayload
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		var arr []string
+		if err2 := c.ShouldBindJSON(&arr); err2 != nil {
+			log.Warnf("invalid JSON: %v / %v", err, err2)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON body; expected {\"ids\":[...] }"})
+			return
+		}
+		payload.IDs = arr
+	}
+
+	seen := make(map[string]struct{}, len(payload.IDs))
+	ids := make([]string, 0, len(payload.IDs))
+	for _, id := range payload.IDs {
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+
+	const maxIDs = 500
+	if len(ids) > maxIDs {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"error":         "too many ids",
+			"max_supported": maxIDs,
+		})
+		return
+	}
+
+	if len(ids) == 0 {
+		c.JSON(http.StatusOK, []decoder.ApiStationResult{})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	out := make([]decoder.ApiStationResult, 0, len(ids))
+	for _, id := range ids {
+		s, unlock, err := decoder.GetStationRecordReadOnly(ctx, dbDetails, id, "API.GetStations")
+		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
+			log.Warnf("error retrieving station %s: %v", id, err)
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+		if s != nil {
+			out = append(out, decoder.BuildStationResult(s))
+		}
+		if unlock != nil {
+			unlock()
+		}
+		if ctx.Err() != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+	}
+
+	c.JSON(http.StatusOK, out)
+}
+
 // POST /api/gym/search
 // Multiple filter combinations with AND logic
 //

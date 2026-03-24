@@ -331,9 +331,9 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	start := time.Now()
 
 	for _, key := range returnKeys {
-		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStation")
+		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStation")
 		if err == nil && station != nil {
-			stationCopy := buildStationResult(station)
+			stationCopy := BuildStationResult(station)
 			results = append(results, &stationCopy)
 		}
 		if unlock != nil {
@@ -380,9 +380,9 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 
 	stations := make([]*ApiStationResult, 0, len(stationKeys))
 	for _, key := range stationKeys {
-		station, unlock, err := getStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStationPokemon")
+		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStationPokemon")
 		if err == nil && station != nil {
-			stationCopy := buildStationResult(station)
+			stationCopy := BuildStationResult(station)
 			stations = append(stations, &stationCopy)
 		}
 		if unlock != nil {
