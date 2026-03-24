@@ -66,10 +66,10 @@ func peekStationRecord(stationId string, caller string) (*Station, func(), error
 	return nil, nil, nil
 }
 
-// getStationRecordReadOnly acquires lock but does NOT take snapshot.
+// GetStationRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
+func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
 	// Check cache first
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
@@ -104,7 +104,7 @@ func getStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 // getStationRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Caller MUST call returned unlock function if non-nil.
 func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
-	station, unlock, err := getStationRecordReadOnly(ctx, db, stationId, caller)
+	station, unlock, err := GetStationRecordReadOnly(ctx, db, stationId, caller)
 	if err != nil || station == nil {
 		return nil, nil, err
 	}

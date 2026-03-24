@@ -335,6 +335,7 @@ func main() {
 	apiGroup.POST("/gym/search", SearchGyms)
 	apiGroup.POST("/gym/scan", GymScan)
 	apiGroup.POST("/pokestop/scan", PokestopScan)
+	apiGroup.POST("/station/query", GetStations)
 	apiGroup.POST("/station/scan", StationScan)
 	apiGroup.POST("/fort/scan", FortScan)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)

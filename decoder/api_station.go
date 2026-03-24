@@ -27,7 +27,7 @@ type ApiStationResult struct {
 	StationedPokemon       null.String `json:"stationed_pokemon"`
 }
 
-func buildStationResult(station *Station) ApiStationResult {
+func BuildStationResult(station *Station) ApiStationResult {
 	return ApiStationResult{
 		Id:                     station.Id,
 		Lat:                    station.Lat,
