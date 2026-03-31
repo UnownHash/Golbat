@@ -55,6 +55,99 @@ func TestUpsertCachedStationBattleIgnoresUpdatedOnlyChange(t *testing.T) {
 	}
 }
 
+func TestUpsertCachedStationBattleDropsEarlierEndAfterLaterObservation(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       "station-1",
+		BattleLevel:     1,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 1800,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 2,
+		StationId:       "station-1",
+		BattleLevel:     2,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(133),
+	}, now)
+
+	battles := getKnownStationBattles("station-1", nil, now)
+	if len(battles) != 1 {
+		t.Fatalf("expected 1 battle after later observation, got %d", len(battles))
+	}
+	if battles[0].BreadBattleSeed != 2 {
+		t.Fatalf("expected seed 2 to replace earlier battle, got %d", battles[0].BreadBattleSeed)
+	}
+}
+
+func TestUpsertCachedStationBattleReplacesEqualEndBattle(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       "station-1",
+		BattleLevel:     1,
+		BattleStart:     now - 120,
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 2,
+		StationId:       "station-1",
+		BattleLevel:     2,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(133),
+	}, now)
+
+	battles := getKnownStationBattles("station-1", nil, now)
+	if len(battles) != 1 {
+		t.Fatalf("expected 1 battle after equal-end replacement, got %d", len(battles))
+	}
+	if battles[0].BreadBattleSeed != 2 {
+		t.Fatalf("expected latest equal-end seed 2, got %d", battles[0].BreadBattleSeed)
+	}
+}
+
+func TestUpsertCachedStationBattleKeepsLongerBattleWhenShorterObserved(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       "station-1",
+		BattleLevel:     3,
+		BattleStart:     now - 120,
+		BattleEnd:       now + 7200,
+		BattlePokemonId: null.IntFrom(374),
+	}, now)
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 2,
+		StationId:       "station-1",
+		BattleLevel:     1,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 1800,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
+
+	battles := getKnownStationBattles("station-1", nil, now)
+	if len(battles) != 2 {
+		t.Fatalf("expected longer and shorter battles to coexist, got %d", len(battles))
+	}
+	if battles[0].BreadBattleSeed != 1 || battles[1].BreadBattleSeed != 2 {
+		t.Fatalf("unexpected battle ordering after shorter observation: %+v", battles)
+	}
+}
+
 func TestCanonicalStationBattleUsesLatestEnd(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
@@ -77,8 +170,8 @@ func TestCanonicalStationBattleUsesLatestEnd(t *testing.T) {
 	}, now)
 
 	battles := getKnownStationBattles("station-1", nil, now)
-	if len(battles) != 2 {
-		t.Fatalf("expected 2 battles, got %d", len(battles))
+	if len(battles) != 1 {
+		t.Fatalf("expected later-ending battle to replace earlier one, got %d battles", len(battles))
 	}
 	if battles[0].BreadBattleSeed != 2 {
 		t.Fatalf("expected latest-ending battle first, got seed %d", battles[0].BreadBattleSeed)
@@ -131,8 +224,8 @@ func TestBuildStationResultUsesBattleCacheProjection(t *testing.T) {
 	if result.BattlePokemonId.ValueOrZero() != 133 {
 		t.Fatalf("expected canonical pokemon 133, got %d", result.BattlePokemonId.ValueOrZero())
 	}
-	if len(result.Battles) != 2 {
-		t.Fatalf("expected 2 battles, got %d", len(result.Battles))
+	if len(result.Battles) != 1 {
+		t.Fatalf("expected 1 battle after later-ending replacement, got %d", len(result.Battles))
 	}
 }
 
@@ -183,31 +276,31 @@ func TestGetActiveStationBattlesKeepsFutureBattleCached(t *testing.T) {
 	}
 }
 
-func TestCanonicalStationBattlePrefersActiveOverFuture(t *testing.T) {
+func TestCanonicalStationBattleKeepsLongerBattleWhenShorterFutureObserved(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 
 	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 1,
 		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
+		BattleLevel:     3,
+		BattleStart:     now - 120,
+		BattleEnd:       now + 7200,
+		BattlePokemonId: null.IntFrom(374),
 	}, now)
 	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 2,
 		StationId:       "station-1",
 		BattleLevel:     2,
 		BattleStart:     now + 600,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(133),
+		BattleEnd:       now + 1800,
+		BattlePokemonId: null.IntFrom(527),
 	}, now)
 
 	battles := getKnownStationBattles("station-1", nil, now)
 	canonical := canonicalStationBattleFromSlice(battles, now)
 	if canonical == nil || canonical.BreadBattleSeed != 1 {
-		t.Fatalf("expected active battle seed 1 to override future battle, got %+v", canonical)
+		t.Fatalf("expected longer existing battle seed 1 to remain canonical, got %+v", canonical)
 	}
 }
 
@@ -382,18 +475,18 @@ func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
 	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 1,
 		StationId:       station.Id,
-		BattleLevel:     1,
+		BattleLevel:     3,
 		BattleStart:     now - 600,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
+		BattleEnd:       now + 7200,
+		BattlePokemonId: null.IntFrom(374),
 	}, now)
 	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 2,
 		StationId:       station.Id,
-		BattleLevel:     2,
+		BattleLevel:     1,
 		BattleStart:     now + 600,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(133),
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(527),
 	}, now)
 	station.oldValues = StationOldValues{
 		CanonicalBattleSeed: 1,
