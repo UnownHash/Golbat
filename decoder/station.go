@@ -52,6 +52,7 @@ type Station struct {
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 	forceSave     bool     `db:"-" json:"-"`
+	skipWebhook   bool     `db:"-" json:"-"`
 
 	oldValues StationOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
@@ -59,7 +60,10 @@ type Station struct {
 // StationOldValues holds old field values for webhook comparison
 type StationOldValues struct {
 	EndTime                int64
+	IsBattleAvailable      bool
+	HasCanonicalBattle     bool
 	CanonicalBattleSeed    int64
+	BattleProjection       *StationBattleData
 	BattleEnd              null.Int
 	BattlePokemonId        null.Int
 	BattlePokemonForm      null.Int
@@ -101,7 +105,10 @@ func (station *Station) snapshotOldValues() {
 	battles := getKnownStationBattles(station.Id, station, now)
 	canonical := canonicalStationBattleFromSlice(battles, now)
 	station.oldValues = StationOldValues{
+		IsBattleAvailable:      station.IsBattleAvailable,
+		HasCanonicalBattle:     canonical != nil,
 		CanonicalBattleSeed:    canonicalBattleSeed(canonical),
+		BattleProjection:       stationBattleFromStationProjection(station),
 		EndTime:                station.EndTime,
 		BattleEnd:              station.BattleEnd,
 		BattlePokemonId:        station.BattlePokemonId,

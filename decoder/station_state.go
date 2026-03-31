@@ -262,6 +262,11 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 }
 
 func createStationWebhooks(station *Station) {
+	if station.skipWebhook {
+		station.skipWebhook = false
+		return
+	}
+
 	old := &station.oldValues
 	isNew := station.IsNewRecord()
 	now := time.Now().Unix()
@@ -305,7 +310,7 @@ func createStationWebhooks(station *Station) {
 		}
 		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		if seed := canonicalBattleSeed(canonical); seed != 0 && (isNew || old.CanonicalBattleSeed != seed) {
+		if seed := canonicalBattleSeed(canonical); canonical != nil && (isNew || !old.HasCanonicalBattle || old.CanonicalBattleSeed != seed) {
 			statsCollector.UpdateMaxBattleCount(areas, int64(canonical.BattleLevel))
 		}
 	}
