@@ -368,6 +368,40 @@ func TestBuildFortLookupStationBattlesIncludesFutureBattle(t *testing.T) {
 	}
 }
 
+func TestCachePreloadedStationBattlesPreservesPersistedSetRegardlessOfInputOrder(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+
+	if !cachePreloadedStationBattles("station-1", []StationBattleData{
+		{
+			BreadBattleSeed: 2,
+			StationId:       "station-1",
+			BattleLevel:     1,
+			BattleStart:     now + 600,
+			BattleEnd:       now + 1800,
+			BattlePokemonId: null.IntFrom(527),
+		},
+		{
+			BreadBattleSeed: 1,
+			StationId:       "station-1",
+			BattleLevel:     3,
+			BattleStart:     now - 120,
+			BattleEnd:       now + 7200,
+			BattlePokemonId: null.IntFrom(374),
+		},
+	}) {
+		t.Fatal("expected preloaded station battles to be cached")
+	}
+
+	battles := getKnownStationBattles("station-1", nil, now)
+	if len(battles) != 2 {
+		t.Fatalf("expected both persisted battles after preload, got %d", len(battles))
+	}
+	if battles[0].BreadBattleSeed != 1 || battles[1].BreadBattleSeed != 2 {
+		t.Fatalf("unexpected preloaded battle ordering: %+v", battles)
+	}
+}
+
 func TestCreateStationWebhooksSkipsEmptyExistingStation(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
