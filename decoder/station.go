@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/guregu/null/v6"
 )
@@ -50,6 +51,7 @@ type Station struct {
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	forceSave     bool     `db:"-" json:"-"`
 
 	oldValues StationOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
@@ -57,12 +59,14 @@ type Station struct {
 // StationOldValues holds old field values for webhook comparison
 type StationOldValues struct {
 	EndTime                int64
+	CanonicalBattleSeed    int64
 	BattleEnd              null.Int
 	BattlePokemonId        null.Int
 	BattlePokemonForm      null.Int
 	BattlePokemonCostume   null.Int
 	BattlePokemonGender    null.Int
 	BattlePokemonBreadMode null.Int
+	BattleListSignature    string
 }
 
 // IsDirty returns true if any field has been modified
@@ -93,7 +97,11 @@ func (station *Station) Unlock() {
 // snapshotOldValues saves current values for webhook comparison
 // Call this after loading from cache/DB but before modifications
 func (station *Station) snapshotOldValues() {
+	now := time.Now().Unix()
+	battles := getKnownStationBattles(station.Id, station, now)
+	canonical := canonicalStationBattleFromSlice(battles, now)
 	station.oldValues = StationOldValues{
+		CanonicalBattleSeed:    canonicalBattleSeed(canonical),
 		EndTime:                station.EndTime,
 		BattleEnd:              station.BattleEnd,
 		BattlePokemonId:        station.BattlePokemonId,
@@ -101,7 +109,12 @@ func (station *Station) snapshotOldValues() {
 		BattlePokemonCostume:   station.BattlePokemonCostume,
 		BattlePokemonGender:    station.BattlePokemonGender,
 		BattlePokemonBreadMode: station.BattlePokemonBreadMode,
+		BattleListSignature:    stationBattleSignatureFromSlice(battles),
 	}
+}
+
+func (station *Station) MarkBattleListChanged() {
+	station.forceSave = true
 }
 
 // --- Set methods with dirty tracking ---

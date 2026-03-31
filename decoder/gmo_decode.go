@@ -122,6 +122,7 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			continue
 		}
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
+		syncStationBattlesFromProto(ctx, db, station, stationProto.Data.BattleDetails)
 		saveStationRecord(ctx, db, station)
 		unlock()
 	}

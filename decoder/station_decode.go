@@ -48,6 +48,8 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 				log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
 			}
 		}
+	} else {
+		clearStationBattleProjection(station)
 	}
 	station.SetCellId(int64(cellId))
 	return station
