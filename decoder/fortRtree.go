@@ -3,6 +3,7 @@ package decoder
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -57,6 +58,7 @@ type FortLookup struct {
 	BattleLevel        int8
 	BattlePokemonId    int16
 	BattlePokemonForm  int16
+	StationBattles     []FortLookupStationBattle
 }
 
 var fortLookupCache *xsync.MapOf[string, FortLookup]
@@ -202,14 +204,28 @@ func updateGymLookup(gym *Gym) {
 }
 
 func updateStationLookup(station *Station) {
+	now := time.Now().Unix()
+	battles := buildFortLookupStationBattles(station, now)
+	canonical := canonicalStationBattleFromSlice(getKnownStationBattles(station.Id, station, now), now)
+	battleEndTimestamp := int64(0)
+	battleLevel := int8(0)
+	battlePokemonId := int16(0)
+	battlePokemonForm := int16(0)
+	if canonical != nil {
+		battleEndTimestamp = canonical.BattleEnd
+		battleLevel = int8(canonical.BattleLevel)
+		battlePokemonId = int16(canonical.BattlePokemonId.ValueOrZero())
+		battlePokemonForm = int16(canonical.BattlePokemonForm.ValueOrZero())
+	}
 	fortLookupCache.Store(station.Id, FortLookup{
 		FortType:           STATION,
 		Lat:                station.Lat,
 		Lon:                station.Lon,
-		BattleEndTimestamp: station.BattleEnd.ValueOrZero(),
-		BattleLevel:        int8(station.BattleLevel.ValueOrZero()),
-		BattlePokemonId:    int16(station.BattlePokemonId.ValueOrZero()),
-		BattlePokemonForm:  int16(station.BattlePokemonForm.ValueOrZero()),
+		BattleEndTimestamp: battleEndTimestamp,
+		BattleLevel:        battleLevel,
+		BattlePokemonId:    battlePokemonId,
+		BattlePokemonForm:  battlePokemonForm,
+		StationBattles:     battles,
 	})
 }
 

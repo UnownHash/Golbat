@@ -170,6 +170,7 @@ func initDataCache() {
 	})
 	initPokemonRtree()
 	initFortRtree()
+	initStationBattleCache()
 
 	incidentCache = ttlcache.New[string, *Incident](
 		ttlcache.WithTTL[string, *Incident](60 * time.Minute),

@@ -53,6 +53,7 @@ type cleanup struct {
 	Pokemon             bool  `koanf:"pokemon"`
 	Quests              bool  `koanf:"quests"`
 	Incidents           bool  `koanf:"incidents"`
+	StationBattles      bool  `koanf:"station_battles"`
 	Tappables           bool  `koanf:"tappables"`
 	Stats               bool  `koanf:"stats"`
 	StatsDays           int   `koanf:"stats_days"`
