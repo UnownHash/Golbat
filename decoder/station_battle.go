@@ -81,7 +81,7 @@ const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
 var stationBattleCache *xsync.MapOf[string, []StationBattleData]
-var upsertStationBattleRecordFunc = upsertStationBattleRecord
+var upsertStationBattleRecordFunc = storeStationBattleRecord
 
 func initStationBattleCache() {
 	stationBattleCache = xsync.NewMapOf[string, []StationBattleData]()
@@ -256,21 +256,7 @@ func stationBattlesEqual(a []StationBattleData, b []StationBattleData) bool {
 
 func upsertCachedStationBattle(battle StationBattleData, now int64) bool {
 	existing, _ := stationBattleCache.Load(battle.StationId)
-	next := make([]StationBattleData, 0, len(existing)+1)
-	replaced := false
-	for _, cached := range existing {
-		if cached.BreadBattleSeed == battle.BreadBattleSeed {
-			next = append(next, battle)
-			replaced = true
-			continue
-		}
-		if stationBattleIsActive(cached, now) || cached.BattleStart > now {
-			next = append(next, cached)
-		}
-	}
-	if !replaced && (stationBattleIsActive(battle, now) || battle.BattleStart > now) {
-		next = append(next, battle)
-	}
+	next := pruneObsoleteStationBattles(existing, battle, now)
 	sortStationBattlesByEnd(next)
 	if stationBattlesEqual(existing, next) {
 		return false
@@ -281,6 +267,20 @@ func upsertCachedStationBattle(battle StationBattleData, now int64) bool {
 		stationBattleCache.Store(battle.StationId, next)
 	}
 	return true
+}
+
+func pruneObsoleteStationBattles(existing []StationBattleData, battle StationBattleData, now int64) []StationBattleData {
+	next := make([]StationBattleData, 0, len(existing)+1)
+	if battle.BattleEnd > now {
+		next = append(next, battle)
+	}
+	for _, cached := range existing {
+		if cached.BreadBattleSeed == battle.BreadBattleSeed || cached.BattleEnd <= now || cached.BattleEnd <= battle.BattleEnd {
+			continue
+		}
+		next = append(next, cached)
+	}
+	return next
 }
 
 func getKnownStationBattles(stationId string, station *Station, now int64) []StationBattleData {
@@ -467,8 +467,14 @@ func buildFortLookupStationBattles(station *Station, now int64) []FortLookupStat
 	return result
 }
 
-func upsertStationBattleRecord(ctx context.Context, dbDetails db.DbDetails, battle StationBattleData) error {
-	_, err := dbDetails.GeneralDb.NamedExecContext(ctx, `
+func storeStationBattleRecord(ctx context.Context, dbDetails db.DbDetails, battle StationBattleData) error {
+	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
+	statsCollector.IncDbQuery("begin station_battle", err)
+	if err != nil {
+		return err
+	}
+
+	if _, err = tx.NamedExecContext(ctx, `
 		INSERT INTO station_battle (
 			bread_battle_seed, station_id, battle_level, battle_start, battle_end,
 			battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
@@ -496,8 +502,27 @@ func upsertStationBattleRecord(ctx context.Context, dbDetails db.DbDetails, batt
 			battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
 			battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
 			updated = VALUES(updated)
-	`, battle)
-	statsCollector.IncDbQuery("upsert station_battle", err)
+	`, battle); err != nil {
+		_ = tx.Rollback()
+		statsCollector.IncDbQuery("upsert station_battle", err)
+		return err
+	}
+	statsCollector.IncDbQuery("upsert station_battle", nil)
+
+	if _, err = tx.ExecContext(ctx, `
+		DELETE FROM station_battle
+		WHERE station_id = ?
+		  AND bread_battle_seed <> ?
+		  AND battle_end <= ?
+	`, battle.StationId, battle.BreadBattleSeed, battle.BattleEnd); err != nil {
+		_ = tx.Rollback()
+		statsCollector.IncDbQuery("delete obsolete station_battle", err)
+		return err
+	}
+	statsCollector.IncDbQuery("delete obsolete station_battle", nil)
+
+	err = tx.Commit()
+	statsCollector.IncDbQuery("commit station_battle", err)
 	return err
 }
 
