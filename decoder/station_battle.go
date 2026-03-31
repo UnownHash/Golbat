@@ -557,9 +557,19 @@ func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails
 	return nil
 }
 
+func cachePreloadedStationBattles(stationId string, battles []StationBattleData) bool {
+	if stationId == "" || len(battles) == 0 {
+		return false
+	}
+	sortStationBattlesByEnd(battles)
+	stationBattleCache.Store(stationId, battles)
+	return true
+}
+
 func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	now := time.Now().Unix()
-	query := "SELECT " + stationBattleSelectColumns + " FROM station_battle WHERE battle_end > ?"
+	query := "SELECT " + stationBattleSelectColumns + " FROM station_battle WHERE battle_end > ? " +
+		"ORDER BY station_id, battle_end DESC, battle_start DESC, bread_battle_seed DESC"
 	rows, err := dbDetails.GeneralDb.Queryx(query, now)
 	statsCollector.IncDbQuery("select station_battle active", err)
 	if err != nil {
@@ -569,20 +579,35 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	defer rows.Close()
 
 	count := int32(0)
-	affected := make(map[string]struct{})
+	affected := make([]string, 0)
+	currentStationId := ""
+	currentBattles := make([]StationBattleData, 0)
+	flushCurrent := func() {
+		if cachePreloadedStationBattles(currentStationId, currentBattles) {
+			affected = append(affected, currentStationId)
+		}
+		currentStationId = ""
+		currentBattles = nil
+	}
 	for rows.Next() {
 		var battle StationBattleData
 		if err := rows.StructScan(&battle); err != nil {
 			log.Errorf("Preload: station battle scan error - %s", err)
 			continue
 		}
-		upsertCachedStationBattle(battle, now)
-		affected[battle.StationId] = struct{}{}
+		if currentStationId != "" && battle.StationId != currentStationId {
+			flushCurrent()
+		}
+		if currentStationId == "" {
+			currentStationId = battle.StationId
+		}
+		currentBattles = append(currentBattles, battle)
 		count++
 	}
+	flushCurrent()
 
 	if populateRtree {
-		for stationId := range affected {
+		for _, stationId := range affected {
 			station, unlock, _ := peekStationRecord(stationId, "preloadStationBattles")
 			if station == nil {
 				continue
