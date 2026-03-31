@@ -523,6 +523,7 @@ func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
 	station.oldValues = StationOldValues{
+		HasCanonicalBattle:  true,
 		CanonicalBattleSeed: 1,
 		EndTime:             station.EndTime,
 		BattleListSignature: "old-signature",
@@ -537,7 +538,54 @@ func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
 	}
 }
 
-func TestSyncStationBattlesFromProtoKeepsFreshProjectionWhenSeedMissing(t *testing.T) {
+func TestCreateStationWebhooksCountsZeroSeedCanonicalBattle(t *testing.T) {
+	initStationBattleCache()
+	previousSender := webhooksSender
+	previousStats := statsCollector
+	sender := &recordingWebhooksSender{}
+	collector := &recordingStatsCollector{StatsCollector: stats_collector.NewNoopStatsCollector()}
+	webhooksSender = sender
+	statsCollector = collector
+	defer func() {
+		webhooksSender = previousSender
+		statsCollector = previousStats
+	}()
+
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id:      "station-1",
+			Name:    "Station",
+			Lat:     1,
+			Lon:     2,
+			CellId:  123,
+			EndTime: now + 7200,
+			Updated: now,
+		},
+	}
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 0,
+		StationId:       station.Id,
+		BattleLevel:     1,
+		BattleStart:     now - 600,
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
+	station.oldValues = StationOldValues{
+		EndTime:             station.EndTime,
+		BattleListSignature: "",
+	}
+
+	createStationWebhooks(station)
+	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
+		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
+	}
+	if len(collector.maxBattleLevels) != 1 || collector.maxBattleLevels[0] != 1 {
+		t.Fatalf("expected one max battle metric increment, got %v", collector.maxBattleLevels)
+	}
+}
+
+func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 	station := &Station{
@@ -549,47 +597,57 @@ func TestSyncStationBattlesFromProtoKeepsFreshProjectionWhenSeedMissing(t *testi
 			BattlePokemonId: null.IntFrom(133),
 		},
 	}
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 99,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
+
+	previousUpsert := upsertStationBattleRecordFunc
+	upsertStationBattleRecordFunc = func(context.Context, db.DbDetails, StationBattleData) error {
+		return nil
+	}
+	defer func() {
+		upsertStationBattleRecordFunc = previousUpsert
+	}()
 
 	syncStationBattlesFromProto(context.Background(), db.DbDetails{}, station, &pogo.BreadBattleDetailProto{
 		BreadBattleSeed:     0,
 		BattleWindowStartMs: (now - 60) * 1000,
 		BattleWindowEndMs:   (now + 3600) * 1000,
 		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
+		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
 	})
 
-	if station.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected fresh station projection to win, got %d", station.BattlePokemonId.ValueOrZero())
+	battles := getKnownStationBattles(station.Id, station, now)
+	if len(battles) != 1 || battles[0].BreadBattleSeed != 0 {
+		t.Fatalf("expected zero-seed battle to be cached, got %+v", battles)
 	}
-	if _, ok := stationBattleCache.Load(station.Id); ok {
-		t.Fatal("expected stale station battle cache to be cleared")
+	if station.BattlePokemonId.ValueOrZero() != 133 {
+		t.Fatalf("expected zero-seed battle projection, got %d", station.BattlePokemonId.ValueOrZero())
 	}
 }
 
-func TestSyncStationBattlesFromProtoKeepsFreshProjectionOnUpsertFailure(t *testing.T) {
+func TestSyncStationBattlesFromProtoRestoresOldProjectionOnUpsertFailure(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
-			BattleLevel:     null.IntFrom(2),
-			BattleStart:     null.IntFrom(now - 60),
-			BattleEnd:       null.IntFrom(now + 3600),
-			BattlePokemonId: null.IntFrom(133),
+			Id:                "station-1",
+			IsBattleAvailable: true,
+			BattleLevel:       null.IntFrom(1),
+			BattleStart:       null.IntFrom(now - 120),
+			BattleEnd:         null.IntFrom(now + 7200),
+			BattlePokemonId:   null.IntFrom(527),
 		},
 	}
+	station.snapshotOldValues()
+	station.SetIsBattleAvailable(true)
+	station.SetBattleLevel(null.IntFrom(2))
+	station.SetBattleStart(null.IntFrom(now - 60))
+	station.SetBattleEnd(null.IntFrom(now + 3600))
+	station.SetBattlePokemonId(null.IntFrom(133))
+
 	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 99,
 		StationId:       station.Id,
 		BattleLevel:     1,
-		BattleStart:     now - 60,
+		BattleStart:     now - 120,
 		BattleEnd:       now + 7200,
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
@@ -610,10 +668,10 @@ func TestSyncStationBattlesFromProtoKeepsFreshProjectionOnUpsertFailure(t *testi
 		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
 	})
 
-	if station.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected fresh station projection to win, got %d", station.BattlePokemonId.ValueOrZero())
+	if station.BattlePokemonId.ValueOrZero() != 527 {
+		t.Fatalf("expected old battle projection to be restored, got %d", station.BattlePokemonId.ValueOrZero())
 	}
-	if _, ok := stationBattleCache.Load(station.Id); ok {
-		t.Fatal("expected stale station battle cache to be cleared")
+	if !station.skipWebhook {
+		t.Fatal("expected webhook suppression after failed station battle write")
 	}
 }

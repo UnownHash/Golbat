@@ -89,22 +89,15 @@ func initStationBattleCache() {
 
 func syncStationBattlesFromProto(ctx context.Context, dbDetails db.DbDetails, station *Station, battleDetail *pogo.BreadBattleDetailProto) {
 	now := time.Now().Unix()
-	cacheFresh := battleDetail == nil
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
 		if err := upsertStationBattleRecordFunc(ctx, dbDetails, *battle); err != nil {
 			log.Errorf("upsert station battle %s/%d: %v", station.Id, battle.BreadBattleSeed, err)
+			restoreStationBattleProjectionFromOldValues(station)
+			station.skipWebhook = true
+			return
 		} else if upsertCachedStationBattle(*battle, now) {
 			station.MarkBattleListChanged()
-			cacheFresh = true
-		} else {
-			cacheFresh = true
 		}
-	} else if battleDetail == nil {
-		cacheFresh = true
-	}
-
-	if !cacheFresh {
-		stationBattleCache.Delete(station.Id)
 	}
 
 	battles := getKnownStationBattles(station.Id, station, now)
@@ -119,9 +112,6 @@ func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDeta
 		return nil
 	}
 	seed := battleDetail.GetBreadBattleSeed()
-	if seed == 0 {
-		return nil
-	}
 	battle := &StationBattleData{
 		BreadBattleSeed: seed,
 		StationId:       stationId,
@@ -344,6 +334,16 @@ func clearStationBattleProjection(station *Station) {
 	station.SetBattlePokemonMove2(null.Int{})
 	station.SetBattlePokemonStamina(null.Int{})
 	station.SetBattlePokemonCpMultiplier(null.Float{})
+}
+
+func restoreStationBattleProjectionFromOldValues(station *Station) {
+	station.SetIsBattleAvailable(station.oldValues.IsBattleAvailable)
+	if station.oldValues.BattleProjection == nil {
+		clearStationBattleProjection(station)
+		return
+	}
+	battle := *station.oldValues.BattleProjection
+	applyStationBattleProjection(station, &battle)
 }
 
 func applyStationBattleProjection(station *Station, battle *StationBattleData) {
