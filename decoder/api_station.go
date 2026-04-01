@@ -35,7 +35,7 @@ type ApiStationResult struct {
 func BuildStationResult(station *Station) ApiStationResult {
 	now := time.Now().Unix()
 	snapshot := collectStationBattleSnapshot(station, now)
-	_, hasBattleCache := stationBattleCache.Load(station.Id)
+	hasBattleState := hasHydratedStationBattles(station.Id)
 
 	result := ApiStationResult{
 		Id:                    station.Id,
@@ -63,7 +63,7 @@ func BuildStationResult(station *Station) ApiStationResult {
 		result.BattlePokemonBreadMode = snapshot.Canonical.BattlePokemonBreadMode
 		result.BattlePokemonMove1 = snapshot.Canonical.BattlePokemonMove1
 		result.BattlePokemonMove2 = snapshot.Canonical.BattlePokemonMove2
-	} else if !hasBattleCache {
+	} else if !hasBattleState {
 		result.BattleLevel = station.BattleLevel
 		result.BattleStart = station.BattleStart
 		result.BattleEnd = station.BattleEnd
