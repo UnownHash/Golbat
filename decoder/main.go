@@ -127,12 +127,13 @@ func initDataCache() {
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
-	if config.Config.FortInMemory {
-		stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
+	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
+		clearStationBattleCaches(item.Key())
+		if config.Config.FortInMemory {
 			s := item.Value()
 			evictFortFromTree(s.Id, s.Lat, s.Lon)
-		})
-	}
+		}
+	})
 
 	tappableCache = ttlcache.New[uint64, *Tappable](
 		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),

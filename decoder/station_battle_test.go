@@ -1,11 +1,16 @@
 package decoder
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/guregu/null/v6"
+	"github.com/jellydator/ttlcache/v3"
 
+	"golbat/config"
+	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -641,5 +646,277 @@ func TestGetKnownStationBattlesDoesNotMutateCacheOnRead(t *testing.T) {
 	cached, ok := stationBattleCache.Load("station-1")
 	if !ok || len(cached) != 2 {
 		t.Fatalf("expected cached slice to remain unchanged, got %+v", cached)
+	}
+}
+
+func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id:              "station-1",
+			Name:            "Station",
+			Lat:             1,
+			Lon:             2,
+			StartTime:       now - 3600,
+			EndTime:         now + 3600,
+			Updated:         now,
+			BattleLevel:     null.IntFrom(1),
+			BattleStart:     null.IntFrom(now - 600),
+			BattleEnd:       null.IntFrom(now + 600),
+			BattlePokemonId: null.IntFrom(527),
+		},
+	}
+	markStationBattlesHydrated(station.Id)
+
+	stationBattleCache.Store("station-1", []StationBattleData{{
+		BreadBattleSeed: 1,
+		StationId:       station.Id,
+		BattleLevel:     1,
+		BattleStart:     now - 7200,
+		BattleEnd:       now - 60,
+		BattlePokemonId: null.IntFrom(527),
+	}})
+
+	result := BuildStationResult(station)
+	if result.BattleEnd.Valid || result.BattlePokemonId.Valid {
+		t.Fatalf("expected expired hydrated cache to suppress stale projection, got %+v", result)
+	}
+	if _, ok := stationBattleCache.Load(station.Id); ok {
+		t.Fatal("expected expired hydrated cache entry to be cleaned up")
+	}
+}
+
+func TestGetStationRecordReadOnlyRetriesHydrationOnCachedStation(t *testing.T) {
+	initStationBattleCache()
+	stationId := "station-hydration-retry"
+	station := &Station{StationData: StationData{Id: stationId}}
+	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
+	defer stationCache.Delete(stationId)
+	defer clearStationBattleCaches(stationId)
+
+	attempts := 0
+	previousHydrate := hydrateStationBattlesForStationFunc
+	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
+		attempts++
+		if attempts == 1 {
+			return errors.New("boom")
+		}
+		markStationBattlesHydrated(station.Id)
+		return nil
+	}
+	defer func() {
+		hydrateStationBattlesForStationFunc = previousHydrate
+	}()
+
+	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err != nil {
+		t.Fatalf("expected cached station to be served even when hydration fails, got %v", err)
+	}
+	if record == nil || unlock == nil {
+		t.Fatal("expected cached station record on hydration failure")
+	}
+	unlock()
+
+	record, unlock, err = GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err != nil {
+		t.Fatalf("expected second hydration attempt to succeed, got %v", err)
+	}
+	if record == nil || unlock == nil {
+		t.Fatal("expected cached station record after retry")
+	}
+	unlock()
+	if attempts != 2 {
+		t.Fatalf("expected hydration retry on cached station, got %d attempts", attempts)
+	}
+}
+
+func TestGetStationRecordReadOnlyKeepsSingletonAfterHydrationFailureOnCacheMiss(t *testing.T) {
+	initStationBattleCache()
+	stationId := "station-hydration-miss-retry"
+	defer stationCache.Delete(stationId)
+	defer clearStationBattleCaches(stationId)
+
+	loadCalls := 0
+	previousLoad := loadStationFromDatabaseFunc
+	loadStationFromDatabaseFunc = func(_ context.Context, _ db.DbDetails, id string, station *Station) error {
+		loadCalls++
+		station.Id = id
+		station.Name = "Station"
+		return nil
+	}
+	defer func() {
+		loadStationFromDatabaseFunc = previousLoad
+	}()
+
+	hydrateCalls := 0
+	previousHydrate := hydrateStationBattlesForStationFunc
+	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
+		hydrateCalls++
+		if hydrateCalls == 1 {
+			return errors.New("boom")
+		}
+		markStationBattlesHydrated(station.Id)
+		return nil
+	}
+	defer func() {
+		hydrateStationBattlesForStationFunc = previousHydrate
+	}()
+
+	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err == nil {
+		if unlock != nil {
+			unlock()
+		}
+		t.Fatal("expected first cache-miss hydration to fail")
+	}
+	if record != nil || unlock != nil {
+		t.Fatal("expected no station return on failed cache-miss hydration")
+	}
+
+	cachedItem := stationCache.Get(stationId)
+	if cachedItem == nil {
+		t.Fatal("expected failed hydration to keep cached station instance")
+	}
+	cachedStation := cachedItem.Value()
+
+	record, unlock, err = GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err != nil {
+		t.Fatalf("expected retry on cached singleton to succeed, got %v", err)
+	}
+	if record == nil || unlock == nil {
+		t.Fatal("expected cached station record after retry")
+	}
+	if record != cachedStation {
+		unlock()
+		t.Fatal("expected retry to reuse cached station singleton")
+	}
+	unlock()
+
+	if loadCalls != 1 {
+		t.Fatalf("expected one DB load across retry, got %d", loadCalls)
+	}
+	if hydrateCalls != 2 {
+		t.Fatalf("expected two hydration attempts across retry, got %d", hydrateCalls)
+	}
+}
+
+func TestGetStationRecordReadOnlySkipsHydrationAfterProtoSync(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	stationId := "station-hydration-skip"
+	station := &Station{StationData: StationData{Id: stationId}}
+	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
+	defer stationCache.Delete(stationId)
+	defer clearStationBattleCaches(stationId)
+
+	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
+		BreadBattleSeed:     7,
+		BattleWindowStartMs: (now - 60) * 1000,
+		BattleWindowEndMs:   (now + 3600) * 1000,
+		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
+		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
+	})
+
+	attempts := 0
+	previousHydrate := hydrateStationBattlesForStationFunc
+	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, _ *Station, _ int64) error {
+		attempts++
+		return nil
+	}
+	defer func() {
+		hydrateStationBattlesForStationFunc = previousHydrate
+	}()
+
+	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err != nil {
+		t.Fatalf("expected cached station read to succeed, got %v", err)
+	}
+	if record == nil || unlock == nil {
+		t.Fatal("expected cached station record")
+	}
+	unlock()
+	if attempts != 0 {
+		t.Fatalf("expected no DB hydration after proto sync, got %d attempts", attempts)
+	}
+}
+
+func TestMarkPreloadedStationsHydratedMarksEmptyStations(t *testing.T) {
+	initStationBattleCache()
+	stationId := "station-preload-empty"
+	station := &Station{StationData: StationData{Id: stationId}}
+	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
+	defer stationCache.Delete(stationId)
+	defer clearStationBattleCaches(stationId)
+
+	if hasHydratedStationBattles(stationId) {
+		t.Fatal("expected station to start unhydrated")
+	}
+
+	markPreloadedStationsHydrated(false)
+
+	if !hasHydratedStationBattles(stationId) {
+		t.Fatal("expected empty preloaded station to be marked hydrated")
+	}
+}
+
+func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
+	initStationBattleCache()
+	previousFortInMemory := config.Config.FortInMemory
+	config.Config.FortInMemory = true
+	defer func() {
+		config.Config.FortInMemory = previousFortInMemory
+	}()
+
+	now := time.Now().Unix()
+	stationId := "station-hydration-lookup"
+	station := &Station{
+		StationData: StationData{
+			Id:              stationId,
+			Lat:             1,
+			Lon:             2,
+			BattleLevel:     null.IntFrom(1),
+			BattleStart:     null.IntFrom(now - 600),
+			BattleEnd:       null.IntFrom(now + 600),
+			BattlePokemonId: null.IntFrom(527),
+		},
+	}
+	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
+	defer stationCache.Delete(stationId)
+	defer clearStationBattleCaches(stationId)
+	fortLookupCache.Store(stationId, FortLookup{
+		FortType:           STATION,
+		Lat:                station.Lat,
+		Lon:                station.Lon,
+		BattleEndTimestamp: station.BattleEnd.ValueOrZero(),
+		BattleLevel:        int8(station.BattleLevel.ValueOrZero()),
+		BattlePokemonId:    int16(station.BattlePokemonId.ValueOrZero()),
+	})
+
+	previousHydrate := hydrateStationBattlesForStationFunc
+	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
+		markStationBattlesHydrated(station.Id)
+		stationBattleCache.Delete(station.Id)
+		return nil
+	}
+	defer func() {
+		hydrateStationBattlesForStationFunc = previousHydrate
+	}()
+
+	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
+	if err != nil {
+		t.Fatalf("expected hydration to succeed, got %v", err)
+	}
+	if record == nil || unlock == nil {
+		t.Fatal("expected cached station")
+	}
+	unlock()
+
+	lookup, ok := fortLookupCache.Load(stationId)
+	if !ok {
+		t.Fatal("expected fort lookup entry")
+	}
+	if lookup.BattleEndTimestamp != 0 || lookup.BattleLevel != 0 || lookup.BattlePokemonId != 0 {
+		t.Fatalf("expected fort lookup to be cleared after hydration, got %+v", lookup)
 	}
 }

@@ -56,6 +56,9 @@ func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId str
 	return err
 }
 
+var loadStationFromDatabaseFunc = loadStationFromDatabase
+var hydrateStationBattlesForStationFunc = hydrateStationBattlesForStation
+
 // peekStationRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekStationRecord(stationId string, caller string) (*Station, func(), error) {
@@ -75,11 +78,18 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
 		station.Lock(caller)
+		if !hasHydratedStationBattles(stationId) {
+			if err := hydrateStationBattlesForStationFunc(ctx, db, station, time.Now().Unix()); err != nil {
+				log.Debugf("GetStationRecordReadOnly: station battle hydration failed for %s: %v", stationId, err)
+			} else if config.Config.FortInMemory {
+				fortRtreeUpdateStationOnSave(station)
+			}
+		}
 		return station, func() { station.Unlock() }, nil
 	}
 
 	dbStation := Station{}
-	err := loadStationFromDatabase(ctx, db, stationId, &dbStation)
+	err := loadStationFromDatabaseFunc(ctx, db, stationId, &dbStation)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, nil
 	}
@@ -98,8 +108,8 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	station.Lock(caller)
 	loadedFromDb := station == &dbStation
 	hydratedBattles := false
-	if _, ok := stationBattleCache.Load(stationId); !ok {
-		if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+	if !hasHydratedStationBattles(stationId) {
+		if err := hydrateStationBattlesForStationFunc(ctx, db, station, time.Now().Unix()); err != nil {
 			station.Unlock()
 			return nil, nil, err
 		}
@@ -135,7 +145,7 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 
 	if station.newRecord {
 		// We should attempt to load from database
-		err := loadStationFromDatabase(ctx, db, stationId, station)
+		err := loadStationFromDatabaseFunc(ctx, db, stationId, station)
 		if err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
 				station.Unlock()
@@ -145,7 +155,7 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 			// We loaded from DB
 			station.newRecord = false
 			station.ClearDirty()
-			if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+			if err := hydrateStationBattlesForStationFunc(ctx, db, station, time.Now().Unix()); err != nil {
 				station.Unlock()
 				return nil, nil, err
 			}

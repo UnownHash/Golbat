@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v3"
 	log "github.com/sirupsen/logrus"
 
@@ -92,9 +93,34 @@ const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
 var stationBattleCache *xsync.MapOf[string, []StationBattleData]
+var stationBattleHydratedCache *xsync.MapOf[string, struct{}]
 
 func initStationBattleCache() {
 	stationBattleCache = xsync.NewMapOf[string, []StationBattleData]()
+	stationBattleHydratedCache = xsync.NewMapOf[string, struct{}]()
+}
+
+func markStationBattlesHydrated(stationId string) {
+	if stationId == "" {
+		return
+	}
+	stationBattleHydratedCache.Store(stationId, struct{}{})
+}
+
+func clearStationBattleCaches(stationId string) {
+	if stationId == "" {
+		return
+	}
+	stationBattleCache.Delete(stationId)
+	stationBattleHydratedCache.Delete(stationId)
+}
+
+func hasHydratedStationBattles(stationId string) bool {
+	if stationId == "" {
+		return false
+	}
+	_, ok := stationBattleHydratedCache.Load(stationId)
+	return ok
 }
 
 func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattleDetailProto) {
@@ -102,6 +128,7 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
 		upsertCachedStationBattle(*battle, now)
 	}
+	markStationBattlesHydrated(station.Id)
 
 	snapshot := collectStationBattleSnapshot(station, now)
 	applyStationBattleProjection(station, snapshot.Canonical)
@@ -278,6 +305,13 @@ func getKnownStationBattles(stationId string, station *Station, now int64) []Sta
 			if len(current) > 0 {
 				return current
 			}
+			stationBattleCache.Delete(stationId)
+			if hasHydratedStationBattles(stationId) {
+				return nil
+			}
+		}
+		if hasHydratedStationBattles(stationId) {
+			return nil
 		}
 	}
 	if fallback := stationBattleFromStationProjection(station); fallback != nil && fallback.BattleEnd > now {
@@ -604,9 +638,11 @@ func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails
 	}
 	if len(battles) == 0 {
 		stationBattleCache.Delete(station.Id)
+		markStationBattlesHydrated(station.Id)
 		return nil
 	}
 	stationBattleCache.Store(station.Id, battles)
+	markStationBattlesHydrated(station.Id)
 	return nil
 }
 
@@ -616,7 +652,22 @@ func cachePreloadedStationBattles(stationId string, battles []StationBattleData)
 	}
 	sortStationBattlesByEnd(battles)
 	stationBattleCache.Store(stationId, battles)
+	markStationBattlesHydrated(stationId)
 	return true
+}
+
+func markPreloadedStationsHydrated(populateRtree bool) {
+	stationCache.Range(func(item *ttlcache.Item[string, *Station]) bool {
+		stationId := item.Key()
+		markStationBattlesHydrated(stationId)
+		if populateRtree {
+			station := item.Value()
+			station.Lock("preloadStationBattles")
+			fortRtreeUpdateStationOnSave(station)
+			station.Unlock()
+		}
+		return true
+	})
 }
 
 func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
@@ -659,15 +710,7 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	}
 	flushCurrent()
 
-	if populateRtree {
-		for _, stationId := range affected {
-			station, unlock, _ := peekStationRecord(stationId, "preloadStationBattles")
-			if station == nil {
-				continue
-			}
-			updateStationLookup(station)
-			unlock()
-		}
-	}
+	markPreloadedStationsHydrated(populateRtree)
+
 	return count
 }
