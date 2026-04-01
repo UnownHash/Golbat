@@ -51,8 +51,6 @@ type Station struct {
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
-	forceSave     bool     `db:"-" json:"-"`
-	skipWebhook   bool     `db:"-" json:"-"`
 
 	oldValues StationOldValues `db:"-" json:"-"` // Old values for webhook comparison
 }
@@ -102,12 +100,11 @@ func (station *Station) Unlock() {
 // Call this after loading from cache/DB but before modifications
 func (station *Station) snapshotOldValues() {
 	now := time.Now().Unix()
-	battles := getKnownStationBattles(station.Id, station, now)
-	canonical := canonicalStationBattleFromSlice(battles, now)
+	snapshot := collectStationBattleSnapshot(station, now)
 	station.oldValues = StationOldValues{
 		IsBattleAvailable:      station.IsBattleAvailable,
-		HasCanonicalBattle:     canonical != nil,
-		CanonicalBattleSeed:    canonicalBattleSeed(canonical),
+		HasCanonicalBattle:     snapshot.Canonical != nil,
+		CanonicalBattleSeed:    canonicalBattleSeed(snapshot.Canonical),
 		BattleProjection:       stationBattleFromStationProjection(station),
 		EndTime:                station.EndTime,
 		BattleEnd:              station.BattleEnd,
@@ -116,12 +113,8 @@ func (station *Station) snapshotOldValues() {
 		BattlePokemonCostume:   station.BattlePokemonCostume,
 		BattlePokemonGender:    station.BattlePokemonGender,
 		BattlePokemonBreadMode: station.BattlePokemonBreadMode,
-		BattleListSignature:    stationBattleSignatureFromSlice(battles),
+		BattleListSignature:    snapshot.Signature,
 	}
-}
-
-func (station *Station) MarkBattleListChanged() {
-	station.forceSave = true
 }
 
 // --- Set methods with dirty tracking ---

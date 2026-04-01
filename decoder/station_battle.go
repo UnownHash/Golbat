@@ -2,12 +2,11 @@ package decoder
 
 import (
 	"context"
-	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v3"
 	log "github.com/sirupsen/logrus"
@@ -76,58 +75,36 @@ type FortLookupStationBattle struct {
 	BattlePokemonForm  int16
 }
 
+type StationBattleWrite struct {
+	StationId string
+	Battles   []StationBattleData
+}
+
+type stationBattleSnapshot struct {
+	Battles   []StationBattleData
+	Canonical *StationBattleData
+	Signature string
+}
+
 const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level, battle_start, battle_end,
 	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
 	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
-const (
-	mysqlDeadlockCode            = 1213
-	stationBattleDeadlockRetries = 3
-)
-
 var stationBattleCache *xsync.MapOf[string, []StationBattleData]
-var upsertStationBattleRecordFunc = storeStationBattleRecord
 
 func initStationBattleCache() {
 	stationBattleCache = xsync.NewMapOf[string, []StationBattleData]()
 }
 
-func syncStationBattlesFromProto(ctx context.Context, dbDetails db.DbDetails, station *Station, battleDetail *pogo.BreadBattleDetailProto) {
+func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattleDetailProto) {
 	now := time.Now().Unix()
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
-		if err := upsertStationBattleRecordWithRetry(ctx, dbDetails, *battle); err != nil {
-			log.Errorf("upsert station battle %s/%d: %v", station.Id, battle.BreadBattleSeed, err)
-			restoreStationBattleProjectionFromOldValues(station)
-			station.skipWebhook = true
-			return
-		} else if upsertCachedStationBattle(*battle, now) {
-			station.MarkBattleListChanged()
-		}
+		upsertCachedStationBattle(*battle, now)
 	}
 
-	battles := getKnownStationBattles(station.Id, station, now)
-	applyStationBattleProjection(station, canonicalStationBattleFromSlice(battles, now))
-	if station.oldValues.BattleListSignature != stationBattleSignatureFromSlice(battles) {
-		station.MarkBattleListChanged()
-	}
-}
-
-func upsertStationBattleRecordWithRetry(ctx context.Context, dbDetails db.DbDetails, battle StationBattleData) error {
-	var err error
-	for attempt := 0; attempt <= stationBattleDeadlockRetries; attempt++ {
-		err = upsertStationBattleRecordFunc(ctx, dbDetails, battle)
-		if err == nil {
-			return nil
-		}
-		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlockCode && attempt < stationBattleDeadlockRetries {
-			log.Debugf("station_battle deadlock on attempt %d/%d for %s/%d, retrying...", attempt+1, stationBattleDeadlockRetries, battle.StationId, battle.BreadBattleSeed)
-			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
-			continue
-		}
-		return err
-	}
-	return err
+	snapshot := collectStationBattleSnapshot(station, now)
+	applyStationBattleProjection(station, snapshot.Canonical)
 }
 
 func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
@@ -233,7 +210,6 @@ func activeStationBattlesFromSlice(battles []StationBattleData, now int64) []Sta
 			active = append(active, battle)
 		}
 	}
-	sortStationBattlesByEnd(active)
 	return active
 }
 
@@ -247,7 +223,6 @@ func nonExpiredStationBattlesFromSlice(battles []StationBattleData, now int64) [
 			current = append(current, battle)
 		}
 	}
-	sortStationBattlesByEnd(current)
 	return current
 }
 
@@ -300,15 +275,8 @@ func getKnownStationBattles(stationId string, station *Station, now int64) []Sta
 	if stationId != "" {
 		if cached, ok := stationBattleCache.Load(stationId); ok {
 			current := nonExpiredStationBattlesFromSlice(cached, now)
-			if !stationBattlesEqual(cached, current) {
-				if len(current) == 0 {
-					stationBattleCache.Delete(stationId)
-				} else {
-					stationBattleCache.Store(stationId, current)
-				}
-			}
 			if len(current) > 0 {
-				return cloneStationBattles(current)
+				return current
 			}
 		}
 	}
@@ -316,6 +284,15 @@ func getKnownStationBattles(stationId string, station *Station, now int64) []Sta
 		return []StationBattleData{*fallback}
 	}
 	return nil
+}
+
+func collectStationBattleSnapshot(station *Station, now int64) stationBattleSnapshot {
+	battles := getKnownStationBattles(station.Id, station, now)
+	return stationBattleSnapshot{
+		Battles:   battles,
+		Canonical: canonicalStationBattleFromSlice(battles, now),
+		Signature: stationBattleSignatureFromSlice(battles),
+	}
 }
 
 func getActiveStationBattles(stationId string, station *Station, now int64) []StationBattleData {
@@ -390,7 +367,7 @@ func applyStationBattleProjection(station *Station, battle *StationBattleData) {
 }
 
 func stationBattleSignature(station *Station, now int64) string {
-	return stationBattleSignatureFromSlice(getKnownStationBattles(station.Id, station, now))
+	return collectStationBattleSnapshot(station, now).Signature
 }
 
 func stationBattleSignatureFromSlice(battles []StationBattleData) string {
@@ -399,28 +376,41 @@ func stationBattleSignatureFromSlice(battles []StationBattleData) string {
 	}
 	var builder strings.Builder
 	for _, battle := range battles {
-		builder.WriteString(fmt.Sprintf("%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%t:%t;",
-			battle.BreadBattleSeed,
-			battle.BattleLevel,
-			battle.BattleStart,
-			battle.BattleEnd,
-			battle.BattlePokemonId.ValueOrZero(),
-			battle.BattlePokemonForm.ValueOrZero(),
-			battle.BattlePokemonCostume.ValueOrZero(),
-			battle.BattlePokemonGender.ValueOrZero(),
-			battle.BattlePokemonAlignment.ValueOrZero(),
-			battle.BattlePokemonBreadMode.ValueOrZero(),
-			battle.BattlePokemonMove1.ValueOrZero(),
-			battle.BattlePokemonMove2.Valid,
-			battle.BattlePokemonCpMultiplier.Valid,
-		))
-		builder.WriteString(fmt.Sprintf("%d:%g;", battle.BattlePokemonMove2.ValueOrZero(), battle.BattlePokemonCpMultiplier.ValueOrZero()))
+		builder.WriteString(strconv.FormatInt(battle.BreadBattleSeed, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(int64(battle.BattleLevel), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattleStart, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattleEnd, 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonId.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonForm.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonCostume.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonGender.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonAlignment.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonBreadMode.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonMove1.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatBool(battle.BattlePokemonMove2.Valid))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatBool(battle.BattlePokemonCpMultiplier.Valid))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatInt(battle.BattlePokemonMove2.ValueOrZero(), 10))
+		builder.WriteByte(':')
+		builder.WriteString(strconv.FormatFloat(battle.BattlePokemonCpMultiplier.ValueOrZero(), 'g', -1, 64))
+		builder.WriteByte(';')
 	}
 	return builder.String()
 }
 
-func buildApiStationBattles(station *Station, now int64) []ApiStationBattle {
-	battles := getKnownStationBattles(station.Id, station, now)
+func buildApiStationBattlesFromSlice(battles []StationBattleData) []ApiStationBattle {
 	if len(battles) == 0 {
 		return nil
 	}
@@ -446,8 +436,11 @@ func buildApiStationBattles(station *Station, now int64) []ApiStationBattle {
 	return result
 }
 
-func buildStationWebhookBattles(station *Station, now int64) []StationBattleWebhook {
-	battles := getKnownStationBattles(station.Id, station, now)
+func buildApiStationBattles(station *Station, now int64) []ApiStationBattle {
+	return buildApiStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
+}
+
+func buildStationWebhookBattlesFromSlice(battles []StationBattleData) []StationBattleWebhook {
 	if len(battles) == 0 {
 		return nil
 	}
@@ -473,8 +466,11 @@ func buildStationWebhookBattles(station *Station, now int64) []StationBattleWebh
 	return result
 }
 
-func buildFortLookupStationBattles(station *Station, now int64) []FortLookupStationBattle {
-	battles := getKnownStationBattles(station.Id, station, now)
+func buildStationWebhookBattles(station *Station, now int64) []StationBattleWebhook {
+	return buildStationWebhookBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
+}
+
+func buildFortLookupStationBattlesFromSlice(battles []StationBattleData) []FortLookupStationBattle {
 	if len(battles) == 0 {
 		return nil
 	}
@@ -490,54 +486,75 @@ func buildFortLookupStationBattles(station *Station, now int64) []FortLookupStat
 	return result
 }
 
-func storeStationBattleRecord(ctx context.Context, dbDetails db.DbDetails, battle StationBattleData) error {
+func buildFortLookupStationBattles(station *Station, now int64) []FortLookupStationBattle {
+	return buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
+}
+
+func stationBattleWriteFromSlice(stationId string, battles []StationBattleData) StationBattleWrite {
+	return StationBattleWrite{
+		StationId: stationId,
+		Battles:   cloneStationBattles(battles),
+	}
+}
+
+func storeStationBattleSnapshot(ctx context.Context, dbDetails db.DbDetails, snapshot StationBattleWrite) error {
 	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
 	statsCollector.IncDbQuery("begin station_battle", err)
 	if err != nil {
 		return err
 	}
 
-	if _, err = tx.NamedExecContext(ctx, `
-		INSERT INTO station_battle (
-			bread_battle_seed, station_id, battle_level, battle_start, battle_end,
-			battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
-			battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
-			battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated
-		) VALUES (
-			:bread_battle_seed, :station_id, :battle_level, :battle_start, :battle_end,
-			:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
-			:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
-			:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :updated
-		)
-		ON DUPLICATE KEY UPDATE
-			station_id = VALUES(station_id),
-			battle_level = VALUES(battle_level),
-			battle_start = VALUES(battle_start),
-			battle_end = VALUES(battle_end),
-			battle_pokemon_id = VALUES(battle_pokemon_id),
-			battle_pokemon_form = VALUES(battle_pokemon_form),
-			battle_pokemon_costume = VALUES(battle_pokemon_costume),
-			battle_pokemon_gender = VALUES(battle_pokemon_gender),
-			battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
-			battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
-			battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
-			battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
-			battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
-			battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
-			updated = VALUES(updated)
-	`, battle); err != nil {
-		_ = tx.Rollback()
-		statsCollector.IncDbQuery("upsert station_battle", err)
-		return err
+	if len(snapshot.Battles) > 0 {
+		if _, err = tx.NamedExecContext(ctx, `
+			INSERT INTO station_battle (
+				bread_battle_seed, station_id, battle_level, battle_start, battle_end,
+				battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
+				battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
+				battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated
+			) VALUES (
+				:bread_battle_seed, :station_id, :battle_level, :battle_start, :battle_end,
+				:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
+				:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
+				:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :updated
+			)
+			ON DUPLICATE KEY UPDATE
+				station_id = VALUES(station_id),
+				battle_level = VALUES(battle_level),
+				battle_start = VALUES(battle_start),
+				battle_end = VALUES(battle_end),
+				battle_pokemon_id = VALUES(battle_pokemon_id),
+				battle_pokemon_form = VALUES(battle_pokemon_form),
+				battle_pokemon_costume = VALUES(battle_pokemon_costume),
+				battle_pokemon_gender = VALUES(battle_pokemon_gender),
+				battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
+				battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
+				battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
+				battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
+				battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
+				battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
+				updated = VALUES(updated)
+		`, snapshot.Battles); err != nil {
+			_ = tx.Rollback()
+			statsCollector.IncDbQuery("upsert station_battle", err)
+			return err
+		}
+		statsCollector.IncDbQuery("upsert station_battle", nil)
 	}
-	statsCollector.IncDbQuery("upsert station_battle", nil)
 
-	if _, err = tx.ExecContext(ctx, `
-		DELETE FROM station_battle
-		WHERE station_id = ?
-		  AND bread_battle_seed <> ?
-		  AND battle_end <= ?
-	`, battle.StationId, battle.BreadBattleSeed, battle.BattleEnd); err != nil {
+	deleteQuery := "DELETE FROM station_battle WHERE station_id = ?"
+	deleteArgs := []any{snapshot.StationId}
+	if len(snapshot.Battles) > 0 {
+		deleteQuery += " AND bread_battle_seed NOT IN ("
+		for i, battle := range snapshot.Battles {
+			if i > 0 {
+				deleteQuery += ","
+			}
+			deleteQuery += "?"
+			deleteArgs = append(deleteArgs, battle.BreadBattleSeed)
+		}
+		deleteQuery += ")"
+	}
+	if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
 		_ = tx.Rollback()
 		statsCollector.IncDbQuery("delete obsolete station_battle", err)
 		return err
@@ -547,6 +564,19 @@ func storeStationBattleRecord(ctx context.Context, dbDetails db.DbDetails, battl
 	err = tx.Commit()
 	statsCollector.IncDbQuery("commit station_battle", err)
 	return err
+}
+
+func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapshots []StationBattleWrite) error {
+	var firstErr error
+	for _, snapshot := range snapshots {
+		if err := storeStationBattleSnapshot(ctx, dbDetails, snapshot); err != nil {
+			log.Errorf("flush station_battle %s: %v", snapshot.StationId, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) ([]StationBattleData, error) {
@@ -564,19 +594,19 @@ func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, s
 	return battles, nil
 }
 
-func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) error {
-	if stationId == "" {
+func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, station *Station, now int64) error {
+	if station == nil || station.Id == "" {
 		return nil
 	}
-	battles, err := loadStationBattlesForStation(ctx, dbDetails, stationId, now)
+	battles, err := loadStationBattlesForStation(ctx, dbDetails, station.Id, now)
 	if err != nil {
 		return err
 	}
 	if len(battles) == 0 {
-		stationBattleCache.Delete(stationId)
+		stationBattleCache.Delete(station.Id)
 		return nil
 	}
-	stationBattleCache.Store(stationId, battles)
+	stationBattleCache.Store(station.Id, battles)
 	return nil
 }
 

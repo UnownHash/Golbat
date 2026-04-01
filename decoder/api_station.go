@@ -34,8 +34,7 @@ type ApiStationResult struct {
 
 func BuildStationResult(station *Station) ApiStationResult {
 	now := time.Now().Unix()
-	battles := getKnownStationBattles(station.Id, station, now)
-	canonical := canonicalStationBattleFromSlice(battles, now)
+	snapshot := collectStationBattleSnapshot(station, now)
 	_, hasBattleCache := stationBattleCache.Load(station.Id)
 
 	result := ApiStationResult{
@@ -50,20 +49,20 @@ func BuildStationResult(station *Station) ApiStationResult {
 		TotalStationedPokemon: station.TotalStationedPokemon,
 		TotalStationedGmax:    station.TotalStationedGmax,
 		StationedPokemon:      station.StationedPokemon,
-		Battles:               buildApiStationBattles(station, now),
+		Battles:               buildApiStationBattlesFromSlice(snapshot.Battles),
 	}
-	if canonical != nil {
-		result.BattleLevel = null.IntFrom(int64(canonical.BattleLevel))
-		result.BattleStart = null.IntFrom(canonical.BattleStart)
-		result.BattleEnd = null.IntFrom(canonical.BattleEnd)
-		result.BattlePokemonId = canonical.BattlePokemonId
-		result.BattlePokemonForm = canonical.BattlePokemonForm
-		result.BattlePokemonCostume = canonical.BattlePokemonCostume
-		result.BattlePokemonGender = canonical.BattlePokemonGender
-		result.BattlePokemonAlignment = canonical.BattlePokemonAlignment
-		result.BattlePokemonBreadMode = canonical.BattlePokemonBreadMode
-		result.BattlePokemonMove1 = canonical.BattlePokemonMove1
-		result.BattlePokemonMove2 = canonical.BattlePokemonMove2
+	if snapshot.Canonical != nil {
+		result.BattleLevel = null.IntFrom(int64(snapshot.Canonical.BattleLevel))
+		result.BattleStart = null.IntFrom(snapshot.Canonical.BattleStart)
+		result.BattleEnd = null.IntFrom(snapshot.Canonical.BattleEnd)
+		result.BattlePokemonId = snapshot.Canonical.BattlePokemonId
+		result.BattlePokemonForm = snapshot.Canonical.BattlePokemonForm
+		result.BattlePokemonCostume = snapshot.Canonical.BattlePokemonCostume
+		result.BattlePokemonGender = snapshot.Canonical.BattlePokemonGender
+		result.BattlePokemonAlignment = snapshot.Canonical.BattlePokemonAlignment
+		result.BattlePokemonBreadMode = snapshot.Canonical.BattlePokemonBreadMode
+		result.BattlePokemonMove1 = snapshot.Canonical.BattlePokemonMove1
+		result.BattlePokemonMove2 = snapshot.Canonical.BattlePokemonMove2
 	} else if !hasBattleCache {
 		result.BattleLevel = station.BattleLevel
 		result.BattleStart = station.BattleStart

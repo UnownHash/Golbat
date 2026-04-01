@@ -204,9 +204,12 @@ func updateGymLookup(gym *Gym) {
 }
 
 func updateStationLookup(station *Station) {
-	now := time.Now().Unix()
-	battles := buildFortLookupStationBattles(station, now)
-	canonical := canonicalStationBattleFromSlice(getKnownStationBattles(station.Id, station, now), now)
+	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station, time.Now().Unix()))
+}
+
+func updateStationLookupFromSnapshot(station *Station, snapshot stationBattleSnapshot) {
+	battles := buildFortLookupStationBattlesFromSlice(snapshot.Battles)
+	canonical := snapshot.Canonical
 	battleEndTimestamp := int64(0)
 	battleLevel := int8(0)
 	battlePokemonId := int16(0)

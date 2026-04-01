@@ -1,15 +1,11 @@
 package decoder
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"time"
 
-	"github.com/go-sql-driver/mysql"
 	"github.com/guregu/null/v6"
 
-	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -599,15 +595,7 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 		},
 	}
 
-	previousUpsert := upsertStationBattleRecordFunc
-	upsertStationBattleRecordFunc = func(context.Context, db.DbDetails, StationBattleData) error {
-		return nil
-	}
-	defer func() {
-		upsertStationBattleRecordFunc = previousUpsert
-	}()
-
-	syncStationBattlesFromProto(context.Background(), db.DbDetails{}, station, &pogo.BreadBattleDetailProto{
+	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
 		BreadBattleSeed:     0,
 		BattleWindowStartMs: (now - 60) * 1000,
 		BattleWindowEndMs:   (now + 3600) * 1000,
@@ -624,96 +612,34 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 	}
 }
 
-func TestSyncStationBattlesFromProtoRestoresOldProjectionOnUpsertFailure(t *testing.T) {
+func TestGetKnownStationBattlesDoesNotMutateCacheOnRead(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id:                "station-1",
-			IsBattleAvailable: true,
-			BattleLevel:       null.IntFrom(1),
-			BattleStart:       null.IntFrom(now - 120),
-			BattleEnd:         null.IntFrom(now + 7200),
-			BattlePokemonId:   null.IntFrom(527),
-		},
-	}
-	station.snapshotOldValues()
-	station.SetIsBattleAvailable(true)
-	station.SetBattleLevel(null.IntFrom(2))
-	station.SetBattleStart(null.IntFrom(now - 60))
-	station.SetBattleEnd(null.IntFrom(now + 3600))
-	station.SetBattlePokemonId(null.IntFrom(133))
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 99,
-		StationId:       station.Id,
+	expired := StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       "station-1",
 		BattleLevel:     1,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 7200,
+		BattleStart:     now - 7200,
+		BattleEnd:       now - 60,
 		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	previousUpsert := upsertStationBattleRecordFunc
-	upsertStationBattleRecordFunc = func(context.Context, db.DbDetails, StationBattleData) error {
-		return errors.New("boom")
 	}
-	defer func() {
-		upsertStationBattleRecordFunc = previousUpsert
-	}()
-
-	syncStationBattlesFromProto(context.Background(), db.DbDetails{}, station, &pogo.BreadBattleDetailProto{
-		BreadBattleSeed:     7,
-		BattleWindowStartMs: (now - 60) * 1000,
-		BattleWindowEndMs:   (now + 3600) * 1000,
-		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
-		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
-	})
-
-	if station.BattlePokemonId.ValueOrZero() != 527 {
-		t.Fatalf("expected old battle projection to be restored, got %d", station.BattlePokemonId.ValueOrZero())
+	current := StationBattleData{
+		BreadBattleSeed: 2,
+		StationId:       "station-1",
+		BattleLevel:     2,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 3600,
+		BattlePokemonId: null.IntFrom(133),
 	}
-	if !station.skipWebhook {
-		t.Fatal("expected webhook suppression after failed station battle write")
-	}
-}
+	stationBattleCache.Store("station-1", []StationBattleData{current, expired})
 
-func TestSyncStationBattlesFromProtoRetriesDeadlock(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id: "station-1",
-		},
+	battles := getKnownStationBattles("station-1", nil, now)
+	if len(battles) != 1 || battles[0].BreadBattleSeed != 2 {
+		t.Fatalf("expected only current battle from read, got %+v", battles)
 	}
 
-	attempts := 0
-	previousUpsert := upsertStationBattleRecordFunc
-	upsertStationBattleRecordFunc = func(context.Context, db.DbDetails, StationBattleData) error {
-		attempts++
-		if attempts == 1 {
-			return &mysql.MySQLError{Number: 1213, Message: "deadlock"}
-		}
-		return nil
-	}
-	defer func() {
-		upsertStationBattleRecordFunc = previousUpsert
-	}()
-
-	syncStationBattlesFromProto(context.Background(), db.DbDetails{}, station, &pogo.BreadBattleDetailProto{
-		BreadBattleSeed:     7,
-		BattleWindowStartMs: (now - 60) * 1000,
-		BattleWindowEndMs:   (now + 3600) * 1000,
-		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
-		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
-	})
-
-	if attempts != 2 {
-		t.Fatalf("expected one deadlock retry, got %d attempts", attempts)
-	}
-	if station.skipWebhook {
-		t.Fatal("expected retry to succeed without suppressing webhook")
-	}
-	if station.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected battle projection after retry success, got %d", station.BattlePokemonId.ValueOrZero())
+	cached, ok := stationBattleCache.Load("station-1")
+	if !ok || len(cached) != 2 {
+		t.Fatalf("expected cached slice to remain unchanged, got %+v", cached)
 	}
 }
