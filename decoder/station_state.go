@@ -87,21 +87,27 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 		return nil, nil, err
 	}
 	dbStation.ClearDirty()
-	if err := hydrateStationBattlesForStation(ctx, db, stationId, time.Now().Unix()); err != nil {
-		return nil, nil, err
-	}
 
 	// Atomically cache the loaded Station - if another goroutine raced us,
 	// we'll get their Station and use that instead (ensuring same mutex)
 	existingStation, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
-		if config.Config.FortInMemory {
-			fortRtreeUpdateStationOnGet(&dbStation)
-		}
 		return &dbStation
 	})
 
 	station := existingStation.Value()
 	station.Lock(caller)
+	loadedFromDb := station == &dbStation
+	hydratedBattles := false
+	if _, ok := stationBattleCache.Load(stationId); !ok {
+		if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+			station.Unlock()
+			return nil, nil, err
+		}
+		hydratedBattles = true
+	}
+	if config.Config.FortInMemory && (loadedFromDb || hydratedBattles) {
+		fortRtreeUpdateStationOnGet(station)
+	}
 	return station, func() { station.Unlock() }, nil
 }
 
@@ -139,7 +145,7 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 			// We loaded from DB
 			station.newRecord = false
 			station.ClearDirty()
-			if err := hydrateStationBattlesForStation(ctx, db, stationId, time.Now().Unix()); err != nil {
+			if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
 				station.Unlock()
 				return nil, nil, err
 			}
@@ -155,9 +161,11 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
+	snapshot := collectStationBattleSnapshot(station, now)
+	battleListChanged := station.oldValues.BattleListSignature != snapshot.Signature
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
-	if !station.IsDirty() && !station.IsNewRecord() && !station.forceSave {
+	if !station.IsDirty() && !station.IsNewRecord() && !battleListChanged {
 		if station.Updated > now-GetUpdateThreshold(900) {
 			return
 		}
@@ -184,19 +192,26 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		// Fallback to direct write if queue not initialized
 		_ = stationWriteDB(db, station, isNewRecord)
 	}
+	if battleListChanged {
+		if stationBattleQueue != nil {
+			stationBattleQueue.Enqueue(stationBattleWriteFromSlice(station.Id, snapshot.Battles), false, 0)
+		} else {
+			_ = storeStationBattleSnapshot(ctx, db, stationBattleWriteFromSlice(station.Id, snapshot.Battles))
+		}
+	}
 
 	if dbDebugEnabled {
 		station.changedFields = station.changedFields[:0]
 	}
 	station.ClearDirty()
-	station.forceSave = false
-	createStationWebhooks(station)
+	createStationWebhooksWithSnapshot(station, snapshot, isNewRecord)
 	if isNewRecord {
 		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {
-		fortRtreeUpdateStationOnSave(station)
+		genericUpdateFort(station.Id, station.Lat, station.Lon, false)
+		updateStationLookupFromSnapshot(station, snapshot)
 	}
 }
 
@@ -262,23 +277,19 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 }
 
 func createStationWebhooks(station *Station) {
-	if station.skipWebhook {
-		station.skipWebhook = false
-		return
-	}
+	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station, time.Now().Unix()), station.IsNewRecord())
+}
 
+func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleSnapshot, isNew bool) {
 	old := &station.oldValues
-	isNew := station.IsNewRecord()
-	now := time.Now().Unix()
-	currentSignature := stationBattleSignature(station, now)
+	currentSignature := snapshot.Signature
 
 	if currentSignature == "" {
 		return
 	}
 
 	if isNew || old.EndTime != station.EndTime || old.BattleListSignature != currentSignature {
-		battles := getKnownStationBattles(station.Id, station, now)
-		canonical := canonicalStationBattleFromSlice(battles, now)
+		canonical := snapshot.Canonical
 		if canonical == nil {
 			canonical = stationBattleFromStationProjection(station)
 		}
@@ -292,7 +303,7 @@ func createStationWebhooks(station *Station) {
 			IsBattleAvailable:     station.IsBattleAvailable,
 			TotalStationedPokemon: station.TotalStationedPokemon,
 			TotalStationedGmax:    station.TotalStationedGmax,
-			Battles:               buildStationWebhookBattles(station, now),
+			Battles:               buildStationWebhookBattlesFromSlice(snapshot.Battles),
 			Updated:               station.Updated,
 		}
 		if canonical != nil {
