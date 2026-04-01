@@ -121,7 +121,7 @@ func upsertStationBattleRecordWithRetry(ctx context.Context, dbDetails db.DbDeta
 			return nil
 		}
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlockCode && attempt < stationBattleDeadlockRetries {
-			log.Warnf("station_battle deadlock on attempt %d/%d for %s/%d, retrying...", attempt+1, stationBattleDeadlockRetries, battle.StationId, battle.BreadBattleSeed)
+			log.Debugf("station_battle deadlock on attempt %d/%d for %s/%d, retrying...", attempt+1, stationBattleDeadlockRetries, battle.StationId, battle.BreadBattleSeed)
 			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
 			continue
 		}
