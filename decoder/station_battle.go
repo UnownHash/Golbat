@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v3"
 	log "github.com/sirupsen/logrus"
@@ -80,6 +81,11 @@ const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level,
 	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
+const (
+	mysqlDeadlockCode            = 1213
+	stationBattleDeadlockRetries = 3
+)
+
 var stationBattleCache *xsync.MapOf[string, []StationBattleData]
 var upsertStationBattleRecordFunc = storeStationBattleRecord
 
@@ -90,7 +96,7 @@ func initStationBattleCache() {
 func syncStationBattlesFromProto(ctx context.Context, dbDetails db.DbDetails, station *Station, battleDetail *pogo.BreadBattleDetailProto) {
 	now := time.Now().Unix()
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
-		if err := upsertStationBattleRecordFunc(ctx, dbDetails, *battle); err != nil {
+		if err := upsertStationBattleRecordWithRetry(ctx, dbDetails, *battle); err != nil {
 			log.Errorf("upsert station battle %s/%d: %v", station.Id, battle.BreadBattleSeed, err)
 			restoreStationBattleProjectionFromOldValues(station)
 			station.skipWebhook = true
@@ -105,6 +111,23 @@ func syncStationBattlesFromProto(ctx context.Context, dbDetails db.DbDetails, st
 	if station.oldValues.BattleListSignature != stationBattleSignatureFromSlice(battles) {
 		station.MarkBattleListChanged()
 	}
+}
+
+func upsertStationBattleRecordWithRetry(ctx context.Context, dbDetails db.DbDetails, battle StationBattleData) error {
+	var err error
+	for attempt := 0; attempt <= stationBattleDeadlockRetries; attempt++ {
+		err = upsertStationBattleRecordFunc(ctx, dbDetails, battle)
+		if err == nil {
+			return nil
+		}
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlockCode && attempt < stationBattleDeadlockRetries {
+			log.Warnf("station_battle deadlock on attempt %d/%d for %s/%d, retrying...", attempt+1, stationBattleDeadlockRetries, battle.StationId, battle.BreadBattleSeed)
+			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+			continue
+		}
+		return err
+	}
+	return err
 }
 
 func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
