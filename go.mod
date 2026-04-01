@@ -7,13 +7,13 @@ toolchain go1.26.0
 require (
 	github.com/Depado/ginprom v1.8.3
 	github.com/UnownHash/gohbem v0.12.0
-	github.com/getsentry/sentry-go v0.43.0
+	github.com/getsentry/sentry-go v0.44.1
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.9.3
-	github.com/goccy/go-json v0.10.5
+	github.com/goccy/go-json v0.10.6
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/golang/geo v0.0.0-20260302211937-87f5a40ea07a
-	github.com/grafana/pyroscope-go v1.2.7
+	github.com/golang/geo v0.0.0-20260401045841-3289a7742193
+	github.com/grafana/pyroscope-go v1.2.8
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/guregu/null/v6 v6.0.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
@@ -22,8 +22,8 @@ require (
 	github.com/knadh/koanf/parsers/toml v0.1.0
 	github.com/knadh/koanf/providers/file v1.2.1
 	github.com/knadh/koanf/providers/structs v1.0.0
-	github.com/knadh/koanf/v2 v2.3.3
-	github.com/paulmach/orb v0.12.0
+	github.com/knadh/koanf/v2 v2.3.4
+	github.com/paulmach/orb v0.13.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/puzpuzpuz/xsync/v3 v3.5.1
 	github.com/ringsaturn/tzf v1.0.4
@@ -31,7 +31,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/tidwall/rtree v1.10.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
-	google.golang.org/grpc v1.79.2
+	google.golang.org/grpc v1.80.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -79,7 +79,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/twpayne/go-polyline v1.1.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
-	go.mongodb.org/mongo-driver v1.17.9 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/arch v0.25.0 // indirect
