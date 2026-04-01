@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-sql-driver/mysql"
 	"github.com/guregu/null/v6"
 
 	"golbat/db"
@@ -673,5 +674,46 @@ func TestSyncStationBattlesFromProtoRestoresOldProjectionOnUpsertFailure(t *test
 	}
 	if !station.skipWebhook {
 		t.Fatal("expected webhook suppression after failed station battle write")
+	}
+}
+
+func TestSyncStationBattlesFromProtoRetriesDeadlock(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id: "station-1",
+		},
+	}
+
+	attempts := 0
+	previousUpsert := upsertStationBattleRecordFunc
+	upsertStationBattleRecordFunc = func(context.Context, db.DbDetails, StationBattleData) error {
+		attempts++
+		if attempts == 1 {
+			return &mysql.MySQLError{Number: 1213, Message: "deadlock"}
+		}
+		return nil
+	}
+	defer func() {
+		upsertStationBattleRecordFunc = previousUpsert
+	}()
+
+	syncStationBattlesFromProto(context.Background(), db.DbDetails{}, station, &pogo.BreadBattleDetailProto{
+		BreadBattleSeed:     7,
+		BattleWindowStartMs: (now - 60) * 1000,
+		BattleWindowEndMs:   (now + 3600) * 1000,
+		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
+		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
+	})
+
+	if attempts != 2 {
+		t.Fatalf("expected one deadlock retry, got %d attempts", attempts)
+	}
+	if station.skipWebhook {
+		t.Fatal("expected retry to succeed without suppressing webhook")
+	}
+	if station.BattlePokemonId.ValueOrZero() != 133 {
+		t.Fatalf("expected battle projection after retry success, got %d", station.BattlePokemonId.ValueOrZero())
 	}
 }
