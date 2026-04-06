@@ -179,13 +179,13 @@ func TestCanonicalStationBattleUsesLatestEnd(t *testing.T) {
 		t.Fatalf("expected latest-ending battle first, got seed %d", battles[0].BreadBattleSeed)
 	}
 
-	canonical := canonicalStationBattleFromSlice(battles, now)
+	canonical := canonicalStationBattleFromSlice(nil, battles, now)
 	if canonical == nil || canonical.BreadBattleSeed != 2 {
 		t.Fatalf("expected canonical seed 2, got %+v", canonical)
 	}
 }
 
-func TestBuildStationResultUsesBattleCacheProjection(t *testing.T) {
+func TestBuildStationResultPrefersCurrentActiveProjection(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 
@@ -206,14 +206,6 @@ func TestBuildStationResultUsesBattleCacheProjection(t *testing.T) {
 	}
 
 	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-	upsertCachedStationBattle(StationBattleData{
 		BreadBattleSeed: 2,
 		StationId:       station.Id,
 		BattleLevel:     2,
@@ -221,13 +213,21 @@ func TestBuildStationResultUsesBattleCacheProjection(t *testing.T) {
 		BattleEnd:       now + 7200,
 		BattlePokemonId: null.IntFrom(133),
 	}, now)
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       station.Id,
+		BattleLevel:     1,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 1800,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
 
 	result := BuildStationResult(station)
-	if result.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected canonical pokemon 133, got %d", result.BattlePokemonId.ValueOrZero())
+	if result.BattlePokemonId.ValueOrZero() != 527 {
+		t.Fatalf("expected current active pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
 	}
-	if len(result.Battles) != 1 {
-		t.Fatalf("expected 1 battle after later-ending replacement, got %d", len(result.Battles))
+	if len(result.Battles) != 2 {
+		t.Fatalf("expected both battles to remain known, got %d", len(result.Battles))
 	}
 }
 
@@ -300,9 +300,50 @@ func TestCanonicalStationBattleKeepsLongerBattleWhenShorterFutureObserved(t *tes
 	}, now)
 
 	battles := getKnownStationBattles("station-1", nil, now)
-	canonical := canonicalStationBattleFromSlice(battles, now)
+	canonical := canonicalStationBattleFromSlice(nil, battles, now)
 	if canonical == nil || canonical.BreadBattleSeed != 1 {
 		t.Fatalf("expected longer existing battle seed 1 to remain canonical, got %+v", canonical)
+	}
+}
+
+func TestCanonicalStationBattlePrefersCurrentActiveProjection(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id:              "station-1",
+			BattleLevel:     null.IntFrom(1),
+			BattleStart:     null.IntFrom(now - 60),
+			BattleEnd:       null.IntFrom(now + 1800),
+			BattlePokemonId: null.IntFrom(527),
+		},
+	}
+
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 2,
+		StationId:       station.Id,
+		BattleLevel:     2,
+		BattleStart:     now - 120,
+		BattleEnd:       now + 7200,
+		BattlePokemonId: null.IntFrom(133),
+	}, now)
+	upsertCachedStationBattle(StationBattleData{
+		BreadBattleSeed: 1,
+		StationId:       station.Id,
+		BattleLevel:     1,
+		BattleStart:     now - 60,
+		BattleEnd:       now + 1800,
+		BattlePokemonId: null.IntFrom(527),
+	}, now)
+
+	battles := getKnownStationBattles(station.Id, station, now)
+	if len(battles) != 2 {
+		t.Fatalf("expected both active battles to remain known, got %d", len(battles))
+	}
+
+	canonical := canonicalStationBattleFromSlice(station, battles, now)
+	if canonical == nil || canonical.BreadBattleSeed != 1 {
+		t.Fatalf("expected current station projection seed 1 to be canonical, got %+v", canonical)
 	}
 }
 

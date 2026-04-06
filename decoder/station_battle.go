@@ -324,7 +324,7 @@ func collectStationBattleSnapshot(station *Station, now int64) stationBattleSnap
 	battles := getKnownStationBattles(station.Id, station, now)
 	return stationBattleSnapshot{
 		Battles:   battles,
-		Canonical: canonicalStationBattleFromSlice(battles, now),
+		Canonical: canonicalStationBattleFromSlice(station, battles, now),
 		Signature: stationBattleSignatureFromSlice(battles),
 	}
 }
@@ -333,14 +333,42 @@ func getActiveStationBattles(stationId string, station *Station, now int64) []St
 	return activeStationBattlesFromSlice(getKnownStationBattles(stationId, station, now), now)
 }
 
-func canonicalStationBattleFromSlice(battles []StationBattleData, now int64) *StationBattleData {
+func stationBattleMatchesProjection(battle StationBattleData, projection *StationBattleData) bool {
+	if projection == nil {
+		return false
+	}
+	return battle.BattleLevel == projection.BattleLevel &&
+		battle.BattleStart == projection.BattleStart &&
+		battle.BattleEnd == projection.BattleEnd &&
+		battle.BattlePokemonId == projection.BattlePokemonId &&
+		battle.BattlePokemonForm == projection.BattlePokemonForm
+}
+
+func canonicalStationBattleFromSlice(station *Station, battles []StationBattleData, now int64) *StationBattleData {
 	if len(battles) == 0 {
 		return nil
+	}
+	projection := stationBattleFromStationProjection(station)
+	if projection != nil && stationBattleIsActive(*projection, now) {
+		for _, battle := range battles {
+			if stationBattleIsActive(battle, now) && stationBattleMatchesProjection(battle, projection) {
+				current := battle
+				return &current
+			}
+		}
 	}
 	for _, battle := range battles {
 		if stationBattleIsActive(battle, now) {
 			current := battle
 			return &current
+		}
+	}
+	if projection != nil {
+		for _, battle := range battles {
+			if stationBattleMatchesProjection(battle, projection) {
+				current := battle
+				return &current
+			}
 		}
 	}
 	battle := battles[0]
