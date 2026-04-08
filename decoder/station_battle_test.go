@@ -34,6 +34,17 @@ func (collector *recordingStatsCollector) UpdateMaxBattleCount(_ []geo.AreaName,
 	collector.maxBattleLevels = append(collector.maxBattleLevels, level)
 }
 
+func testStationBattle(stationId string, seed int64, level int16, start, end int64, pokemon int64) StationBattleData {
+	return StationBattleData{
+		BreadBattleSeed: seed,
+		StationId:       stationId,
+		BattleLevel:     level,
+		BattleStart:     start,
+		BattleEnd:       end,
+		BattlePokemonId: null.IntFrom(pokemon),
+	}
+}
+
 func TestUpsertCachedStationBattleIgnoresUpdatedOnlyChange(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
@@ -57,135 +68,84 @@ func TestUpsertCachedStationBattleIgnoresUpdatedOnlyChange(t *testing.T) {
 	}
 }
 
-func TestUpsertCachedStationBattleDropsEarlierEndAfterLaterObservation(t *testing.T) {
-	initStationBattleCache()
+func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 	now := time.Now().Unix()
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     2,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(133),
-	}, now)
-
-	battles := getKnownStationBattles("station-1", nil, now)
-	if len(battles) != 1 {
-		t.Fatalf("expected 1 battle after later observation, got %d", len(battles))
+	cases := []struct {
+		name     string
+		inserted []StationBattleData
+		expected []int64
+	}{
+		{
+			name: "drops earlier end after later observation",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+			},
+			expected: []int64{2},
+		},
+		{
+			name: "replaces equal end battle",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 1, 1, now-120, now+3600, 527),
+				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+			},
+			expected: []int64{2},
+		},
+		{
+			name: "replaces longer active battle when shorter observed",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 1, 3, now-120, now+7200, 374),
+				testStationBattle("station-1", 2, 1, now-60, now+1800, 527),
+			},
+			expected: []int64{2},
+		},
+		{
+			name: "first battle uses latest end when newer active lasts longer",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+				testStationBattle("station-1", 2, 2, now-120, now+7200, 133),
+			},
+			expected: []int64{2},
+		},
+		{
+			name: "drops future battle that would sort ahead of active battle",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 1, 3, now-120, now+1800, 374),
+				testStationBattle("station-1", 2, 2, now+600, now+7200, 527),
+			},
+			expected: []int64{1},
+		},
+		{
+			name: "first battle follows latest active observation",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 2, 2, now-120, now+7200, 133),
+				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+			},
+			expected: []int64{1},
+		},
 	}
-	if battles[0].BreadBattleSeed != 2 {
-		t.Fatalf("expected seed 2 to replace earlier battle, got %d", battles[0].BreadBattleSeed)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			initStationBattleCache()
+			for _, battle := range tc.inserted {
+				upsertCachedStationBattle(battle, now)
+			}
+
+			battles := getKnownStationBattles("station-1", now)
+			if len(battles) != len(tc.expected) {
+				t.Fatalf("expected %d battles, got %d (%+v)", len(tc.expected), len(battles), battles)
+			}
+			for i, expectedSeed := range tc.expected {
+				if battles[i].BreadBattleSeed != expectedSeed {
+					t.Fatalf("expected seed %d at index %d, got %+v", expectedSeed, i, battles)
+				}
+			}
+		})
 	}
 }
 
-func TestUpsertCachedStationBattleReplacesEqualEndBattle(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     2,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(133),
-	}, now)
-
-	battles := getKnownStationBattles("station-1", nil, now)
-	if len(battles) != 1 {
-		t.Fatalf("expected 1 battle after equal-end replacement, got %d", len(battles))
-	}
-	if battles[0].BreadBattleSeed != 2 {
-		t.Fatalf("expected latest equal-end seed 2, got %d", battles[0].BreadBattleSeed)
-	}
-}
-
-func TestUpsertCachedStationBattleKeepsLongerBattleWhenShorterObserved(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     3,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(374),
-	}, now)
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	battles := getKnownStationBattles("station-1", nil, now)
-	if len(battles) != 2 {
-		t.Fatalf("expected longer and shorter battles to coexist, got %d", len(battles))
-	}
-	if battles[0].BreadBattleSeed != 1 || battles[1].BreadBattleSeed != 2 {
-		t.Fatalf("unexpected battle ordering after shorter observation: %+v", battles)
-	}
-}
-
-func TestCanonicalStationBattleUsesLatestEnd(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     2,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(133),
-	}, now)
-
-	battles := getKnownStationBattles("station-1", nil, now)
-	if len(battles) != 1 {
-		t.Fatalf("expected later-ending battle to replace earlier one, got %d battles", len(battles))
-	}
-	if battles[0].BreadBattleSeed != 2 {
-		t.Fatalf("expected latest-ending battle first, got seed %d", battles[0].BreadBattleSeed)
-	}
-
-	canonical := canonicalStationBattleFromSlice(nil, battles, now)
-	if canonical == nil || canonical.BreadBattleSeed != 2 {
-		t.Fatalf("expected canonical seed 2, got %+v", canonical)
-	}
-}
-
-func TestBuildStationResultPrefersCurrentActiveProjection(t *testing.T) {
+func TestBuildStationResultUsesFirstCachedBattleAsTopBattle(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 
@@ -224,10 +184,10 @@ func TestBuildStationResultPrefersCurrentActiveProjection(t *testing.T) {
 
 	result := BuildStationResult(station)
 	if result.BattlePokemonId.ValueOrZero() != 527 {
-		t.Fatalf("expected current active pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
+		t.Fatalf("expected first cached pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
 	}
-	if len(result.Battles) != 2 {
-		t.Fatalf("expected both battles to remain known, got %d", len(result.Battles))
+	if len(result.Battles) != 1 {
+		t.Fatalf("expected conflicting active battle to be evicted, got %d", len(result.Battles))
 	}
 }
 
@@ -265,85 +225,16 @@ func TestGetActiveStationBattlesKeepsFutureBattleCached(t *testing.T) {
 		t.Fatal("expected future battle insert to change cache")
 	}
 
-	if active := getActiveStationBattles("station-1", nil, now); len(active) != 0 {
-		t.Fatalf("expected no active battles, got %d", len(active))
+	if battles := getKnownStationBattles("station-1", now); len(battles) != 1 || stationBattleIsActive(battles[0], now) {
+		t.Fatalf("expected one cached future battle and no active battles, got %+v", battles)
 	}
 
-	cached, ok := stationBattleCache.Load("station-1")
-	if !ok || len(cached) != 1 {
-		t.Fatalf("expected future battle to remain cached, got ok=%t len=%d", ok, len(cached))
+	state, ok := stationBattleCache.Load("station-1")
+	if !ok || len(state.Battles) != 1 {
+		t.Fatalf("expected future battle to remain cached, got ok=%t len=%d", ok, len(state.Battles))
 	}
-	if cached[0].BreadBattleSeed != future.BreadBattleSeed {
-		t.Fatalf("expected cached seed %d, got %d", future.BreadBattleSeed, cached[0].BreadBattleSeed)
-	}
-}
-
-func TestCanonicalStationBattleKeepsLongerBattleWhenShorterFutureObserved(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     3,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(374),
-	}, now)
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     2,
-		BattleStart:     now + 600,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	battles := getKnownStationBattles("station-1", nil, now)
-	canonical := canonicalStationBattleFromSlice(nil, battles, now)
-	if canonical == nil || canonical.BreadBattleSeed != 1 {
-		t.Fatalf("expected longer existing battle seed 1 to remain canonical, got %+v", canonical)
-	}
-}
-
-func TestCanonicalStationBattlePrefersCurrentActiveProjection(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id:              "station-1",
-			BattleLevel:     null.IntFrom(1),
-			BattleStart:     null.IntFrom(now - 60),
-			BattleEnd:       null.IntFrom(now + 1800),
-			BattlePokemonId: null.IntFrom(527),
-		},
-	}
-
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       station.Id,
-		BattleLevel:     2,
-		BattleStart:     now - 120,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(133),
-	}, now)
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 1800,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	battles := getKnownStationBattles(station.Id, station, now)
-	if len(battles) != 2 {
-		t.Fatalf("expected both active battles to remain known, got %d", len(battles))
-	}
-
-	canonical := canonicalStationBattleFromSlice(station, battles, now)
-	if canonical == nil || canonical.BreadBattleSeed != 1 {
-		t.Fatalf("expected current station projection seed 1 to be canonical, got %+v", canonical)
+	if state.Battles[0].BreadBattleSeed != future.BreadBattleSeed {
+		t.Fatalf("expected cached seed %d, got %d", future.BreadBattleSeed, state.Battles[0].BreadBattleSeed)
 	}
 }
 
@@ -402,7 +293,7 @@ func TestBuildFortLookupStationBattlesIncludesFutureBattle(t *testing.T) {
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
 
-	battles := buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
+	battles := buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, now))
 	if len(battles) != 1 {
 		t.Fatalf("expected future battle in fort lookup, got %d", len(battles))
 	}
@@ -415,7 +306,7 @@ func TestCachePreloadedStationBattlesPreservesPersistedSetRegardlessOfInputOrder
 	initStationBattleCache()
 	now := time.Now().Unix()
 
-	if !cachePreloadedStationBattles("station-1", []StationBattleData{
+	storeStationBattles("station-1", []StationBattleData{
 		{
 			BreadBattleSeed: 2,
 			StationId:       "station-1",
@@ -432,11 +323,9 @@ func TestCachePreloadedStationBattlesPreservesPersistedSetRegardlessOfInputOrder
 			BattleEnd:       now + 7200,
 			BattlePokemonId: null.IntFrom(374),
 		},
-	}) {
-		t.Fatal("expected preloaded station battles to be cached")
-	}
+	})
 
-	battles := getKnownStationBattles("station-1", nil, now)
+	battles := getKnownStationBattles("station-1", now)
 	if len(battles) != 2 {
 		t.Fatalf("expected both persisted battles after preload, got %d", len(battles))
 	}
@@ -524,7 +413,7 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 	}
 }
 
-func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
+func TestCreateStationWebhooksDoesNotRecountTopBattleSeed(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
 	previousStats := statsCollector
@@ -566,8 +455,8 @@ func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
 	station.oldValues = StationOldValues{
-		HasCanonicalBattle:  true,
-		CanonicalBattleSeed: 1,
+		HasTopBattle:        true,
+		TopBattleSeed:       1,
 		EndTime:             station.EndTime,
 		BattleListSignature: "old-signature",
 	}
@@ -581,7 +470,7 @@ func TestCreateStationWebhooksDoesNotRecountCanonicalBattleSeed(t *testing.T) {
 	}
 }
 
-func TestCreateStationWebhooksCountsZeroSeedCanonicalBattle(t *testing.T) {
+func TestCreateStationWebhooksCountsZeroSeedTopBattle(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
 	previousStats := statsCollector
@@ -649,7 +538,7 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
 	})
 
-	battles := getKnownStationBattles(station.Id, station, now)
+	battles := getKnownStationBattles(station.Id, now)
 	if len(battles) != 1 || battles[0].BreadBattleSeed != 0 {
 		t.Fatalf("expected zero-seed battle to be cached, got %+v", battles)
 	}
@@ -687,11 +576,12 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 
 	syncStationBattlesFromProto(station, nil)
 
-	if _, ok := stationBattleCache.Load(station.Id); ok {
-		t.Fatal("expected cached battle state to be cleared")
+	state, ok := stationBattleCache.Load(station.Id)
+	if !ok || !state.Loaded || len(state.Battles) != 0 {
+		t.Fatalf("expected missing battle details to leave an empty loaded state, got %+v ok=%t", state, ok)
 	}
-	if !hasHydratedStationBattles(station.Id) {
-		t.Fatal("expected missing battle details to leave station hydrated")
+	if !hasLoadedStationBattles(station.Id) {
+		t.Fatal("expected missing battle details to leave station loaded")
 	}
 	if station.BattleEnd.Valid || station.BattlePokemonId.Valid {
 		t.Fatalf("expected station projection cleared, got %+v", station)
@@ -722,16 +612,16 @@ func TestGetKnownStationBattlesDoesNotMutateCacheOnRead(t *testing.T) {
 		BattleEnd:       now + 3600,
 		BattlePokemonId: null.IntFrom(133),
 	}
-	stationBattleCache.Store("station-1", []StationBattleData{current, expired})
+	storeStationBattles("station-1", []StationBattleData{current, expired})
 
-	battles := getKnownStationBattles("station-1", nil, now)
+	battles := getKnownStationBattles("station-1", now)
 	if len(battles) != 1 || battles[0].BreadBattleSeed != 2 {
 		t.Fatalf("expected only current battle from read, got %+v", battles)
 	}
 
-	cached, ok := stationBattleCache.Load("station-1")
-	if !ok || len(cached) != 2 {
-		t.Fatalf("expected cached slice to remain unchanged, got %+v", cached)
+	state, ok := stationBattleCache.Load("station-1")
+	if !ok || len(state.Battles) != 2 {
+		t.Fatalf("expected cached slice to remain unchanged, got %+v", state)
 	}
 }
 
@@ -753,9 +643,7 @@ func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t 
 			BattlePokemonId: null.IntFrom(527),
 		},
 	}
-	markStationBattlesHydrated(station.Id)
-
-	stationBattleCache.Store("station-1", []StationBattleData{{
+	storeStationBattles("station-1", []StationBattleData{{
 		BreadBattleSeed: 1,
 		StationId:       station.Id,
 		BattleLevel:     1,
@@ -768,8 +656,9 @@ func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t 
 	if result.BattleEnd.Valid || result.BattlePokemonId.Valid {
 		t.Fatalf("expected expired hydrated cache to suppress stale projection, got %+v", result)
 	}
-	if _, ok := stationBattleCache.Load(station.Id); ok {
-		t.Fatal("expected expired hydrated cache entry to be cleaned up")
+	state, ok := stationBattleCache.Load(station.Id)
+	if !ok || !state.Loaded || len(state.Battles) != 0 {
+		t.Fatalf("expected expired loaded state to be collapsed to empty, got %+v ok=%t", state, ok)
 	}
 }
 
@@ -779,7 +668,7 @@ func TestGetStationRecordReadOnlyRetriesHydrationOnCachedStation(t *testing.T) {
 	station := &Station{StationData: StationData{Id: stationId}}
 	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
 	defer stationCache.Delete(stationId)
-	defer clearStationBattleCaches(stationId)
+	defer clearStationBattleState(stationId)
 
 	attempts := 0
 	previousHydrate := hydrateStationBattlesForStationFunc
@@ -788,7 +677,7 @@ func TestGetStationRecordReadOnlyRetriesHydrationOnCachedStation(t *testing.T) {
 		if attempts == 1 {
 			return errors.New("boom")
 		}
-		markStationBattlesHydrated(station.Id)
+		storeStationBattles(station.Id, nil)
 		return nil
 	}
 	defer func() {
@@ -821,7 +710,7 @@ func TestGetStationRecordReadOnlyKeepsSingletonAfterHydrationFailureOnCacheMiss(
 	initStationBattleCache()
 	stationId := "station-hydration-miss-retry"
 	defer stationCache.Delete(stationId)
-	defer clearStationBattleCaches(stationId)
+	defer clearStationBattleState(stationId)
 
 	loadCalls := 0
 	previousLoad := loadStationFromDatabaseFunc
@@ -842,7 +731,7 @@ func TestGetStationRecordReadOnlyKeepsSingletonAfterHydrationFailureOnCacheMiss(
 		if hydrateCalls == 1 {
 			return errors.New("boom")
 		}
-		markStationBattlesHydrated(station.Id)
+		storeStationBattles(station.Id, nil)
 		return nil
 	}
 	defer func() {
@@ -894,7 +783,7 @@ func TestGetStationRecordReadOnlySkipsHydrationAfterProtoSync(t *testing.T) {
 	station := &Station{StationData: StationData{Id: stationId}}
 	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
 	defer stationCache.Delete(stationId)
-	defer clearStationBattleCaches(stationId)
+	defer clearStationBattleState(stationId)
 
 	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
 		BreadBattleSeed:     7,
@@ -927,22 +816,22 @@ func TestGetStationRecordReadOnlySkipsHydrationAfterProtoSync(t *testing.T) {
 	}
 }
 
-func TestMarkPreloadedStationsHydratedMarksEmptyStations(t *testing.T) {
+func TestFinalizePreloadedStationBattlesMarksEmptyStationsLoaded(t *testing.T) {
 	initStationBattleCache()
 	stationId := "station-preload-empty"
 	station := &Station{StationData: StationData{Id: stationId}}
 	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
 	defer stationCache.Delete(stationId)
-	defer clearStationBattleCaches(stationId)
+	defer clearStationBattleState(stationId)
 
-	if hasHydratedStationBattles(stationId) {
-		t.Fatal("expected station to start unhydrated")
+	if hasLoadedStationBattles(stationId) {
+		t.Fatal("expected station to start unloaded")
 	}
 
-	markPreloadedStationsHydrated(false)
+	finalizePreloadedStationBattles(false)
 
-	if !hasHydratedStationBattles(stationId) {
-		t.Fatal("expected empty preloaded station to be marked hydrated")
+	if !hasLoadedStationBattles(stationId) {
+		t.Fatal("expected empty preloaded station to be marked loaded")
 	}
 }
 
@@ -969,7 +858,7 @@ func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
 	}
 	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
 	defer stationCache.Delete(stationId)
-	defer clearStationBattleCaches(stationId)
+	defer clearStationBattleState(stationId)
 	fortLookupCache.Store(stationId, FortLookup{
 		FortType:           STATION,
 		Lat:                station.Lat,
@@ -981,8 +870,7 @@ func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
 
 	previousHydrate := hydrateStationBattlesForStationFunc
 	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
-		markStationBattlesHydrated(station.Id)
-		stationBattleCache.Delete(station.Id)
+		storeStationBattles(station.Id, nil)
 		return nil
 	}
 	defer func() {

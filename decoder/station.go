@@ -57,18 +57,10 @@ type Station struct {
 
 // StationOldValues holds old field values for webhook comparison
 type StationOldValues struct {
-	EndTime                int64
-	IsBattleAvailable      bool
-	HasCanonicalBattle     bool
-	CanonicalBattleSeed    int64
-	BattleProjection       *StationBattleData
-	BattleEnd              null.Int
-	BattlePokemonId        null.Int
-	BattlePokemonForm      null.Int
-	BattlePokemonCostume   null.Int
-	BattlePokemonGender    null.Int
-	BattlePokemonBreadMode null.Int
-	BattleListSignature    string
+	EndTime             int64
+	HasTopBattle        bool
+	TopBattleSeed       int64
+	BattleListSignature string
 }
 
 // IsDirty returns true if any field has been modified
@@ -100,20 +92,16 @@ func (station *Station) Unlock() {
 // Call this after loading from cache/DB but before modifications
 func (station *Station) snapshotOldValues() {
 	now := time.Now().Unix()
-	snapshot := collectStationBattleSnapshot(station, now)
+	snapshot := collectStationBattleSnapshot(station.Id, now)
+	topBattleSeed := int64(0)
+	if len(snapshot.Battles) > 0 {
+		topBattleSeed = snapshot.Battles[0].BreadBattleSeed
+	}
 	station.oldValues = StationOldValues{
-		IsBattleAvailable:      station.IsBattleAvailable,
-		HasCanonicalBattle:     snapshot.Canonical != nil,
-		CanonicalBattleSeed:    canonicalBattleSeed(snapshot.Canonical),
-		BattleProjection:       stationBattleFromStationProjection(station),
-		EndTime:                station.EndTime,
-		BattleEnd:              station.BattleEnd,
-		BattlePokemonId:        station.BattlePokemonId,
-		BattlePokemonForm:      station.BattlePokemonForm,
-		BattlePokemonCostume:   station.BattlePokemonCostume,
-		BattlePokemonGender:    station.BattlePokemonGender,
-		BattlePokemonBreadMode: station.BattlePokemonBreadMode,
-		BattleListSignature:    snapshot.Signature,
+		HasTopBattle:        len(snapshot.Battles) > 0,
+		TopBattleSeed:       topBattleSeed,
+		EndTime:             station.EndTime,
+		BattleListSignature: snapshot.Signature,
 	}
 }
 

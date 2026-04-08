@@ -78,7 +78,7 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
 		station.Lock(caller)
-		if !hasHydratedStationBattles(stationId) {
+		if !hasLoadedStationBattles(stationId) {
 			if err := hydrateStationBattlesForStationFunc(ctx, db, station, time.Now().Unix()); err != nil {
 				log.Debugf("GetStationRecordReadOnly: station battle hydration failed for %s: %v", stationId, err)
 			} else if config.Config.FortInMemory {
@@ -108,7 +108,7 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	station.Lock(caller)
 	loadedFromDb := station == &dbStation
 	hydratedBattles := false
-	if !hasHydratedStationBattles(stationId) {
+	if !hasLoadedStationBattles(stationId) {
 		if err := hydrateStationBattlesForStationFunc(ctx, db, station, time.Now().Unix()); err != nil {
 			station.Unlock()
 			return nil, nil, err
@@ -171,7 +171,7 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
-	snapshot := collectStationBattleSnapshot(station, now)
+	snapshot := collectStationBattleSnapshot(station.Id, now)
 	battleListChanged := station.oldValues.BattleListSignature != snapshot.Signature
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
@@ -287,7 +287,7 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 }
 
 func createStationWebhooks(station *Station) {
-	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station, time.Now().Unix()), station.IsNewRecord())
+	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station.Id, time.Now().Unix()), station.IsNewRecord())
 }
 
 func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleSnapshot, isNew bool) {
@@ -299,10 +299,6 @@ func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleS
 	}
 
 	if isNew || old.EndTime != station.EndTime || old.BattleListSignature != currentSignature {
-		canonical := snapshot.Canonical
-		if canonical == nil {
-			canonical = stationBattleFromStationProjection(station)
-		}
 		stationHook := StationWebhook{
 			Id:                    station.Id,
 			Latitude:              station.Lat,
@@ -313,26 +309,29 @@ func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleS
 			IsBattleAvailable:     station.IsBattleAvailable,
 			TotalStationedPokemon: station.TotalStationedPokemon,
 			TotalStationedGmax:    station.TotalStationedGmax,
-			Battles:               buildStationWebhookBattlesFromSlice(snapshot.Battles),
+			Battles:               buildStationBattleViewsFromSlice(snapshot.Battles),
 			Updated:               station.Updated,
 		}
-		if canonical != nil {
-			stationHook.BattleLevel = null.IntFrom(int64(canonical.BattleLevel))
-			stationHook.BattleStart = null.IntFrom(canonical.BattleStart)
-			stationHook.BattleEnd = null.IntFrom(canonical.BattleEnd)
-			stationHook.BattlePokemonId = canonical.BattlePokemonId
-			stationHook.BattlePokemonForm = canonical.BattlePokemonForm
-			stationHook.BattlePokemonCostume = canonical.BattlePokemonCostume
-			stationHook.BattlePokemonGender = canonical.BattlePokemonGender
-			stationHook.BattlePokemonAlignment = canonical.BattlePokemonAlignment
-			stationHook.BattlePokemonBreadMode = canonical.BattlePokemonBreadMode
-			stationHook.BattlePokemonMove1 = canonical.BattlePokemonMove1
-			stationHook.BattlePokemonMove2 = canonical.BattlePokemonMove2
+		if len(snapshot.Battles) > 0 {
+			stationHook.BattleLevel = null.IntFrom(int64(snapshot.Battles[0].BattleLevel))
+			stationHook.BattleStart = null.IntFrom(snapshot.Battles[0].BattleStart)
+			stationHook.BattleEnd = null.IntFrom(snapshot.Battles[0].BattleEnd)
+			stationHook.BattlePokemonId = snapshot.Battles[0].BattlePokemonId
+			stationHook.BattlePokemonForm = snapshot.Battles[0].BattlePokemonForm
+			stationHook.BattlePokemonCostume = snapshot.Battles[0].BattlePokemonCostume
+			stationHook.BattlePokemonGender = snapshot.Battles[0].BattlePokemonGender
+			stationHook.BattlePokemonAlignment = snapshot.Battles[0].BattlePokemonAlignment
+			stationHook.BattlePokemonBreadMode = snapshot.Battles[0].BattlePokemonBreadMode
+			stationHook.BattlePokemonMove1 = snapshot.Battles[0].BattlePokemonMove1
+			stationHook.BattlePokemonMove2 = snapshot.Battles[0].BattlePokemonMove2
 		}
 		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		if seed := canonicalBattleSeed(canonical); canonical != nil && (isNew || !old.HasCanonicalBattle || old.CanonicalBattleSeed != seed) {
-			statsCollector.UpdateMaxBattleCount(areas, int64(canonical.BattleLevel))
+		if len(snapshot.Battles) > 0 {
+			seed := snapshot.Battles[0].BreadBattleSeed
+			if isNew || !old.HasTopBattle || old.TopBattleSeed != seed {
+				statsCollector.UpdateMaxBattleCount(areas, int64(snapshot.Battles[0].BattleLevel))
+			}
 		}
 	}
 }
