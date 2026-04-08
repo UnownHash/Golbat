@@ -658,6 +658,51 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 	}
 }
 
+func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id:              "station-1",
+			Name:            "Station",
+			Lat:             1,
+			Lon:             2,
+			StartTime:       now - 3600,
+			EndTime:         now + 3600,
+			Updated:         now,
+			BattleLevel:     null.IntFrom(2),
+			BattleStart:     null.IntFrom(now - 60),
+			BattleEnd:       null.IntFrom(now + 3600),
+			BattlePokemonId: null.IntFrom(133),
+		},
+	}
+
+	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
+		BreadBattleSeed:     7,
+		BattleWindowStartMs: (now - 60) * 1000,
+		BattleWindowEndMs:   (now + 3600) * 1000,
+		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
+		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
+	})
+
+	syncStationBattlesFromProto(station, nil)
+
+	if _, ok := stationBattleCache.Load(station.Id); ok {
+		t.Fatal("expected cached battle state to be cleared")
+	}
+	if !hasHydratedStationBattles(station.Id) {
+		t.Fatal("expected missing battle details to leave station hydrated")
+	}
+	if station.BattleEnd.Valid || station.BattlePokemonId.Valid {
+		t.Fatalf("expected station projection cleared, got %+v", station)
+	}
+
+	result := BuildStationResult(station)
+	if result.BattleEnd.Valid || result.BattlePokemonId.Valid || len(result.Battles) != 0 {
+		t.Fatalf("expected API result without stale battles, got %+v", result)
+	}
+}
+
 func TestGetKnownStationBattlesDoesNotMutateCacheOnRead(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()

@@ -124,7 +124,16 @@ func hasHydratedStationBattles(stationId string) bool {
 }
 
 func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattleDetailProto) {
+	if station == nil {
+		return
+	}
 	now := time.Now().Unix()
+	if battleDetail == nil {
+		clearStationBattleCaches(station.Id)
+		markStationBattlesHydrated(station.Id)
+		applyStationBattleProjection(station, nil)
+		return
+	}
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
 		upsertCachedStationBattle(*battle, now)
 	}
