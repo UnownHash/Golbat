@@ -402,7 +402,7 @@ func TestBuildFortLookupStationBattlesIncludesFutureBattle(t *testing.T) {
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
 
-	battles := buildFortLookupStationBattles(station, now)
+	battles := buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
 	if len(battles) != 1 {
 		t.Fatalf("expected future battle in fort lookup, got %d", len(battles))
 	}
