@@ -82,6 +82,36 @@ const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level,
 	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
+const stationBattleBatchUpsertQuery = `
+INSERT INTO station_battle (
+	bread_battle_seed, station_id, battle_level, battle_start, battle_end,
+	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
+	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
+	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated
+) VALUES (
+	:bread_battle_seed, :station_id, :battle_level, :battle_start, :battle_end,
+	:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
+	:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
+	:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :updated
+)
+ON DUPLICATE KEY UPDATE
+	station_id = VALUES(station_id),
+	battle_level = VALUES(battle_level),
+	battle_start = VALUES(battle_start),
+	battle_end = VALUES(battle_end),
+	battle_pokemon_id = VALUES(battle_pokemon_id),
+	battle_pokemon_form = VALUES(battle_pokemon_form),
+	battle_pokemon_costume = VALUES(battle_pokemon_costume),
+	battle_pokemon_gender = VALUES(battle_pokemon_gender),
+	battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
+	battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
+	battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
+	battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
+	battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
+	battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
+	updated = VALUES(updated)
+`
+
 var stationBattleCache *xsync.MapOf[string, stationBattleState]
 
 func initStationBattleCache() {
@@ -443,6 +473,77 @@ func stationBattleWriteFromSlice(stationId string, battles []StationBattleData) 
 	}
 }
 
+func flattenStationBattleWrites(snapshots []StationBattleWrite) ([]StationBattleData, []string) {
+	if len(snapshots) == 0 {
+		return nil, nil
+	}
+	totalBattles := 0
+	stationIds := make([]string, 0, len(snapshots))
+	seenStations := make(map[string]struct{}, len(snapshots))
+	for _, snapshot := range snapshots {
+		if snapshot.StationId == "" {
+			continue
+		}
+		if _, ok := seenStations[snapshot.StationId]; !ok {
+			seenStations[snapshot.StationId] = struct{}{}
+			stationIds = append(stationIds, snapshot.StationId)
+		}
+		totalBattles += len(snapshot.Battles)
+	}
+	if len(stationIds) == 0 {
+		return nil, nil
+	}
+	battles := make([]StationBattleData, 0, totalBattles)
+	for _, snapshot := range snapshots {
+		for _, battle := range snapshot.Battles {
+			if battle.StationId == "" {
+				battle.StationId = snapshot.StationId
+			}
+			battles = append(battles, battle)
+		}
+	}
+	return battles, stationIds
+}
+
+func buildDeleteObsoleteStationBattlesQuery(stationIds []string, battles []StationBattleData) (string, []any) {
+	if len(stationIds) == 0 {
+		return "", nil
+	}
+	args := make([]any, 0, len(battles)*2+len(stationIds))
+	var builder strings.Builder
+	if len(battles) == 0 {
+		builder.WriteString("DELETE FROM station_battle WHERE station_id IN (")
+		for i, stationId := range stationIds {
+			if i > 0 {
+				builder.WriteByte(',')
+			}
+			builder.WriteByte('?')
+			args = append(args, stationId)
+		}
+		builder.WriteByte(')')
+		return builder.String(), args
+	}
+
+	builder.WriteString("DELETE sb FROM station_battle sb LEFT JOIN (")
+	for i, battle := range battles {
+		if i > 0 {
+			builder.WriteString(" UNION ALL ")
+		}
+		builder.WriteString("SELECT ? AS station_id, ? AS bread_battle_seed")
+		args = append(args, battle.StationId, battle.BreadBattleSeed)
+	}
+	builder.WriteString(") keep_rows ON keep_rows.station_id = sb.station_id AND keep_rows.bread_battle_seed = sb.bread_battle_seed WHERE sb.station_id IN (")
+	for i, stationId := range stationIds {
+		if i > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteByte('?')
+		args = append(args, stationId)
+	}
+	builder.WriteString(") AND keep_rows.station_id IS NULL")
+	return builder.String(), args
+}
+
 func storeStationBattleSnapshot(ctx context.Context, dbDetails db.DbDetails, snapshot StationBattleWrite) error {
 	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
 	statsCollector.IncDbQuery("begin station_battle", err)
@@ -451,35 +552,7 @@ func storeStationBattleSnapshot(ctx context.Context, dbDetails db.DbDetails, sna
 	}
 
 	if len(snapshot.Battles) > 0 {
-		if _, err = tx.NamedExecContext(ctx, `
-			INSERT INTO station_battle (
-				bread_battle_seed, station_id, battle_level, battle_start, battle_end,
-				battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
-				battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
-				battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated
-			) VALUES (
-				:bread_battle_seed, :station_id, :battle_level, :battle_start, :battle_end,
-				:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
-				:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
-				:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :updated
-			)
-			ON DUPLICATE KEY UPDATE
-				station_id = VALUES(station_id),
-				battle_level = VALUES(battle_level),
-				battle_start = VALUES(battle_start),
-				battle_end = VALUES(battle_end),
-				battle_pokemon_id = VALUES(battle_pokemon_id),
-				battle_pokemon_form = VALUES(battle_pokemon_form),
-				battle_pokemon_costume = VALUES(battle_pokemon_costume),
-				battle_pokemon_gender = VALUES(battle_pokemon_gender),
-				battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
-				battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
-				battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
-				battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
-				battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
-				battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
-				updated = VALUES(updated)
-		`, snapshot.Battles); err != nil {
+		if _, err = tx.NamedExecContext(ctx, stationBattleBatchUpsertQuery, snapshot.Battles); err != nil {
 			_ = tx.Rollback()
 			statsCollector.IncDbQuery("upsert station_battle", err)
 			return err
@@ -513,16 +586,38 @@ func storeStationBattleSnapshot(ctx context.Context, dbDetails db.DbDetails, sna
 }
 
 func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapshots []StationBattleWrite) error {
-	var firstErr error
-	for _, snapshot := range snapshots {
-		if err := storeStationBattleSnapshot(ctx, dbDetails, snapshot); err != nil {
-			log.Errorf("flush station_battle %s: %v", snapshot.StationId, err)
-			if firstErr == nil {
-				firstErr = err
-			}
-		}
+	battles, stationIds := flattenStationBattleWrites(snapshots)
+	if len(stationIds) == 0 {
+		return nil
 	}
-	return firstErr
+	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
+	statsCollector.IncDbQuery("begin station_battle", err)
+	if err != nil {
+		return err
+	}
+
+	if len(battles) > 0 {
+		if _, err = tx.NamedExecContext(ctx, stationBattleBatchUpsertQuery, battles); err != nil {
+			_ = tx.Rollback()
+			statsCollector.IncDbQuery("upsert station_battle", err)
+			return err
+		}
+		statsCollector.IncDbQuery("upsert station_battle", nil)
+	}
+
+	deleteQuery, deleteArgs := buildDeleteObsoleteStationBattlesQuery(stationIds, battles)
+	if deleteQuery != "" {
+		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
+			_ = tx.Rollback()
+			statsCollector.IncDbQuery("delete obsolete station_battle", err)
+			return err
+		}
+		statsCollector.IncDbQuery("delete obsolete station_battle", nil)
+	}
+
+	err = tx.Commit()
+	statsCollector.IncDbQuery("commit station_battle", err)
+	return err
 }
 
 func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) ([]StationBattleData, error) {
