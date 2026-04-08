@@ -437,10 +437,6 @@ func applyStationBattleProjection(station *Station, battle *StationBattleData) {
 	station.SetBattlePokemonCpMultiplier(battle.BattlePokemonCpMultiplier)
 }
 
-func stationBattleSignature(station *Station, now int64) string {
-	return collectStationBattleSnapshot(station, now).Signature
-}
-
 func stationBattleSignatureFromSlice(battles []StationBattleData) string {
 	if len(battles) == 0 {
 		return ""
@@ -507,10 +503,6 @@ func buildApiStationBattlesFromSlice(battles []StationBattleData) []ApiStationBa
 	return result
 }
 
-func buildApiStationBattles(station *Station, now int64) []ApiStationBattle {
-	return buildApiStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
-}
-
 func buildStationWebhookBattlesFromSlice(battles []StationBattleData) []StationBattleWebhook {
 	if len(battles) == 0 {
 		return nil
@@ -537,10 +529,6 @@ func buildStationWebhookBattlesFromSlice(battles []StationBattleData) []StationB
 	return result
 }
 
-func buildStationWebhookBattles(station *Station, now int64) []StationBattleWebhook {
-	return buildStationWebhookBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
-}
-
 func buildFortLookupStationBattlesFromSlice(battles []StationBattleData) []FortLookupStationBattle {
 	if len(battles) == 0 {
 		return nil
@@ -555,10 +543,6 @@ func buildFortLookupStationBattlesFromSlice(battles []StationBattleData) []FortL
 		})
 	}
 	return result
-}
-
-func buildFortLookupStationBattles(station *Station, now int64) []FortLookupStationBattle {
-	return buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, station, now))
 }
 
 func stationBattleWriteFromSlice(stationId string, battles []StationBattleData) StationBattleWrite {
@@ -720,13 +704,10 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	defer rows.Close()
 
 	count := int32(0)
-	affected := make([]string, 0)
 	currentStationId := ""
 	currentBattles := make([]StationBattleData, 0)
 	flushCurrent := func() {
-		if cachePreloadedStationBattles(currentStationId, currentBattles) {
-			affected = append(affected, currentStationId)
-		}
+		cachePreloadedStationBattles(currentStationId, currentBattles)
 		currentStationId = ""
 		currentBattles = nil
 	}
