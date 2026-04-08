@@ -128,7 +128,7 @@ func initDataCache() {
 		KeyToShard: StringKeyToShard,
 	})
 	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
-		clearStationBattleCaches(item.Key())
+		clearStationBattleState(item.Key())
 		if config.Config.FortInMemory {
 			s := item.Value()
 			evictFortFromTree(s.Id, s.Lat, s.Lon)

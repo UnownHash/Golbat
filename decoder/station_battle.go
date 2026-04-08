@@ -35,7 +35,7 @@ type StationBattleData struct {
 	Updated                   int64      `db:"updated"`
 }
 
-type ApiStationBattle struct {
+type StationBattleView struct {
 	BreadBattleSeed           int64      `json:"bread_battle_seed,omitempty"`
 	BattleLevel               int16      `json:"battle_level"`
 	BattleStart               int64      `json:"battle_start"`
@@ -52,22 +52,8 @@ type ApiStationBattle struct {
 	BattlePokemonCpMultiplier null.Float `json:"battle_pokemon_cp_multiplier"`
 }
 
-type StationBattleWebhook struct {
-	BreadBattleSeed           int64      `json:"bread_battle_seed,omitempty"`
-	BattleLevel               int16      `json:"battle_level"`
-	BattleStart               int64      `json:"battle_start"`
-	BattleEnd                 int64      `json:"battle_end"`
-	BattlePokemonId           null.Int   `json:"battle_pokemon_id"`
-	BattlePokemonForm         null.Int   `json:"battle_pokemon_form"`
-	BattlePokemonCostume      null.Int   `json:"battle_pokemon_costume"`
-	BattlePokemonGender       null.Int   `json:"battle_pokemon_gender"`
-	BattlePokemonAlignment    null.Int   `json:"battle_pokemon_alignment"`
-	BattlePokemonBreadMode    null.Int   `json:"battle_pokemon_bread_mode"`
-	BattlePokemonMove1        null.Int   `json:"battle_pokemon_move_1"`
-	BattlePokemonMove2        null.Int   `json:"battle_pokemon_move_2"`
-	BattlePokemonStamina      null.Int   `json:"battle_pokemon_stamina"`
-	BattlePokemonCpMultiplier null.Float `json:"battle_pokemon_cp_multiplier"`
-}
+type ApiStationBattle = StationBattleView
+type StationBattleWebhook = StationBattleView
 
 type FortLookupStationBattle struct {
 	BattleEndTimestamp int64
@@ -83,8 +69,12 @@ type StationBattleWrite struct {
 
 type stationBattleSnapshot struct {
 	Battles   []StationBattleData
-	Canonical *StationBattleData
 	Signature string
+}
+
+type stationBattleState struct {
+	Battles []StationBattleData
+	Loaded  bool
 }
 
 const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level, battle_start, battle_end,
@@ -92,35 +82,41 @@ const stationBattleSelectColumns = `bread_battle_seed, station_id, battle_level,
 	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
 	battle_pokemon_stamina, battle_pokemon_cp_multiplier, updated`
 
-var stationBattleCache *xsync.MapOf[string, []StationBattleData]
-var stationBattleHydratedCache *xsync.MapOf[string, struct{}]
+var stationBattleCache *xsync.MapOf[string, stationBattleState]
 
 func initStationBattleCache() {
-	stationBattleCache = xsync.NewMapOf[string, []StationBattleData]()
-	stationBattleHydratedCache = xsync.NewMapOf[string, struct{}]()
+	stationBattleCache = xsync.NewMapOf[string, stationBattleState]()
 }
 
-func markStationBattlesHydrated(stationId string) {
+func storeStationBattles(stationId string, battles []StationBattleData) {
 	if stationId == "" {
 		return
 	}
-	stationBattleHydratedCache.Store(stationId, struct{}{})
+	if len(battles) == 0 {
+		stationBattleCache.Store(stationId, stationBattleState{Loaded: true})
+		return
+	}
+	stateBattles := cloneStationBattles(battles)
+	sortStationBattlesByEnd(stateBattles)
+	stationBattleCache.Store(stationId, stationBattleState{
+		Battles: stateBattles,
+		Loaded:  true,
+	})
 }
 
-func clearStationBattleCaches(stationId string) {
+func clearStationBattleState(stationId string) {
 	if stationId == "" {
 		return
 	}
 	stationBattleCache.Delete(stationId)
-	stationBattleHydratedCache.Delete(stationId)
 }
 
-func hasHydratedStationBattles(stationId string) bool {
+func hasLoadedStationBattles(stationId string) bool {
 	if stationId == "" {
 		return false
 	}
-	_, ok := stationBattleHydratedCache.Load(stationId)
-	return ok
+	state, ok := stationBattleCache.Load(stationId)
+	return ok && state.Loaded
 }
 
 func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattleDetailProto) {
@@ -129,18 +125,15 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 	}
 	now := time.Now().Unix()
 	if battleDetail == nil {
-		clearStationBattleCaches(station.Id)
-		markStationBattlesHydrated(station.Id)
+		storeStationBattles(station.Id, nil)
 		applyStationBattleProjection(station, nil)
 		return
 	}
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
 		upsertCachedStationBattle(*battle, now)
 	}
-	markStationBattlesHydrated(station.Id)
 
-	snapshot := collectStationBattleSnapshot(station, now)
-	applyStationBattleProjection(station, snapshot.Canonical)
+	applyStationBattleProjection(station, firstStationBattle(getKnownStationBattles(station.Id, now)))
 }
 
 func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
@@ -167,31 +160,11 @@ func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDeta
 		battle.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetBreadModeEnum()))
 		battle.BattlePokemonStamina = null.IntFrom(int64(pokemon.GetStamina()))
 		battle.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.GetCpMultiplier()))
+		if rewardPokemon := battleDetail.GetRewardPokemon(); rewardPokemon != nil && pokemon.GetPokemonId() != rewardPokemon.GetPokemonId() {
+			log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
+		}
 	}
 	return battle
-}
-
-func stationBattleFromStationProjection(station *Station) *StationBattleData {
-	if station == nil || !station.BattleEnd.Valid {
-		return nil
-	}
-	return &StationBattleData{
-		StationId:                 station.Id,
-		BattleLevel:               int16(station.BattleLevel.ValueOrZero()),
-		BattleStart:               station.BattleStart.ValueOrZero(),
-		BattleEnd:                 station.BattleEnd.ValueOrZero(),
-		BattlePokemonId:           station.BattlePokemonId,
-		BattlePokemonForm:         station.BattlePokemonForm,
-		BattlePokemonCostume:      station.BattlePokemonCostume,
-		BattlePokemonGender:       station.BattlePokemonGender,
-		BattlePokemonAlignment:    station.BattlePokemonAlignment,
-		BattlePokemonBreadMode:    station.BattlePokemonBreadMode,
-		BattlePokemonMove1:        station.BattlePokemonMove1,
-		BattlePokemonMove2:        station.BattlePokemonMove2,
-		BattlePokemonStamina:      station.BattlePokemonStamina,
-		BattlePokemonCpMultiplier: station.BattlePokemonCpMultiplier,
-		Updated:                   station.Updated,
-	}
 }
 
 func cloneStationBattles(battles []StationBattleData) []StationBattleData {
@@ -236,19 +209,6 @@ func stationBattleIsActive(battle StationBattleData, now int64) bool {
 	return battle.BattleStart <= now
 }
 
-func activeStationBattlesFromSlice(battles []StationBattleData, now int64) []StationBattleData {
-	if len(battles) == 0 {
-		return nil
-	}
-	active := make([]StationBattleData, 0, len(battles))
-	for _, battle := range battles {
-		if stationBattleIsActive(battle, now) {
-			active = append(active, battle)
-		}
-	}
-	return active
-}
-
 func nonExpiredStationBattlesFromSlice(battles []StationBattleData, now int64) []StationBattleData {
 	if len(battles) == 0 {
 		return nil
@@ -279,116 +239,83 @@ func stationBattlesEqual(a []StationBattleData, b []StationBattleData) bool {
 }
 
 func upsertCachedStationBattle(battle StationBattleData, now int64) bool {
-	existing, _ := stationBattleCache.Load(battle.StationId)
-	next := pruneObsoleteStationBattles(existing, battle, now)
-	sortStationBattlesByEnd(next)
-	if stationBattlesEqual(existing, next) {
+	state, _ := stationBattleCache.Load(battle.StationId)
+	next := mergeStationBattles(state.Battles, battle, now)
+	if state.Loaded && stationBattlesEqual(state.Battles, next) {
 		return false
 	}
-	if len(next) == 0 {
-		stationBattleCache.Delete(battle.StationId)
-	} else {
-		stationBattleCache.Store(battle.StationId, next)
-	}
+	storeStationBattles(battle.StationId, next)
 	return true
 }
 
-func pruneObsoleteStationBattles(existing []StationBattleData, battle StationBattleData, now int64) []StationBattleData {
+func mergeStationBattles(existing []StationBattleData, observed StationBattleData, now int64) []StationBattleData {
+	observedActive := stationBattleIsActive(observed, now)
+	observedCurrent := observed.BattleEnd > now
+	keepObserved := observedCurrent
+	if observedCurrent && !observedActive {
+		for _, cached := range existing {
+			if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now {
+				continue
+			}
+			if stationBattleIsActive(cached, now) && cached.BattleEnd <= observed.BattleEnd {
+				keepObserved = false
+				break
+			}
+		}
+	}
+
 	next := make([]StationBattleData, 0, len(existing)+1)
-	if battle.BattleEnd > now {
-		next = append(next, battle)
+	if keepObserved {
+		next = append(next, observed)
 	}
 	for _, cached := range existing {
-		if cached.BreadBattleSeed == battle.BreadBattleSeed || cached.BattleEnd <= now || cached.BattleEnd <= battle.BattleEnd {
+		if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now {
+			continue
+		}
+		if observedActive {
+			if stationBattleIsActive(cached, now) || cached.BattleEnd >= observed.BattleEnd {
+				continue
+			}
+		} else if keepObserved && !stationBattleIsActive(cached, now) && cached.BattleEnd <= observed.BattleEnd {
 			continue
 		}
 		next = append(next, cached)
 	}
+	sortStationBattlesByEnd(next)
 	return next
 }
 
-func getKnownStationBattles(stationId string, station *Station, now int64) []StationBattleData {
-	if stationId != "" {
-		if cached, ok := stationBattleCache.Load(stationId); ok {
-			current := nonExpiredStationBattlesFromSlice(cached, now)
-			if len(current) > 0 {
-				return current
-			}
-			stationBattleCache.Delete(stationId)
-			if hasHydratedStationBattles(stationId) {
-				return nil
-			}
-		}
-		if hasHydratedStationBattles(stationId) {
-			return nil
-		}
+func getKnownStationBattles(stationId string, now int64) []StationBattleData {
+	if stationId == "" {
+		return nil
 	}
-	if fallback := stationBattleFromStationProjection(station); fallback != nil && fallback.BattleEnd > now {
-		return []StationBattleData{*fallback}
+	state, ok := stationBattleCache.Load(stationId)
+	if !ok {
+		return nil
+	}
+	current := nonExpiredStationBattlesFromSlice(state.Battles, now)
+	if len(current) > 0 {
+		return current
+	}
+	if len(state.Battles) > 0 {
+		stationBattleCache.Store(stationId, stationBattleState{Loaded: state.Loaded})
 	}
 	return nil
 }
 
-func collectStationBattleSnapshot(station *Station, now int64) stationBattleSnapshot {
-	battles := getKnownStationBattles(station.Id, station, now)
-	return stationBattleSnapshot{
-		Battles:   battles,
-		Canonical: canonicalStationBattleFromSlice(station, battles, now),
-		Signature: stationBattleSignatureFromSlice(battles),
-	}
-}
-
-func getActiveStationBattles(stationId string, station *Station, now int64) []StationBattleData {
-	return activeStationBattlesFromSlice(getKnownStationBattles(stationId, station, now), now)
-}
-
-func stationBattleMatchesProjection(battle StationBattleData, projection *StationBattleData) bool {
-	if projection == nil {
-		return false
-	}
-	return battle.BattleLevel == projection.BattleLevel &&
-		battle.BattleStart == projection.BattleStart &&
-		battle.BattleEnd == projection.BattleEnd &&
-		battle.BattlePokemonId == projection.BattlePokemonId &&
-		battle.BattlePokemonForm == projection.BattlePokemonForm
-}
-
-func canonicalStationBattleFromSlice(station *Station, battles []StationBattleData, now int64) *StationBattleData {
+func firstStationBattle(battles []StationBattleData) *StationBattleData {
 	if len(battles) == 0 {
 		return nil
 	}
-	projection := stationBattleFromStationProjection(station)
-	if projection != nil && stationBattleIsActive(*projection, now) {
-		for _, battle := range battles {
-			if stationBattleIsActive(battle, now) && stationBattleMatchesProjection(battle, projection) {
-				current := battle
-				return &current
-			}
-		}
-	}
-	for _, battle := range battles {
-		if stationBattleIsActive(battle, now) {
-			current := battle
-			return &current
-		}
-	}
-	if projection != nil {
-		for _, battle := range battles {
-			if stationBattleMatchesProjection(battle, projection) {
-				current := battle
-				return &current
-			}
-		}
-	}
-	battle := battles[0]
-	return &battle
+	return &battles[0]
 }
 
-func canonicalBattleSeed(battle *StationBattleData) int64 {
-	if battle == nil {
-		return 0
+func collectStationBattleSnapshot(stationId string, now int64) stationBattleSnapshot {
+	battles := getKnownStationBattles(stationId, now)
+	return stationBattleSnapshot{
+		Battles:   battles,
+		Signature: stationBattleSignatureFromSlice(battles),
 	}
-	return battle.BreadBattleSeed
 }
 
 func clearStationBattleProjection(station *Station) {
@@ -405,16 +332,6 @@ func clearStationBattleProjection(station *Station) {
 	station.SetBattlePokemonMove2(null.Int{})
 	station.SetBattlePokemonStamina(null.Int{})
 	station.SetBattlePokemonCpMultiplier(null.Float{})
-}
-
-func restoreStationBattleProjectionFromOldValues(station *Station) {
-	station.SetIsBattleAvailable(station.oldValues.IsBattleAvailable)
-	if station.oldValues.BattleProjection == nil {
-		clearStationBattleProjection(station)
-		return
-	}
-	battle := *station.oldValues.BattleProjection
-	applyStationBattleProjection(station, &battle)
 }
 
 func applyStationBattleProjection(station *Station, battle *StationBattleData) {
@@ -477,39 +394,13 @@ func stationBattleSignatureFromSlice(battles []StationBattleData) string {
 	return builder.String()
 }
 
-func buildApiStationBattlesFromSlice(battles []StationBattleData) []ApiStationBattle {
+func buildStationBattleViewsFromSlice(battles []StationBattleData) []StationBattleView {
 	if len(battles) == 0 {
 		return nil
 	}
-	result := make([]ApiStationBattle, 0, len(battles))
+	result := make([]StationBattleView, 0, len(battles))
 	for _, battle := range battles {
-		result = append(result, ApiStationBattle{
-			BreadBattleSeed:           battle.BreadBattleSeed,
-			BattleLevel:               battle.BattleLevel,
-			BattleStart:               battle.BattleStart,
-			BattleEnd:                 battle.BattleEnd,
-			BattlePokemonId:           battle.BattlePokemonId,
-			BattlePokemonForm:         battle.BattlePokemonForm,
-			BattlePokemonCostume:      battle.BattlePokemonCostume,
-			BattlePokemonGender:       battle.BattlePokemonGender,
-			BattlePokemonAlignment:    battle.BattlePokemonAlignment,
-			BattlePokemonBreadMode:    battle.BattlePokemonBreadMode,
-			BattlePokemonMove1:        battle.BattlePokemonMove1,
-			BattlePokemonMove2:        battle.BattlePokemonMove2,
-			BattlePokemonStamina:      battle.BattlePokemonStamina,
-			BattlePokemonCpMultiplier: battle.BattlePokemonCpMultiplier,
-		})
-	}
-	return result
-}
-
-func buildStationWebhookBattlesFromSlice(battles []StationBattleData) []StationBattleWebhook {
-	if len(battles) == 0 {
-		return nil
-	}
-	result := make([]StationBattleWebhook, 0, len(battles))
-	for _, battle := range battles {
-		result = append(result, StationBattleWebhook{
+		result = append(result, StationBattleView{
 			BreadBattleSeed:           battle.BreadBattleSeed,
 			BattleLevel:               battle.BattleLevel,
 			BattleStart:               battle.BattleStart,
@@ -657,30 +548,16 @@ func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails
 	if err != nil {
 		return err
 	}
-	if len(battles) == 0 {
-		stationBattleCache.Delete(station.Id)
-		markStationBattlesHydrated(station.Id)
-		return nil
-	}
-	stationBattleCache.Store(station.Id, battles)
-	markStationBattlesHydrated(station.Id)
+	storeStationBattles(station.Id, battles)
 	return nil
 }
 
-func cachePreloadedStationBattles(stationId string, battles []StationBattleData) bool {
-	if stationId == "" || len(battles) == 0 {
-		return false
-	}
-	sortStationBattlesByEnd(battles)
-	stationBattleCache.Store(stationId, battles)
-	markStationBattlesHydrated(stationId)
-	return true
-}
-
-func markPreloadedStationsHydrated(populateRtree bool) {
+func finalizePreloadedStationBattles(populateRtree bool) {
 	stationCache.Range(func(item *ttlcache.Item[string, *Station]) bool {
 		stationId := item.Key()
-		markStationBattlesHydrated(stationId)
+		if _, ok := stationBattleCache.Load(stationId); !ok {
+			storeStationBattles(stationId, nil)
+		}
 		if populateRtree {
 			station := item.Value()
 			station.Lock("preloadStationBattles")
@@ -707,7 +584,7 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	currentStationId := ""
 	currentBattles := make([]StationBattleData, 0)
 	flushCurrent := func() {
-		cachePreloadedStationBattles(currentStationId, currentBattles)
+		storeStationBattles(currentStationId, currentBattles)
 		currentStationId = ""
 		currentBattles = nil
 	}
@@ -728,7 +605,7 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	}
 	flushCurrent()
 
-	markPreloadedStationsHydrated(populateRtree)
+	finalizePreloadedStationBattles(populateRtree)
 
 	return count
 }

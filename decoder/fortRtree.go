@@ -204,21 +204,20 @@ func updateGymLookup(gym *Gym) {
 }
 
 func updateStationLookup(station *Station) {
-	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station, time.Now().Unix()))
+	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station.Id, time.Now().Unix()))
 }
 
 func updateStationLookupFromSnapshot(station *Station, snapshot stationBattleSnapshot) {
 	battles := buildFortLookupStationBattlesFromSlice(snapshot.Battles)
-	canonical := snapshot.Canonical
 	battleEndTimestamp := int64(0)
 	battleLevel := int8(0)
 	battlePokemonId := int16(0)
 	battlePokemonForm := int16(0)
-	if canonical != nil {
-		battleEndTimestamp = canonical.BattleEnd
-		battleLevel = int8(canonical.BattleLevel)
-		battlePokemonId = int16(canonical.BattlePokemonId.ValueOrZero())
-		battlePokemonForm = int16(canonical.BattlePokemonForm.ValueOrZero())
+	if len(snapshot.Battles) > 0 {
+		battleEndTimestamp = snapshot.Battles[0].BattleEnd
+		battleLevel = int8(snapshot.Battles[0].BattleLevel)
+		battlePokemonId = int16(snapshot.Battles[0].BattlePokemonId.ValueOrZero())
+		battlePokemonForm = int16(snapshot.Battles[0].BattlePokemonForm.ValueOrZero())
 	}
 	fortLookupCache.Store(station.Id, FortLookup{
 		FortType:           STATION,
