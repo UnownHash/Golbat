@@ -68,6 +68,93 @@ func TestUpsertCachedStationBattleIgnoresUpdatedOnlyChange(t *testing.T) {
 	}
 }
 
+func TestFlattenStationBattleWrites(t *testing.T) {
+	snapshots := []StationBattleWrite{
+		{
+			StationId: "station-1",
+			Battles: []StationBattleData{
+				{StationId: "station-1", BreadBattleSeed: 1},
+				{StationId: "", BreadBattleSeed: 2},
+			},
+		},
+		{
+			StationId: "station-2",
+			Battles:   nil,
+		},
+		{
+			StationId: "station-1",
+			Battles: []StationBattleData{
+				{StationId: "station-1", BreadBattleSeed: 3},
+			},
+		},
+	}
+
+	battles, stationIds := flattenStationBattleWrites(snapshots)
+	if len(stationIds) != 2 || stationIds[0] != "station-1" || stationIds[1] != "station-2" {
+		t.Fatalf("unexpected station ids: %+v", stationIds)
+	}
+	if len(battles) != 3 {
+		t.Fatalf("expected 3 flattened battles, got %d", len(battles))
+	}
+	if battles[1].StationId != "station-1" {
+		t.Fatalf("expected missing station id to be filled from snapshot, got %+v", battles[1])
+	}
+}
+
+func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
+	query, args := buildDeleteObsoleteStationBattlesQuery(
+		[]string{"station-1", "station-2", "station-3"},
+		[]StationBattleData{
+			{StationId: "station-1", BreadBattleSeed: 1},
+			{StationId: "station-1", BreadBattleSeed: 2},
+			{StationId: "station-3", BreadBattleSeed: 3},
+		},
+	)
+
+	expectedQuery := "DELETE sb FROM station_battle sb LEFT JOIN (" +
+		"SELECT ? AS station_id, ? AS bread_battle_seed UNION ALL " +
+		"SELECT ? AS station_id, ? AS bread_battle_seed UNION ALL " +
+		"SELECT ? AS station_id, ? AS bread_battle_seed" +
+		") keep_rows ON keep_rows.station_id = sb.station_id AND keep_rows.bread_battle_seed = sb.bread_battle_seed " +
+		"WHERE sb.station_id IN (?,?,?) AND keep_rows.station_id IS NULL"
+	if query != expectedQuery {
+		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
+	}
+
+	expectedArgs := []any{
+		"station-1", int64(1),
+		"station-1", int64(2),
+		"station-3", int64(3),
+		"station-1", "station-2", "station-3",
+	}
+	if len(args) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got %d: %+v", len(expectedArgs), len(args), args)
+	}
+	for i := range expectedArgs {
+		if args[i] != expectedArgs[i] {
+			t.Fatalf("arg %d mismatch: expected %#v, got %#v", i, expectedArgs[i], args[i])
+		}
+	}
+}
+
+func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
+	query, args := buildDeleteObsoleteStationBattlesQuery([]string{"station-1", "station-2"}, nil)
+
+	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?,?)"
+	if query != expectedQuery {
+		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
+	}
+	expectedArgs := []any{"station-1", "station-2"}
+	if len(args) != len(expectedArgs) {
+		t.Fatalf("expected %d args, got %d: %+v", len(expectedArgs), len(args), args)
+	}
+	for i := range expectedArgs {
+		if args[i] != expectedArgs[i] {
+			t.Fatalf("arg %d mismatch: expected %#v, got %#v", i, expectedArgs[i], args[i])
+		}
+	}
+}
+
 func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 	now := time.Now().Unix()
 	cases := []struct {
