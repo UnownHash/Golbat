@@ -15,6 +15,7 @@ CREATE TABLE `station_battle` (
  `battle_pokemon_stamina`    INT unsigned DEFAULT NULL,
  `battle_pokemon_cp_multiplier` FLOAT DEFAULT NULL,
  `updated`                   INT UNSIGNED NOT NULL,
+ -- Intentionally keyed by bread_battle_seed alone; Golbat treats battle seeds as globally unique across stations.
  PRIMARY KEY(`bread_battle_seed`),
  KEY `ix_station_battle_station_end` (`station_id`, `battle_end`),
  KEY `ix_station_battle_end` (`battle_end`)
