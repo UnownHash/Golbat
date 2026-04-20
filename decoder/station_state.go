@@ -172,6 +172,7 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
 	snapshot := collectStationBattleSnapshot(station.Id, now)
+	applyStationBattleProjection(station, snapshot.Canonical)
 	battleListChanged := station.oldValues.BattleListSignature != snapshot.Signature
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
