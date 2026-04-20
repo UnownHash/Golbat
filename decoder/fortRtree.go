@@ -213,11 +213,11 @@ func updateStationLookupFromSnapshot(station *Station, snapshot stationBattleSna
 	battleLevel := int8(0)
 	battlePokemonId := int16(0)
 	battlePokemonForm := int16(0)
-	if len(snapshot.Battles) > 0 {
-		battleEndTimestamp = snapshot.Battles[0].BattleEnd
-		battleLevel = int8(snapshot.Battles[0].BattleLevel)
-		battlePokemonId = int16(snapshot.Battles[0].BattlePokemonId.ValueOrZero())
-		battlePokemonForm = int16(snapshot.Battles[0].BattlePokemonForm.ValueOrZero())
+	if snapshot.Canonical != nil {
+		battleEndTimestamp = snapshot.Canonical.BattleEnd
+		battleLevel = int8(snapshot.Canonical.BattleLevel)
+		battlePokemonId = int16(snapshot.Canonical.BattlePokemonId.ValueOrZero())
+		battlePokemonForm = int16(snapshot.Canonical.BattlePokemonForm.ValueOrZero())
 	}
 	fortLookupCache.Store(station.Id, FortLookup{
 		FortType:           STATION,

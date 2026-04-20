@@ -312,25 +312,25 @@ func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleS
 			Battles:               buildStationBattleViewsFromSlice(snapshot.Battles),
 			Updated:               station.Updated,
 		}
-		if len(snapshot.Battles) > 0 {
-			stationHook.BattleLevel = null.IntFrom(int64(snapshot.Battles[0].BattleLevel))
-			stationHook.BattleStart = null.IntFrom(snapshot.Battles[0].BattleStart)
-			stationHook.BattleEnd = null.IntFrom(snapshot.Battles[0].BattleEnd)
-			stationHook.BattlePokemonId = snapshot.Battles[0].BattlePokemonId
-			stationHook.BattlePokemonForm = snapshot.Battles[0].BattlePokemonForm
-			stationHook.BattlePokemonCostume = snapshot.Battles[0].BattlePokemonCostume
-			stationHook.BattlePokemonGender = snapshot.Battles[0].BattlePokemonGender
-			stationHook.BattlePokemonAlignment = snapshot.Battles[0].BattlePokemonAlignment
-			stationHook.BattlePokemonBreadMode = snapshot.Battles[0].BattlePokemonBreadMode
-			stationHook.BattlePokemonMove1 = snapshot.Battles[0].BattlePokemonMove1
-			stationHook.BattlePokemonMove2 = snapshot.Battles[0].BattlePokemonMove2
+		if snapshot.Canonical != nil {
+			stationHook.BattleLevel = null.IntFrom(int64(snapshot.Canonical.BattleLevel))
+			stationHook.BattleStart = null.IntFrom(snapshot.Canonical.BattleStart)
+			stationHook.BattleEnd = null.IntFrom(snapshot.Canonical.BattleEnd)
+			stationHook.BattlePokemonId = snapshot.Canonical.BattlePokemonId
+			stationHook.BattlePokemonForm = snapshot.Canonical.BattlePokemonForm
+			stationHook.BattlePokemonCostume = snapshot.Canonical.BattlePokemonCostume
+			stationHook.BattlePokemonGender = snapshot.Canonical.BattlePokemonGender
+			stationHook.BattlePokemonAlignment = snapshot.Canonical.BattlePokemonAlignment
+			stationHook.BattlePokemonBreadMode = snapshot.Canonical.BattlePokemonBreadMode
+			stationHook.BattlePokemonMove1 = snapshot.Canonical.BattlePokemonMove1
+			stationHook.BattlePokemonMove2 = snapshot.Canonical.BattlePokemonMove2
 		}
 		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		if len(snapshot.Battles) > 0 {
-			seed := snapshot.Battles[0].BreadBattleSeed
+		if snapshot.Canonical != nil {
+			seed := snapshot.Canonical.BreadBattleSeed
 			if isNew || !old.HasTopBattle || old.TopBattleSeed != seed {
-				statsCollector.UpdateMaxBattleCount(areas, int64(snapshot.Battles[0].BattleLevel))
+				statsCollector.UpdateMaxBattleCount(areas, int64(snapshot.Canonical.BattleLevel))
 			}
 		}
 	}

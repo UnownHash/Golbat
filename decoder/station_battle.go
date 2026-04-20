@@ -69,6 +69,7 @@ type StationBattleWrite struct {
 
 type stationBattleSnapshot struct {
 	Battles   []StationBattleData
+	Canonical *StationBattleData
 	Signature string
 }
 
@@ -163,7 +164,7 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 		upsertCachedStationBattle(*battle, now)
 	}
 
-	applyStationBattleProjection(station, firstStationBattle(getKnownStationBattles(station.Id, now)))
+	applyStationBattleProjection(station, canonicalStationBattleFromSlice(getKnownStationBattles(station.Id, now), now))
 }
 
 func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
@@ -279,34 +280,12 @@ func upsertCachedStationBattle(battle StationBattleData, now int64) bool {
 }
 
 func mergeStationBattles(existing []StationBattleData, observed StationBattleData, now int64) []StationBattleData {
-	observedActive := stationBattleIsActive(observed, now)
-	observedCurrent := observed.BattleEnd > now
-	keepObserved := observedCurrent
-	if observedCurrent && !observedActive {
-		for _, cached := range existing {
-			if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now {
-				continue
-			}
-			if stationBattleIsActive(cached, now) && cached.BattleEnd <= observed.BattleEnd {
-				keepObserved = false
-				break
-			}
-		}
-	}
-
 	next := make([]StationBattleData, 0, len(existing)+1)
-	if keepObserved {
+	if observed.BattleEnd > now {
 		next = append(next, observed)
 	}
 	for _, cached := range existing {
 		if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now {
-			continue
-		}
-		if observedActive {
-			if stationBattleIsActive(cached, now) || cached.BattleEnd >= observed.BattleEnd {
-				continue
-			}
-		} else if keepObserved && !stationBattleIsActive(cached, now) && cached.BattleEnd <= observed.BattleEnd {
 			continue
 		}
 		next = append(next, cached)
@@ -333,17 +312,40 @@ func getKnownStationBattles(stationId string, now int64) []StationBattleData {
 	return nil
 }
 
-func firstStationBattle(battles []StationBattleData) *StationBattleData {
+func canonicalStationBattleFromSlice(battles []StationBattleData, now int64) *StationBattleData {
 	if len(battles) == 0 {
 		return nil
 	}
-	return &battles[0]
+	canonical := battles[0]
+	canonicalActive := stationBattleIsActive(canonical, now)
+	for _, battle := range battles[1:] {
+		battleActive := stationBattleIsActive(battle, now)
+		switch {
+		case battleActive && !canonicalActive:
+			canonical = battle
+			canonicalActive = true
+		case battleActive && canonicalActive:
+			if battle.BattleEnd < canonical.BattleEnd ||
+				(battle.BattleEnd == canonical.BattleEnd && battle.BattleStart < canonical.BattleStart) ||
+				(battle.BattleEnd == canonical.BattleEnd && battle.BattleStart == canonical.BattleStart && battle.BreadBattleSeed < canonical.BreadBattleSeed) {
+				canonical = battle
+			}
+		case !battleActive && !canonicalActive:
+			if battle.BattleStart < canonical.BattleStart ||
+				(battle.BattleStart == canonical.BattleStart && battle.BattleEnd < canonical.BattleEnd) ||
+				(battle.BattleStart == canonical.BattleStart && battle.BattleEnd == canonical.BattleEnd && battle.BreadBattleSeed < canonical.BreadBattleSeed) {
+				canonical = battle
+			}
+		}
+	}
+	return &canonical
 }
 
 func collectStationBattleSnapshot(stationId string, now int64) stationBattleSnapshot {
 	battles := getKnownStationBattles(stationId, now)
 	return stationBattleSnapshot{
 		Battles:   battles,
+		Canonical: canonicalStationBattleFromSlice(battles, now),
 		Signature: stationBattleSignatureFromSlice(battles),
 	}
 }

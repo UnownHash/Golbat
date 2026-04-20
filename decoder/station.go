@@ -94,11 +94,11 @@ func (station *Station) snapshotOldValues() {
 	now := time.Now().Unix()
 	snapshot := collectStationBattleSnapshot(station.Id, now)
 	topBattleSeed := int64(0)
-	if len(snapshot.Battles) > 0 {
-		topBattleSeed = snapshot.Battles[0].BreadBattleSeed
+	if snapshot.Canonical != nil {
+		topBattleSeed = snapshot.Canonical.BreadBattleSeed
 	}
 	station.oldValues = StationOldValues{
-		HasTopBattle:        len(snapshot.Battles) > 0,
+		HasTopBattle:        snapshot.Canonical != nil,
 		TopBattleSeed:       topBattleSeed,
 		EndTime:             station.EndTime,
 		BattleListSignature: snapshot.Signature,
