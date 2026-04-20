@@ -158,57 +158,55 @@ func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
 func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 	now := time.Now().Unix()
 	cases := []struct {
-		name     string
-		inserted []StationBattleData
-		expected []int64
+		name      string
+		inserted  []StationBattleData
+		expected  []int64
+		canonical int64
 	}{
 		{
-			name: "drops earlier end after later observation",
+			name: "keeps active battles sorted by latest end",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
 				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
 			},
-			expected: []int64{2},
+			expected:  []int64{2, 1},
+			canonical: 1,
 		},
 		{
-			name: "replaces equal end battle",
+			name: "keeps equal end battles and prefers earlier start as canonical",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 1, now-120, now+3600, 527),
 				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
 			},
-			expected: []int64{2},
+			expected:  []int64{2, 1},
+			canonical: 1,
 		},
 		{
-			name: "replaces longer active battle when shorter observed",
+			name: "keeps future battle alongside active battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 3, now-120, now+7200, 374),
-				testStationBattle("station-1", 2, 1, now-60, now+1800, 527),
+				testStationBattle("station-1", 2, 1, now+600, now+9000, 527),
 			},
-			expected: []int64{2},
+			expected:  []int64{2, 1},
+			canonical: 1,
 		},
 		{
-			name: "first battle uses latest end when newer active lasts longer",
+			name: "keeps future battle when active battle is observed later",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
-				testStationBattle("station-1", 2, 2, now-120, now+7200, 133),
-			},
-			expected: []int64{2},
-		},
-		{
-			name: "drops future battle that would sort ahead of active battle",
-			inserted: []StationBattleData{
-				testStationBattle("station-1", 1, 3, now-120, now+1800, 374),
-				testStationBattle("station-1", 2, 2, now+600, now+7200, 527),
-			},
-			expected: []int64{1},
-		},
-		{
-			name: "first battle follows latest active observation",
-			inserted: []StationBattleData{
-				testStationBattle("station-1", 2, 2, now-120, now+7200, 133),
+				testStationBattle("station-1", 2, 2, now+600, now+7200, 133),
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
 			},
-			expected: []int64{1},
+			expected:  []int64{2, 1},
+			canonical: 1,
+		},
+		{
+			name: "future-only battles use the soonest upcoming battle as canonical",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 2, 2, now+1800, now+7200, 527),
+				testStationBattle("station-1", 1, 3, now+600, now+3600, 374),
+			},
+			expected:  []int64{2, 1},
+			canonical: 1,
 		},
 	}
 
@@ -228,11 +226,15 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 					t.Fatalf("expected seed %d at index %d, got %+v", expectedSeed, i, battles)
 				}
 			}
+			canonical := canonicalStationBattleFromSlice(battles, now)
+			if canonical == nil || canonical.BreadBattleSeed != tc.canonical {
+				t.Fatalf("expected canonical seed %d, got %+v", tc.canonical, canonical)
+			}
 		})
 	}
 }
 
-func TestBuildStationResultUsesFirstCachedBattleAsTopBattle(t *testing.T) {
+func TestBuildStationResultUsesCanonicalBattleAsTopBattle(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 
@@ -271,10 +273,10 @@ func TestBuildStationResultUsesFirstCachedBattleAsTopBattle(t *testing.T) {
 
 	result := BuildStationResult(station)
 	if result.BattlePokemonId.ValueOrZero() != 527 {
-		t.Fatalf("expected first cached pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
+		t.Fatalf("expected canonical pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
 	}
-	if len(result.Battles) != 1 {
-		t.Fatalf("expected conflicting active battle to be evicted, got %d", len(result.Battles))
+	if len(result.Battles) != 2 {
+		t.Fatalf("expected both known battles to remain, got %d", len(result.Battles))
 	}
 }
 
