@@ -11,7 +11,6 @@ import (
 
 	"golbat/config"
 	"golbat/db"
-	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -612,11 +611,7 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
-			BattleLevel:     null.IntFrom(2),
-			BattleStart:     null.IntFrom(now - 60),
-			BattleEnd:       null.IntFrom(now + 3600),
-			BattlePokemonId: null.IntFrom(133),
+			Id: "station-1",
 		},
 	}
 
@@ -632,8 +627,9 @@ func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
 	if len(battles) != 1 || battles[0].BreadBattleSeed != 0 {
 		t.Fatalf("expected zero-seed battle to be cached, got %+v", battles)
 	}
-	if station.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected zero-seed battle projection, got %d", station.BattlePokemonId.ValueOrZero())
+	result := BuildStationResult(station)
+	if result.BattlePokemonId.ValueOrZero() != 133 {
+		t.Fatalf("expected zero-seed battle in compatibility fields, got %+v", result)
 	}
 }
 
@@ -642,17 +638,13 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
-			Name:            "Station",
-			Lat:             1,
-			Lon:             2,
-			StartTime:       now - 3600,
-			EndTime:         now + 3600,
-			Updated:         now,
-			BattleLevel:     null.IntFrom(2),
-			BattleStart:     null.IntFrom(now - 60),
-			BattleEnd:       null.IntFrom(now + 3600),
-			BattlePokemonId: null.IntFrom(133),
+			Id:        "station-1",
+			Name:      "Station",
+			Lat:       1,
+			Lon:       2,
+			StartTime: now - 3600,
+			EndTime:   now + 3600,
+			Updated:   now,
 		},
 	}
 
@@ -673,10 +665,6 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 	if !hasLoadedStationBattles(station.Id) {
 		t.Fatal("expected missing battle details to leave station loaded")
 	}
-	if station.BattleEnd.Valid || station.BattlePokemonId.Valid {
-		t.Fatalf("expected station projection cleared, got %+v", station)
-	}
-
 	result := BuildStationResult(station)
 	if result.BattleEnd.Valid || result.BattlePokemonId.Valid || len(result.Battles) != 0 {
 		t.Fatalf("expected API result without stale battles, got %+v", result)
@@ -749,82 +737,6 @@ func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t 
 	state, ok := stationBattleCache.Load(station.Id)
 	if !ok || !state.Loaded || len(state.Battles) != 0 {
 		t.Fatalf("expected expired loaded state to be collapsed to empty, got %+v ok=%t", state, ok)
-	}
-}
-
-func TestSaveStationRecordRefreshesCompatibilityFieldsFromCanonicalBattle(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	stationId := "station-save-refresh"
-	station := &Station{
-		StationData: StationData{
-			Id:                    stationId,
-			Name:                  "Station",
-			Lat:                   1,
-			Lon:                   2,
-			EndTime:               now + 7200,
-			Updated:               now - 3600,
-			BattleLevel:           null.IntFrom(1),
-			BattleStart:           null.IntFrom(now - 7200),
-			BattleEnd:             null.IntFrom(now - 60),
-			BattlePokemonId:       null.IntFrom(527),
-			TotalStationedPokemon: null.IntFrom(1),
-		},
-	}
-	storeStationBattles(stationId, []StationBattleData{
-		{
-			BreadBattleSeed: 1,
-			StationId:       stationId,
-			BattleLevel:     1,
-			BattleStart:     now - 7200,
-			BattleEnd:       now - 60,
-			BattlePokemonId: null.IntFrom(527),
-		},
-		{
-			BreadBattleSeed: 2,
-			StationId:       stationId,
-			BattleLevel:     3,
-			BattleStart:     now + 600,
-			BattleEnd:       now + 7200,
-			BattlePokemonId: null.IntFrom(374),
-		},
-	})
-	station.snapshotOldValues()
-	station.SetTotalStationedPokemon(null.IntFrom(2))
-
-	previousStationQueue := stationQueue
-	previousStationBattleQueue := stationBattleQueue
-	previousStats := statsCollector
-	statsCollector = stats_collector.NewNoopStatsCollector()
-	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
-		Name:      "station-test",
-		BatchSize: 10,
-		Limiter:   writebehind.NewSharedLimiter(1),
-		Db:        db.DbDetails{},
-		Stats:     statsCollector,
-		FlushFunc: func(context.Context, db.DbDetails, []StationData) error { return nil },
-		KeyFunc:   func(d StationData) string { return d.Id },
-	})
-	stationBattleQueue = nil
-	defer func() {
-		stationQueue = previousStationQueue
-		stationBattleQueue = previousStationBattleQueue
-		statsCollector = previousStats
-	}()
-
-	saveStationRecord(context.Background(), db.DbDetails{}, station)
-
-	if station.BattlePokemonId.ValueOrZero() != 374 {
-		t.Fatalf("expected compatibility fields to refresh to canonical battle, got %+v", station)
-	}
-	if station.BattleLevel.ValueOrZero() != 3 {
-		t.Fatalf("expected canonical battle level 3, got %+v", station.BattleLevel)
-	}
-	if station.BattleStart.ValueOrZero() != now+600 || station.BattleEnd.ValueOrZero() != now+7200 {
-		t.Fatalf("expected canonical battle window [%d,%d], got start=%d end=%d", now+600, now+7200, station.BattleStart.ValueOrZero(), station.BattleEnd.ValueOrZero())
-	}
-	if station.TotalStationedPokemon.ValueOrZero() != 2 {
-		t.Fatalf("expected unrelated station change to be preserved, got %+v", station.TotalStationedPokemon)
 	}
 }
 
@@ -1013,13 +925,9 @@ func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
 	stationId := "station-hydration-lookup"
 	station := &Station{
 		StationData: StationData{
-			Id:              stationId,
-			Lat:             1,
-			Lon:             2,
-			BattleLevel:     null.IntFrom(1),
-			BattleStart:     null.IntFrom(now - 600),
-			BattleEnd:       null.IntFrom(now + 600),
-			BattlePokemonId: null.IntFrom(527),
+			Id:  stationId,
+			Lat: 1,
+			Lon: 2,
 		},
 	}
 	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
@@ -1029,9 +937,9 @@ func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
 		FortType:           STATION,
 		Lat:                station.Lat,
 		Lon:                station.Lon,
-		BattleEndTimestamp: station.BattleEnd.ValueOrZero(),
-		BattleLevel:        int8(station.BattleLevel.ValueOrZero()),
-		BattlePokemonId:    int16(station.BattlePokemonId.ValueOrZero()),
+		BattleEndTimestamp: now + 600,
+		BattleLevel:        1,
+		BattlePokemonId:    527,
 	})
 
 	previousHydrate := hydrateStationBattlesForStationFunc

@@ -157,14 +157,11 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 	now := time.Now().Unix()
 	if battleDetail == nil {
 		storeStationBattles(station.Id, nil)
-		applyStationBattleProjection(station, nil)
 		return
 	}
 	if battle := stationBattleFromProto(station.Id, battleDetail, now); battle != nil {
 		upsertCachedStationBattle(*battle, now)
 	}
-
-	applyStationBattleProjection(station, canonicalStationBattleFromSlice(getKnownStationBattles(station.Id, now), now))
 }
 
 func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
@@ -348,42 +345,6 @@ func collectStationBattleSnapshot(stationId string, now int64) stationBattleSnap
 		Canonical: canonicalStationBattleFromSlice(battles, now),
 		Signature: stationBattleSignatureFromSlice(battles),
 	}
-}
-
-func clearStationBattleProjection(station *Station) {
-	station.SetBattleLevel(null.Int{})
-	station.SetBattleStart(null.Int{})
-	station.SetBattleEnd(null.Int{})
-	station.SetBattlePokemonId(null.Int{})
-	station.SetBattlePokemonForm(null.Int{})
-	station.SetBattlePokemonCostume(null.Int{})
-	station.SetBattlePokemonGender(null.Int{})
-	station.SetBattlePokemonAlignment(null.Int{})
-	station.SetBattlePokemonBreadMode(null.Int{})
-	station.SetBattlePokemonMove1(null.Int{})
-	station.SetBattlePokemonMove2(null.Int{})
-	station.SetBattlePokemonStamina(null.Int{})
-	station.SetBattlePokemonCpMultiplier(null.Float{})
-}
-
-func applyStationBattleProjection(station *Station, battle *StationBattleData) {
-	if battle == nil {
-		clearStationBattleProjection(station)
-		return
-	}
-	station.SetBattleLevel(null.IntFrom(int64(battle.BattleLevel)))
-	station.SetBattleStart(null.IntFrom(battle.BattleStart))
-	station.SetBattleEnd(null.IntFrom(battle.BattleEnd))
-	station.SetBattlePokemonId(battle.BattlePokemonId)
-	station.SetBattlePokemonForm(battle.BattlePokemonForm)
-	station.SetBattlePokemonCostume(battle.BattlePokemonCostume)
-	station.SetBattlePokemonGender(battle.BattlePokemonGender)
-	station.SetBattlePokemonAlignment(battle.BattlePokemonAlignment)
-	station.SetBattlePokemonBreadMode(battle.BattlePokemonBreadMode)
-	station.SetBattlePokemonMove1(battle.BattlePokemonMove1)
-	station.SetBattlePokemonMove2(battle.BattlePokemonMove2)
-	station.SetBattlePokemonStamina(battle.BattlePokemonStamina)
-	station.SetBattlePokemonCpMultiplier(battle.BattlePokemonCpMultiplier)
 }
 
 func stationBattleSignatureFromSlice(battles []StationBattleData) string {
