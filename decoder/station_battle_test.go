@@ -11,6 +11,7 @@ import (
 
 	"golbat/config"
 	"golbat/db"
+	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -748,6 +749,82 @@ func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t 
 	state, ok := stationBattleCache.Load(station.Id)
 	if !ok || !state.Loaded || len(state.Battles) != 0 {
 		t.Fatalf("expected expired loaded state to be collapsed to empty, got %+v ok=%t", state, ok)
+	}
+}
+
+func TestSaveStationRecordRefreshesCompatibilityFieldsFromCanonicalBattle(t *testing.T) {
+	initStationBattleCache()
+	now := time.Now().Unix()
+	stationId := "station-save-refresh"
+	station := &Station{
+		StationData: StationData{
+			Id:                    stationId,
+			Name:                  "Station",
+			Lat:                   1,
+			Lon:                   2,
+			EndTime:               now + 7200,
+			Updated:               now - 3600,
+			BattleLevel:           null.IntFrom(1),
+			BattleStart:           null.IntFrom(now - 7200),
+			BattleEnd:             null.IntFrom(now - 60),
+			BattlePokemonId:       null.IntFrom(527),
+			TotalStationedPokemon: null.IntFrom(1),
+		},
+	}
+	storeStationBattles(stationId, []StationBattleData{
+		{
+			BreadBattleSeed: 1,
+			StationId:       stationId,
+			BattleLevel:     1,
+			BattleStart:     now - 7200,
+			BattleEnd:       now - 60,
+			BattlePokemonId: null.IntFrom(527),
+		},
+		{
+			BreadBattleSeed: 2,
+			StationId:       stationId,
+			BattleLevel:     3,
+			BattleStart:     now + 600,
+			BattleEnd:       now + 7200,
+			BattlePokemonId: null.IntFrom(374),
+		},
+	})
+	station.snapshotOldValues()
+	station.SetTotalStationedPokemon(null.IntFrom(2))
+
+	previousStationQueue := stationQueue
+	previousStationBattleQueue := stationBattleQueue
+	previousStats := statsCollector
+	statsCollector = stats_collector.NewNoopStatsCollector()
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
+		Name:      "station-test",
+		BatchSize: 10,
+		Limiter:   writebehind.NewSharedLimiter(1),
+		Db:        db.DbDetails{},
+		Stats:     statsCollector,
+		FlushFunc: func(context.Context, db.DbDetails, []StationData) error { return nil },
+		KeyFunc:   func(d StationData) string { return d.Id },
+	})
+	stationBattleQueue = nil
+	defer func() {
+		stationQueue = previousStationQueue
+		stationBattleQueue = previousStationBattleQueue
+		statsCollector = previousStats
+	}()
+
+	saveStationRecord(context.Background(), db.DbDetails{}, station)
+
+	if station.BattlePokemonId.ValueOrZero() != 374 {
+		t.Fatalf("expected compatibility fields to refresh to canonical battle, got %+v", station)
+	}
+	if station.BattleLevel.ValueOrZero() != 3 {
+		t.Fatalf("expected canonical battle level 3, got %+v", station.BattleLevel)
+	}
+	if station.BattleStart.ValueOrZero() != now+600 || station.BattleEnd.ValueOrZero() != now+7200 {
+		t.Fatalf("expected canonical battle window [%d,%d], got start=%d end=%d", now+600, now+7200, station.BattleStart.ValueOrZero(), station.BattleEnd.ValueOrZero())
+	}
+	if station.TotalStationedPokemon.ValueOrZero() != 2 {
+		t.Fatalf("expected unrelated station change to be preserved, got %+v", station.TotalStationedPokemon)
 	}
 }
 
