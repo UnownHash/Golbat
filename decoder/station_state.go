@@ -16,13 +16,10 @@ import (
 )
 
 // stationSelectColumns defines the columns for station queries.
-// Used by both single-row and bulk load queries to keep them in sync.
+// The legacy battle_* projection lives in station_battle and is derived at read time,
+// so those compatibility columns are intentionally excluded here.
 const stationSelectColumns = `id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete,
-	is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end,
-	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
-	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
-	battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax,
-	stationed_pokemon`
+	is_battle_available, is_inactive, updated, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon`
 
 type StationWebhook struct {
 	Id                     string                 `json:"id"`
@@ -172,7 +169,6 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
 	snapshot := collectStationBattleSnapshot(station.Id, now)
-	applyStationBattleProjection(station, snapshot.Canonical)
 	battleListChanged := station.oldValues.BattleListSignature != snapshot.Signature
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
@@ -234,8 +230,8 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 	if isNewRecord {
 		res, err := db.GeneralDb.NamedExecContext(ctx,
 			`
-			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end, battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender, battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2, battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
-			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_start,:battle_end,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:battle_pokemon_bread_mode,:battle_pokemon_move_1,:battle_pokemon_move_2,:battle_pokemon_stamina,:battle_pokemon_cp_multiplier,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
+			INSERT INTO station (id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete, is_battle_available, is_inactive, updated, total_stationed_pokemon, total_stationed_gmax, stationed_pokemon)
+			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
 			`, station)
 
 		statsCollector.IncDbQuery("insert station", err)
@@ -258,19 +254,6 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 			    is_battle_available = :is_battle_available,
 			    is_inactive = :is_inactive,
 			    updated = :updated,
-			    battle_level = :battle_level,
-			    battle_start = :battle_start,
-			    battle_end = :battle_end,
-			    battle_pokemon_id = :battle_pokemon_id,
-			    battle_pokemon_form = :battle_pokemon_form,
-			    battle_pokemon_costume = :battle_pokemon_costume,
-			    battle_pokemon_gender = :battle_pokemon_gender,
-			    battle_pokemon_alignment = :battle_pokemon_alignment,
-			    battle_pokemon_bread_mode = :battle_pokemon_bread_mode,
-			    battle_pokemon_move_1 = :battle_pokemon_move_1,
-			    battle_pokemon_move_2 = :battle_pokemon_move_2,
-			    battle_pokemon_stamina = :battle_pokemon_stamina,
-			    battle_pokemon_cp_multiplier = :battle_pokemon_cp_multiplier,
 			    total_stationed_pokemon = :total_stationed_pokemon,
 			    total_stationed_gmax = :total_stationed_gmax,
 			    stationed_pokemon = :stationed_pokemon
