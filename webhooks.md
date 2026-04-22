@@ -313,7 +313,7 @@ Each value is an array of `PokemonEntry` objects (from
 | `pokemon`    | int     | Pokédex ID of the ranked form — may differ from the current `pokemon_id` if an evolution was projected. |
 | `form`       | int     | Form ID. Omitted (`omitempty`) when `0`. |
 | `evolution`  | int     | Temporary-evolution (mega/primal) ID. Omitted when `0`. |
-| `cap`        | float64 | **Level** cap applied when computing this entry (e.g. `40`, `50`, or a half-level like `40.5`). `0` means no level cap was applied (this entry maximises at the Pokémon's natural max level). The field is declared `float64` in the Go source (`gohbem@v0.12.0/structs.go:78`), so half-levels can appear; whole-level values emit as bare integers in JSON (`50`, not `50.0`), which makes the field easy to mistake for an int. Omitted when `0`. |
+| `cap`        | float64 | **Level** cap applied when computing this entry (e.g. `40`, `50`). The field is declared `float64` in the Go source (`gohbem@v0.12.0/structs.go:78`), but all values ever assigned to it come from `Ohbem.LevelCaps []int` or the `MaxLevel = 100` constant — so in practice it is always a whole integer, and JSON emits it as one (`50`, not `50.0`). `0` means no level cap was applied. Omitted when `0`. |
 | `value`      | float64 | Comparator score used for ranking — typically `⌊Attack × Defense × Stamina⌋`. Omitted when `0`. |
 | `level`      | float64 | Level (half-level allowed, e.g. `29.5`) at which the Pokémon maximises `value` for this league. |
 | `cp`         | int     | CP at `level`. Omitted when `0`. |
