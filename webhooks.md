@@ -313,13 +313,18 @@ Each value is an array of `PokemonEntry` objects (from
 | `pokemon`    | int     | Pokédex ID of the ranked form — may differ from the current `pokemon_id` if an evolution was projected. |
 | `form`       | int     | Form ID. Omitted (`omitempty`) when `0`. |
 | `evolution`  | int     | Temporary-evolution (mega/primal) ID. Omitted when `0`. |
-| `cap`        | float64 | League CP cap used when computing this entry. Omitted when `0`. |
-| `value`      | float64 | Comparator score used for ranking (Attack × Defense × Stamina product). Omitted when `0`. |
+| `cap`        | float64 | **Level** cap applied when computing this entry (e.g. `40`, `50`, or a half-level like `40.5`). `0` means no level cap was applied (this entry maximises at the Pokémon's natural max level). The field is declared `float64` in the Go source (`gohbem@v0.12.0/structs.go:78`), so half-levels can appear; whole-level values emit as bare integers in JSON (`50`, not `50.0`), which makes the field easy to mistake for an int. Omitted when `0`. |
+| `value`      | float64 | Comparator score used for ranking — typically `⌊Attack × Defense × Stamina⌋`. Omitted when `0`. |
 | `level`      | float64 | Level (half-level allowed, e.g. `29.5`) at which the Pokémon maximises `value` for this league. |
 | `cp`         | int     | CP at `level`. Omitted when `0`. |
 | `percentage` | float64 | Rank value as a fraction of the best possible (0.0–1.0). |
 | `rank`       | int16   | Integer rank within the league (1 = best). |
-| `capped`     | bool    | `true` if the Pokémon could not reach the league cap at level 50 — i.e. `cp` is bounded by level, not by the cap. Omitted when `false`. |
+| `capped`     | bool    | `true` if the ranking row duplicates a previous row that had a lower level cap — i.e. the Pokémon cannot improve past an earlier level cap under this league's CP limit. Omitted when `false`. |
+
+> Do **not** confuse `PokemonEntry.cap` (the **level** cap, emitted in webhook
+> output) with `League.Cap` (the **CP** cap, an `int` in the gohbem
+> configuration struct at `structs.go:43`). They share the name but are
+> different quantities.
 
 Example:
 
@@ -328,7 +333,7 @@ Example:
   "great": [
     {
       "pokemon": 68,
-      "cap": 1500,
+      "cap": 50,
       "value": 2298123,
       "level": 29.5,
       "cp": 1498,
@@ -339,7 +344,9 @@ Example:
   "ultra": [
     {
       "pokemon": 68,
-      "level": 50,
+      "cap": 40,
+      "level": 40,
+      "cp": 2354,
       "percentage": 0.8733,
       "rank": 128,
       "capped": true
