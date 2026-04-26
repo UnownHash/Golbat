@@ -43,21 +43,14 @@ func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
 		},
 	)
 
-	expectedQuery := "DELETE sb FROM station_battle sb LEFT JOIN (" +
-		"SELECT ? AS station_id, ? AS bread_battle_seed UNION ALL " +
-		"SELECT ? AS station_id, ? AS bread_battle_seed UNION ALL " +
-		"SELECT ? AS station_id, ? AS bread_battle_seed" +
-		") keep_rows ON keep_rows.station_id = sb.station_id AND keep_rows.bread_battle_seed = sb.bread_battle_seed " +
-		"WHERE sb.station_id IN (?,?,?) AND keep_rows.station_id IS NULL"
+	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?,?,?) AND bread_battle_seed NOT IN (?,?,?)"
 	if query != expectedQuery {
 		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
 	}
 
 	expectedArgs := []any{
-		"station-1", int64(1),
-		"station-1", int64(2),
-		"station-3", int64(3),
 		"station-1", "station-2", "station-3",
+		int64(1), int64(2), int64(3),
 	}
 	if len(args) != len(expectedArgs) {
 		t.Fatalf("expected %d args, got %d: %+v", len(expectedArgs), len(args), args)
@@ -283,7 +276,7 @@ func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 		testStationBattle(station.Id, 1, 1, now-60, now+1800, 527),
 		testStationBattle(station.Id, 2, 2, now-60, now+3600, 133),
 	})
-	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station.Id, now))
+	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, now))
 
 	lookup, ok := fortLookupCache.Load(station.Id)
 	if !ok {
@@ -328,11 +321,10 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 		BattlePokemonId: null.IntFrom(527),
 	}, now)
 	station.oldValues = StationOldValues{
-		EndTime:             station.EndTime,
-		BattleListSignature: "",
+		EndTime: station.EndTime,
 	}
 
-	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station.Id, now), station.IsNewRecord())
+	createStationWebhooksWithBattles(station, getKnownStationBattles(station.Id, now), station.IsNewRecord())
 	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
 		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
 	}
@@ -366,11 +358,10 @@ func TestCreateStationWebhooksUsesTopBattleForFlatFields(t *testing.T) {
 	upsertCachedStationBattle(testStationBattle(station.Id, 2, 2, now-60, now+3600, 133), now)
 	upsertCachedStationBattle(testStationBattle(station.Id, 1, 1, now-60, now+1800, 527), now)
 	station.oldValues = StationOldValues{
-		EndTime:             station.EndTime,
-		BattleListSignature: "",
+		EndTime: station.EndTime,
 	}
 
-	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station.Id, now), station.IsNewRecord())
+	createStationWebhooksWithBattles(station, getKnownStationBattles(station.Id, now), station.IsNewRecord())
 	if len(sender.payloads) != 1 {
 		t.Fatalf("expected one max_battle payload, got %d", len(sender.payloads))
 	}
@@ -421,7 +412,7 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 	}
 }
 
-func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t *testing.T) {
+func TestBuildStationResultSuppressesStaleBattleAfterExpiredHydratedCache(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 	station := &Station{

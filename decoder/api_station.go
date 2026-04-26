@@ -34,7 +34,7 @@ type ApiStationResult struct {
 
 func BuildStationResult(station *Station) ApiStationResult {
 	now := time.Now().Unix()
-	snapshot := collectStationBattleSnapshot(station.Id, now)
+	battles := getKnownStationBattles(station.Id, now)
 
 	result := ApiStationResult{
 		Id:                    station.Id,
@@ -48,8 +48,8 @@ func BuildStationResult(station *Station) ApiStationResult {
 		TotalStationedPokemon: station.TotalStationedPokemon,
 		TotalStationedGmax:    station.TotalStationedGmax,
 		StationedPokemon:      station.StationedPokemon,
-		Battles:               snapshot.Battles,
+		Battles:               battles,
 	}
-	topStationBattleProjection(snapshot).applyToApiStationResult(&result)
+	applyTopStationBattleToApiStationResult(&result, battles)
 	return result
 }

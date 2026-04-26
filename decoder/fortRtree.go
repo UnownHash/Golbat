@@ -204,18 +204,18 @@ func updateGymLookup(gym *Gym) {
 }
 
 func updateStationLookup(station *Station) {
-	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station.Id, time.Now().Unix()))
+	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, time.Now().Unix()))
 }
 
-func updateStationLookupFromSnapshot(station *Station, snapshot stationBattleSnapshot) {
-	battles := buildFortLookupStationBattlesFromSlice(snapshot.Battles)
+func updateStationLookupWithBattles(station *Station, stationBattles []StationBattleData) {
+	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
 		FortType:       STATION,
 		Lat:            station.Lat,
 		Lon:            station.Lon,
 		StationBattles: battles,
 	}
-	topStationBattleProjection(snapshot).applyToFortLookup(&lookup)
+	applyTopStationBattleToFortLookup(&lookup, stationBattles)
 	fortLookupCache.Store(station.Id, lookup)
 }
 

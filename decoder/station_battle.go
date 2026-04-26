@@ -3,7 +3,6 @@ package decoder
 import (
 	"context"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -45,11 +44,6 @@ type FortLookupStationBattle struct {
 type stationBattleWrite struct {
 	StationId string
 	Battles   []StationBattleData
-}
-
-type stationBattleSnapshot struct {
-	Battles   []StationBattleData
-	Signature string
 }
 
 type stationBattleState struct {
@@ -298,144 +292,102 @@ func enforceObservedStationBattleTopInvariant(battles []StationBattleData, obser
 	return battles
 }
 
-type stationBattleProjection struct {
-	BattleLevel               null.Int
-	BattleStart               null.Int
-	BattleEnd                 null.Int
-	BattlePokemonId           null.Int
-	BattlePokemonForm         null.Int
-	BattlePokemonCostume      null.Int
-	BattlePokemonGender       null.Int
-	BattlePokemonAlignment    null.Int
-	BattlePokemonBreadMode    null.Int
-	BattlePokemonMove1        null.Int
-	BattlePokemonMove2        null.Int
-	BattlePokemonStamina      null.Int
-	BattlePokemonCpMultiplier null.Float
-}
-
-func stationBattleProjectionFromData(battle *StationBattleData) stationBattleProjection {
+func stationBattleLevel(battle *StationBattleData) null.Int {
 	if battle == nil {
-		return stationBattleProjection{}
+		return null.Int{}
 	}
-	return stationBattleProjection{
-		BattleLevel:               null.IntFrom(int64(battle.BattleLevel)),
-		BattleStart:               null.IntFrom(battle.BattleStart),
-		BattleEnd:                 null.IntFrom(battle.BattleEnd),
-		BattlePokemonId:           battle.BattlePokemonId,
-		BattlePokemonForm:         battle.BattlePokemonForm,
-		BattlePokemonCostume:      battle.BattlePokemonCostume,
-		BattlePokemonGender:       battle.BattlePokemonGender,
-		BattlePokemonAlignment:    battle.BattlePokemonAlignment,
-		BattlePokemonBreadMode:    battle.BattlePokemonBreadMode,
-		BattlePokemonMove1:        battle.BattlePokemonMove1,
-		BattlePokemonMove2:        battle.BattlePokemonMove2,
-		BattlePokemonStamina:      battle.BattlePokemonStamina,
-		BattlePokemonCpMultiplier: battle.BattlePokemonCpMultiplier,
+	return null.IntFrom(int64(battle.BattleLevel))
+}
+
+func stationBattleStart(battle *StationBattleData) null.Int {
+	if battle == nil {
+		return null.Int{}
 	}
+	return null.IntFrom(battle.BattleStart)
 }
 
-func topStationBattleProjection(snapshot stationBattleSnapshot) stationBattleProjection {
-	return stationBattleProjectionFromData(topStationBattleFromSlice(snapshot.Battles))
-}
-
-func (projection stationBattleProjection) applyToStation(station *Station) {
-	station.SetBattleLevel(projection.BattleLevel)
-	station.SetBattleStart(projection.BattleStart)
-	station.SetBattleEnd(projection.BattleEnd)
-	station.SetBattlePokemonId(projection.BattlePokemonId)
-	station.SetBattlePokemonForm(projection.BattlePokemonForm)
-	station.SetBattlePokemonCostume(projection.BattlePokemonCostume)
-	station.SetBattlePokemonGender(projection.BattlePokemonGender)
-	station.SetBattlePokemonAlignment(projection.BattlePokemonAlignment)
-	station.SetBattlePokemonBreadMode(projection.BattlePokemonBreadMode)
-	station.SetBattlePokemonMove1(projection.BattlePokemonMove1)
-	station.SetBattlePokemonMove2(projection.BattlePokemonMove2)
-	station.SetBattlePokemonStamina(projection.BattlePokemonStamina)
-	station.SetBattlePokemonCpMultiplier(projection.BattlePokemonCpMultiplier)
-}
-
-func (projection stationBattleProjection) applyToApiStationResult(result *ApiStationResult) {
-	result.BattleLevel = projection.BattleLevel
-	result.BattleStart = projection.BattleStart
-	result.BattleEnd = projection.BattleEnd
-	result.BattlePokemonId = projection.BattlePokemonId
-	result.BattlePokemonForm = projection.BattlePokemonForm
-	result.BattlePokemonCostume = projection.BattlePokemonCostume
-	result.BattlePokemonGender = projection.BattlePokemonGender
-	result.BattlePokemonAlignment = projection.BattlePokemonAlignment
-	result.BattlePokemonBreadMode = projection.BattlePokemonBreadMode
-	result.BattlePokemonMove1 = projection.BattlePokemonMove1
-	result.BattlePokemonMove2 = projection.BattlePokemonMove2
-}
-
-func (projection stationBattleProjection) applyToStationWebhook(hook *StationWebhook) {
-	hook.BattleLevel = projection.BattleLevel
-	hook.BattleStart = projection.BattleStart
-	hook.BattleEnd = projection.BattleEnd
-	hook.BattlePokemonId = projection.BattlePokemonId
-	hook.BattlePokemonForm = projection.BattlePokemonForm
-	hook.BattlePokemonCostume = projection.BattlePokemonCostume
-	hook.BattlePokemonGender = projection.BattlePokemonGender
-	hook.BattlePokemonAlignment = projection.BattlePokemonAlignment
-	hook.BattlePokemonBreadMode = projection.BattlePokemonBreadMode
-	hook.BattlePokemonMove1 = projection.BattlePokemonMove1
-	hook.BattlePokemonMove2 = projection.BattlePokemonMove2
-}
-
-func (projection stationBattleProjection) applyToFortLookup(lookup *FortLookup) {
-	lookup.BattleEndTimestamp = projection.BattleEnd.ValueOrZero()
-	lookup.BattleLevel = int8(projection.BattleLevel.ValueOrZero())
-	lookup.BattlePokemonId = int16(projection.BattlePokemonId.ValueOrZero())
-	lookup.BattlePokemonForm = int16(projection.BattlePokemonForm.ValueOrZero())
-}
-
-func collectStationBattleSnapshot(stationId string, now int64) stationBattleSnapshot {
-	battles := getKnownStationBattles(stationId, now)
-	return stationBattleSnapshot{
-		Battles:   battles,
-		Signature: stationBattleSignatureFromSlice(battles),
+func stationBattleEnd(battle *StationBattleData) null.Int {
+	if battle == nil {
+		return null.Int{}
 	}
+	return null.IntFrom(battle.BattleEnd)
 }
 
-func stationBattleSignatureFromSlice(battles []StationBattleData) string {
-	if len(battles) == 0 {
-		return ""
+func applyTopStationBattleToStation(station *Station, battles []StationBattleData) {
+	battle := topStationBattleFromSlice(battles)
+	station.SetBattleLevel(stationBattleLevel(battle))
+	station.SetBattleStart(stationBattleStart(battle))
+	station.SetBattleEnd(stationBattleEnd(battle))
+	if battle == nil {
+		station.SetBattlePokemonId(null.Int{})
+		station.SetBattlePokemonForm(null.Int{})
+		station.SetBattlePokemonCostume(null.Int{})
+		station.SetBattlePokemonGender(null.Int{})
+		station.SetBattlePokemonAlignment(null.Int{})
+		station.SetBattlePokemonBreadMode(null.Int{})
+		station.SetBattlePokemonMove1(null.Int{})
+		station.SetBattlePokemonMove2(null.Int{})
+		station.SetBattlePokemonStamina(null.Int{})
+		station.SetBattlePokemonCpMultiplier(null.Float{})
+		return
 	}
-	var builder strings.Builder
-	for _, battle := range battles {
-		builder.WriteString(strconv.FormatInt(battle.BreadBattleSeed, 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(int64(battle.BattleLevel), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattleStart, 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattleEnd, 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonId.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonForm.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonCostume.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonGender.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonAlignment.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonBreadMode.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonMove1.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatBool(battle.BattlePokemonMove2.Valid))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatBool(battle.BattlePokemonCpMultiplier.Valid))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatInt(battle.BattlePokemonMove2.ValueOrZero(), 10))
-		builder.WriteByte(':')
-		builder.WriteString(strconv.FormatFloat(battle.BattlePokemonCpMultiplier.ValueOrZero(), 'g', -1, 64))
-		builder.WriteByte(';')
+	station.SetBattlePokemonId(battle.BattlePokemonId)
+	station.SetBattlePokemonForm(battle.BattlePokemonForm)
+	station.SetBattlePokemonCostume(battle.BattlePokemonCostume)
+	station.SetBattlePokemonGender(battle.BattlePokemonGender)
+	station.SetBattlePokemonAlignment(battle.BattlePokemonAlignment)
+	station.SetBattlePokemonBreadMode(battle.BattlePokemonBreadMode)
+	station.SetBattlePokemonMove1(battle.BattlePokemonMove1)
+	station.SetBattlePokemonMove2(battle.BattlePokemonMove2)
+	station.SetBattlePokemonStamina(battle.BattlePokemonStamina)
+	station.SetBattlePokemonCpMultiplier(battle.BattlePokemonCpMultiplier)
+}
+
+func applyTopStationBattleToApiStationResult(result *ApiStationResult, battles []StationBattleData) {
+	battle := topStationBattleFromSlice(battles)
+	result.BattleLevel = stationBattleLevel(battle)
+	result.BattleStart = stationBattleStart(battle)
+	result.BattleEnd = stationBattleEnd(battle)
+	if battle == nil {
+		return
 	}
-	return builder.String()
+	result.BattlePokemonId = battle.BattlePokemonId
+	result.BattlePokemonForm = battle.BattlePokemonForm
+	result.BattlePokemonCostume = battle.BattlePokemonCostume
+	result.BattlePokemonGender = battle.BattlePokemonGender
+	result.BattlePokemonAlignment = battle.BattlePokemonAlignment
+	result.BattlePokemonBreadMode = battle.BattlePokemonBreadMode
+	result.BattlePokemonMove1 = battle.BattlePokemonMove1
+	result.BattlePokemonMove2 = battle.BattlePokemonMove2
+}
+
+func applyTopStationBattleToStationWebhook(hook *StationWebhook, battles []StationBattleData) {
+	battle := topStationBattleFromSlice(battles)
+	hook.BattleLevel = stationBattleLevel(battle)
+	hook.BattleStart = stationBattleStart(battle)
+	hook.BattleEnd = stationBattleEnd(battle)
+	if battle == nil {
+		return
+	}
+	hook.BattlePokemonId = battle.BattlePokemonId
+	hook.BattlePokemonForm = battle.BattlePokemonForm
+	hook.BattlePokemonCostume = battle.BattlePokemonCostume
+	hook.BattlePokemonGender = battle.BattlePokemonGender
+	hook.BattlePokemonAlignment = battle.BattlePokemonAlignment
+	hook.BattlePokemonBreadMode = battle.BattlePokemonBreadMode
+	hook.BattlePokemonMove1 = battle.BattlePokemonMove1
+	hook.BattlePokemonMove2 = battle.BattlePokemonMove2
+}
+
+func applyTopStationBattleToFortLookup(lookup *FortLookup, battles []StationBattleData) {
+	battle := topStationBattleFromSlice(battles)
+	if battle == nil {
+		return
+	}
+	lookup.BattleEndTimestamp = battle.BattleEnd
+	lookup.BattleLevel = int8(battle.BattleLevel)
+	lookup.BattlePokemonId = int16(battle.BattlePokemonId.ValueOrZero())
+	lookup.BattlePokemonForm = int16(battle.BattlePokemonForm.ValueOrZero())
 }
 
 func buildFortLookupStationBattlesFromSlice(battles []StationBattleData) []FortLookupStationBattle {
@@ -478,30 +430,9 @@ func buildDeleteObsoleteStationBattlesQuery(stationIds []string, battles []Stati
 	if len(stationIds) == 0 {
 		return "", nil
 	}
-	args := make([]any, 0, len(battles)*2+len(stationIds))
+	args := make([]any, 0, len(stationIds)+len(battles))
 	var builder strings.Builder
-	if len(battles) == 0 {
-		builder.WriteString("DELETE FROM station_battle WHERE station_id IN (")
-		for i, stationId := range stationIds {
-			if i > 0 {
-				builder.WriteByte(',')
-			}
-			builder.WriteByte('?')
-			args = append(args, stationId)
-		}
-		builder.WriteByte(')')
-		return builder.String(), args
-	}
-
-	builder.WriteString("DELETE sb FROM station_battle sb LEFT JOIN (")
-	for i, battle := range battles {
-		if i > 0 {
-			builder.WriteString(" UNION ALL ")
-		}
-		builder.WriteString("SELECT ? AS station_id, ? AS bread_battle_seed")
-		args = append(args, battle.StationId, battle.BreadBattleSeed)
-	}
-	builder.WriteString(") keep_rows ON keep_rows.station_id = sb.station_id AND keep_rows.bread_battle_seed = sb.bread_battle_seed WHERE sb.station_id IN (")
+	builder.WriteString("DELETE FROM station_battle WHERE station_id IN (")
 	for i, stationId := range stationIds {
 		if i > 0 {
 			builder.WriteByte(',')
@@ -509,7 +440,19 @@ func buildDeleteObsoleteStationBattlesQuery(stationIds []string, battles []Stati
 		builder.WriteByte('?')
 		args = append(args, stationId)
 	}
-	builder.WriteString(") AND keep_rows.station_id IS NULL")
+	builder.WriteByte(')')
+	if len(battles) == 0 {
+		return builder.String(), args
+	}
+	builder.WriteString(" AND bread_battle_seed NOT IN (")
+	for i, battle := range battles {
+		if i > 0 {
+			builder.WriteByte(',')
+		}
+		builder.WriteByte('?')
+		args = append(args, battle.BreadBattleSeed)
+	}
+	builder.WriteByte(')')
 	return builder.String(), args
 }
 

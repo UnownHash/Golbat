@@ -168,9 +168,9 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
-	snapshot := collectStationBattleSnapshot(station.Id, now)
-	topStationBattleProjection(snapshot).applyToStation(station)
-	battleListChanged := station.oldValues.BattleListSignature != snapshot.Signature
+	battles := getKnownStationBattles(station.Id, now)
+	applyTopStationBattleToStation(station, battles)
+	battleListChanged := !stationBattlesEqual(station.oldValues.Battles, battles)
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
 	if !station.IsDirty() && !station.IsNewRecord() && !battleListChanged {
@@ -201,7 +201,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		_ = stationWriteDB(db, station, isNewRecord)
 	}
 	if battleListChanged {
-		battleWrite := stationBattleWrite{StationId: station.Id, Battles: snapshot.Battles}
+		battleWrite := stationBattleWrite{StationId: station.Id, Battles: battles}
 		if stationBattleQueue != nil {
 			stationBattleQueue.Enqueue(battleWrite, false, 0)
 		} else {
@@ -213,14 +213,14 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		station.changedFields = station.changedFields[:0]
 	}
 	station.ClearDirty()
-	createStationWebhooksWithSnapshot(station, snapshot, isNewRecord)
+	createStationWebhooksWithBattles(station, battles, isNewRecord)
 	if isNewRecord {
 		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {
 		genericUpdateFort(station.Id, station.Lat, station.Lon, false)
-		updateStationLookupFromSnapshot(station, snapshot)
+		updateStationLookupWithBattles(station, battles)
 	}
 }
 
@@ -285,15 +285,14 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 	return nil
 }
 
-func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleSnapshot, isNew bool) {
+func createStationWebhooksWithBattles(station *Station, battles []StationBattleData, isNew bool) {
 	old := &station.oldValues
-	currentSignature := snapshot.Signature
 
-	if currentSignature == "" {
+	if len(battles) == 0 {
 		return
 	}
 
-	if isNew || old.EndTime != station.EndTime || old.BattleListSignature != currentSignature {
+	if isNew || old.EndTime != station.EndTime || !stationBattlesEqual(old.Battles, battles) {
 		stationHook := StationWebhook{
 			Id:                    station.Id,
 			Latitude:              station.Lat,
@@ -304,15 +303,15 @@ func createStationWebhooksWithSnapshot(station *Station, snapshot stationBattleS
 			IsBattleAvailable:     station.IsBattleAvailable,
 			TotalStationedPokemon: station.TotalStationedPokemon,
 			TotalStationedGmax:    station.TotalStationedGmax,
-			Battles:               snapshot.Battles,
+			Battles:               battles,
 			Updated:               station.Updated,
 		}
-		topStationBattleProjection(snapshot).applyToStationWebhook(&stationHook)
+		applyTopStationBattleToStationWebhook(&stationHook, battles)
 		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		if topBattle := topStationBattleFromSlice(snapshot.Battles); topBattle != nil {
-			seed := topBattle.BreadBattleSeed
-			if isNew || !old.HasTopBattle || old.TopBattleSeed != seed {
+		if topBattle := topStationBattleFromSlice(battles); topBattle != nil {
+			oldTopBattle := topStationBattleFromSlice(old.Battles)
+			if isNew || oldTopBattle == nil || oldTopBattle.BreadBattleSeed != topBattle.BreadBattleSeed {
 				statsCollector.UpdateMaxBattleCount(areas, int64(topBattle.BattleLevel))
 			}
 		}
