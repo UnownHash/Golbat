@@ -11,7 +11,7 @@ import (
 	"golbat/db"
 )
 
-// Preload loads forts, stations, active station battles, active incidents, and recent spawnpoints from DB into cache.
+// Preload loads forts, stations, non-expired station battles, active incidents, and recent spawnpoints from DB into cache.
 // If populateRtree is true, also builds the rtree index for forts.
 func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	startTime := time.Now()
