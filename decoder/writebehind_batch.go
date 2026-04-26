@@ -30,7 +30,7 @@ var (
 	routeQueue         *writebehind.TypedQueue[string, RouteData]
 	tappableQueue      *writebehind.TypedQueue[uint64, TappableData]
 	stationQueue       *writebehind.TypedQueue[string, StationData]
-	stationBattleQueue *writebehind.TypedQueue[string, StationBattleWrite]
+	stationBattleQueue *writebehind.TypedQueue[string, stationBattleWrite]
 	incidentQueue      *writebehind.TypedQueue[string, IncidentData]
 	s2cellQueue        *writebehind.TypedQueue[uint64, S2CellData]
 
@@ -153,7 +153,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 	})
 	queueManager.Register(stationQueue)
 
-	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationBattleWrite]{
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
 		Name:                "station_battle",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -162,7 +162,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushStationBattleBatch,
-		KeyFunc:             func(d StationBattleWrite) string { return d.StationId },
+		KeyFunc:             func(d stationBattleWrite) string { return d.StationId },
 	})
 	queueManager.Register(stationBattleQueue)
 
@@ -557,12 +557,18 @@ ON DUPLICATE KEY UPDATE
 const stationBatchUpsertQuery = `
 INSERT INTO station (
 	id, lat, lon, name, cell_id, start_time, end_time, cooldown_complete,
-	is_battle_available, is_inactive, updated, total_stationed_pokemon,
+	is_battle_available, is_inactive, updated, battle_level, battle_start, battle_end,
+	battle_pokemon_id, battle_pokemon_form, battle_pokemon_costume, battle_pokemon_gender,
+	battle_pokemon_alignment, battle_pokemon_bread_mode, battle_pokemon_move_1, battle_pokemon_move_2,
+	battle_pokemon_stamina, battle_pokemon_cp_multiplier, total_stationed_pokemon,
 	total_stationed_gmax, stationed_pokemon
 )
 VALUES (
 	:id, :lat, :lon, :name, :cell_id, :start_time, :end_time, :cooldown_complete,
-	:is_battle_available, :is_inactive, :updated, :total_stationed_pokemon,
+	:is_battle_available, :is_inactive, :updated, :battle_level, :battle_start, :battle_end,
+	:battle_pokemon_id, :battle_pokemon_form, :battle_pokemon_costume, :battle_pokemon_gender,
+	:battle_pokemon_alignment, :battle_pokemon_bread_mode, :battle_pokemon_move_1, :battle_pokemon_move_2,
+	:battle_pokemon_stamina, :battle_pokemon_cp_multiplier, :total_stationed_pokemon,
 	:total_stationed_gmax, :stationed_pokemon
 )
 ON DUPLICATE KEY UPDATE
@@ -576,6 +582,19 @@ ON DUPLICATE KEY UPDATE
 	is_battle_available = VALUES(is_battle_available),
 	is_inactive = VALUES(is_inactive),
 	updated = VALUES(updated),
+	battle_level = VALUES(battle_level),
+	battle_start = VALUES(battle_start),
+	battle_end = VALUES(battle_end),
+	battle_pokemon_id = VALUES(battle_pokemon_id),
+	battle_pokemon_form = VALUES(battle_pokemon_form),
+	battle_pokemon_costume = VALUES(battle_pokemon_costume),
+	battle_pokemon_gender = VALUES(battle_pokemon_gender),
+	battle_pokemon_alignment = VALUES(battle_pokemon_alignment),
+	battle_pokemon_bread_mode = VALUES(battle_pokemon_bread_mode),
+	battle_pokemon_move_1 = VALUES(battle_pokemon_move_1),
+	battle_pokemon_move_2 = VALUES(battle_pokemon_move_2),
+	battle_pokemon_stamina = VALUES(battle_pokemon_stamina),
+	battle_pokemon_cp_multiplier = VALUES(battle_pokemon_cp_multiplier),
 	total_stationed_pokemon = VALUES(total_stationed_pokemon),
 	total_stationed_gmax = VALUES(total_stationed_gmax),
 	stationed_pokemon = VALUES(stationed_pokemon)

@@ -93,12 +93,13 @@ func (station *Station) Unlock() {
 func (station *Station) snapshotOldValues() {
 	now := time.Now().Unix()
 	snapshot := collectStationBattleSnapshot(station.Id, now)
+	topBattle := topStationBattleFromSlice(snapshot.Battles)
 	topBattleSeed := int64(0)
-	if snapshot.Canonical != nil {
-		topBattleSeed = snapshot.Canonical.BreadBattleSeed
+	if topBattle != nil {
+		topBattleSeed = topBattle.BreadBattleSeed
 	}
 	station.oldValues = StationOldValues{
-		HasTopBattle:        snapshot.Canonical != nil,
+		HasTopBattle:        topBattle != nil,
 		TopBattleSeed:       topBattleSeed,
 		EndTime:             station.EndTime,
 		BattleListSignature: snapshot.Signature,

@@ -209,26 +209,14 @@ func updateStationLookup(station *Station) {
 
 func updateStationLookupFromSnapshot(station *Station, snapshot stationBattleSnapshot) {
 	battles := buildFortLookupStationBattlesFromSlice(snapshot.Battles)
-	battleEndTimestamp := int64(0)
-	battleLevel := int8(0)
-	battlePokemonId := int16(0)
-	battlePokemonForm := int16(0)
-	if snapshot.Canonical != nil {
-		battleEndTimestamp = snapshot.Canonical.BattleEnd
-		battleLevel = int8(snapshot.Canonical.BattleLevel)
-		battlePokemonId = int16(snapshot.Canonical.BattlePokemonId.ValueOrZero())
-		battlePokemonForm = int16(snapshot.Canonical.BattlePokemonForm.ValueOrZero())
+	lookup := FortLookup{
+		FortType:       STATION,
+		Lat:            station.Lat,
+		Lon:            station.Lon,
+		StationBattles: battles,
 	}
-	fortLookupCache.Store(station.Id, FortLookup{
-		FortType:           STATION,
-		Lat:                station.Lat,
-		Lon:                station.Lon,
-		BattleEndTimestamp: battleEndTimestamp,
-		BattleLevel:        battleLevel,
-		BattlePokemonId:    battlePokemonId,
-		BattlePokemonForm:  battlePokemonForm,
-		StationBattles:     battles,
-	})
+	topStationBattleProjection(snapshot).applyToFortLookup(&lookup)
+	fortLookupCache.Store(station.Id, lookup)
 }
 
 // updatePokestopIncidentLookup updates the incident fields on a pokestop's FortLookup entry

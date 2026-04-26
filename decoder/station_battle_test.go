@@ -1,16 +1,11 @@
 package decoder
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 
-	"golbat/config"
-	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -19,19 +14,12 @@ import (
 
 type recordingWebhooksSender struct {
 	messages []webhooks.WebhookType
+	payloads []any
 }
 
-func (sender *recordingWebhooksSender) AddMessage(whType webhooks.WebhookType, _ any, _ []geo.AreaName) {
+func (sender *recordingWebhooksSender) AddMessage(whType webhooks.WebhookType, payload any, _ []geo.AreaName) {
 	sender.messages = append(sender.messages, whType)
-}
-
-type recordingStatsCollector struct {
-	stats_collector.StatsCollector
-	maxBattleLevels []int64
-}
-
-func (collector *recordingStatsCollector) UpdateMaxBattleCount(_ []geo.AreaName, level int64) {
-	collector.maxBattleLevels = append(collector.maxBattleLevels, level)
+	sender.payloads = append(sender.payloads, payload)
 }
 
 func testStationBattle(stationId string, seed int64, level int16, start, end int64, pokemon int64) StationBattleData {
@@ -42,62 +30,6 @@ func testStationBattle(stationId string, seed int64, level int16, start, end int
 		BattleStart:     start,
 		BattleEnd:       end,
 		BattlePokemonId: null.IntFrom(pokemon),
-	}
-}
-
-func TestUpsertCachedStationBattleIgnoresUpdatedOnlyChange(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	battle := StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-		Updated:         now,
-	}
-
-	if !upsertCachedStationBattle(battle, now) {
-		t.Fatal("expected first insert to change cache")
-	}
-
-	battle.Updated = now + 120
-	if upsertCachedStationBattle(battle, now) {
-		t.Fatal("expected updated-only change to be ignored")
-	}
-}
-
-func TestFlattenStationBattleWrites(t *testing.T) {
-	snapshots := []StationBattleWrite{
-		{
-			StationId: "station-1",
-			Battles: []StationBattleData{
-				{StationId: "station-1", BreadBattleSeed: 1},
-				{StationId: "", BreadBattleSeed: 2},
-			},
-		},
-		{
-			StationId: "station-2",
-			Battles:   nil,
-		},
-		{
-			StationId: "station-1",
-			Battles: []StationBattleData{
-				{StationId: "station-1", BreadBattleSeed: 3},
-			},
-		},
-	}
-
-	battles, stationIds := flattenStationBattleWrites(snapshots)
-	if len(stationIds) != 2 || stationIds[0] != "station-1" || stationIds[1] != "station-2" {
-		t.Fatalf("unexpected station ids: %+v", stationIds)
-	}
-	if len(battles) != 3 {
-		t.Fatalf("expected 3 flattened battles, got %d", len(battles))
-	}
-	if battles[1].StationId != "station-1" {
-		t.Fatalf("expected missing station id to be filled from snapshot, got %+v", battles[1])
 	}
 }
 
@@ -158,55 +90,57 @@ func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
 func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 	now := time.Now().Unix()
 	cases := []struct {
-		name      string
-		inserted  []StationBattleData
-		expected  []int64
-		canonical int64
+		name     string
+		inserted []StationBattleData
+		expected []int64
 	}{
 		{
-			name: "keeps active battles sorted by latest end",
+			name: "new longer active battle evicts older shorter battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
 				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
 			},
-			expected:  []int64{2, 1},
-			canonical: 1,
+			expected: []int64{2},
 		},
 		{
-			name: "keeps equal end battles and prefers earlier start as canonical",
+			name: "new shorter active battle keeps older longer battle later",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 1, 1, now-120, now+3600, 527),
 				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
 			},
-			expected:  []int64{2, 1},
-			canonical: 1,
+			expected: []int64{1, 2},
 		},
 		{
-			name: "keeps future battle alongside active battle",
+			name: "keeps future battle after active battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 3, now-120, now+7200, 374),
 				testStationBattle("station-1", 2, 1, now+600, now+9000, 527),
 			},
-			expected:  []int64{2, 1},
-			canonical: 1,
+			expected: []int64{1, 2},
 		},
 		{
-			name: "keeps future battle when active battle is observed later",
+			name: "active battle observed after future battle becomes first",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 2, 2, now+600, now+7200, 133),
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
 			},
-			expected:  []int64{2, 1},
-			canonical: 1,
+			expected: []int64{1, 2},
 		},
 		{
-			name: "future-only battles use the soonest upcoming battle as canonical",
+			name: "equal end battles use tie breaker order",
+			inserted: []StationBattleData{
+				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+				testStationBattle("station-1", 1, 1, now-120, now+3600, 527),
+			},
+			expected: []int64{1, 2},
+		},
+		{
+			name: "keeps future-only battles sorted by earliest end",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 2, 2, now+1800, now+7200, 527),
 				testStationBattle("station-1", 1, 3, now+600, now+3600, 374),
 			},
-			expected:  []int64{2, 1},
-			canonical: 1,
+			expected: []int64{1, 2},
 		},
 	}
 
@@ -226,15 +160,15 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 					t.Fatalf("expected seed %d at index %d, got %+v", expectedSeed, i, battles)
 				}
 			}
-			canonical := canonicalStationBattleFromSlice(battles, now)
-			if canonical == nil || canonical.BreadBattleSeed != tc.canonical {
-				t.Fatalf("expected canonical seed %d, got %+v", tc.canonical, canonical)
+			topBattle := topStationBattleFromSlice(battles)
+			if topBattle == nil || topBattle.BreadBattleSeed != tc.expected[0] {
+				t.Fatalf("expected top seed %d, got %+v", tc.expected[0], topBattle)
 			}
 		})
 	}
 }
 
-func TestBuildStationResultUsesCanonicalBattleAsTopBattle(t *testing.T) {
+func TestBuildStationResultUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
 
@@ -273,10 +207,10 @@ func TestBuildStationResultUsesCanonicalBattleAsTopBattle(t *testing.T) {
 
 	result := BuildStationResult(station)
 	if result.BattlePokemonId.ValueOrZero() != 527 {
-		t.Fatalf("expected canonical pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
+		t.Fatalf("expected top battle pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
 	}
 	if len(result.Battles) != 2 {
-		t.Fatalf("expected both known battles to remain, got %d", len(result.Battles))
+		t.Fatalf("expected shorter battle to keep prior longer battle later, got %d", len(result.Battles))
 	}
 }
 
@@ -295,35 +229,6 @@ func TestStationFortFilterMatchesSecondaryBattle(t *testing.T) {
 
 	if !isFortDnfMatch(STATION, &lookup, &filter, now) {
 		t.Fatal("expected station filter to match secondary battle")
-	}
-}
-
-func TestGetActiveStationBattlesKeepsFutureBattleCached(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	future := StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now + 600,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-	}
-
-	if !upsertCachedStationBattle(future, now) {
-		t.Fatal("expected future battle insert to change cache")
-	}
-
-	if battles := getKnownStationBattles("station-1", now); len(battles) != 1 || stationBattleIsActive(battles[0], now) {
-		t.Fatalf("expected one cached future battle and no active battles, got %+v", battles)
-	}
-
-	state, ok := stationBattleCache.Load("station-1")
-	if !ok || len(state.Battles) != 1 {
-		t.Fatalf("expected future battle to remain cached, got ok=%t len=%d", ok, len(state.Battles))
-	}
-	if state.Battles[0].BreadBattleSeed != future.BreadBattleSeed {
-		t.Fatalf("expected cached seed %d, got %d", future.BreadBattleSeed, state.Battles[0].BreadBattleSeed)
 	}
 }
 
@@ -368,93 +273,24 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 	}
 }
 
-func TestBuildFortLookupStationBattlesIncludesFutureBattle(t *testing.T) {
+func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
+	initFortRtree()
 	now := time.Now().Unix()
-	station := &Station{StationData: StationData{Id: "station-1"}}
+	station := &Station{StationData: StationData{Id: "station-1", Lat: 1, Lon: 2}}
 
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now + 600,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-
-	battles := buildFortLookupStationBattlesFromSlice(getKnownStationBattles(station.Id, now))
-	if len(battles) != 1 {
-		t.Fatalf("expected future battle in fort lookup, got %d", len(battles))
-	}
-	if battles[0].BattlePokemonId != 527 {
-		t.Fatalf("expected battle pokemon 527, got %d", battles[0].BattlePokemonId)
-	}
-}
-
-func TestCachePreloadedStationBattlesPreservesPersistedSetRegardlessOfInputOrder(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-
-	storeStationBattles("station-1", []StationBattleData{
-		{
-			BreadBattleSeed: 2,
-			StationId:       "station-1",
-			BattleLevel:     1,
-			BattleStart:     now + 600,
-			BattleEnd:       now + 1800,
-			BattlePokemonId: null.IntFrom(527),
-		},
-		{
-			BreadBattleSeed: 1,
-			StationId:       "station-1",
-			BattleLevel:     3,
-			BattleStart:     now - 120,
-			BattleEnd:       now + 7200,
-			BattlePokemonId: null.IntFrom(374),
-		},
+	storeStationBattles(station.Id, []StationBattleData{
+		testStationBattle(station.Id, 1, 1, now-60, now+1800, 527),
+		testStationBattle(station.Id, 2, 2, now-60, now+3600, 133),
 	})
+	updateStationLookupFromSnapshot(station, collectStationBattleSnapshot(station.Id, now))
 
-	battles := getKnownStationBattles("station-1", now)
-	if len(battles) != 2 {
-		t.Fatalf("expected both persisted battles after preload, got %d", len(battles))
+	lookup, ok := fortLookupCache.Load(station.Id)
+	if !ok {
+		t.Fatal("expected station lookup")
 	}
-	if battles[0].BreadBattleSeed != 1 || battles[1].BreadBattleSeed != 2 {
-		t.Fatalf("unexpected preloaded battle ordering: %+v", battles)
-	}
-}
-
-func TestCreateStationWebhooksSkipsEmptyExistingStation(t *testing.T) {
-	initStationBattleCache()
-	previousSender := webhooksSender
-	previousStats := statsCollector
-	sender := &recordingWebhooksSender{}
-	webhooksSender = sender
-	statsCollector = stats_collector.NewNoopStatsCollector()
-	defer func() {
-		webhooksSender = previousSender
-		statsCollector = previousStats
-	}()
-
-	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id:      "station-1",
-			Name:    "Station",
-			Lat:     1,
-			Lon:     2,
-			CellId:  123,
-			EndTime: now + 3600,
-			Updated: now,
-		},
-	}
-	station.oldValues = StationOldValues{
-		EndTime:             now - 3600,
-		BattleListSignature: "",
-	}
-
-	createStationWebhooks(station)
-	if len(sender.messages) != 0 {
-		t.Fatalf("expected no max_battle webhook, got %v", sender.messages)
+	if lookup.BattlePokemonId != 527 || lookup.BattleLevel != 1 {
+		t.Fatalf("expected fort lookup flat fields from top battle, got %+v", lookup)
 	}
 }
 
@@ -464,7 +300,7 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 	previousStats := statsCollector
 	sender := &recordingWebhooksSender{}
 	webhooksSender = sender
-	statsCollector = &recordingStatsCollector{StatsCollector: stats_collector.NewNoopStatsCollector()}
+	statsCollector = stats_collector.NewNoopStatsCollector()
 	defer func() {
 		webhooksSender = previousSender
 		statsCollector = previousStats
@@ -496,20 +332,19 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 		BattleListSignature: "",
 	}
 
-	createStationWebhooks(station)
+	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station.Id, now), station.IsNewRecord())
 	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
 		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
 	}
 }
 
-func TestCreateStationWebhooksDoesNotRecountTopBattleSeed(t *testing.T) {
+func TestCreateStationWebhooksUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
 	previousStats := statsCollector
 	sender := &recordingWebhooksSender{}
-	collector := &recordingStatsCollector{StatsCollector: stats_collector.NewNoopStatsCollector()}
 	webhooksSender = sender
-	statsCollector = collector
+	statsCollector = stats_collector.NewNoopStatsCollector()
 	defer func() {
 		webhooksSender = previousSender
 		statsCollector = previousStats
@@ -518,118 +353,33 @@ func TestCreateStationWebhooksDoesNotRecountTopBattleSeed(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:      "station-1",
-			Name:    "Station",
-			Lat:     1,
-			Lon:     2,
-			CellId:  123,
-			EndTime: now + 7200,
-			Updated: now,
+			Id:              "station-1",
+			Name:            "Station",
+			Lat:             1,
+			Lon:             2,
+			CellId:          123,
+			EndTime:         now + 7200,
+			Updated:         now,
+			BattlePokemonId: null.IntFrom(527),
 		},
 	}
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       station.Id,
-		BattleLevel:     3,
-		BattleStart:     now - 600,
-		BattleEnd:       now + 7200,
-		BattlePokemonId: null.IntFrom(374),
-	}, now)
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now + 600,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
-	station.oldValues = StationOldValues{
-		HasTopBattle:        true,
-		TopBattleSeed:       1,
-		EndTime:             station.EndTime,
-		BattleListSignature: "old-signature",
-	}
-
-	createStationWebhooks(station)
-	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
-		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
-	}
-	if len(collector.maxBattleLevels) != 0 {
-		t.Fatalf("expected no max battle metric increment, got %v", collector.maxBattleLevels)
-	}
-}
-
-func TestCreateStationWebhooksCountsZeroSeedTopBattle(t *testing.T) {
-	initStationBattleCache()
-	previousSender := webhooksSender
-	previousStats := statsCollector
-	sender := &recordingWebhooksSender{}
-	collector := &recordingStatsCollector{StatsCollector: stats_collector.NewNoopStatsCollector()}
-	webhooksSender = sender
-	statsCollector = collector
-	defer func() {
-		webhooksSender = previousSender
-		statsCollector = previousStats
-	}()
-
-	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id:      "station-1",
-			Name:    "Station",
-			Lat:     1,
-			Lon:     2,
-			CellId:  123,
-			EndTime: now + 7200,
-			Updated: now,
-		},
-	}
-	upsertCachedStationBattle(StationBattleData{
-		BreadBattleSeed: 0,
-		StationId:       station.Id,
-		BattleLevel:     1,
-		BattleStart:     now - 600,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(527),
-	}, now)
+	upsertCachedStationBattle(testStationBattle(station.Id, 2, 2, now-60, now+3600, 133), now)
+	upsertCachedStationBattle(testStationBattle(station.Id, 1, 1, now-60, now+1800, 527), now)
 	station.oldValues = StationOldValues{
 		EndTime:             station.EndTime,
 		BattleListSignature: "",
 	}
 
-	createStationWebhooks(station)
-	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
-		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
+	createStationWebhooksWithSnapshot(station, collectStationBattleSnapshot(station.Id, now), station.IsNewRecord())
+	if len(sender.payloads) != 1 {
+		t.Fatalf("expected one max_battle payload, got %d", len(sender.payloads))
 	}
-	if len(collector.maxBattleLevels) != 1 || collector.maxBattleLevels[0] != 1 {
-		t.Fatalf("expected one max battle metric increment, got %v", collector.maxBattleLevels)
+	payload, ok := sender.payloads[0].(StationWebhook)
+	if !ok {
+		t.Fatalf("expected StationWebhook payload, got %T", sender.payloads[0])
 	}
-}
-
-func TestSyncStationBattlesFromProtoAllowsZeroSeed(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	station := &Station{
-		StationData: StationData{
-			Id: "station-1",
-		},
-	}
-
-	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
-		BreadBattleSeed:     0,
-		BattleWindowStartMs: (now - 60) * 1000,
-		BattleWindowEndMs:   (now + 3600) * 1000,
-		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
-		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
-	})
-
-	battles := getKnownStationBattles(station.Id, now)
-	if len(battles) != 1 || battles[0].BreadBattleSeed != 0 {
-		t.Fatalf("expected zero-seed battle to be cached, got %+v", battles)
-	}
-	result := BuildStationResult(station)
-	if result.BattlePokemonId.ValueOrZero() != 133 {
-		t.Fatalf("expected zero-seed battle in compatibility fields, got %+v", result)
+	if payload.BattlePokemonId.ValueOrZero() != 527 || payload.BattleLevel.ValueOrZero() != 1 {
+		t.Fatalf("expected webhook flat fields from top battle, got %+v", payload)
 	}
 }
 
@@ -671,38 +421,6 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 	}
 }
 
-func TestGetKnownStationBattlesDoesNotMutateCacheOnRead(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	expired := StationBattleData{
-		BreadBattleSeed: 1,
-		StationId:       "station-1",
-		BattleLevel:     1,
-		BattleStart:     now - 7200,
-		BattleEnd:       now - 60,
-		BattlePokemonId: null.IntFrom(527),
-	}
-	current := StationBattleData{
-		BreadBattleSeed: 2,
-		StationId:       "station-1",
-		BattleLevel:     2,
-		BattleStart:     now - 60,
-		BattleEnd:       now + 3600,
-		BattlePokemonId: null.IntFrom(133),
-	}
-	storeStationBattles("station-1", []StationBattleData{current, expired})
-
-	battles := getKnownStationBattles("station-1", now)
-	if len(battles) != 1 || battles[0].BreadBattleSeed != 2 {
-		t.Fatalf("expected only current battle from read, got %+v", battles)
-	}
-
-	state, ok := stationBattleCache.Load("station-1")
-	if !ok || len(state.Battles) != 2 {
-		t.Fatalf("expected cached slice to remain unchanged, got %+v", state)
-	}
-}
-
 func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
@@ -737,234 +455,5 @@ func TestBuildStationResultSuppressesStaleProjectionAfterExpiredHydratedCache(t 
 	state, ok := stationBattleCache.Load(station.Id)
 	if !ok || !state.Loaded || len(state.Battles) != 0 {
 		t.Fatalf("expected expired loaded state to be collapsed to empty, got %+v ok=%t", state, ok)
-	}
-}
-
-func TestGetStationRecordReadOnlyRetriesHydrationOnCachedStation(t *testing.T) {
-	initStationBattleCache()
-	stationId := "station-hydration-retry"
-	station := &Station{StationData: StationData{Id: stationId}}
-	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
-	defer stationCache.Delete(stationId)
-	defer clearStationBattleState(stationId)
-
-	attempts := 0
-	previousHydrate := hydrateStationBattlesForStationFunc
-	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
-		attempts++
-		if attempts == 1 {
-			return errors.New("boom")
-		}
-		storeStationBattles(station.Id, nil)
-		return nil
-	}
-	defer func() {
-		hydrateStationBattlesForStationFunc = previousHydrate
-	}()
-
-	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err != nil {
-		t.Fatalf("expected cached station to be served even when hydration fails, got %v", err)
-	}
-	if record == nil || unlock == nil {
-		t.Fatal("expected cached station record on hydration failure")
-	}
-	unlock()
-
-	record, unlock, err = GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err != nil {
-		t.Fatalf("expected second hydration attempt to succeed, got %v", err)
-	}
-	if record == nil || unlock == nil {
-		t.Fatal("expected cached station record after retry")
-	}
-	unlock()
-	if attempts != 2 {
-		t.Fatalf("expected hydration retry on cached station, got %d attempts", attempts)
-	}
-}
-
-func TestGetStationRecordReadOnlyKeepsSingletonAfterHydrationFailureOnCacheMiss(t *testing.T) {
-	initStationBattleCache()
-	stationId := "station-hydration-miss-retry"
-	defer stationCache.Delete(stationId)
-	defer clearStationBattleState(stationId)
-
-	loadCalls := 0
-	previousLoad := loadStationFromDatabaseFunc
-	loadStationFromDatabaseFunc = func(_ context.Context, _ db.DbDetails, id string, station *Station) error {
-		loadCalls++
-		station.Id = id
-		station.Name = "Station"
-		return nil
-	}
-	defer func() {
-		loadStationFromDatabaseFunc = previousLoad
-	}()
-
-	hydrateCalls := 0
-	previousHydrate := hydrateStationBattlesForStationFunc
-	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
-		hydrateCalls++
-		if hydrateCalls == 1 {
-			return errors.New("boom")
-		}
-		storeStationBattles(station.Id, nil)
-		return nil
-	}
-	defer func() {
-		hydrateStationBattlesForStationFunc = previousHydrate
-	}()
-
-	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err == nil {
-		if unlock != nil {
-			unlock()
-		}
-		t.Fatal("expected first cache-miss hydration to fail")
-	}
-	if record != nil || unlock != nil {
-		t.Fatal("expected no station return on failed cache-miss hydration")
-	}
-
-	cachedItem := stationCache.Get(stationId)
-	if cachedItem == nil {
-		t.Fatal("expected failed hydration to keep cached station instance")
-	}
-	cachedStation := cachedItem.Value()
-
-	record, unlock, err = GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err != nil {
-		t.Fatalf("expected retry on cached singleton to succeed, got %v", err)
-	}
-	if record == nil || unlock == nil {
-		t.Fatal("expected cached station record after retry")
-	}
-	if record != cachedStation {
-		unlock()
-		t.Fatal("expected retry to reuse cached station singleton")
-	}
-	unlock()
-
-	if loadCalls != 1 {
-		t.Fatalf("expected one DB load across retry, got %d", loadCalls)
-	}
-	if hydrateCalls != 2 {
-		t.Fatalf("expected two hydration attempts across retry, got %d", hydrateCalls)
-	}
-}
-
-func TestGetStationRecordReadOnlySkipsHydrationAfterProtoSync(t *testing.T) {
-	initStationBattleCache()
-	now := time.Now().Unix()
-	stationId := "station-hydration-skip"
-	station := &Station{StationData: StationData{Id: stationId}}
-	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
-	defer stationCache.Delete(stationId)
-	defer clearStationBattleState(stationId)
-
-	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
-		BreadBattleSeed:     7,
-		BattleWindowStartMs: (now - 60) * 1000,
-		BattleWindowEndMs:   (now + 3600) * 1000,
-		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
-		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
-	})
-
-	attempts := 0
-	previousHydrate := hydrateStationBattlesForStationFunc
-	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, _ *Station, _ int64) error {
-		attempts++
-		return nil
-	}
-	defer func() {
-		hydrateStationBattlesForStationFunc = previousHydrate
-	}()
-
-	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err != nil {
-		t.Fatalf("expected cached station read to succeed, got %v", err)
-	}
-	if record == nil || unlock == nil {
-		t.Fatal("expected cached station record")
-	}
-	unlock()
-	if attempts != 0 {
-		t.Fatalf("expected no DB hydration after proto sync, got %d attempts", attempts)
-	}
-}
-
-func TestFinalizePreloadedStationBattlesMarksEmptyStationsLoaded(t *testing.T) {
-	initStationBattleCache()
-	stationId := "station-preload-empty"
-	station := &Station{StationData: StationData{Id: stationId}}
-	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
-	defer stationCache.Delete(stationId)
-	defer clearStationBattleState(stationId)
-
-	if hasLoadedStationBattles(stationId) {
-		t.Fatal("expected station to start unloaded")
-	}
-
-	finalizePreloadedStationBattles(false)
-
-	if !hasLoadedStationBattles(stationId) {
-		t.Fatal("expected empty preloaded station to be marked loaded")
-	}
-}
-
-func TestGetStationRecordReadOnlyHydrationRefreshesFortLookup(t *testing.T) {
-	initStationBattleCache()
-	previousFortInMemory := config.Config.FortInMemory
-	config.Config.FortInMemory = true
-	defer func() {
-		config.Config.FortInMemory = previousFortInMemory
-	}()
-
-	now := time.Now().Unix()
-	stationId := "station-hydration-lookup"
-	station := &Station{
-		StationData: StationData{
-			Id:  stationId,
-			Lat: 1,
-			Lon: 2,
-		},
-	}
-	stationCache.Set(stationId, station, ttlcache.DefaultTTL)
-	defer stationCache.Delete(stationId)
-	defer clearStationBattleState(stationId)
-	fortLookupCache.Store(stationId, FortLookup{
-		FortType:           STATION,
-		Lat:                station.Lat,
-		Lon:                station.Lon,
-		BattleEndTimestamp: now + 600,
-		BattleLevel:        1,
-		BattlePokemonId:    527,
-	})
-
-	previousHydrate := hydrateStationBattlesForStationFunc
-	hydrateStationBattlesForStationFunc = func(_ context.Context, _ db.DbDetails, station *Station, _ int64) error {
-		storeStationBattles(station.Id, nil)
-		return nil
-	}
-	defer func() {
-		hydrateStationBattlesForStationFunc = previousHydrate
-	}()
-
-	record, unlock, err := GetStationRecordReadOnly(context.Background(), db.DbDetails{}, stationId, "test")
-	if err != nil {
-		t.Fatalf("expected hydration to succeed, got %v", err)
-	}
-	if record == nil || unlock == nil {
-		t.Fatal("expected cached station")
-	}
-	unlock()
-
-	lookup, ok := fortLookupCache.Load(stationId)
-	if !ok {
-		t.Fatal("expected fort lookup entry")
-	}
-	if lookup.BattleEndTimestamp != 0 || lookup.BattleLevel != 0 || lookup.BattlePokemonId != 0 {
-		t.Fatalf("expected fort lookup to be cleared after hydration, got %+v", lookup)
 	}
 }
