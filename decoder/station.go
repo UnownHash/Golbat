@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -57,10 +58,8 @@ type Station struct {
 
 // StationOldValues holds old field values for webhook comparison
 type StationOldValues struct {
-	EndTime             int64
-	HasTopBattle        bool
-	TopBattleSeed       int64
-	BattleListSignature string
+	EndTime int64
+	Battles []StationBattleData
 }
 
 // IsDirty returns true if any field has been modified
@@ -92,17 +91,10 @@ func (station *Station) Unlock() {
 // Call this after loading from cache/DB but before modifications
 func (station *Station) snapshotOldValues() {
 	now := time.Now().Unix()
-	snapshot := collectStationBattleSnapshot(station.Id, now)
-	topBattle := topStationBattleFromSlice(snapshot.Battles)
-	topBattleSeed := int64(0)
-	if topBattle != nil {
-		topBattleSeed = topBattle.BreadBattleSeed
-	}
+	battles := getKnownStationBattles(station.Id, now)
 	station.oldValues = StationOldValues{
-		HasTopBattle:        topBattle != nil,
-		TopBattleSeed:       topBattleSeed,
-		EndTime:             station.EndTime,
-		BattleListSignature: snapshot.Signature,
+		EndTime: station.EndTime,
+		Battles: slices.Clone(battles),
 	}
 }
 
