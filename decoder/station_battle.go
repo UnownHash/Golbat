@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -169,26 +170,7 @@ func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDeta
 
 func sortStationBattlesByEnd(battles []StationBattleData) {
 	slices.SortFunc(battles, func(a, b StationBattleData) int {
-		if a.BattleEnd != b.BattleEnd {
-			if a.BattleEnd < b.BattleEnd {
-				return -1
-			}
-			return 1
-		}
-		if a.BattleStart != b.BattleStart {
-			if a.BattleStart < b.BattleStart {
-				return -1
-			}
-			return 1
-		}
-		switch {
-		case a.BreadBattleSeed < b.BreadBattleSeed:
-			return -1
-		case a.BreadBattleSeed > b.BreadBattleSeed:
-			return 1
-		default:
-			return 0
-		}
+		return cmp.Compare(a.BattleEnd, b.BattleEnd)
 	})
 }
 
@@ -476,7 +458,7 @@ func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, s
 		SELECT `+stationBattleSelectColumns+`
 		FROM station_battle
 		WHERE station_id = ? AND battle_end > ?
-		ORDER BY battle_end ASC, battle_start ASC, bread_battle_seed ASC
+		ORDER BY battle_end ASC
 	`, stationId, now)
 	statsCollector.IncDbQuery("select station_battle station", err)
 	if err != nil {
@@ -516,7 +498,7 @@ func finalizePreloadedStationBattles(populateRtree bool) {
 func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	now := time.Now().Unix()
 	query := "SELECT " + stationBattleSelectColumns + " FROM station_battle WHERE battle_end > ? " +
-		"ORDER BY station_id, battle_end ASC, battle_start ASC, bread_battle_seed ASC"
+		"ORDER BY station_id, battle_end ASC"
 	rows, err := dbDetails.GeneralDb.Queryx(query, now)
 	statsCollector.IncDbQuery("select station_battle non_expired", err)
 	if err != nil {
