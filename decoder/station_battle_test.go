@@ -88,15 +88,7 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 		expected []int64
 	}{
 		{
-			name: "new longer active battle evicts older shorter battle",
-			inserted: []StationBattleData{
-				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
-				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
-			},
-			expected: []int64{2},
-		},
-		{
-			name: "new shorter active battle keeps older longer battle later",
+			name: "observed earlier-ending active battle keeps later-ending cached battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
@@ -104,26 +96,18 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 			expected: []int64{1, 2},
 		},
 		{
-			name: "keeps future battle after active battle",
+			name: "observed later-ending future battle evicts earlier-ending active battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 1, 3, now-120, now+7200, 374),
 				testStationBattle("station-1", 2, 1, now+600, now+9000, 527),
 			},
-			expected: []int64{1, 2},
+			expected: []int64{2},
 		},
 		{
-			name: "active battle observed after future battle becomes first",
+			name: "observed active battle keeps later-ending future cached battle",
 			inserted: []StationBattleData{
 				testStationBattle("station-1", 2, 2, now+600, now+7200, 133),
 				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
-			},
-			expected: []int64{1, 2},
-		},
-		{
-			name: "equal end battles use tie breaker order",
-			inserted: []StationBattleData{
-				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
-				testStationBattle("station-1", 1, 1, now-120, now+3600, 527),
 			},
 			expected: []int64{1, 2},
 		},
@@ -156,6 +140,55 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 			topBattle := topStationBattleFromSlice(battles)
 			if topBattle == nil || topBattle.BreadBattleSeed != tc.expected[0] {
 				t.Fatalf("expected top seed %d, got %+v", tc.expected[0], topBattle)
+			}
+		})
+	}
+}
+
+func TestObservedStationBattleEvictsCachedBattlesEndingNoLater(t *testing.T) {
+	now := time.Now().Unix()
+	cases := []struct {
+		name          string
+		cachedStart   int64
+		cachedEnd     int64
+		observedStart int64
+		observedEnd   int64
+	}{
+		{
+			name:          "cached ends before observed",
+			cachedStart:   now - 120,
+			cachedEnd:     now + 1800,
+			observedStart: now + 600,
+			observedEnd:   now + 3600,
+		},
+		{
+			name:          "cached has same end and observed starts before cached",
+			cachedStart:   now - 60,
+			cachedEnd:     now + 3600,
+			observedStart: now - 120,
+			observedEnd:   now + 3600,
+		},
+		{
+			name:          "cached has same end and observed starts after cached",
+			cachedStart:   now - 120,
+			cachedEnd:     now + 3600,
+			observedStart: now - 60,
+			observedEnd:   now + 3600,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			initStationBattleCache()
+			upsertCachedStationBattle(testStationBattle("station-1", 1, 1, tc.cachedStart, tc.cachedEnd, 527), now)
+			upsertCachedStationBattle(testStationBattle("station-1", 2, 2, tc.observedStart, tc.observedEnd, 133), now)
+
+			battles := getKnownStationBattles("station-1", now)
+			if len(battles) != 1 {
+				t.Fatalf("expected observed battle to evict cached battle ending no later, got %+v", battles)
+			}
+			if battles[0].BreadBattleSeed != 2 {
+				t.Fatalf("expected observed seed 2, got %+v", battles)
 			}
 		})
 	}
