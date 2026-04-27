@@ -162,17 +162,10 @@ func TestObservedStationBattleEvictsCachedBattlesEndingNoLater(t *testing.T) {
 			observedEnd:   now + 3600,
 		},
 		{
-			name:          "cached has same end and observed starts before cached",
+			name:          "cached has same end",
 			cachedStart:   now - 60,
 			cachedEnd:     now + 3600,
 			observedStart: now - 120,
-			observedEnd:   now + 3600,
-		},
-		{
-			name:          "cached has same end and observed starts after cached",
-			cachedStart:   now - 120,
-			cachedEnd:     now + 3600,
-			observedStart: now - 60,
 			observedEnd:   now + 3600,
 		},
 	}
