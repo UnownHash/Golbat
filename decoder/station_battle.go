@@ -192,16 +192,6 @@ func sortStationBattlesByEnd(battles []StationBattleData) {
 	})
 }
 
-func stationBattleIsActive(battle StationBattleData, now int64) bool {
-	if battle.BattleEnd <= now {
-		return false
-	}
-	if battle.BattleStart == 0 {
-		return true
-	}
-	return battle.BattleStart <= now
-}
-
 func nonExpiredStationBattlesFromSlice(battles []StationBattleData, now int64) []StationBattleData {
 	if len(battles) == 0 {
 		return nil
@@ -247,13 +237,13 @@ func mergeStationBattles(existing []StationBattleData, observed StationBattleDat
 		next = append(next, observed)
 	}
 	for _, cached := range existing {
-		if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now {
+		if cached.BreadBattleSeed == observed.BreadBattleSeed || cached.BattleEnd <= now || cached.BattleEnd <= observed.BattleEnd {
 			continue
 		}
 		next = append(next, cached)
 	}
 	sortStationBattlesByEnd(next)
-	return enforceObservedStationBattleTopInvariant(next, observed, now)
+	return next
 }
 
 func getKnownStationBattles(stationId string, now int64) []StationBattleData {
@@ -279,17 +269,6 @@ func topStationBattleFromSlice(battles []StationBattleData) *StationBattleData {
 		return nil
 	}
 	return &battles[0]
-}
-
-func enforceObservedStationBattleTopInvariant(battles []StationBattleData, observed StationBattleData, now int64) []StationBattleData {
-	if stationBattleIsActive(observed, now) {
-		for i, battle := range battles {
-			if battle.BreadBattleSeed == observed.BreadBattleSeed {
-				return battles[i:]
-			}
-		}
-	}
-	return battles
 }
 
 func stationBattleLevel(battle *StationBattleData) null.Int {
