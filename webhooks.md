@@ -507,7 +507,7 @@ ascending by timeslot.
 
 | Field         | Type  | Notes |
 |---------------|-------|-------|
-| `timeslot`    | int64 | Unix seconds of the start of this raid timeslot. |
+| `timeslot`    | int64 | **Unix milliseconds** of the start of this raid timeslot. The proto value (`GetEventRsvpsOutProto.RsvpTimeslots[i].TimeSlot`) is passed through unchanged, so the field is in ms — unlike most other timestamps in the Golbat webhook contract, which are seconds. |
 | `going_count` | int32 | Players who RSVPed "going" to this timeslot. |
 | `maybe_count` | int32 | Players who RSVPed "maybe" to this timeslot. |
 
@@ -518,8 +518,8 @@ Example:
 
 ```json
 [
-  { "timeslot": 1744131600, "going_count": 3, "maybe_count": 1 },
-  { "timeslot": 1744132500, "going_count": 8, "maybe_count": 2 }
+  { "timeslot": 1744131600000, "going_count": 3, "maybe_count": 1 },
+  { "timeslot": 1744132500000, "going_count": 8, "maybe_count": 2 }
 ]
 ```
 
