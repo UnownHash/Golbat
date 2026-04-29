@@ -28,6 +28,12 @@ document and the code disagree, the code wins — please update this document.
   - [max_battle](#max_battle)
 - [Configuration](#configuration)
 
+> Anchor links in this document use GitHub-flavored Markdown slugs that
+> preserve underscores (e.g. `#gym_details`, `#fort_update`). They render
+> correctly on github.com but may not resolve in strict-CommonMark
+> renderers (VS Code preview, MkDocs, dev.to, etc.) which would expect
+> hyphenated slugs (`#gym-details`).
+
 ---
 
 ## Transport
@@ -52,6 +58,31 @@ multiple webhooks over its lifetime (see firing-condition sections below).
 
 The HTTP client is `net/http` with default settings; there is no configured
 timeout.
+
+#### Delivery semantics
+
+Messages accumulate in an **unbounded** in-memory collection (one slice per
+webhook type, guarded by a mutex). On each flush tick, Golbat atomically
+swaps the collection with a fresh empty one and spawns a goroutine per
+configured webhook URL to POST the swapped batch. Concretely:
+
+- **No bound on batch size or POST body size.** Both are limited only by
+  whatever has accumulated since the previous successful flush.
+- **No per-request timeout.** A slow or hung receiver holds its goroutine
+  indefinitely. A subsequent flush tick will spawn another goroutine with
+  the next batch even if the previous flush is still in flight, so a slow
+  receiver causes both message backlog *and* goroutine accumulation.
+- **No retry.** If a POST returns an error or a non-2xx response, the
+  messages are gone. Any 2xx/3xx/4xx/5xx response is treated identically
+  (read-and-discard).
+- **No back-pressure on decode.** `AddMessage` is a non-blocking
+  mutex+append; if receivers can't keep up, messages and goroutines pile up
+  until Golbat exhausts memory.
+
+Receivers that want reliability should keep their handler well under one
+flush interval, return 2xx promptly, and idempotently process each
+envelope. There is no application-level dedup key, sequence number, or
+retry mechanism in the protocol — those are receiver-side responsibilities.
 
 ---
 
@@ -210,6 +241,16 @@ Configuration type strings:
 - `"pokemon_iv"` — only after all three IVs are known.
 - `"pokemon_no_iv"` — only while IVs are still unknown.
 
+#### Idempotency / deduplication
+
+Consumers must idempotently process each envelope: the same `encounter_id`
+typically fires multiple times in flight order `nearby_cell` → `wild` →
+`encounter`, and refires whenever `pokemon_id`, `weather`, or `cp` changes.
+The recommended deduplication key is `encounter_id` plus a stat fingerprint
+(`cp`, `weather`, `pokemon_id`); using `encounter_id` alone will mute
+legitimate re-notifications when a previously-no-IV spawn becomes
+encountered.
+
 #### Payload
 
 | JSON field                | Go type           | Description |
@@ -225,7 +266,7 @@ Configuration type strings:
 | `disappear_time_verified` | bool              | `true` if the despawn time comes from a trusted source (spawnpoint history, encounter). |
 | `first_seen`              | int64             | Unix seconds when Golbat first saw this encounter. |
 | `last_modified_time`      | null.Int          | Unix seconds of Golbat's most recent update to the record. |
-| `gender`                  | null.Int          | Gender enum: 1=male, 2=female, 3=genderless. |
+| `gender`                  | null.Int          | Gender enum: 1=male, 2=female, 3=genderless. Source: `pogo.PokemonDisplayProto_Gender`. |
 | `cp`                      | null.Int          | Combat Power at trainer level 30 / weather-boosted level. |
 | `form`                    | null.Int          | Form ID. |
 | `costume`                 | null.Int          | Costume ID. |
@@ -381,7 +422,7 @@ Fires when **any** of these is true:
 | `url`                   | string  | Gym photo URL, empty string if null. |
 | `latitude`              | float64 | Latitude. |
 | `longitude`             | float64 | Longitude. |
-| `team`                  | int64   | Team enum: 0=neutral, 1=mystic (blue), 2=valor (red), 3=instinct (yellow). |
+| `team`                  | int64   | Team enum: 0=neutral, 1=mystic (blue), 2=valor (red), 3=instinct (yellow). Source: `pogo.Team`. |
 | `guard_pokemon_id`      | int64   | Pokédex ID of the defending (top-left) Pokémon. `0` if none. |
 | `slots_available`       | int64   | Number of empty defender slots. Defaults to `6` when DB value is null. |
 | `ex_raid_eligible`      | int64   | `0` or `1`. |
@@ -404,6 +445,17 @@ Fires when **any** of these is true:
 Built by `updateGymFromGymGetStatusProto` in `decoder/gym_decode.go`. The
 value is a JSON array, one entry per defending Pokémon in the order Niantic
 reports them. Populated from `METHOD_GYM_GET_INFO` responses.
+
+> `defenders` is the most recent observation Golbat has from a
+> `METHOD_GYM_GET_INFO` response — possibly from the firing webhook's scan,
+> possibly hours older if no scanner has visited the gym since. The `gym_details`
+> webhook fires on team / slots / `in_battle` changes detected from regular
+> `METHOD_GET_MAP_OBJECTS` traffic, which does **not** refresh `defenders`. The
+> array can therefore be stale relative to the change that triggered the
+> envelope. There is no per-defender or per-array timestamp on the JSON itself;
+> consumers needing a freshness bound should fall back to the `deployed_time`
+> on individual entries (an approximation captured at scan time, not now), or
+> require the gym's own `updated` field via the `raid` webhook payload.
 
 | Field                      | Type    | Notes |
 |----------------------------|---------|-------|
@@ -473,7 +525,7 @@ Both comparisons use `time.Now().Unix()` (Unix seconds).
 | `gym_url`               | string          | Gym photo URL, empty string if null. |
 | `latitude`              | float64         | Latitude. |
 | `longitude`             | float64         | Longitude. |
-| `team_id`               | int64           | Team enum (same values as `gym_details.team`). |
+| `team_id`               | int64           | Team enum (same values as `gym_details.team`). Source: `pogo.Team`. |
 | `spawn`                 | int64           | Unix seconds when the raid egg was first seen. |
 | `start`                 | int64           | Unix seconds when the raid battle begins (egg hatches). |
 | `end`                   | int64           | Unix seconds when the raid ends. |
@@ -546,6 +598,23 @@ the lure-change path. A lure expiring will, however, be reflected in the next
 webhook fired for any other reason (since all fields are a snapshot at send
 time).
 
+#### What this envelope actually carries
+
+This webhook type multiplexes three independent event classes that share a
+single envelope:
+
+- **Lure** — fires on `lure_expiration` change while `lure_id != 0`.
+- **Community power-up** — fires on `power_up_end_timestamp` change.
+- **Showcase** — *snapshot only*. Showcase changes do **not** fire this
+  webhook; showcase fields ride along whenever a lure or power-up event
+  fires, but a pokestop with only a showcase (no active lure, no active
+  power-up) is invisible on this stream.
+
+A consumer that filters on `lure_id != 0` will silently drop every power-up
+event and every showcase ride-along carried by a power-up event. Treat the
+payload as a snapshot, not an event, and dispatch on the bits you actually
+care about.
+
 #### Payload
 
 | JSON field                    | Go type         | Description |
@@ -558,7 +627,7 @@ time).
 | `lure_expiration`             | int64           | Unix seconds when the active lure expires. `0` if no lure. |
 | `last_modified`               | int64           | Unix seconds when the server last modified the pokestop. |
 | `enabled`                     | bool            | Whether the pokestop is operational. |
-| `lure_id`                     | int16           | Lure enum: 501=Regular, 502=Glacial, 503=Mossy, 504=Magnetic, 505=Rainy, 506=Sparkly (values from pogo `Item_` enum). `0` if no lure. |
+| `lure_id`                     | int16           | Lure enum: 501=Regular, 502=Glacial, 503=Mossy, 504=Magnetic, 505=Rainy, 506=Sparkly. `0` if no lure. Source: `pogo.Item` (the `ITEM_TROY_DISK_*` values). |
 | `ar_scan_eligible`            | int64           | `0` or `1`. |
 | `power_up_level`              | int64           | Community power-up level 0–3. |
 | `power_up_points`             | int64           | Points accumulated toward the next power-up level. |
@@ -741,6 +810,12 @@ numeric value from the bundled `pogo` proto definitions if you need it.
 |----------------------|---------|-------|
 | `pokemon_id`         | int     | Pokédex ID. Set to `132` (Ditto) if `is_hidden_ditto` is true. |
 | `pokemon_id_display` | int     | Only present when `pokemon_id` is forced to `132`: the apparent species the client will show. |
+
+> When matching a user's desired encounter species against quest rewards,
+> prefer `pokemon_id_display` when present and fall back to `pokemon_id`
+> otherwise. A user tracking "quest with Pikachu encounter" would otherwise
+> miss every Pikachu that turns out to be a hidden Ditto, while a user
+> tracking Ditto-only quests would over-match.
 | `shiny_probability`  | float64 | Omitted when `0`. |
 | `costume_id`         | int     | Omitted when `0`. |
 | `form_id`            | int     | Omitted when `0`. |
@@ -794,10 +869,10 @@ Changes to slot 2 or slot 3 alone do **not** fire the webhook.
 | `start`                     | int64           | Unix seconds when the invasion started. |
 | `incident_expire_timestamp` | int64           | Unix seconds when the invasion expires. **Duplicated in `expiration`** for legacy compatibility. |
 | `expiration`                | int64           | Same value as `incident_expire_timestamp`. |
-| `display_type`              | int16           | Display enum (Niantic `IncidentDisplayType`). |
+| `display_type`              | int16           | Display enum. Source: `pogo.IncidentDisplayType`. |
 | `style`                     | int16           | Style enum. |
-| `grunt_type`                | int16           | Character enum (Niantic `InvasionCharacter`). **Duplicated in `character`** for legacy compatibility. |
-| `character`                 | int16           | Same value as `grunt_type`. |
+| `grunt_type`                | int16           | Character enum. **Duplicated in `character`** for legacy compatibility. Source: `pogo.EnumWrapper_InvasionCharacter`. |
+| `character`                 | int16           | Same value as `grunt_type`. Source: `pogo.EnumWrapper_InvasionCharacter`. |
 | `updated`                   | int64           | Unix seconds when Golbat last saved the record. |
 | `confirmed`                 | bool            | Whether the lineup is verified. |
 | `lineup`                    | array           | Array of up to 3 `{slot, pokemon_id, form}` entries. Empty array `[]` if slot 1 is unknown. |
@@ -840,8 +915,8 @@ fire the webhook.
 | `s2_cell_id`            | int64              | Google S2 cell ID (level-10 cells, ~1 km² each). |
 | `latitude`              | float64            | Center latitude of the cell. |
 | `longitude`             | float64            | Center longitude of the cell. |
-| `polygon`               | array of 4 `[lat, lon]` pairs | The four corners of the S2 cell, computed from `s2.CellFromCellID(id).Vertex(i)` in order 0–3. Each element is a two-element `[lat, lon]` array in degrees. |
-| `gameplay_condition`    | int64              | Niantic `GameplayWeatherProto_WeatherCondition` enum: 0=none, 1=clear, 2=rainy, 3=partly cloudy, 4=overcast, 5=windy, 6=snow, 7=fog. |
+| `polygon`               | array of 4 `[lat, lon]` pairs | The four corners of the S2 cell, computed from `s2.CellFromCellID(id).Vertex(i)` in order 0–3. Each element is a two-element `[lat, lon]` array in degrees. See [polygon ordering](#polygon-ordering) below. |
+| `gameplay_condition`    | int64              | Weather enum: 0=none, 1=clear, 2=rainy, 3=partly cloudy, 4=overcast, 5=windy, 6=snow, 7=fog. Source: `pogo.GameplayWeatherProto_WeatherCondition`. |
 | `wind_direction`        | int64              | Compass direction 0–359°. |
 | `cloud_level`           | int64              | 0–3 scale. |
 | `rain_level`            | int64              | 0–3 scale. |
@@ -852,6 +927,24 @@ fire the webhook.
 | `severity`              | int64              | Alert severity enum (for hazardous weather). |
 | `warn_weather`          | bool               | `true` if Niantic is displaying a weather warning. |
 | `updated`               | int64              | Unix seconds of Golbat's most recent update (derived from `UpdatedMs / 1000`). |
+
+#### polygon ordering
+
+The polygon array always contains exactly four vertices in `s2.Cell.Vertex(0..3)`
+order. Per the s2 library's docstring, that ordering is **CCW in the cell's
+local UV plane**: vertex 0 = lower-left, 1 = lower-right, 2 = upper-right,
+3 = upper-left of the cube face's UV coordinates. The result is a convex
+spherical quadrilateral.
+
+The UV-plane CCW orientation maps to CCW in lat/lon for cells on most of S2's
+six cube faces, but the projection is not consistent across all faces: cells
+on the polar faces (face 2, north; face 5, south) and cells straddling face
+boundaries can present apparent winding inversions when projected to a
+plate-carrée map. Vertex 0 is **not** tied to any compass direction —
+"lower-left" is a UV-plane statement, not a map statement. Consumers that
+need a specific orientation (e.g. CW for a particular GIS tool, or
+"north-east first") must compute it from the latitudes and longitudes
+themselves.
 
 ---
 
@@ -882,6 +975,9 @@ The payload has three variants distinguished by `change_type`:
   - `"description"` — same rules as name.
   - `"image_url"` — the URL's path component changed. Domain-only changes are
     **not** reported. A transition from nil/empty to non-empty URL is reported.
+    Example: `https://lh3.googleusercontent.com/X` → `https://lh4.googleusercontent.com/X`
+    is *not* reported (domain only). `https://lh3.googleusercontent.com/X` →
+    `https://lh3.googleusercontent.com/Y` *is* reported (path changed).
   - `"location"` — latitude or longitude changed beyond `floatTolerance`.
 - **removal**: the fort-tracker detected the fort has been absent from its S2
   cell for longer than the stale threshold.
