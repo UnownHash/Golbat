@@ -448,14 +448,20 @@ reports them. Populated from `METHOD_GYM_GET_INFO` responses.
 
 > `defenders` is the most recent observation Golbat has from a
 > `METHOD_GYM_GET_INFO` response — possibly from the firing webhook's scan,
-> possibly hours older if no scanner has visited the gym since. The `gym_details`
+> possibly hours older if no scanner has spun the gym since. The `gym_details`
 > webhook fires on team / slots / `in_battle` changes detected from regular
-> `METHOD_GET_MAP_OBJECTS` traffic, which does **not** refresh `defenders`. The
-> array can therefore be stale relative to the change that triggered the
-> envelope. There is no per-defender or per-array timestamp on the JSON itself;
-> consumers needing a freshness bound should fall back to the `deployed_time`
-> on individual entries (an approximation captured at scan time, not now), or
-> require the gym's own `updated` field via the `raid` webhook payload.
+> `METHOD_GET_MAP_OBJECTS` traffic, which does **not** carry defender data. A
+> defenders-only change (the array contents shifting without a slot, team, or
+> battle-flag transition) does not fire any webhook — it updates the in-memory
+> record (via `internalDirty`) but neither persists to MySQL nor produces an
+> envelope.
+>
+> There is no in-payload timestamp on `defenders` and no `updated` field on
+> the `gym_details` webhook itself. Per-entry `deployed_time` / `deployed_ms`
+> describe the defender's deployment moment (computed at GYM_GET_INFO scan
+> time and frozen in the JSON), not when Golbat last observed the gym.
+> Receivers needing a freshness bound must track GYM_GET_INFO scan times
+> out-of-band; the webhook stream alone is insufficient.
 
 | Field                      | Type    | Notes |
 |----------------------------|---------|-------|
@@ -606,9 +612,11 @@ single envelope:
 - **Lure** — fires on `lure_expiration` change while `lure_id != 0`.
 - **Community power-up** — fires on `power_up_end_timestamp` change.
 - **Showcase** — *snapshot only*. Showcase changes do **not** fire this
-  webhook; showcase fields ride along whenever a lure or power-up event
-  fires, but a pokestop with only a showcase (no active lure, no active
-  power-up) is invisible on this stream.
+  webhook (or the `quest` or `fort_update` webhooks). Showcase fields ride
+  along whenever a lure or power-up event fires, but a showcase-only update
+  — e.g. the contest leaderboard refreshing on an existing showcase, or a
+  showcase appearing on a pokestop with no active lure or power-up — is
+  persisted to MySQL but is invisible on every webhook stream.
 
 A consumer that filters on `lure_id != 0` will silently drop every power-up
 event and every showcase ride-along carried by a power-up event. Treat the
