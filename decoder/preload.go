@@ -126,6 +126,7 @@ func preloadPokestops(dbDetails db.DbDetails, populateRtree bool) int32 {
 			log.Errorf("Preload: pokestop scan error - %s", err)
 			continue
 		}
+		pokestop.afterLoadFromDB()
 		jobs <- &pokestop
 	}
 	close(jobs)

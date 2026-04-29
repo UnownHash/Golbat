@@ -76,12 +76,22 @@ type Pokestop struct {
 	QuestSeed            null.Int `db:"-"` // Quest seed for AR quest (memory only, sent in webhook)
 	AlternativeQuestSeed null.Int `db:"-"` // Quest seed for non-AR quest (memory only, sent in webhook)
 
-	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
-	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
-	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty                   bool     `db:"-"` // Not persisted - tracks if object needs saving
+	internalDirty           bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
+	newRecord               bool     `db:"-"` // Not persisted - tracks if this is a new record
+	pokestopWebhookRequired bool     `db:"-"` // Set when the pokestop webhook should fire on next save; cleared after fire
+	changedFields           []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
 
 	oldValues PokestopOldValues `db:"-"` // Old values for webhook comparison
+}
+
+// afterLoadFromDB is called once after sqlx populates the Pokestop from a DB
+// row. It seeds the showcase rank-1 fingerprint in oldValues — parsed once
+// from the loaded ShowcaseRankings JSON so the contest-entry decode path
+// can detect leaderboard movement without re-parsing the JSON in any hot
+// path.
+func (p *Pokestop) afterLoadFromDB() {
+	p.oldValues.ShowcaseTopScore, p.oldValues.ShowcaseTopPokemonId = extractShowcaseTop(p.ShowcaseRankings)
 }
 
 // PokestopOldValues holds old field values for webhook comparison (populated when loading from cache/DB)
@@ -96,6 +106,14 @@ type PokestopOldValues struct {
 	Description          null.String
 	Lat                  float64
 	Lon                  float64
+
+	// Last-observed showcase rank-1 fingerprint. Unlike the rest of this
+	// struct, these are NOT snapshots of the live pokestop — they are
+	// running values seeded by afterLoadFromDB and updated by the
+	// contest-entry decoder when it detects leaderboard movement. They are
+	// intentionally preserved across snapshotOldValues calls.
+	ShowcaseTopScore     null.Float
+	ShowcaseTopPokemonId null.Int
 }
 
 //`id` varchar(35) NOT NULL,
@@ -171,6 +189,9 @@ func (p *Pokestop) snapshotOldValues() {
 		Description:          p.Description,
 		Lat:                  p.Lat,
 		Lon:                  p.Lon,
+		// Carry forward running webhook state (see PokestopOldValues).
+		ShowcaseTopScore:     p.oldValues.ShowcaseTopScore,
+		ShowcaseTopPokemonId: p.oldValues.ShowcaseTopPokemonId,
 	}
 }
 
@@ -249,6 +270,13 @@ func (p *Pokestop) SetLureExpireTimestamp(v null.Int) {
 		}
 		p.LureExpireTimestamp = v
 		p.dirty = true
+		// Lure expiry is only webhook-worthy when the lure is active. SetLureId
+		// also sets the flag for new/replacement lures, so call order between
+		// the two setters does not matter (see pokestop_decode.go which has
+		// paths in both orders).
+		if p.LureId != 0 {
+			p.pokestopWebhookRequired = true
+		}
 	}
 }
 
@@ -429,6 +457,9 @@ func (p *Pokestop) SetLureId(v int16) {
 		}
 		p.LureId = v
 		p.dirty = true
+		if v != 0 {
+			p.pokestopWebhookRequired = true
+		}
 	}
 }
 
@@ -499,6 +530,7 @@ func (p *Pokestop) SetPowerUpEndTimestamp(v null.Int) {
 		}
 		p.PowerUpEndTimestamp = v
 		p.dirty = true
+		p.pokestopWebhookRequired = true
 	}
 }
 
@@ -649,6 +681,7 @@ func (p *Pokestop) SetShowcaseFocus(v null.String) {
 		}
 		p.ShowcaseFocus = v
 		p.dirty = true
+		p.pokestopWebhookRequired = true
 	}
 }
 
@@ -699,6 +732,7 @@ func (p *Pokestop) SetShowcaseExpiry(v null.Int) {
 		}
 		p.ShowcaseExpiry = v
 		p.dirty = true
+		p.pokestopWebhookRequired = true
 	}
 }
 

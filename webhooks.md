@@ -593,16 +593,19 @@ Sent when a lure or community power-up starts or changes on a pokestop.
 
 Fires when either:
 
-- Pokestop is new AND (`LureId != 0` OR `PowerUpEndTimestamp != 0`), OR
+- Pokestop is new AND (`LureId != 0` OR `PowerUpEndTimestamp != 0` OR `ShowcaseExpiry` is set), OR
 - Pokestop is not new AND:
   - `LureExpireTimestamp` changed AND `LureId != 0`, OR
-  - `PowerUpEndTimestamp` changed.
+  - `PowerUpEndTimestamp` changed, OR
+  - `ShowcaseExpiry` changed, OR
+  - `ShowcaseFocus` changed, OR
+  - The rank-1 contest entry's score or `pokemon_id` changed.
 
 Note: a lure *expiring* (transitioning `LureId` from non-zero back to 0) does
-not fire this webhook because the second branch's `LureId != 0` check gates
-the lure-change path. A lure expiring will, however, be reflected in the next
-webhook fired for any other reason (since all fields are a snapshot at send
-time).
+not fire this webhook because the lure clause's `LureId != 0` check gates
+the lure-change path. A lure expiring will, however, be reflected in the
+next webhook fired for any other reason (since all fields are a snapshot at
+send time).
 
 #### What this envelope actually carries
 
@@ -611,17 +614,17 @@ single envelope:
 
 - **Lure** — fires on `lure_expiration` change while `lure_id != 0`.
 - **Community power-up** — fires on `power_up_end_timestamp` change.
-- **Showcase** — *snapshot only*. Showcase changes do **not** fire this
-  webhook (or the `quest` or `fort_update` webhooks). Showcase fields ride
-  along whenever a lure or power-up event fires, but a showcase-only update
-  — e.g. the contest leaderboard refreshing on an existing showcase, or a
-  showcase appearing on a pokestop with no active lure or power-up — is
-  persisted to MySQL but is invisible on every webhook stream.
+- **Showcase** — fires on `showcase_expiry` change, `showcase_focus` change,
+  or rank-1 leaderboard movement (rank-1 score or `pokemon_id` differs from
+  the previously observed top entry). Per-scan rankings churn that does not
+  move the rank-1 entry is persisted to MySQL but does not fire a webhook.
 
 A consumer that filters on `lure_id != 0` will silently drop every power-up
-event and every showcase ride-along carried by a power-up event. Treat the
-payload as a snapshot, not an event, and dispatch on the bits you actually
-care about.
+event and every showcase event. Treat the payload as a snapshot, not an
+event, and dispatch on the bits you actually care about.
+
+The full snapshot of all three event classes (lure, power-up, showcase) is
+included in every firing regardless of which class triggered the fire.
 
 #### Payload
 
@@ -641,13 +644,46 @@ care about.
 | `power_up_points`             | int64           | Points accumulated toward the next power-up level. |
 | `power_up_end_timestamp`      | int64           | Unix seconds when the current power-up expires. `0` if none. |
 | `updated`                     | int64           | Unix seconds when Golbat last saved the record. |
-| `showcase_focus`              | null.String     | Showcase category descriptor. |
+| `showcase_focus`              | json.RawMessage | Showcase category descriptor as a JSON object (not a JSON-encoded string). See [showcase_focus structure](#showcase_focus-structure). `null` if not set. |
 | `showcase_pokemon_id`         | null.Int        | Pokédex ID featured in the showcase. |
 | `showcase_pokemon_form_id`    | null.Int        | Form ID featured. |
 | `showcase_pokemon_type_id`    | null.Int        | Pokémon type enum featured. |
 | `showcase_ranking_standard`   | null.Int        | Ranking metric enum (size, weight, etc.). |
 | `showcase_expiry`             | null.Int        | Unix seconds when the showcase ends. |
 | `showcase_rankings`           | json.RawMessage | Top-3 contest rankings for the showcase. See [showcase_rankings structure](#showcase_rankings-structure). `null` if not set. |
+
+#### showcase_focus structure
+
+Built by `createFocusStoreFromContestProto` in `decoder/pokestop_showcase.go`
+from a `ContestProto.Focuses` entry. The value is a JSON object whose
+`type` key identifies which focus class is in use; the remaining fields
+depend on that class. Niantic's contest model permits multiple focuses
+per contest in principle, but in practice Golbat has only ever observed
+one — the implementation logs a warning if more arrive and emits the last
+one decoded.
+
+| `type`        | Additional fields |
+|---------------|-------------------|
+| `"pokemon"`   | `pokemon_id` (int). `pokemon_form` (int) is included only when the focus requires a specific form to match. |
+| `"type"`      | `pokemon_type_1` (int). `pokemon_type_2` (int) included only when a second type is required. |
+| `"alignment"` | `pokemon_alignment` (int — shadow / purified enum). |
+| `"class"`     | `pokemon_class` (int — normal / legendary / mythic / ultra-beast enum). |
+| `"family"`    | `pokemon_family` (int — Pokémon family ID). |
+| `"buddy"`     | `min_level` (int — minimum buddy level required). |
+| `"generation"`| `generation` (int — generation enum). |
+| `"hatched"`   | `hatched` (bool — must be hatched from an egg). |
+| `"mega"`      | `temp_evolution` (int — required mega/primal evolution), `restriction` (int). |
+| `"shiny"`    | `shiny` (bool). |
+
+Examples:
+
+```json
+{ "type": "pokemon", "pokemon_id": 25 }
+```
+
+```json
+{ "type": "type", "pokemon_type_1": 13, "pokemon_type_2": 4 }
+```
 
 #### showcase_rankings structure
 
