@@ -113,6 +113,7 @@ func ReadConfig() (configDefinition, error) {
 	for i := 0; i < len(Config.Webhooks); i++ {
 		hook := &Config.Webhooks[i]
 		hook.AreaNames = splitIntoAreaAndFenceName(hook.Areas)
+		hook.ExcludeAreaNames = splitIntoAreaAndFenceName(hook.ExcludeAreas)
 		hook.HeaderMap = splitIntoHeaderMap(hook.Headers)
 	}
 

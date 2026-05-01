@@ -66,6 +66,9 @@ url = "http://localhost:4201"
 #url = "http://localhost:4202"
 #types = ["raid"]
 #areas = ["London/*", "*/Harrow", "Harrow"]
+# exclude_areas suppresses messages from the listed geofences/areas. If an
+# area appears in both areas and exclude_areas, the exclusion wins.
+#exclude_areas = ["London/Westminster", "*/Wembley"]
 
 [tuning]
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
