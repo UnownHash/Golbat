@@ -24,6 +24,7 @@ type FortTracker struct {
 
 	// Configuration
 	staleThreshold int64 // seconds after which a fort is considered stale
+	minMissCount   int   // consecutive cell scans a fort must be missing before staleness
 }
 
 // FortTrackerCellState tracks the state of forts within a single S2 cell
@@ -35,9 +36,10 @@ type FortTrackerCellState struct {
 
 // FortTrackerLastSeen holds tracker bookkeeping (cell + last-seen + type) for a fort
 type FortTrackerLastSeen struct {
-	cellId   uint64
-	lastSeen int64 // last time this fort was seen in GMO
-	isGym    bool  // faster targeted removal
+	cellId    uint64
+	lastSeen  int64 // last time this fort was seen in GMO
+	missCount int   // consecutive cell scans where this fort was absent
+	isGym     bool  // faster targeted removal
 }
 
 // FortTrackerGMOContents holds fort IDs per cell extracted from a single GMO
@@ -50,14 +52,20 @@ type FortTrackerGMOContents struct {
 // Global fort tracker instance
 var fortTracker *FortTracker
 
-// InitFortTracker initializes the global fort tracker
-func InitFortTracker(staleThresholdSeconds int64) {
+// InitFortTracker initializes the global fort tracker.
+// minMissCount must be >= 1 (1 = previous behavior, >1 = require multiple
+// consecutive cell scans missing the fort before flagging it stale).
+func InitFortTracker(staleThresholdSeconds int64, minMissCount int) {
+	if minMissCount < 1 {
+		minMissCount = 1
+	}
 	fortTracker = &FortTracker{
 		cells:          make(map[uint64]*FortTrackerCellState),
 		forts:          make(map[string]*FortTrackerLastSeen),
 		staleThreshold: staleThresholdSeconds,
+		minMissCount:   minMissCount,
 	}
-	log.Infof("FortTracker: initialized with stale threshold of %d seconds", staleThresholdSeconds)
+	log.Infof("FortTracker: initialized with stale threshold of %d seconds, min miss count %d", staleThresholdSeconds, minMissCount)
 }
 
 // LoadFortsFromDB populates the tracker from database on startup
@@ -114,6 +122,9 @@ func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table strin
 			break
 		}
 
+		// "now" rather than row.Updated: load is a confirmation event.
+		// See preloadPokestops for rationale.
+		nowMs := time.Now().UnixMilli()
 		fortTracker.mu.Lock()
 		for _, row := range rows {
 			cellId := uint64(row.CellId)
@@ -123,9 +134,12 @@ func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table strin
 			} else {
 				cell.pokestops[row.Id] = struct{}{}
 			}
+			if nowMs > cell.lastSeen {
+				cell.lastSeen = nowMs
+			}
 			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
 				cellId:   cellId,
-				lastSeen: row.Updated * 1000, // convert to milliseconds
+				lastSeen: nowMs,
 				isGym:    isGym,
 			}
 		}
@@ -272,6 +286,7 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 			}
 			if info, ok := ft.forts[stopId]; ok {
 				info.lastSeen = timestamp
+				info.missCount = 0
 			}
 			currentPokestops[stopId] = struct{}{}
 		}
@@ -281,6 +296,7 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 			}
 			if info, ok := ft.forts[gymId]; ok {
 				info.lastSeen = timestamp
+				info.missCount = 0
 			}
 			currentGyms[gymId] = struct{}{}
 		}
@@ -291,17 +307,24 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 
 	var pendingPokestops, pendingGyms []string
 
+	// A fort qualifies as stale only when both criteria are met:
+	// - missing for at least staleThreshold (time-based, defends against partial GMOs)
+	// - absent from at least minMissCount consecutive cell scans (count-based,
+	//   defends against transient single-frame coverage gaps / level-30 gating).
 	for stopId := range cell.pokestops {
 		if _, inGMO := currentPokestops[stopId]; inGMO {
 			continue
 		}
-		if info, exists := ft.forts[stopId]; exists {
-			missingDuration := timestamp - info.lastSeen
-			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
-				result.StalePokestops = append(result.StalePokestops, stopId)
-			} else {
-				pendingPokestops = append(pendingPokestops, stopId)
-			}
+		info, exists := ft.forts[stopId]
+		if !exists {
+			continue
+		}
+		info.missCount++
+		missingDuration := timestamp - info.lastSeen
+		if missingDuration >= ft.staleThreshold*1000 && info.missCount >= ft.minMissCount {
+			result.StalePokestops = append(result.StalePokestops, stopId)
+		} else {
+			pendingPokestops = append(pendingPokestops, stopId)
 		}
 	}
 
@@ -309,13 +332,16 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 		if _, inGMO := currentGyms[gymId]; inGMO {
 			continue
 		}
-		if info, exists := ft.forts[gymId]; exists {
-			missingDuration := timestamp - info.lastSeen
-			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
-				result.StaleGyms = append(result.StaleGyms, gymId)
-			} else {
-				pendingGyms = append(pendingGyms, gymId)
-			}
+		info, exists := ft.forts[gymId]
+		if !exists {
+			continue
+		}
+		info.missCount++
+		missingDuration := timestamp - info.lastSeen
+		if missingDuration >= ft.staleThreshold*1000 && info.missCount >= ft.minMissCount {
+			result.StaleGyms = append(result.StaleGyms, gymId)
+		} else {
+			pendingGyms = append(pendingGyms, gymId)
 		}
 	}
 
@@ -376,6 +402,7 @@ func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint
 			}
 		}
 		info.lastSeen = timestamp
+		info.missCount = 0
 		// Defensive: ensure fort lives in this cell's set even if a later
 		// early-return is added before cell.pokestops/gyms is reassigned.
 		if isGym {
@@ -432,9 +459,10 @@ func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now
 	}
 
 	ft.forts[fortId] = &FortTrackerLastSeen{
-		cellId:   cellId,
-		lastSeen: nowMs,
-		isGym:    isGym,
+		cellId:    cellId,
+		lastSeen:  nowMs,
+		missCount: 0,
+		isGym:     isGym,
 	}
 }
 

@@ -258,7 +258,11 @@ func main() {
 	if staleThreshold <= 0 {
 		staleThreshold = 3600 // def 1 hour
 	}
-	decoder.InitFortTracker(staleThreshold)
+	minMissCount := cfg.Cleanup.FortsMinMissCount
+	if minMissCount <= 0 {
+		minMissCount = 1
+	}
+	decoder.InitFortTracker(staleThreshold, minMissCount)
 
 	// Determine loading strategy
 	// Preload: warms cache for forts, stations, and recent spawnpoints
