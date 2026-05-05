@@ -201,7 +201,8 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 }
 
 // RegisterFort registers a fort during bulk loading (e.g., from preload).
-// Unlike UpdateFort, this uses the provided timestamp rather than "now".
+// Seeds cell.lastSeen so a partial first GMO does not erase preloaded forts.
+// Does not rewind info.lastSeen if a more recent value is already tracked.
 func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -214,45 +215,16 @@ func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, up
 		cell.pokestops[fortId] = struct{}{}
 	}
 
+	if updatedTimestamp > cell.lastSeen {
+		cell.lastSeen = updatedTimestamp
+	}
+
+	if existing, exists := ft.forts[fortId]; exists && updatedTimestamp <= existing.lastSeen {
+		return
+	}
 	ft.forts[fortId] = &FortTrackerLastSeen{
 		cellId:   cellId,
 		lastSeen: updatedTimestamp,
-		isGym:    isGym,
-	}
-}
-
-// UpdateFort updates tracking for a single fort seen in GMO
-func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now int64) {
-	ft.mu.Lock()
-	defer ft.mu.Unlock()
-
-	// Get or create cell
-	cell := ft.getOrCreateCellLocked(cellId)
-
-	// Check if fort moved cells
-	if existing, exists := ft.forts[fortId]; exists && existing.cellId != cellId {
-		// Fort moved to a different cell - remove from old cell
-		oldCell, oldExists := ft.cells[existing.cellId]
-		if oldExists {
-			if existing.isGym {
-				delete(oldCell.gyms, fortId)
-			} else {
-				delete(oldCell.pokestops, fortId)
-			}
-		}
-	}
-
-	// Add to current cell
-	if isGym {
-		cell.gyms[fortId] = struct{}{}
-	} else {
-		cell.pokestops[fortId] = struct{}{}
-	}
-
-	// Update fort info
-	ft.forts[fortId] = &FortTrackerLastSeen{
-		cellId:   cellId,
-		lastSeen: now,
 		isGym:    isGym,
 	}
 }
@@ -268,10 +240,19 @@ type CellUpdateResult struct {
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
 // Logic: if fort.lastSeen < cell.lastSeen, fort is missing from cell.
 // Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
-// Returns nil if timestamp is older than last processed for this cell.
+// Returns nil if timestamp is older than last processed for this cell, or
+// far enough in the future to look implausible (clock skew / malicious input).
 func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) *CellUpdateResult {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
+
+	// Reject implausibly future timestamps so a single bad GMO cannot
+	// permanently wedge a cell (any later real GMO would always be <= it).
+	nowMs := time.Now().UnixMilli()
+	if timestamp > nowMs+60_000 {
+		log.Warnf("FortTracker: rejecting GMO with future timestamp cell=%d ts=%d now=%d", cellId, timestamp, nowMs)
+		return nil
+	}
 
 	cell := ft.getOrCreateCellLocked(cellId)
 
@@ -282,7 +263,9 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 
 	result := CellUpdateResult{}
 
-	// Build sets of current forts from GMO
+	// Build sets of current forts from GMO. If the same id appears in both
+	// pokestopIds and gymIds (Niantic-side type-change race), gym wins —
+	// matches proto pack order and avoids the conversion loop fighting itself.
 	currentPokestops := make(map[string]struct{}, len(pokestopIds))
 	for _, id := range pokestopIds {
 		currentPokestops[id] = struct{}{}
@@ -291,66 +274,41 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	for _, id := range gymIds {
 		currentGyms[id] = struct{}{}
 	}
+	for id := range currentGyms {
+		delete(currentPokestops, id)
+	}
 
 	// Check if this is the first time we're seeing this cell
 	firstScan := cell.lastSeen == 0
 
-	// Update lastSeen for forts present in GMO and handle cell moves / type changes
-	for _, id := range pokestopIds {
-		if info, exists := ft.forts[id]; exists {
-			// Handle cell move
-			if info.cellId != cellId {
-				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
-					if info.isGym {
-						delete(oldCell.gyms, id)
-					} else {
-						delete(oldCell.pokestops, id)
-					}
-				}
-				info.cellId = cellId
-			}
-			// Handle type change (gym -> pokestop)
-			if info.isGym {
-				info.isGym = false
-				result.ConvertedToPokestops = append(result.ConvertedToPokestops, id)
-				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
-			}
-			info.lastSeen = timestamp
-		} else {
-			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: false}
-		}
-	}
-	for _, id := range gymIds {
-		if info, exists := ft.forts[id]; exists {
-			// Handle cell move
-			if info.cellId != cellId {
-				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
-					if info.isGym {
-						delete(oldCell.gyms, id)
-					} else {
-						delete(oldCell.pokestops, id)
-					}
-				}
-				info.cellId = cellId
-			}
-			// Handle type change (pokestop -> gym)
-			if !info.isGym {
-				info.isGym = true
-				result.ConvertedToGyms = append(result.ConvertedToGyms, id)
-				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
-			}
-			info.lastSeen = timestamp
-		} else {
-			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: true}
-		}
-	}
+	ft.applyPresentForts(cell, cellId, pokestopIds, currentPokestops, false, &result.ConvertedToPokestops, timestamp)
+	ft.applyPresentForts(cell, cellId, gymIds, currentGyms, true, &result.ConvertedToGyms, timestamp)
 
 	// Update cell lastSeen
 	cell.lastSeen = timestamp
 
-	// Skip stale check on first scan - we need at least one prior scan to compare against
-	// But still update cell fort sets so new forts are tracked for future scans
+	// First scan: merge previously-tracked forts into the GMO set instead of
+	// replacing, otherwise preloaded forts not in this partial GMO disappear
+	// from cell tracking and are never checked for staleness again.
 	if firstScan {
+		for stopId := range cell.pokestops {
+			if _, inGMO := currentPokestops[stopId]; inGMO {
+				continue
+			}
+			if info, ok := ft.forts[stopId]; ok {
+				info.lastSeen = timestamp
+			}
+			currentPokestops[stopId] = struct{}{}
+		}
+		for gymId := range cell.gyms {
+			if _, inGMO := currentGyms[gymId]; inGMO {
+				continue
+			}
+			if info, ok := ft.forts[gymId]; ok {
+				info.lastSeen = timestamp
+			}
+			currentGyms[gymId] = struct{}{}
+		}
 		cell.pokestops = currentPokestops
 		cell.gyms = currentGyms
 		return &result
@@ -409,6 +367,56 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	return &result
 }
 
+// applyPresentForts updates lastSeen for forts present in the GMO, handles
+// cell moves and type conversions. `current` is the deduplicated set for the
+// fort kind being processed; ids skipped via dedup are ignored.
+func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint64, ids []string, current map[string]struct{}, isGym bool, converted *[]string, timestamp int64) {
+	for _, id := range ids {
+		if _, ok := current[id]; !ok {
+			continue
+		}
+		info, exists := ft.forts[id]
+		if !exists {
+			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: isGym}
+			if isGym {
+				cell.gyms[id] = struct{}{}
+			} else {
+				cell.pokestops[id] = struct{}{}
+			}
+			continue
+		}
+		// Handle cell move
+		if info.cellId != cellId {
+			if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
+				if info.isGym {
+					delete(oldCell.gyms, id)
+				} else {
+					delete(oldCell.pokestops, id)
+				}
+			}
+			info.cellId = cellId
+		}
+		// Handle type change
+		if info.isGym != isGym {
+			info.isGym = isGym
+			*converted = append(*converted, id)
+			if isGym {
+				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
+			} else {
+				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
+			}
+		}
+		info.lastSeen = timestamp
+		// Defensive: ensure fort lives in this cell's set even if a later
+		// early-return is added before cell.pokestops/gyms is reassigned.
+		if isGym {
+			cell.gyms[id] = struct{}{}
+		} else {
+			cell.pokestops[id] = struct{}{}
+		}
+	}
+}
+
 // RemoveFort removes a fort from tracking (called after marking as deleted)
 func (ft *FortTracker) RemoveFort(fortId string) {
 	ft.mu.Lock()
@@ -432,9 +440,35 @@ func (ft *FortTracker) RemoveFort(fortId string) {
 	delete(ft.forts, fortId)
 }
 
-// RestoreFort adds a fort back to tracking (called when un-deleting)
-func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now int64) {
-	ft.UpdateFort(fortId, cellId, isGym, now)
+// RestoreFort adds a fort back to tracking (called when un-deleting).
+// nowMs MUST be milliseconds (matches tracker's internal unit).
+func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, nowMs int64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if existing, exists := ft.forts[fortId]; exists && existing.cellId != cellId {
+		if oldCell, ok := ft.cells[existing.cellId]; ok {
+			if existing.isGym {
+				delete(oldCell.gyms, fortId)
+			} else {
+				delete(oldCell.pokestops, fortId)
+			}
+		}
+	}
+
+	if isGym {
+		cell.gyms[fortId] = struct{}{}
+	} else {
+		cell.pokestops[fortId] = struct{}{}
+	}
+
+	ft.forts[fortId] = &FortTrackerLastSeen{
+		cellId:   cellId,
+		lastSeen: nowMs,
+		isGym:    isGym,
+	}
 }
 
 // GetFortTracker returns the global fort tracker instance
@@ -521,7 +555,10 @@ func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string,
 		return
 	}
 	if gym == nil {
-		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
+		log.Warnf("FortTracker: gym %s not found in cache or database, clearing tracker entry", gymId)
+		if removeFromTracker {
+			fortTracker.RemoveFort(gymId)
+		}
 		return
 	}
 
@@ -556,7 +593,10 @@ func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId s
 		return
 	}
 	if pokestop == nil {
-		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
+		log.Warnf("FortTracker: pokestop %s not found in cache or database, clearing tracker entry", stopId)
+		if removeFromTracker {
+			fortTracker.RemoveFort(stopId)
+		}
 		return
 	}
 
