@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -23,23 +24,25 @@ type FortTracker struct {
 
 	// Configuration
 	staleThreshold int64 // seconds after which a fort is considered stale
+	minMissCount   int   // consecutive cell scans a fort must be missing before staleness
 }
 
-// CellFortState tracks the state of forts within a single S2 cell
+// FortTrackerCellState tracks the state of forts within a single S2 cell
 type FortTrackerCellState struct {
 	lastSeen  int64               // last time this cell was seen in GMO
 	pokestops map[string]struct{} // set of pokestop IDs
 	gyms      map[string]struct{} // set of gym IDs
 }
 
-// FortInfo tracks individual fort metadata
+// FortTrackerLastSeen holds tracker bookkeeping (cell + last-seen + type) for a fort
 type FortTrackerLastSeen struct {
-	cellId   uint64
-	lastSeen int64 // last time this fort was seen in GMO
-	isGym    bool  // faster targeted removal
+	cellId    uint64
+	lastSeen  int64 // last time this fort was seen in GMO
+	missCount int   // consecutive cell scans where this fort was absent
+	isGym     bool  // faster targeted removal
 }
 
-// CellFortsData holds fort IDs per cell from GMO processing
+// FortTrackerGMOContents holds fort IDs per cell extracted from a single GMO
 type FortTrackerGMOContents struct {
 	Pokestops []string
 	Gyms      []string
@@ -49,14 +52,20 @@ type FortTrackerGMOContents struct {
 // Global fort tracker instance
 var fortTracker *FortTracker
 
-// InitFortTracker initializes the global fort tracker
-func InitFortTracker(staleThresholdSeconds int64) {
+// InitFortTracker initializes the global fort tracker.
+// minMissCount must be >= 1 (1 = previous behavior, >1 = require multiple
+// consecutive cell scans missing the fort before flagging it stale).
+func InitFortTracker(staleThresholdSeconds int64, minMissCount int) {
+	if minMissCount < 1 {
+		minMissCount = 1
+	}
 	fortTracker = &FortTracker{
 		cells:          make(map[uint64]*FortTrackerCellState),
 		forts:          make(map[string]*FortTrackerLastSeen),
 		staleThreshold: staleThresholdSeconds,
+		minMissCount:   minMissCount,
 	}
-	log.Infof("FortTracker: initialized with stale threshold of %d seconds", staleThresholdSeconds)
+	log.Infof("FortTracker: initialized with stale threshold of %d seconds, min miss count %d", staleThresholdSeconds, minMissCount)
 }
 
 // LoadFortsFromDB populates the tracker from database on startup
@@ -67,14 +76,12 @@ func LoadFortsFromDB(ctx context.Context, dbDetails db.DbDetails) error {
 
 	startTime := time.Now()
 
-	// Load pokestops
-	pokestopCount, err := loadPokestopsFromDB(ctx, dbDetails)
+	pokestopCount, err := loadFortKindFromDB(ctx, dbDetails, "pokestop", false)
 	if err != nil {
 		return err
 	}
 
-	// Load gyms
-	gymCount, err := loadGymsFromDB(ctx, dbDetails)
+	gymCount, err := loadFortKindFromDB(ctx, dbDetails, "gym", true)
 	if err != nil {
 		return err
 	}
@@ -87,23 +94,27 @@ func LoadFortsFromDB(ctx context.Context, dbDetails db.DbDetails) error {
 
 const loadBatchSize = 30000
 
-func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
-	type pokestopRow struct {
+// loadFortKindFromDB streams non-deleted forts of a single kind into the tracker.
+// `table` is a hardcoded literal (not user input), so the Sprintf is not a SQL injection vector.
+func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table string, isGym bool) (int, error) {
+	type fortRow struct {
 		Id      string `db:"id"`
 		CellId  int64  `db:"cell_id"`
 		Updated int64  `db:"updated"`
 	}
 
+	query := fmt.Sprintf(
+		"SELECT id, cell_id, updated FROM %s WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
+		table,
+	)
+
 	var totalCount int
 	var lastId string
 
 	for {
-		rows := []pokestopRow{}
-		err := dbDetails.GeneralDb.SelectContext(ctx, &rows,
-			"SELECT id, cell_id, updated FROM pokestop WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
-			lastId, loadBatchSize)
-		if err != nil {
-			log.Errorf("FortTracker: failed to load pokestops - %s", err)
+		rows := []fortRow{}
+		if err := dbDetails.GeneralDb.SelectContext(ctx, &rows, query, lastId, loadBatchSize); err != nil {
+			log.Errorf("FortTracker: failed to load %s - %s", table, err)
 			return totalCount, err
 		}
 
@@ -111,15 +122,25 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			break
 		}
 
+		// "now" rather than row.Updated: load is a confirmation event.
+		// See preloadPokestops for rationale.
+		nowMs := time.Now().UnixMilli()
 		fortTracker.mu.Lock()
 		for _, row := range rows {
 			cellId := uint64(row.CellId)
 			cell := fortTracker.getOrCreateCellLocked(cellId)
-			cell.pokestops[row.Id] = struct{}{}
+			if isGym {
+				cell.gyms[row.Id] = struct{}{}
+			} else {
+				cell.pokestops[row.Id] = struct{}{}
+			}
+			if nowMs > cell.lastSeen {
+				cell.lastSeen = nowMs
+			}
 			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
 				cellId:   cellId,
-				lastSeen: row.Updated * 1000, // convert to milliseconds
-				isGym:    false,
+				lastSeen: nowMs,
+				isGym:    isGym,
 			}
 		}
 		fortTracker.mu.Unlock()
@@ -131,57 +152,7 @@ func loadPokestopsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, erro
 			break
 		}
 
-		log.Debugf("FortTracker: loading pokestops... %d so far", totalCount)
-	}
-
-	return totalCount, nil
-}
-
-func loadGymsFromDB(ctx context.Context, dbDetails db.DbDetails) (int, error) {
-	type gymRow struct {
-		Id      string `db:"id"`
-		CellId  int64  `db:"cell_id"`
-		Updated int64  `db:"updated"`
-	}
-
-	var totalCount int
-	var lastId string
-
-	for {
-		rows := []gymRow{}
-		err := dbDetails.GeneralDb.SelectContext(ctx, &rows,
-			"SELECT id, cell_id, updated FROM gym WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
-			lastId, loadBatchSize)
-		if err != nil {
-			log.Errorf("FortTracker: failed to load gyms - %s", err)
-			return totalCount, err
-		}
-
-		if len(rows) == 0 {
-			break
-		}
-
-		fortTracker.mu.Lock()
-		for _, row := range rows {
-			cellId := uint64(row.CellId)
-			cell := fortTracker.getOrCreateCellLocked(cellId)
-			cell.gyms[row.Id] = struct{}{}
-			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
-				cellId:   cellId,
-				lastSeen: row.Updated * 1000, // convert to milliseconds
-				isGym:    true,
-			}
-		}
-		fortTracker.mu.Unlock()
-
-		totalCount += len(rows)
-		lastId = rows[len(rows)-1].Id
-
-		if len(rows) < loadBatchSize {
-			break
-		}
-
-		log.Debugf("FortTracker: loading gyms... %d so far", totalCount)
+		log.Debugf("FortTracker: loading %s... %d so far", table, totalCount)
 	}
 
 	return totalCount, nil
@@ -201,7 +172,8 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 }
 
 // RegisterFort registers a fort during bulk loading (e.g., from preload).
-// Unlike UpdateFort, this uses the provided timestamp rather than "now".
+// Seeds cell.lastSeen so a partial first GMO does not erase preloaded forts.
+// Does not rewind info.lastSeen if a more recent value is already tracked.
 func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -214,45 +186,16 @@ func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, up
 		cell.pokestops[fortId] = struct{}{}
 	}
 
+	if updatedTimestamp > cell.lastSeen {
+		cell.lastSeen = updatedTimestamp
+	}
+
+	if existing, exists := ft.forts[fortId]; exists && updatedTimestamp <= existing.lastSeen {
+		return
+	}
 	ft.forts[fortId] = &FortTrackerLastSeen{
 		cellId:   cellId,
 		lastSeen: updatedTimestamp,
-		isGym:    isGym,
-	}
-}
-
-// UpdateFort updates tracking for a single fort seen in GMO
-func (ft *FortTracker) UpdateFort(fortId string, cellId uint64, isGym bool, now int64) {
-	ft.mu.Lock()
-	defer ft.mu.Unlock()
-
-	// Get or create cell
-	cell := ft.getOrCreateCellLocked(cellId)
-
-	// Check if fort moved cells
-	if existing, exists := ft.forts[fortId]; exists && existing.cellId != cellId {
-		// Fort moved to a different cell - remove from old cell
-		oldCell, oldExists := ft.cells[existing.cellId]
-		if oldExists {
-			if existing.isGym {
-				delete(oldCell.gyms, fortId)
-			} else {
-				delete(oldCell.pokestops, fortId)
-			}
-		}
-	}
-
-	// Add to current cell
-	if isGym {
-		cell.gyms[fortId] = struct{}{}
-	} else {
-		cell.pokestops[fortId] = struct{}{}
-	}
-
-	// Update fort info
-	ft.forts[fortId] = &FortTrackerLastSeen{
-		cellId:   cellId,
-		lastSeen: now,
 		isGym:    isGym,
 	}
 }
@@ -268,21 +211,52 @@ type CellUpdateResult struct {
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
 // Logic: if fort.lastSeen < cell.lastSeen, fort is missing from cell.
 // Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
-// Returns nil if timestamp is older than last processed for this cell.
+// Returns nil if timestamp is older than last processed for this cell, or
+// far enough in the future to look implausible (clock skew / malicious input).
 func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) *CellUpdateResult {
-	ft.mu.Lock()
-	defer ft.mu.Unlock()
-
-	cell := ft.getOrCreateCellLocked(cellId)
-
-	// Skip if this GMO is older than the last one we processed for this cell
-	if timestamp <= cell.lastSeen {
+	// Reject implausibly future timestamps so a single bad GMO cannot
+	// permanently wedge a cell (any later real GMO would always be <= it).
+	nowMs := time.Now().UnixMilli()
+	if timestamp > nowMs+60_000 {
+		log.Warnf("FortTracker: rejecting GMO with future timestamp cell=%d ts=%d now=%d", cellId, timestamp, nowMs)
 		return nil
 	}
 
-	result := CellUpdateResult{}
+	ft.mu.Lock()
+	result, pendingPokestops, pendingGyms, processed := ft.processCellUpdateLocked(cellId, pokestopIds, gymIds, timestamp)
+	ft.mu.Unlock()
 
-	// Build sets of current forts from GMO
+	if !processed {
+		return nil
+	}
+
+	// Hoisted out of locked section: log message formatting / slice boxing is
+	// not worth holding the global tracker lock for.
+	if len(pendingPokestops) > 0 {
+		log.Debugf("FortTracker: cell %d has %d pokestop(s) pending removal: %v", cellId, len(pendingPokestops), pendingPokestops)
+	}
+	if len(pendingGyms) > 0 {
+		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
+	}
+
+	return result
+}
+
+// processCellUpdateLocked is the locked core of ProcessCellUpdate.
+// Caller must hold ft.mu. Returns (result, pendingPokestops, pendingGyms, processed).
+// processed is false when the GMO is older than our last processed timestamp for this cell.
+func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) (*CellUpdateResult, []string, []string, bool) {
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if timestamp <= cell.lastSeen {
+		return nil, nil, nil, false
+	}
+
+	result := &CellUpdateResult{}
+
+	// Build sets of current forts from GMO. If the same id appears in both
+	// pokestopIds and gymIds (Niantic-side type-change race), gym wins —
+	// matches proto pack order and avoids the conversion loop fighting itself.
 	currentPokestops := make(map[string]struct{}, len(pokestopIds))
 	for _, id := range pokestopIds {
 		currentPokestops[id] = struct{}{}
@@ -291,85 +265,66 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 	for _, id := range gymIds {
 		currentGyms[id] = struct{}{}
 	}
+	for id := range currentGyms {
+		delete(currentPokestops, id)
+	}
 
-	// Check if this is the first time we're seeing this cell
 	firstScan := cell.lastSeen == 0
 
-	// Update lastSeen for forts present in GMO and handle cell moves / type changes
-	for _, id := range pokestopIds {
-		if info, exists := ft.forts[id]; exists {
-			// Handle cell move
-			if info.cellId != cellId {
-				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
-					if info.isGym {
-						delete(oldCell.gyms, id)
-					} else {
-						delete(oldCell.pokestops, id)
-					}
-				}
-				info.cellId = cellId
-			}
-			// Handle type change (gym -> pokestop)
-			if info.isGym {
-				info.isGym = false
-				result.ConvertedToPokestops = append(result.ConvertedToPokestops, id)
-				log.Infof("FortTracker: fort %s converted from gym to pokestop", id)
-			}
-			info.lastSeen = timestamp
-		} else {
-			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: false}
-		}
-	}
-	for _, id := range gymIds {
-		if info, exists := ft.forts[id]; exists {
-			// Handle cell move
-			if info.cellId != cellId {
-				if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
-					if info.isGym {
-						delete(oldCell.gyms, id)
-					} else {
-						delete(oldCell.pokestops, id)
-					}
-				}
-				info.cellId = cellId
-			}
-			// Handle type change (pokestop -> gym)
-			if !info.isGym {
-				info.isGym = true
-				result.ConvertedToGyms = append(result.ConvertedToGyms, id)
-				log.Infof("FortTracker: fort %s converted from pokestop to gym", id)
-			}
-			info.lastSeen = timestamp
-		} else {
-			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: true}
-		}
-	}
+	ft.applyPresentForts(cell, cellId, pokestopIds, currentPokestops, false, &result.ConvertedToPokestops, timestamp)
+	ft.applyPresentForts(cell, cellId, gymIds, currentGyms, true, &result.ConvertedToGyms, timestamp)
 
-	// Update cell lastSeen
 	cell.lastSeen = timestamp
 
-	// Skip stale check on first scan - we need at least one prior scan to compare against
-	// But still update cell fort sets so new forts are tracked for future scans
+	// First scan: merge previously-tracked forts into the GMO set instead of
+	// replacing, otherwise preloaded forts not in this partial GMO disappear
+	// from cell tracking and are never checked for staleness again.
 	if firstScan {
+		for stopId := range cell.pokestops {
+			if _, inGMO := currentPokestops[stopId]; inGMO {
+				continue
+			}
+			if info, ok := ft.forts[stopId]; ok {
+				info.lastSeen = timestamp
+				info.missCount = 0
+			}
+			currentPokestops[stopId] = struct{}{}
+		}
+		for gymId := range cell.gyms {
+			if _, inGMO := currentGyms[gymId]; inGMO {
+				continue
+			}
+			if info, ok := ft.forts[gymId]; ok {
+				info.lastSeen = timestamp
+				info.missCount = 0
+			}
+			currentGyms[gymId] = struct{}{}
+		}
 		cell.pokestops = currentPokestops
 		cell.gyms = currentGyms
-		return &result
+		return result, nil, nil, true
 	}
 
-	// Check forts in cell: if fort.lastSeen < cell.lastSeen, it's missing
 	var pendingPokestops, pendingGyms []string
 
+	// A fort qualifies as stale only when both criteria are met:
+	// - missing for at least staleThreshold (time-based, defends against partial GMOs)
+	// - absent from at least minMissCount consecutive cell scans (count-based,
+	//   defends against transient single-frame coverage gaps / level-30 gating).
 	for stopId := range cell.pokestops {
 		if _, inGMO := currentPokestops[stopId]; inGMO {
 			continue
 		}
-		if info, exists := ft.forts[stopId]; exists {
-			missingDuration := timestamp - info.lastSeen
-			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
-				result.StalePokestops = append(result.StalePokestops, stopId)
-			} else {
-				pendingPokestops = append(pendingPokestops, stopId)
-			}
+		info, exists := ft.forts[stopId]
+		if !exists {
+			continue
+		}
+		info.missCount++
+		missingDuration := timestamp - info.lastSeen
+		if missingDuration >= ft.staleThreshold*1000 && info.missCount >= ft.minMissCount {
+			result.StalePokestops = append(result.StalePokestops, stopId)
+		} else {
+			pendingPokestops = append(pendingPokestops, stopId)
 		}
 	}
 
@@ -377,21 +332,17 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		if _, inGMO := currentGyms[gymId]; inGMO {
 			continue
 		}
-		if info, exists := ft.forts[gymId]; exists {
-			missingDuration := timestamp - info.lastSeen
-			if missingDuration >= ft.staleThreshold*1000 { // staleThreshold is in seconds, timestamp in ms
-				result.StaleGyms = append(result.StaleGyms, gymId)
-			} else {
-				pendingGyms = append(pendingGyms, gymId)
-			}
+		info, exists := ft.forts[gymId]
+		if !exists {
+			continue
 		}
-	}
-
-	if len(pendingPokestops) > 0 {
-		log.Debugf("FortTracker: cell %d has %d pokestop(s) pending removal: %v", cellId, len(pendingPokestops), pendingPokestops)
-	}
-	if len(pendingGyms) > 0 {
-		log.Debugf("FortTracker: cell %d has %d gym(s) pending removal: %v", cellId, len(pendingGyms), pendingGyms)
+		info.missCount++
+		missingDuration := timestamp - info.lastSeen
+		if missingDuration >= ft.staleThreshold*1000 && info.missCount >= ft.minMissCount {
+			result.StaleGyms = append(result.StaleGyms, gymId)
+		} else {
+			pendingGyms = append(pendingGyms, gymId)
+		}
 	}
 
 	// Keep pending forts in cell tracking so they are checked again on subsequent scans
@@ -402,11 +353,64 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		currentGyms[gymId] = struct{}{}
 	}
 
-	// Update cell fort sets with current GMO data (including pending forts)
 	cell.pokestops = currentPokestops
 	cell.gyms = currentGyms
 
-	return &result
+	return result, pendingPokestops, pendingGyms, true
+}
+
+// applyPresentForts updates lastSeen for forts present in the GMO, handles
+// cell moves and type conversions. `current` is the deduplicated set for the
+// fort kind being processed; ids skipped via dedup are ignored.
+func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint64, ids []string, current map[string]struct{}, isGym bool, converted *[]string, timestamp int64) {
+	for _, id := range ids {
+		if _, ok := current[id]; !ok {
+			continue
+		}
+		info, exists := ft.forts[id]
+		if !exists {
+			ft.forts[id] = &FortTrackerLastSeen{cellId: cellId, lastSeen: timestamp, isGym: isGym}
+			if isGym {
+				cell.gyms[id] = struct{}{}
+			} else {
+				cell.pokestops[id] = struct{}{}
+			}
+			continue
+		}
+		// Handle cell move
+		if info.cellId != cellId {
+			if oldCell, oldExists := ft.cells[info.cellId]; oldExists {
+				if info.isGym {
+					delete(oldCell.gyms, id)
+				} else {
+					delete(oldCell.pokestops, id)
+				}
+			}
+			info.cellId = cellId
+		}
+		// Handle type change. The follow-up clear*WithLock call already logs
+		// the conversion at Info level, so we keep this trace at Debug.
+		if info.isGym != isGym {
+			info.isGym = isGym
+			*converted = append(*converted, id)
+			if log.IsLevelEnabled(log.DebugLevel) {
+				if isGym {
+					log.Debugf("FortTracker: fort %s converted from pokestop to gym", id)
+				} else {
+					log.Debugf("FortTracker: fort %s converted from gym to pokestop", id)
+				}
+			}
+		}
+		info.lastSeen = timestamp
+		info.missCount = 0
+		// Defensive: ensure fort lives in this cell's set even if a later
+		// early-return is added before cell.pokestops/gyms is reassigned.
+		if isGym {
+			cell.gyms[id] = struct{}{}
+		} else {
+			cell.pokestops[id] = struct{}{}
+		}
+	}
 }
 
 // RemoveFort removes a fort from tracking (called after marking as deleted)
@@ -419,7 +423,6 @@ func (ft *FortTracker) RemoveFort(fortId string) {
 		return
 	}
 
-	// Remove from cell
 	if cell, cellExists := ft.cells[info.cellId]; cellExists {
 		if info.isGym {
 			delete(cell.gyms, fortId)
@@ -428,13 +431,39 @@ func (ft *FortTracker) RemoveFort(fortId string) {
 		}
 	}
 
-	// Remove from forts map
 	delete(ft.forts, fortId)
 }
 
-// RestoreFort adds a fort back to tracking (called when un-deleting)
-func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now int64) {
-	ft.UpdateFort(fortId, cellId, isGym, now)
+// RestoreFort adds a fort back to tracking (called when un-deleting).
+// nowMs MUST be milliseconds (matches tracker's internal unit).
+func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, nowMs int64) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	cell := ft.getOrCreateCellLocked(cellId)
+
+	if existing, exists := ft.forts[fortId]; exists && existing.cellId != cellId {
+		if oldCell, ok := ft.cells[existing.cellId]; ok {
+			if existing.isGym {
+				delete(oldCell.gyms, fortId)
+			} else {
+				delete(oldCell.pokestops, fortId)
+			}
+		}
+	}
+
+	if isGym {
+		cell.gyms[fortId] = struct{}{}
+	} else {
+		cell.pokestops[fortId] = struct{}{}
+	}
+
+	ft.forts[fortId] = &FortTrackerLastSeen{
+		cellId:    cellId,
+		lastSeen:  nowMs,
+		missCount: 0,
+		isGym:     isGym,
+	}
 }
 
 // GetFortTracker returns the global fort tracker instance
@@ -483,7 +512,7 @@ func (ft *FortTracker) GetCellInfo(cellId uint64) *CellFortInfo {
 	}
 
 	return &CellFortInfo{
-		CellId:    fmt.Sprintf("%d", cellId),
+		CellId:    strconv.FormatUint(cellId, 10),
 		LastSeen:  cell.lastSeen,
 		Pokestops: pokestops,
 		Gyms:      gyms,
@@ -506,108 +535,109 @@ func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
 
 	return &FortTrackerInfo{
 		FortId:   fortId,
-		CellId:   fmt.Sprintf("%d", fort.cellId),
+		CellId:   strconv.FormatUint(fort.cellId, 10),
 		LastSeen: fort.lastSeen,
 		IsGym:    fort.isGym,
 	}
 }
 
-// clearGymWithLock marks a gym as deleted while holding the object-level mutex
-func clearGymWithLock(ctx context.Context, dbDetails db.DbDetails, gymId string, cellId uint64, removeFromTracker bool) {
-	// Load gym through cache (will load from DB if not cached)
-	gym, unlock, err := getGymRecordForUpdate(ctx, dbDetails, gymId, "clearGymWithLock")
-	if err != nil {
-		log.Errorf("FortTracker: failed to load gym %s - %s", gymId, err)
-		return
-	}
-	if gym == nil {
-		log.Warnf("FortTracker: gym %s not found in cache or database", gymId)
-		return
-	}
-
-	// Mark as deleted and save through write-behind queue
-	gym.SetDeleted(true)
-	saveGymRecord(ctx, dbDetails, gym)
-
-	// Build webhook payload while we still hold the lock
-	var fort *FortWebhook
-	if removeFromTracker {
-		fort = InitWebHookFortFromGym(gym)
-	}
-	unlock()
-
-	if removeFromTracker {
-		fortTracker.RemoveFort(gymId)
-		log.Infof("FortTracker: removed gym in cell %d: %s", cellId, gymId)
-		CreateFortChangeWebhooks(fort, REMOVAL)
-		statsCollector.IncFortChange("gym_delete")
-	} else {
-		log.Infof("FortTracker: marked gym as deleted (converted to pokestop) in cell %d: %s", cellId, gymId)
-		statsCollector.IncFortChange("gym_to_pokestop")
-	}
+// fortKindOps captures the type-specific bits clearFortWithLock needs
+// so the gym/pokestop control flow can share a single implementation.
+type fortKindOps[T comparable] struct {
+	kindLabel        string
+	convertedToLabel string
+	statDelete       string
+	statConvert      string
+	loadForUpdate    func(context.Context, db.DbDetails, string, string) (T, func(), error)
+	saveRecord       func(context.Context, db.DbDetails, T)
+	initWebhook      func(T) *FortWebhook
+	setDeleted       func(T)
+	isNil            func(T) bool
 }
 
-// clearPokestopWithLock marks a pokestop as deleted while holding the object-level mutex
-func clearPokestopWithLock(ctx context.Context, dbDetails db.DbDetails, stopId string, cellId uint64, removeFromTracker bool) {
-	// Load pokestop through cache (will load from DB if not cached)
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, dbDetails, stopId, "clearPokestopWithLock")
-	if err != nil {
-		log.Errorf("FortTracker: failed to load pokestop %s - %s", stopId, err)
-		return
-	}
-	if pokestop == nil {
-		log.Warnf("FortTracker: pokestop %s not found in cache or database", stopId)
-		return
-	}
-
-	// Mark as deleted and save through write-behind queue
-	pokestop.SetDeleted(true)
-	savePokestopRecord(ctx, dbDetails, pokestop)
-
-	// Build webhook payload while we still hold the lock
-	var fort *FortWebhook
-	if removeFromTracker {
-		fort = InitWebHookFortFromPokestop(pokestop)
-	}
-	unlock()
-
-	if removeFromTracker {
-		fortTracker.RemoveFort(stopId)
-		log.Infof("FortTracker: removed pokestop in cell %d: %s", cellId, stopId)
-		CreateFortChangeWebhooks(fort, REMOVAL)
-		statsCollector.IncFortChange("pokestop_delete")
-	} else {
-		log.Infof("FortTracker: marked pokestop as deleted (converted to gym) in cell %d: %s", cellId, stopId)
-		statsCollector.IncFortChange("pokestop_to_gym")
-	}
+var gymClearOps = fortKindOps[*Gym]{
+	kindLabel:        "gym",
+	convertedToLabel: "pokestop",
+	statDelete:       "gym_delete",
+	statConvert:      "gym_to_pokestop",
+	loadForUpdate:    getGymRecordForUpdate,
+	saveRecord:       saveGymRecord,
+	initWebhook:      InitWebHookFortFromGym,
+	setDeleted:       func(g *Gym) { g.SetDeleted(true) },
+	isNil:            func(g *Gym) bool { return g == nil },
 }
 
-// CheckRemovedForts uses the in-memory fort tracker for fast detection
-func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, mapCells []uint64, cellForts map[uint64]*FortTrackerGMOContents) {
-	for _, cellId := range mapCells {
-		cf, ok := cellForts[cellId]
-		if !ok {
-			continue
+var pokestopClearOps = fortKindOps[*Pokestop]{
+	kindLabel:        "pokestop",
+	convertedToLabel: "gym",
+	statDelete:       "pokestop_delete",
+	statConvert:      "pokestop_to_gym",
+	loadForUpdate:    getPokestopRecordForUpdate,
+	saveRecord:       savePokestopRecord,
+	initWebhook:      InitWebHookFortFromPokestop,
+	setDeleted:       func(p *Pokestop) { p.SetDeleted(true) },
+	isNil:            func(p *Pokestop) bool { return p == nil },
+}
+
+// clearFortWithLock marks a fort as deleted while holding its object-level mutex.
+// removeFromTracker=true means stale removal (drop tracker entry, fire webhook);
+// false means type conversion (the *other* type still exists in the tracker).
+func clearFortWithLock[T comparable](ctx context.Context, dbDetails db.DbDetails, fortId string, cellId uint64, removeFromTracker bool, ops fortKindOps[T]) {
+	rec, unlock, err := ops.loadForUpdate(ctx, dbDetails, fortId, "clear"+ops.kindLabel+"WithLock")
+	if err != nil {
+		log.Errorf("FortTracker: failed to load %s %s - %s", ops.kindLabel, fortId, err)
+		return
+	}
+	if ops.isNil(rec) {
+		log.Warnf("FortTracker: %s %s not found in cache or database, clearing tracker entry", ops.kindLabel, fortId)
+		if removeFromTracker {
+			fortTracker.RemoveFort(fortId)
 		}
+		return
+	}
 
-		// Process cell through tracker - returns stale and converted forts
-		// Returns nil if this GMO timestamp is older than last processed for this cell
+	ops.setDeleted(rec)
+	ops.saveRecord(ctx, dbDetails, rec)
+
+	var fort *FortWebhook
+	if removeFromTracker {
+		fort = ops.initWebhook(rec)
+	}
+	unlock()
+
+	if removeFromTracker {
+		fortTracker.RemoveFort(fortId)
+		log.Infof("FortTracker: removed %s in cell %d: %s", ops.kindLabel, cellId, fortId)
+		CreateFortChangeWebhooks(fort, REMOVAL)
+		statsCollector.IncFortChange(ops.statDelete)
+	} else {
+		log.Infof("FortTracker: marked %s as deleted (converted to %s) in cell %d: %s", ops.kindLabel, ops.convertedToLabel, cellId, fortId)
+		statsCollector.IncFortChange(ops.statConvert)
+	}
+}
+
+// CheckRemovedForts uses the in-memory fort tracker for fast detection.
+// Iterates cellForts directly — its keyset already matches mapCells.
+func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts map[uint64]*FortTrackerGMOContents) {
+	for cellId, cf := range cellForts {
+		// Process cell through tracker - returns stale and converted forts.
+		// nil result means this GMO timestamp is older than last processed for this cell.
 		result := fortTracker.ProcessCellUpdate(cellId, cf.Pokestops, cf.Gyms, cf.Timestamp)
 		if result == nil {
 			continue
 		}
 
 		for _, gymId := range result.StaleGyms {
-			clearGymWithLock(ctx, dbDetails, gymId, cellId, true)
+			clearFortWithLock(ctx, dbDetails, gymId, cellId, true, gymClearOps)
 		}
 		for _, stopId := range result.StalePokestops {
-			clearPokestopWithLock(ctx, dbDetails, stopId, cellId, true)
+			clearFortWithLock(ctx, dbDetails, stopId, cellId, true, pokestopClearOps)
 		}
 		for _, stopId := range result.ConvertedToGyms {
-			clearPokestopWithLock(ctx, dbDetails, stopId, cellId, false)
+			clearFortWithLock(ctx, dbDetails, stopId, cellId, false, pokestopClearOps)
 		}
 		for _, gymId := range result.ConvertedToPokestops {
-			clearGymWithLock(ctx, dbDetails, gymId, cellId, false)
+			clearFortWithLock(ctx, dbDetails, gymId, cellId, false, gymClearOps)
 		}
 	}
 }

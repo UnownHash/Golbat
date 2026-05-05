@@ -57,7 +57,8 @@ type cleanup struct {
 	Stats               bool  `koanf:"stats"`
 	StatsDays           int   `koanf:"stats_days"`
 	DeviceHours         int   `koanf:"device_hours"`
-	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"` // seconds, default 3600 (1 hour)
+	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"`  // seconds, default 3600 (1 hour)
+	FortsMinMissCount   int   `koanf:"forts_min_miss_count"`   // consecutive cell-scan misses before staleness (default 1)
 }
 
 type Webhook struct {
