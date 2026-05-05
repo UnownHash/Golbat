@@ -198,14 +198,34 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 	} else if fortLookup.FortType == STATION {
 		if filter.BattleLevel != nil || filter.BattlePokemon != nil {
-			// Check if battle has expired
-			if fortLookup.BattleEndTimestamp <= now {
-				return false
+			if len(fortLookup.StationBattles) == 0 {
+				if fortLookup.BattleEndTimestamp <= now {
+					return false
+				}
+				if filter.BattleLevel != nil && !slices.Contains(filter.BattleLevel, fortLookup.BattleLevel) {
+					return false
+				}
+				if filter.BattlePokemon != nil && !matchDnfIdPair(filter.BattlePokemon, fortLookup.BattlePokemonId, fortLookup.BattlePokemonForm) {
+					return false
+				}
+				return true
 			}
-			if filter.BattleLevel != nil && !slices.Contains(filter.BattleLevel, fortLookup.BattleLevel) {
-				return false
+
+			matchedBattle := false
+			for _, battle := range fortLookup.StationBattles {
+				if battle.BattleEndTimestamp <= now {
+					continue
+				}
+				if filter.BattleLevel != nil && !slices.Contains(filter.BattleLevel, battle.BattleLevel) {
+					continue
+				}
+				if filter.BattlePokemon != nil && !matchDnfIdPair(filter.BattlePokemon, battle.BattlePokemonId, battle.BattlePokemonForm) {
+					continue
+				}
+				matchedBattle = true
+				break
 			}
-			if filter.BattlePokemon != nil && !matchDnfIdPair(filter.BattlePokemon, fortLookup.BattlePokemonId, fortLookup.BattlePokemonForm) {
+			if !matchedBattle {
 				return false
 			}
 		}

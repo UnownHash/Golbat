@@ -193,6 +193,30 @@ func StartIncidentExpiry(db *sqlx.DB) {
 	}()
 }
 
+func StartStationBattleExpiry(db *sqlx.DB) {
+	ticker := time.NewTicker(time.Hour + 13*time.Minute)
+	go func() {
+		for {
+			<-ticker.C
+			start := time.Now()
+
+			var result sql.Result
+			var err error
+
+			result, err = db.Exec("DELETE FROM station_battle WHERE battle_end < UNIX_TIMESTAMP();")
+
+			elapsed := time.Since(start)
+
+			if err != nil {
+				log.Errorf("DB - Cleanup of station_battle table error %s", err)
+			} else {
+				rows, _ := result.RowsAffected()
+				log.Infof("DB - Cleanup of station_battle table took %s (%d rows)", elapsed, rows)
+			}
+		}
+	}()
+}
+
 func StartTappableExpiry(db *sqlx.DB) {
 	ticker := time.NewTicker(time.Hour + 16*time.Minute)
 	go func() {

@@ -241,6 +241,10 @@ func main() {
 		StartIncidentExpiry(db)
 	}
 
+	if cfg.Cleanup.StationBattles == true {
+		StartStationBattleExpiry(db)
+	}
+
 	if cfg.Cleanup.Tappables == true {
 		StartTappableExpiry(db)
 	}
