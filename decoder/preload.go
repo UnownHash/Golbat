@@ -101,13 +101,17 @@ func preloadPokestops(dbDetails db.DbDetails, populateRtree bool) int32 {
 					fortRtreeUpdatePokestopOnSave(pokestop)
 				}
 
-				// Register with fort tracker
+				// Register with fort tracker.
+				// We use "now" (not pokestop.Updated) because preload is a
+				// confirmation event — every loaded fort is presumed alive as
+				// of preload time. Using DB Updated would mean partial GMOs
+				// after a long downtime would immediately stale all forts.
 				if fortTracker != nil && pokestop.CellId.Valid {
 					fortTracker.RegisterFort(
 						pokestop.Id,
 						uint64(pokestop.CellId.Int64),
 						false,
-						pokestop.Updated*1000, // convert to milliseconds
+						time.Now().UnixMilli(),
 					)
 				}
 
@@ -161,13 +165,13 @@ func preloadGyms(dbDetails db.DbDetails, populateRtree bool) int32 {
 					fortRtreeUpdateGymOnSave(gym)
 				}
 
-				// Register with fort tracker
+				// Register with fort tracker (see comment in preloadPokestops).
 				if fortTracker != nil && gym.CellId.Valid {
 					fortTracker.RegisterFort(
 						gym.Id,
 						uint64(gym.CellId.Int64),
 						true,
-						gym.Updated*1000, // convert to milliseconds
+						time.Now().UnixMilli(),
 					)
 				}
 
