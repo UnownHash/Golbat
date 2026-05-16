@@ -83,7 +83,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			gym.updateGymFromFort(fort.Data, fort.Cell)
+			gym.updateGymFromFort(fort.Data, fort.Cell, fort.Timestamp)
 			isNewRecord := gym.IsNewRecord()
 
 			saveGymRecord(ctx, db, gym)
