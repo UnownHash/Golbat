@@ -49,6 +49,7 @@ type ApiGymResult struct {
 	RaidPokemonCostume     *int64  `json:"raid_pokemon_costume" doc:"Costume ID of the raid boss"`
 	RaidPokemonEvolution   *int64  `json:"raid_pokemon_evolution" doc:"Evolution ID of the raid boss (e.g. mega)"`
 	ArScanEligible         *int64  `json:"ar_scan_eligible" doc:"Whether the gym is eligible for AR scanning"`
+	IsMegaEnhancedEligible *int64  `json:"is_mega_enhanced_eligible"`
 	PowerUpLevel           *int64  `json:"power_up_level" doc:"Power-up level of the gym"`
 	PowerUpPoints          *int64  `json:"power_up_points" doc:"Power-up points accumulated for the gym"`
 	PowerUpEndTimestamp    *int64  `json:"power_up_end_timestamp" doc:"Unix timestamp when the power-up ends"`
@@ -94,6 +95,7 @@ func buildGymResult(gym *Gym) ApiGymResult {
 		RaidPokemonCostume:     gym.RaidPokemonCostume.Ptr(),
 		RaidPokemonEvolution:   gym.RaidPokemonEvolution.Ptr(),
 		ArScanEligible:         gym.ArScanEligible.Ptr(),
+		IsMegaEnhancedEligible: gym.IsMegaEnhancedEligible.Ptr(),
 		PowerUpLevel:           gym.PowerUpLevel.Ptr(),
 		PowerUpPoints:          gym.PowerUpPoints.Ptr(),
 		PowerUpEndTimestamp:    gym.PowerUpEndTimestamp.Ptr(),

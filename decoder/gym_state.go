@@ -144,55 +144,57 @@ func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string, c
 }
 
 type GymDetailsWebhook struct {
-	Id                  string  `json:"id"`
-	Name                string  `json:"name"`
-	Url                 string  `json:"url"`
-	Latitude            float64 `json:"latitude"`
-	Longitude           float64 `json:"longitude"`
-	Team                int64   `json:"team"`
-	GuardPokemonId      int64   `json:"guard_pokemon_id"`
-	SlotsAvailable      int64   `json:"slots_available"`
-	ExRaidEligible      int64   `json:"ex_raid_eligible"`
-	InBattle            bool    `json:"in_battle"`
-	SponsorId           int64   `json:"sponsor_id"`
-	PartnerId           int64   `json:"partner_id"`
-	PowerUpPoints       int64   `json:"power_up_points"`
-	PowerUpLevel        int64   `json:"power_up_level"`
-	PowerUpEndTimestamp int64   `json:"power_up_end_timestamp"`
-	ArScanEligible      int64   `json:"ar_scan_eligible"`
-	Defenders           any     `json:"defenders"`
+	Id                     string  `json:"id"`
+	Name                   string  `json:"name"`
+	Url                    string  `json:"url"`
+	Latitude               float64 `json:"latitude"`
+	Longitude              float64 `json:"longitude"`
+	Team                   int64   `json:"team"`
+	GuardPokemonId         int64   `json:"guard_pokemon_id"`
+	SlotsAvailable         int64   `json:"slots_available"`
+	ExRaidEligible         int64   `json:"ex_raid_eligible"`
+	InBattle               bool    `json:"in_battle"`
+	SponsorId              int64   `json:"sponsor_id"`
+	PartnerId              int64   `json:"partner_id"`
+	PowerUpPoints          int64   `json:"power_up_points"`
+	PowerUpLevel           int64   `json:"power_up_level"`
+	PowerUpEndTimestamp    int64   `json:"power_up_end_timestamp"`
+	ArScanEligible         int64   `json:"ar_scan_eligible"`
+	IsMegaEnhancedEligible int64   `json:"is_mega_enhanced_eligible"`
+	Defenders              any     `json:"defenders"`
 }
 
 type RaidWebhook struct {
-	GymId               string          `json:"gym_id"`
-	GymName             string          `json:"gym_name"`
-	GymUrl              string          `json:"gym_url"`
-	Latitude            float64         `json:"latitude"`
-	Longitude           float64         `json:"longitude"`
-	TeamId              int64           `json:"team_id"`
-	Spawn               int64           `json:"spawn"`
-	Start               int64           `json:"start"`
-	End                 int64           `json:"end"`
-	Level               int64           `json:"level"`
-	PokemonId           int64           `json:"pokemon_id"`
-	Cp                  int64           `json:"cp"`
-	Gender              int64           `json:"gender"`
-	Form                int64           `json:"form"`
-	Alignment           int64           `json:"alignment"`
-	Costume             int64           `json:"costume"`
-	Evolution           int64           `json:"evolution"`
-	Move1               int64           `json:"move_1"`
-	Move2               int64           `json:"move_2"`
-	ExRaidEligible      int64           `json:"ex_raid_eligible"`
-	IsExclusive         int64           `json:"is_exclusive"`
-	SponsorId           int64           `json:"sponsor_id"`
-	PartnerId           string          `json:"partner_id"`
-	PowerUpPoints       int64           `json:"power_up_points"`
-	PowerUpLevel        int64           `json:"power_up_level"`
-	PowerUpEndTimestamp int64           `json:"power_up_end_timestamp"`
-	ArScanEligible      int64           `json:"ar_scan_eligible"`
-	Rsvps               json.RawMessage `json:"rsvps"`
-	RaidSeed            null.String     `json:"raid_seed"`
+	GymId                  string          `json:"gym_id"`
+	GymName                string          `json:"gym_name"`
+	GymUrl                 string          `json:"gym_url"`
+	Latitude               float64         `json:"latitude"`
+	Longitude              float64         `json:"longitude"`
+	TeamId                 int64           `json:"team_id"`
+	Spawn                  int64           `json:"spawn"`
+	Start                  int64           `json:"start"`
+	End                    int64           `json:"end"`
+	Level                  int64           `json:"level"`
+	PokemonId              int64           `json:"pokemon_id"`
+	Cp                     int64           `json:"cp"`
+	Gender                 int64           `json:"gender"`
+	Form                   int64           `json:"form"`
+	Alignment              int64           `json:"alignment"`
+	Costume                int64           `json:"costume"`
+	Evolution              int64           `json:"evolution"`
+	Move1                  int64           `json:"move_1"`
+	Move2                  int64           `json:"move_2"`
+	ExRaidEligible         int64           `json:"ex_raid_eligible"`
+	IsExclusive            int64           `json:"is_exclusive"`
+	SponsorId              int64           `json:"sponsor_id"`
+	PartnerId              string          `json:"partner_id"`
+	PowerUpPoints          int64           `json:"power_up_points"`
+	PowerUpLevel           int64           `json:"power_up_level"`
+	PowerUpEndTimestamp    int64           `json:"power_up_end_timestamp"`
+	ArScanEligible         int64           `json:"ar_scan_eligible"`
+	IsMegaEnhancedEligible int64           `json:"is_mega_enhanced_eligible"`
+	Rsvps                  json.RawMessage `json:"rsvps"`
+	RaidSeed               null.String     `json:"raid_seed"`
 }
 
 func createGymFortWebhooks(gym *Gym) {
@@ -231,8 +233,9 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 					return 6
 				}
 			}(),
-			ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
-			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+			ExRaidEligible:         gym.ExRaidEligible.ValueOrZero(),
+			IsMegaEnhancedEligible: gym.IsMegaEnhancedEligible.ValueOrZero(),
+			InBattle:               func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
 			Defenders: func() any {
 				if gym.Defenders.Valid {
 					return json.RawMessage(gym.Defenders.ValueOrZero())
@@ -266,34 +269,35 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 			}
 
 			raidHook := RaidWebhook{
-				GymId:               gym.Id,
-				GymName:             gymName,
-				GymUrl:              gym.Url.ValueOrZero(),
-				Latitude:            gym.Lat,
-				Longitude:           gym.Lon,
-				TeamId:              gym.TeamId.ValueOrZero(),
-				Spawn:               gym.RaidSpawnTimestamp.ValueOrZero(),
-				Start:               gym.RaidBattleTimestamp.ValueOrZero(),
-				End:                 gym.RaidEndTimestamp.ValueOrZero(),
-				Level:               gym.RaidLevel.ValueOrZero(),
-				PokemonId:           gym.RaidPokemonId.ValueOrZero(),
-				Cp:                  gym.RaidPokemonCp.ValueOrZero(),
-				Gender:              gym.RaidPokemonGender.ValueOrZero(),
-				Form:                gym.RaidPokemonForm.ValueOrZero(),
-				Alignment:           gym.RaidPokemonAlignment.ValueOrZero(),
-				Costume:             gym.RaidPokemonCostume.ValueOrZero(),
-				Evolution:           gym.RaidPokemonEvolution.ValueOrZero(),
-				Move1:               gym.RaidPokemonMove1.ValueOrZero(),
-				Move2:               gym.RaidPokemonMove2.ValueOrZero(),
-				ExRaidEligible:      gym.ExRaidEligible.ValueOrZero(),
-				IsExclusive:         gym.RaidIsExclusive.ValueOrZero(),
-				SponsorId:           gym.SponsorId.ValueOrZero(),
-				PartnerId:           gym.PartnerId.ValueOrZero(),
-				PowerUpPoints:       gym.PowerUpPoints.ValueOrZero(),
-				PowerUpLevel:        gym.PowerUpLevel.ValueOrZero(),
-				PowerUpEndTimestamp: gym.PowerUpEndTimestamp.ValueOrZero(),
-				ArScanEligible:      gym.ArScanEligible.ValueOrZero(),
-				Rsvps:               rsvps,
+				GymId:                  gym.Id,
+				GymName:                gymName,
+				GymUrl:                 gym.Url.ValueOrZero(),
+				Latitude:               gym.Lat,
+				Longitude:              gym.Lon,
+				TeamId:                 gym.TeamId.ValueOrZero(),
+				Spawn:                  gym.RaidSpawnTimestamp.ValueOrZero(),
+				Start:                  gym.RaidBattleTimestamp.ValueOrZero(),
+				End:                    gym.RaidEndTimestamp.ValueOrZero(),
+				Level:                  gym.RaidLevel.ValueOrZero(),
+				PokemonId:              gym.RaidPokemonId.ValueOrZero(),
+				Cp:                     gym.RaidPokemonCp.ValueOrZero(),
+				Gender:                 gym.RaidPokemonGender.ValueOrZero(),
+				Form:                   gym.RaidPokemonForm.ValueOrZero(),
+				Alignment:              gym.RaidPokemonAlignment.ValueOrZero(),
+				Costume:                gym.RaidPokemonCostume.ValueOrZero(),
+				Evolution:              gym.RaidPokemonEvolution.ValueOrZero(),
+				Move1:                  gym.RaidPokemonMove1.ValueOrZero(),
+				Move2:                  gym.RaidPokemonMove2.ValueOrZero(),
+				ExRaidEligible:         gym.ExRaidEligible.ValueOrZero(),
+				IsExclusive:            gym.RaidIsExclusive.ValueOrZero(),
+				SponsorId:              gym.SponsorId.ValueOrZero(),
+				PartnerId:              gym.PartnerId.ValueOrZero(),
+				PowerUpPoints:          gym.PowerUpPoints.ValueOrZero(),
+				PowerUpLevel:           gym.PowerUpLevel.ValueOrZero(),
+				PowerUpEndTimestamp:    gym.PowerUpEndTimestamp.ValueOrZero(),
+				ArScanEligible:         gym.ArScanEligible.ValueOrZero(),
+				IsMegaEnhancedEligible: gym.IsMegaEnhancedEligible.ValueOrZero(),
+				Rsvps:                  rsvps,
 				RaidSeed: func() null.String {
 					if gym.RaidSeed.Valid {
 						return null.StringFrom(strconv.FormatInt(gym.RaidSeed.Int64, 10))
@@ -369,8 +373,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 	ctx := context.Background()
 
 	if isNewRecord {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,is_mega_enhanced_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:is_mega_enhanced_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
 		statsCollector.IncDbQuery("insert gym", err)
 		if err != nil {
@@ -413,6 +417,7 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 			"raid_pokemon_costume = :raid_pokemon_costume, "+
 			"raid_pokemon_evolution = :raid_pokemon_evolution, "+
 			"ar_scan_eligible = :ar_scan_eligible, "+
+			"is_mega_enhanced_eligible = :is_mega_enhanced_eligible, "+
 			"power_up_level = :power_up_level, "+
 			"power_up_points = :power_up_points, "+
 			"power_up_end_timestamp = :power_up_end_timestamp,"+
