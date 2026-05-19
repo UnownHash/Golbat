@@ -47,8 +47,9 @@ type ApiGymResult struct {
 	PartnerId              null.String `json:"partner_id"`
 	RaidPokemonCostume     null.Int    `json:"raid_pokemon_costume"`
 	RaidPokemonEvolution   null.Int    `json:"raid_pokemon_evolution"`
-	ArScanEligible         null.Int    `json:"ar_scan_eligible"`
-	PowerUpLevel           null.Int    `json:"power_up_level"`
+	ArScanEligible              null.Int    `json:"ar_scan_eligible"`
+	IsMegaEnhancedEligible      null.Int    `json:"is_mega_enhanced_eligible"`
+	PowerUpLevel                null.Int    `json:"power_up_level"`
 	PowerUpPoints          null.Int    `json:"power_up_points"`
 	PowerUpEndTimestamp    null.Int    `json:"power_up_end_timestamp"`
 	Description            null.String `json:"description"`
@@ -92,8 +93,9 @@ func buildGymResult(gym *Gym) ApiGymResult {
 		PartnerId:              gym.PartnerId,
 		RaidPokemonCostume:     gym.RaidPokemonCostume,
 		RaidPokemonEvolution:   gym.RaidPokemonEvolution,
-		ArScanEligible:         gym.ArScanEligible,
-		PowerUpLevel:           gym.PowerUpLevel,
+		ArScanEligible:              gym.ArScanEligible,
+		IsMegaEnhancedEligible:      gym.IsMegaEnhancedEligible,
+		PowerUpLevel:                gym.PowerUpLevel,
 		PowerUpPoints:          gym.PowerUpPoints,
 		PowerUpEndTimestamp:    gym.PowerUpEndTimestamp,
 		Description:            gym.Description,

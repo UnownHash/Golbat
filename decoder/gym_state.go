@@ -178,6 +178,7 @@ func hasChangesGym(old *Gym, new *Gym) bool {
 		old.RaidPokemonCostume != new.RaidPokemonCostume ||
 		old.RaidPokemonEvolution != new.RaidPokemonEvolution ||
 		old.ArScanEligible != new.ArScanEligible ||
+		old.IsMegaEnhancedEligible != new.IsMegaEnhancedEligible ||
 		old.PowerUpLevel != new.PowerUpLevel ||
 		old.PowerUpPoints != new.PowerUpPoints ||
 		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
@@ -208,11 +209,12 @@ type GymDetailsWebhook struct {
 	InBattle            bool    `json:"in_battle"`
 	SponsorId           int64   `json:"sponsor_id"`
 	PartnerId           int64   `json:"partner_id"`
-	PowerUpPoints       int64   `json:"power_up_points"`
-	PowerUpLevel        int64   `json:"power_up_level"`
-	PowerUpEndTimestamp int64   `json:"power_up_end_timestamp"`
-	ArScanEligible      int64   `json:"ar_scan_eligible"`
-	Defenders           any     `json:"defenders"`
+	PowerUpPoints          int64   `json:"power_up_points"`
+	PowerUpLevel           int64   `json:"power_up_level"`
+	PowerUpEndTimestamp    int64   `json:"power_up_end_timestamp"`
+	ArScanEligible         int64   `json:"ar_scan_eligible"`
+	IsMegaEnhancedEligible int64   `json:"is_mega_enhanced_eligible"`
+	Defenders              any     `json:"defenders"`
 }
 
 type RaidWebhook struct {
@@ -242,9 +244,10 @@ type RaidWebhook struct {
 	PowerUpPoints       int64           `json:"power_up_points"`
 	PowerUpLevel        int64           `json:"power_up_level"`
 	PowerUpEndTimestamp int64           `json:"power_up_end_timestamp"`
-	ArScanEligible      int64           `json:"ar_scan_eligible"`
-	Rsvps               json.RawMessage `json:"rsvps"`
-	RaidSeed            null.String     `json:"raid_seed"`
+	ArScanEligible         int64           `json:"ar_scan_eligible"`
+	IsMegaEnhancedEligible int64           `json:"is_mega_enhanced_eligible"`
+	Rsvps                  json.RawMessage `json:"rsvps"`
+	RaidSeed               null.String     `json:"raid_seed"`
 }
 
 func createGymFortWebhooks(gym *Gym) {
@@ -283,8 +286,9 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 					return 6
 				}
 			}(),
-			ExRaidEligible: gym.ExRaidEligible.ValueOrZero(),
-			InBattle:       func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
+			ExRaidEligible:         gym.ExRaidEligible.ValueOrZero(),
+			IsMegaEnhancedEligible: gym.IsMegaEnhancedEligible.ValueOrZero(),
+			InBattle:               func() bool { return gym.InBattle.ValueOrZero() != 0 }(),
 			Defenders: func() any {
 				if gym.Defenders.Valid {
 					return json.RawMessage(gym.Defenders.ValueOrZero())
@@ -344,8 +348,9 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 				PowerUpPoints:       gym.PowerUpPoints.ValueOrZero(),
 				PowerUpLevel:        gym.PowerUpLevel.ValueOrZero(),
 				PowerUpEndTimestamp: gym.PowerUpEndTimestamp.ValueOrZero(),
-				ArScanEligible:      gym.ArScanEligible.ValueOrZero(),
-				Rsvps:               rsvps,
+				ArScanEligible:         gym.ArScanEligible.ValueOrZero(),
+				IsMegaEnhancedEligible: gym.IsMegaEnhancedEligible.ValueOrZero(),
+				Rsvps:                  rsvps,
 				RaidSeed: func() null.String {
 					if gym.RaidSeed.Valid {
 						return null.StringFrom(strconv.FormatInt(gym.RaidSeed.Int64, 10))
@@ -421,8 +426,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 	ctx := context.Background()
 
 	if isNewRecord {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,is_mega_enhanced_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:is_mega_enhanced_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
 		statsCollector.IncDbQuery("insert gym", err)
 		if err != nil {
@@ -465,6 +470,7 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 			"raid_pokemon_costume = :raid_pokemon_costume, "+
 			"raid_pokemon_evolution = :raid_pokemon_evolution, "+
 			"ar_scan_eligible = :ar_scan_eligible, "+
+			"is_mega_enhanced_eligible = :is_mega_enhanced_eligible, "+
 			"power_up_level = :power_up_level, "+
 			"power_up_points = :power_up_points, "+
 			"power_up_end_timestamp = :power_up_end_timestamp,"+

@@ -45,8 +45,9 @@ type GymData struct {
 	PartnerId              null.String `db:"partner_id"`
 	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume"`
 	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution"`
-	ArScanEligible         null.Int    `db:"ar_scan_eligible"`
-	PowerUpLevel           null.Int    `db:"power_up_level"`
+	ArScanEligible              null.Int    `db:"ar_scan_eligible"`
+	IsMegaEnhancedEligible      null.Int    `db:"is_mega_enhanced_eligible"`
+	PowerUpLevel                null.Int    `db:"power_up_level"`
 	PowerUpPoints          null.Int    `db:"power_up_points"`
 	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
 	Description            null.String `db:"description"`
@@ -473,6 +474,16 @@ func (gym *Gym) SetArScanEligible(v null.Int) {
 			gym.changedFields = append(gym.changedFields, fmt.Sprintf("ArScanEligible:%s->%s", FormatNull(gym.ArScanEligible), FormatNull(v)))
 		}
 		gym.ArScanEligible = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetIsMegaEnhancedEligible(v null.Int) {
+	if gym.IsMegaEnhancedEligible != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("IsMegaEnhancedEligible:%s->%s", FormatNull(gym.IsMegaEnhancedEligible), FormatNull(v)))
+		}
+		gym.IsMegaEnhancedEligible = v
 		gym.dirty = true
 	}
 }
