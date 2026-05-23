@@ -244,6 +244,44 @@ func TestProcessCellUpdate_TypeRaceDedup(t *testing.T) {
 	}
 }
 
+// §1: a fort registered as pokestop then observed only as a gym must leave
+// cell.pokestops empty (no orphan that would later mis-drive RemoveFort).
+func TestApplyPresentForts_TypeConversionClearsOldCellSet(t *testing.T) {
+	InitFortTracker(60, 1)
+	defer resetTracker()
+	ft := GetFortTracker()
+
+	cellId := uint64(0xc0ffee)
+	id := "convert_me"
+	registerTs := int64(100_000)
+
+	ft.RegisterFort(id, cellId, false, registerTs)
+
+	result := ft.ProcessCellUpdate(cellId, nil, []string{id}, registerTs+1000)
+	if result == nil {
+		t.Fatal("ProcessCellUpdate returned nil")
+	}
+
+	ft.mu.RLock()
+	_, inStops := ft.cells[cellId].pokestops[id]
+	_, inGyms := ft.cells[cellId].gyms[id]
+	info := ft.forts[id]
+	ft.mu.RUnlock()
+
+	if inStops {
+		t.Fatalf("fort %s must not remain in cell.pokestops after pokestop→gym conversion", id)
+	}
+	if !inGyms {
+		t.Fatalf("fort %s must be in cell.gyms after conversion", id)
+	}
+	if info == nil || !info.isGym {
+		t.Fatalf("fort info must record isGym=true, got: %+v", info)
+	}
+	if len(result.ConvertedToGyms) != 1 || result.ConvertedToGyms[0] != id {
+		t.Fatalf("expected ConvertedToGyms=[%s], got: %v", id, result.ConvertedToGyms)
+	}
+}
+
 // §6.2: with minMissCount=2, a single missing scan past the time threshold
 // is not enough; require two consecutive cell-scan misses.
 func TestProcessCellUpdate_MissCountGuard(t *testing.T) {

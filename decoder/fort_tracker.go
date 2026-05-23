@@ -222,6 +222,10 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 		return nil
 	}
 
+	// Lock ordering: ft.mu must be released here before CheckRemovedForts'
+	// downstream clearFortWithLock acquires an entity lock. The canonical order
+	// is entity → ft.mu (see RestoreFort), so a future refactor that holds
+	// ft.mu across clearFortWithLock would deadlock.
 	ft.mu.Lock()
 	result, pendingPokestops, pendingGyms, processed := ft.processCellUpdateLocked(cellId, pokestopIds, gymIds, timestamp)
 	ft.mu.Unlock()
@@ -269,6 +273,8 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 		delete(currentPokestops, id)
 	}
 
+	// MUST capture firstScan before cell.lastSeen is reassigned below; otherwise
+	// the merge branch never triggers and preloaded forts are dropped.
 	firstScan := cell.lastSeen == 0
 
 	ft.applyPresentForts(cell, cellId, pokestopIds, currentPokestops, false, &result.ConvertedToPokestops, timestamp)
@@ -391,6 +397,13 @@ func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint
 		// Handle type change. The follow-up clear*WithLock call already logs
 		// the conversion at Info level, so we keep this trace at Debug.
 		if info.isGym != isGym {
+			// Remove from the old-type set so the fort does not orphan
+			// in both sets (e.g. pokestop→gym leaving the id in cell.pokestops).
+			if info.isGym {
+				delete(cell.gyms, id)
+			} else {
+				delete(cell.pokestops, id)
+			}
 			info.isGym = isGym
 			*converted = append(*converted, id)
 			if log.IsLevelEnabled(log.DebugLevel) {
@@ -442,7 +455,10 @@ func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, now
 
 	cell := ft.getOrCreateCellLocked(cellId)
 
-	if existing, exists := ft.forts[fortId]; exists && existing.cellId != cellId {
+	// Defensive: clean the old set even when only isGym changed in the same cell.
+	// Today's callers always pair pokestop→isGym=false and gym→isGym=true, but
+	// a future caller mixing those would otherwise leave an orphan entry.
+	if existing, exists := ft.forts[fortId]; exists && (existing.cellId != cellId || existing.isGym != isGym) {
 		if oldCell, ok := ft.cells[existing.cellId]; ok {
 			if existing.isGym {
 				delete(oldCell.gyms, fortId)
