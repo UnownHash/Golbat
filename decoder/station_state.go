@@ -187,13 +187,13 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
 	battles := getKnownStationBattles(station.Id, now)
 	battleSnapshot := snapshotStationBattles(battles)
-	topBattleChanged := applyTopStationBattleToStation(station, battles)
+	applyTopStationBattleToStation(station, battles)
 	battleListChanged := station.oldValues.BattleSnapshot != battleSnapshot
 	isNewRecord := station.IsNewRecord()
-	stationNeedsWrite := topBattleChanged || station.IsDirty() || isNewRecord
+	stationNeedsWrite := station.IsDirty() || isNewRecord || battleListChanged
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
-	if !stationNeedsWrite && !battleListChanged {
+	if !stationNeedsWrite {
 		if station.Updated > now-GetUpdateThreshold(900) {
 			return
 		}

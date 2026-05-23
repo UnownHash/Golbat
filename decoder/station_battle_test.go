@@ -1,11 +1,14 @@
 package decoder
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/guregu/null/v6"
 
+	"golbat/db"
+	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/stats_collector"
@@ -480,5 +483,106 @@ func TestBuildStationResultSuppressesStaleBattleAfterExpiredHydratedCache(t *tes
 	state, ok := stationBattleCache.Load(station.Id)
 	if !ok || !state.Loaded || len(state.Battles) != 0 {
 		t.Fatalf("expected expired loaded state to be collapsed to empty, got %+v ok=%t", state, ok)
+	}
+}
+
+func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T) {
+	initStationBattleCache()
+	previousStationQueue := stationQueue
+	previousStationBattleQueue := stationBattleQueue
+	previousSender := webhooksSender
+	previousStats := statsCollector
+	stats := stats_collector.NewNoopStatsCollector()
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
+		Name:      "station",
+		Stats:     stats,
+		FlushFunc: func(context.Context, db.DbDetails, []StationData) error { return nil },
+		KeyFunc:   func(d StationData) string { return d.Id },
+	})
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
+		Name:      "station_battle",
+		Stats:     stats,
+		FlushFunc: func(context.Context, db.DbDetails, []stationBattleWrite) error { return nil },
+		KeyFunc:   func(d stationBattleWrite) string { return d.StationId },
+	})
+	webhooksSender = &recordingWebhooksSender{}
+	statsCollector = stats
+	defer func() {
+		stationQueue = previousStationQueue
+		stationBattleQueue = previousStationBattleQueue
+		webhooksSender = previousSender
+		statsCollector = previousStats
+	}()
+
+	now := time.Now().Unix()
+	oldBattles := []StationBattleData{
+		testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+		testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+	}
+	newBattles := []StationBattleData{
+		testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+		testStationBattle("station-1", 3, 2, now-60, now+3600, 133),
+	}
+	storeStationBattles("station-1", newBattles)
+	station := &Station{
+		StationData: StationData{
+			Id:              "station-1",
+			Name:            "Station",
+			Lat:             1,
+			Lon:             2,
+			EndTime:         now + 7200,
+			Updated:         now - 3600,
+			BattleLevel:     null.IntFrom(1),
+			BattleStart:     null.IntFrom(now - 60),
+			BattleEnd:       null.IntFrom(now + 1800),
+			BattlePokemonId: null.IntFrom(527),
+		},
+		oldValues: StationOldValues{
+			EndTime:        now + 7200,
+			BattleSnapshot: snapshotStationBattles(oldBattles),
+		},
+	}
+
+	saveStationRecord(context.Background(), db.DbDetails{}, station)
+
+	if stationQueue.Size() != 1 {
+		t.Fatalf("expected battle-list change to refresh station row, station queue size=%d", stationQueue.Size())
+	}
+	if stationBattleQueue.Size() != 1 {
+		t.Fatalf("expected battle-list change to write station battles, station battle queue size=%d", stationBattleQueue.Size())
+	}
+	if station.Updated <= now-3600 {
+		t.Fatalf("expected station updated to advance, got %d", station.Updated)
+	}
+}
+
+func TestApplyTopStationBattleToStationUsesCpMultiplierTolerance(t *testing.T) {
+	now := time.Now().Unix()
+	station := &Station{
+		StationData: StationData{
+			Id:                        "station-1",
+			BattleLevel:               null.IntFrom(1),
+			BattleStart:               null.IntFrom(now - 60),
+			BattleEnd:                 null.IntFrom(now + 1800),
+			BattlePokemonId:           null.IntFrom(527),
+			BattlePokemonCpMultiplier: null.FloatFrom(0.5),
+		},
+	}
+	station.ClearDirty()
+	applyTopStationBattleToStation(station, []StationBattleData{{
+		BreadBattleSeed:           1,
+		StationId:                 station.Id,
+		BattleLevel:               1,
+		BattleStart:               now - 60,
+		BattleEnd:                 now + 1800,
+		BattlePokemonId:           null.IntFrom(527),
+		BattlePokemonCpMultiplier: null.FloatFrom(0.5 + floatTolerance/2),
+	}})
+
+	if station.IsDirty() {
+		t.Fatal("expected tolerated cp multiplier difference not to dirty station")
+	}
+	if station.BattlePokemonCpMultiplier.Float64 != 0.5 {
+		t.Fatalf("expected tolerated cp multiplier difference to leave value unchanged, got %f", station.BattlePokemonCpMultiplier.Float64)
 	}
 }

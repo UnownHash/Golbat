@@ -396,27 +396,8 @@ func stationBattleProjectionFromBattle(battle *StationBattleData) stationBattleP
 	}
 }
 
-func stationBattleProjectionFromStation(station *Station) stationBattleProjection {
-	return stationBattleProjection{
-		BattleLevel:               station.BattleLevel,
-		BattleStart:               station.BattleStart,
-		BattleEnd:                 station.BattleEnd,
-		BattlePokemonId:           station.BattlePokemonId,
-		BattlePokemonForm:         station.BattlePokemonForm,
-		BattlePokemonCostume:      station.BattlePokemonCostume,
-		BattlePokemonGender:       station.BattlePokemonGender,
-		BattlePokemonAlignment:    station.BattlePokemonAlignment,
-		BattlePokemonBreadMode:    station.BattlePokemonBreadMode,
-		BattlePokemonMove1:        station.BattlePokemonMove1,
-		BattlePokemonMove2:        station.BattlePokemonMove2,
-		BattlePokemonStamina:      station.BattlePokemonStamina,
-		BattlePokemonCpMultiplier: station.BattlePokemonCpMultiplier,
-	}
-}
-
-func applyTopStationBattleToStation(station *Station, battles []StationBattleData) bool {
+func applyTopStationBattleToStation(station *Station, battles []StationBattleData) {
 	projection := stationBattleProjectionFromBattle(topStationBattleFromSlice(battles))
-	changed := stationBattleProjectionFromStation(station) != projection
 	station.SetBattleLevel(projection.BattleLevel)
 	station.SetBattleStart(projection.BattleStart)
 	station.SetBattleEnd(projection.BattleEnd)
@@ -430,7 +411,6 @@ func applyTopStationBattleToStation(station *Station, battles []StationBattleDat
 	station.SetBattlePokemonMove2(projection.BattlePokemonMove2)
 	station.SetBattlePokemonStamina(projection.BattlePokemonStamina)
 	station.SetBattlePokemonCpMultiplier(projection.BattlePokemonCpMultiplier)
-	return changed
 }
 
 func applyTopStationBattleToApiStationResult(result *ApiStationResult, battles []StationBattleData) {
