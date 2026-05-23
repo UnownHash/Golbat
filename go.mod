@@ -7,13 +7,13 @@ toolchain go1.26.0
 require (
 	github.com/Depado/ginprom v1.8.3
 	github.com/UnownHash/gohbem v0.12.0
-	github.com/getsentry/sentry-go v0.44.1
+	github.com/getsentry/sentry-go v0.46.2
 	github.com/gin-gonic/gin v1.12.0
-	github.com/go-sql-driver/mysql v1.9.3
+	github.com/go-sql-driver/mysql v1.10.0
 	github.com/goccy/go-json v0.10.6
 	github.com/golang-migrate/migrate/v4 v4.19.1
-	github.com/golang/geo v0.0.0-20260401045841-3289a7742193
-	github.com/grafana/pyroscope-go v1.2.8
+	github.com/golang/geo v0.0.0-20260512202753-e3c51de6d1b6
+	github.com/grafana/pyroscope-go v1.3.0
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0
 	github.com/guregu/null/v6 v6.0.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
@@ -26,12 +26,11 @@ require (
 	github.com/paulmach/orb v0.13.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/puzpuzpuz/xsync/v3 v3.5.1
-	github.com/ringsaturn/tzf v1.0.4
-	github.com/ringsaturn/tzf-rel v0.0.2026-a
+	github.com/ringsaturn/tzf v1.2.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/tidwall/rtree v1.10.0
 	github.com/toorop/gin-logrus v0.0.0-20210225092905-2c785434f26f
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
@@ -53,15 +52,14 @@ require (
 	github.com/go-playground/validator/v10 v10.30.1 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
-	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
+	github.com/grafana/pyroscope-go/godeltaprof v0.1.10 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.4 // indirect
+	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
-	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -73,11 +71,9 @@ require (
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.59.0 // indirect
-	github.com/ringsaturn/tzf-rel-lite v0.0.2026-a // indirect
+	github.com/ringsaturn/tzf-dist v0.0.2026-b-fix1 // indirect
 	github.com/tidwall/geoindex v1.7.0 // indirect
-	github.com/tidwall/geojson v1.4.6 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
-	github.com/twpayne/go-polyline v1.1.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
