@@ -507,10 +507,16 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 	j := contestJson{LastUpdate: time.Now().Unix()}
 	j.TotalEntries = int(contestData.TotalEntries)
 
+	var newTopScore null.Float
+	var newTopPokemonId null.Int
 	for _, entry := range contestData.GetContestEntries() {
 		rank := entry.GetRank()
 		if rank > 3 {
 			break
+		}
+		if rank == 1 {
+			newTopScore = null.FloatFrom(entry.GetScore())
+			newTopPokemonId = null.IntFrom(int64(entry.GetPokedexId()))
 		}
 		j.ContestEntries = append(j.ContestEntries, contestEntry{
 			Rank:                  int(rank),
@@ -528,6 +534,17 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 		})
 
 	}
+
+	// Detect rank-1 leaderboard movement against the running top stored in
+	// oldValues. The previous top is seeded from the loaded rankings JSON
+	// in afterLoadFromDB and updated here from the parsed proto entries —
+	// no further JSON re-parsing in any hot path.
+	if newTopScore != stop.oldValues.ShowcaseTopScore || newTopPokemonId != stop.oldValues.ShowcaseTopPokemonId {
+		stop.pokestopWebhookRequired = true
+		stop.oldValues.ShowcaseTopScore = newTopScore
+		stop.oldValues.ShowcaseTopPokemonId = newTopPokemonId
+	}
+
 	jsonString, _ := json.Marshal(j)
 	stop.SetShowcaseRankings(null.StringFrom(string(jsonString)))
 }

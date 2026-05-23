@@ -1,11 +1,43 @@
 package decoder
 
 import (
+	"encoding/json"
+
 	"golbat/pogo"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 )
+
+// extractShowcaseTop parses a ShowcaseRankings JSON blob and returns the
+// rank-1 entry's score and pokemon_id. Used to detect leaderboard top-1
+// movement for webhook firing.
+//
+// The blob is the JSON produced by updatePokestopFromGetPokemonSizeContestEntryOutProto,
+// shape: {"contest_entries": [{"rank": 1, "score": ..., "pokemon_id": ...}, ...]}.
+// Returns invalid null values when the blob is missing or has no rank-1 entry.
+func extractShowcaseTop(rankings null.String) (null.Float, null.Int) {
+	if !rankings.Valid {
+		return null.Float{}, null.Int{}
+	}
+	type entry struct {
+		Rank      int     `json:"rank"`
+		Score     float64 `json:"score"`
+		PokemonId int     `json:"pokemon_id"`
+	}
+	var data struct {
+		ContestEntries []entry `json:"contest_entries"`
+	}
+	if err := json.Unmarshal([]byte(rankings.ValueOrZero()), &data); err != nil {
+		return null.Float{}, null.Int{}
+	}
+	for _, e := range data.ContestEntries {
+		if e.Rank == 1 {
+			return null.FloatFrom(e.Score), null.IntFrom(int64(e.PokemonId))
+		}
+	}
+	return null.Float{}, null.Int{}
+}
 
 type contestFocusType string
 

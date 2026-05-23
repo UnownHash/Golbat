@@ -38,6 +38,9 @@ func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId strin
 	err := db.GeneralDb.GetContext(ctx, pokestop,
 		`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
 	statsCollector.IncDbQuery("select pokestop", err)
+	if err == nil {
+		pokestop.afterLoadFromDB()
+	}
 	return err
 }
 
@@ -184,7 +187,7 @@ type PokestopWebhook struct {
 	PowerUpPoints           int64           `json:"power_up_points"`
 	PowerUpEndTimestamp     int64           `json:"power_up_end_timestamp"`
 	Updated                 int64           `json:"updated"`
-	ShowcaseFocus           null.String     `json:"showcase_focus"`
+	ShowcaseFocus           json.RawMessage `json:"showcase_focus"`
 	ShowcasePokemonId       null.Int        `json:"showcase_pokemon_id"`
 	ShowcasePokemonFormId   null.Int        `json:"showcase_pokemon_form_id"`
 	ShowcasePokemonTypeId   null.Int        `json:"showcase_pokemon_type_id"`
@@ -271,10 +274,14 @@ func createPokestopWebhooks(stop *Pokestop) {
 		}
 		webhooksSender.AddMessage(webhooks.Quest, questHook, areas)
 	}
-	if (stop.newRecord && (stop.LureId != 0 || stop.PowerUpEndTimestamp.ValueOrZero() != 0)) || (!stop.newRecord && ((stop.LureExpireTimestamp != stop.oldValues.LureExpireTimestamp && stop.LureId != 0) || stop.PowerUpEndTimestamp != stop.oldValues.PowerUpEndTimestamp)) {
+	if stop.pokestopWebhookRequired {
 		var showcaseRankings json.RawMessage
 		if stop.ShowcaseRankings.Valid {
 			showcaseRankings = json.RawMessage(stop.ShowcaseRankings.ValueOrZero())
+		}
+		var showcaseFocus json.RawMessage
+		if stop.ShowcaseFocus.Valid {
+			showcaseFocus = json.RawMessage(stop.ShowcaseFocus.ValueOrZero())
 		}
 
 		pokestopHook := PokestopWebhook{
@@ -292,7 +299,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 			PowerUpPoints:           stop.PowerUpPoints.ValueOrZero(),
 			PowerUpEndTimestamp:     stop.PowerUpEndTimestamp.ValueOrZero(),
 			Updated:                 stop.Updated,
-			ShowcaseFocus:           stop.ShowcaseFocus,
+			ShowcaseFocus:           showcaseFocus,
 			ShowcasePokemonId:       stop.ShowcasePokemon,
 			ShowcasePokemonFormId:   stop.ShowcasePokemonForm,
 			ShowcasePokemonTypeId:   stop.ShowcasePokemonType,
@@ -302,6 +309,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 		}
 
 		webhooksSender.AddMessage(webhooks.Pokestop, pokestopHook, areas)
+		stop.pokestopWebhookRequired = false
 	}
 }
 
