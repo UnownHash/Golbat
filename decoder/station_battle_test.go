@@ -34,7 +34,7 @@ func testStationBattle(stationId string, seed int64, level int16, start, end int
 }
 
 func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
-	query, args := buildDeleteObsoleteStationBattlesQuery(
+	query, args, err := buildDeleteObsoleteStationBattlesQuery(
 		[]string{"station-1", "station-2", "station-3"},
 		[]StationBattleData{
 			{StationId: "station-1", BreadBattleSeed: 1},
@@ -42,8 +42,11 @@ func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
 			{StationId: "station-3", BreadBattleSeed: 3},
 		},
 	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?,?,?) AND bread_battle_seed NOT IN (?,?,?)"
+	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?, ?, ?) AND bread_battle_seed NOT IN (?, ?, ?)"
 	if query != expectedQuery {
 		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
 	}
@@ -63,9 +66,12 @@ func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
 }
 
 func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
-	query, args := buildDeleteObsoleteStationBattlesQuery([]string{"station-1", "station-2"}, nil)
+	query, args, err := buildDeleteObsoleteStationBattlesQuery([]string{"station-1", "station-2"}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
 
-	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?,?)"
+	expectedQuery := "DELETE FROM station_battle WHERE station_id IN (?, ?)"
 	if query != expectedQuery {
 		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
 	}
@@ -350,7 +356,8 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 		EndTime: station.EndTime,
 	}
 
-	createStationWebhooksWithBattles(station, getKnownStationBattles(station.Id, now), station.IsNewRecord())
+	battles := getKnownStationBattles(station.Id, now)
+	createStationWebhooksWithBattles(station, battles, snapshotStationBattles(battles), station.IsNewRecord(), now)
 	if len(sender.messages) != 1 || sender.messages[0] != webhooks.MaxBattle {
 		t.Fatalf("expected one max_battle webhook, got %v", sender.messages)
 	}
@@ -387,7 +394,8 @@ func TestCreateStationWebhooksUsesTopBattleForFlatFields(t *testing.T) {
 		EndTime: station.EndTime,
 	}
 
-	createStationWebhooksWithBattles(station, getKnownStationBattles(station.Id, now), station.IsNewRecord())
+	battles := getKnownStationBattles(station.Id, now)
+	createStationWebhooksWithBattles(station, battles, snapshotStationBattles(battles), station.IsNewRecord(), now)
 	if len(sender.payloads) != 1 {
 		t.Fatalf("expected one max_battle payload, got %d", len(sender.payloads))
 	}

@@ -7,29 +7,46 @@ import (
 )
 
 type ApiStationResult struct {
-	Id                     string              `json:"id"`
-	Lat                    float64             `json:"lat"`
-	Lon                    float64             `json:"lon"`
-	Name                   string              `json:"name"`
-	StartTime              int64               `json:"start_time"`
-	EndTime                int64               `json:"end_time"`
-	IsBattleAvailable      bool                `json:"is_battle_available"`
-	Updated                int64               `json:"updated"`
-	BattleLevel            null.Int            `json:"battle_level"`
-	BattleStart            null.Int            `json:"battle_start"`
-	BattleEnd              null.Int            `json:"battle_end"`
-	BattlePokemonId        null.Int            `json:"battle_pokemon_id"`
-	BattlePokemonForm      null.Int            `json:"battle_pokemon_form"`
-	BattlePokemonCostume   null.Int            `json:"battle_pokemon_costume"`
-	BattlePokemonGender    null.Int            `json:"battle_pokemon_gender"`
-	BattlePokemonAlignment null.Int            `json:"battle_pokemon_alignment"`
-	BattlePokemonBreadMode null.Int            `json:"battle_pokemon_bread_mode"`
-	BattlePokemonMove1     null.Int            `json:"battle_pokemon_move_1"`
-	BattlePokemonMove2     null.Int            `json:"battle_pokemon_move_2"`
-	TotalStationedPokemon  null.Int            `json:"total_stationed_pokemon"`
-	TotalStationedGmax     null.Int            `json:"total_stationed_gmax"`
-	StationedPokemon       null.String         `json:"stationed_pokemon"`
-	Battles                []StationBattleData `json:"battles,omitempty"`
+	Id                     string                   `json:"id"`
+	Lat                    float64                  `json:"lat"`
+	Lon                    float64                  `json:"lon"`
+	Name                   string                   `json:"name"`
+	StartTime              int64                    `json:"start_time"`
+	EndTime                int64                    `json:"end_time"`
+	IsBattleAvailable      bool                     `json:"is_battle_available"`
+	Updated                int64                    `json:"updated"`
+	BattleLevel            null.Int                 `json:"battle_level"`
+	BattleStart            null.Int                 `json:"battle_start"`
+	BattleEnd              null.Int                 `json:"battle_end"`
+	BattlePokemonId        null.Int                 `json:"battle_pokemon_id"`
+	BattlePokemonForm      null.Int                 `json:"battle_pokemon_form"`
+	BattlePokemonCostume   null.Int                 `json:"battle_pokemon_costume"`
+	BattlePokemonGender    null.Int                 `json:"battle_pokemon_gender"`
+	BattlePokemonAlignment null.Int                 `json:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode null.Int                 `json:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1     null.Int                 `json:"battle_pokemon_move_1"`
+	BattlePokemonMove2     null.Int                 `json:"battle_pokemon_move_2"`
+	TotalStationedPokemon  null.Int                 `json:"total_stationed_pokemon"`
+	TotalStationedGmax     null.Int                 `json:"total_stationed_gmax"`
+	StationedPokemon       null.String              `json:"stationed_pokemon"`
+	Battles                []ApiStationBattleResult `json:"battles,omitempty"`
+}
+
+type ApiStationBattleResult struct {
+	BreadBattleSeed           int64      `json:"bread_battle_seed,omitempty"`
+	BattleLevel               int16      `json:"battle_level"`
+	BattleStart               int64      `json:"battle_start"`
+	BattleEnd                 int64      `json:"battle_end"`
+	BattlePokemonId           null.Int   `json:"battle_pokemon_id"`
+	BattlePokemonForm         null.Int   `json:"battle_pokemon_form"`
+	BattlePokemonCostume      null.Int   `json:"battle_pokemon_costume"`
+	BattlePokemonGender       null.Int   `json:"battle_pokemon_gender"`
+	BattlePokemonAlignment    null.Int   `json:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode    null.Int   `json:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1        null.Int   `json:"battle_pokemon_move_1"`
+	BattlePokemonMove2        null.Int   `json:"battle_pokemon_move_2"`
+	BattlePokemonStamina      null.Int   `json:"battle_pokemon_stamina"`
+	BattlePokemonCpMultiplier null.Float `json:"battle_pokemon_cp_multiplier"`
 }
 
 func BuildStationResult(station *Station) ApiStationResult {
@@ -48,7 +65,7 @@ func BuildStationResult(station *Station) ApiStationResult {
 		TotalStationedPokemon: station.TotalStationedPokemon,
 		TotalStationedGmax:    station.TotalStationedGmax,
 		StationedPokemon:      station.StationedPokemon,
-		Battles:               battles,
+		Battles:               buildApiStationBattleResults(battles),
 	}
 	applyTopStationBattleToApiStationResult(&result, battles)
 	return result
