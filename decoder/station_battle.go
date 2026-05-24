@@ -4,8 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/binary"
-	"hash"
-	"hash/fnv"
+	"hash/maphash"
 	"math"
 	"slices"
 	"time"
@@ -119,7 +118,10 @@ ON DUPLICATE KEY UPDATE
 	updated = VALUES(updated)
 `
 
-var stationBattleCache *xsync.MapOf[string, stationBattleState]
+var (
+	stationBattleCache        *xsync.MapOf[string, stationBattleState]
+	stationBattleSnapshotSeed = maphash.MakeSeed()
+)
 
 func initStationBattleCache() {
 	stationBattleCache = xsync.NewMapOf[string, stationBattleState]()
@@ -239,9 +241,10 @@ func snapshotStationBattles(battles []StationBattleData) stationBattleSnapshot {
 	if len(battles) == 0 {
 		return stationBattleSnapshot{}
 	}
-	h := fnv.New64a()
+	var h maphash.Hash
+	h.SetSeed(stationBattleSnapshotSeed)
 	for _, battle := range battles {
-		hashStationBattle(h, battle)
+		hashStationBattle(&h, battle)
 	}
 	topBattle := topStationBattleFromSlice(battles)
 	return stationBattleSnapshot{
@@ -252,7 +255,7 @@ func snapshotStationBattles(battles []StationBattleData) stationBattleSnapshot {
 	}
 }
 
-func hashStationBattle(h hash.Hash64, battle StationBattleData) {
+func hashStationBattle(h *maphash.Hash, battle StationBattleData) {
 	writeInt64(h, battle.BreadBattleSeed)
 	writeString(h, battle.StationId)
 	writeInt64(h, int64(battle.BattleLevel))
@@ -270,25 +273,25 @@ func hashStationBattle(h hash.Hash64, battle StationBattleData) {
 	writeNullFloat(h, battle.BattlePokemonCpMultiplier)
 }
 
-func writeInt64(h hash.Hash64, v int64) {
+func writeInt64(h *maphash.Hash, v int64) {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], uint64(v))
 	_, _ = h.Write(buf[:])
 }
 
-func writeString(h hash.Hash64, v string) {
+func writeString(h *maphash.Hash, v string) {
 	writeInt64(h, int64(len(v)))
-	_, _ = h.Write([]byte(v))
+	h.WriteString(v)
 }
 
-func writeNullInt(h hash.Hash64, v null.Int) {
+func writeNullInt(h *maphash.Hash, v null.Int) {
 	writeInt64(h, boolAsInt64(v.Valid))
 	if v.Valid {
 		writeInt64(h, v.Int64)
 	}
 }
 
-func writeNullFloat(h hash.Hash64, v null.Float) {
+func writeNullFloat(h *maphash.Hash, v null.Float) {
 	writeInt64(h, boolAsInt64(v.Valid))
 	if v.Valid {
 		writeInt64(h, int64(math.Float64bits(v.Float64)))
