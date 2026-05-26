@@ -92,6 +92,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	}
 	gym.SetInBattle(null.IntFrom(util.BoolToInt[int64](fortData.IsInBattle)))
 	gym.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible)))
+	gym.SetIsMegaEnhancedEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsMegaEnhancedEligible)))
 	gym.SetPowerUpPoints(null.IntFrom(int64(fortData.PowerUpProgressPoints)))
 
 	powerUpLevel, powerUpEndTimestamp := calculatePowerUpPoints(fortData)
