@@ -65,7 +65,7 @@ func main() {
 		cfg.Logging.Compress,
 	)
 
-	log.Infof("Golbat starting")
+	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:
 	// https://docs.sentry.io/platforms/go
@@ -327,6 +327,7 @@ func main() {
 
 	r.POST("/raw", Raw)
 	r.GET("/health", GetHealth)
+	r.GET("/version", GetVersion)
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
