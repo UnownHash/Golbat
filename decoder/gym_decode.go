@@ -259,7 +259,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		gym.SetDefenders(null.StringFrom(string(bDefenders)))
 
 		if fortProto := status.PokemonFortProto; fortProto != nil {
-			gym.updateGymFromFort(fortProto, 0)
+			gym.updateGymFromFort(fortProto, 0, 0)
 		}
 	}
 
