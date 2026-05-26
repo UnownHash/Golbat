@@ -45,7 +45,7 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 	return powerUpLevel, powerUpEndTimestamp
 }
 
-func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64) *Gym {
+func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64, timestampMs int64) *Gym {
 	type pokemonDisplay struct {
 		Form                  int    `json:"form,omitempty"`
 		Costume               int    `json:"costume,omitempty"`
@@ -167,7 +167,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		log.Warnf("Cleared Gym with id '%s' is found again in GMO, therefore un-deleted", gym.Id)
 		// Restore in fort tracker if enabled
 		if fortTracker != nil {
-			fortTracker.RestoreFort(gym.Id, cellId, true, time.Now().Unix())
+			fortTracker.RestoreFort(gym.Id, cellId, true, timestampMs)
 		}
 	}
 
