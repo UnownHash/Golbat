@@ -180,7 +180,7 @@ Each webhook is geofenced before sending. The relevant entity's location
 (usually latitude/longitude, with an optional S2 cell-ID fast path) is matched
 against configured geofences, producing a list of `AreaName{Parent, Name}`
 entries. The receiver sees only the envelopes whose area list intersects its
-configured `area_names`.
+configured `area_names` and is not excluded by `exclude_areas`.
 
 Configuration:
 
@@ -188,14 +188,27 @@ Configuration:
 [[webhooks]]
 url = "https://example.com/hook"
 types = ["pokemon", "raid"]
-area_names = ["SanFrancisco/Downtown", "Oakland/*"]
+area_names = ["SanFrancisco/*"]
+exclude_areas = ["SanFrancisco/Tenderloin"]
 ```
 
-`area_names` supports wildcards via `geo.AreaMatchWithWildcards`:
+Both `area_names` and `exclude_areas` support wildcards via
+`geo.AreaMatchWithWildcards`:
 
 - Empty (`area_names = []` or omitted): receive all areas.
 - `"Parent/*"`: all subareas of `Parent`.
 - `"Parent/Name"`: exact match.
+
+`exclude_areas` suppresses messages from the listed geofences. It is evaluated
+**before** the `area_names` inclusion check, so when the same area appears in
+both lists the exclusion wins. Concretely, a message is delivered only if:
+
+1. it does **not** match any entry in `exclude_areas`, **and**
+2. either `area_names` is empty/omitted, **or** the message matches at least
+   one entry in `area_names`.
+
+`exclude_areas` can be used on its own (without `area_names`) to receive
+everything except a small block-list of areas.
 
 Entities with no matching areas still produce webhook messages internally, but
 receivers not configured for any of those areas will not receive them.
@@ -1161,6 +1174,7 @@ webhook_interval = "1s"   # how often to flush; default 1s
 url = "https://example.com/hook"
 types = ["pokemon", "raid", "fort_update"]
 area_names = ["SanFrancisco/*"]
+exclude_areas = ["SanFrancisco/Tenderloin"]
 
 [webhooks.header_map]
 Authorization = "Bearer secret"
@@ -1172,6 +1186,7 @@ X-Custom-Header = "value"
 | `url`              | yes      | HTTP(S) endpoint. Must include scheme. |
 | `types`            | no       | Array of type strings (see below). Omit or empty to receive everything. |
 | `area_names`       | no       | Area filter; omit or empty to receive all areas. |
+| `exclude_areas`    | no       | Areas to suppress; evaluated before `area_names`. If an area appears in both lists, the exclusion wins. Supports the same wildcard syntax as `area_names`. |
 | `header_map`       | no       | Extra HTTP headers to set on every POST. |
 
 ### Accepted type strings
