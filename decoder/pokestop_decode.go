@@ -228,13 +228,9 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		case pogo.QuestConditionProto_WITH_RAID_LOCATION:
 		case pogo.QuestConditionProto_WITH_FRIENDS_RAID:
 		case pogo.QuestConditionProto_WITH_POKEMON_COSTUME:
-		default:
-			break
 		}
 
-		if infoData != nil {
-			condition["info"] = infoData
-		}
+		condition["info"] = infoData
 		conditions = append(conditions, condition)
 	}
 
@@ -352,8 +348,6 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		case pogo.QuestRewardProto_LEVEL_CAP:
 		case pogo.QuestRewardProto_INCIDENT:
 		case pogo.QuestRewardProto_PLAYER_ATTRIBUTE:
-		default:
-			break
 		}
 		reward["info"] = infoData
 		rewards = append(rewards, reward)
@@ -378,7 +372,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 		}
 	}
 
-	if questExpiry.Valid == false {
+	if !questExpiry.Valid {
 		questExpiry = null.IntFrom(time.Now().Unix() + 24*60*60) // Set expiry to 24 hours from now
 	}
 
@@ -434,7 +428,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 		stop.SetDescription(null.StringFrom(fortData.Description))
 	}
 
-	if fortData.Modifier != nil && len(fortData.Modifier) > 0 {
+	if len(fortData.Modifier) > 0 {
 		// DeployingPlayerCodename contains the name of the player if we want that
 		lureId := int16(fortData.Modifier[0].ModifierType)
 		lureExpiry := fortData.Modifier[0].ExpirationTimeMs / 1000

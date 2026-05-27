@@ -1,0 +1,37 @@
+version: "2"
+
+run:
+  build-tags:
+    - go_json
+  timeout: 5m
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+
+  settings:
+    errcheck:
+      # Close/Copy on read paths is a standard Go idiom; a deferred Close
+      # error after a successful read has nowhere actionable to go.
+      exclude-functions:
+        - (io.Closer).Close
+        - (*database/sql.Rows).Close
+        - (*github.com/jmoiron/sqlx.Rows).Close
+        - io.Copy
+        - (*encoding/json.Decoder).Decode
+
+  exclusions:
+    rules:
+      # Entity access pattern: each entity type provides peek*Record /
+      # get*RecordReadOnly / get*RecordForUpdate even when not currently
+      # called, to keep the access-pattern API symmetric across entities.
+      # See CLAUDE.md "Record Access Patterns".
+      - linters:
+          - unused
+        path: decoder/
+        text: "func (peek|get)[A-Z][A-Za-z]+Record(ReadOnly|ForUpdate)? is unused"

@@ -143,58 +143,6 @@ func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string, c
 	return gym, func() { gym.Unlock() }, nil
 }
 
-// hasChangesGym compares two Gym structs
-// Float tolerance: Lat, Lon
-func hasChangesGym(old *Gym, new *Gym) bool {
-	return old.Id != new.Id ||
-		old.Name != new.Name ||
-		old.Url != new.Url ||
-		old.LastModifiedTimestamp != new.LastModifiedTimestamp ||
-		old.RaidEndTimestamp != new.RaidEndTimestamp ||
-		old.RaidSpawnTimestamp != new.RaidSpawnTimestamp ||
-		old.RaidBattleTimestamp != new.RaidBattleTimestamp ||
-		old.Updated != new.Updated ||
-		old.RaidPokemonId != new.RaidPokemonId ||
-		old.GuardingPokemonId != new.GuardingPokemonId ||
-		old.AvailableSlots != new.AvailableSlots ||
-		old.TeamId != new.TeamId ||
-		old.RaidLevel != new.RaidLevel ||
-		old.Enabled != new.Enabled ||
-		old.ExRaidEligible != new.ExRaidEligible ||
-		//		old.InBattle != new.InBattle ||
-		old.RaidPokemonMove1 != new.RaidPokemonMove1 ||
-		old.RaidPokemonMove2 != new.RaidPokemonMove2 ||
-		old.RaidPokemonForm != new.RaidPokemonForm ||
-		old.RaidPokemonAlignment != new.RaidPokemonAlignment ||
-		old.RaidPokemonCp != new.RaidPokemonCp ||
-		old.RaidIsExclusive != new.RaidIsExclusive ||
-		old.CellId != new.CellId ||
-		old.Deleted != new.Deleted ||
-		old.TotalCp != new.TotalCp ||
-		old.FirstSeenTimestamp != new.FirstSeenTimestamp ||
-		old.RaidPokemonGender != new.RaidPokemonGender ||
-		old.SponsorId != new.SponsorId ||
-		old.PartnerId != new.PartnerId ||
-		old.RaidPokemonCostume != new.RaidPokemonCostume ||
-		old.RaidPokemonEvolution != new.RaidPokemonEvolution ||
-		old.ArScanEligible != new.ArScanEligible ||
-		old.PowerUpLevel != new.PowerUpLevel ||
-		old.PowerUpPoints != new.PowerUpPoints ||
-		old.PowerUpEndTimestamp != new.PowerUpEndTimestamp ||
-		old.Description != new.Description ||
-		old.Rsvps != new.Rsvps ||
-		!floatAlmostEqual(old.Lat, new.Lat, floatTolerance) ||
-		!floatAlmostEqual(old.Lon, new.Lon, floatTolerance)
-
-}
-
-// hasChangesInternalGym compares two Gym structs for changes that will be stored in memory
-// Float tolerance: Lat, Lon
-func hasInternalChangesGym(old *Gym, new *Gym) bool {
-	return old.InBattle != new.InBattle ||
-		old.Defenders != new.Defenders
-}
-
 type GymDetailsWebhook struct {
 	Id                  string  `json:"id"`
 	Name                string  `json:"name"`

@@ -42,13 +42,7 @@ type ApiDeviceLocation struct {
 func GetAllDevices() map[string]ApiDeviceLocation {
 	locations := map[string]ApiDeviceLocation{}
 	for _, key := range deviceLocation.Items() {
-		deviceLocation := key.Value()
-		locations[key.Key()] = ApiDeviceLocation{
-			Latitude:    deviceLocation.Latitude,
-			Longitude:   deviceLocation.Longitude,
-			LastUpdate:  deviceLocation.LastUpdate,
-			ScanContext: deviceLocation.ScanContext,
-		}
+		locations[key.Key()] = ApiDeviceLocation(key.Value())
 	}
 	return locations
 }

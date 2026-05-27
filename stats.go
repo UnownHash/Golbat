@@ -38,13 +38,12 @@ func StartDatabaseArchiver(db *sqlx.DB) {
 		for {
 			<-ticker.C
 			log.Infof("DB - Archive of pokemon table - starting")
-			start := time.Now()
 
 			var resultCounter int64
 			var result sql.Result
 			var err error
 
-			start = time.Now()
+			start := time.Now()
 
 			for {
 				pokemonId := []PokemonIdToDelete{}

@@ -2,8 +2,8 @@ package decoder
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"net/http"
+	"os"
 	"sync/atomic"
 
 	"golbat/config"
@@ -77,7 +77,7 @@ func ReadGeofences() error {
 		fc, err := GetKojiGeofence(kojiUrl)
 		if err != nil {
 			log.Warnf("KOJI: Unable to get geofence from koji - %s", err)
-			geofence, err := ioutil.ReadFile(kojiCacheFilename)
+			geofence, err := os.ReadFile(kojiCacheFilename)
 			if err != nil {
 				log.Warnf("KOJI: Unable to read cached geofence - %s", err)
 			} else {
@@ -93,12 +93,14 @@ func ReadGeofences() error {
 		} else {
 			log.Infof("KOJI: Loaded geofence from koji, caching")
 			bytes, _ := json.MarshalIndent(fc, "", "  ")
-			ioutil.WriteFile(kojiCacheFilename, []byte(bytes), 0644)
+			if err := os.WriteFile(kojiCacheFilename, bytes, 0644); err != nil {
+				log.Warnf("KOJI: Unable to cache geofence - %s", err)
+			}
 			statsFeatureCollection = fc
 
 		}
 	} else {
-		geofence, err := ioutil.ReadFile(geojsonFilename)
+		geofence, err := os.ReadFile(geojsonFilename)
 		if err != nil {
 			return err
 		}

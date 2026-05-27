@@ -122,7 +122,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 	}
 	if !ignore {
 		elapsed := time.Since(start)
-		if processed == true {
+		if processed {
 			statsCollector.IncDecodeMethods("ok", "", getMethodName(method, true))
 			log.Debugf("%s/%s %s - %s - %s", protoData.Uuid, protoData.Account, pogo.Method(method), elapsed, result)
 		} else {
@@ -209,7 +209,7 @@ func decodeGetFriendDetails(payload []byte) string {
 
 	if getFriendDetailsOutProto.GetResult() != pogo.InternalGetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
 		statsCollector.IncDecodeGetFriendDetails("error", "non_success")
-		return fmt.Sprintf("unsuccessful get friends details")
+		return "unsuccessful get friends details"
 	}
 
 	failures := 0
@@ -239,7 +239,7 @@ func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byt
 
 	if searchPlayerOutProto.GetResult() != pogo.InternalSearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
 		statsCollector.IncDecodeSearchPlayer("error", "non_success")
-		return fmt.Sprintf("unsuccessful search player response")
+		return "unsuccessful search player response"
 	}
 
 	var searchPlayerProto pogo.InternalSearchPlayerProto
@@ -258,7 +258,7 @@ func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byt
 	}
 
 	statsCollector.IncDecodeSearchPlayer("ok", "")
-	return fmt.Sprintf("1 player decoded from SearchPlayerProto")
+	return "1 player decoded from SearchPlayerProto"
 }
 
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
@@ -338,11 +338,11 @@ func decodeGetRoutes(ctx context.Context, payload []byte) string {
 			}
 			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(ctx, dbDetails, route)
 			if decodeError != nil {
-				if decodeErrors[route.Id] != true {
+				if !decodeErrors[route.Id] {
 					decodeErrors[route.Id] = true
 				}
 				log.Errorf("Failed to decode route %s", decodeError)
-			} else if decodeSuccesses[route.Id] != true {
+			} else if !decodeSuccesses[route.Id] {
 				decodeSuccesses[route.Id] = true
 			}
 		}
@@ -583,10 +583,6 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
 	return len(mapCell.Stations) > 0 || len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
-}
-
-func cellContainsForts(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Fort) > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {

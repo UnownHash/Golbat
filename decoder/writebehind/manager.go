@@ -26,9 +26,8 @@ type QueueManager struct {
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
 
-	startTime            time.Time
-	startupDelayComplete bool
-	startupDelaySeconds  int
+	startTime           time.Time
+	startupDelaySeconds int
 }
 
 // NewQueueManager creates a new queue manager

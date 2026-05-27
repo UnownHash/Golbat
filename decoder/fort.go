@@ -113,7 +113,8 @@ func CreateFortChangeWebhooks(fort *FortWebhook, change FortChange) {
 }
 
 func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
-	if change == NEW {
+	switch change {
+	case NEW:
 		areas := MatchStatsGeofenceWithCell(new.Location.Latitude, new.Location.Longitude, new.CellId)
 		hook := FortChangeWebhook{
 			ChangeType: change.String(),
@@ -121,7 +122,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, new.Type, "addition")
-	} else if change == REMOVAL {
+	case REMOVAL:
 		areas := MatchStatsGeofenceWithCell(old.Location.Latitude, old.Location.Longitude, old.CellId)
 		hook := FortChangeWebhook{
 			ChangeType: change.String(),
@@ -129,7 +130,7 @@ func CreateFortWebHooks(old *FortWebhook, new *FortWebhook, change FortChange) {
 		}
 		webhooksSender.AddMessage(webhooks.FortUpdate, hook, areas)
 		statsCollector.UpdateFortCount(areas, old.Type, "removal")
-	} else if change == EDIT {
+	case EDIT:
 		areas := MatchStatsGeofenceWithCell(new.Location.Latitude, new.Location.Longitude, new.CellId)
 		var editTypes []string
 

@@ -119,7 +119,8 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		return false
 	}
 
-	if fortLookup.FortType == GYM {
+	switch fortLookup.FortType {
+	case GYM:
 		if filter.AvailableSlots != nil && (fortLookup.AvailableSlots < filter.AvailableSlots.Min || fortLookup.AvailableSlots > filter.AvailableSlots.Max) {
 			return false
 		}
@@ -139,7 +140,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 				return false
 			}
 		}
-	} else if fortLookup.FortType == POKESTOP {
+	case POKESTOP:
 		if filter.LureId != nil && !slices.Contains(filter.LureId, fortLookup.LureId) {
 			return false
 		}
@@ -196,7 +197,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		if filter.IncidentPokemon != nil && !matchDnfIdPair(filter.IncidentPokemon, fortLookup.IncidentPokemonId, fortLookup.IncidentPokemonForm) {
 			return false
 		}
-	} else if fortLookup.FortType == STATION {
+	case STATION:
 		if filter.BattleLevel != nil || filter.BattlePokemon != nil {
 			// Check if battle has expired
 			if fortLookup.BattleEndTimestamp <= now {
