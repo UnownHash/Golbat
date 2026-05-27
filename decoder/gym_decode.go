@@ -25,7 +25,7 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 	now := time.Now().Unix()
 	powerUpLevelExpirationMs := int64(fortData.PowerUpLevelExpirationMs) / 1000
 	powerUpPoints := int64(fortData.PowerUpProgressPoints)
-	powerUpLevel := null.IntFrom(0)
+	var powerUpLevel null.Int
 	powerUpEndTimestamp := null.NewInt(0, false)
 	if powerUpPoints < 50 {
 		powerUpLevel = null.IntFrom(0)

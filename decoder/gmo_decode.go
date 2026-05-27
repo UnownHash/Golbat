@@ -59,20 +59,18 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				incidents = []*pogo.PokestopIncidentDisplayProto{fort.Data.PokestopDisplay}
 			}
 
-			if incidents != nil {
-				for _, incidentProto := range incidents {
-					if incidentProto.IncidentId == "" {
-						continue
-					}
-					incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId, "UpdateFortBatch")
-					if err != nil {
-						log.Errorf("getOrCreateIncidentRecord: %s", err)
-						continue
-					}
-					incident.updateFromPokestopIncidentDisplay(incidentProto)
-					saveIncidentRecord(ctx, db, incident)
-					unlock()
+			for _, incidentProto := range incidents {
+				if incidentProto.IncidentId == "" {
+					continue
 				}
+				incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId, "UpdateFortBatch")
+				if err != nil {
+					log.Errorf("getOrCreateIncidentRecord: %s", err)
+					continue
+				}
+				incident.updateFromPokestopIncidentDisplay(incidentProto)
+				saveIncidentRecord(ctx, db, incident)
+				unlock()
 			}
 		}
 

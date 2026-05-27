@@ -330,7 +330,7 @@ func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
 	if old == nil || old.CompressedIv() == new.CompressedIv() {
 		return nil
 	}
-	return errors.New(fmt.Sprintf("Unexpected IV mismatch %s != %s", old, new))
+	return fmt.Errorf("unexpected IV mismatch %s != %s", old, new)
 }
 
 func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
@@ -395,8 +395,8 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				}
 			}
 			if scan.Level != expectedLevel || scan.CompressedIv() != strongScan.CompressedIv() {
-				return scan, errors.New(fmt.Sprintf("Unexpected strong Pokemon (Ditto?), %s -> %s",
-					strongScan, scan))
+				return scan, fmt.Errorf("unexpected strong Pokemon (Ditto?), %s -> %s",
+					strongScan, scan)
 			}
 		}
 		return scan, nil
@@ -418,8 +418,8 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 		} else if unboostedScan != nil {
 			unboostedLevel = unboostedScan.Level
 		} else {
-			pokemon.resetDittoAttributes("?", nil, nil, scan)
-			return scan, errors.New("Missing past scans. Ditto will be reset")
+			_, _ = pokemon.resetDittoAttributes("?", nil, nil, scan)
+			return scan, errors.New("missing past scans; Ditto will be reset")
 		}
 		// If IsDitto = true, then the IV sets in history are ALWAYS confirmed
 		scan.Confirmed = true
@@ -435,8 +435,8 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 					scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 					return unboostedScan, checkScans(boostedScan, scan)
 				}
-				return scan, errors.New(fmt.Sprintf("Unexpected 0P Ditto level change, %s/%s -> %s",
-					unboostedScan, boostedScan, scan))
+				return scan, fmt.Errorf("unexpected 0P Ditto level change, %s/%s -> %s",
+					unboostedScan, boostedScan, scan)
 			}
 			return scan, checkScans(unboostedScan, scan)
 		case int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY):
@@ -449,8 +449,8 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 		case unboostedLevel + 5:
 			return pokemon.resetDittoAttributes("BN", boostedScan, unboostedScan, scan)
 		}
-		return scan, errors.New(fmt.Sprintf("Unexpected B0 Ditto level change, %s/%s -> %s",
-			unboostedScan, boostedScan, scan))
+		return scan, fmt.Errorf("unexpected B0 Ditto level change, %s/%s -> %s",
+			unboostedScan, boostedScan, scan)
 	}
 
 	isBoosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
@@ -474,8 +474,8 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 				scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 				return unboostedScan, nil
 			}
-			return scan, errors.New(fmt.Sprintf("Unexpected third level found %s, %s vs %s",
-				unboostedScan, boostedScan, scan))
+			return scan, fmt.Errorf("unexpected third level found %s, %s vs %s",
+				unboostedScan, boostedScan, scan)
 		}
 
 		levelAdjustment := int32(0)
@@ -628,7 +628,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 			scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
 			return scan, nil
 		default:
-			return scan, errors.New(fmt.Sprintf("Unexpected level %s -> %s", matchingScan, scan))
+			return scan, fmt.Errorf("unexpected level %s -> %s", matchingScan, scan)
 		}
 	}
 	if isBoosted {
@@ -757,7 +757,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
-	if pokemon.CellId.Valid == false {
+	if !pokemon.CellId.Valid {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
 		cellID := s2.CellIDFromLatLng(centerCoord).Parent(15)
 		pokemon.SetCellId(null.IntFrom(int64(cellID)))

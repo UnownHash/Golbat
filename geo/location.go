@@ -57,5 +57,5 @@ func SplitRoute(route []Location, parts int) [][]Location {
 }
 
 func (l ApiLocation) ToLocation() Location {
-	return Location{l.Latitude, l.Longitude}
+	return Location(l)
 }

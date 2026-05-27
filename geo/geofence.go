@@ -124,11 +124,7 @@ func (p *Geofence) Add(point Location) {
 //	this should be sufficient for detecting if points
 //	are contained using the raycast algorithm.
 func (p *Geofence) IsClosed() bool {
-	if len(p.Fence) < 3 {
-		return false
-	}
-
-	return true
+	return len(p.Fence) >= 3
 }
 
 // Contains returns whether or not the current Polygon contains the passed in Point.

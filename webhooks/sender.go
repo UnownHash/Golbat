@@ -2,10 +2,13 @@ package webhooks
 
 import (
 	"context"
-	"golbat/config"
-	"golbat/geo"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
+
+	"golbat/config"
+	"golbat/geo"
 )
 
 type configInterface interface {
@@ -69,7 +72,9 @@ func (sender *webhooksSender) Flush() {
 		wg.Add(1)
 		go func(wh *webhook) {
 			defer wg.Done()
-			wh.sendCollection(currentCollection)
+			if err := wh.sendCollection(currentCollection); err != nil {
+				log.Warnf("webhooks: flush to %s failed: %s", wh.url, err)
+			}
 		}(wh)
 	}
 	wg.Wait()

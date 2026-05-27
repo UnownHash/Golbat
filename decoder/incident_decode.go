@@ -31,10 +31,11 @@ func (incident *Incident) updateFromOpenInvasionCombatSessionOut(protoRes *pogo.
 	incident.SetSlot1PokemonId(null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokedexId.Number()), true))
 	incident.SetSlot1Form(null.NewInt(int64(protoRes.Combat.Opponent.ActivePokemon.PokemonDisplay.Form.Number()), true))
 	for i, pokemon := range protoRes.Combat.Opponent.ReservePokemon {
-		if i == 0 {
+		switch i {
+		case 0:
 			incident.SetSlot2PokemonId(null.NewInt(int64(pokemon.PokedexId.Number()), true))
 			incident.SetSlot2Form(null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true))
-		} else if i == 1 {
+		case 1:
 			incident.SetSlot3PokemonId(null.NewInt(int64(pokemon.PokedexId.Number()), true))
 			incident.SetSlot3Form(null.NewInt(int64(pokemon.PokemonDisplay.Form.Number()), true))
 		}

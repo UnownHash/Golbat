@@ -70,7 +70,7 @@ func questsHeldHasARTask(quests_held any) *bool {
 
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
-	var r *http.Request = c.Request
+	r := c.Request
 
 	dataReceivedTimestamp := time.Now().UnixMilli()
 
@@ -258,7 +258,7 @@ func Raw(c *gin.Context) {
 		}
 	}
 
-	if decodeError == true {
+	if decodeError {
 		statsCollector.IncRawRequests("error", "decode")
 		log.Infof("Raw: Data could not be decoded. From User agent %s - Received data %s", userAgent, body)
 

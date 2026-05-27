@@ -167,7 +167,7 @@ func updateEncounterStats(pokemon *Pokemon) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
 	// And double check that we have IVs, anyway.
-	if !(pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid) {
+	if !pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
 		return
 	}
 
@@ -183,7 +183,7 @@ func updateEncounterStats(pokemon *Pokemon) {
 	encounterCacheVal := encounterCache.GetOrCreate(uint64(pokemon.Id))
 	isNewEncounter := encounterCacheVal.NumAccountsSeen() == 0
 
-	if encounterCacheVal.SetAccountSeen(pokemon.Username.ValueOrZero()) {
+	if encounterCacheVal.SetAccountSeen(username) {
 		// account has already seen this encounter Id
 		statsCollector.IncDuplicateEncounters(true)
 		return
@@ -419,7 +419,7 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 		if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
 			bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
 			verifiedReEncounterIncr > 0 {
-			if locked == false {
+			if !locked {
 				pokemonStatsLock.Lock()
 				locked = true
 			}

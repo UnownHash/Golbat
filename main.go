@@ -53,7 +53,7 @@ func main() {
 
 	logLevel := log.InfoLevel
 
-	if cfg.Logging.Debug == true {
+	if cfg.Logging.Debug {
 		logLevel = log.DebugLevel
 	}
 	SetupLogger(
@@ -237,19 +237,19 @@ func main() {
 		StartDatabaseArchiver(db)
 	}
 
-	if cfg.Cleanup.Incidents == true {
+	if cfg.Cleanup.Incidents {
 		StartIncidentExpiry(db)
 	}
 
-	if cfg.Cleanup.Tappables == true {
+	if cfg.Cleanup.Tappables {
 		StartTappableExpiry(db)
 	}
 
-	if cfg.Cleanup.Quests == true {
+	if cfg.Cleanup.Quests {
 		StartQuestExpiry(dbDetails)
 	}
 
-	if cfg.Cleanup.Stats == true {
+	if cfg.Cleanup.Stats {
 		StartStatsExpiry(db)
 	}
 
