@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/guregu/null/v6"
 )
@@ -56,13 +57,8 @@ type Station struct {
 
 // StationOldValues holds old field values for webhook comparison
 type StationOldValues struct {
-	EndTime                int64
-	BattleEnd              null.Int
-	BattlePokemonId        null.Int
-	BattlePokemonForm      null.Int
-	BattlePokemonCostume   null.Int
-	BattlePokemonGender    null.Int
-	BattlePokemonBreadMode null.Int
+	EndTime        int64
+	BattleSnapshot stationBattleSnapshot
 }
 
 // IsDirty returns true if any field has been modified
@@ -94,13 +90,8 @@ func (station *Station) Unlock() {
 // Call this after loading from cache/DB but before modifications
 func (station *Station) snapshotOldValues() {
 	station.oldValues = StationOldValues{
-		EndTime:                station.EndTime,
-		BattleEnd:              station.BattleEnd,
-		BattlePokemonId:        station.BattlePokemonId,
-		BattlePokemonForm:      station.BattlePokemonForm,
-		BattlePokemonCostume:   station.BattlePokemonCostume,
-		BattlePokemonGender:    station.BattlePokemonGender,
-		BattlePokemonBreadMode: station.BattlePokemonBreadMode,
+		EndTime:        station.EndTime,
+		BattleSnapshot: snapshotStationBattles(getKnownStationBattles(station.Id, time.Now().Unix())),
 	}
 }
 

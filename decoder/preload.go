@@ -11,13 +11,13 @@ import (
 	"golbat/db"
 )
 
-// Preload loads forts, stations, active incidents, and recent spawnpoints from DB into cache.
+// Preload loads forts, stations, non-expired station battles, active incidents, and recent spawnpoints from DB into cache.
 // If populateRtree is true, also builds the rtree index for forts.
 func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
-	var pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount int32
+	var pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount int32
 
 	// Phase 1: Load forts and spawnpoints in parallel.
 	// Forts must be loaded before incidents so that the fort lookup cache
@@ -41,11 +41,20 @@ func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	}()
 	wg.Wait()
 
-	// Phase 2: Load incidents (needs pokestop lookup entries to exist)
-	incidentCount = preloadIncidents(dbDetails, populateRtree)
+	// Phase 2: Load child state that depends on forts/stations already being present.
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		stationBattleCount = preloadStationBattles(dbDetails, populateRtree)
+	}()
+	go func() {
+		defer wg.Done()
+		incidentCount = preloadIncidents(dbDetails, populateRtree)
+	}()
+	wg.Wait()
 
-	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d incidents, %d spawnpoints in %v (rtree=%v)",
-		pokestopCount, gymCount, stationCount, incidentCount, spawnpointCount, time.Since(startTime), populateRtree)
+	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d station battles, %d incidents, %d spawnpoints in %v (rtree=%v)",
+		pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount, time.Since(startTime), populateRtree)
 }
 
 // PreloadForts loads all forts from DB into cache.

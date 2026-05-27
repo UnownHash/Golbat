@@ -23,15 +23,16 @@ type S2CellData struct {
 
 // Typed queues for each entity type - using native key types for efficiency
 var (
-	pokestopQueue   *writebehind.TypedQueue[string, PokestopData]
-	gymQueue        *writebehind.TypedQueue[string, GymData]
-	pokemonQueue    *writebehind.TypedQueue[uint64, PokemonData]
-	spawnpointQueue *writebehind.TypedQueue[int64, SpawnpointData]
-	routeQueue      *writebehind.TypedQueue[string, RouteData]
-	tappableQueue   *writebehind.TypedQueue[uint64, TappableData]
-	stationQueue    *writebehind.TypedQueue[string, StationData]
-	incidentQueue   *writebehind.TypedQueue[string, IncidentData]
-	s2cellQueue     *writebehind.TypedQueue[uint64, S2CellData]
+	pokestopQueue      *writebehind.TypedQueue[string, PokestopData]
+	gymQueue           *writebehind.TypedQueue[string, GymData]
+	pokemonQueue       *writebehind.TypedQueue[uint64, PokemonData]
+	spawnpointQueue    *writebehind.TypedQueue[int64, SpawnpointData]
+	routeQueue         *writebehind.TypedQueue[string, RouteData]
+	tappableQueue      *writebehind.TypedQueue[uint64, TappableData]
+	stationQueue       *writebehind.TypedQueue[string, StationData]
+	stationBattleQueue *writebehind.TypedQueue[string, stationBattleWrite]
+	incidentQueue      *writebehind.TypedQueue[string, IncidentData]
+	s2cellQueue        *writebehind.TypedQueue[uint64, S2CellData]
 
 	// QueueManager coordinates all queues
 	queueManager *writebehind.QueueManager
@@ -151,6 +152,19 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		KeyFunc:             func(d StationData) string { return d.Id },
 	})
 	queueManager.Register(stationQueue)
+
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
+		Name:                "station_battle",
+		BatchSize:           batchSize,
+		BatchTimeout:        batchTimeout,
+		StartupDelaySeconds: startupDelay,
+		Limiter:             limiter,
+		Db:                  dbDetails,
+		Stats:               stats,
+		FlushFunc:           flushStationBattleBatch,
+		KeyFunc:             func(d stationBattleWrite) string { return d.StationId },
+	})
+	queueManager.Register(stationBattleQueue)
 
 	incidentQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, IncidentData]{
 		Name:                "incident",
