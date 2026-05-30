@@ -299,22 +299,35 @@ func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
 		return nil, err
 	}
 
+	return normaliseFenceFromBytes(bodyBytes, c.Request.Method+" "+c.FullPath())
+}
+
+// NormaliseFenceFromBytes parses a request body (geometry, feature, or Golbat
+// fence JSON) into a geojson.Feature. This is the body-parsing path shared by
+// the gin handler NormaliseFenceRequest and the Huma POST endpoints.
+func NormaliseFenceFromBytes(body []byte) (*geojson.Feature, error) {
+	return normaliseFenceFromBytes(body, "fence request")
+}
+
+// normaliseFenceFromBytes contains the actual parse logic. logContext is used
+// only for debug logging.
+func normaliseFenceFromBytes(bodyBytes []byte, logContext string) (*geojson.Feature, error) {
 	geometry, err := geojson.UnmarshalGeometry(bodyBytes)
 	if err == nil {
-		log.Debugf("%s %s - received a geometry", c.Request.Method, c.FullPath())
+		log.Debugf("%s - received a geometry", logContext)
 		return geojson.NewFeature(geometry.Geometry()), nil
 	}
 
 	feature, err := geojson.UnmarshalFeature(bodyBytes)
 	if err == nil {
-		log.Debugf("%s %s - received a feature", c.Request.Method, c.FullPath())
+		log.Debugf("%s - received a feature", logContext)
 		return feature, nil
 	}
 
 	var golbatFance *GeofenceApi
 	err = json.Unmarshal(bodyBytes, &golbatFance)
 	if err == nil {
-		log.Debugf("%s %s - received a fence", c.Request.Method, c.FullPath())
+		log.Debugf("%s - received a fence", logContext)
 		return golbatFance.toGeofence().toFeature(), err
 	}
 
