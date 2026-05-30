@@ -14,8 +14,8 @@ import (
 )
 
 type ApiPokemonDnfId struct {
-	Pokemon int16  `json:"id" required:"false" doc:"Pokedex id to match; 0 or absent matches any pokemon."`
-	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form."`
+	Pokemon int16  `json:"id" doc:"Pokedex id to match; 0 matches any pokemon. Required within a pokemon entry — a form without an id can never match."`
+	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form of the given id."`
 }
 
 type ApiPokemonDnfMinMax struct {
