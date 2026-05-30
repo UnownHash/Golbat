@@ -1,51 +1,52 @@
 package decoder
 
-import "github.com/guregu/null/v6"
-
+// ApiPokestopResult is the API representation of a pokestop. Nullable database
+// columns are represented as pointers (nil => JSON null) without omitempty so
+// every key is always present.
 type ApiPokestopResult struct {
-	Id                         string      `json:"id"`
-	Lat                        float64     `json:"lat"`
-	Lon                        float64     `json:"lon"`
-	Name                       null.String `json:"name"`
-	Url                        null.String `json:"url"`
-	LureExpireTimestamp        null.Int    `json:"lure_expire_timestamp"`
-	LastModifiedTimestamp      null.Int    `json:"last_modified_timestamp"`
-	Updated                    int64       `json:"updated"`
-	Enabled                    null.Bool   `json:"enabled"`
-	QuestType                  null.Int    `json:"quest_type"`
-	QuestTimestamp             null.Int    `json:"quest_timestamp"`
-	QuestTarget                null.Int    `json:"quest_target"`
-	QuestConditions            null.String `json:"quest_conditions"`
-	QuestRewards               null.String `json:"quest_rewards"`
-	QuestTemplate              null.String `json:"quest_template"`
-	QuestTitle                 null.String `json:"quest_title"`
-	QuestExpiry                null.Int    `json:"quest_expiry"`
-	CellId                     null.Int    `json:"cell_id"`
-	Deleted                    bool        `json:"deleted"`
-	LureId                     int16       `json:"lure_id"`
-	FirstSeenTimestamp         int16       `json:"first_seen_timestamp"`
-	SponsorId                  null.Int    `json:"sponsor_id"`
-	PartnerId                  null.String `json:"partner_id"`
-	ArScanEligible             null.Int    `json:"ar_scan_eligible"`
-	PowerUpLevel               null.Int    `json:"power_up_level"`
-	PowerUpPoints              null.Int    `json:"power_up_points"`
-	PowerUpEndTimestamp        null.Int    `json:"power_up_end_timestamp"`
-	AlternativeQuestType       null.Int    `json:"alternative_quest_type"`
-	AlternativeQuestTimestamp  null.Int    `json:"alternative_quest_timestamp"`
-	AlternativeQuestTarget     null.Int    `json:"alternative_quest_target"`
-	AlternativeQuestConditions null.String `json:"alternative_quest_conditions"`
-	AlternativeQuestRewards    null.String `json:"alternative_quest_rewards"`
-	AlternativeQuestTemplate   null.String `json:"alternative_quest_template"`
-	AlternativeQuestTitle      null.String `json:"alternative_quest_title"`
-	AlternativeQuestExpiry     null.Int    `json:"alternative_quest_expiry"`
-	Description                null.String `json:"description"`
-	ShowcaseFocus              null.String `json:"showcase_focus"`
-	ShowcasePokemon            null.Int    `json:"showcase_pokemon_id"`
-	ShowcasePokemonForm        null.Int    `json:"showcase_pokemon_form_id"`
-	ShowcasePokemonType        null.Int    `json:"showcase_pokemon_type_id"`
-	ShowcaseRankingStandard    null.Int    `json:"showcase_ranking_standard"`
-	ShowcaseExpiry             null.Int    `json:"showcase_expiry"`
-	ShowcaseRankings           null.String `json:"showcase_rankings"`
+	Id                         string  `json:"id" doc:"Fort ID of the pokestop"`
+	Lat                        float64 `json:"lat" doc:"Latitude of the pokestop"`
+	Lon                        float64 `json:"lon" doc:"Longitude of the pokestop"`
+	Name                       *string `json:"name" doc:"Name of the pokestop"`
+	Url                        *string `json:"url" doc:"Image URL of the pokestop"`
+	LureExpireTimestamp        *int64  `json:"lure_expire_timestamp" doc:"Unix timestamp when the current lure expires"`
+	LastModifiedTimestamp      *int64  `json:"last_modified_timestamp" doc:"Unix timestamp when the pokestop was last modified in-game"`
+	Updated                    int64   `json:"updated" doc:"Unix timestamp when the record was last updated"`
+	Enabled                    *bool   `json:"enabled" doc:"Whether the pokestop is enabled"`
+	QuestType                  *int64  `json:"quest_type" doc:"Type of the AR quest"`
+	QuestTimestamp             *int64  `json:"quest_timestamp" doc:"Unix timestamp when the AR quest was set"`
+	QuestTarget                *int64  `json:"quest_target" doc:"Target count for the AR quest"`
+	QuestConditions            *string `json:"quest_conditions" doc:"Serialized conditions of the AR quest"`
+	QuestRewards               *string `json:"quest_rewards" doc:"Serialized rewards of the AR quest"`
+	QuestTemplate              *string `json:"quest_template" doc:"Template ID of the AR quest"`
+	QuestTitle                 *string `json:"quest_title" doc:"Title of the AR quest"`
+	QuestExpiry                *int64  `json:"quest_expiry" doc:"Unix timestamp when the AR quest expires"`
+	CellId                     *int64  `json:"cell_id" doc:"S2 cell ID the pokestop belongs to"`
+	Deleted                    bool    `json:"deleted" doc:"Whether the pokestop has been deleted"`
+	LureId                     int16   `json:"lure_id" doc:"ID of the current lure module"`
+	FirstSeenTimestamp         int16   `json:"first_seen_timestamp" doc:"Unix timestamp when the pokestop was first seen"`
+	SponsorId                  *int64  `json:"sponsor_id" doc:"Sponsor ID of the pokestop, if sponsored"`
+	PartnerId                  *string `json:"partner_id" doc:"Partner ID of the pokestop, if partnered"`
+	ArScanEligible             *int64  `json:"ar_scan_eligible" doc:"Whether the pokestop is eligible for AR scanning"`
+	PowerUpLevel               *int64  `json:"power_up_level" doc:"Power-up level of the pokestop"`
+	PowerUpPoints              *int64  `json:"power_up_points" doc:"Power-up points accumulated for the pokestop"`
+	PowerUpEndTimestamp        *int64  `json:"power_up_end_timestamp" doc:"Unix timestamp when the power-up ends"`
+	AlternativeQuestType       *int64  `json:"alternative_quest_type" doc:"Type of the non-AR quest"`
+	AlternativeQuestTimestamp  *int64  `json:"alternative_quest_timestamp" doc:"Unix timestamp when the non-AR quest was set"`
+	AlternativeQuestTarget     *int64  `json:"alternative_quest_target" doc:"Target count for the non-AR quest"`
+	AlternativeQuestConditions *string `json:"alternative_quest_conditions" doc:"Serialized conditions of the non-AR quest"`
+	AlternativeQuestRewards    *string `json:"alternative_quest_rewards" doc:"Serialized rewards of the non-AR quest"`
+	AlternativeQuestTemplate   *string `json:"alternative_quest_template" doc:"Template ID of the non-AR quest"`
+	AlternativeQuestTitle      *string `json:"alternative_quest_title" doc:"Title of the non-AR quest"`
+	AlternativeQuestExpiry     *int64  `json:"alternative_quest_expiry" doc:"Unix timestamp when the non-AR quest expires"`
+	Description                *string `json:"description" doc:"Description of the pokestop"`
+	ShowcaseFocus              *string `json:"showcase_focus" doc:"Focus type of the showcase contest"`
+	ShowcasePokemon            *int64  `json:"showcase_pokemon_id" doc:"Pokedex ID of the showcase contest pokemon"`
+	ShowcasePokemonForm        *int64  `json:"showcase_pokemon_form_id" doc:"Form ID of the showcase contest pokemon"`
+	ShowcasePokemonType        *int64  `json:"showcase_pokemon_type_id" doc:"Type ID of the showcase contest pokemon"`
+	ShowcaseRankingStandard    *int64  `json:"showcase_ranking_standard" doc:"Ranking standard of the showcase contest"`
+	ShowcaseExpiry             *int64  `json:"showcase_expiry" doc:"Unix timestamp when the showcase contest expires"`
+	ShowcaseRankings           *string `json:"showcase_rankings" doc:"Serialized showcase contest rankings"`
 }
 
 func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
@@ -53,46 +54,46 @@ func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
 		Id:                         stop.Id,
 		Lat:                        stop.Lat,
 		Lon:                        stop.Lon,
-		Name:                       stop.Name,
-		Url:                        stop.Url,
-		LureExpireTimestamp:        stop.LureExpireTimestamp,
-		LastModifiedTimestamp:      stop.LastModifiedTimestamp,
+		Name:                       stop.Name.Ptr(),
+		Url:                        stop.Url.Ptr(),
+		LureExpireTimestamp:        stop.LureExpireTimestamp.Ptr(),
+		LastModifiedTimestamp:      stop.LastModifiedTimestamp.Ptr(),
 		Updated:                    stop.Updated,
-		Enabled:                    stop.Enabled,
-		QuestType:                  stop.QuestType,
-		QuestTimestamp:             stop.QuestTimestamp,
-		QuestTarget:                stop.QuestTarget,
-		QuestConditions:            stop.QuestConditions,
-		QuestRewards:               stop.QuestRewards,
-		QuestTemplate:              stop.QuestTemplate,
-		QuestTitle:                 stop.QuestTitle,
-		QuestExpiry:                stop.QuestExpiry,
-		CellId:                     stop.CellId,
+		Enabled:                    stop.Enabled.Ptr(),
+		QuestType:                  stop.QuestType.Ptr(),
+		QuestTimestamp:             stop.QuestTimestamp.Ptr(),
+		QuestTarget:                stop.QuestTarget.Ptr(),
+		QuestConditions:            stop.QuestConditions.Ptr(),
+		QuestRewards:               stop.QuestRewards.Ptr(),
+		QuestTemplate:              stop.QuestTemplate.Ptr(),
+		QuestTitle:                 stop.QuestTitle.Ptr(),
+		QuestExpiry:                stop.QuestExpiry.Ptr(),
+		CellId:                     stop.CellId.Ptr(),
 		Deleted:                    stop.Deleted,
 		LureId:                     stop.LureId,
 		FirstSeenTimestamp:         stop.FirstSeenTimestamp,
-		SponsorId:                  stop.SponsorId,
-		PartnerId:                  stop.PartnerId,
-		ArScanEligible:             stop.ArScanEligible,
-		PowerUpLevel:               stop.PowerUpLevel,
-		PowerUpPoints:              stop.PowerUpPoints,
-		PowerUpEndTimestamp:        stop.PowerUpEndTimestamp,
-		AlternativeQuestType:       stop.AlternativeQuestType,
-		AlternativeQuestTimestamp:  stop.AlternativeQuestTimestamp,
-		AlternativeQuestTarget:     stop.AlternativeQuestTarget,
-		AlternativeQuestConditions: stop.AlternativeQuestConditions,
-		AlternativeQuestRewards:    stop.AlternativeQuestRewards,
-		AlternativeQuestTemplate:   stop.AlternativeQuestTemplate,
-		AlternativeQuestTitle:      stop.AlternativeQuestTitle,
-		AlternativeQuestExpiry:     stop.AlternativeQuestExpiry,
-		Description:                stop.Description,
-		ShowcaseFocus:              stop.ShowcaseFocus,
-		ShowcasePokemon:            stop.ShowcasePokemon,
-		ShowcasePokemonForm:        stop.ShowcasePokemonForm,
-		ShowcasePokemonType:        stop.ShowcasePokemonType,
-		ShowcaseRankingStandard:    stop.ShowcaseRankingStandard,
-		ShowcaseExpiry:             stop.ShowcaseExpiry,
-		ShowcaseRankings:           stop.ShowcaseRankings,
+		SponsorId:                  stop.SponsorId.Ptr(),
+		PartnerId:                  stop.PartnerId.Ptr(),
+		ArScanEligible:             stop.ArScanEligible.Ptr(),
+		PowerUpLevel:               stop.PowerUpLevel.Ptr(),
+		PowerUpPoints:              stop.PowerUpPoints.Ptr(),
+		PowerUpEndTimestamp:        stop.PowerUpEndTimestamp.Ptr(),
+		AlternativeQuestType:       stop.AlternativeQuestType.Ptr(),
+		AlternativeQuestTimestamp:  stop.AlternativeQuestTimestamp.Ptr(),
+		AlternativeQuestTarget:     stop.AlternativeQuestTarget.Ptr(),
+		AlternativeQuestConditions: stop.AlternativeQuestConditions.Ptr(),
+		AlternativeQuestRewards:    stop.AlternativeQuestRewards.Ptr(),
+		AlternativeQuestTemplate:   stop.AlternativeQuestTemplate.Ptr(),
+		AlternativeQuestTitle:      stop.AlternativeQuestTitle.Ptr(),
+		AlternativeQuestExpiry:     stop.AlternativeQuestExpiry.Ptr(),
+		Description:                stop.Description.Ptr(),
+		ShowcaseFocus:              stop.ShowcaseFocus.Ptr(),
+		ShowcasePokemon:            stop.ShowcasePokemon.Ptr(),
+		ShowcasePokemonForm:        stop.ShowcasePokemonForm.Ptr(),
+		ShowcasePokemonType:        stop.ShowcasePokemonType.Ptr(),
+		ShowcaseRankingStandard:    stop.ShowcaseRankingStandard.Ptr(),
+		ShowcaseExpiry:             stop.ShowcaseExpiry.Ptr(),
+		ShowcaseRankings:           stop.ShowcaseRankings.Ptr(),
 	}
 }
 
