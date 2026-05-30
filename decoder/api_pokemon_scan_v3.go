@@ -43,13 +43,6 @@ type ApiPokemonDnfFilter3 struct {
 	Ultra   *ApiPokemonDnfMinMax  `json:"pvp_ultra"`
 }
 
-type PokemonScan3Result struct {
-	Pokemon  []*ApiPokemonResult `json:"pokemon"`
-	Examined int                 `json:"examined"`
-	Skipped  int                 `json:"skipped"`
-	Total    int                 `json:"total"`
-}
-
 func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, int, int, int) {
 	dnfFilters := make(map[dnfFilterLookup][]ApiPokemonDnfFilter3)
 
@@ -100,34 +93,6 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 	}
 
 	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch)
-}
-
-func GetPokemonInArea3(retrieveParameters ApiPokemonScan3) *PokemonScan3Result {
-	returnKeys, examined, skipped, total := internalGetPokemonInArea3(retrieveParameters)
-	results := make([]*ApiPokemonResult, 0, len(returnKeys))
-
-	start := time.Now()
-	startUnix := start.Unix()
-
-	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v3")
-		if pokemon != nil {
-			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
-				apiPokemon := buildApiPokemonResult(pokemon)
-				results = append(results, &apiPokemon)
-			}
-			unlock()
-		}
-	}
-
-	log.Infof("GetPokemonInAreaV3 - result buffer time %s, %d added", time.Since(start), len(results))
-
-	return &PokemonScan3Result{
-		Pokemon:  results,
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
-	}
 }
 
 func GrpcGetPokemonInArea3(retrieveParameters *pb.PokemonScanRequestV3) ([]*pb.PokemonDetails, int, int, int) {

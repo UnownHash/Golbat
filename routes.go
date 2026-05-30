@@ -469,40 +469,6 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-func PokemonScan2(c *gin.Context) {
-	var requestBody decoder.ApiPokemonScan2
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /api/pokemon/scan/ Error during post retrieve %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	res := decoder.GetPokemonInArea2(requestBody)
-	if res == nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	c.JSON(http.StatusAccepted, res)
-}
-
-func PokemonScan3(c *gin.Context) {
-	var requestBody decoder.ApiPokemonScan3
-
-	if err := c.BindJSON(&requestBody); err != nil {
-		log.Warnf("POST /api/v3/pokemon/scan/ Error during post retrieve %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	res := decoder.GetPokemonInArea3(requestBody)
-	if res == nil {
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-	c.JSON(http.StatusAccepted, res)
-}
-
 func PokemonOne(c *gin.Context) {
 	pokemonId, err := strconv.ParseUint(c.Param("pokemon_id"), 10, 64)
 	if err != nil {
