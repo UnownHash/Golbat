@@ -342,10 +342,8 @@ func main() {
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
-	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
-	apiGroup.POST("/pokemon/search", PokemonSearch)
 
 	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
@@ -392,6 +390,7 @@ func main() {
 	humaAPI := setupHumaAPI(r)
 	registerHumaRoutes(humaAPI)
 	registerFortScanRoutes(humaAPI)
+	registerPokemonReadRoutes(humaAPI)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
