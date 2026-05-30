@@ -7,7 +7,9 @@ import (
 
 	"golbat/config"
 
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/gin-gonic/gin"
 	gojson "github.com/goccy/go-json"
 )
 
@@ -94,5 +96,107 @@ func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
 				t.Errorf("%s: got %d, want 202; body=%s", name, resp.Code, resp.Body.String())
 			}
 		})
+	}
+}
+
+// fortScanBody is an empty-filter fort scan request that matches against the
+// empty in-memory rtree (no DB), yielding zero results.
+const fortScanBody = `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[]}`
+
+// TestFortScanEndpoints exercises the HTTP pipeline for the migrated fort scan
+// endpoints: success (200 with the expected envelope), the FortInMemory 503
+// guard, and the auth requirement (401). No database is required.
+func TestFortScanEndpoints(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevInMem := config.Config.FortInMemory
+	defer func() {
+		config.Config.ApiSecret = prevSecret
+		config.Config.FortInMemory = prevInMem
+	}()
+
+	config.Config.ApiSecret = ""
+	config.Config.FortInMemory = true
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerHumaRoutes(api)
+	registerFortScanRoutes(api)
+
+	t.Run("gym scan returns 200 envelope", func(t *testing.T) {
+		resp := api.Post("/api/gym/scan", strings.NewReader(fortScanBody))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var m map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &m); err != nil {
+			t.Fatalf("body is not a JSON object: %v; body=%s", err, resp.Body.String())
+		}
+		for _, key := range []string{"gyms", "examined", "skipped", "total"} {
+			if _, ok := m[key]; !ok {
+				t.Errorf("body missing key %q: %s", key, resp.Body.String())
+			}
+		}
+	})
+
+	t.Run("503 when fort_in_memory disabled", func(t *testing.T) {
+		config.Config.FortInMemory = false
+		defer func() { config.Config.FortInMemory = true }()
+		resp := api.Post("/api/gym/scan", strings.NewReader(fortScanBody))
+		if resp.Code != http.StatusServiceUnavailable {
+			t.Errorf("got %d, want 503; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("401 without secret when auth configured", func(t *testing.T) {
+		config.Config.ApiSecret = "secret"
+		defer func() { config.Config.ApiSecret = "" }()
+		resp := api.Post("/api/gym/scan", strings.NewReader(fortScanBody))
+		if resp.Code != http.StatusUnauthorized {
+			t.Errorf("got %d, want 401; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+}
+
+// TestFortScanDraftBadge asserts the four fort scan operations carry the
+// x-badges extension (draft marker) in the OpenAPI spec, while an existing
+// pokemon operation does not.
+func TestFortScanDraftBadge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerHumaRoutes(api)
+	registerFortScanRoutes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Badges any `json:"x-badges"`
+		} `json:"paths"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	for _, path := range []string{"/api/gym/scan", "/api/pokestop/scan", "/api/station/scan", "/api/fort/scan"} {
+		op, ok := doc.Paths[path]["post"]
+		if !ok {
+			t.Errorf("path %q has no post operation", path)
+			continue
+		}
+		if op.Badges == nil {
+			t.Errorf("path %q post is missing x-badges (draft marker)", path)
+		}
+	}
+
+	pokemonOp, ok := doc.Paths["/api/pokemon/v2/scan"]["post"]
+	if !ok {
+		t.Fatalf("pokemon v2 scan op not found")
+	}
+	if pokemonOp.Badges != nil {
+		t.Errorf("pokemon v2 scan must NOT carry x-badges, got %v", pokemonOp.Badges)
 	}
 }
