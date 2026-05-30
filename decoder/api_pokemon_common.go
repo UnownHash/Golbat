@@ -14,18 +14,18 @@ import (
 )
 
 type ApiPokemonDnfId struct {
-	Pokemon int16  `json:"id"`
-	Form    *int16 `json:"form"`
+	Pokemon int16  `json:"id" doc:"Pokedex id to match; 0 or absent matches any pokemon."`
+	Form    *int16 `json:"form" doc:"Form id to match; null matches any form."`
 }
 
 type ApiPokemonDnfMinMax struct {
-	Min int16 `json:"min"`
-	Max int16 `json:"max"`
+	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
+	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
 }
 
 type ApiPokemonDnfMinMax8 struct {
-	Min int8 `json:"min"`
-	Max int8 `json:"max"`
+	Min int8 `json:"min" doc:"Minimum value (inclusive)."`
+	Max int8 `json:"max" doc:"Maximum value (inclusive)."`
 }
 
 type ApiPokemonResult struct {
