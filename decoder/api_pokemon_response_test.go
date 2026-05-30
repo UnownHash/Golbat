@@ -164,3 +164,36 @@ func TestBuildPokemonResult_GoldenParity(t *testing.T) {
 		t.Errorf("new pvp = %s, want object form with null leagues", got)
 	}
 }
+
+func TestPokemonScanResultV3_WireShape(t *testing.T) {
+	res := PokemonScanResultV3{
+		Pokemon:  []PokemonResult{{Id: "1", PokemonId: 25}},
+		Examined: 5,
+		Skipped:  1,
+		Total:    6,
+	}
+	b, err := json.Marshal(res)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	for _, k := range []string{"pokemon", "examined", "skipped", "total"} {
+		if _, ok := m[k]; !ok {
+			t.Errorf("v3 wrapper missing key %q", k)
+		}
+	}
+}
+
+func TestPokemonV2_BareArrayShape(t *testing.T) {
+	res := []PokemonResult{{Id: "1", PokemonId: 25}}
+	b, err := json.Marshal(res)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(b) == 0 || b[0] != '[' {
+		t.Errorf("v2 response must be a bare array, got: %s", b)
+	}
+}
