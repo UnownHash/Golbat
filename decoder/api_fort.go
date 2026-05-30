@@ -20,11 +20,11 @@ type ApiFortScan struct {
 }
 
 type ApiFortDnfFilter struct {
-	PowerUpLevel     *ApiFortDnfMinMax8 `json:"power_up_level"`
-	IsArScanEligible *bool              `json:"is_ar_scan_eligible"`
+	PowerUpLevel     *ApiFortDnfMinMax `json:"power_up_level"`
+	IsArScanEligible *bool             `json:"is_ar_scan_eligible"`
 
 	// Gym
-	AvailableSlots *ApiFortDnfMinMax8 `json:"available_slots"`
+	AvailableSlots *ApiFortDnfMinMax `json:"available_slots"`
 	TeamId         []int8             `json:"team_id"`
 	RaidLevel      []int8             `json:"raid_level"`
 	RaidPokemon    []ApiDnfId         `json:"raid_pokemon_id"`
@@ -32,7 +32,7 @@ type ApiFortDnfFilter struct {
 	// Pokestop - unified quest (matches AR or no-AR)
 	LureId             []int16             `json:"lure_id"`
 	QuestRewardType    []int16             `json:"quest_reward_type"`
-	QuestRewardAmount  *ApiFortDnfMinMax16 `json:"quest_reward_amount"`
+	QuestRewardAmount  *ApiFortDnfMinMax   `json:"quest_reward_amount"`
 	QuestRewardItemId  []int16             `json:"quest_reward_item_id"`
 	QuestRewardPokemon []ApiDnfId          `json:"quest_reward_pokemon"`
 
@@ -45,7 +45,7 @@ type ApiFortDnfFilter struct {
 	// Pokestop - contest
 	ContestPokemon      []ApiDnfId          `json:"contest_pokemon"`
 	ContestPokemonType  []int8              `json:"contest_pokemon_type"`
-	ContestTotalEntries *ApiFortDnfMinMax16 `json:"contest_total_entries"`
+	ContestTotalEntries *ApiFortDnfMinMax   `json:"contest_total_entries"`
 
 	// Station
 	BattleLevel   []int8     `json:"battle_level"`
@@ -57,14 +57,11 @@ type ApiDnfId struct {
 	Form    *int16 `json:"form"`
 }
 
-type ApiFortDnfMinMax8 struct {
-	Min int8 `json:"min"`
-	Max int8 `json:"max"`
-}
-
-type ApiFortDnfMinMax16 struct {
-	Min int16 `json:"min"`
-	Max int16 `json:"max"`
+// ApiFortDnfMinMax is an inclusive integer range used by the fort filter clauses
+// (int16 internally — wide enough for all fort range fields).
+type ApiFortDnfMinMax struct {
+	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
+	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
 }
 
 type ApiGymScanResult struct {
@@ -112,7 +109,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 	if fortType != 0 && fortType != fortLookup.FortType {
 		return false
 	}
-	if filter.PowerUpLevel != nil && (fortLookup.PowerUpLevel < filter.PowerUpLevel.Min || fortLookup.PowerUpLevel > filter.PowerUpLevel.Max) {
+	if filter.PowerUpLevel != nil && (int16(fortLookup.PowerUpLevel) < filter.PowerUpLevel.Min || int16(fortLookup.PowerUpLevel) > filter.PowerUpLevel.Max) {
 		return false
 	}
 	if filter.IsArScanEligible != nil && !fortLookup.IsArScanEligible {
@@ -121,7 +118,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 
 	switch fortLookup.FortType {
 	case GYM:
-		if filter.AvailableSlots != nil && (fortLookup.AvailableSlots < filter.AvailableSlots.Min || fortLookup.AvailableSlots > filter.AvailableSlots.Max) {
+		if filter.AvailableSlots != nil && (int16(fortLookup.AvailableSlots) < filter.AvailableSlots.Min || int16(fortLookup.AvailableSlots) > filter.AvailableSlots.Max) {
 			return false
 		}
 		if filter.TeamId != nil && !slices.Contains(filter.TeamId, fortLookup.TeamId) {
