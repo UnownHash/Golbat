@@ -1,0 +1,71 @@
+package main
+
+import (
+	"io"
+	"net/http"
+
+	"golbat/config"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
+	"github.com/gin-gonic/gin"
+	gojson "github.com/goccy/go-json"
+)
+
+const securitySchemeName = "golbatSecret"
+
+func newHumaConfig(version string) huma.Config {
+	cfg := huma.DefaultConfig("Golbat API", version)
+
+	goccyFmt := huma.Format{
+		Marshal:   func(w io.Writer, v any) error { return gojson.NewEncoder(w).Encode(v) },
+		Unmarshal: gojson.Unmarshal,
+	}
+	cfg.Formats = map[string]huma.Format{
+		"application/json": goccyFmt,
+		"json":             goccyFmt,
+	}
+
+	if cfg.Components == nil {
+		cfg.Components = &huma.Components{}
+	}
+	if cfg.Components.SecuritySchemes == nil {
+		cfg.Components.SecuritySchemes = map[string]*huma.SecurityScheme{}
+	}
+	cfg.Components.SecuritySchemes[securitySchemeName] = &huma.SecurityScheme{
+		Type: "apiKey",
+		In:   "header",
+		Name: "X-Golbat-Secret",
+	}
+	return cfg
+}
+
+func setupHumaAPI(r *gin.Engine) huma.API {
+	version := gitRevision
+	if version == "" {
+		version = "dev"
+	}
+	api := humagin.New(r, newHumaConfig(version))
+
+	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+		secret := config.Config.ApiSecret
+		if secret == "" {
+			next(ctx)
+			return
+		}
+		requiresAuth := false
+		for _, req := range ctx.Operation().Security {
+			if _, ok := req[securitySchemeName]; ok {
+				requiresAuth = true
+				break
+			}
+		}
+		if requiresAuth && ctx.Header("X-Golbat-Secret") != secret {
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or missing X-Golbat-Secret")
+			return
+		}
+		next(ctx)
+	})
+
+	return api
+}
