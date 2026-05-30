@@ -1,6 +1,8 @@
 package decoder
 
 import (
+	"time"
+
 	"github.com/UnownHash/gohbem"
 )
 
@@ -161,6 +163,51 @@ func buildPvpRankings(pokemon *Pokemon) PvpRankings {
 		Great:  convertPvpEntries(pvp["great"]),
 		Ultra:  convertPvpEntries(pvp["ultra"]),
 	}
+}
+
+// PokemonScanResultV3 is the v3-only response envelope wrapping the matched
+// pokemon together with the spatial-index candidate counts.
+type PokemonScanResultV3 struct {
+	Pokemon  []PokemonResult `json:"pokemon" doc:"Matched pokemon"`
+	Examined int             `json:"examined" doc:"Candidates examined from the spatial index"`
+	Skipped  int             `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
+	Total    int             `json:"total" doc:"Total candidates in the bounding box"`
+}
+
+// GetPokemonInArea2Clean runs the v2 rtree/DNF search and returns a bare array of
+// PokemonResult, discarding the candidate counts (matching the legacy v2 shape).
+func GetPokemonInArea2Clean(req ApiPokemonScan2) []PokemonResult {
+	keys, _, _, _ := internalGetPokemonInArea2(req)
+	return collectPokemonResults(keys, "API.ScanPokemon.v2.clean")
+}
+
+// GetPokemonInArea3Clean runs the v3 rtree/DNF search and returns the matched
+// pokemon together with the candidate counts in the v3 envelope.
+func GetPokemonInArea3Clean(req ApiPokemonScan3) *PokemonScanResultV3 {
+	keys, examined, skipped, total := internalGetPokemonInArea3(req)
+	return &PokemonScanResultV3{
+		Pokemon:  collectPokemonResults(keys, "API.ScanPokemon.v3.clean"),
+		Examined: examined,
+		Skipped:  skipped,
+		Total:    total,
+	}
+}
+
+// collectPokemonResults peeks each pokemon by encounter ID and builds PokemonResult
+// values, filtering out expired pokemon exactly as the legacy builders do.
+func collectPokemonResults(keys []uint64, caller string) []PokemonResult {
+	results := make([]PokemonResult, 0, len(keys))
+	nowUnix := time.Now().Unix()
+	for _, key := range keys {
+		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
+		if pokemon != nil {
+			if pokemon.ExpireTimestamp.ValueOrZero() > nowUnix {
+				results = append(results, buildPokemonResult(pokemon))
+			}
+			unlock()
+		}
+	}
+	return results
 }
 
 // convertPvpEntries maps gohbem entries to PvpEntry, preserving nil for nil input.
