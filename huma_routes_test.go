@@ -330,3 +330,52 @@ func TestFortScanDraftBadge(t *testing.T) {
 		t.Errorf("pokemon v2 scan must NOT carry x-badges, got %v", pokemonOp.Badges)
 	}
 }
+
+// TestTier4RoutesRegisterInSpec asserts the two geofence-body quest operations
+// register in the OpenAPI spec at their expected method+path. These hit the DB
+// so they are not exercised end-to-end here.
+func TestTier4RoutesRegisterInSpec(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerTier4Routes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+	var doc struct {
+		Paths map[string]map[string]any `json:"paths"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	want := []struct{ method, path string }{
+		{"post", "/api/quest-status"},
+		{"post", "/api/clear-quests"},
+	}
+	for _, w := range want {
+		if _, ok := doc.Paths[w.path][w.method]; !ok {
+			t.Errorf("missing %s %s in OpenAPI spec", w.method, w.path)
+		}
+	}
+}
+
+// TestQuestStatusMalformedFenceIs400 verifies that quest-status rejects a
+// malformed geofence body with 400 before reaching the database:
+// NormaliseFenceFromBytes fails to parse garbage bytes, so no DB call occurs.
+func TestQuestStatusMalformedFenceIs400(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = ""
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerTier4Routes(api)
+
+	resp := api.Post("/api/quest-status", strings.NewReader(`{"bad":`))
+	if resp.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
+	}
+}

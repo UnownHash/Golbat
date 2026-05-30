@@ -12,6 +12,7 @@ import (
 	"golbat/geo"
 
 	"github.com/danielgtaylor/huma/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 type pokemonV2ScanInput struct {
@@ -528,5 +529,65 @@ func registerTier3Routes(api huma.API) {
 			return nil, huma.Error500InternalServerError("error retrieving pokestop positions")
 		}
 		return &pokestopPositionsOutput{Body: response}, nil
+	})
+}
+
+type questStatusInput struct {
+	RawBody []byte
+}
+type questStatusOutput struct{ Body db2.QuestStatus }
+
+type clearQuestsInput struct {
+	RawBody []byte
+}
+type clearQuestsOutput struct{ Body StatusResponse }
+
+// registerTier4Routes registers the geofence-body quest endpoints (quest-status
+// and clear-quests) on the given API.
+func registerTier4Routes(api huma.API) {
+	// POST /api/quest-status
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-quest-status",
+		Method:        http.MethodPost,
+		Path:          "/api/quest-status",
+		Summary:       "Quest status within a geofence",
+		Description:   "Returns quest completion status for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Tags:          []string{"Quest"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, in *questStatusInput) (*questStatusOutput, error) {
+		fence, err := geo.NormaliseFenceFromBytes(in.RawBody)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		status := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
+		return &questStatusOutput{Body: status}, nil
+	})
+
+	// POST /api/clear-quests
+	huma.Register(api, huma.Operation{
+		OperationID:   "clear-quests",
+		Method:        http.MethodPost,
+		Path:          "/api/clear-quests",
+		Summary:       "Clear quests within a geofence",
+		Description:   "Deletes quests for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Tags:          []string{"Quest"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, func(ctx context.Context, in *clearQuestsInput) (*clearQuestsOutput, error) {
+		fence, err := geo.NormaliseFenceFromBytes(in.RawBody)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+
+		tctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		log.Debugf("Clear quests %+v", fence)
+		startTime := time.Now()
+		decoder.ClearQuestsWithinGeofence(tctx, dbDetails, fence)
+		log.Infof("Clear quest took %s", time.Since(startTime))
+
+		return &clearQuestsOutput{Body: StatusResponse{Status: "ok"}}, nil
 	})
 }
