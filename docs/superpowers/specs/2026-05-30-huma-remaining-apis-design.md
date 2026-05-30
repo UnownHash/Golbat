@@ -157,3 +157,38 @@ the requested scope — leave on gin for now).
 - Per-field semantic constraints on numeric ranges (e.g. IV 0–15) — a shared range
   type can't express per-field domains; separate future change.
 - Splitting draft vs stable into separate PRs (we chose one PR).
+
+## Results (2026-05-30)
+
+Implemented on `feat/huma-remaining-apis` in 13 tasks (each spec- and
+quality-reviewed). All planned endpoints are now served by Huma:
+
+- **Fort scan (Draft-badged):** `/api/gym/scan`, `/api/pokestop/scan`,
+  `/api/station/scan`, `/api/fort/scan` — with the Stoplight `x-badges` Draft badge,
+  `fort_in_memory` 503 gating, and the int8/int16 fort range types unified.
+- **Pokemon:** `/api/pokemon/search`, `/api/pokemon/id/{pokemon_id}`.
+- **Tier 3:** `/api/gym/query`, `/api/station/query`, `/api/gym/search`,
+  `/api/gym/id/{gym_id}`, `/api/pokestop/id/{fort_id}`,
+  `/api/tappable/id/{tappable_id}`, `/api/pokestop-positions`.
+- **Tier 4:** `/api/quest-status`, `/api/clear-quests`, `/api/devices/all`,
+  `/api/fort-tracker/cell/{cell_id}`, `/api/fort-tracker/forts/{fort_id}`,
+  `/api/reload-geojson` (GET+POST), `/api/skip-preserve-pokemon` (GET+POST).
+
+**Response structs converted to pointers** (with golden-snapshot tests pinning the
+wire format): `ApiGymResult`, `ApiPokestopResult`, `ApiStationResult`,
+`ApiTappableResult`. `ApiFortScan` and `ApiPokemonSearch` now use `ApiLatLon`.
+
+**Still on gin (intentional):** `POST /raw`, `GET /health`, `GET /version`,
+`POST /api/pokemon/scan` (v1, deprecated), `GET /api/pokemon/available`.
+
+**Decisions realized:** geofence endpoints take a `RawBody` GeoJSON body via
+`geo.NormaliseFenceFromBytes`; `gym/query`/`station/query` standardized to
+`{"ids":[...]}`. Known transport changes vs the gin handlers (consistent across the
+migration): validation errors are now `422` + `application/problem+json` instead of
+ad-hoc `400`/`500` `{"error":...}`; a malformed geofence on `pokestop-positions`
+returns `400` (was `500`). `clear-quests` DB-delete behavior verified identical.
+
+**Remaining manual step:** boot against a populated MariaDB and open `/docs` to
+confirm the operations group by tag and the fort scan ops show the Draft badge
+(the implementation environment has no live DB; all HTTP-contract behavior is
+covered by `humatest` e2e + golden-snapshot tests).
