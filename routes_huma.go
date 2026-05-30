@@ -55,6 +55,51 @@ func registerHumaRoutes(api huma.API) {
 	})
 }
 
+type pokemonSearchInput struct{ Body decoder.ApiPokemonSearch }
+type pokemonSearchOutput struct{ Body []*decoder.ApiPokemonResult }
+
+type pokemonByIdInput struct {
+	PokemonId uint64 `path:"pokemon_id" doc:"Encounter ID of the pokemon"`
+}
+type pokemonByIdOutput struct{ Body decoder.ApiPokemonResult }
+
+// registerPokemonReadRoutes registers the pokemon search and by-id read operations.
+func registerPokemonReadRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "search-pokemon",
+		Method:        http.MethodPost,
+		Path:          "/api/pokemon/search",
+		Summary:       "Search pokemon by id within a bounding box",
+		Description:   "Returns pokemon within [min,max] whose id is in searchIds, ordered by distance from center. Returns a bare array.",
+		Tags:          []string{"Pokemon"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, func(ctx context.Context, in *pokemonSearchInput) (*pokemonSearchOutput, error) {
+		res, err := decoder.SearchPokemon(in.Body)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		return &pokemonSearchOutput{Body: res}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-pokemon",
+		Method:        http.MethodGet,
+		Path:          "/api/pokemon/id/{pokemon_id}",
+		Summary:       "Get a single pokemon by encounter id",
+		Description:   "Returns the pokemon with the given encounter id, or 404 if not present in the cache.",
+		Tags:          []string{"Pokemon"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, func(ctx context.Context, in *pokemonByIdInput) (*pokemonByIdOutput, error) {
+		res := decoder.GetOnePokemon(in.PokemonId)
+		if res == nil {
+			return nil, huma.Error404NotFound("pokemon not found")
+		}
+		return &pokemonByIdOutput{Body: *res}, nil
+	})
+}
+
 type gymScanInput struct{ Body decoder.ApiFortScan }
 type gymScanOutput struct{ Body decoder.ApiGymScanResult }
 

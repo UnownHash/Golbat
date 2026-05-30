@@ -99,6 +99,45 @@ func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
 	}
 }
 
+// TestPokemonReadEndpoints exercises the migrated pokemon search and by-id read
+// endpoints over the HTTP pipeline without a database: get-pokemon for an absent
+// id is 404, and search-pokemon returns a 202 bare JSON array (empty against the
+// empty in-memory rtree).
+func TestPokemonReadEndpoints(t *testing.T) {
+	prev := config.Config.ApiSecret
+	prevDist := config.Config.Tuning.MaxPokemonDistance
+	config.Config.ApiSecret = ""
+	// The 1x1 degree bounding box spans ~157km; allow it through the distance guard.
+	config.Config.Tuning.MaxPokemonDistance = 100000
+	defer func() {
+		config.Config.ApiSecret = prev
+		config.Config.Tuning.MaxPokemonDistance = prevDist
+	}()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerPokemonReadRoutes(api)
+
+	t.Run("get-pokemon for unknown id is 404", func(t *testing.T) {
+		resp := api.Get("/api/pokemon/id/123456789")
+		if resp.Code != http.StatusNotFound {
+			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("search-pokemon returns 202 bare array", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"searchIds":[25]}`
+		resp := api.Post("/api/pokemon/search", strings.NewReader(body))
+		if resp.Code != http.StatusAccepted {
+			t.Fatalf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
+		}
+		var arr []any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &arr); err != nil {
+			t.Fatalf("body is not a JSON array: %v; body=%s", err, resp.Body.String())
+		}
+	})
+}
+
 // fortScanBody is an empty-filter fort scan request that matches against the
 // empty in-memory rtree (no DB), yielding zero results.
 const fortScanBody = `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[]}`
