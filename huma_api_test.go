@@ -218,3 +218,46 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	// match); form stays optional.
 	wantExactly("ApiPokemonDnfId", "id")
 }
+
+// TestLatLonSchemaDocumentsOnlyLatLon asserts the OpenAPI advertises only the
+// canonical lat/lon spelling, even though latitude/longitude is still accepted at
+// runtime (see decoder.ApiLatLon.UnmarshalJSON and TestHumaScanAcceptsLatLonSpellings).
+func TestLatLonSchemaDocumentsOnlyLatLon(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerHumaRoutes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+	// ApiLatLon is a SchemaProvider returning an unregistered schema, so Huma
+	// inlines it into the min/max properties rather than as a named component.
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					Properties map[string]any `json:"properties"`
+				} `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+	coord := doc.Components.Schemas["ApiPokemonScan2"].Properties["min"].Properties
+	if coord == nil {
+		t.Fatalf("ApiPokemonScan2.min has no inlined coordinate properties")
+	}
+	for _, want := range []string{"lat", "lon"} {
+		if _, ok := coord[want]; !ok {
+			t.Errorf("coordinate schema should document %q; properties=%v", want, coord)
+		}
+	}
+	for _, notWant := range []string{"latitude", "longitude"} {
+		if _, ok := coord[notWant]; ok {
+			t.Errorf("coordinate schema must NOT advertise %q; properties=%v", notWant, coord)
+		}
+	}
+}

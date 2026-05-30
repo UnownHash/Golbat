@@ -54,22 +54,23 @@ func (l *ApiLatLon) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Schema implements huma.SchemaProvider so the OpenAPI documents (and Huma
-// validates) both accepted spellings. Without this, Huma would generate the
-// schema from the struct's lat/lon tags and reject latitude/longitude under its
-// additionalProperties:false default.
+// Schema implements huma.SchemaProvider. It documents only the canonical lat/lon
+// form. The latitude/longitude alias is still accepted at runtime (see
+// UnmarshalJSON) but intentionally not advertised. The custom schema is still
+// required: it leaves additionalProperties permissive (and lat/lon optional) so
+// the undocumented alias passes Huma's body validation — which runs before
+// UnmarshalJSON — instead of being rejected by the default additionalProperties:
+// false.
 func (ApiLatLon) Schema(huma.Registry) *huma.Schema {
 	num := func(desc string) *huma.Schema {
 		return &huma.Schema{Type: huma.TypeNumber, Format: "double", Description: desc}
 	}
 	return &huma.Schema{
 		Type:        huma.TypeObject,
-		Description: `Coordinate. Provide "lat"/"lon" (preferred) or "latitude"/"longitude".`,
+		Description: "Coordinate as lat/lon.",
 		Properties: map[string]*huma.Schema{
-			"lat":       num("Latitude (preferred)"),
-			"lon":       num("Longitude (preferred)"),
-			"latitude":  num("Latitude (alias for lat)"),
-			"longitude": num("Longitude (alias for lon)"),
+			"lat": num("Latitude"),
+			"lon": num("Longitude"),
 		},
 	}
 }
