@@ -590,4 +590,145 @@ func registerTier4Routes(api huma.API) {
 
 		return &clearQuestsOutput{Body: StatusResponse{Status: "ok"}}, nil
 	})
+
+	// GET /api/devices/all
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-devices",
+		Method:        http.MethodGet,
+		Path:          "/api/devices/all",
+		Summary:       "List all known devices",
+		Description:   "Returns the last-known location for every device that has submitted data.",
+		Tags:          []string{"Devices"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, in *struct{}) (*devicesOutput, error) {
+		out := &devicesOutput{}
+		out.Body.Devices = GetAllDevices()
+		return out, nil
+	})
+
+	// GET /api/fort-tracker/cell/{cell_id}
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-fort-tracker-cell",
+		Method:        http.MethodGet,
+		Path:          "/api/fort-tracker/cell/{cell_id}",
+		Summary:       "Forts within an S2 cell",
+		Description:   "Returns the pokestops and gyms the fort tracker has seen within the given S2 cell.",
+		Tags:          []string{"FortTracker"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, in *fortTrackerCellInput) (*fortTrackerCellOutput, error) {
+		ft := decoder.GetFortTracker()
+		if ft == nil {
+			return nil, huma.Error503ServiceUnavailable("FortTracker not initialized")
+		}
+		info := ft.GetCellInfo(in.CellId)
+		if info == nil {
+			return nil, huma.Error404NotFound("Cell not found")
+		}
+		return &fortTrackerCellOutput{Body: *info}, nil
+	})
+
+	// GET /api/fort-tracker/forts/{fort_id}
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-fort-tracker-fort",
+		Method:        http.MethodGet,
+		Path:          "/api/fort-tracker/forts/{fort_id}",
+		Summary:       "Fort tracker info for a fort",
+		Description:   "Returns the S2 cell and last-seen timestamp the fort tracker holds for the given fort id.",
+		Tags:          []string{"FortTracker"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, in *fortTrackerFortInput) (*fortTrackerFortOutput, error) {
+		ft := decoder.GetFortTracker()
+		if ft == nil {
+			return nil, huma.Error503ServiceUnavailable("FortTracker not initialized")
+		}
+		info := ft.GetFortInfo(in.FortId)
+		if info == nil {
+			return nil, huma.Error404NotFound("Fort not found")
+		}
+		return &fortTrackerFortOutput{Body: *info}, nil
+	})
+
+	// GET+POST /api/reload-geojson
+	reloadGeojsonHandler := func(ctx context.Context, in *struct{}) (*reloadGeojsonOutput, error) {
+		decoder.ReloadGeofenceAndClearStats()
+		return &reloadGeojsonOutput{Body: StatusResponse{Status: "ok"}}, nil
+	}
+	huma.Register(api, huma.Operation{
+		OperationID:   "reload-geojson-get",
+		Method:        http.MethodGet,
+		Path:          "/api/reload-geojson",
+		Summary:       "Reload geofences and clear stats",
+		Description:   "Reloads geofences from the configured source and clears area statistics.",
+		Tags:          []string{"Admin"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, reloadGeojsonHandler)
+	huma.Register(api, huma.Operation{
+		OperationID:   "reload-geojson-post",
+		Method:        http.MethodPost,
+		Path:          "/api/reload-geojson",
+		Summary:       "Reload geofences and clear stats",
+		Description:   "Reloads geofences from the configured source and clears area statistics.",
+		Tags:          []string{"Admin"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, reloadGeojsonHandler)
+
+	// GET+POST /api/skip-preserve-pokemon
+	skipPreserveHandler := func(ctx context.Context, in *struct{}) (*skipPreservePokemonOutput, error) {
+		decoder.SetSkipPreservePokemon(true)
+		log.Info("Skip preserve pokemon flag set - pokemon will not be preserved on shutdown")
+		out := &skipPreservePokemonOutput{}
+		out.Body.Status = "ok"
+		out.Body.Message = "Pokemon preservation will be skipped on shutdown"
+		return out, nil
+	}
+	huma.Register(api, huma.Operation{
+		OperationID:   "skip-preserve-pokemon-get",
+		Method:        http.MethodGet,
+		Path:          "/api/skip-preserve-pokemon",
+		Summary:       "Skip pokemon preservation on shutdown",
+		Description:   "Sets a flag so pokemon are not preserved to the database on shutdown.",
+		Tags:          []string{"Admin"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, skipPreserveHandler)
+	huma.Register(api, huma.Operation{
+		OperationID:   "skip-preserve-pokemon-post",
+		Method:        http.MethodPost,
+		Path:          "/api/skip-preserve-pokemon",
+		Summary:       "Skip pokemon preservation on shutdown",
+		Description:   "Sets a flag so pokemon are not preserved to the database on shutdown.",
+		Tags:          []string{"Admin"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, skipPreserveHandler)
+}
+
+type devicesOutput struct {
+	Body struct {
+		Devices map[string]ApiDeviceLocation `json:"devices"`
+	}
+}
+
+type fortTrackerCellInput struct {
+	CellId uint64 `path:"cell_id" doc:"S2 cell id"`
+}
+type fortTrackerCellOutput struct{ Body decoder.CellFortInfo }
+
+type fortTrackerFortInput struct {
+	FortId string `path:"fort_id" doc:"Fort id"`
+}
+type fortTrackerFortOutput struct{ Body decoder.FortTrackerInfo }
+
+type reloadGeojsonOutput struct{ Body StatusResponse }
+
+type skipPreservePokemonOutput struct {
+	Body struct {
+		Status  string `json:"status"`
+		Message string `json:"message"`
+	}
 }

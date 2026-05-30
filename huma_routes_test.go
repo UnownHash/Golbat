@@ -379,3 +379,74 @@ func TestQuestStatusMalformedFenceIs400(t *testing.T) {
 		t.Errorf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
 	}
 }
+
+// TestTier4OperationalEndpoints exercises the migrated tier-4 operational
+// endpoints over the HTTP pipeline without a database: devices/all, reload
+// -geojson, skip-preserve-pokemon, and the nil-FortTracker 503 guard.
+func TestTier4OperationalEndpoints(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = ""
+	defer func() { config.Config.ApiSecret = prev }()
+
+	// GetAllDevices() reads from the global device cache; initialise it (no DB
+	// required) so devices/all does not nil-deref.
+	if config.Config.Cleanup.DeviceHours == 0 {
+		config.Config.Cleanup.DeviceHours = 1
+	}
+	InitDeviceCache()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerTier4Routes(api)
+
+	t.Run("devices/all returns 200 with devices object", func(t *testing.T) {
+		resp := api.Get("/api/devices/all")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var m map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &m); err != nil {
+			t.Fatalf("body is not a JSON object: %v; body=%s", err, resp.Body.String())
+		}
+		if _, ok := m["devices"]; !ok {
+			t.Errorf("body missing key %q: %s", "devices", resp.Body.String())
+		}
+	})
+
+	t.Run("reload-geojson POST returns 202 status ok", func(t *testing.T) {
+		resp := api.Post("/api/reload-geojson", strings.NewReader(""))
+		if resp.Code != http.StatusAccepted {
+			t.Fatalf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
+		}
+		var m map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &m); err != nil {
+			t.Fatalf("body is not a JSON object: %v; body=%s", err, resp.Body.String())
+		}
+		if m["status"] != "ok" {
+			t.Errorf("status = %v, want \"ok\"; body=%s", m["status"], resp.Body.String())
+		}
+	})
+
+	t.Run("skip-preserve-pokemon GET returns 200", func(t *testing.T) {
+		resp := api.Get("/api/skip-preserve-pokemon")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var m map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &m); err != nil {
+			t.Fatalf("body is not a JSON object: %v; body=%s", err, resp.Body.String())
+		}
+		if m["status"] != "ok" {
+			t.Errorf("status = %v, want \"ok\"; body=%s", m["status"], resp.Body.String())
+		}
+	})
+
+	t.Run("fort-tracker/cell with nil tracker returns 503", func(t *testing.T) {
+		// GetFortTracker() is nil in this DB-free test (no Preload), so the
+		// handler short-circuits to 503 before any cell lookup.
+		resp := api.Get("/api/fort-tracker/cell/1234567890")
+		if resp.Code != http.StatusServiceUnavailable {
+			t.Errorf("got %d, want 503; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+}
