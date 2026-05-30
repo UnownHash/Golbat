@@ -62,8 +62,9 @@ func TestBuildPokemonResult_NullablesAndDefaults(t *testing.T) {
 // TestBuildPokemonResult_GoldenParity pins the wire-compatibility guarantee: with
 // ohbem == nil, every shared NON-pvp key of the new buildPokemonResult must be
 // byte-identical to the legacy buildApiPokemonResult. The pvp key is excluded from
-// the byte comparison and instead asserted separately to document the intended
-// wire divergence (legacy -> null; new -> {little,great,ultra} object).
+// the byte comparison and instead asserted separately: with ohbem disabled,
+// legacy -> null and new -> {} (empty object). With ohbem enabled the league
+// keys match the legacy map (empty leagues omitted via omitempty).
 func TestBuildPokemonResult_GoldenParity(t *testing.T) {
 	// ohbem is nil in tests, so PVP is disabled for both builders.
 	if ohbem != nil {
@@ -154,14 +155,39 @@ func TestBuildPokemonResult_GoldenParity(t *testing.T) {
 		}
 	}
 
-	// Document the intended pvp divergence as explicit assertions.
+	// Document the one remaining pvp divergence as explicit assertions.
 	// Legacy: Pvp is interface{} nil when ohbem == nil -> marshals to null.
 	if got := string(legacyMap["pvp"]); got != "null" {
 		t.Errorf("legacy pvp = %s, want null (ohbem disabled)", got)
 	}
-	// New: fixed-league object with all three keys null.
-	if got := string(freshMap["pvp"]); got != `{"little":null,"great":null,"ultra":null}` {
-		t.Errorf("new pvp = %s, want object form with null leagues", got)
+	// New: empty object (all leagues omitted via omitempty) when ohbem == nil.
+	if got := string(freshMap["pvp"]); got != `{}` {
+		t.Errorf("new pvp = %s, want empty object", got)
+	}
+}
+
+// TestPvpRankings_OmitsEmptyLeagues pins the wire-compat behavior that a league
+// with no ranking is omitted from the JSON entirely (matching the legacy map),
+// rather than emitted as null.
+func TestPvpRankings_OmitsEmptyLeagues(t *testing.T) {
+	// Only Great populated; Little and Ultra empty.
+	pvp := PvpRankings{Great: []PvpEntry{{Pokemon: 99, Rank: 1}}}
+	b, err := json.Marshal(pvp)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := m["great"]; !ok {
+		t.Errorf("great should be present: %s", b)
+	}
+	if _, ok := m["little"]; ok {
+		t.Errorf("little should be omitted when empty: %s", b)
+	}
+	if _, ok := m["ultra"]; ok {
+		t.Errorf("ultra should be omitted when empty: %s", b)
 	}
 }
 
