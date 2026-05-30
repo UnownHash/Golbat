@@ -16,14 +16,12 @@ type ApiPokemonDnfId struct {
 	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form of the given id."`
 }
 
+// ApiPokemonDnfMinMax is an inclusive integer range used by the filter clauses.
+// It is int16 internally (wide enough for CP and PVP ranks); the smaller fields
+// like IV simply use the low end of that range.
 type ApiPokemonDnfMinMax struct {
 	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
 	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
-}
-
-type ApiPokemonDnfMinMax8 struct {
-	Min int8 `json:"min" doc:"Minimum value (inclusive)."`
-	Max int8 `json:"max" doc:"Maximum value (inclusive)."`
 }
 
 func contains(s []int8, e int8) bool {
@@ -35,26 +33,7 @@ func contains(s []int8, e int8) bool {
 	return false
 }
 
-func convertToMinMax8(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax8 {
-	if minmax == nil {
-		return nil
-	}
-	var minV int8 = 0
-	var maxV int8 = math.MaxInt8
-	if minmax.Min != nil {
-		minV = int8(*minmax.Min)
-	}
-	if minmax.Max != nil {
-		maxV = int8(*minmax.Max)
-	}
-
-	return &ApiPokemonDnfMinMax8{
-		Min: minV,
-		Max: maxV,
-	}
-}
-
-func convertToMinMax16(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
+func convertToMinMax(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
 	if minmax == nil {
 		return nil
 	}

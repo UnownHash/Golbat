@@ -210,7 +210,6 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	wantExactly("ApiPokemonScan3", "min", "max")
 	// A range object requires both bounds when present.
 	wantExactly("ApiPokemonDnfMinMax", "min", "max")
-	wantExactly("ApiPokemonDnfMinMax8", "min", "max")
 	// Filter attributes are all optional.
 	wantExactly("ApiPokemonDnfFilter")
 	wantExactly("ApiPokemonDnfFilter3")
