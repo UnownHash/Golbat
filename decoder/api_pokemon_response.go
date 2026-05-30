@@ -20,24 +20,21 @@ type PvpEntry struct {
 	Evolution  int     `json:"evolution,omitempty" doc:"Evolution ID if this ranking is for an evolved form"`
 }
 
-// PvpRankings holds the PVP rankings for the supported leagues.
+// PvpRankings holds the PVP rankings per league.
 //
-// WIRE DIVERGENCE (intentional): this structure deliberately does NOT match the
-// legacy `pvp` wire format. The legacy endpoint emitted a dynamic
-// map[string][]gohbem.PokemonEntry produced by QueryPvPRank, which:
-//   - only included a league key when that league had entries (so e.g. an empty
-//     little league was simply absent: `"pvp":{"great":[...]}`), and
-//   - emitted `"pvp":null` entirely when PVP was disabled (ohbem == nil).
-//
-// This fixed-league struct instead ALWAYS emits all three league keys
-// (little/great/ultra), using JSON null for empty or disabled leagues. When PVP
-// is disabled the result is `"pvp":{"little":null,"great":null,"ultra":null}`
-// rather than `"pvp":null`. This is a deliberate design choice to expose a
-// stable, documentable OpenAPI schema instead of a dynamic map, and is approved.
+// The league fields use omitempty so a league with no ranking is dropped from
+// the JSON, matching the legacy wire format: the old endpoint emitted a dynamic
+// map[string][]gohbem.PokemonEntry from QueryPvPRank that only included a league
+// key when that league had entries. So a pokemon ranked only in Great serializes
+// as `"pvp":{"great":[...]}` and a pokemon with no rankings as `"pvp":{}`. Using
+// a fixed struct (rather than a map) keeps a stable, documentable OpenAPI schema
+// that still lists all three leagues. (The only remaining difference from legacy
+// is the fully-disabled case: legacy emitted `"pvp":null` when ohbem was nil,
+// where this emits `"pvp":{}`.)
 type PvpRankings struct {
-	Little []PvpEntry `json:"little" doc:"PVP rankings for the Little league (CP cap 500)"`
-	Great  []PvpEntry `json:"great" doc:"PVP rankings for the Great league (CP cap 1500)"`
-	Ultra  []PvpEntry `json:"ultra" doc:"PVP rankings for the Ultra league (CP cap 2500)"`
+	Little []PvpEntry `json:"little,omitempty" doc:"PVP rankings for the Little league (CP cap 500)"`
+	Great  []PvpEntry `json:"great,omitempty" doc:"PVP rankings for the Great league (CP cap 1500)"`
+	Ultra  []PvpEntry `json:"ultra,omitempty" doc:"PVP rankings for the Ultra league (CP cap 2500)"`
 }
 
 // PokemonResult is the documented, pointer-based equivalent of ApiPokemonResult.
@@ -89,9 +86,10 @@ type PokemonResult struct {
 }
 
 // buildPokemonResult builds a PokemonResult whose ~35 scalar (non-pvp) fields are
-// JSON wire-identical to the legacy buildApiPokemonResult. The `pvp` field is the
-// sole intentional exception: it uses the fixed-league PvpRankings structure
-// rather than the legacy dynamic map (see the PvpRankings doc comment).
+// JSON wire-identical to the legacy buildApiPokemonResult. The `pvp` field is built
+// from a fixed-league PvpRankings struct (for a documentable schema) but, thanks to
+// omitempty, serializes the same league keys as the legacy dynamic map — see the
+// PvpRankings doc comment for the one edge-case difference (ohbem disabled).
 //
 // PARITY: like buildApiPokemonResult, Capture1, Capture2, Capture3 and IsEvent are
 // intentionally left unset. The legacy builder never populated these, so today's
