@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -136,6 +137,96 @@ func TestPokemonReadEndpoints(t *testing.T) {
 			t.Fatalf("body is not a JSON array: %v; body=%s", err, resp.Body.String())
 		}
 	})
+}
+
+// TestTier3ReadEndpoints exercises the migrated tier-3 read endpoints over the
+// HTTP pipeline without a database: gym/query with an empty ids list returns a
+// 200 empty array, and an oversized ids list returns 413. (gym/id 404 needs a
+// DB fallback so it is covered by the registration smoke test instead.)
+func TestTier3ReadEndpoints(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = ""
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerTier3Routes(api)
+
+	t.Run("gym/query with empty ids returns 200 empty array", func(t *testing.T) {
+		resp := api.Post("/api/gym/query", strings.NewReader(`{"ids":[]}`))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		body := strings.TrimSpace(resp.Body.String())
+		if body != "[]" {
+			t.Errorf("body = %q, want \"[]\"", body)
+		}
+	})
+
+	t.Run("pokestop/id for unknown id is 404", func(t *testing.T) {
+		// PeekPokestopRecord is cache-only (no DB fallback), so a missing id is
+		// a clean 404 with no database.
+		resp := api.Get("/api/pokestop/id/does-not-exist")
+		if resp.Code != http.StatusNotFound {
+			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("tappable/id for unknown id is 404", func(t *testing.T) {
+		// PeekTappableRecord is cache-only, so a missing id is a clean 404.
+		resp := api.Get("/api/tappable/id/123456789")
+		if resp.Code != http.StatusNotFound {
+			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("gym/query rejecting >500 ids returns 413", func(t *testing.T) {
+		ids := make([]string, 0, 501)
+		for i := 0; i < 501; i++ {
+			ids = append(ids, "id"+strconv.Itoa(i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+}
+
+// TestTier3RoutesRegisterInSpec asserts all seven tier-3 operations appear in
+// the OpenAPI spec at their expected method+path (registration smoke test for
+// the endpoints that need a DB and so are not exercised end-to-end here).
+func TestTier3RoutesRegisterInSpec(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerTier3Routes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+	var doc struct {
+		Paths map[string]map[string]any `json:"paths"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	want := []struct{ method, path string }{
+		{"post", "/api/gym/query"},
+		{"post", "/api/station/query"},
+		{"post", "/api/gym/search"},
+		{"get", "/api/gym/id/{gym_id}"},
+		{"get", "/api/pokestop/id/{fort_id}"},
+		{"get", "/api/tappable/id/{tappable_id}"},
+		{"post", "/api/pokestop-positions"},
+	}
+	for _, w := range want {
+		if _, ok := doc.Paths[w.path][w.method]; !ok {
+			t.Errorf("missing %s %s in OpenAPI spec", w.method, w.path)
+		}
+	}
 }
 
 // fortScanBody is an empty-filter fort scan request that matches against the

@@ -333,19 +333,11 @@ func main() {
 	apiGroup.GET("/health", GetHealth)
 	apiGroup.POST("/clear-quests", ClearQuests)
 	apiGroup.POST("/quest-status", GetQuestStatus)
-	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
-	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
-	apiGroup.GET("/gym/id/:gym_id", GetGym)
-	apiGroup.POST("/gym/query", GetGyms)
-	apiGroup.POST("/gym/search", SearchGyms)
-	apiGroup.POST("/station/query", GetStations)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
-
-	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
 
 	apiGroup.GET("/devices/all", GetDevices)
 	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
@@ -391,6 +383,7 @@ func main() {
 	registerHumaRoutes(humaAPI)
 	registerFortScanRoutes(humaAPI)
 	registerPokemonReadRoutes(humaAPI)
+	registerTier3Routes(humaAPI)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
