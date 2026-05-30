@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 
+	"golbat/config"
 	"golbat/decoder"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -51,5 +52,93 @@ func registerHumaRoutes(api huma.API) {
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *pokemonV3ScanInput) (*pokemonV3ScanOutput, error) {
 		return &pokemonV3ScanOutput{Body: *decoder.GetPokemonInArea3Clean(in.Body)}, nil
+	})
+}
+
+type gymScanInput struct{ Body decoder.ApiFortScan }
+type gymScanOutput struct{ Body decoder.ApiGymScanResult }
+
+type pokestopScanInput struct{ Body decoder.ApiFortScan }
+type pokestopScanOutput struct{ Body decoder.ApiPokestopScanResult }
+
+type stationScanInput struct{ Body decoder.ApiFortScan }
+type stationScanOutput struct{ Body decoder.ApiStationScanResult }
+
+type fortScanInput struct{ Body decoder.ApiFortScan }
+type fortScanOutput struct{ Body decoder.ApiFortCombinedScanResult }
+
+// registerFortScanRoutes registers the four in-memory fort scan operations.
+// These are gated by config.Config.FortInMemory and return 503 when disabled.
+func registerFortScanRoutes(api huma.API) {
+	gymOp := huma.Operation{
+		OperationID:   "scan-gyms",
+		Method:        http.MethodPost,
+		Path:          "/api/gym/scan",
+		Summary:       "Search gyms in a bounding box (DNF filters)",
+		Description:   "Returns gyms within [min,max] matching any DNF filter clause.",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&gymOp)
+	huma.Register(api, gymOp, func(ctx context.Context, in *gymScanInput) (*gymScanOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &gymScanOutput{Body: *decoder.GymScanEndpoint(in.Body, dbDetails)}, nil
+	})
+
+	pokestopOp := huma.Operation{
+		OperationID:   "scan-pokestops",
+		Method:        http.MethodPost,
+		Path:          "/api/pokestop/scan",
+		Summary:       "Search pokestops in a bounding box (DNF filters)",
+		Description:   "Returns pokestops within [min,max] matching any DNF filter clause.",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&pokestopOp)
+	huma.Register(api, pokestopOp, func(ctx context.Context, in *pokestopScanInput) (*pokestopScanOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &pokestopScanOutput{Body: *decoder.PokestopScanEndpoint(in.Body, dbDetails)}, nil
+	})
+
+	stationOp := huma.Operation{
+		OperationID:   "scan-stations",
+		Method:        http.MethodPost,
+		Path:          "/api/station/scan",
+		Summary:       "Search stations in a bounding box (DNF filters)",
+		Description:   "Returns stations within [min,max] matching any DNF filter clause.",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&stationOp)
+	huma.Register(api, stationOp, func(ctx context.Context, in *stationScanInput) (*stationScanOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &stationScanOutput{Body: *decoder.StationScanEndpoint(in.Body, dbDetails)}, nil
+	})
+
+	fortOp := huma.Operation{
+		OperationID:   "scan-forts",
+		Method:        http.MethodPost,
+		Path:          "/api/fort/scan",
+		Summary:       "Search all fort types in a bounding box (DNF filters)",
+		Description:   "Returns gyms, pokestops, and stations within [min,max] matching any DNF filter clause, in a single rtree traversal.",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&fortOp)
+	huma.Register(api, fortOp, func(ctx context.Context, in *fortScanInput) (*fortScanOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &fortScanOutput{Body: *decoder.FortCombinedScanEndpoint(in.Body, dbDetails)}, nil
 	})
 }
