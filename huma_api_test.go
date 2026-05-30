@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"golbat/config"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humagin"
 	"github.com/danielgtaylor/huma/v2/humatest"
+	"github.com/gin-gonic/gin"
 	gojson "github.com/goccy/go-json"
 )
 
@@ -115,5 +118,32 @@ func TestHumaSecretMiddlewareDisabledWhenSecretEmpty(t *testing.T) {
 	resp := api.Get("/secure")
 	if resp.Code != http.StatusOK {
 		t.Errorf("auth-disabled: got %d, want 200", resp.Code)
+	}
+}
+
+func TestOpenAPISpecIsDiscoverable(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerHumaRoutes(api)
+
+	spec, err := api.OpenAPI().YAML()
+	if err != nil {
+		t.Fatalf("YAML: %v", err)
+	}
+	s := string(spec)
+
+	for _, want := range []string{
+		"scan-pokemon-v2",
+		"scan-pokemon-v3",
+		"PvpRankings",
+		"PvpEntry",
+		"PokemonResult",
+		"golbatSecret",
+		"X-Golbat-Secret",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("OpenAPI spec missing %q", want)
+		}
 	}
 }
