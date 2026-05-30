@@ -14,7 +14,7 @@ type pokemonV2ScanInput struct {
 }
 
 type pokemonV2ScanOutput struct {
-	Body []decoder.PokemonResult
+	Body []decoder.ApiPokemonResult
 }
 
 type pokemonV3ScanInput struct {
@@ -22,7 +22,7 @@ type pokemonV3ScanInput struct {
 }
 
 type pokemonV3ScanOutput struct {
-	Body decoder.PokemonScanResultV3
+	Body decoder.ApiPokemonScanResultV3
 }
 
 // registerHumaRoutes registers all Huma-backed operations on the given API.
