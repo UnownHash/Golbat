@@ -9,14 +9,13 @@ import (
 
 	"golbat/config"
 	"golbat/db"
-	"golbat/geo"
 )
 
 type ApiFortScan struct {
-	Min        geo.Location       `json:"min"`
-	Max        geo.Location       `json:"max"`
-	Limit      int                `json:"limit"`
-	DnfFilters []ApiFortDnfFilter `json:"filters"`
+	Min        ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
+	Max        ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
+	Limit      int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
+	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause."`
 }
 
 type ApiFortDnfFilter struct {
@@ -234,8 +233,8 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]string, int, int, int) {
 	start := time.Now()
 
-	minLocation := retrieveParameters.Min
-	maxLocation := retrieveParameters.Max
+	minLocation := retrieveParameters.Min.Location()
+	maxLocation := retrieveParameters.Max.Location()
 
 	maxForts := config.Config.Tuning.MaxPokemonResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
@@ -424,8 +423,8 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestopKeys, stationKeys []string, examined, skipped, total int) {
 	start := time.Now()
 
-	minLocation := retrieveParameters.Min
-	maxLocation := retrieveParameters.Max
+	minLocation := retrieveParameters.Min.Location()
+	maxLocation := retrieveParameters.Max.Location()
 
 	maxForts := config.Config.Tuning.MaxPokemonResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
