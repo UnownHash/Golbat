@@ -24,6 +24,7 @@ forts_stale_threshold = 3600    # Seconds before a fort is considered stale (def
 
 [logging]
 debug = false
+api_request_logging = false     # Log raw request/response bodies of API scan endpoints (large; off by default)
 save_logs = true
 max_size = 50                   # Size in MB
 max_backups = 10                # Amount of files to keep

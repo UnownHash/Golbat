@@ -8,120 +8,20 @@ import (
 	"golbat/geo"
 	pb "golbat/grpc"
 
-	"github.com/UnownHash/gohbem"
-	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 )
 
 type ApiPokemonDnfId struct {
-	Pokemon int16  `json:"id"`
-	Form    *int16 `json:"form"`
+	Pokemon int16  `json:"id" doc:"Pokedex id to match; 0 matches any pokemon. Required within a pokemon entry — a form without an id can never match."`
+	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form of the given id."`
 }
 
+// ApiPokemonDnfMinMax is an inclusive integer range used by the filter clauses.
+// It is int16 internally (wide enough for CP and PVP ranks); the smaller fields
+// like IV simply use the low end of that range.
 type ApiPokemonDnfMinMax struct {
-	Min int16 `json:"min"`
-	Max int16 `json:"max"`
-}
-
-type ApiPokemonDnfMinMax8 struct {
-	Min int8 `json:"min"`
-	Max int8 `json:"max"`
-}
-
-type ApiPokemonResult struct {
-	Id                      string      `json:"id"`
-	PokestopId              null.String `json:"pokestop_id"`
-	SpawnId                 null.Int    `json:"spawn_id"`
-	Lat                     float64     `json:"lat"`
-	Lon                     float64     `json:"lon"`
-	Weight                  null.Float  `json:"weight"`
-	Size                    null.Int    `json:"size"`
-	Height                  null.Float  `json:"height"`
-	ExpireTimestamp         null.Int    `json:"expire_timestamp"`
-	Updated                 null.Int    `json:"updated"`
-	PokemonId               int16       `json:"pokemon_id"`
-	Move1                   null.Int    `json:"move_1"`
-	Move2                   null.Int    `json:"move_2"`
-	Gender                  null.Int    `json:"gender"`
-	Cp                      null.Int    `json:"cp"`
-	AtkIv                   null.Int    `json:"atk_iv"`
-	DefIv                   null.Int    `json:"def_iv"`
-	StaIv                   null.Int    `json:"sta_iv"`
-	Iv                      null.Float  `json:"iv"`
-	Form                    null.Int    `json:"form"`
-	Level                   null.Int    `json:"level"`
-	Weather                 null.Int    `json:"weather"`
-	Costume                 null.Int    `json:"costume"`
-	FirstSeenTimestamp      int64       `json:"first_seen_timestamp"`
-	Changed                 int64       `json:"changed"`
-	CellId                  null.Int    `json:"cell_id"`
-	ExpireTimestampVerified bool        `json:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int    `json:"display_pokemon_id"`
-	DisplayPokemonForm      null.Int    `json:"display_pokemon_form"`
-	IsDitto                 bool        `json:"is_ditto"`
-	SeenType                null.String `json:"seen_type"`
-	Shiny                   null.Bool   `json:"shiny"`
-	Username                null.String `json:"username"`
-	Capture1                null.Float  `json:"capture_1"`
-	Capture2                null.Float  `json:"capture_2"`
-	Capture3                null.Float  `json:"capture_3"`
-	Pvp                     interface{} `json:"pvp"`
-	IsEvent                 int8        `json:"is_event"`
-}
-
-func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
-	return ApiPokemonResult{
-		Id:                      pokemon.Id.String(),
-		PokestopId:              pokemon.PokestopId,
-		SpawnId:                 pokemon.SpawnId,
-		Lat:                     pokemon.Lat,
-		Lon:                     pokemon.Lon,
-		Weight:                  pokemon.Weight,
-		Size:                    pokemon.Size,
-		Height:                  pokemon.Height,
-		ExpireTimestamp:         pokemon.ExpireTimestamp,
-		Updated:                 pokemon.Updated,
-		PokemonId:               pokemon.PokemonId,
-		Move1:                   pokemon.Move1,
-		Move2:                   pokemon.Move2,
-		Gender:                  pokemon.Gender,
-		Cp:                      pokemon.Cp,
-		AtkIv:                   pokemon.AtkIv,
-		DefIv:                   pokemon.DefIv,
-		StaIv:                   pokemon.StaIv,
-		Iv:                      pokemon.Iv,
-		Form:                    pokemon.Form,
-		Level:                   pokemon.Level,
-		Weather:                 pokemon.Weather,
-		Costume:                 pokemon.Costume,
-		FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
-		Changed:                 pokemon.Changed,
-		CellId:                  pokemon.CellId,
-		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
-		DisplayPokemonId:        pokemon.DisplayPokemonId,
-		DisplayPokemonForm:      pokemon.DisplayPokemonForm,
-		IsDitto:                 pokemon.IsDitto,
-		SeenType:                pokemon.SeenType,
-		Shiny:                   pokemon.Shiny,
-		Username:                pokemon.Username,
-		Pvp: func() map[string][]gohbem.PokemonEntry {
-			if ohbem != nil {
-				pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
-					int(pokemon.Form.ValueOrZero()),
-					int(pokemon.Costume.ValueOrZero()),
-					int(pokemon.Gender.ValueOrZero()),
-					int(pokemon.AtkIv.ValueOrZero()),
-					int(pokemon.DefIv.ValueOrZero()),
-					int(pokemon.StaIv.ValueOrZero()),
-					float64(pokemon.Level.ValueOrZero()))
-				if err != nil {
-					return nil
-				}
-				return pvp
-			}
-			return nil
-		}(),
-	}
+	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
+	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
 }
 
 func contains(s []int8, e int8) bool {
@@ -133,26 +33,7 @@ func contains(s []int8, e int8) bool {
 	return false
 }
 
-func convertToMinMax8(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax8 {
-	if minmax == nil {
-		return nil
-	}
-	var minV int8 = 0
-	var maxV int8 = math.MaxInt8
-	if minmax.Min != nil {
-		minV = int8(*minmax.Min)
-	}
-	if minmax.Max != nil {
-		maxV = int8(*minmax.Max)
-	}
-
-	return &ApiPokemonDnfMinMax8{
-		Min: minV,
-		Max: maxV,
-	}
-}
-
-func convertToMinMax16(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
+func convertToMinMax(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
 	if minmax == nil {
 		return nil
 	}
