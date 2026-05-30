@@ -412,7 +412,7 @@ func registerTier3Routes(api huma.API) {
 			if id == "" {
 				continue
 			}
-			g, unlock, err := decoder.GetGymRecordReadOnly(tctx, dbDetails, id, "API.GetFortTracker")
+			g, unlock, err := decoder.GetGymRecordReadOnly(tctx, dbDetails, id, "API.SearchGyms")
 			if err != nil {
 				if unlock != nil {
 					unlock()
