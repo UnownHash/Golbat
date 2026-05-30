@@ -148,7 +148,11 @@ func TestOpenAPISpecIsDiscoverable(t *testing.T) {
 	}
 }
 
-func TestScanRequestFieldsAreOptional(t *testing.T) {
+// TestScanRequestRequiredFields pins the per-field required/optional contract for
+// the scan request schemas: only the bounding box (min/max) is required at the top
+// level; filter attributes are all optional; but a range object, when present,
+// requires both min and max.
+func TestScanRequestRequiredFields(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	api := humagin.New(r, newHumaConfig("test"))
@@ -169,7 +173,7 @@ func TestScanRequestFieldsAreOptional(t *testing.T) {
 		t.Fatalf("unmarshal openapi: %v", err)
 	}
 
-	for _, name := range []string{"ApiPokemonScan2", "ApiPokemonScan3"} {
+	required := func(name string) []string {
 		s, ok := doc.Components.Schemas[name]
 		if !ok {
 			names := make([]string, 0, len(doc.Components.Schemas))
@@ -178,8 +182,38 @@ func TestScanRequestFieldsAreOptional(t *testing.T) {
 			}
 			t.Fatalf("schema %q not found; available: %v", name, names)
 		}
-		if len(s.Required) != 0 {
-			t.Errorf("%s request fields should be optional, but required = %v", name, s.Required)
+		return s.Required
+	}
+	asSet := func(ss []string) map[string]bool {
+		m := map[string]bool{}
+		for _, s := range ss {
+			m[s] = true
+		}
+		return m
+	}
+	wantExactly := func(name string, want ...string) {
+		got := asSet(required(name))
+		wantSet := asSet(want)
+		if len(got) != len(wantSet) {
+			t.Errorf("%s required = %v, want exactly %v", name, required(name), want)
+			return
+		}
+		for w := range wantSet {
+			if !got[w] {
+				t.Errorf("%s required = %v, missing %q", name, required(name), w)
+			}
 		}
 	}
+
+	// Bounding box required; limit/filters optional.
+	wantExactly("ApiPokemonScan2", "min", "max")
+	wantExactly("ApiPokemonScan3", "min", "max")
+	// A range object requires both bounds when present.
+	wantExactly("ApiPokemonDnfMinMax", "min", "max")
+	wantExactly("ApiPokemonDnfMinMax8", "min", "max")
+	// Filter attributes are all optional.
+	wantExactly("ApiPokemonDnfFilter")
+	wantExactly("ApiPokemonDnfFilter3")
+	// Pokemon/form selector is optional.
+	wantExactly("ApiPokemonDnfId")
 }
