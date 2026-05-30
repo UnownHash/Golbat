@@ -37,6 +37,14 @@ func newHumaConfig(version string) huma.Config {
 		In:   "header",
 		Name: "X-Golbat-Secret",
 	}
+
+	// Disable Huma's schema-link transformer (DefaultConfig adds it via CreateHooks).
+	// It injects a `$schema` field into object responses and a `Link: rel="describedBy"`
+	// header, which would diverge from the legacy v2/v3 wire format. The OpenAPI docs
+	// at /docs and /openapi.json are unaffected — they come from the spec, not this
+	// response transformer.
+	cfg.CreateHooks = nil
+
 	return cfg
 }
 
