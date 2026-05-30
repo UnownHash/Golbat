@@ -331,8 +331,6 @@ func main() {
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
-	apiGroup.POST("/clear-quests", ClearQuests)
-	apiGroup.POST("/quest-status", GetQuestStatus)
 	apiGroup.POST("/reload-geojson", ReloadGeojson)
 	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
@@ -384,6 +382,7 @@ func main() {
 	registerFortScanRoutes(humaAPI)
 	registerPokemonReadRoutes(humaAPI)
 	registerTier3Routes(humaAPI)
+	registerTier4Routes(humaAPI)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),

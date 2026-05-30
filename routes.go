@@ -14,7 +14,6 @@ import (
 
 	"golbat/config"
 	"golbat/decoder"
-	"golbat/geo"
 	"golbat/pogo"
 )
 
@@ -332,26 +331,6 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
-func ClearQuests(c *gin.Context) {
-	fence, err := geo.NormaliseFenceRequest(c)
-
-	if err != nil {
-		log.Warnf("POST /api/clear-quests/ Error during post area %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	log.Debugf("Clear quests %+v", fence)
-	startTime := time.Now()
-	decoder.ClearQuestsWithinGeofence(ctx, dbDetails, fence)
-	log.Infof("Clear quest took %s", time.Since(startTime))
-
-	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
-}
-
 func ReloadGeojson(c *gin.Context) {
 	decoder.ReloadGeofenceAndClearStats()
 
@@ -378,20 +357,6 @@ func PokemonScan(c *gin.Context) {
 func PokemonAvailable(c *gin.Context) {
 	res := decoder.GetAvailablePokemon()
 	c.JSON(http.StatusAccepted, res)
-}
-
-func GetQuestStatus(c *gin.Context) {
-	fence, err := geo.NormaliseFenceRequest(c)
-
-	if err != nil {
-		log.Warnf("POST /api/quest-status/ Error during post area %v", err)
-		c.Status(http.StatusInternalServerError)
-		return
-	}
-
-	questStatus := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
-
-	c.JSON(http.StatusOK, &questStatus)
 }
 
 // GetHealth provides unrestricted health status for monitoring tools
