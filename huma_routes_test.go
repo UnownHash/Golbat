@@ -70,3 +70,29 @@ func TestHumaScanEndpointsE2E(t *testing.T) {
 		}
 	})
 }
+
+// TestHumaScanAcceptsLatLonSpellings verifies the bounding box accepts both the
+// canonical lat/lon (used by other Golbat endpoints) and the legacy
+// latitude/longitude spelling. Before the ApiLatLon fix, lat/lon got a 422.
+func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerHumaRoutes(api)
+
+	bodies := map[string]string{
+		"lat/lon":            `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[]}`,
+		"latitude/longitude": `{"min":{"latitude":0,"longitude":0},"max":{"latitude":1,"longitude":1},"filters":[]}`,
+	}
+	for name, body := range bodies {
+		t.Run(name, func(t *testing.T) {
+			resp := api.Post("/api/pokemon/v2/scan", "X-Golbat-Secret: topsecret", strings.NewReader(body))
+			if resp.Code != http.StatusAccepted {
+				t.Errorf("%s: got %d, want 202; body=%s", name, resp.Code, resp.Body.String())
+			}
+		})
+	}
+}

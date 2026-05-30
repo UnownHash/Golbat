@@ -10,18 +10,18 @@ import (
 )
 
 type ApiPokemonScan2 struct {
-	Min        geo.Location          `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
-	Max        geo.Location          `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
+	Min        ApiLatLon             `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
+	Max        ApiLatLon             `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
 	Limit      int                   `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
 	DnfFilters []ApiPokemonDnfFilter `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
 }
 
 func (r ApiPokemonScan2) GetMin() geo.Location {
-	return r.Min
+	return r.Min.Location()
 }
 
 func (r ApiPokemonScan2) GetMax() geo.Location {
-	return r.Max
+	return r.Max.Location()
 }
 
 func (r ApiPokemonScan2) GetLimit() int {
@@ -99,13 +99,13 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 	// Build consistent api request
 
 	apiRequest := ApiPokemonScan2{
-		Min: geo.Location{
-			Latitude:  float64(retrieveParameters.MinLat),
-			Longitude: float64(retrieveParameters.MinLon),
+		Min: ApiLatLon{
+			Lat: float64(retrieveParameters.MinLat),
+			Lon: float64(retrieveParameters.MinLon),
 		},
-		Max: geo.Location{
-			Latitude:  float64(retrieveParameters.MaxLat),
-			Longitude: float64(retrieveParameters.MaxLon),
+		Max: ApiLatLon{
+			Lat: float64(retrieveParameters.MaxLat),
+			Lon: float64(retrieveParameters.MaxLon),
 		},
 		Limit: int(retrieveParameters.Limit),
 	}
