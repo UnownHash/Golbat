@@ -214,6 +214,7 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	// Filter attributes are all optional.
 	wantExactly("ApiPokemonDnfFilter")
 	wantExactly("ApiPokemonDnfFilter3")
-	// Pokemon/form selector is optional.
-	wantExactly("ApiPokemonDnfId")
+	// Within a pokemon selector, id is required (a form without an id can never
+	// match); form stays optional.
+	wantExactly("ApiPokemonDnfId", "id")
 }
