@@ -12,8 +12,8 @@ import (
 type ApiPokemonScan2 struct {
 	Min        geo.Location          `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
 	Max        geo.Location          `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
-	Limit      int                   `json:"limit" doc:"Maximum number of results to return; 0 uses the server default."`
-	DnfFilters []ApiPokemonDnfFilter `json:"filters" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	Limit      int                   `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
+	DnfFilters []ApiPokemonDnfFilter `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
 }
 
 func (r ApiPokemonScan2) GetMin() geo.Location {
@@ -29,18 +29,18 @@ func (r ApiPokemonScan2) GetLimit() int {
 }
 
 type ApiPokemonDnfFilter struct {
-	Pokemon []ApiPokemonDnfId     `json:"pokemon" doc:"Pokemon/form ids this clause applies to; empty matches any pokemon. All other conditions in the clause are AND'd together."`
-	Iv      *ApiPokemonDnfMinMax8 `json:"iv" doc:"Inclusive IV percentage range; null means no IV constraint."`
-	AtkIv   *ApiPokemonDnfMinMax8 `json:"atk_iv" doc:"Inclusive attack IV range; null means no attack IV constraint."`
-	DefIv   *ApiPokemonDnfMinMax8 `json:"def_iv" doc:"Inclusive defense IV range; null means no defense IV constraint."`
-	StaIv   *ApiPokemonDnfMinMax8 `json:"sta_iv" doc:"Inclusive stamina IV range; null means no stamina IV constraint."`
-	Level   *ApiPokemonDnfMinMax8 `json:"level" doc:"Inclusive level range; null means no level constraint."`
-	Cp      *ApiPokemonDnfMinMax  `json:"cp" doc:"Inclusive CP range; null means no CP constraint."`
-	Gender  *ApiPokemonDnfMinMax8 `json:"gender" doc:"Inclusive gender value range; null means no gender constraint."`
-	Size    *ApiPokemonDnfMinMax8 `json:"size" doc:"Inclusive size range; null means no size constraint."`
-	Little  *ApiPokemonDnfMinMax  `json:"pvp_little" doc:"Inclusive Little League PVP rank range; null means no Little League constraint."`
-	Great   *ApiPokemonDnfMinMax  `json:"pvp_great" doc:"Inclusive Great League PVP rank range; null means no Great League constraint."`
-	Ultra   *ApiPokemonDnfMinMax  `json:"pvp_ultra" doc:"Inclusive Ultra League PVP rank range; null means no Ultra League constraint."`
+	Pokemon []ApiPokemonDnfId     `json:"pokemon" required:"false" doc:"Pokemon/form ids this clause applies to; empty matches any pokemon. All other conditions in the clause are AND'd together."`
+	Iv      *ApiPokemonDnfMinMax8 `json:"iv" required:"false" doc:"Inclusive IV percentage range; null means no IV constraint."`
+	AtkIv   *ApiPokemonDnfMinMax8 `json:"atk_iv" required:"false" doc:"Inclusive attack IV range; null means no attack IV constraint."`
+	DefIv   *ApiPokemonDnfMinMax8 `json:"def_iv" required:"false" doc:"Inclusive defense IV range; null means no defense IV constraint."`
+	StaIv   *ApiPokemonDnfMinMax8 `json:"sta_iv" required:"false" doc:"Inclusive stamina IV range; null means no stamina IV constraint."`
+	Level   *ApiPokemonDnfMinMax8 `json:"level" required:"false" doc:"Inclusive level range; null means no level constraint."`
+	Cp      *ApiPokemonDnfMinMax  `json:"cp" required:"false" doc:"Inclusive CP range; null means no CP constraint."`
+	Gender  *ApiPokemonDnfMinMax8 `json:"gender" required:"false" doc:"Inclusive gender value range; null means no gender constraint."`
+	Size    *ApiPokemonDnfMinMax8 `json:"size" required:"false" doc:"Inclusive size range; null means no size constraint."`
+	Little  *ApiPokemonDnfMinMax  `json:"pvp_little" required:"false" doc:"Inclusive Little League PVP rank range; null means no Little League constraint."`
+	Great   *ApiPokemonDnfMinMax  `json:"pvp_great" required:"false" doc:"Inclusive Great League PVP rank range; null means no Great League constraint."`
+	Ultra   *ApiPokemonDnfMinMax  `json:"pvp_ultra" required:"false" doc:"Inclusive Ultra League PVP rank range; null means no Ultra League constraint."`
 }
 
 func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) ([]uint64, int, int, int) {

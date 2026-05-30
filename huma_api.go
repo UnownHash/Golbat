@@ -45,12 +45,6 @@ func newHumaConfig(version string) huma.Config {
 	// response transformer.
 	cfg.CreateHooks = nil
 
-	// Make all schema fields optional by default. Huma marks every field required
-	// unless told otherwise, but the legacy gin handlers used BindJSON, which never
-	// required any field — callers send whatever subset they need. This keeps the
-	// documented request contract matching that lenient behavior.
-	cfg.FieldsOptionalByDefault = true
-
 	return cfg
 }
 
