@@ -78,6 +78,13 @@ func setupHumaAPI(r *gin.Engine) huma.API {
 	if version == "" {
 		version = "dev"
 	}
+
+	// Installed before the Huma routes so it wraps them. Logs raw request/response
+	// for the scan endpoints when logging.debug is set — Huma rejects invalid
+	// bodies with 422 before the handler runs, so this transport-level logging is
+	// the only place that sees rejected payloads.
+	r.Use(humaScanRequestLogger())
+
 	api := humagin.New(r, newHumaConfig(version))
 
 	api.UseMiddleware(golbatSecretMiddleware(api))
