@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -424,12 +423,6 @@ func AuthRequired() gin.HandlerFunc {
 	}
 }
 
-func ReloadGeojson(c *gin.Context) {
-	decoder.ReloadGeofenceAndClearStats()
-
-	c.JSON(http.StatusAccepted, StatusResponse{Status: "ok"})
-}
-
 func PokemonScan(c *gin.Context) {
 	var requestBody decoder.ApiPokemonScan
 
@@ -457,54 +450,3 @@ func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-func GetDevices(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"devices": GetAllDevices()})
-}
-
-func GetFortTrackerCell(c *gin.Context) {
-	cellIdStr := c.Param("cell_id")
-	cellId, err := strconv.ParseUint(cellIdStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid cell ID"})
-		return
-	}
-
-	fortTracker := decoder.GetFortTracker()
-	if fortTracker == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "FortTracker not initialized"})
-		return
-	}
-
-	cellInfo := fortTracker.GetCellInfo(cellId)
-	if cellInfo == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Cell not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, cellInfo)
-}
-
-func GetFortTrackerFort(c *gin.Context) {
-	fortId := c.Param("fort_id")
-
-	fortTracker := decoder.GetFortTracker()
-	if fortTracker == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "FortTracker not initialized"})
-		return
-	}
-
-	fortInfo := fortTracker.GetFortInfo(fortId)
-	if fortInfo == nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Fort not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, fortInfo)
-}
-
-// SkipPreservePokemon sets a flag to prevent pokemon preservation on shutdown
-func SkipPreservePokemon(c *gin.Context) {
-	decoder.SetSkipPreservePokemon(true)
-	log.Info("Skip preserve pokemon flag set - pokemon will not be preserved on shutdown")
-	c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Pokemon preservation will be skipped on shutdown"})
-}

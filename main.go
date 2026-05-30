@@ -335,17 +335,9 @@ func main() {
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
-	apiGroup.POST("/reload-geojson", ReloadGeojson)
-	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
 	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
-
-	apiGroup.GET("/devices/all", GetDevices)
-	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
-	apiGroup.GET("/fort-tracker/forts/:fort_id", GetFortTrackerFort)
-	apiGroup.GET("/skip-preserve-pokemon", SkipPreservePokemon)
-	apiGroup.POST("/skip-preserve-pokemon", SkipPreservePokemon)
 
 	debugGroup := r.Group("/debug")
 
