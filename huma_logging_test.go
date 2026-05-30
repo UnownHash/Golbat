@@ -14,12 +14,12 @@ import (
 )
 
 func TestHumaScanRequestLogging(t *testing.T) {
-	prevDebug := config.Config.Logging.Debug
+	prevLogging := config.Config.Logging.ApiRequestLogging
 	prevSecret := config.Config.ApiSecret
-	config.Config.Logging.Debug = true
+	config.Config.Logging.ApiRequestLogging = true
 	config.Config.ApiSecret = "" // disable auth so the request reaches the handler
 	defer func() {
-		config.Config.Logging.Debug = prevDebug
+		config.Config.Logging.ApiRequestLogging = prevLogging
 		config.Config.ApiSecret = prevSecret
 	}()
 
@@ -54,10 +54,10 @@ func TestHumaScanRequestLogging(t *testing.T) {
 	}
 }
 
-func TestHumaScanRequestLoggingSilentWhenDebugOff(t *testing.T) {
-	prevDebug := config.Config.Logging.Debug
-	config.Config.Logging.Debug = false
-	defer func() { config.Config.Logging.Debug = prevDebug }()
+func TestHumaScanRequestLoggingSilentWhenDisabled(t *testing.T) {
+	prevLogging := config.Config.Logging.ApiRequestLogging
+	config.Config.Logging.ApiRequestLogging = false
+	defer func() { config.Config.Logging.ApiRequestLogging = prevLogging }()
 
 	var buf bytes.Buffer
 	log.SetOutput(&buf)
