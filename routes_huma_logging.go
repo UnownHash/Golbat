@@ -16,14 +16,15 @@ const humaLogMaxBody = 4096
 
 // humaScanRequestLogger logs the raw request body and the response (status +
 // body) for the Huma-served pokemon scan endpoints, but only when
-// logging.debug is enabled. This is a debugging aid for callers whose requests
-// are rejected: Huma validates the body against the OpenAPI schema and returns
-// 422 *before* the operation handler runs, so the handler never sees a rejected
-// payload — only this transport-level hook does. The 422 response body itself
-// lists exactly which properties were unexpected or missing.
+// logging.api_request_logging is enabled. It is off by default and independent of
+// logging.debug because these bodies can be very large. This is a debugging aid
+// for callers whose requests are rejected: Huma validates the body against the
+// OpenAPI schema and returns 422 *before* the operation handler runs, so the
+// handler never sees a rejected payload — only this transport-level hook does. The
+// 422 response body itself lists exactly which properties were unexpected or missing.
 func humaScanRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !config.Config.Logging.Debug || !isHumaScanPath(c.Request.URL.Path) {
+		if !config.Config.Logging.ApiRequestLogging || !isHumaScanPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
