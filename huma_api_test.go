@@ -147,3 +147,39 @@ func TestOpenAPISpecIsDiscoverable(t *testing.T) {
 		}
 	}
 }
+
+func TestScanRequestFieldsAreOptional(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerHumaRoutes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Required []string `json:"required"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	for _, name := range []string{"ApiPokemonScan2", "ApiPokemonScan3"} {
+		s, ok := doc.Components.Schemas[name]
+		if !ok {
+			names := make([]string, 0, len(doc.Components.Schemas))
+			for n := range doc.Components.Schemas {
+				names = append(names, n)
+			}
+			t.Fatalf("schema %q not found; available: %v", name, names)
+		}
+		if len(s.Required) != 0 {
+			t.Errorf("%s request fields should be optional, but required = %v", name, s.Required)
+		}
+	}
+}
