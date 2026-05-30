@@ -7,6 +7,7 @@ toolchain go1.26.0
 require (
 	github.com/Depado/ginprom v1.8.3
 	github.com/UnownHash/gohbem v0.12.0
+	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.0
@@ -43,7 +44,6 @@ require (
 	github.com/bytedance/sonic/loader v0.5.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/danielgtaylor/huma/v2 v2.38.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
