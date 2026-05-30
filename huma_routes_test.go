@@ -137,6 +137,13 @@ func TestPokemonReadEndpoints(t *testing.T) {
 			t.Fatalf("body is not a JSON array: %v; body=%s", err, resp.Body.String())
 		}
 	})
+
+	t.Run("available-pokemon returns 202", func(t *testing.T) {
+		resp := api.Get("/api/pokemon/available")
+		if resp.Code != http.StatusAccepted {
+			t.Fatalf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
+		}
+	})
 }
 
 // TestTier3ReadEndpoints exercises the migrated tier-3 read endpoints over the

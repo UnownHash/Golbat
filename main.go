@@ -332,7 +332,6 @@ func main() {
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
 
-	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
 
 	debugGroup := r.Group("/debug")
