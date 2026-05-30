@@ -16,9 +16,9 @@ import (
 const earthRadiusKm = 6371
 
 type ApiPokemonAvailableResult struct {
-	PokemonId int16 `json:"id"`
-	Form      int16 `json:"form"`
-	Count     int   `json:"count"`
+	PokemonId int16 `json:"id" doc:"Pokedex id"`
+	Form      int16 `json:"form" doc:"Form id"`
+	Count     int   `json:"count" doc:"Number currently in the cache"`
 }
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {

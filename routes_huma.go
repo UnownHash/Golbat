@@ -103,6 +103,23 @@ func registerPokemonReadRoutes(api huma.API) {
 		}
 		return &pokemonByIdOutput{Body: *res}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "available-pokemon",
+		Method:        http.MethodGet,
+		Path:          "/api/pokemon/available",
+		Summary:       "List currently available pokemon",
+		Description:   "Returns the distinct pokemon id/form combinations currently in the cache with their counts.",
+		Tags:          []string{"Pokemon"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, func(ctx context.Context, _ *struct{}) (*pokemonAvailableOutput, error) {
+		return &pokemonAvailableOutput{Body: decoder.GetAvailablePokemon()}, nil
+	})
+}
+
+type pokemonAvailableOutput struct {
+	Body []*decoder.ApiPokemonAvailableResult
 }
 
 type gymScanInput struct{ Body decoder.ApiFortScan }

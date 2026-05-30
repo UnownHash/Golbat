@@ -440,10 +440,6 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-func PokemonAvailable(c *gin.Context) {
-	res := decoder.GetAvailablePokemon()
-	c.JSON(http.StatusAccepted, res)
-}
 
 // GetHealth provides unrestricted health status for monitoring tools
 func GetHealth(c *gin.Context) {
