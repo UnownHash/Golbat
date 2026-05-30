@@ -2,8 +2,14 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"net/http"
 	"testing"
 
+	"golbat/config"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/humatest"
 	gojson "github.com/goccy/go-json"
 )
 
@@ -34,5 +40,80 @@ func TestHumaConfigDeclaresSecurityScheme(t *testing.T) {
 	}
 	if scheme.Type != "apiKey" || scheme.In != "header" || scheme.Name != "X-Golbat-Secret" {
 		t.Errorf("unexpected scheme: %+v", scheme)
+	}
+}
+
+// registerSecretTestOps registers a secured /secure operation (declaring the
+// golbatSecret security requirement) and an unsecured /open operation on api.
+func registerSecretTestOps(api huma.API) {
+	type emptyOut struct {
+		Body struct{}
+	}
+	handler := func(ctx context.Context, _ *struct{}) (*emptyOut, error) {
+		return &emptyOut{}, nil
+	}
+	huma.Register(api, huma.Operation{
+		OperationID: "secure",
+		Method:      http.MethodGet,
+		Path:        "/secure",
+		Security:    []map[string][]string{{securitySchemeName: {}}},
+	}, handler)
+	huma.Register(api, huma.Operation{
+		OperationID: "open",
+		Method:      http.MethodGet,
+		Path:        "/open",
+	}, handler)
+}
+
+func TestHumaSecretMiddleware(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerSecretTestOps(api)
+
+	t.Run("secure without header is 401", func(t *testing.T) {
+		resp := api.Get("/secure")
+		if resp.Code != http.StatusUnauthorized {
+			t.Errorf("got %d, want 401", resp.Code)
+		}
+	})
+
+	t.Run("secure with wrong header is 401", func(t *testing.T) {
+		resp := api.Get("/secure", "X-Golbat-Secret: wrong")
+		if resp.Code != http.StatusUnauthorized {
+			t.Errorf("got %d, want 401", resp.Code)
+		}
+	})
+
+	t.Run("secure with correct header is 200", func(t *testing.T) {
+		resp := api.Get("/secure", "X-Golbat-Secret: topsecret")
+		if resp.Code != http.StatusOK {
+			t.Errorf("got %d, want 200", resp.Code)
+		}
+	})
+
+	t.Run("open without header is 200", func(t *testing.T) {
+		resp := api.Get("/open")
+		if resp.Code != http.StatusOK {
+			t.Errorf("got %d, want 200", resp.Code)
+		}
+	})
+}
+
+func TestHumaSecretMiddlewareDisabledWhenSecretEmpty(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = ""
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerSecretTestOps(api)
+
+	resp := api.Get("/secure")
+	if resp.Code != http.StatusOK {
+		t.Errorf("auth-disabled: got %d, want 200", resp.Code)
 	}
 }

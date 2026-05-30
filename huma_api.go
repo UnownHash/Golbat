@@ -40,14 +40,11 @@ func newHumaConfig(version string) huma.Config {
 	return cfg
 }
 
-func setupHumaAPI(r *gin.Engine) huma.API {
-	version := gitRevision
-	if version == "" {
-		version = "dev"
-	}
-	api := humagin.New(r, newHumaConfig(version))
-
-	api.UseMiddleware(func(ctx huma.Context, next func(huma.Context)) {
+// golbatSecretMiddleware enforces config.Config.ApiSecret as the X-Golbat-Secret
+// header for any operation declaring the golbatSecret security requirement.
+// Mirrors AuthRequired(): an empty configured secret disables auth.
+func golbatSecretMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
 		secret := config.Config.ApiSecret
 		if secret == "" {
 			next(ctx)
@@ -65,7 +62,17 @@ func setupHumaAPI(r *gin.Engine) huma.API {
 			return
 		}
 		next(ctx)
-	})
+	}
+}
+
+func setupHumaAPI(r *gin.Engine) huma.API {
+	version := gitRevision
+	if version == "" {
+		version = "dev"
+	}
+	api := humagin.New(r, newHumaConfig(version))
+
+	api.UseMiddleware(golbatSecretMiddleware(api))
 
 	return api
 }
