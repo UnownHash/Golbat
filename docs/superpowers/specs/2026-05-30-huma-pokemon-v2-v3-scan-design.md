@@ -283,6 +283,50 @@ gin engine (root)
 - **Docs auth:** docs/spec are intentionally public; the operations themselves are
   secured and the spec advertises the `X-Golbat-Secret` requirement.
 
+## POC Results (2026-05-30)
+
+The migration was implemented on branch `feat/huma-pokemon-v2-v3-scan`. Both
+`POST /api/pokemon/v2/scan` and `POST /api/pokemon/v3/scan` are now served by Huma,
+with the gin handlers retired. Docs render at `/docs` and the spec at
+`/openapi.json` (both public; operations secured via the `golbatSecret` scheme).
+
+**Discoverability — achieved.** A committed test (`TestOpenAPISpecIsDiscoverable`)
+asserts the generated OpenAPI contains both operations, the `PokemonResult`,
+`PvpEntry`, and `PvpRankings` schemas, and the `X-Golbat-Secret` security scheme.
+The previously-opaque `Pvp interface{}` is now a fully documented
+`{little, great, ultra}` structure with per-field docs. This is the headline win:
+the complex DNF request and the PVP response are now self-describing.
+
+**Wire-compat — verified for the scalar surface.**
+- A golden parity test marshals the legacy `buildApiPokemonResult` and the new
+  `buildPokemonResult` for the same `*Pokemon` and asserts every shared non-`pvp`
+  key is byte-identical. No unintended scalar differences.
+- v2 preserved as a bare array (`[]`), v3 as the `{pokemon,examined,skipped,total}`
+  wrapper, both at HTTP 202 (`DefaultStatus`).
+- **Regression caught & fixed:** Huma's `DefaultConfig` injects a `$schema` field
+  into object responses (and a `Link: rel="describedBy"` header) via a
+  `SchemaLinkTransformer`. This would have added a `$schema` key to the v3 body.
+  Disabled via `cfg.CreateHooks = nil` in `newHumaConfig`; an end-to-end test
+  (`TestHumaScanEndpointsE2E`) now guards that v3 has no `$schema` and v2 is exactly
+  `[]`. Found by the end-to-end HTTP exercise, not by unit tests.
+
+**Intentional divergences (documented, by design):**
+- `pvp` shape changed from the legacy dynamic `map[string][]gohbem.PokemonEntry`
+  (empty leagues omitted; `null` when PVP disabled) to the fixed three-league struct
+  (always emits `little`/`great`/`ultra`, `null` for empty/disabled). Documented on
+  `PvpRankings`.
+- Huma validates request bodies more strictly than gin's `BindJSON` (structured 422
+  on type mismatch).
+
+**Remaining manual step (requires the user's environment):** the full server boots
+only against a live MariaDB (it `log.Fatal`s on DB ping before serving), so a real
+end-to-end run and a replay of the **real v2 consumer's** request/response could not
+be done in the implementation environment. All HTTP-contract behavior (auth 401/202,
+v2/v3 envelopes, no `$schema`, goccy serialization) was verified via `humatest`
+against empty cache state. Recommended before merge: boot against a populated DB,
+open `/docs`, and diff a captured real v2 consumer response against the migrated
+output.
+
 ## Future work (out of scope)
 
 If the POC is judged successful, the `setupHumaAPI` infrastructure (adapter, goccy
