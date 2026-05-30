@@ -95,30 +95,6 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) ([]uint64, in
 	return internalGetPokemonInArea[ApiPokemonDnfFilter](retrieveParameters, dnfFilters, isPokemonDnfMatch)
 }
 
-func GetPokemonInArea2(retrieveParameters ApiPokemonScan2) []*ApiPokemonResult {
-	returnKeys, _, _, _ := internalGetPokemonInArea2(retrieveParameters)
-	results := make([]*ApiPokemonResult, 0, len(returnKeys))
-
-	start := time.Now()
-	startUnix := start.Unix()
-
-	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v2")
-		if pokemon != nil {
-			if pokemon.ExpireTimestamp.ValueOrZero() > startUnix {
-				apiPokemon := buildApiPokemonResult(pokemon)
-				results = append(results, &apiPokemon)
-			}
-			unlock()
-
-		}
-	}
-
-	log.Infof("GetPokemonInAreaV2 - result buffer time %s, %d added", time.Since(start), len(results))
-
-	return results
-}
-
 func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.PokemonDetails {
 	// Build consistent api request
 
