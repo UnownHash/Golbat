@@ -7,7 +7,7 @@ import (
 	"github.com/guregu/null/v6"
 )
 
-func TestBuildPokemonResult_NullablesAndDefaults(t *testing.T) {
+func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 	p := &Pokemon{
 		PokemonData: PokemonData{
 			Id:                 12345,
@@ -22,7 +22,7 @@ func TestBuildPokemonResult_NullablesAndDefaults(t *testing.T) {
 		},
 	}
 
-	got := buildPokemonResult(p) // ohbem is nil in tests -> empty PVP
+	got := buildApiPokemonResult(p) // ohbem is nil in tests -> empty PVP
 
 	if got.Id != "12345" {
 		t.Errorf("Id = %q, want \"12345\"", got.Id)
@@ -59,20 +59,10 @@ func TestBuildPokemonResult_NullablesAndDefaults(t *testing.T) {
 	}
 }
 
-// TestBuildPokemonResult_GoldenParity pins the wire-compatibility guarantee: with
-// ohbem == nil, every shared NON-pvp key of the new buildPokemonResult must be
-// byte-identical to the legacy buildApiPokemonResult. The pvp key is excluded from
-// the byte comparison and instead asserted separately: with ohbem disabled,
-// legacy -> null and new -> {} (empty object). With ohbem enabled the league
-// keys match the legacy map (empty leagues omitted via omitempty).
-func TestBuildPokemonResult_GoldenParity(t *testing.T) {
-	// ohbem is nil in tests, so PVP is disabled for both builders.
-	if ohbem != nil {
-		t.Fatalf("expected ohbem to be nil in tests")
-	}
-
-	// A representative mix of set and unset (null) fields across types.
-	p := &Pokemon{
+// goldenSnapshotPokemon is a representative pokemon with a mix of set and unset
+// (null) fields across every type, used to pin the exact wire format.
+func goldenSnapshotPokemon() *Pokemon {
+	return &Pokemon{
 		PokemonData: PokemonData{
 			Id:                      9876543210,
 			PokestopId:              null.StringFrom("stop-abc"),
@@ -108,70 +98,35 @@ func TestBuildPokemonResult_GoldenParity(t *testing.T) {
 			// Username intentionally left null
 		},
 	}
+}
 
-	legacy := buildApiPokemonResult(p)
-	fresh := buildPokemonResult(p)
+// TestBuildApiPokemonResult_GoldenSnapshot pins the exact JSON wire format of an
+// ApiPokemonResult (with ohbem disabled so pvp is {}). This struct is now shared
+// by every pokemon endpoint (v1/v2/v3/search), so any accidental change to a json
+// tag, field type, pointer/null handling, or field order will fail this test.
+func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
+	if ohbem != nil {
+		t.Fatalf("expected ohbem to be nil in tests")
+	}
 
-	legacyBytes, err := json.Marshal(legacy)
+	got, err := json.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
 	if err != nil {
-		t.Fatalf("marshal legacy: %v", err)
-	}
-	freshBytes, err := json.Marshal(fresh)
-	if err != nil {
-		t.Fatalf("marshal fresh: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
 
-	var legacyMap, freshMap map[string]json.RawMessage
-	if err := json.Unmarshal(legacyBytes, &legacyMap); err != nil {
-		t.Fatalf("unmarshal legacy: %v", err)
-	}
-	if err := json.Unmarshal(freshBytes, &freshMap); err != nil {
-		t.Fatalf("unmarshal fresh: %v", err)
-	}
+	const want = `{"id":"9876543210","pokestop_id":"stop-abc","spawn_id":7777,"lat":12.3456,"lon":-65.4321,"weight":3.14,"size":2,"height":0.5,"expire_timestamp":1700000000,"updated":1699999999,"pokemon_id":150,"move_1":216,"move_2":94,"gender":1,"cp":3500,"atk_iv":15,"def_iv":14,"sta_iv":13,"iv":93.33,"form":0,"level":35,"weather":1,"costume":0,"first_seen_timestamp":1699990000,"changed":1699995000,"cell_id":1234567890123,"expire_timestamp_verified":true,"display_pokemon_id":null,"display_pokemon_form":null,"is_ditto":false,"seen_type":"encounter","shiny":true,"username":null,"capture_1":null,"capture_2":null,"capture_3":null,"pvp":{},"is_event":0}`
 
-	// The two builders must emit exactly the same set of keys.
-	for k := range legacyMap {
-		if _, ok := freshMap[k]; !ok {
-			t.Errorf("key %q present in legacy but missing from new result", k)
-		}
-	}
-	for k := range freshMap {
-		if _, ok := legacyMap[k]; !ok {
-			t.Errorf("key %q present in new result but missing from legacy", k)
-		}
-	}
-
-	// Every shared NON-pvp key must be byte-identical.
-	for k, legacyVal := range legacyMap {
-		if k == "pvp" {
-			continue
-		}
-		freshVal, ok := freshMap[k]
-		if !ok {
-			continue // already reported above
-		}
-		if string(legacyVal) != string(freshVal) {
-			t.Errorf("scalar wire mismatch for key %q: legacy=%s new=%s", k, legacyVal, freshVal)
-		}
-	}
-
-	// Document the one remaining pvp divergence as explicit assertions.
-	// Legacy: Pvp is interface{} nil when ohbem == nil -> marshals to null.
-	if got := string(legacyMap["pvp"]); got != "null" {
-		t.Errorf("legacy pvp = %s, want null (ohbem disabled)", got)
-	}
-	// New: empty object (all leagues omitted via omitempty) when ohbem == nil.
-	if got := string(freshMap["pvp"]); got != `{}` {
-		t.Errorf("new pvp = %s, want empty object", got)
+	if string(got) != want {
+		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)
 	}
 }
 
-// TestPvpRankings_OmitsEmptyLeagues pins the wire-compat behavior that a league
+// TestApiPvpRankings_OmitsEmptyLeagues pins the wire-compat behavior that a league
 // with no ranking is omitted from the JSON entirely (matching the legacy map),
 // rather than emitted as null.
-func TestPvpRankings_OmitsEmptyLeagues(t *testing.T) {
+func TestApiPvpRankings_OmitsEmptyLeagues(t *testing.T) {
 	// Only Great populated; Little and Ultra empty.
-	pvp := PvpRankings{Great: []PvpEntry{{Pokemon: 99, Rank: 1}}}
+	pvp := ApiPvpRankings{Great: []ApiPvpEntry{{Pokemon: 99, Rank: 1}}}
 	b, err := json.Marshal(pvp)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -191,9 +146,9 @@ func TestPvpRankings_OmitsEmptyLeagues(t *testing.T) {
 	}
 }
 
-func TestPokemonScanResultV3_WireShape(t *testing.T) {
-	res := PokemonScanResultV3{
-		Pokemon:  []PokemonResult{{Id: "1", PokemonId: 25}},
+func TestApiPokemonScanResultV3_WireShape(t *testing.T) {
+	res := ApiPokemonScanResultV3{
+		Pokemon:  []ApiPokemonResult{{Id: "1", PokemonId: 25}},
 		Examined: 5,
 		Skipped:  1,
 		Total:    6,
@@ -213,8 +168,8 @@ func TestPokemonScanResultV3_WireShape(t *testing.T) {
 	}
 }
 
-func TestPokemonV2_BareArrayShape(t *testing.T) {
-	res := []PokemonResult{{Id: "1", PokemonId: 25}}
+func TestApiPokemonV2_BareArrayShape(t *testing.T) {
+	res := []ApiPokemonResult{{Id: "1", PokemonId: 25}}
 	b, err := json.Marshal(res)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)

@@ -136,9 +136,9 @@ func TestOpenAPISpecIsDiscoverable(t *testing.T) {
 	for _, want := range []string{
 		"scan-pokemon-v2",
 		"scan-pokemon-v3",
-		"PvpRankings",
-		"PvpEntry",
-		"PokemonResult",
+		"ApiPvpRankings",
+		"ApiPvpEntry",
+		"ApiPokemonResult",
 		"golbatSecret",
 		"X-Golbat-Secret",
 	} {
