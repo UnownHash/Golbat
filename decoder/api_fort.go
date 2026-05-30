@@ -19,41 +19,41 @@ type ApiFortScan struct {
 }
 
 type ApiFortDnfFilter struct {
-	PowerUpLevel     *ApiFortDnfMinMax `json:"power_up_level"`
-	IsArScanEligible *bool             `json:"is_ar_scan_eligible"`
+	PowerUpLevel     *ApiFortDnfMinMax `json:"power_up_level" required:"false" doc:"Inclusive power-up level range; null means no power-up level constraint."`
+	IsArScanEligible *bool             `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
 
 	// Gym
-	AvailableSlots *ApiFortDnfMinMax `json:"available_slots"`
-	TeamId         []int8             `json:"team_id"`
-	RaidLevel      []int8             `json:"raid_level"`
-	RaidPokemon    []ApiDnfId         `json:"raid_pokemon_id"`
+	AvailableSlots *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
+	TeamId         []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; empty means no team constraint."`
+	RaidLevel      []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; empty means no raid level constraint. Only matches gyms with an active raid."`
+	RaidPokemon    []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; empty means no raid pokemon constraint. Only matches gyms with an active raid."`
 
 	// Pokestop - unified quest (matches AR or no-AR)
-	LureId             []int16             `json:"lure_id"`
-	QuestRewardType    []int16             `json:"quest_reward_type"`
-	QuestRewardAmount  *ApiFortDnfMinMax   `json:"quest_reward_amount"`
-	QuestRewardItemId  []int16             `json:"quest_reward_item_id"`
-	QuestRewardPokemon []ApiDnfId          `json:"quest_reward_pokemon"`
+	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; empty means no lure constraint."`
+	QuestRewardType    []int16           `json:"quest_reward_type" required:"false" doc:"Pokestop only: allowed quest reward types; matched against either the AR or no-AR quest. Empty means no reward type constraint."`
+	QuestRewardAmount  *ApiFortDnfMinMax `json:"quest_reward_amount" required:"false" doc:"Pokestop only: inclusive quest reward amount range; matched against either the AR or no-AR quest. Null means no reward amount constraint."`
+	QuestRewardItemId  []int16           `json:"quest_reward_item_id" required:"false" doc:"Pokestop only: allowed quest reward item ids; matched against either the AR or no-AR quest. Empty means no reward item constraint."`
+	QuestRewardPokemon []ApiDnfId        `json:"quest_reward_pokemon" required:"false" doc:"Pokestop only: allowed quest reward pokemon/form pairs; matched against either the AR or no-AR quest. Empty means no reward pokemon constraint."`
 
 	// Pokestop - incident
-	IncidentDisplayType []int8     `json:"incident_display_type"`
-	IncidentStyle       []int8     `json:"incident_style"`
-	IncidentCharacter   []int16    `json:"incident_character"`
-	IncidentPokemon     []ApiDnfId `json:"incident_pokemon"`
+	IncidentDisplayType []int8     `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; empty means no incident display type constraint."`
+	IncidentStyle       []int8     `json:"incident_style" required:"false" doc:"Pokestop only: allowed incident styles; empty means no incident style constraint."`
+	IncidentCharacter   []int16    `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; empty means no incident character constraint."`
+	IncidentPokemon     []ApiDnfId `json:"incident_pokemon" required:"false" doc:"Pokestop only: allowed incident pokemon/form pairs; empty means no incident pokemon constraint."`
 
 	// Pokestop - contest
-	ContestPokemon      []ApiDnfId          `json:"contest_pokemon"`
-	ContestPokemonType  []int8              `json:"contest_pokemon_type"`
-	ContestTotalEntries *ApiFortDnfMinMax   `json:"contest_total_entries"`
+	ContestPokemon      []ApiDnfId        `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; empty means no contest pokemon constraint."`
+	ContestPokemonType  []int8            `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; empty means no contest type constraint."`
+	ContestTotalEntries *ApiFortDnfMinMax `json:"contest_total_entries" required:"false" doc:"Pokestop only: inclusive range for the contest's total number of entries; null means no contest entries constraint."`
 
 	// Station
-	BattleLevel   []int8     `json:"battle_level"`
-	BattlePokemon []ApiDnfId `json:"battle_pokemon"`
+	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; empty means no battle level constraint. Only matches stations with an active battle."`
+	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; empty means no battle pokemon constraint. Only matches stations with an active battle."`
 }
 
 type ApiDnfId struct {
-	Pokemon int16  `json:"pokemon_id"`
-	Form    *int16 `json:"form"`
+	Pokemon int16  `json:"pokemon_id" doc:"Pokedex id to match. Required within an entry — a form without an id can never match."`
+	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form of the given id."`
 }
 
 // ApiFortDnfMinMax is an inclusive integer range used by the fort filter clauses
@@ -64,33 +64,33 @@ type ApiFortDnfMinMax struct {
 }
 
 type ApiGymScanResult struct {
-	Gyms     []*ApiGymResult `json:"gyms"`
-	Examined int             `json:"examined"`
-	Skipped  int             `json:"skipped"`
-	Total    int             `json:"total"`
+	Gyms     []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Examined int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped  int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total    int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
 }
 
 type ApiPokestopScanResult struct {
-	Pokestops []*ApiPokestopResult `json:"pokestops"`
-	Examined  int                  `json:"examined"`
-	Skipped   int                  `json:"skipped"`
-	Total     int                  `json:"total"`
+	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
 }
 
 type ApiStationScanResult struct {
-	Stations []*ApiStationResult `json:"stations"`
-	Examined int                 `json:"examined"`
-	Skipped  int                 `json:"skipped"`
-	Total    int                 `json:"total"`
+	Stations []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped  int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total    int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
 }
 
 type ApiFortCombinedScanResult struct {
-	Gyms      []*ApiGymResult      `json:"gyms"`
-	Pokestops []*ApiPokestopResult `json:"pokestops"`
-	Stations  []*ApiStationResult  `json:"stations"`
-	Examined  int                  `json:"examined"`
-	Skipped   int                  `json:"skipped"`
-	Total     int                  `json:"total"`
+	Gyms      []*ApiGymResult      `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Stations  []*ApiStationResult  `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
 }
 
 // matchDnfIdPair checks if any ApiDnfId in the filter matches the given pokemon/form pair
