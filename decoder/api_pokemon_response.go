@@ -19,6 +19,19 @@ type PvpEntry struct {
 }
 
 // PvpRankings holds the PVP rankings for the supported leagues.
+//
+// WIRE DIVERGENCE (intentional): this structure deliberately does NOT match the
+// legacy `pvp` wire format. The legacy endpoint emitted a dynamic
+// map[string][]gohbem.PokemonEntry produced by QueryPvPRank, which:
+//   - only included a league key when that league had entries (so e.g. an empty
+//     little league was simply absent: `"pvp":{"great":[...]}`), and
+//   - emitted `"pvp":null` entirely when PVP was disabled (ohbem == nil).
+//
+// This fixed-league struct instead ALWAYS emits all three league keys
+// (little/great/ultra), using JSON null for empty or disabled leagues. When PVP
+// is disabled the result is `"pvp":{"little":null,"great":null,"ultra":null}`
+// rather than `"pvp":null`. This is a deliberate design choice to expose a
+// stable, documentable OpenAPI schema instead of a dynamic map, and is approved.
 type PvpRankings struct {
 	Little []PvpEntry `json:"little" doc:"PVP rankings for the Little league (CP cap 500)"`
 	Great  []PvpEntry `json:"great" doc:"PVP rankings for the Great league (CP cap 1500)"`
@@ -29,6 +42,9 @@ type PvpRankings struct {
 // Nullable database columns are represented as pointers (nil => JSON null) without
 // omitempty so every key is always present, matching the legacy wire format.
 // Field declaration order mirrors ApiPokemonResult for diff-friendly comparison.
+//
+// The `pvp` field intentionally diverges from the legacy wire format; see the
+// PvpRankings doc comment for the rationale and exact differences.
 type PokemonResult struct {
 	Id                      string      `json:"id" doc:"Encounter ID of the pokemon"`
 	PokestopId              *string     `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
@@ -70,8 +86,10 @@ type PokemonResult struct {
 	IsEvent                 int8        `json:"is_event" doc:"Whether the pokemon is part of an event"`
 }
 
-// buildPokemonResult builds a PokemonResult that is JSON wire-identical to the
-// legacy buildApiPokemonResult.
+// buildPokemonResult builds a PokemonResult whose ~35 scalar (non-pvp) fields are
+// JSON wire-identical to the legacy buildApiPokemonResult. The `pvp` field is the
+// sole intentional exception: it uses the fixed-league PvpRankings structure
+// rather than the legacy dynamic map (see the PvpRankings doc comment).
 //
 // PARITY: like buildApiPokemonResult, Capture1, Capture2, Capture3 and IsEvent are
 // intentionally left unset. The legacy builder never populated these, so today's
@@ -135,6 +153,9 @@ func buildPvpRankings(pokemon *Pokemon) PvpRankings {
 	if err != nil {
 		return PvpRankings{}
 	}
+	// The hardcoded little/great/ultra keys correspond to the leagues configured
+	// in the ohbem init in decoder/main.go (~line 209). Adding a league there must
+	// also be reflected here (and in the PvpRankings struct).
 	return PvpRankings{
 		Little: convertPvpEntries(pvp["little"]),
 		Great:  convertPvpEntries(pvp["great"]),
