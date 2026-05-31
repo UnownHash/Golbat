@@ -331,33 +331,8 @@ func main() {
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
-	apiGroup.POST("/clear-quests", ClearQuests)
-	apiGroup.POST("/quest-status", GetQuestStatus)
-	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
-	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
-	apiGroup.GET("/gym/id/:gym_id", GetGym)
-	apiGroup.POST("/gym/query", GetGyms)
-	apiGroup.POST("/gym/search", SearchGyms)
-	apiGroup.POST("/gym/scan", GymScan)
-	apiGroup.POST("/pokestop/scan", PokestopScan)
-	apiGroup.POST("/station/query", GetStations)
-	apiGroup.POST("/station/scan", StationScan)
-	apiGroup.POST("/fort/scan", FortScan)
-	apiGroup.POST("/reload-geojson", ReloadGeojson)
-	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
-	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
-	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
-	apiGroup.POST("/pokemon/search", PokemonSearch)
-
-	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
-
-	apiGroup.GET("/devices/all", GetDevices)
-	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
-	apiGroup.GET("/fort-tracker/forts/:fort_id", GetFortTrackerFort)
-	apiGroup.GET("/skip-preserve-pokemon", SkipPreservePokemon)
-	apiGroup.POST("/skip-preserve-pokemon", SkipPreservePokemon)
 
 	debugGroup := r.Group("/debug")
 
@@ -395,6 +370,10 @@ func main() {
 
 	humaAPI := setupHumaAPI(r)
 	registerHumaRoutes(humaAPI)
+	registerFortScanRoutes(humaAPI)
+	registerPokemonReadRoutes(humaAPI)
+	registerTier3Routes(humaAPI)
+	registerTier4Routes(humaAPI)
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
