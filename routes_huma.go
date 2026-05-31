@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -260,7 +261,9 @@ type tappableByIdInput struct {
 type tappableByIdOutput struct{ Body decoder.ApiTappableResult }
 
 type pokestopPositionsInput struct {
-	RawBody []byte
+	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
+	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	Body json.RawMessage
 }
 type pokestopPositionsOutput struct{ Body []db2.QuestLocation }
 
@@ -537,7 +540,7 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *pokestopPositionsInput) (*pokestopPositionsOutput, error) {
-		fence, err := geo.NormaliseFenceFromBytes(in.RawBody)
+		fence, err := geo.NormaliseFenceFromBytes(in.Body)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -550,12 +553,16 @@ func registerTier3Routes(api huma.API) {
 }
 
 type questStatusInput struct {
-	RawBody []byte
+	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
+	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	Body json.RawMessage
 }
 type questStatusOutput struct{ Body db2.QuestStatus }
 
 type clearQuestsInput struct {
-	RawBody []byte
+	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
+	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	Body json.RawMessage
 }
 type clearQuestsOutput struct{ Body StatusResponse }
 
@@ -573,7 +580,7 @@ func registerTier4Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
 	}, func(ctx context.Context, in *questStatusInput) (*questStatusOutput, error) {
-		fence, err := geo.NormaliseFenceFromBytes(in.RawBody)
+		fence, err := geo.NormaliseFenceFromBytes(in.Body)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
@@ -592,7 +599,7 @@ func registerTier4Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *clearQuestsInput) (*clearQuestsOutput, error) {
-		fence, err := geo.NormaliseFenceFromBytes(in.RawBody)
+		fence, err := geo.NormaliseFenceFromBytes(in.Body)
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
