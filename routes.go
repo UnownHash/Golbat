@@ -65,6 +65,12 @@ type StatusResponse struct {
 	Status string `json:"status"`
 }
 
+// getString extracts a string value from a map[string]any, returning "" if absent or not a string.
+func getString(m map[string]any, k string) string {
+	v, _ := m[k].(string)
+	return v
+}
+
 func questsHeldHasARTask(quests_held any) *bool {
 	const ar_quest_id = int64(pogo.QuestType_QUEST_GEOTARGETED_AR_SCAN)
 
@@ -124,6 +130,7 @@ func Raw(c *gin.Context) {
 	var latTarget, lonTarget float64
 	var globalHaveAr *bool
 	var protoData []InboundRawData
+	var nebulaItems []NebulaData
 
 	// Objective is to normalise incoming proto data. Unfortunately each provider seems
 	// to be just different enough that this ends up being a little bit more of a mess
@@ -209,10 +216,45 @@ func Raw(c *gin.Context) {
 				}
 			}
 
+			if rawNebula, ok := raw["nebula_contents"].([]any); ok {
+				for _, item := range rawNebula {
+					m, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					payload, _ := b64.StdEncoding.DecodeString(getString(m, "payload"))
+					request, _ := b64.StdEncoding.DecodeString(getString(m, "request"))
+					nd := NebulaData{
+						Endpoint:    getString(m, "endpoint"),
+						Data:        payload,
+						Request:     request,
+						BattleId:    getString(m, "battle_id"),
+						Account:     account,
+						Level:       level,
+						Uuid:        uuid,
+						ScanContext: scanContext,
+						Lat:         latTarget,
+						Lon:         lonTarget,
+						TimestampMs: dataReceivedTimestamp,
+					}
+					// context: { "invasion": { "fort_id": "...", "incident_id": "..." } }
+					if ctxObj, ok := m["context"].(map[string]any); ok {
+						if inv, ok := ctxObj["invasion"].(map[string]any); ok {
+							nd.Invasion = &nebulaInvasionContext{
+								FortId:     getString(inv, "fort_id"),
+								IncidentId: getString(inv, "incident_id"),
+							}
+						}
+					}
+					nebulaItems = append(nebulaItems, nd)
+				}
+			}
+
 			contents, ok := raw["contents"].([]interface{})
 			if !ok {
-				decodeError = true
-
+				if len(nebulaItems) == 0 {
+					decodeError = true
+				}
 			} else {
 
 				decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
@@ -324,6 +366,10 @@ func Raw(c *gin.Context) {
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, method, &protoData)
 			cancel()
+		}
+
+		for _, entry := range nebulaItems {
+			go decodeNebula(context.Background(), entry.Endpoint, &entry)
 		}
 	}()
 
