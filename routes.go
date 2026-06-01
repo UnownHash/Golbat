@@ -33,6 +33,27 @@ type ProtoData struct {
 	TimestampMs int64
 }
 
+// nebulaInvasionContext mirrors the proto InvasionContext oneof case.
+type nebulaInvasionContext struct {
+	FortId     string
+	IncidentId string
+}
+
+type NebulaData struct {
+	Endpoint    string
+	Data        []byte
+	Request     []byte
+	Invasion    *nebulaInvasionContext // set when the context oneof case is invasion
+	BattleId    string
+	Account     string
+	Level       int
+	Uuid        string
+	ScanContext string
+	Lat         float64
+	Lon         float64
+	TimestampMs int64
+}
+
 type InboundRawData struct {
 	Base64Data string
 	Request    string
