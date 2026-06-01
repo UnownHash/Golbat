@@ -55,8 +55,11 @@ func (incident *Incident) updateFromStartIncidentOut(proto *pogo.StartIncidentOu
 }
 
 // updateFromBattleState fills the lineup slots from a Nebula get-state response.
-// Opponent actor selection matches NPC (type=4) or NPC_BOSS (type=5) — provisional,
-// pending validation against a real captured get-state payload.
+// The opponent is the NPC (grunt) / NPC_BOSS (leader/Giovanni) actor; the player
+// actor is ignored. Validated against production get-state payloads: at the
+// opening state only the opponent's ACTIVE pokemon has its species revealed, so
+// slot 1 is reliably populated while the reserves (slots 2/3) carry PokedexId 0
+// until the battle progresses — those are left NULL rather than written as 0.
 func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
 	state := out.GetBattleState()
 	if state == nil {
@@ -68,8 +71,6 @@ func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
 	for _, a := range state.GetActors() {
 		log.Debugf("Nebula battlestate actor id=%s type=%s team=%s active=%d roster=%v",
 			a.GetId(), a.GetType(), a.GetTeam(), a.GetActivePokemonId(), a.GetPokemonRoster())
-		// NOTE: opponent-actor selection is provisional, pending validation against a real
-		// captured get-state payload (we have none yet).
 		if a.GetType() == pogo.BattleActorProto_NPC || a.GetType() == pogo.BattleActorProto_NPC_BOSS {
 			opponent = a
 		}
@@ -85,7 +86,13 @@ func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
 		if bp == nil {
 			return
 		}
-		pokedex := null.NewInt(int64(bp.GetPokedexId().Number()), true)
+		pokedexId := int64(bp.GetPokedexId().Number())
+		if pokedexId == 0 {
+			// Species not revealed yet (e.g. reserve pokemon at the opening state):
+			// leave the slot NULL rather than writing pokemon id 0.
+			return
+		}
+		pokedex := null.NewInt(pokedexId, true)
 		switch slot {
 		case 1:
 			incident.SetSlot1PokemonId(pokedex)
