@@ -93,13 +93,18 @@ func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
 			return
 		}
 		pokedex := null.NewInt(pokedexId, true)
+		// Form is 0 (FORM_UNSET) for default-form pokemon, which is a valid value.
+		form := null.NewInt(int64(bp.GetDisplay().GetForm().Number()), true)
 		switch slot {
 		case 1:
 			incident.SetSlot1PokemonId(pokedex)
+			incident.SetSlot1Form(form)
 		case 2:
 			incident.SetSlot2PokemonId(pokedex)
+			incident.SetSlot2Form(form)
 		case 3:
 			incident.SetSlot3PokemonId(pokedex)
+			incident.SetSlot3Form(form)
 		}
 	}
 
