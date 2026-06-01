@@ -123,4 +123,10 @@ func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
 	}
 
 	incident.SetConfirmed(true)
+
+	log.Debugf("Nebula lineup incident=%s slot1=%s/%s slot2=%s/%s slot3=%s/%s (pokemon/form)",
+		incident.Id,
+		FormatNull(incident.Slot1PokemonId), FormatNull(incident.Slot1Form),
+		FormatNull(incident.Slot2PokemonId), FormatNull(incident.Slot2Form),
+		FormatNull(incident.Slot3PokemonId), FormatNull(incident.Slot3Form))
 }
