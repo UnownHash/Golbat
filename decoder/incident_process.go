@@ -26,6 +26,18 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 	return ""
 }
 
+func UpdateIncidentLineupFromBattleState(ctx context.Context, db db.DbDetails, fortId, incidentId string, out *pogo.BattleStateOutProto) string {
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentId, fortId, "UpdateIncidentLineupFromBattleState")
+	if err != nil {
+		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
+	}
+	defer unlock()
+
+	incident.updateFromBattleState(out)
+	saveIncidentRecord(ctx, db, incident)
+	return ""
+}
+
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
 	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, proto.Incident.IncidentId, proto.Incident.FortId, "UpdateIncidentFromInvasion")
 	if err != nil {

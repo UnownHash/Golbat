@@ -53,3 +53,62 @@ func (incident *Incident) updateFromStartIncidentOut(proto *pogo.StartIncidentOu
 	incident.SetStartTime(int64(proto.Incident.GetCompletionDisplay().GetIncidentStartMs() / 1000))
 	incident.SetExpirationTime(int64(proto.Incident.GetCompletionDisplay().GetIncidentExpirationMs() / 1000))
 }
+
+// updateFromBattleState fills the lineup slots from a Nebula get-state response.
+// Opponent actor selection matches NPC (type=4) or NPC_BOSS (type=5) — provisional,
+// pending validation against a real captured get-state payload.
+func (incident *Incident) updateFromBattleState(out *pogo.BattleStateOutProto) {
+	state := out.GetBattleState()
+	if state == nil {
+		return
+	}
+
+	// Identify the opponent actor (NPC or NPC_BOSS). Verbose debug for payload capture.
+	var opponent *pogo.BattleActorProto
+	for _, a := range state.GetActors() {
+		log.Debugf("Nebula battlestate actor id=%s type=%s team=%s active=%d roster=%v",
+			a.GetId(), a.GetType(), a.GetTeam(), a.GetActivePokemonId(), a.GetPokemonRoster())
+		// NOTE: opponent-actor selection is provisional, pending validation against a real
+		// captured get-state payload (we have none yet).
+		if a.GetType() == pogo.BattleActorProto_NPC || a.GetType() == pogo.BattleActorProto_NPC_BOSS {
+			opponent = a
+		}
+	}
+	if opponent == nil {
+		log.Warnf("Nebula battlestate: no opponent actor found")
+		return
+	}
+
+	pokemon := state.GetPokemon()
+	setSlot := func(slot int, id uint64) {
+		bp := pokemon[id]
+		if bp == nil {
+			return
+		}
+		pokedex := null.NewInt(int64(bp.GetPokedexId().Number()), true)
+		switch slot {
+		case 1:
+			incident.SetSlot1PokemonId(pokedex)
+		case 2:
+			incident.SetSlot2PokemonId(pokedex)
+		case 3:
+			incident.SetSlot3PokemonId(pokedex)
+		}
+	}
+
+	// Slot 1 = active; slots 2/3 = next roster entries (skipping the active id).
+	setSlot(1, opponent.GetActivePokemonId())
+	slot := 2
+	for _, id := range opponent.GetPokemonRoster() {
+		if id == opponent.GetActivePokemonId() {
+			continue
+		}
+		if slot > 3 {
+			break
+		}
+		setSlot(slot, id)
+		slot++
+	}
+
+	incident.SetConfirmed(true)
+}
