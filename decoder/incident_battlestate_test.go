@@ -15,7 +15,7 @@ func TestUpdateFromBattleState_SetsSlot1(t *testing.T) {
 				"npc": {Id: "npc", Type: pogo.BattleActorProto_NPC, ActivePokemonId: 100, PokemonRoster: []uint64{100, 101}},
 			},
 			Pokemon: map[uint64]*pogo.BattlePokemonProto{
-				100: {PokedexId: pogo.HoloPokemonId(147)},
+				100: {PokedexId: pogo.HoloPokemonId(147), Display: &pogo.PokemonDisplayProto{Form: pogo.PokemonDisplayProto_Form(11)}},
 				101: {PokedexId: pogo.HoloPokemonId(148)},
 			},
 		},
@@ -25,6 +25,9 @@ func TestUpdateFromBattleState_SetsSlot1(t *testing.T) {
 
 	if !incident.Slot1PokemonId.Valid || incident.Slot1PokemonId.Int64 != 147 {
 		t.Errorf("slot1 = %+v, want 147", incident.Slot1PokemonId)
+	}
+	if !incident.Slot1Form.Valid || incident.Slot1Form.Int64 != 11 {
+		t.Errorf("slot1 form = %+v, want 11", incident.Slot1Form)
 	}
 	// slot 2 came from a revealed reserve (148).
 	if !incident.Slot2PokemonId.Valid || incident.Slot2PokemonId.Int64 != 148 {
