@@ -3,8 +3,40 @@ package decoder
 import (
 	"testing"
 
+	"github.com/guregu/null/v6"
 	"golbat/pogo"
 )
+
+// The webhook lineup must omit slots without a known pokemon rather than emit
+// null entries.
+func TestIncidentLineup_OmitsNullSlots(t *testing.T) {
+	incident := &Incident{IncidentData: IncidentData{
+		Slot1PokemonId: null.IntFrom(100),
+		Slot1Form:      null.IntFrom(1047),
+		// slots 2 and 3 left invalid (unknown reserves)
+	}}
+
+	lineup := incidentLineup(incident)
+	if len(lineup) != 1 {
+		t.Fatalf("want 1 lineup entry, got %d: %+v", len(lineup), lineup)
+	}
+	if lineup[0].Slot != 1 || lineup[0].PokemonId.Int64 != 100 || lineup[0].Form.Int64 != 1047 {
+		t.Errorf("unexpected slot 1 entry: %+v", lineup[0])
+	}
+
+	// All slots known -> all three included (old OpenInvasion flow).
+	full := &Incident{IncidentData: IncidentData{
+		Slot1PokemonId: null.IntFrom(1), Slot2PokemonId: null.IntFrom(2), Slot3PokemonId: null.IntFrom(3),
+	}}
+	if got := incidentLineup(full); len(got) != 3 {
+		t.Errorf("want 3 entries for a full lineup, got %d", len(got))
+	}
+
+	// No species known -> empty lineup.
+	if got := incidentLineup(&Incident{}); len(got) != 0 {
+		t.Errorf("want 0 entries for an empty lineup, got %d", len(got))
+	}
+}
 
 func TestUpdateFromBattleState_SetsSlot1(t *testing.T) {
 	incident := &Incident{IncidentData: IncidentData{Id: "-9", PokestopId: "F"}, newRecord: true}

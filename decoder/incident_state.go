@@ -233,26 +233,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 			pokestopName = "Unknown"
 		}
 
-		var lineup []webhookLineup
-		if incident.Slot1PokemonId.Valid {
-			lineup = []webhookLineup{
-				{
-					Slot:      1,
-					PokemonId: incident.Slot1PokemonId,
-					Form:      incident.Slot1Form,
-				},
-				{
-					Slot:      2,
-					PokemonId: incident.Slot2PokemonId,
-					Form:      incident.Slot2Form,
-				},
-				{
-					Slot:      3,
-					PokemonId: incident.Slot3PokemonId,
-					Form:      incident.Slot3Form,
-				},
-			}
-		}
+		lineup := incidentLineup(incident)
 
 		incidentHook := IncidentWebhook{
 			Id:                      incident.Id,
