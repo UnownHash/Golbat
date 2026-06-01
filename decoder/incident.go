@@ -55,6 +55,23 @@ type webhookLineup struct {
 	Form      null.Int `json:"form"`
 }
 
+// incidentLineup returns only the lineup slots with a known pokemon. Slots whose
+// species is unknown (e.g. reserves not yet revealed) are omitted rather than
+// emitted as null entries.
+func incidentLineup(incident *Incident) []webhookLineup {
+	var lineup []webhookLineup
+	if incident.Slot1PokemonId.Valid {
+		lineup = append(lineup, webhookLineup{Slot: 1, PokemonId: incident.Slot1PokemonId, Form: incident.Slot1Form})
+	}
+	if incident.Slot2PokemonId.Valid {
+		lineup = append(lineup, webhookLineup{Slot: 2, PokemonId: incident.Slot2PokemonId, Form: incident.Slot2Form})
+	}
+	if incident.Slot3PokemonId.Valid {
+		lineup = append(lineup, webhookLineup{Slot: 3, PokemonId: incident.Slot3PokemonId, Form: incident.Slot3Form})
+	}
+	return lineup
+}
+
 type IncidentWebhook struct {
 	Id                      string          `json:"id"`
 	PokestopId              string          `json:"pokestop_id"`
