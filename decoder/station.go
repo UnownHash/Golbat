@@ -47,7 +47,13 @@ type Station struct {
 
 	StationData // Embedded data fields - can be copied for write-behind queue
 
+	// Memory-only fields (not persisted to DB)
+	BattleLobbyCount null.Int `db:"-" json:"-"` // Max-battle lobby player count (memory only)
+	BattleLobbyEndMs null.Int `db:"-" json:"-"` // Max-battle lobby join-end timestamp ms (memory only)
+	BattleLobbyPubMs int64    `db:"-" json:"-"` // Pub timestamp ms for dedup ordering (memory only)
+
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	internalDirty bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (in memory only)
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
 
@@ -73,6 +79,12 @@ func (station *Station) IsDirty() bool {
 // ClearDirty resets the dirty flag (call after saving to DB)
 func (station *Station) ClearDirty() {
 	station.dirty = false
+	station.internalDirty = false
+}
+
+// IsInternalDirty returns true if any in-memory-only field has been modified
+func (station *Station) IsInternalDirty() bool {
+	return station.internalDirty
 }
 
 // IsNewRecord returns true if this is a new record (not yet in DB)
@@ -373,5 +385,21 @@ func (station *Station) SetUpdated(v int64) {
 		}
 		station.Updated = v
 		station.dirty = true
+	}
+}
+
+// SetBattleLobbyCount sets the Max-battle lobby player count (memory only, not saved to DB)
+func (station *Station) SetBattleLobbyCount(v null.Int) {
+	if station.BattleLobbyCount != v {
+		station.BattleLobbyCount = v
+		station.internalDirty = true
+	}
+}
+
+// SetBattleLobbyEndMs sets the Max-battle lobby join-end timestamp (memory only, not saved to DB)
+func (station *Station) SetBattleLobbyEndMs(v null.Int) {
+	if station.BattleLobbyEndMs != v {
+		station.BattleLobbyEndMs = v
+		station.internalDirty = true
 	}
 }
