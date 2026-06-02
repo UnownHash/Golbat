@@ -31,9 +31,11 @@ func decodePushGateway(ctx context.Context, messageType string, payload []byte) 
 	switch m := msg.GetMessage().(type) {
 	case *pogo.PushGatewayMessage_RaidLobbyPlayerCount:
 		d := m.RaidLobbyPlayerCount
+		log.Infof("PushGateway: received raid_lobby gym=%s players=%d joinEnd=%d pub=%d", d.GetGymId(), d.GetPlayerCount(), d.GetLobbyJoinEndMs(), pubMs)
 		decoder.UpdateGymRaidLobby(ctx, dbDetails, d.GetGymId(), d.GetPlayerCount(), d.GetLobbyJoinEndMs(), pubMs)
 	case *pogo.PushGatewayMessage_BreadLobbyPlayerCount:
 		d := m.BreadLobbyPlayerCount
+		log.Infof("PushGateway: received bread_lobby station=%s players=%d joinEnd=%d pub=%d", d.GetStationId(), d.GetPlayerCount(), d.GetBreadLobbyJoinEndMs(), pubMs)
 		decoder.UpdateStationBattleLobby(ctx, dbDetails, d.GetStationId(), d.GetPlayerCount(), d.GetBreadLobbyJoinEndMs(), pubMs)
 	}
 }

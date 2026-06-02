@@ -282,12 +282,14 @@ func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId st
 		return
 	}
 	if station == nil {
-		// Station not yet known — drop silently
+		// Station not yet known — drop (Golbat must already know the station to geofence it)
+		log.Infof("PushGateway: bread_lobby station %s unknown to Golbat - dropped (no webhook)", stationId)
 		return
 	}
 	defer unlock()
 
 	if !station.updateBattleLobby(playerCount, joinEndMs, pubMs) {
+		log.Debugf("PushGateway: bread_lobby station %s stale/duplicate (pub=%d) - dropped", stationId, pubMs)
 		return // stale/duplicate
 	}
 
@@ -296,6 +298,7 @@ func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId st
 	}
 
 	areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
+	log.Infof("PushGateway: bread_lobby station %s players=%d -> emitting max_battle_lobby webhook (%d geofence areas)", stationId, playerCount, len(areas))
 	webhooksSender.AddMessage(webhooks.MaxBattleLobby, buildMaxBattleLobbyWebhook(station), areas)
 	station.ClearDirty()
 }

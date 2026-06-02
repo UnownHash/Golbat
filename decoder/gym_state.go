@@ -461,12 +461,14 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 		return
 	}
 	if gym == nil {
-		// Fort not yet known — drop silently
+		// Fort not yet known — drop (Golbat must already know the gym to geofence it)
+		log.Infof("PushGateway: raid_lobby gym %s unknown to Golbat - dropped (no webhook)", gymId)
 		return
 	}
 	defer unlock()
 
 	if !gym.updateRaidLobby(playerCount, joinEndMs, pubMs) {
+		log.Debugf("PushGateway: raid_lobby gym %s stale/duplicate (pub=%d) - dropped", gymId, pubMs)
 		return // stale/duplicate
 	}
 
@@ -475,6 +477,7 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 	}
 
 	areas := MatchStatsGeofenceWithCell(gym.Lat, gym.Lon, uint64(gym.CellId.ValueOrZero()))
+	log.Infof("PushGateway: raid_lobby gym %s players=%d -> emitting raid_lobby webhook (%d geofence areas)", gymId, playerCount, len(areas))
 	webhooksSender.AddMessage(webhooks.RaidLobby, buildRaidLobbyWebhook(gym), areas)
 	gym.ClearDirty()
 }
