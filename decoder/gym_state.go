@@ -433,20 +433,20 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 
 // RaidLobbyWebhook is the payload for a raid_lobby webhook.
 type RaidLobbyWebhook struct {
-	Id            string  `json:"id"`
-	Latitude      float64 `json:"latitude"`
-	Longitude     float64 `json:"longitude"`
-	PlayerCount   int64   `json:"player_count"`
-	LobbyJoinEnd  int64   `json:"lobby_join_end"`
+	Id             string  `json:"id"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	PlayerCount    int64   `json:"player_count"`
+	LobbyJoinEndMs int64   `json:"lobby_join_end_ms"` // milliseconds (Golbat suffixes ms time fields with _ms)
 }
 
 func buildRaidLobbyWebhook(gym *Gym) RaidLobbyWebhook {
 	return RaidLobbyWebhook{
-		Id:           gym.Id,
-		Latitude:     gym.Lat,
-		Longitude:    gym.Lon,
-		PlayerCount:  gym.RaidLobbyCount.ValueOrZero(),
-		LobbyJoinEnd: gym.RaidLobbyEndMs.ValueOrZero(),
+		Id:             gym.Id,
+		Latitude:       gym.Lat,
+		Longitude:      gym.Lon,
+		PlayerCount:    gym.RaidLobbyCount.ValueOrZero(),
+		LobbyJoinEndMs: gym.RaidLobbyEndMs.ValueOrZero(),
 	}
 }
 

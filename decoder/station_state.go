@@ -254,20 +254,20 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 
 // MaxBattleLobbyWebhook is the payload for a max_battle_lobby webhook.
 type MaxBattleLobbyWebhook struct {
-	Id           string  `json:"id"`
-	Latitude     float64 `json:"latitude"`
-	Longitude    float64 `json:"longitude"`
-	PlayerCount  int64   `json:"player_count"`
-	LobbyJoinEnd int64   `json:"lobby_join_end"`
+	Id             string  `json:"id"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	PlayerCount    int64   `json:"player_count"`
+	LobbyJoinEndMs int64   `json:"lobby_join_end_ms"` // milliseconds (Golbat suffixes ms time fields with _ms)
 }
 
 func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
 	return MaxBattleLobbyWebhook{
-		Id:           station.Id,
-		Latitude:     station.Lat,
-		Longitude:    station.Lon,
-		PlayerCount:  station.BattleLobbyCount.ValueOrZero(),
-		LobbyJoinEnd: station.BattleLobbyEndMs.ValueOrZero(),
+		Id:             station.Id,
+		Latitude:       station.Lat,
+		Longitude:      station.Lon,
+		PlayerCount:    station.BattleLobbyCount.ValueOrZero(),
+		LobbyJoinEndMs: station.BattleLobbyEndMs.ValueOrZero(),
 	}
 }
 
