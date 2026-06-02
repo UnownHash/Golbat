@@ -404,12 +404,17 @@ func (station *Station) SetBattleLobbyEndMs(v null.Int) {
 	}
 }
 
-// updateBattleLobby applies a Max-battle lobby update only if strictly newer. Returns true if applied.
+// updateBattleLobby applies a Max-battle lobby update. When the message carries a
+// publish timestamp it keeps only strictly-newer updates (prevents regress and
+// dedups overlapping cell deliveries). A zero timestamp means the message had none,
+// so it cannot be ordered and is always applied rather than dropped. Returns true if applied.
 func (station *Station) updateBattleLobby(playerCount int32, joinEndMs, pubMs int64) bool {
-	if pubMs <= station.BattleLobbyPubMs {
-		return false
+	if pubMs != 0 {
+		if pubMs <= station.BattleLobbyPubMs {
+			return false
+		}
+		station.BattleLobbyPubMs = pubMs
 	}
-	station.BattleLobbyPubMs = pubMs
 	station.SetBattleLobbyCount(null.IntFrom(int64(playerCount)))
 	station.SetBattleLobbyEndMs(null.IntFrom(joinEndMs))
 	return true

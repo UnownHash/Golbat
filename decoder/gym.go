@@ -569,12 +569,17 @@ func (gym *Gym) SetRaidLobbyEndMs(v null.Int) {
 	}
 }
 
-// updateRaidLobby applies a raid-lobby update only if strictly newer. Returns true if applied.
+// updateRaidLobby applies a raid-lobby update. When the message carries a publish
+// timestamp it keeps only strictly-newer updates (prevents regress and dedups
+// overlapping cell deliveries). A zero timestamp means the message had none, so
+// it cannot be ordered and is always applied rather than dropped. Returns true if applied.
 func (gym *Gym) updateRaidLobby(playerCount int32, joinEndMs, pubMs int64) bool {
-	if pubMs <= gym.RaidLobbyPubMs {
-		return false
+	if pubMs != 0 {
+		if pubMs <= gym.RaidLobbyPubMs {
+			return false
+		}
+		gym.RaidLobbyPubMs = pubMs
 	}
-	gym.RaidLobbyPubMs = pubMs
 	gym.SetRaidLobbyCount(null.IntFrom(int64(playerCount)))
 	gym.SetRaidLobbyEndMs(null.IntFrom(joinEndMs))
 	return true
