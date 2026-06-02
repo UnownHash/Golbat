@@ -275,7 +275,7 @@ func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
 // If the station is unknown (not in cache or DB) the update is silently dropped — we
 // cannot geofence a webhook without lat/lon, and a lobby message implies an active
 // known station. No DB write is performed.
-func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId string, playerCount int32, joinEndMs, pubMs int64) {
+func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId string, playerCount int32, joinEndMs int64) {
 	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "BattleLobby")
 	if err != nil {
 		log.Warnf("UpdateStationBattleLobby: error loading station %s: %v", stationId, err)
@@ -288,10 +288,7 @@ func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId st
 	}
 	defer unlock()
 
-	if !station.updateBattleLobby(playerCount, joinEndMs, pubMs) {
-		log.Debugf("PushGateway: bread_lobby station %s stale/duplicate (pub=%d) - dropped", stationId, pubMs)
-		return // stale/duplicate
-	}
+	station.updateBattleLobby(playerCount, joinEndMs)
 
 	if config.Config.FortInMemory {
 		fortRtreeUpdateStationOnSave(station)

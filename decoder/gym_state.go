@@ -454,7 +454,7 @@ func buildRaidLobbyWebhook(gym *Gym) RaidLobbyWebhook {
 // If the gym is unknown (not in cache or DB) the update is silently dropped — we
 // cannot geofence a webhook without lat/lon, and a lobby message implies an active
 // known fort. No DB write is performed.
-func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, playerCount int32, joinEndMs, pubMs int64) {
+func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, playerCount int32, joinEndMs int64) {
 	gym, unlock, err := getGymRecordForUpdate(ctx, db, gymId, "RaidLobby")
 	if err != nil {
 		log.Warnf("UpdateGymRaidLobby: error loading gym %s: %v", gymId, err)
@@ -467,10 +467,7 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 	}
 	defer unlock()
 
-	if !gym.updateRaidLobby(playerCount, joinEndMs, pubMs) {
-		log.Debugf("PushGateway: raid_lobby gym %s stale/duplicate (pub=%d) - dropped", gymId, pubMs)
-		return // stale/duplicate
-	}
+	gym.updateRaidLobby(playerCount, joinEndMs)
 
 	if config.Config.FortInMemory {
 		fortRtreeUpdateGymOnSave(gym)

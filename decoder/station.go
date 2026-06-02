@@ -50,7 +50,6 @@ type Station struct {
 	// Memory-only fields (not persisted to DB)
 	BattleLobbyCount null.Int `db:"-" json:"-"` // Max-battle lobby player count (memory only)
 	BattleLobbyEndMs null.Int `db:"-" json:"-"` // Max-battle lobby join-end timestamp ms (memory only)
-	BattleLobbyPubMs int64    `db:"-" json:"-"` // Pub timestamp ms for dedup ordering (memory only)
 
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	internalDirty bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving (in memory only)
@@ -404,18 +403,10 @@ func (station *Station) SetBattleLobbyEndMs(v null.Int) {
 	}
 }
 
-// updateBattleLobby applies a Max-battle lobby update. When the message carries a
-// publish timestamp it keeps only strictly-newer updates (prevents regress and
-// dedups overlapping cell deliveries). A zero timestamp means the message had none,
-// so it cannot be ordered and is always applied rather than dropped. Returns true if applied.
-func (station *Station) updateBattleLobby(playerCount int32, joinEndMs, pubMs int64) bool {
-	if pubMs != 0 {
-		if pubMs <= station.BattleLobbyPubMs {
-			return false
-		}
-		station.BattleLobbyPubMs = pubMs
-	}
+// updateBattleLobby applies a Max-battle lobby update (memory only). Push-gateway
+// lobby messages carry no usable publish timestamp, so each update is applied as
+// it arrives.
+func (station *Station) updateBattleLobby(playerCount int32, joinEndMs int64) {
 	station.SetBattleLobbyCount(null.IntFrom(int64(playerCount)))
 	station.SetBattleLobbyEndMs(null.IntFrom(joinEndMs))
-	return true
 }

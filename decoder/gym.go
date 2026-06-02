@@ -65,7 +65,6 @@ type Gym struct {
 	RaidSeed       null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
 	RaidLobbyCount null.Int `db:"-"` // Raid lobby player count (memory only)
 	RaidLobbyEndMs null.Int `db:"-"` // Raid lobby join-end timestamp ms (memory only)
-	RaidLobbyPubMs int64    `db:"-"` // Pub timestamp ms for dedup ordering (memory only)
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
 	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
@@ -569,20 +568,12 @@ func (gym *Gym) SetRaidLobbyEndMs(v null.Int) {
 	}
 }
 
-// updateRaidLobby applies a raid-lobby update. When the message carries a publish
-// timestamp it keeps only strictly-newer updates (prevents regress and dedups
-// overlapping cell deliveries). A zero timestamp means the message had none, so
-// it cannot be ordered and is always applied rather than dropped. Returns true if applied.
-func (gym *Gym) updateRaidLobby(playerCount int32, joinEndMs, pubMs int64) bool {
-	if pubMs != 0 {
-		if pubMs <= gym.RaidLobbyPubMs {
-			return false
-		}
-		gym.RaidLobbyPubMs = pubMs
-	}
+// updateRaidLobby applies a raid-lobby update (memory only). Push-gateway lobby
+// messages carry no usable publish timestamp, so each update is applied as it
+// arrives.
+func (gym *Gym) updateRaidLobby(playerCount int32, joinEndMs int64) {
 	gym.SetRaidLobbyCount(null.IntFrom(int64(playerCount)))
 	gym.SetRaidLobbyEndMs(null.IntFrom(joinEndMs))
-	return true
 }
 
 func (gym *Gym) SetUpdated(v int64) {
