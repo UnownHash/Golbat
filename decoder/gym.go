@@ -569,6 +569,17 @@ func (gym *Gym) SetRaidLobbyEndMs(v null.Int) {
 	}
 }
 
+// updateRaidLobby applies a raid-lobby update only if strictly newer. Returns true if applied.
+func (gym *Gym) updateRaidLobby(playerCount int32, joinEndMs, pubMs int64) bool {
+	if pubMs <= gym.RaidLobbyPubMs {
+		return false
+	}
+	gym.RaidLobbyPubMs = pubMs
+	gym.SetRaidLobbyCount(null.IntFrom(int64(playerCount)))
+	gym.SetRaidLobbyEndMs(null.IntFrom(joinEndMs))
+	return true
+}
+
 func (gym *Gym) SetUpdated(v int64) {
 	if gym.Updated != v {
 		if dbDebugEnabled {
