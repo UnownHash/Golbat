@@ -62,7 +62,10 @@ type Gym struct {
 	GymData // Embedded data fields (all db columns)
 
 	// Memory-only fields (not persisted to DB)
-	RaidSeed null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
+	RaidSeed       null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
+	RaidLobbyCount null.Int `db:"-"` // Raid lobby player count (memory only)
+	RaidLobbyEndMs null.Int `db:"-"` // Raid lobby join-end timestamp ms (memory only)
+	RaidLobbyPubMs int64    `db:"-"` // Pub timestamp ms for dedup ordering (memory only)
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
 	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
@@ -546,6 +549,22 @@ func (gym *Gym) SetRaidSeed(v null.Int) {
 		}
 		gym.RaidSeed = v
 		// Do not set dirty, as this doesn't trigger a DB update
+		gym.internalDirty = true
+	}
+}
+
+// SetRaidLobbyCount sets the raid lobby player count (memory only, not saved to DB)
+func (gym *Gym) SetRaidLobbyCount(v null.Int) {
+	if gym.RaidLobbyCount != v {
+		gym.RaidLobbyCount = v
+		gym.internalDirty = true
+	}
+}
+
+// SetRaidLobbyEndMs sets the raid lobby join-end timestamp (memory only, not saved to DB)
+func (gym *Gym) SetRaidLobbyEndMs(v null.Int) {
+	if gym.RaidLobbyEndMs != v {
+		gym.RaidLobbyEndMs = v
 		gym.internalDirty = true
 	}
 }
