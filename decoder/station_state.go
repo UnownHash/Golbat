@@ -252,6 +252,54 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 	return nil
 }
 
+// MaxBattleLobbyWebhook is the payload for a max_battle_lobby webhook.
+type MaxBattleLobbyWebhook struct {
+	Id           string  `json:"id"`
+	Latitude     float64 `json:"lat"`
+	Longitude    float64 `json:"lon"`
+	PlayerCount  int64   `json:"player_count"`
+	LobbyJoinEnd int64   `json:"lobby_join_end"`
+}
+
+func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
+	return MaxBattleLobbyWebhook{
+		Id:           station.Id,
+		Latitude:     station.Lat,
+		Longitude:    station.Lon,
+		PlayerCount:  station.BattleLobbyCount.ValueOrZero(),
+		LobbyJoinEnd: station.BattleLobbyEndMs.ValueOrZero(),
+	}
+}
+
+// UpdateStationBattleLobby applies an in-memory-only Max-battle lobby update for a known station.
+// If the station is unknown (not in cache or DB) the update is silently dropped — we
+// cannot geofence a webhook without lat/lon, and a lobby message implies an active
+// known station. No DB write is performed.
+func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId string, playerCount int32, joinEndMs, pubMs int64) {
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "BattleLobby")
+	if err != nil {
+		log.Warnf("UpdateStationBattleLobby: error loading station %s: %v", stationId, err)
+		return
+	}
+	if station == nil {
+		// Station not yet known — drop silently
+		return
+	}
+	defer unlock()
+
+	if !station.updateBattleLobby(playerCount, joinEndMs, pubMs) {
+		return // stale/duplicate
+	}
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdateStationOnSave(station)
+	}
+
+	areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
+	webhooksSender.AddMessage(webhooks.MaxBattleLobby, buildMaxBattleLobbyWebhook(station), areas)
+	station.ClearDirty()
+}
+
 func createStationWebhooks(station *Station) {
 	old := &station.oldValues
 	isNew := station.IsNewRecord()

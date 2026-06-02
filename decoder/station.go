@@ -403,3 +403,14 @@ func (station *Station) SetBattleLobbyEndMs(v null.Int) {
 		station.internalDirty = true
 	}
 }
+
+// updateBattleLobby applies a Max-battle lobby update only if strictly newer. Returns true if applied.
+func (station *Station) updateBattleLobby(playerCount int32, joinEndMs, pubMs int64) bool {
+	if pubMs <= station.BattleLobbyPubMs {
+		return false
+	}
+	station.BattleLobbyPubMs = pubMs
+	station.SetBattleLobbyCount(null.IntFrom(int64(playerCount)))
+	station.SetBattleLobbyEndMs(null.IntFrom(joinEndMs))
+	return true
+}
