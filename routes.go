@@ -272,7 +272,7 @@ func Raw(c *gin.Context) {
 
 			contents, ok := raw["contents"].([]interface{})
 			if !ok {
-				if len(nebulaItems) == 0 {
+				if len(nebulaItems) == 0 && len(pushItems) == 0 {
 					decodeError = true
 				}
 			} else {

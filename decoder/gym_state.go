@@ -434,8 +434,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 // RaidLobbyWebhook is the payload for a raid_lobby webhook.
 type RaidLobbyWebhook struct {
 	Id            string  `json:"id"`
-	Latitude      float64 `json:"lat"`
-	Longitude     float64 `json:"lon"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
 	PlayerCount   int64   `json:"player_count"`
 	LobbyJoinEnd  int64   `json:"lobby_join_end"`
 }
