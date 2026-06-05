@@ -67,6 +67,28 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		protoData = append(protoData, inboundRawData)
 	}
 
+	var nebulaData []NebulaData
+	for _, v := range in.NebulaContents {
+		nd := NebulaData{
+			Endpoint:    v.Endpoint,
+			Data:        v.ResponsePayload,
+			Request:     v.RequestPayload,
+			BattleId:    v.BattleId,
+			Account:     account,
+			Level:       level,
+			Uuid:        uuid,
+			ScanContext: scanContext,
+			Lat:         latTarget,
+			Lon:         lonTarget,
+			TimestampMs: dataReceivedTimestamp,
+		}
+		// Map the proto context oneof to NebulaData.
+		if inv := v.GetInvasion(); inv != nil {
+			nd.Invasion = &nebulaInvasionContext{FortId: inv.GetFortId(), IncidentId: inv.GetIncidentId()}
+		}
+		nebulaData = append(nebulaData, nd)
+	}
+
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
 		timeout := 5 * time.Second
@@ -78,6 +100,18 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 			// provide independent cancellation contexts for each proto decode
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, entry.Method, &entry)
+			cancel()
+		}
+
+		for _, entry := range nebulaData {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodeNebula(ctx, entry.Endpoint, &entry)
+			cancel()
+		}
+
+		for _, v := range in.PushContents {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodePushGateway(ctx, v.MessageType, v.Payload)
 			cancel()
 		}
 	}()

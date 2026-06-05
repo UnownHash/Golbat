@@ -33,6 +33,27 @@ type ProtoData struct {
 	TimestampMs int64
 }
 
+// nebulaInvasionContext mirrors the proto InvasionContext oneof case.
+type nebulaInvasionContext struct {
+	FortId     string
+	IncidentId string
+}
+
+type NebulaData struct {
+	Endpoint    string
+	Data        []byte
+	Request     []byte
+	Invasion    *nebulaInvasionContext // set when the context oneof case is invasion
+	BattleId    string
+	Account     string
+	Level       int
+	Uuid        string
+	ScanContext string
+	Lat         float64
+	Lon         float64
+	TimestampMs int64
+}
+
 type InboundRawData struct {
 	Base64Data string
 	Request    string
@@ -42,6 +63,12 @@ type InboundRawData struct {
 
 type StatusResponse struct {
 	Status string `json:"status"`
+}
+
+// getString extracts a string value from a map[string]any, returning "" if absent or not a string.
+func getString(m map[string]any, k string) string {
+	v, _ := m[k].(string)
+	return v
 }
 
 func questsHeldHasARTask(quests_held any) *bool {
@@ -103,6 +130,12 @@ func Raw(c *gin.Context) {
 	var latTarget, lonTarget float64
 	var globalHaveAr *bool
 	var protoData []InboundRawData
+	var nebulaItems []NebulaData
+	type pushItem struct {
+		MessageType string
+		Payload     []byte
+	}
+	var pushItems []pushItem
 
 	// Objective is to normalise incoming proto data. Unfortunately each provider seems
 	// to be just different enough that this ends up being a little bit more of a mess
@@ -188,10 +221,60 @@ func Raw(c *gin.Context) {
 				}
 			}
 
+			if rawNebula, ok := raw["nebula_contents"].([]any); ok {
+				for _, item := range rawNebula {
+					m, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					payload, _ := b64.StdEncoding.DecodeString(getString(m, "payload"))
+					request, _ := b64.StdEncoding.DecodeString(getString(m, "request"))
+					nd := NebulaData{
+						Endpoint:    getString(m, "endpoint"),
+						Data:        payload,
+						Request:     request,
+						BattleId:    getString(m, "battle_id"),
+						Account:     account,
+						Level:       level,
+						Uuid:        uuid,
+						ScanContext: scanContext,
+						Lat:         latTarget,
+						Lon:         lonTarget,
+						TimestampMs: dataReceivedTimestamp,
+					}
+					// context: { "invasion": { "fort_id": "...", "incident_id": "..." } }
+					if ctxObj, ok := m["context"].(map[string]any); ok {
+						if inv, ok := ctxObj["invasion"].(map[string]any); ok {
+							nd.Invasion = &nebulaInvasionContext{
+								FortId:     getString(inv, "fort_id"),
+								IncidentId: getString(inv, "incident_id"),
+							}
+						}
+					}
+					nebulaItems = append(nebulaItems, nd)
+				}
+			}
+
+			if rawPush, ok := raw["push_contents"].([]any); ok {
+				for _, item := range rawPush {
+					m, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					msgType := getString(m, "message_type")
+					payload, _ := b64.StdEncoding.DecodeString(getString(m, "payload"))
+					if msgType == "" || payload == nil {
+						continue
+					}
+					pushItems = append(pushItems, pushItem{MessageType: msgType, Payload: payload})
+				}
+			}
+
 			contents, ok := raw["contents"].([]interface{})
 			if !ok {
-				decodeError = true
-
+				if len(nebulaItems) == 0 && len(pushItems) == 0 {
+					decodeError = true
+				}
 			} else {
 
 				decodeAlternate := func(data map[string]interface{}, key1, key2 string) interface{} {
@@ -302,6 +385,16 @@ func Raw(c *gin.Context) {
 			// provide independent cancellation contexts for each proto decode
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, method, &protoData)
+			cancel()
+		}
+
+		for _, entry := range nebulaItems {
+			go decodeNebula(context.Background(), entry.Endpoint, &entry)
+		}
+
+		for _, entry := range pushItems {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodePushGateway(ctx, entry.MessageType, entry.Payload)
 			cancel()
 		}
 	}()

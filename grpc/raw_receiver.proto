@@ -20,6 +20,28 @@ message RawProtoRequest {
   optional bool have_ar = 7;
   repeated Content contents = 8;
   optional string scan_context = 9;
+  repeated NebulaContent nebula_contents = 10;
+  repeated PushGatewayContent push_contents = 11;   // push-gateway messages forwarded verbatim
+}
+
+message PushGatewayContent {
+  string message_type = 1;   // oneof-case tag, e.g. "raid_lobby_player_count"
+  bytes  payload      = 2;   // whole marshalled pogo.PushGatewayMessage
+}
+
+message NebulaContent {
+  string endpoint = 1;
+  bytes response_payload = 2;
+  bytes request_payload = 3;
+  oneof context {
+    InvasionContext invasion = 4;
+  }
+  string battle_id = 5;
+}
+
+message InvasionContext {
+  string fort_id = 1;
+  string incident_id = 2;
 }
 
 message Content  {
