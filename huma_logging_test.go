@@ -41,7 +41,7 @@ func TestHumaScanRequestLogging(t *testing.T) {
 
 	logged := buf.String()
 	for _, want := range []string{
-		"[huma scan]",
+		"[huma api]",
 		"/api/pokemon/v2/scan",
 		"1.25",                // request body coordinate captured (logrus escapes quotes)
 		"bogus",               // the offending field is visible in the request
@@ -50,6 +50,38 @@ func TestHumaScanRequestLogging(t *testing.T) {
 	} {
 		if !strings.Contains(logged, want) {
 			t.Errorf("log missing %q.\n--- log ---\n%s", want, logged)
+		}
+	}
+}
+
+// TestHumaApiRequestLoggingCoversNonScanEndpoints confirms the logger now captures
+// every Huma /api operation, not just the scan endpoints.
+func TestHumaApiRequestLoggingCoversNonScanEndpoints(t *testing.T) {
+	prevLogging := config.Config.Logging.ApiRequestLogging
+	prevSecret := config.Config.ApiSecret
+	config.Config.Logging.ApiRequestLogging = true
+	config.Config.ApiSecret = ""
+	defer func() {
+		config.Config.Logging.ApiRequestLogging = prevLogging
+		config.Config.ApiSecret = prevSecret
+	}()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := setupHumaAPI(r)
+	registerPokemonReadRoutes(api) // includes GET /api/pokemon/available
+
+	req := httptest.NewRequest("GET", "/api/pokemon/available", nil)
+	r.ServeHTTP(httptest.NewRecorder(), req)
+
+	logged := buf.String()
+	for _, want := range []string{"[huma api]", "/api/pokemon/available"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("log missing %q for a non-scan endpoint.\n--- log ---\n%s", want, logged)
 		}
 	}
 }
@@ -72,7 +104,7 @@ func TestHumaScanRequestLoggingSilentWhenDisabled(t *testing.T) {
 		strings.NewReader(`{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[]}`))
 	r.ServeHTTP(httptest.NewRecorder(), req)
 
-	if strings.Contains(buf.String(), "[huma scan]") {
+	if strings.Contains(buf.String(), "[huma api]") {
 		t.Errorf("expected no scan log when debug off, got: %s", buf.String())
 	}
 }

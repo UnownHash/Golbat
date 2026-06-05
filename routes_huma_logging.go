@@ -14,17 +14,17 @@ import (
 // humaLogMaxBody caps how much of each body is written to the log.
 const humaLogMaxBody = 4096
 
-// humaScanRequestLogger logs the raw request body and the response (status +
-// body) for the Huma-served pokemon scan endpoints, but only when
-// logging.api_request_logging is enabled. It is off by default and independent of
-// logging.debug because these bodies can be very large. This is a debugging aid
-// for callers whose requests are rejected: Huma validates the body against the
-// OpenAPI schema and returns 422 *before* the operation handler runs, so the
-// handler never sees a rejected payload — only this transport-level hook does. The
-// 422 response body itself lists exactly which properties were unexpected or missing.
-func humaScanRequestLogger() gin.HandlerFunc {
+// humaApiRequestLogger logs the raw request body and the response (status + body)
+// for every Huma-served /api request, but only when logging.api_request_logging is
+// enabled. It is off by default and independent of logging.debug because these
+// bodies can be very large. This is a debugging aid for callers whose requests are
+// rejected: Huma validates the body against the OpenAPI schema and returns 422
+// *before* the operation handler runs, so the handler never sees a rejected payload
+// — only this transport-level hook does. The 422 response body itself lists exactly
+// which properties were unexpected or missing.
+func humaApiRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !config.Config.Logging.ApiRequestLogging || !isHumaScanPath(c.Request.URL.Path) {
+		if !config.Config.Logging.ApiRequestLogging || !isHumaApiPath(c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -41,14 +41,18 @@ func humaScanRequestLogger() gin.HandlerFunc {
 
 		c.Next()
 
-		log.Infof("[huma scan] %s %s -> %d\n  request:  %s\n  response: %s",
+		log.Infof("[huma api] %s %s -> %d\n  request:  %s\n  response: %s",
 			c.Request.Method, c.Request.URL.Path, rec.Status(),
 			truncateForLog(reqBody), truncateForLog(rec.body.Bytes()))
 	}
 }
 
-func isHumaScanPath(p string) bool {
-	return strings.HasPrefix(p, "/api/pokemon/") && strings.HasSuffix(p, "/scan")
+// isHumaApiPath matches every /api/ request. The logging middleware is installed
+// only ahead of the Huma routes (in setupHumaAPI), so in practice this captures
+// the Huma-served operations and not the few remaining gin /api routes, nor the
+// /docs and /openapi.json doc routes (which are not under /api).
+func isHumaApiPath(p string) bool {
+	return strings.HasPrefix(p, "/api/")
 }
 
 func truncateForLog(b []byte) string {

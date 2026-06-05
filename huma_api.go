@@ -83,7 +83,7 @@ func setupHumaAPI(r *gin.Engine) huma.API {
 	// for the scan endpoints when logging.debug is set — Huma rejects invalid
 	// bodies with 422 before the handler runs, so this transport-level logging is
 	// the only place that sees rejected payloads.
-	r.Use(humaScanRequestLogger())
+	r.Use(humaApiRequestLogger())
 
 	api := humagin.New(r, newHumaConfig(version))
 

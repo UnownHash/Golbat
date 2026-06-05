@@ -110,9 +110,9 @@ type Prometheus struct {
 
 type logging struct {
 	Debug bool `koanf:"debug"`
-	// ApiRequestLogging logs the raw request/response bodies of the API scan
-	// endpoints. Independent of Debug because these bodies can be very large; off
-	// by default, enable only when debugging a specific caller.
+	// ApiRequestLogging logs the raw request/response bodies of every Huma-served
+	// /api endpoint. Independent of Debug because these bodies can be very large;
+	// off by default, enable only when debugging a specific caller.
 	ApiRequestLogging bool `koanf:"api_request_logging"`
 	SaveLogs          bool `koanf:"save_logs"`
 	MaxSize           int  `koanf:"max_size"`
