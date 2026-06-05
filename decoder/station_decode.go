@@ -29,26 +29,6 @@ func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, 
 	station.SetEndTime(stationProto.EndTimeMs / 1000)
 	station.SetCooldownComplete(stationProto.CooldownCompleteMs)
 	station.SetIsBattleAvailable(stationProto.IsBreadBattleAvailable)
-	if battleDetails := stationProto.BattleDetails; battleDetails != nil {
-		station.SetBattleLevel(null.IntFrom(int64(battleDetails.BattleLevel)))
-		station.SetBattleStart(null.IntFrom(battleDetails.BattleWindowStartMs / 1000))
-		station.SetBattleEnd(null.IntFrom(battleDetails.BattleWindowEndMs / 1000))
-		if pokemon := battleDetails.BattlePokemon; pokemon != nil {
-			station.SetBattlePokemonId(null.IntFrom(int64(pokemon.PokemonId)))
-			station.SetBattlePokemonMove1(null.IntFrom(int64(pokemon.Move1)))
-			station.SetBattlePokemonMove2(null.IntFrom(int64(pokemon.Move2)))
-			station.SetBattlePokemonForm(null.IntFrom(int64(pokemon.PokemonDisplay.Form)))
-			station.SetBattlePokemonCostume(null.IntFrom(int64(pokemon.PokemonDisplay.Costume)))
-			station.SetBattlePokemonGender(null.IntFrom(int64(pokemon.PokemonDisplay.Gender)))
-			station.SetBattlePokemonAlignment(null.IntFrom(int64(pokemon.PokemonDisplay.Alignment)))
-			station.SetBattlePokemonBreadMode(null.IntFrom(int64(pokemon.PokemonDisplay.BreadModeEnum)))
-			station.SetBattlePokemonStamina(null.IntFrom(int64(pokemon.Stamina)))
-			station.SetBattlePokemonCpMultiplier(null.FloatFrom(float64(pokemon.CpMultiplier)))
-			if rewardPokemon := battleDetails.RewardPokemon; rewardPokemon != nil && pokemon.PokemonId != rewardPokemon.PokemonId {
-				log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
-			}
-		}
-	}
 	station.SetCellId(int64(cellId))
 	return station
 }

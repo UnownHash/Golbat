@@ -25,27 +25,45 @@ const stationSelectColumns = `id, lat, lon, name, cell_id, start_time, end_time,
 	stationed_pokemon`
 
 type StationWebhook struct {
-	Id                     string   `json:"id"`
-	Latitude               float64  `json:"latitude"`
-	Longitude              float64  `json:"longitude"`
-	Name                   string   `json:"name"`
-	StartTime              int64    `json:"start_time"`
-	EndTime                int64    `json:"end_time"`
-	IsBattleAvailable      bool     `json:"is_battle_available"`
-	BattleLevel            null.Int `json:"battle_level"`
-	BattleStart            null.Int `json:"battle_start"`
-	BattleEnd              null.Int `json:"battle_end"`
-	BattlePokemonId        null.Int `json:"battle_pokemon_id"`
-	BattlePokemonForm      null.Int `json:"battle_pokemon_form"`
-	BattlePokemonCostume   null.Int `json:"battle_pokemon_costume"`
-	BattlePokemonGender    null.Int `json:"battle_pokemon_gender"`
-	BattlePokemonAlignment null.Int `json:"battle_pokemon_alignment"`
-	BattlePokemonBreadMode null.Int `json:"battle_pokemon_bread_mode"`
-	BattlePokemonMove1     null.Int `json:"battle_pokemon_move_1"`
-	BattlePokemonMove2     null.Int `json:"battle_pokemon_move_2"`
-	TotalStationedPokemon  null.Int `json:"total_stationed_pokemon"`
-	TotalStationedGmax     null.Int `json:"total_stationed_gmax"`
-	Updated                int64    `json:"updated"`
+	Id                     string                 `json:"id"`
+	Latitude               float64                `json:"latitude"`
+	Longitude              float64                `json:"longitude"`
+	Name                   string                 `json:"name"`
+	StartTime              int64                  `json:"start_time"`
+	EndTime                int64                  `json:"end_time"`
+	IsBattleAvailable      bool                   `json:"is_battle_available"`
+	BattleLevel            null.Int               `json:"battle_level"`
+	BattleStart            null.Int               `json:"battle_start"`
+	BattleEnd              null.Int               `json:"battle_end"`
+	BattlePokemonId        null.Int               `json:"battle_pokemon_id"`
+	BattlePokemonForm      null.Int               `json:"battle_pokemon_form"`
+	BattlePokemonCostume   null.Int               `json:"battle_pokemon_costume"`
+	BattlePokemonGender    null.Int               `json:"battle_pokemon_gender"`
+	BattlePokemonAlignment null.Int               `json:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode null.Int               `json:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1     null.Int               `json:"battle_pokemon_move_1"`
+	BattlePokemonMove2     null.Int               `json:"battle_pokemon_move_2"`
+	TotalStationedPokemon  null.Int               `json:"total_stationed_pokemon"`
+	TotalStationedGmax     null.Int               `json:"total_stationed_gmax"`
+	Battles                []StationBattleWebhook `json:"battles,omitempty"`
+	Updated                int64                  `json:"updated"`
+}
+
+type StationBattleWebhook struct {
+	BreadBattleSeed           int64      `json:"bread_battle_seed,omitempty"`
+	BattleLevel               int16      `json:"battle_level"`
+	BattleStart               int64      `json:"battle_start"`
+	BattleEnd                 int64      `json:"battle_end"`
+	BattlePokemonId           null.Int   `json:"battle_pokemon_id"`
+	BattlePokemonForm         null.Int   `json:"battle_pokemon_form"`
+	BattlePokemonCostume      null.Int   `json:"battle_pokemon_costume"`
+	BattlePokemonGender       null.Int   `json:"battle_pokemon_gender"`
+	BattlePokemonAlignment    null.Int   `json:"battle_pokemon_alignment"`
+	BattlePokemonBreadMode    null.Int   `json:"battle_pokemon_bread_mode"`
+	BattlePokemonMove1        null.Int   `json:"battle_pokemon_move_1"`
+	BattlePokemonMove2        null.Int   `json:"battle_pokemon_move_2"`
+	BattlePokemonStamina      null.Int   `json:"battle_pokemon_stamina"`
+	BattlePokemonCpMultiplier null.Float `json:"battle_pokemon_cp_multiplier"`
 }
 
 func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
@@ -74,6 +92,13 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	if item := stationCache.Get(stationId); item != nil {
 		station := item.Value()
 		station.Lock(caller)
+		if !hasLoadedStationBattles(stationId) {
+			if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+				log.Debugf("GetStationRecordReadOnly: station battle hydration failed for %s: %v", stationId, err)
+			} else if config.Config.FortInMemory {
+				fortRtreeUpdateStationOnSave(station)
+			}
+		}
 		return station, func() { station.Unlock() }, nil
 	}
 
@@ -90,14 +115,23 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 	// Atomically cache the loaded Station - if another goroutine raced us,
 	// we'll get their Station and use that instead (ensuring same mutex)
 	existingStation, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
-		if config.Config.FortInMemory {
-			fortRtreeUpdateStationOnGet(&dbStation)
-		}
 		return &dbStation
 	})
 
 	station := existingStation.Value()
 	station.Lock(caller)
+	loadedFromDb := station == &dbStation
+	hydratedBattles := false
+	if !hasLoadedStationBattles(stationId) {
+		if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+			station.Unlock()
+			return nil, nil, err
+		}
+		hydratedBattles = true
+	}
+	if config.Config.FortInMemory && (loadedFromDb || hydratedBattles) {
+		fortRtreeUpdateStationOnGet(station)
+	}
 	return station, func() { station.Unlock() }, nil
 }
 
@@ -135,6 +169,10 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 			// We loaded from DB
 			station.newRecord = false
 			station.ClearDirty()
+			if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
+				station.Unlock()
+				return nil, nil, err
+			}
 			if config.Config.FortInMemory {
 				fortRtreeUpdateStationOnGet(station)
 			}
@@ -147,47 +185,64 @@ func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId st
 
 func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	now := time.Now().Unix()
+	battles := getKnownStationBattles(station.Id, now)
+	battleSnapshot := snapshotStationBattles(battles)
+	applyTopStationBattleToStation(station, battles)
+	battleListChanged := station.oldValues.BattleSnapshot != battleSnapshot
+	isNewRecord := station.IsNewRecord()
+	stationNeedsWrite := station.IsDirty() || isNewRecord || battleListChanged
 
 	// Skip save if not dirty and was updated recently (15-min debounce)
-	if !station.IsDirty() && !station.IsNewRecord() {
+	if !stationNeedsWrite {
 		if station.Updated > now-GetUpdateThreshold(900) {
 			return
 		}
+		stationNeedsWrite = true
 	}
 
-	station.SetUpdated(now)
+	if stationNeedsWrite {
+		station.SetUpdated(now)
 
-	// Capture isNewRecord before state changes
-	isNewRecord := station.IsNewRecord()
+		// Debug logging before queueing
+		if dbDebugEnabled {
+			if isNewRecord {
+				dbDebugLog("INSERT", "Station", station.Id, station.changedFields)
+			} else {
+				dbDebugLog("UPDATE", "Station", station.Id, station.changedFields)
+			}
+		}
 
-	// Debug logging before queueing
-	if dbDebugEnabled {
-		if isNewRecord {
-			dbDebugLog("INSERT", "Station", station.Id, station.changedFields)
+		// Queue the write through the typed write-behind queue
+		if stationQueue != nil {
+			stationQueue.Enqueue(station.StationData, isNewRecord, 0)
 		} else {
-			dbDebugLog("UPDATE", "Station", station.Id, station.changedFields)
+			// Fallback to direct write if queue not initialized
+			_ = stationWriteDB(db, station, isNewRecord)
+		}
+	}
+	if battleListChanged {
+		battleWrite := stationBattleWrite{StationId: station.Id, Battles: battles}
+		if stationBattleQueue != nil {
+			stationBattleQueue.Enqueue(battleWrite, false, 0)
+		} else {
+			_ = flushStationBattleBatch(ctx, db, []stationBattleWrite{battleWrite})
 		}
 	}
 
-	// Queue the write through the typed write-behind queue
-	if stationQueue != nil {
-		stationQueue.Enqueue(station.StationData, isNewRecord, 0)
-	} else {
-		// Fallback to direct write if queue not initialized
-		_ = stationWriteDB(db, station, isNewRecord)
-	}
-
-	if dbDebugEnabled {
+	if stationNeedsWrite && dbDebugEnabled {
 		station.changedFields = station.changedFields[:0]
 	}
-	station.ClearDirty()
-	createStationWebhooks(station)
+	if stationNeedsWrite {
+		station.ClearDirty()
+	}
+	createStationWebhooksWithBattles(station, battles, battleSnapshot, isNewRecord, now)
 	if isNewRecord {
 		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {
-		fortRtreeUpdateStationOnSave(station)
+		genericUpdateFort(station.Id, station.Lat, station.Lon, false)
+		updateStationLookupWithBattles(station, battles)
 	}
 }
 
@@ -252,42 +307,34 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 	return nil
 }
 
-func createStationWebhooks(station *Station) {
+func createStationWebhooksWithBattles(station *Station, battles []StationBattleData, battleSnapshot stationBattleSnapshot, isNew bool, updated int64) {
 	old := &station.oldValues
-	isNew := station.IsNewRecord()
 
-	if isNew || station.BattlePokemonId.Valid && (old.EndTime != station.EndTime ||
-		old.BattleEnd != station.BattleEnd ||
-		old.BattlePokemonId != station.BattlePokemonId ||
-		old.BattlePokemonForm != station.BattlePokemonForm ||
-		old.BattlePokemonCostume != station.BattlePokemonCostume ||
-		old.BattlePokemonGender != station.BattlePokemonGender ||
-		old.BattlePokemonBreadMode != station.BattlePokemonBreadMode) {
+	if len(battles) == 0 {
+		return
+	}
+
+	if isNew || old.EndTime != station.EndTime || old.BattleSnapshot != battleSnapshot {
 		stationHook := StationWebhook{
-			Id:                     station.Id,
-			Latitude:               station.Lat,
-			Longitude:              station.Lon,
-			Name:                   station.Name,
-			StartTime:              station.StartTime,
-			EndTime:                station.EndTime,
-			IsBattleAvailable:      station.IsBattleAvailable,
-			BattleLevel:            station.BattleLevel,
-			BattleStart:            station.BattleStart,
-			BattleEnd:              station.BattleEnd,
-			BattlePokemonId:        station.BattlePokemonId,
-			BattlePokemonForm:      station.BattlePokemonForm,
-			BattlePokemonCostume:   station.BattlePokemonCostume,
-			BattlePokemonGender:    station.BattlePokemonGender,
-			BattlePokemonAlignment: station.BattlePokemonAlignment,
-			BattlePokemonBreadMode: station.BattlePokemonBreadMode,
-			BattlePokemonMove1:     station.BattlePokemonMove1,
-			BattlePokemonMove2:     station.BattlePokemonMove2,
-			TotalStationedPokemon:  station.TotalStationedPokemon,
-			TotalStationedGmax:     station.TotalStationedGmax,
-			Updated:                station.Updated,
+			Id:                    station.Id,
+			Latitude:              station.Lat,
+			Longitude:             station.Lon,
+			Name:                  station.Name,
+			StartTime:             station.StartTime,
+			EndTime:               station.EndTime,
+			IsBattleAvailable:     station.IsBattleAvailable,
+			TotalStationedPokemon: station.TotalStationedPokemon,
+			TotalStationedGmax:    station.TotalStationedGmax,
+			Battles:               buildStationBattleWebhooks(battles),
+			Updated:               updated,
 		}
+		applyTopStationBattleToStationWebhook(&stationHook, battles)
 		areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
-		statsCollector.UpdateMaxBattleCount(areas, station.BattleLevel.ValueOrZero())
+		if topBattle := topStationBattleFromSlice(battles); topBattle != nil {
+			if isNew || !old.BattleSnapshot.HasTopBreadBattle || old.BattleSnapshot.TopBreadBattleSeed != topBattle.BreadBattleSeed {
+				statsCollector.UpdateMaxBattleCount(areas, int64(topBattle.BattleLevel))
+			}
+		}
 	}
 }

@@ -3,6 +3,7 @@ package decoder
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v3"
@@ -57,6 +58,7 @@ type FortLookup struct {
 	BattleLevel        int8
 	BattlePokemonId    int16
 	BattlePokemonForm  int16
+	StationBattles     []FortLookupStationBattle
 }
 
 var fortLookupCache *xsync.MapOf[string, FortLookup]
@@ -202,15 +204,19 @@ func updateGymLookup(gym *Gym) {
 }
 
 func updateStationLookup(station *Station) {
-	fortLookupCache.Store(station.Id, FortLookup{
-		FortType:           STATION,
-		Lat:                station.Lat,
-		Lon:                station.Lon,
-		BattleEndTimestamp: station.BattleEnd.ValueOrZero(),
-		BattleLevel:        int8(station.BattleLevel.ValueOrZero()),
-		BattlePokemonId:    int16(station.BattlePokemonId.ValueOrZero()),
-		BattlePokemonForm:  int16(station.BattlePokemonForm.ValueOrZero()),
-	})
+	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, time.Now().Unix()))
+}
+
+func updateStationLookupWithBattles(station *Station, stationBattles []StationBattleData) {
+	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
+	lookup := FortLookup{
+		FortType:       STATION,
+		Lat:            station.Lat,
+		Lon:            station.Lon,
+		StationBattles: battles,
+	}
+	applyTopStationBattleToFortLookup(&lookup, stationBattles)
+	fortLookupCache.Store(station.Id, lookup)
 }
 
 // updatePokestopIncidentLookup updates the incident fields on a pokestop's FortLookup entry

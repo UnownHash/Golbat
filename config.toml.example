@@ -15,6 +15,7 @@ bearer_token = "secret"
 [cleanup]
 pokemon = true                  # Keep pokemon table is kept nice and short
 incidents = true                # Remove incidents after expiry
+station_battles = true          # Remove station battles after expiry
 quests = true                   # Remove quests after expiry
 tappables = true                # Remove tappables after expiry
 stats = true                    # Enable/Disable stats history
