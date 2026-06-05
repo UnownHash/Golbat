@@ -307,6 +307,54 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 	return nil
 }
 
+// MaxBattleLobbyWebhook is the payload for a max_battle_lobby webhook.
+type MaxBattleLobbyWebhook struct {
+	Id             string  `json:"id"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	PlayerCount    int64   `json:"player_count"`
+	LobbyJoinEndMs int64   `json:"lobby_join_end_ms"` // milliseconds (Golbat suffixes ms time fields with _ms)
+}
+
+func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
+	return MaxBattleLobbyWebhook{
+		Id:             station.Id,
+		Latitude:       station.Lat,
+		Longitude:      station.Lon,
+		PlayerCount:    station.BattleLobbyCount.ValueOrZero(),
+		LobbyJoinEndMs: station.BattleLobbyEndMs.ValueOrZero(),
+	}
+}
+
+// UpdateStationBattleLobby applies an in-memory-only Max-battle lobby update for a known station.
+// If the station is unknown (not in cache or DB) the update is silently dropped — we
+// cannot geofence a webhook without lat/lon, and a lobby message implies an active
+// known station. No DB write is performed.
+func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId string, playerCount int32, joinEndMs int64) {
+	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "BattleLobby")
+	if err != nil {
+		log.Warnf("UpdateStationBattleLobby: error loading station %s: %v", stationId, err)
+		return
+	}
+	if station == nil {
+		// Station not yet known — drop (Golbat must already know the station to geofence it)
+		log.Infof("PushGateway: bread_lobby station %s unknown to Golbat - dropped (no webhook)", stationId)
+		return
+	}
+	defer unlock()
+
+	station.updateBattleLobby(playerCount, joinEndMs)
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdateStationOnSave(station)
+	}
+
+	areas := MatchStatsGeofenceWithCell(station.Lat, station.Lon, uint64(station.CellId))
+	log.Infof("PushGateway: bread_lobby station %s players=%d -> emitting max_battle_lobby webhook (%d geofence areas)", stationId, playerCount, len(areas))
+	webhooksSender.AddMessage(webhooks.MaxBattleLobby, buildMaxBattleLobbyWebhook(station), areas)
+	station.ClearDirty()
+}
+
 func createStationWebhooksWithBattles(station *Station, battles []StationBattleData, battleSnapshot stationBattleSnapshot, isNew bool, updated int64) {
 	old := &station.oldValues
 

@@ -62,7 +62,9 @@ type Gym struct {
 	GymData // Embedded data fields (all db columns)
 
 	// Memory-only fields (not persisted to DB)
-	RaidSeed null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
+	RaidSeed       null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
+	RaidLobbyCount null.Int `db:"-"` // Raid lobby player count (memory only)
+	RaidLobbyEndMs null.Int `db:"-"` // Raid lobby join-end timestamp ms (memory only)
 
 	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving (to db)
 	internalDirty bool     `db:"-"` // Not persisted - tracks if object needs saving (in memory only)
@@ -548,6 +550,30 @@ func (gym *Gym) SetRaidSeed(v null.Int) {
 		// Do not set dirty, as this doesn't trigger a DB update
 		gym.internalDirty = true
 	}
+}
+
+// SetRaidLobbyCount sets the raid lobby player count (memory only, not saved to DB)
+func (gym *Gym) SetRaidLobbyCount(v null.Int) {
+	if gym.RaidLobbyCount != v {
+		gym.RaidLobbyCount = v
+		gym.internalDirty = true
+	}
+}
+
+// SetRaidLobbyEndMs sets the raid lobby join-end timestamp (memory only, not saved to DB)
+func (gym *Gym) SetRaidLobbyEndMs(v null.Int) {
+	if gym.RaidLobbyEndMs != v {
+		gym.RaidLobbyEndMs = v
+		gym.internalDirty = true
+	}
+}
+
+// updateRaidLobby applies a raid-lobby update (memory only). Push-gateway lobby
+// messages carry no usable publish timestamp, so each update is applied as it
+// arrives.
+func (gym *Gym) updateRaidLobby(playerCount int32, joinEndMs int64) {
+	gym.SetRaidLobbyCount(null.IntFrom(int64(playerCount)))
+	gym.SetRaidLobbyEndMs(null.IntFrom(joinEndMs))
 }
 
 func (gym *Gym) SetUpdated(v int64) {

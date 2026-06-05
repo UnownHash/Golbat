@@ -108,6 +108,12 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 			decodeNebula(ctx, entry.Endpoint, &entry)
 			cancel()
 		}
+
+		for _, v := range in.PushContents {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodePushGateway(ctx, v.MessageType, v.Payload)
+			cancel()
+		}
 	}()
 
 	if latTarget != 0 && lonTarget != 0 && uuid != "" {

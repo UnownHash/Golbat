@@ -431,6 +431,54 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 	return nil
 }
 
+// RaidLobbyWebhook is the payload for a raid_lobby webhook.
+type RaidLobbyWebhook struct {
+	Id             string  `json:"id"`
+	Latitude       float64 `json:"latitude"`
+	Longitude      float64 `json:"longitude"`
+	PlayerCount    int64   `json:"player_count"`
+	LobbyJoinEndMs int64   `json:"lobby_join_end_ms"` // milliseconds (Golbat suffixes ms time fields with _ms)
+}
+
+func buildRaidLobbyWebhook(gym *Gym) RaidLobbyWebhook {
+	return RaidLobbyWebhook{
+		Id:             gym.Id,
+		Latitude:       gym.Lat,
+		Longitude:      gym.Lon,
+		PlayerCount:    gym.RaidLobbyCount.ValueOrZero(),
+		LobbyJoinEndMs: gym.RaidLobbyEndMs.ValueOrZero(),
+	}
+}
+
+// UpdateGymRaidLobby applies an in-memory-only raid-lobby update for a known gym.
+// If the gym is unknown (not in cache or DB) the update is silently dropped — we
+// cannot geofence a webhook without lat/lon, and a lobby message implies an active
+// known fort. No DB write is performed.
+func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, playerCount int32, joinEndMs int64) {
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, gymId, "RaidLobby")
+	if err != nil {
+		log.Warnf("UpdateGymRaidLobby: error loading gym %s: %v", gymId, err)
+		return
+	}
+	if gym == nil {
+		// Fort not yet known — drop (Golbat must already know the gym to geofence it)
+		log.Infof("PushGateway: raid_lobby gym %s unknown to Golbat - dropped (no webhook)", gymId)
+		return
+	}
+	defer unlock()
+
+	gym.updateRaidLobby(playerCount, joinEndMs)
+
+	if config.Config.FortInMemory {
+		fortRtreeUpdateGymOnSave(gym)
+	}
+
+	areas := MatchStatsGeofenceWithCell(gym.Lat, gym.Lon, uint64(gym.CellId.ValueOrZero()))
+	log.Infof("PushGateway: raid_lobby gym %s players=%d -> emitting raid_lobby webhook (%d geofence areas)", gymId, playerCount, len(areas))
+	webhooksSender.AddMessage(webhooks.RaidLobby, buildRaidLobbyWebhook(gym), areas)
+	gym.ClearDirty()
+}
+
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 	storedGetMapFort := getMapFortsCache.Get(gym.Id)
 	if storedGetMapFort != nil {

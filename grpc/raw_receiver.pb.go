@@ -33,6 +33,7 @@ type RawProtoRequest struct {
 	Contents       []*Content             `protobuf:"bytes,8,rep,name=contents,proto3" json:"contents,omitempty"`
 	ScanContext    *string                `protobuf:"bytes,9,opt,name=scan_context,json=scanContext,proto3,oneof" json:"scan_context,omitempty"`
 	NebulaContents []*NebulaContent       `protobuf:"bytes,10,rep,name=nebula_contents,json=nebulaContents,proto3" json:"nebula_contents,omitempty"`
+	PushContents   []*PushGatewayContent  `protobuf:"bytes,11,rep,name=push_contents,json=pushContents,proto3" json:"push_contents,omitempty"` // push-gateway messages forwarded verbatim
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -137,6 +138,65 @@ func (x *RawProtoRequest) GetNebulaContents() []*NebulaContent {
 	return nil
 }
 
+func (x *RawProtoRequest) GetPushContents() []*PushGatewayContent {
+	if x != nil {
+		return x.PushContents
+	}
+	return nil
+}
+
+type PushGatewayContent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	MessageType   string                 `protobuf:"bytes,1,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"` // oneof-case tag, e.g. "raid_lobby_player_count"
+	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`                            // whole marshalled pogo.PushGatewayMessage
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PushGatewayContent) Reset() {
+	*x = PushGatewayContent{}
+	mi := &file_grpc_raw_receiver_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PushGatewayContent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PushGatewayContent) ProtoMessage() {}
+
+func (x *PushGatewayContent) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_raw_receiver_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PushGatewayContent.ProtoReflect.Descriptor instead.
+func (*PushGatewayContent) Descriptor() ([]byte, []int) {
+	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PushGatewayContent) GetMessageType() string {
+	if x != nil {
+		return x.MessageType
+	}
+	return ""
+}
+
+func (x *PushGatewayContent) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
 type NebulaContent struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	Endpoint        string                 `protobuf:"bytes,1,opt,name=endpoint,proto3" json:"endpoint,omitempty"`
@@ -153,7 +213,7 @@ type NebulaContent struct {
 
 func (x *NebulaContent) Reset() {
 	*x = NebulaContent{}
-	mi := &file_grpc_raw_receiver_proto_msgTypes[1]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +225,7 @@ func (x *NebulaContent) String() string {
 func (*NebulaContent) ProtoMessage() {}
 
 func (x *NebulaContent) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_raw_receiver_proto_msgTypes[1]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +238,7 @@ func (x *NebulaContent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NebulaContent.ProtoReflect.Descriptor instead.
 func (*NebulaContent) Descriptor() ([]byte, []int) {
-	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{1}
+	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *NebulaContent) GetEndpoint() string {
@@ -245,7 +305,7 @@ type InvasionContext struct {
 
 func (x *InvasionContext) Reset() {
 	*x = InvasionContext{}
-	mi := &file_grpc_raw_receiver_proto_msgTypes[2]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -257,7 +317,7 @@ func (x *InvasionContext) String() string {
 func (*InvasionContext) ProtoMessage() {}
 
 func (x *InvasionContext) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_raw_receiver_proto_msgTypes[2]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -270,7 +330,7 @@ func (x *InvasionContext) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvasionContext.ProtoReflect.Descriptor instead.
 func (*InvasionContext) Descriptor() ([]byte, []int) {
-	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{2}
+	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *InvasionContext) GetFortId() string {
@@ -299,7 +359,7 @@ type Content struct {
 
 func (x *Content) Reset() {
 	*x = Content{}
-	mi := &file_grpc_raw_receiver_proto_msgTypes[3]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +371,7 @@ func (x *Content) String() string {
 func (*Content) ProtoMessage() {}
 
 func (x *Content) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_raw_receiver_proto_msgTypes[3]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +384,7 @@ func (x *Content) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Content.ProtoReflect.Descriptor instead.
 func (*Content) Descriptor() ([]byte, []int) {
-	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{3}
+	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Content) GetResponsePayload() []byte {
@@ -364,7 +424,7 @@ type RawProtoResponse struct {
 
 func (x *RawProtoResponse) Reset() {
 	*x = RawProtoResponse{}
-	mi := &file_grpc_raw_receiver_proto_msgTypes[4]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +436,7 @@ func (x *RawProtoResponse) String() string {
 func (*RawProtoResponse) ProtoMessage() {}
 
 func (x *RawProtoResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_raw_receiver_proto_msgTypes[4]
+	mi := &file_grpc_raw_receiver_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +449,7 @@ func (x *RawProtoResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RawProtoResponse.ProtoReflect.Descriptor instead.
 func (*RawProtoResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{4}
+	return file_grpc_raw_receiver_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *RawProtoResponse) GetMessage() string {
@@ -403,7 +463,7 @@ var File_grpc_raw_receiver_proto protoreflect.FileDescriptor
 
 const file_grpc_raw_receiver_proto_rawDesc = "" +
 	"\n" +
-	"\x17grpc/raw_receiver.proto\x12\fraw_receiver\"\xa7\x03\n" +
+	"\x17grpc/raw_receiver.proto\x12\fraw_receiver\"\xee\x03\n" +
 	"\x0fRawProtoRequest\x12\x1b\n" +
 	"\tdevice_id\x18\x01 \x01(\tR\bdeviceId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12#\n" +
@@ -417,10 +477,14 @@ const file_grpc_raw_receiver_proto_rawDesc = "" +
 	"\bcontents\x18\b \x03(\v2\x15.raw_receiver.ContentR\bcontents\x12&\n" +
 	"\fscan_context\x18\t \x01(\tH\x01R\vscanContext\x88\x01\x01\x12D\n" +
 	"\x0fnebula_contents\x18\n" +
-	" \x03(\v2\x1b.raw_receiver.NebulaContentR\x0enebulaContentsB\n" +
+	" \x03(\v2\x1b.raw_receiver.NebulaContentR\x0enebulaContents\x12E\n" +
+	"\rpush_contents\x18\v \x03(\v2 .raw_receiver.PushGatewayContentR\fpushContentsB\n" +
 	"\n" +
 	"\b_have_arB\x0f\n" +
-	"\r_scan_context\"\xe4\x01\n" +
+	"\r_scan_context\"Q\n" +
+	"\x12PushGatewayContent\x12!\n" +
+	"\fmessage_type\x18\x01 \x01(\tR\vmessageType\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\"\xe4\x01\n" +
 	"\rNebulaContent\x12\x1a\n" +
 	"\bendpoint\x18\x01 \x01(\tR\bendpoint\x12)\n" +
 	"\x10response_payload\x18\x02 \x01(\fR\x0fresponsePayload\x12'\n" +
@@ -457,25 +521,27 @@ func file_grpc_raw_receiver_proto_rawDescGZIP() []byte {
 	return file_grpc_raw_receiver_proto_rawDescData
 }
 
-var file_grpc_raw_receiver_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_grpc_raw_receiver_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_grpc_raw_receiver_proto_goTypes = []any{
-	(*RawProtoRequest)(nil),  // 0: raw_receiver.RawProtoRequest
-	(*NebulaContent)(nil),    // 1: raw_receiver.NebulaContent
-	(*InvasionContext)(nil),  // 2: raw_receiver.InvasionContext
-	(*Content)(nil),          // 3: raw_receiver.Content
-	(*RawProtoResponse)(nil), // 4: raw_receiver.RawProtoResponse
+	(*RawProtoRequest)(nil),    // 0: raw_receiver.RawProtoRequest
+	(*PushGatewayContent)(nil), // 1: raw_receiver.PushGatewayContent
+	(*NebulaContent)(nil),      // 2: raw_receiver.NebulaContent
+	(*InvasionContext)(nil),    // 3: raw_receiver.InvasionContext
+	(*Content)(nil),            // 4: raw_receiver.Content
+	(*RawProtoResponse)(nil),   // 5: raw_receiver.RawProtoResponse
 }
 var file_grpc_raw_receiver_proto_depIdxs = []int32{
-	3, // 0: raw_receiver.RawProtoRequest.contents:type_name -> raw_receiver.Content
-	1, // 1: raw_receiver.RawProtoRequest.nebula_contents:type_name -> raw_receiver.NebulaContent
-	2, // 2: raw_receiver.NebulaContent.invasion:type_name -> raw_receiver.InvasionContext
-	0, // 3: raw_receiver.RawProto.SubmitRawProto:input_type -> raw_receiver.RawProtoRequest
-	4, // 4: raw_receiver.RawProto.SubmitRawProto:output_type -> raw_receiver.RawProtoResponse
-	4, // [4:5] is the sub-list for method output_type
-	3, // [3:4] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	4, // 0: raw_receiver.RawProtoRequest.contents:type_name -> raw_receiver.Content
+	2, // 1: raw_receiver.RawProtoRequest.nebula_contents:type_name -> raw_receiver.NebulaContent
+	1, // 2: raw_receiver.RawProtoRequest.push_contents:type_name -> raw_receiver.PushGatewayContent
+	3, // 3: raw_receiver.NebulaContent.invasion:type_name -> raw_receiver.InvasionContext
+	0, // 4: raw_receiver.RawProto.SubmitRawProto:input_type -> raw_receiver.RawProtoRequest
+	5, // 5: raw_receiver.RawProto.SubmitRawProto:output_type -> raw_receiver.RawProtoResponse
+	5, // [5:6] is the sub-list for method output_type
+	4, // [4:5] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_grpc_raw_receiver_proto_init() }
@@ -484,17 +550,17 @@ func file_grpc_raw_receiver_proto_init() {
 		return
 	}
 	file_grpc_raw_receiver_proto_msgTypes[0].OneofWrappers = []any{}
-	file_grpc_raw_receiver_proto_msgTypes[1].OneofWrappers = []any{
+	file_grpc_raw_receiver_proto_msgTypes[2].OneofWrappers = []any{
 		(*NebulaContent_Invasion)(nil),
 	}
-	file_grpc_raw_receiver_proto_msgTypes[3].OneofWrappers = []any{}
+	file_grpc_raw_receiver_proto_msgTypes[4].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_raw_receiver_proto_rawDesc), len(file_grpc_raw_receiver_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

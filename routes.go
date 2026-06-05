@@ -131,6 +131,11 @@ func Raw(c *gin.Context) {
 	var globalHaveAr *bool
 	var protoData []InboundRawData
 	var nebulaItems []NebulaData
+	type pushItem struct {
+		MessageType string
+		Payload     []byte
+	}
+	var pushItems []pushItem
 
 	// Objective is to normalise incoming proto data. Unfortunately each provider seems
 	// to be just different enough that this ends up being a little bit more of a mess
@@ -250,9 +255,24 @@ func Raw(c *gin.Context) {
 				}
 			}
 
+			if rawPush, ok := raw["push_contents"].([]any); ok {
+				for _, item := range rawPush {
+					m, ok := item.(map[string]any)
+					if !ok {
+						continue
+					}
+					msgType := getString(m, "message_type")
+					payload, _ := b64.StdEncoding.DecodeString(getString(m, "payload"))
+					if msgType == "" || payload == nil {
+						continue
+					}
+					pushItems = append(pushItems, pushItem{MessageType: msgType, Payload: payload})
+				}
+			}
+
 			contents, ok := raw["contents"].([]interface{})
 			if !ok {
-				if len(nebulaItems) == 0 {
+				if len(nebulaItems) == 0 && len(pushItems) == 0 {
 					decodeError = true
 				}
 			} else {
@@ -370,6 +390,12 @@ func Raw(c *gin.Context) {
 
 		for _, entry := range nebulaItems {
 			go decodeNebula(context.Background(), entry.Endpoint, &entry)
+		}
+
+		for _, entry := range pushItems {
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodePushGateway(ctx, entry.MessageType, entry.Payload)
+			cancel()
 		}
 	}()
 
