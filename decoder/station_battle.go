@@ -574,15 +574,19 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 	if len(stationIds) == 0 {
 		return nil
 	}
-	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
-	statsCollector.IncDbQuery("begin station_battle", err)
-	if err != nil {
-		return err
-	}
 
+	// No surrounding transaction. Every other write-behind flush is a single
+	// autocommit upsert; wrapping these two statements in a transaction held the
+	// upsert's *and* the delete's InnoDB locks together until commit, so under
+	// concurrent overlapping batches the flushes blocked each other (lock-waits /
+	// 1213 deadlocks) and pinned shared-pool connections, starving the synchronous
+	// station reads. Run upsert-then-prune in autocommit so each statement releases
+	// its locks immediately. The brief gap between them is over-inclusive only (the
+	// reader filters battle_end > now and the upsert runs first), and a crash
+	// between them leaves a few obsolete rows that the next flush — or expiry —
+	// removes. Both are acceptable, self-healing states for battle data.
 	if len(battles) > 0 {
-		if _, err = tx.NamedExecContext(ctx, stationBattleBatchUpsertQuery, battles); err != nil {
-			_ = tx.Rollback()
+		if _, err := dbDetails.GeneralDb.NamedExecContext(ctx, stationBattleBatchUpsertQuery, battles); err != nil {
 			statsCollector.IncDbQuery("upsert station_battle", err)
 			return err
 		}
@@ -591,22 +595,18 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 
 	deleteQuery, deleteArgs, err := buildDeleteObsoleteStationBattlesQuery(stationIds, battles)
 	if err != nil {
-		_ = tx.Rollback()
 		statsCollector.IncDbQuery("delete obsolete station_battle", err)
 		return err
 	}
 	if deleteQuery != "" {
-		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
-			_ = tx.Rollback()
+		if _, err := dbDetails.GeneralDb.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
 			statsCollector.IncDbQuery("delete obsolete station_battle", err)
 			return err
 		}
 		statsCollector.IncDbQuery("delete obsolete station_battle", nil)
 	}
 
-	err = tx.Commit()
-	statsCollector.IncDbQuery("commit station_battle", err)
-	return err
+	return nil
 }
 
 func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) ([]StationBattleData, error) {
