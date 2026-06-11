@@ -209,18 +209,10 @@ func convertApiPvpEntries(entries []gohbem.PokemonEntry) []ApiPvpEntry {
 	}
 	result := make([]ApiPvpEntry, len(entries))
 	for i, e := range entries {
-		result[i] = ApiPvpEntry{
-			Pokemon:    e.Pokemon,
-			Form:       e.Form,
-			Cap:        e.Cap,
-			Value:      e.Value,
-			Level:      e.Level,
-			Cp:         e.Cp,
-			Percentage: e.Percentage,
-			Rank:       e.Rank,
-			Capped:     e.Capped,
-			Evolution:  e.Evolution,
-		}
+		// Direct conversion: ApiPvpEntry must stay field-identical to
+		// gohbem.PokemonEntry (tags excepted), so a gohbem field change is a
+		// compile error here rather than a silently dropped API field.
+		result[i] = ApiPvpEntry(e)
 	}
 	return result
 }
