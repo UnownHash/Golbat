@@ -18,6 +18,7 @@ var k = koanf.New(".")
 func ReadConfig() (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
+		ApiDocs: true,
 		Sentry: sentry{
 			SampleRate:       1.0,
 			TracesSampleRate: 1.0,

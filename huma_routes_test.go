@@ -100,6 +100,25 @@ func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
 	}
 }
 
+// TestHumaScanAcceptsPartialRanges verifies a DNF range with only one bound
+// passes schema validation, as the legacy gin BindJSON did (the missing bound
+// binds to 0).
+func TestHumaScanAcceptsPartialRanges(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = ""
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerHumaRoutes(api)
+
+	body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[{"cp":{"min":100,"max":5000},"iv":{"min":90}}]}`
+	resp := api.Post("/api/pokemon/v2/scan", strings.NewReader(body))
+	if resp.Code != http.StatusAccepted {
+		t.Errorf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
+	}
+}
+
 // TestPokemonReadEndpoints exercises the migrated pokemon search and by-id read
 // endpoints over the HTTP pipeline without a database: get-pokemon for an absent
 // id is 404, and search-pokemon returns a 202 bare JSON array (empty against the
@@ -123,6 +142,16 @@ func TestPokemonReadEndpoints(t *testing.T) {
 		resp := api.Get("/api/pokemon/id/123456789")
 		if resp.Code != http.StatusNotFound {
 			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("search-pokemon center-only body passes validation", func(t *testing.T) {
+		// Legacy mode: min/max omitted, results ordered by distance from center
+		// within a small default radius.
+		body := `{"center":{"lat":0,"lon":0},"searchIds":[25]}`
+		resp := api.Post("/api/pokemon/search", strings.NewReader(body))
+		if resp.Code != http.StatusAccepted {
+			t.Errorf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
 		}
 	})
 
@@ -184,6 +213,23 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		resp := api.Get("/api/tappable/id/123456789")
 		if resp.Code != http.StatusNotFound {
 			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("gym/query accepts an empty object body", func(t *testing.T) {
+		resp := api.Post("/api/gym/query", strings.NewReader(`{}`))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		if body := strings.TrimSpace(resp.Body.String()); body != "[]" {
+			t.Errorf("body = %q, want \"[]\"", body)
+		}
+	})
+
+	t.Run("gym/search with no filters is a 400, not a schema 422", func(t *testing.T) {
+		resp := api.Post("/api/gym/search", strings.NewReader(`{}`))
+		if resp.Code != http.StatusBadRequest {
+			t.Errorf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
 		}
 	})
 

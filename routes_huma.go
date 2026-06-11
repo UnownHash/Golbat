@@ -235,7 +235,7 @@ func dedupeIDs(in []string) []string {
 
 type idsQueryInput struct {
 	Body struct {
-		IDs []string `json:"ids" doc:"Fort IDs to fetch (max 500)"`
+		IDs []string `json:"ids" required:"false" doc:"Fort IDs to fetch (max 500). Omitted or null returns an empty result."`
 	}
 }
 
@@ -375,7 +375,9 @@ func registerTier3Routes(api huma.API) {
 			return nil, huma.Error400BadRequest("filters array is required")
 		}
 
-		// Validate filters (and clamp distance like the legacy handler).
+		// Validate filters and clamp distance to 500km. Note: the legacy handler's
+		// clamp assigned to a range-loop copy and never took effect, so this clamp
+		// is a deliberate behavior change — distances over 500km now actually clamp.
 		for i := range search.Filters {
 			filter := &search.Filters[i]
 			if filter.LocationDistance != nil {

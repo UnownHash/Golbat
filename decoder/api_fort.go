@@ -15,7 +15,7 @@ type ApiFortScan struct {
 	Min        ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
 	Max        ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
 	Limit      int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
-	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause."`
+	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. List conditions apply only when present: omit or send null for no constraint — an explicitly empty list matches nothing."`
 }
 
 type ApiFortDnfFilter struct {
@@ -24,31 +24,31 @@ type ApiFortDnfFilter struct {
 
 	// Gym
 	AvailableSlots *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
-	TeamId         []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; empty means no team constraint."`
-	RaidLevel      []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; empty means no raid level constraint. Only matches gyms with an active raid."`
-	RaidPokemon    []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; empty means no raid pokemon constraint. Only matches gyms with an active raid."`
+	TeamId         []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; omitted or null means no team constraint."`
+	RaidLevel      []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; omitted or null means no raid level constraint. Only matches gyms with an active raid."`
+	RaidPokemon    []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; omitted or null means no raid pokemon constraint. Only matches gyms with an active raid."`
 
 	// Pokestop - unified quest (matches AR or no-AR)
-	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; empty means no lure constraint."`
-	QuestRewardType    []int16           `json:"quest_reward_type" required:"false" doc:"Pokestop only: allowed quest reward types; matched against either the AR or no-AR quest. Empty means no reward type constraint."`
+	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; omitted or null means no lure constraint."`
+	QuestRewardType    []int16           `json:"quest_reward_type" required:"false" doc:"Pokestop only: allowed quest reward types; matched against either the AR or no-AR quest. Omitted or null means no reward type constraint."`
 	QuestRewardAmount  *ApiFortDnfMinMax `json:"quest_reward_amount" required:"false" doc:"Pokestop only: inclusive quest reward amount range; matched against either the AR or no-AR quest. Null means no reward amount constraint."`
-	QuestRewardItemId  []int16           `json:"quest_reward_item_id" required:"false" doc:"Pokestop only: allowed quest reward item ids; matched against either the AR or no-AR quest. Empty means no reward item constraint."`
-	QuestRewardPokemon []ApiDnfId        `json:"quest_reward_pokemon" required:"false" doc:"Pokestop only: allowed quest reward pokemon/form pairs; matched against either the AR or no-AR quest. Empty means no reward pokemon constraint."`
+	QuestRewardItemId  []int16           `json:"quest_reward_item_id" required:"false" doc:"Pokestop only: allowed quest reward item ids; matched against either the AR or no-AR quest. Omitted or null means no reward item constraint."`
+	QuestRewardPokemon []ApiDnfId        `json:"quest_reward_pokemon" required:"false" doc:"Pokestop only: allowed quest reward pokemon/form pairs; matched against either the AR or no-AR quest. Omitted or null means no reward pokemon constraint."`
 
 	// Pokestop - incident
-	IncidentDisplayType []int8     `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; empty means no incident display type constraint."`
-	IncidentStyle       []int8     `json:"incident_style" required:"false" doc:"Pokestop only: allowed incident styles; empty means no incident style constraint."`
-	IncidentCharacter   []int16    `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; empty means no incident character constraint."`
-	IncidentPokemon     []ApiDnfId `json:"incident_pokemon" required:"false" doc:"Pokestop only: allowed incident pokemon/form pairs; empty means no incident pokemon constraint."`
+	IncidentDisplayType []int8     `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; omitted or null means no incident display type constraint."`
+	IncidentStyle       []int8     `json:"incident_style" required:"false" doc:"Pokestop only: allowed incident styles; omitted or null means no incident style constraint."`
+	IncidentCharacter   []int16    `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
+	IncidentPokemon     []ApiDnfId `json:"incident_pokemon" required:"false" doc:"Pokestop only: allowed incident pokemon/form pairs; omitted or null means no incident pokemon constraint."`
 
 	// Pokestop - contest
-	ContestPokemon      []ApiDnfId        `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; empty means no contest pokemon constraint."`
-	ContestPokemonType  []int8            `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; empty means no contest type constraint."`
+	ContestPokemon      []ApiDnfId        `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemonType  []int8            `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
 	ContestTotalEntries *ApiFortDnfMinMax `json:"contest_total_entries" required:"false" doc:"Pokestop only: inclusive range for the contest's total number of entries; null means no contest entries constraint."`
 
 	// Station
-	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; empty means no battle level constraint. Only matches stations with an active battle."`
-	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; empty means no battle pokemon constraint. Only matches stations with an active battle."`
+	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
+	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
 }
 
 type ApiDnfId struct {
@@ -59,8 +59,8 @@ type ApiDnfId struct {
 // ApiFortDnfMinMax is an inclusive integer range used by the fort filter clauses
 // (int16 internally — wide enough for all fort range fields).
 type ApiFortDnfMinMax struct {
-	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
-	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
+	Min int16 `json:"min" required:"false" doc:"Minimum value (inclusive). An omitted bound defaults to 0."`
+	Max int16 `json:"max" required:"false" doc:"Maximum value (inclusive). An omitted bound defaults to 0, so a range with only min can never match — send both bounds."`
 }
 
 type ApiGymScanResult struct {

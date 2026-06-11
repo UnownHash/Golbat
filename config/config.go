@@ -23,6 +23,7 @@ type configDefinition struct {
 	Cleanup                 cleanup        `koanf:"cleanup"`
 	RawBearer               string         `koanf:"raw_bearer"`
 	ApiSecret               string         `koanf:"api_secret"`
+	ApiDocs                 bool           `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
 	Pvp                     pvp            `koanf:"pvp"`
 	Koji                    koji           `koanf:"koji"`
 	Tuning                  tuning         `koanf:"tuning"`

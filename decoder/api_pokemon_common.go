@@ -20,8 +20,8 @@ type ApiPokemonDnfId struct {
 // It is int16 internally (wide enough for CP and PVP ranks); the smaller fields
 // like IV simply use the low end of that range.
 type ApiPokemonDnfMinMax struct {
-	Min int16 `json:"min" doc:"Minimum value (inclusive)."`
-	Max int16 `json:"max" doc:"Maximum value (inclusive)."`
+	Min int16 `json:"min" required:"false" doc:"Minimum value (inclusive). An omitted bound defaults to 0."`
+	Max int16 `json:"max" required:"false" doc:"Maximum value (inclusive). An omitted bound defaults to 0, so a range with only min can never match — send both bounds."`
 }
 
 func contains(s []int8, e int8) bool {

@@ -45,6 +45,14 @@ func newHumaConfig(version string) huma.Config {
 	// response transformer.
 	cfg.CreateHooks = nil
 
+	// The docs endpoints are served without the api secret; api_docs = false
+	// removes them entirely (huma skips registration for empty paths).
+	if !config.Config.ApiDocs {
+		cfg.OpenAPIPath = ""
+		cfg.DocsPath = ""
+		cfg.SchemasPath = ""
+	}
+
 	return cfg
 }
 

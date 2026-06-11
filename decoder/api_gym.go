@@ -108,8 +108,8 @@ func BuildGymResult(gym *Gym) ApiGymResult {
 }
 
 type ApiGymSearch struct {
-	Limit   int                  `json:"limit" doc:"Maximum number of gyms to return (default 500, max 10000)"`
-	Filters []ApiGymSearchFilter `json:"filters" doc:"Filter clauses; conditions within a clause are AND'd"`
+	Limit   int                  `json:"limit" required:"false" doc:"Maximum number of gyms to return (default 500, max 10000)"`
+	Filters []ApiGymSearchFilter `json:"filters" required:"false" doc:"Filter clauses; conditions within a clause are AND'd. At least one clause is required."`
 }
 
 type LocationDistance struct {
@@ -117,14 +117,14 @@ type LocationDistance struct {
 		Latitude  float64 `json:"lat" doc:"Latitude of the search center"`
 		Longitude float64 `json:"lon" doc:"Longitude of the search center"`
 	} `json:"location" doc:"Center point of the radius search"`
-	Distance float64 `json:"distance" doc:"Search radius in meters (max 500000)"`
+	Distance float64 `json:"distance" required:"false" doc:"Search radius in meters (must be > 0, max 500000)"`
 }
 
 type ApiGymSearchFilter struct {
-	Name             *string           `json:"name" doc:"Optional gym name substring to match"`
-	Description      *string           `json:"description" doc:"Optional gym description substring to match"`
-	LocationDistance *LocationDistance `json:"location_distance" doc:"Optional geographic radius search"`
-	Bbox             *geo.Bbox         `json:"bbox" doc:"Optional bounding box search"`
+	Name             *string           `json:"name" required:"false" doc:"Optional gym name substring to match"`
+	Description      *string           `json:"description" required:"false" doc:"Optional gym description substring to match"`
+	LocationDistance *LocationDistance `json:"location_distance" required:"false" doc:"Optional geographic radius search"`
+	Bbox             *geo.Bbox         `json:"bbox" required:"false" doc:"Optional bounding box search"`
 }
 
 // SearchGymsAPI searches for gyms using the new API structure with AND filters

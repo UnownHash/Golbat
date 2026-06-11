@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -150,13 +151,16 @@ func TestOpenAPISpecIsDiscoverable(t *testing.T) {
 
 // TestScanRequestRequiredFields pins the per-field required/optional contract for
 // the scan request schemas: only the bounding box (min/max) is required at the top
-// level; filter attributes are all optional; but a range object, when present,
-// requires both min and max.
+// level; filter attributes are all optional. Range objects accept partial bounds
+// for legacy wire compatibility (an omitted bound binds to 0, as gin BindJSON did).
 func TestScanRequestRequiredFields(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	api := humagin.New(r, newHumaConfig("test"))
 	registerHumaRoutes(api)
+	registerFortScanRoutes(api)
+	registerPokemonReadRoutes(api)
+	registerTier3Routes(api)
 
 	raw, err := gojson.Marshal(api.OpenAPI())
 	if err != nil {
@@ -208,14 +212,61 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	// Bounding box required; limit/filters optional.
 	wantExactly("ApiPokemonScan2", "min", "max")
 	wantExactly("ApiPokemonScan3", "min", "max")
-	// A range object requires both bounds when present.
-	wantExactly("ApiPokemonDnfMinMax", "min", "max")
+	// Range bounds are optional for legacy compatibility: gin BindJSON accepted
+	// a lone min/max (the missing bound bound to 0).
+	wantExactly("ApiPokemonDnfMinMax")
 	// Filter attributes are all optional.
 	wantExactly("ApiPokemonDnfFilter")
 	wantExactly("ApiPokemonDnfFilter3")
 	// Within a pokemon selector, id is required (a form without an id can never
 	// match); form stays optional.
 	wantExactly("ApiPokemonDnfId", "id")
+	// Fort ranges mirror the pokemon ranges.
+	wantExactly("ApiFortDnfMinMax")
+	// Gym search: limit and every filter field are optional (each filter field is
+	// an independent alternative); the handler enforces "at least one filter".
+	wantExactly("ApiGymSearch")
+	wantExactly("ApiGymSearchFilter")
+	// Pokemon search: min/max optional to keep the legacy center-only mode.
+	wantExactly("ApiPokemonSearch")
+}
+
+// TestApiDocsGating pins the api_docs config contract: when enabled (the
+// default), /openapi.json and /docs are served without the api secret; when
+// disabled, the routes are not registered at all.
+func TestApiDocsGating(t *testing.T) {
+	prevDocs := config.Config.ApiDocs
+	prevSecret := config.Config.ApiSecret
+	config.Config.ApiSecret = "topsecret"
+	defer func() {
+		config.Config.ApiDocs = prevDocs
+		config.Config.ApiSecret = prevSecret
+	}()
+
+	serve := func(path string) int {
+		gin.SetMode(gin.TestMode)
+		r := gin.New()
+		api := humagin.New(r, newHumaConfig("test"))
+		api.UseMiddleware(golbatSecretMiddleware(api))
+		registerHumaRoutes(api)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		return w.Code
+	}
+
+	config.Config.ApiDocs = true
+	for _, path := range []string{"/openapi.json", "/docs"} {
+		if code := serve(path); code != http.StatusOK {
+			t.Errorf("api_docs=true: GET %s = %d, want 200 without the secret header", path, code)
+		}
+	}
+
+	config.Config.ApiDocs = false
+	for _, path := range []string{"/openapi.json", "/docs"} {
+		if code := serve(path); code != http.StatusNotFound {
+			t.Errorf("api_docs=false: GET %s = %d, want 404", path, code)
+		}
+	}
 }
 
 // TestLatLonSchemaDocumentsOnlyLatLon asserts the OpenAPI advertises only the
