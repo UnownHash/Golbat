@@ -341,31 +341,27 @@ func main() {
 	debugGroup := r.Group("/debug")
 
 	if cfg.Tuning.ProfileRoutes {
+		// We register the pprof routes ourselves (rather than importing
+		// gin-contrib/pprof) so they stay behind AuthRequired(). Route set
+		// mirrors net/http/pprof's own registration: the index plus every named
+		// profile (named ones go through pprof.Handler, the index serves its HTML
+		// listing and links to them).
 		pprofGroup := debugGroup.Group("/pprof", AuthRequired())
-		pprofGroup.GET("/cmdline", func(c *gin.Context) {
-			pprof.Cmdline(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/heap", func(c *gin.Context) {
-			pprof.Index(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/block", func(c *gin.Context) {
-			pprof.Handler("block").ServeHTTP(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/mutex", func(c *gin.Context) {
-			pprof.Index(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/trace", func(c *gin.Context) {
-			pprof.Trace(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/profile", func(c *gin.Context) {
-			pprof.Profile(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/symbol", func(c *gin.Context) {
-			pprof.Symbol(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/goroutine", func(c *gin.Context) {
-			pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request)
-		})
+		pprofHandler := func(h http.HandlerFunc) gin.HandlerFunc {
+			return func(c *gin.Context) { h(c.Writer, c.Request) }
+		}
+		pprofGroup.GET("/", pprofHandler(pprof.Index))
+		pprofGroup.GET("/cmdline", pprofHandler(pprof.Cmdline))
+		pprofGroup.GET("/profile", pprofHandler(pprof.Profile))
+		pprofGroup.GET("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.POST("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.GET("/trace", pprofHandler(pprof.Trace))
+		pprofGroup.GET("/allocs", pprofHandler(pprof.Handler("allocs").ServeHTTP))
+		pprofGroup.GET("/block", pprofHandler(pprof.Handler("block").ServeHTTP))
+		pprofGroup.GET("/goroutine", pprofHandler(pprof.Handler("goroutine").ServeHTTP))
+		pprofGroup.GET("/heap", pprofHandler(pprof.Handler("heap").ServeHTTP))
+		pprofGroup.GET("/mutex", pprofHandler(pprof.Handler("mutex").ServeHTTP))
+		pprofGroup.GET("/threadcreate", pprofHandler(pprof.Handler("threadcreate").ServeHTTP))
 		if config.Config.Tuning.ProfileContention {
 			runtime.SetBlockProfileRate(1)
 			runtime.SetMutexProfileFraction(1)
@@ -382,6 +378,10 @@ func main() {
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: r,
+		// Reap idle keep-alive connections so each one does not pin a goroutine
+		// and a file descriptor indefinitely (net/http holds an open connection
+		// open until the client closes it otherwise).
+		IdleTimeout: 60 * time.Second,
 	}
 
 	// Start the server in a goroutine, as it will block until told to shutdown.
