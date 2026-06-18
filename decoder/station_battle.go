@@ -418,20 +418,20 @@ func applyTopStationBattleToStation(station *Station, battles []StationBattleDat
 
 func applyTopStationBattleToApiStationResult(result *ApiStationResult, battles []StationBattleData) {
 	battle := topStationBattleFromSlice(battles)
-	result.BattleLevel = stationBattleLevel(battle)
-	result.BattleStart = stationBattleStart(battle)
-	result.BattleEnd = stationBattleEnd(battle)
+	result.BattleLevel = stationBattleLevel(battle).Ptr()
+	result.BattleStart = stationBattleStart(battle).Ptr()
+	result.BattleEnd = stationBattleEnd(battle).Ptr()
 	if battle == nil {
 		return
 	}
-	result.BattlePokemonId = battle.BattlePokemonId
-	result.BattlePokemonForm = battle.BattlePokemonForm
-	result.BattlePokemonCostume = battle.BattlePokemonCostume
-	result.BattlePokemonGender = battle.BattlePokemonGender
-	result.BattlePokemonAlignment = battle.BattlePokemonAlignment
-	result.BattlePokemonBreadMode = battle.BattlePokemonBreadMode
-	result.BattlePokemonMove1 = battle.BattlePokemonMove1
-	result.BattlePokemonMove2 = battle.BattlePokemonMove2
+	result.BattlePokemonId = battle.BattlePokemonId.Ptr()
+	result.BattlePokemonForm = battle.BattlePokemonForm.Ptr()
+	result.BattlePokemonCostume = battle.BattlePokemonCostume.Ptr()
+	result.BattlePokemonGender = battle.BattlePokemonGender.Ptr()
+	result.BattlePokemonAlignment = battle.BattlePokemonAlignment.Ptr()
+	result.BattlePokemonBreadMode = battle.BattlePokemonBreadMode.Ptr()
+	result.BattlePokemonMove1 = battle.BattlePokemonMove1.Ptr()
+	result.BattlePokemonMove2 = battle.BattlePokemonMove2.Ptr()
 }
 
 func applyTopStationBattleToStationWebhook(hook *StationWebhook, battles []StationBattleData) {
@@ -463,16 +463,16 @@ func buildApiStationBattleResults(battles []StationBattleData) []ApiStationBattl
 			BattleLevel:               battle.BattleLevel,
 			BattleStart:               battle.BattleStart,
 			BattleEnd:                 battle.BattleEnd,
-			BattlePokemonId:           battle.BattlePokemonId,
-			BattlePokemonForm:         battle.BattlePokemonForm,
-			BattlePokemonCostume:      battle.BattlePokemonCostume,
-			BattlePokemonGender:       battle.BattlePokemonGender,
-			BattlePokemonAlignment:    battle.BattlePokemonAlignment,
-			BattlePokemonBreadMode:    battle.BattlePokemonBreadMode,
-			BattlePokemonMove1:        battle.BattlePokemonMove1,
-			BattlePokemonMove2:        battle.BattlePokemonMove2,
-			BattlePokemonStamina:      battle.BattlePokemonStamina,
-			BattlePokemonCpMultiplier: battle.BattlePokemonCpMultiplier,
+			BattlePokemonId:           battle.BattlePokemonId.Ptr(),
+			BattlePokemonForm:         battle.BattlePokemonForm.Ptr(),
+			BattlePokemonCostume:      battle.BattlePokemonCostume.Ptr(),
+			BattlePokemonGender:       battle.BattlePokemonGender.Ptr(),
+			BattlePokemonAlignment:    battle.BattlePokemonAlignment.Ptr(),
+			BattlePokemonBreadMode:    battle.BattlePokemonBreadMode.Ptr(),
+			BattlePokemonMove1:        battle.BattlePokemonMove1.Ptr(),
+			BattlePokemonMove2:        battle.BattlePokemonMove2.Ptr(),
+			BattlePokemonStamina:      battle.BattlePokemonStamina.Ptr(),
+			BattlePokemonCpMultiplier: battle.BattlePokemonCpMultiplier.Ptr(),
 		})
 	}
 	return results

@@ -18,6 +18,7 @@ var k = koanf.New(".")
 func ReadConfig() (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
+		ApiDocs: true,
 		Sentry: sentry{
 			SampleRate:       1.0,
 			TracesSampleRate: 1.0,
@@ -32,12 +33,13 @@ func ReadConfig() (configDefinition, error) {
 			LiveStatsSleep: 120,
 		},
 		Logging: logging{
-			Debug:      false,
-			SaveLogs:   false,
-			MaxSize:    50,
-			MaxBackups: 10,
-			MaxAge:     30,
-			Compress:   true,
+			Debug:             false,
+			ApiRequestLogging: false,
+			SaveLogs:          false,
+			MaxSize:           50,
+			MaxBackups:        10,
+			MaxAge:            30,
+			Compress:          true,
 		},
 		Cleanup: cleanup{
 			Pokemon:        true,

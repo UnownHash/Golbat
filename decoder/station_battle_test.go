@@ -234,8 +234,8 @@ func TestBuildStationResultUsesTopBattleForFlatFields(t *testing.T) {
 	}, now)
 
 	result := BuildStationResult(station)
-	if result.BattlePokemonId.ValueOrZero() != 527 {
-		t.Fatalf("expected top battle pokemon 527, got %d", result.BattlePokemonId.ValueOrZero())
+	if derefInt64OrNeg(result.BattlePokemonId) != 527 {
+		t.Fatalf("expected top battle pokemon 527, got %d", derefInt64OrNeg(result.BattlePokemonId))
 	}
 	if len(result.Battles) != 2 {
 		t.Fatalf("expected shorter battle to keep prior longer battle later, got %d", len(result.Battles))
@@ -290,7 +290,7 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 	}, now)
 
 	result := BuildStationResult(station)
-	if result.BattlePokemonId.ValueOrZero() != 527 {
+	if derefInt64OrNeg(result.BattlePokemonId) != 527 {
 		t.Fatalf("expected future battle in compatibility fields, got %+v", result)
 	}
 	if len(result.Battles) != 1 {
@@ -444,7 +444,7 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 		t.Fatal("expected missing battle details to leave station loaded")
 	}
 	result := BuildStationResult(station)
-	if result.BattleEnd.Valid || result.BattlePokemonId.Valid || len(result.Battles) != 0 {
+	if result.BattleEnd != nil || result.BattlePokemonId != nil || len(result.Battles) != 0 {
 		t.Fatalf("expected API result without stale battles, got %+v", result)
 	}
 }
@@ -477,7 +477,7 @@ func TestBuildStationResultSuppressesStaleBattleAfterExpiredHydratedCache(t *tes
 	}})
 
 	result := BuildStationResult(station)
-	if result.BattleEnd.Valid || result.BattlePokemonId.Valid {
+	if result.BattleEnd != nil || result.BattlePokemonId != nil {
 		t.Fatalf("expected expired hydrated cache to suppress stale projection, got %+v", result)
 	}
 	state, ok := stationBattleCache.Load(station.Id)
@@ -585,4 +585,13 @@ func TestApplyTopStationBattleToStationUsesCpMultiplierTolerance(t *testing.T) {
 	if station.BattlePokemonCpMultiplier.Float64 != 0.5 {
 		t.Fatalf("expected tolerated cp multiplier difference to leave value unchanged, got %f", station.BattlePokemonCpMultiplier.Float64)
 	}
+}
+
+// derefInt64OrNeg returns *p, or -1 when p is nil (test helper for the
+// pointer-based ApiStationResult battle fields).
+func derefInt64OrNeg(p *int64) int64 {
+	if p == nil {
+		return -1
+	}
+	return *p
 }

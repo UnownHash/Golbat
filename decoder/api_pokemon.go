@@ -16,9 +16,9 @@ import (
 const earthRadiusKm = 6371
 
 type ApiPokemonAvailableResult struct {
-	PokemonId int16 `json:"id"`
-	Form      int16 `json:"form"`
-	Count     int   `json:"count"`
+	PokemonId int16 `json:"id" doc:"Pokedex id"`
+	Form      int16 `json:"form" doc:"Form id"`
+	Count     int   `json:"count" doc:"Number currently in the cache"`
 }
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
@@ -39,11 +39,11 @@ func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 // Pokemon search
 
 type ApiPokemonSearch struct {
-	Min       geo.Location `json:"min"`
-	Max       geo.Location `json:"max"`
-	Center    geo.Location `json:"center"`
-	Limit     int          `json:"limit"`
-	SearchIds []int16      `json:"searchIds"`
+	Min       ApiLatLon `json:"min" required:"false" doc:"Lower-left (minimum lat/lon) corner of the bounding box to search. Omit together with max for a center-only search with a small default radius."`
+	Max       ApiLatLon `json:"max" required:"false" doc:"Upper-right (maximum lat/lon) corner of the bounding box to search. Omit together with min for a center-only search with a small default radius."`
+	Center    ApiLatLon `json:"center" required:"false" doc:"Center point used to order results by distance. Defaults to the zero coordinate."`
+	Limit     int       `json:"limit" required:"false" doc:"Maximum number of results to return. 0 means use the configured maximum."`
+	SearchIds []int16   `json:"searchIds" required:"false" doc:"Pokemon ids to match. A pokemon is returned only if its id is in this list."`
 }
 
 func calculateHypotenuse(a, b float64) float64 {
@@ -76,7 +76,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 	if request.SearchIds == nil {
 		return nil, fmt.Errorf("SearchPokemon - no search ids provided")
 	}
-	if haversine(request.Min, request.Max) > config.Config.Tuning.MaxPokemonDistance {
+	if haversine(request.Min.Location(), request.Max.Location()) > config.Config.Tuning.MaxPokemonDistance {
 		return nil, fmt.Errorf("SearchPokemon - the distance between max and min points is greater than the configurable max distance")
 	}
 
@@ -90,13 +90,13 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 	}
 	pokemonSkipped := 0
 	pokemonScanned := 0
-	maxDistance := calculateHypotenuse(request.Max.Longitude-request.Min.Longitude, request.Max.Latitude-request.Min.Latitude) / 2
+	maxDistance := calculateHypotenuse(request.Max.Lon-request.Min.Lon, request.Max.Lat-request.Min.Lat) / 2
 	if maxDistance == 0 {
 		maxDistance = 10
 	}
 
 	pokemonTree2.Nearby(
-		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Longitude, request.Center.Latitude}, [2]float64{request.Center.Longitude, request.Center.Latitude}, nil),
+		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Lon, request.Center.Lat}, [2]float64{request.Center.Lon, request.Center.Lat}, nil),
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
 			pokemonLookupItem, inCache := pokemonLookupCache.Load(pokemonId)
 			if !inCache {

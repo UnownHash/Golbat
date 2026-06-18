@@ -23,6 +23,7 @@ type configDefinition struct {
 	Cleanup                 cleanup        `koanf:"cleanup"`
 	RawBearer               string         `koanf:"raw_bearer"`
 	ApiSecret               string         `koanf:"api_secret"`
+	ApiDocs                 bool           `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
 	Pvp                     pvp            `koanf:"pvp"`
 	Koji                    koji           `koanf:"koji"`
 	Tuning                  tuning         `koanf:"tuning"`
@@ -58,8 +59,8 @@ type cleanup struct {
 	Stats               bool  `koanf:"stats"`
 	StatsDays           int   `koanf:"stats_days"`
 	DeviceHours         int   `koanf:"device_hours"`
-	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"`  // seconds, default 3600 (1 hour)
-	FortsMinMissCount   int   `koanf:"forts_min_miss_count"`   // consecutive cell-scan misses before staleness (default 1)
+	FortsStaleThreshold int64 `koanf:"forts_stale_threshold"` // seconds, default 3600 (1 hour)
+	FortsMinMissCount   int   `koanf:"forts_min_miss_count"`  // consecutive cell-scan misses before staleness (default 1)
 }
 
 type Webhook struct {
@@ -109,12 +110,16 @@ type Prometheus struct {
 }
 
 type logging struct {
-	Debug      bool `koanf:"debug"`
-	SaveLogs   bool `koanf:"save_logs"`
-	MaxSize    int  `koanf:"max_size"`
-	MaxBackups int  `koanf:"max_backups"`
-	MaxAge     int  `koanf:"max_age"`
-	Compress   bool `koanf:"compress"`
+	Debug bool `koanf:"debug"`
+	// ApiRequestLogging logs the raw request/response bodies of every Huma-served
+	// /api endpoint. Independent of Debug because these bodies can be very large;
+	// off by default, enable only when debugging a specific caller.
+	ApiRequestLogging bool `koanf:"api_request_logging"`
+	SaveLogs          bool `koanf:"save_logs"`
+	MaxSize           int  `koanf:"max_size"`
+	MaxBackups        int  `koanf:"max_backups"`
+	MaxAge            int  `koanf:"max_age"`
+	Compress          bool `koanf:"compress"`
 }
 
 type database struct {

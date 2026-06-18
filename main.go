@@ -335,73 +335,53 @@ func main() {
 
 	apiGroup := r.Group("/api", AuthRequired())
 	apiGroup.GET("/health", GetHealth)
-	apiGroup.POST("/clear-quests", ClearQuests)
-	apiGroup.POST("/quest-status", GetQuestStatus)
-	apiGroup.POST("/pokestop-positions", GetPokestopPositions)
-	apiGroup.GET("/pokestop/id/:fort_id", GetPokestop)
-	apiGroup.GET("/gym/id/:gym_id", GetGym)
-	apiGroup.POST("/gym/query", GetGyms)
-	apiGroup.POST("/gym/search", SearchGyms)
-	apiGroup.POST("/gym/scan", GymScan)
-	apiGroup.POST("/pokestop/scan", PokestopScan)
-	apiGroup.POST("/station/query", GetStations)
-	apiGroup.POST("/station/scan", StationScan)
-	apiGroup.POST("/fort/scan", FortScan)
-	apiGroup.POST("/reload-geojson", ReloadGeojson)
-	apiGroup.GET("/reload-geojson", ReloadGeojson)
 
-	apiGroup.GET("/pokemon/id/:pokemon_id", PokemonOne)
-	apiGroup.GET("/pokemon/available", PokemonAvailable)
 	apiGroup.POST("/pokemon/scan", PokemonScan)
-	apiGroup.POST("/pokemon/v2/scan", PokemonScan2)
-	apiGroup.POST("/pokemon/v3/scan", PokemonScan3)
-	apiGroup.POST("/pokemon/search", PokemonSearch)
-
-	apiGroup.GET("/tappable/id/:tappable_id", GetTappable)
-
-	apiGroup.GET("/devices/all", GetDevices)
-	apiGroup.GET("/fort-tracker/cell/:cell_id", GetFortTrackerCell)
-	apiGroup.GET("/fort-tracker/forts/:fort_id", GetFortTrackerFort)
-	apiGroup.GET("/skip-preserve-pokemon", SkipPreservePokemon)
-	apiGroup.POST("/skip-preserve-pokemon", SkipPreservePokemon)
 
 	debugGroup := r.Group("/debug")
 
 	if cfg.Tuning.ProfileRoutes {
+		// We register the pprof routes ourselves (rather than importing
+		// gin-contrib/pprof) so they stay behind AuthRequired(). Route set
+		// mirrors net/http/pprof's own registration: the index plus every named
+		// profile (named ones go through pprof.Handler, the index serves its HTML
+		// listing and links to them).
 		pprofGroup := debugGroup.Group("/pprof", AuthRequired())
-		pprofGroup.GET("/cmdline", func(c *gin.Context) {
-			pprof.Cmdline(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/heap", func(c *gin.Context) {
-			pprof.Index(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/block", func(c *gin.Context) {
-			pprof.Handler("block").ServeHTTP(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/mutex", func(c *gin.Context) {
-			pprof.Index(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/trace", func(c *gin.Context) {
-			pprof.Trace(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/profile", func(c *gin.Context) {
-			pprof.Profile(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/symbol", func(c *gin.Context) {
-			pprof.Symbol(c.Writer, c.Request)
-		})
-		pprofGroup.GET("/goroutine", func(c *gin.Context) {
-			pprof.Handler("goroutine").ServeHTTP(c.Writer, c.Request)
-		})
+		pprofHandler := func(h http.HandlerFunc) gin.HandlerFunc {
+			return func(c *gin.Context) { h(c.Writer, c.Request) }
+		}
+		pprofGroup.GET("/", pprofHandler(pprof.Index))
+		pprofGroup.GET("/cmdline", pprofHandler(pprof.Cmdline))
+		pprofGroup.GET("/profile", pprofHandler(pprof.Profile))
+		pprofGroup.GET("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.POST("/symbol", pprofHandler(pprof.Symbol))
+		pprofGroup.GET("/trace", pprofHandler(pprof.Trace))
+		pprofGroup.GET("/allocs", pprofHandler(pprof.Handler("allocs").ServeHTTP))
+		pprofGroup.GET("/block", pprofHandler(pprof.Handler("block").ServeHTTP))
+		pprofGroup.GET("/goroutine", pprofHandler(pprof.Handler("goroutine").ServeHTTP))
+		pprofGroup.GET("/heap", pprofHandler(pprof.Handler("heap").ServeHTTP))
+		pprofGroup.GET("/mutex", pprofHandler(pprof.Handler("mutex").ServeHTTP))
+		pprofGroup.GET("/threadcreate", pprofHandler(pprof.Handler("threadcreate").ServeHTTP))
 		if config.Config.Tuning.ProfileContention {
 			runtime.SetBlockProfileRate(1)
 			runtime.SetMutexProfileFraction(1)
 		}
 	}
 
+	humaAPI := setupHumaAPI(r)
+	registerHumaRoutes(humaAPI)
+	registerFortScanRoutes(humaAPI)
+	registerPokemonReadRoutes(humaAPI)
+	registerTier3Routes(humaAPI)
+	registerTier4Routes(humaAPI)
+
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%d", cfg.Port),
 		Handler: r,
+		// Reap idle keep-alive connections so each one does not pin a goroutine
+		// and a file descriptor indefinitely (net/http holds an open connection
+		// open until the client closes it otherwise).
+		IdleTimeout: 60 * time.Second,
 	}
 
 	// Start the server in a goroutine, as it will block until told to shutdown.
