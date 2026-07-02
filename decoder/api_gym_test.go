@@ -43,12 +43,15 @@ func goldenSnapshotGym() *Gym {
 			FirstSeenTimestamp:   1699990000,
 			RaidPokemonGender:    null.IntFrom(1),
 			// SponsorId intentionally left null
-			PartnerId:            null.StringFrom("partner-1"),
-			RaidPokemonCostume:   null.IntFrom(0),
-			RaidPokemonEvolution: null.IntFrom(0),
-			ArScanEligible:       null.IntFrom(1),
-			PowerUpLevel:         null.IntFrom(2),
-			PowerUpPoints:        null.IntFrom(50),
+			PartnerId:               null.StringFrom("partner-1"),
+			RaidPokemonCostume:      null.IntFrom(0),
+			RaidPokemonEvolution:    null.IntFrom(0),
+			RaidSeed:                null.IntFrom(123456789012345),
+			RaidPokemonStamina:      null.IntFrom(15000),
+			RaidPokemonCpMultiplier: null.FloatFrom(0.79),
+			ArScanEligible:          null.IntFrom(1),
+			PowerUpLevel:            null.IntFrom(2),
+			PowerUpPoints:           null.IntFrom(50),
 			// PowerUpEndTimestamp intentionally left null
 			Description: null.StringFrom("A test gym"),
 			// Defenders intentionally left null
@@ -67,7 +70,7 @@ func TestBuildGymResult_GoldenSnapshot(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":"gym-abc","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":null,"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":null,"rsvps":"[]"}`
+	const want = `{"id":"gym-abc","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":null,"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"raid_seed":123456789012345,"raid_pokemon_stamina":15000,"raid_pokemon_cp_multiplier":0.79,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":null,"rsvps":"[]"}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

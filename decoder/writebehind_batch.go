@@ -369,7 +369,8 @@ INSERT INTO gym (
 	raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp,
 	raid_is_exclusive, cell_id, deleted, total_cp, first_seen_timestamp,
 	raid_pokemon_gender, sponsor_id, partner_id, raid_pokemon_costume,
-	raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
+	raid_pokemon_evolution, raid_seed, raid_pokemon_stamina, raid_pokemon_cp_multiplier,
+	ar_scan_eligible, power_up_level, power_up_points,
 	power_up_end_timestamp, description, rsvps, defenders
 )
 VALUES (
@@ -380,7 +381,8 @@ VALUES (
 	:raid_pokemon_move_2, :raid_pokemon_form, :raid_pokemon_alignment, :raid_pokemon_cp,
 	:raid_is_exclusive, :cell_id, :deleted, :total_cp, UNIX_TIMESTAMP(),
 	:raid_pokemon_gender, :sponsor_id, :partner_id, :raid_pokemon_costume,
-	:raid_pokemon_evolution, :ar_scan_eligible, :power_up_level, :power_up_points,
+	:raid_pokemon_evolution, :raid_seed, :raid_pokemon_stamina, :raid_pokemon_cp_multiplier,
+	:ar_scan_eligible, :power_up_level, :power_up_points,
 	:power_up_end_timestamp, :description, :rsvps, :defenders
 )
 ON DUPLICATE KEY UPDATE
@@ -416,6 +418,9 @@ ON DUPLICATE KEY UPDATE
 	partner_id = VALUES(partner_id),
 	raid_pokemon_costume = VALUES(raid_pokemon_costume),
 	raid_pokemon_evolution = VALUES(raid_pokemon_evolution),
+	raid_seed = VALUES(raid_seed),
+	raid_pokemon_stamina = VALUES(raid_pokemon_stamina),
+	raid_pokemon_cp_multiplier = VALUES(raid_pokemon_cp_multiplier),
 	ar_scan_eligible = VALUES(ar_scan_eligible),
 	power_up_level = VALUES(power_up_level),
 	power_up_points = VALUES(power_up_points),

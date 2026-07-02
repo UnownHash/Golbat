@@ -11,47 +11,50 @@ import (
 // GymData contains all database-persisted fields for a Gym.
 // This struct is copyable and used for write-behind queue snapshots.
 type GymData struct {
-	Id                     string      `db:"id"`
-	Lat                    float64     `db:"lat"`
-	Lon                    float64     `db:"lon"`
-	Name                   null.String `db:"name"`
-	Url                    null.String `db:"url"`
-	LastModifiedTimestamp  null.Int    `db:"last_modified_timestamp"`
-	RaidEndTimestamp       null.Int    `db:"raid_end_timestamp"`
-	RaidSpawnTimestamp     null.Int    `db:"raid_spawn_timestamp"`
-	RaidBattleTimestamp    null.Int    `db:"raid_battle_timestamp"`
-	Updated                int64       `db:"updated"`
-	RaidPokemonId          null.Int    `db:"raid_pokemon_id"`
-	GuardingPokemonId      null.Int    `db:"guarding_pokemon_id"`
-	GuardingPokemonDisplay null.String `db:"guarding_pokemon_display"`
-	AvailableSlots         null.Int    `db:"available_slots"`
-	TeamId                 null.Int    `db:"team_id"`
-	RaidLevel              null.Int    `db:"raid_level"`
-	Enabled                null.Int    `db:"enabled"`
-	ExRaidEligible         null.Int    `db:"ex_raid_eligible"`
-	InBattle               null.Int    `db:"in_battle"`
-	RaidPokemonMove1       null.Int    `db:"raid_pokemon_move_1"`
-	RaidPokemonMove2       null.Int    `db:"raid_pokemon_move_2"`
-	RaidPokemonForm        null.Int    `db:"raid_pokemon_form"`
-	RaidPokemonAlignment   null.Int    `db:"raid_pokemon_alignment"`
-	RaidPokemonCp          null.Int    `db:"raid_pokemon_cp"`
-	RaidIsExclusive        null.Int    `db:"raid_is_exclusive"`
-	CellId                 null.Int    `db:"cell_id"`
-	Deleted                bool        `db:"deleted"`
-	TotalCp                null.Int    `db:"total_cp"`
-	FirstSeenTimestamp     int64       `db:"first_seen_timestamp"`
-	RaidPokemonGender      null.Int    `db:"raid_pokemon_gender"`
-	SponsorId              null.Int    `db:"sponsor_id"`
-	PartnerId              null.String `db:"partner_id"`
-	RaidPokemonCostume     null.Int    `db:"raid_pokemon_costume"`
-	RaidPokemonEvolution   null.Int    `db:"raid_pokemon_evolution"`
-	ArScanEligible         null.Int    `db:"ar_scan_eligible"`
-	PowerUpLevel           null.Int    `db:"power_up_level"`
-	PowerUpPoints          null.Int    `db:"power_up_points"`
-	PowerUpEndTimestamp    null.Int    `db:"power_up_end_timestamp"`
-	Description            null.String `db:"description"`
-	Defenders              null.String `db:"defenders"`
-	Rsvps                  null.String `db:"rsvps"`
+	Id                      string      `db:"id"`
+	Lat                     float64     `db:"lat"`
+	Lon                     float64     `db:"lon"`
+	Name                    null.String `db:"name"`
+	Url                     null.String `db:"url"`
+	LastModifiedTimestamp   null.Int    `db:"last_modified_timestamp"`
+	RaidEndTimestamp        null.Int    `db:"raid_end_timestamp"`
+	RaidSpawnTimestamp      null.Int    `db:"raid_spawn_timestamp"`
+	RaidBattleTimestamp     null.Int    `db:"raid_battle_timestamp"`
+	Updated                 int64       `db:"updated"`
+	RaidPokemonId           null.Int    `db:"raid_pokemon_id"`
+	GuardingPokemonId       null.Int    `db:"guarding_pokemon_id"`
+	GuardingPokemonDisplay  null.String `db:"guarding_pokemon_display"`
+	AvailableSlots          null.Int    `db:"available_slots"`
+	TeamId                  null.Int    `db:"team_id"`
+	RaidLevel               null.Int    `db:"raid_level"`
+	Enabled                 null.Int    `db:"enabled"`
+	ExRaidEligible          null.Int    `db:"ex_raid_eligible"`
+	InBattle                null.Int    `db:"in_battle"`
+	RaidPokemonMove1        null.Int    `db:"raid_pokemon_move_1"`
+	RaidPokemonMove2        null.Int    `db:"raid_pokemon_move_2"`
+	RaidPokemonForm         null.Int    `db:"raid_pokemon_form"`
+	RaidPokemonAlignment    null.Int    `db:"raid_pokemon_alignment"`
+	RaidPokemonCp           null.Int    `db:"raid_pokemon_cp"`
+	RaidIsExclusive         null.Int    `db:"raid_is_exclusive"`
+	CellId                  null.Int    `db:"cell_id"`
+	Deleted                 bool        `db:"deleted"`
+	TotalCp                 null.Int    `db:"total_cp"`
+	FirstSeenTimestamp      int64       `db:"first_seen_timestamp"`
+	RaidPokemonGender       null.Int    `db:"raid_pokemon_gender"`
+	SponsorId               null.Int    `db:"sponsor_id"`
+	PartnerId               null.String `db:"partner_id"`
+	RaidPokemonCostume      null.Int    `db:"raid_pokemon_costume"`
+	RaidPokemonEvolution    null.Int    `db:"raid_pokemon_evolution"`
+	RaidSeed                null.Int    `db:"raid_seed"`
+	RaidPokemonStamina      null.Int    `db:"raid_pokemon_stamina"`
+	RaidPokemonCpMultiplier null.Float  `db:"raid_pokemon_cp_multiplier"`
+	ArScanEligible          null.Int    `db:"ar_scan_eligible"`
+	PowerUpLevel            null.Int    `db:"power_up_level"`
+	PowerUpPoints           null.Int    `db:"power_up_points"`
+	PowerUpEndTimestamp     null.Int    `db:"power_up_end_timestamp"`
+	Description             null.String `db:"description"`
+	Defenders               null.String `db:"defenders"`
+	Rsvps                   null.String `db:"rsvps"`
 }
 
 // Gym struct.
@@ -62,7 +65,6 @@ type Gym struct {
 	GymData // Embedded data fields (all db columns)
 
 	// Memory-only fields (not persisted to DB)
-	RaidSeed       null.Int `db:"-"` // Raid seed (memory only, sent in webhook as string)
 	RaidLobbyCount null.Int `db:"-"` // Raid lobby player count (memory only)
 	RaidLobbyEndMs null.Int `db:"-"` // Raid lobby join-end timestamp ms (memory only)
 
@@ -540,15 +542,33 @@ func (gym *Gym) SetRsvps(v null.String) {
 	}
 }
 
-// SetRaidSeed sets the raid seed (memory only, not saved to DB)
 func (gym *Gym) SetRaidSeed(v null.Int) {
 	if gym.RaidSeed != v {
 		if dbDebugEnabled {
 			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidSeed:%s->%s", FormatNull(gym.RaidSeed), FormatNull(v)))
 		}
 		gym.RaidSeed = v
-		// Do not set dirty, as this doesn't trigger a DB update
-		gym.internalDirty = true
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonStamina(v null.Int) {
+	if gym.RaidPokemonStamina != v {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonStamina:%s->%s", FormatNull(gym.RaidPokemonStamina), FormatNull(v)))
+		}
+		gym.RaidPokemonStamina = v
+		gym.dirty = true
+	}
+}
+
+func (gym *Gym) SetRaidPokemonCpMultiplier(v null.Float) {
+	if !nullFloatAlmostEqual(gym.RaidPokemonCpMultiplier, v, floatTolerance) {
+		if dbDebugEnabled {
+			gym.changedFields = append(gym.changedFields, fmt.Sprintf("RaidPokemonCpMultiplier:%s->%s", FormatNull(gym.RaidPokemonCpMultiplier), FormatNull(v)))
+		}
+		gym.RaidPokemonCpMultiplier = v
+		gym.dirty = true
 	}
 }
 

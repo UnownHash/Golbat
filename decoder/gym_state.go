@@ -25,7 +25,8 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 	available_slots, team_id, raid_level, enabled, ex_raid_eligible, in_battle, raid_pokemon_move_1,
 	raid_pokemon_move_2, raid_pokemon_form, raid_pokemon_alignment, raid_pokemon_cp, raid_is_exclusive,
 	cell_id, deleted, total_cp, first_seen_timestamp, raid_pokemon_gender, sponsor_id, partner_id,
-	raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
+	raid_pokemon_costume, raid_pokemon_evolution, raid_seed, raid_pokemon_stamina,
+	raid_pokemon_cp_multiplier, ar_scan_eligible, power_up_level, power_up_points,
 	power_up_end_timestamp, description, defenders, rsvps`
 
 func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
@@ -193,6 +194,8 @@ type RaidWebhook struct {
 	ArScanEligible      int64           `json:"ar_scan_eligible"`
 	Rsvps               json.RawMessage `json:"rsvps"`
 	RaidSeed            null.String     `json:"raid_seed"`
+	Stamina             *int64          `json:"stamina"`
+	CpMultiplier        *float64        `json:"cp_multiplier"`
 }
 
 func createGymFortWebhooks(gym *Gym) {
@@ -300,6 +303,8 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 					}
 					return null.String{}
 				}(),
+				Stamina:      gym.RaidPokemonStamina.Ptr(),
+				CpMultiplier: gym.RaidPokemonCpMultiplier.Ptr(),
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
@@ -369,8 +374,8 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 	ctx := context.Background()
 
 	if isNewRecord {
-		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
-			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
+		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,raid_seed,raid_pokemon_stamina,raid_pokemon_cp_multiplier,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
+			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:raid_seed,:raid_pokemon_stamina,:raid_pokemon_cp_multiplier,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
 		statsCollector.IncDbQuery("insert gym", err)
 		if err != nil {
@@ -412,6 +417,9 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 			"partner_id = :partner_id, "+
 			"raid_pokemon_costume = :raid_pokemon_costume, "+
 			"raid_pokemon_evolution = :raid_pokemon_evolution, "+
+			"raid_seed = :raid_seed, "+
+			"raid_pokemon_stamina = :raid_pokemon_stamina, "+
+			"raid_pokemon_cp_multiplier = :raid_pokemon_cp_multiplier, "+
 			"ar_scan_eligible = :ar_scan_eligible, "+
 			"power_up_level = :power_up_level, "+
 			"power_up_points = :power_up_points, "+
