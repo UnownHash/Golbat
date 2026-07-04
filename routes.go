@@ -349,7 +349,12 @@ func Raw(c *gin.Context) {
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
-		release := acquireRawProcessingSlot()
+		release, ok := acquireRawProcessingSlot()
+		if !ok {
+			// Parked queue over its cap during a stall — shed rather than
+			// pin yet another decoded payload in memory (already logged).
+			return
+		}
 		defer release()
 
 		timeout := 5 * time.Second
