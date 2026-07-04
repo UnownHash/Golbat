@@ -65,6 +65,11 @@ func main() {
 		cfg.Logging.Compress,
 	)
 
+	// Construct entity caches now that config is loaded. Must run before any
+	// other decoder call (config drives cache shard counts, fort TTLs, and
+	// fort eviction-callback registration).
+	decoder.InitDataCache()
+
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:

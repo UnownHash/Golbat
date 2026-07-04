@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -75,8 +76,20 @@ var ProactiveIVSwitchSem chan bool
 var ohbem *gohbem.Ohbem
 
 func init() {
-	initDataCache()
+	// initLiveStats is config-independent, so package-init timing is fine.
+	// Entity caches are NOT — they must be built after config load via
+	// InitDataCache (see below).
 	initLiveStats()
+}
+
+var initDataCacheOnce sync.Once
+
+// InitDataCache constructs all entity caches and spatial-index plumbing.
+// Must be called from main() AFTER config is loaded — cache shard counts,
+// fort TTLs, and fort eviction-callback registration all read config.
+// (Package init() is too early: it runs before config.ReadConfig().)
+func InitDataCache() {
+	initDataCacheOnce.Do(initDataCache)
 }
 
 func InitProactiveIVSwitchSem() {

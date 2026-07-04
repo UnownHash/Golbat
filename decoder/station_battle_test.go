@@ -303,7 +303,6 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 
 func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
-	initFortRtree()
 	now := time.Now().Unix()
 	station := &Station{StationData: StationData{Id: "station-1", Lat: 1, Lon: 2}}
 
