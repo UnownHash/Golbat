@@ -72,18 +72,9 @@ var fortTree rtree.RTreeG[string]
 
 var fortTreeSnapshot atomic.Pointer[treeSnapshot[string]]
 
-// getFortTreeSnapshot: see getPokemonTreeSnapshot.
+// getFortTreeSnapshot: see refreshTreeSnapshot.
 func getFortTreeSnapshot() *rtree.RTreeG[string] {
-	if snap := fortTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
-		return &snap.tree
-	}
-	// Copy() mutates the source tree's COW stamp — full lock required.
-	fortTreeMutex.Lock()
-	tree := *fortTree.Copy()
-	fortTreeMutex.Unlock()
-	snap := &treeSnapshot[string]{tree: tree, createdAt: time.Now()}
-	fortTreeSnapshot.Store(snap)
-	return &snap.tree
+	return refreshTreeSnapshot(&fortTreeSnapshot, &fortTreeMutex, &fortTree)
 }
 
 func initFortRtree() {
@@ -305,15 +296,9 @@ func addFortToTree(id string, lat float64, lon float64) {
 
 var fortTreeEvictor *treeEvictor[string]
 
-// flushFortTreeEvictions removes a batch of evicted forts from the spatial
-// index under a single tree-mutex acquisition (same re-add reasoning as
-// flushPokemonTreeEvictions).
+// flushFortTreeEvictions: see flushTreeEvictions.
 func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
-	fortTreeMutex.Lock()
-	for _, e := range entries {
-		fortTree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
-	}
-	fortTreeMutex.Unlock()
+	flushTreeEvictions(&fortTreeMutex, &fortTree, entries)
 }
 
 // deferFortEviction is the O(1) eviction-callback path: lookup cache is

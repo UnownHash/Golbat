@@ -5,6 +5,12 @@ import (
 	"time"
 )
 
+// invalidateTreeSnapshots resets the shared scan snapshots between tests.
+func invalidateTreeSnapshots() {
+	pokemonTreeSnapshot.Store(nil)
+	fortTreeSnapshot.Store(nil)
+}
+
 func TestPokemonTreeSnapshotIsReusedWithinMaxAge(t *testing.T) {
 	invalidateTreeSnapshots()
 	defer invalidateTreeSnapshots()

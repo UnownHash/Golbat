@@ -67,27 +67,29 @@ type treeSnapshot[K comparable] struct {
 
 var pokemonTreeSnapshot atomic.Pointer[treeSnapshot[uint64]]
 
-// getPokemonTreeSnapshot returns a read-only spatial index snapshot shared
-// by all scans, refreshed at most every treeSnapshotMaxAge. This replaces
+// refreshTreeSnapshot returns a read-only spatial index snapshot shared by
+// all scans, refreshed at most every treeSnapshotMaxAge. This replaces
 // per-request Copy(), which kept the live tree permanently copy-on-write.
-// Callers must only call Search on the result.
-func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
-	if snap := pokemonTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+// Double-checked under the lock so a burst of scans arriving at expiry
+// produces one Copy(), not one per caller. Copy() mutates the source tree's
+// COW stamp — full lock required. Callers must only call Search on the result.
+func refreshTreeSnapshot[K comparable](snapPtr *atomic.Pointer[treeSnapshot[K]], mu *sync.RWMutex, tree *rtree.RTreeG[K]) *rtree.RTreeG[K] {
+	if snap := snapPtr.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
 		return &snap.tree
 	}
-	// Copy() mutates the source tree's COW stamp — full lock required.
-	pokemonTreeMutex.Lock()
-	tree := *pokemonTree.Copy()
-	pokemonTreeMutex.Unlock()
-	snap := &treeSnapshot[uint64]{tree: tree, createdAt: time.Now()}
-	pokemonTreeSnapshot.Store(snap)
+	mu.Lock()
+	if snap := snapPtr.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+		mu.Unlock()
+		return &snap.tree
+	}
+	snap := &treeSnapshot[K]{tree: *tree.Copy(), createdAt: time.Now()}
+	snapPtr.Store(snap)
+	mu.Unlock()
 	return &snap.tree
 }
 
-// invalidateTreeSnapshots is a test helper.
-func invalidateTreeSnapshots() {
-	pokemonTreeSnapshot.Store(nil)
-	fortTreeSnapshot.Store(nil)
+func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
+	return refreshTreeSnapshot(&pokemonTreeSnapshot, &pokemonTreeMutex, &pokemonTree)
 }
 
 const (
@@ -97,17 +99,21 @@ const (
 
 var pokemonTreeEvictor *treeEvictor[uint64]
 
-// flushPokemonTreeEvictions removes a batch of evicted pokemon from the
-// spatial index under a single tree-mutex acquisition. If a pokemon was
-// re-added at the same coordinates between eviction and flush, the tree
-// holds two identical entries and Delete removes one, leaving the fresh
-// entry intact; a re-add at new coordinates is untouched by this delete.
-func flushPokemonTreeEvictions(entries []treeEvictionEntry[uint64]) {
-	pokemonTreeMutex.Lock()
+// flushTreeEvictions removes a batch of evicted entries from a spatial
+// index under a single tree-mutex acquisition. If an entry was re-added at
+// the same coordinates between eviction and flush, the tree holds two
+// identical entries and Delete removes one, leaving the fresh entry intact;
+// a re-add at new coordinates is untouched by this delete.
+func flushTreeEvictions[K comparable](mu *sync.RWMutex, tree *rtree.RTreeG[K], entries []treeEvictionEntry[K]) {
+	mu.Lock()
 	for _, e := range entries {
-		pokemonTree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
+		tree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
 	}
-	pokemonTreeMutex.Unlock()
+	mu.Unlock()
+}
+
+func flushPokemonTreeEvictions(entries []treeEvictionEntry[uint64]) {
+	flushTreeEvictions(&pokemonTreeMutex, &pokemonTree, entries)
 }
 
 func adjustPokemonFormCount(key pokemonFormKey, delta int64) {

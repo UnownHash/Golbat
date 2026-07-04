@@ -2,9 +2,16 @@ package main
 
 import (
 	"runtime"
+	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
 )
+
+// rawSlotWaitWarning is the parked-time threshold above which a raw
+// processing goroutine logs how long it waited for a semaphore slot.
+const rawSlotWaitWarning = time.Second
 
 // rawProcessingSem bounds concurrent raw-proto processing goroutines
 // (HTTP /raw and gRPC). nil means unlimited. Excess submissions park here
@@ -31,6 +38,16 @@ func acquireRawProcessingSlot() func() {
 	if sem == nil {
 		return func() {}
 	}
-	sem <- struct{}{}
+	select {
+	case sem <- struct{}{}:
+	default:
+		// Saturated — park, and surface long waits so operators can see
+		// backpressure instead of inferring it from throughput.
+		start := time.Now()
+		sem <- struct{}{}
+		if wait := time.Since(start); wait > rawSlotWaitWarning {
+			log.Warnf("[RAW_LIMITER] waited %s for a processing slot (limit %d)", wait, cap(sem))
+		}
+	}
 	return func() { <-sem }
 }
