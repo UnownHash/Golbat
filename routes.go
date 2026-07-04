@@ -389,7 +389,9 @@ func Raw(c *gin.Context) {
 		}
 
 		for _, entry := range nebulaItems {
-			go decodeNebula(context.Background(), entry.Endpoint, &entry)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodeNebula(ctx, entry.Endpoint, &entry)
+			cancel()
 		}
 
 		for _, entry := range pushItems {
