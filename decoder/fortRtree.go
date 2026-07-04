@@ -77,9 +77,10 @@ func getFortTreeSnapshot() *rtree.RTreeG[string] {
 	if snap := fortTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
 		return &snap.tree
 	}
-	fortTreeMutex.RLock()
+	// Copy() mutates the source tree's COW stamp — full lock required.
+	fortTreeMutex.Lock()
 	tree := *fortTree.Copy()
-	fortTreeMutex.RUnlock()
+	fortTreeMutex.Unlock()
 	snap := &treeSnapshot[string]{tree: tree, createdAt: time.Now()}
 	fortTreeSnapshot.Store(snap)
 	return &snap.tree

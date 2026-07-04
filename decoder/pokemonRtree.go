@@ -75,9 +75,10 @@ func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
 	if snap := pokemonTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
 		return &snap.tree
 	}
-	pokemonTreeMutex.RLock()
+	// Copy() mutates the source tree's COW stamp — full lock required.
+	pokemonTreeMutex.Lock()
 	tree := *pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTreeMutex.Unlock()
 	snap := &treeSnapshot[uint64]{tree: tree, createdAt: time.Now()}
 	pokemonTreeSnapshot.Store(snap)
 	return &snap.tree
