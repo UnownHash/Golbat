@@ -118,7 +118,9 @@ type Pokestop struct {
 
 ### ShardedCache
 
-High-contention entities (pokestop, gym, station, spawnpoint, pokemon) use `ShardedCache[K, V]` — a generic wrapper over multiple `ttlcache.Cache` instances. Keys are distributed across `runtime.NumCPU()` shards via FNV-1a hashing (strings) or identity (integers), reducing lock contention on the underlying cache maps.
+High-contention entities (pokestop, gym, station, spawnpoint, pokemon) use `ShardedCache[K, V]` — a generic wrapper over multiple `ttlcache.Cache` instances. Keys are distributed across shards (`tuning.cache_shards`, default `runtime.NumCPU()`) via maphash (strings) or identity (integers), reducing lock contention on the underlying cache maps.
+
+**Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — shard counts, fort TTLs, and eviction-callback registration all depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
 
 ### TTL Cache
 
@@ -126,13 +128,17 @@ Lower-contention entities (incident, weather, route, tappable, player, s2cell) u
 
 ### Configuration
 
-- **Fort caches**: 60-minute TTL normally, 25 hours when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations).
-- **Pokemon cache**: 60-minute TTL with `DisableTouchOnHit = true` — TTL counts from creation, not last access, ensuring pokemon expire after their despawn time regardless of query frequency.
+- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter prevents a restart's preload cohort from expiring in one synchronized sweep.
+- **Pokemon cache**: per-entry TTL from `remainingDuration` with `DisableTouchOnHit = true` — verified despawns get despawn time + 60 s (clamped to 1 minute once at/past despawn), unverified get 55–65 min with per-pokemon jitter.
 - **All other caches**: 60-minute TTL (weather consensus: 2 hours).
 
 ### Eviction Callbacks
 
-Fort and pokemon caches register eviction callbacks that clean up the corresponding R-tree entries when a cache item expires. This maintains consistency between the cache and spatial index.
+Fort and pokemon caches register eviction callbacks that clean up the lookup-cache entry inline and hand the R-tree removal to a batched evictor worker (`decoder/rtree_evictor.go`). Important facts about this path:
+
+- ttlcache runs each eviction callback on its **own goroutine** (`Cache.OnEviction` wraps callbacks in `go fn(...)`) — callbacks are NOT synchronized with the expiry sweep, cache operations, or entity-lock holders. The pokemon callback therefore takes the entity lock and skips cleanup if the pokemon was re-cached; the fort callback skips when the lookup entry is already gone (deleted fort) or owned by a different fort type (pokestop↔gym conversion).
+- Tree removal is deferred and batched (~512 deletes per tree-mutex acquisition), so the tree may briefly hold a ghost point (harmless — scans consult the lookup cache) or a duplicate point for a re-added id (scan paths dedupe matched ids).
+- A save that finds its lookup entry missing re-inserts the tree point (`savePokemonRecordAsAtTime`), self-healing the eviction/re-add race.
 
 ## Locking Model
 

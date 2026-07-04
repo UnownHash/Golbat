@@ -1,5 +1,18 @@
 # Lock-Contention Fixes Implementation Plan
 
+> **CORRECTION (post-implementation review):** this plan's premise that
+> ttlcache invokes eviction callbacks synchronously under the shard write
+> lock is WRONG — `Cache.OnEviction` wraps each callback in `go fn(...)`,
+> so callbacks run on their own goroutines, unsynchronized with the sweep,
+> cache operations, or entity-lock holders. The production freeze was the
+> global tree-mutex convoy formed by thousands of per-eviction goroutines
+> (amplified by permanent copy-on-write from per-request tree copies), not
+> shard-lock hold time. The batching/snapshot fixes below still target that
+> convoy, but the eviction callbacks additionally need the race guards added
+> in the post-review fix wave (entity-lock + re-cache check for pokemon;
+> lookup-presence + fort-type guards for forts). Code comments are the
+> source of truth; do not restore this plan's synchrony claims.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Eliminate the multi-second Pokemon entity-lock freezes caused by TTL-cache expiry sweeps doing per-item global R-tree surgery under shard locks, and de-synchronize the post-restart expiry cohort.
