@@ -103,37 +103,22 @@ func initDataCache() {
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
-	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
-			p := item.Value()
-			deferFortEviction(p.Id, p.Lat, p.Lon)
-		})
-	}
 
 	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
 		NumShards:  runtime.NumCPU(),
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
-	if config.Config.FortInMemory {
-		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
-			g := item.Value()
-			deferFortEviction(g.Id, g.Lat, g.Lon)
-		})
-	}
 
 	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
 		NumShards:  runtime.NumCPU(),
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
-	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
-		clearStationBattleState(item.Key())
-		if config.Config.FortInMemory {
-			s := item.Value()
-			deferFortEviction(s.Id, s.Lat, s.Lon)
-		}
-	})
+	// OnEviction registrations for pokestopCache/gymCache/stationCache are
+	// registered in initFortRtree() (called below), after fortTreeEvictor
+	// and fortLookupCache exist, so they can never fire against a nil
+	// evictor/lookup cache.
 
 	tappableCache = ttlcache.New[uint64, *Tappable](
 		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),

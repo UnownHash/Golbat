@@ -1,14 +1,18 @@
 package decoder
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"time"
 
 	"github.com/guregu/null/v6"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v3"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
+
+	"golbat/config"
 )
 
 type FortLookup struct {
@@ -68,6 +72,33 @@ var fortTree rtree.RTreeG[string]
 func initFortRtree() {
 	fortTreeEvictor = newTreeEvictor[string]("fort", treeEvictorQueueSize, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMapOf[string, FortLookup]()
+
+	// OnEviction registrations live here, after fortTreeEvictor and
+	// fortLookupCache are created (and after pokestopCache/gymCache/
+	// stationCache are created by initDataCache before calling this
+	// function), so callbacks can never observe a nil evictor or lookup
+	// cache. Mirrors the structure of initPokemonRtree.
+	if config.Config.FortInMemory {
+		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
+			p := item.Value()
+			deferFortEviction(p.Id, p.Lat, p.Lon)
+		})
+	}
+
+	if config.Config.FortInMemory {
+		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
+			g := item.Value()
+			deferFortEviction(g.Id, g.Lat, g.Lon)
+		})
+	}
+
+	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
+		clearStationBattleState(item.Key())
+		if config.Config.FortInMemory {
+			s := item.Value()
+			deferFortEviction(s.Id, s.Lat, s.Lon)
+		}
+	})
 }
 
 type IdRecord struct {
@@ -256,12 +287,6 @@ func addFortToTree(id string, lat float64, lon float64) {
 	fortTreeMutex.Lock()
 	fortTree.Insert([2]float64{lon, lat}, [2]float64{lon, lat}, id)
 	fortTreeMutex.Unlock()
-}
-
-// evictFortFromTree is called from cache eviction callbacks to clean up all fort state
-func evictFortFromTree(fortId string, lat, lon float64) {
-	fortLookupCache.Delete(fortId)
-	removeFortFromTree(fortId, lat, lon)
 }
 
 var fortTreeEvictor *treeEvictor[string]
