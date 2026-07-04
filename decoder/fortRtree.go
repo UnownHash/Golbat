@@ -100,9 +100,6 @@ func initFortRtree() {
 			p := item.Value()
 			deferFortEviction(p.Id, p.Lat, p.Lon)
 		})
-	}
-
-	if config.Config.FortInMemory {
 		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
 			g := item.Value()
 			deferFortEviction(g.Id, g.Lat, g.Lon)

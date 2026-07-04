@@ -29,6 +29,7 @@ type treeEvictor[K comparable] struct {
 	done      chan struct{}
 }
 
+// The flush callback must not retain the slice after returning; the buffer is reused.
 func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush func([]treeEvictionEntry[K])) *treeEvictor[K] {
 	e := &treeEvictor[K]{
 		name:      name,
@@ -48,7 +49,9 @@ func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 	defer func() {
 		// Sending on a closed channel panics; Close is only used by
 		// tests and shutdown, where losing the entry is acceptable.
-		_ = recover()
+		if r := recover(); r != nil {
+			log.Debugf("[TREE_EVICTOR] %s enqueue after close dropped: %v", e.name, r)
+		}
 	}()
 	e.ch <- treeEvictionEntry[K]{id: id, lat: lat, lon: lon}
 }
@@ -81,6 +84,4 @@ func (e *treeEvictor[K]) run() {
 			log.Warnf("[TREE_EVICTOR] %s backlog %d/%d", e.name, pending, cap(e.ch))
 		}
 	}
-	// Channel closed: flush anything the final receive loop left queued.
-	// (range exits only when ch is closed AND empty, so nothing remains.)
 }
