@@ -144,6 +144,7 @@ type tuning struct {
 	WriteBehindBatchTimeoutMs      int     `koanf:"write_behind_batch_timeout"` // max wait for batch in ms, default: 100
 	S2CellLookup                   bool    `koanf:"s2_cell_lookup"`             // Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups, default: false
 	CacheShards                    int     `koanf:"cache_shards"`               // shards per in-memory entity cache; 0 = number of CPUs. Raise on very large instances to shrink per-shard expiry sweeps.
+	RawProcessingConcurrency       int     `koanf:"raw_processing_concurrency"` // max concurrent raw-proto processing goroutines; 0 = auto (4x CPUs, capped at 96), -1 = unlimited
 }
 
 type scanRule struct {

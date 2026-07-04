@@ -91,6 +91,9 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
+		release := acquireRawProcessingSlot()
+		defer release()
+
 		timeout := 5 * time.Second
 		if config.Config.Tuning.ExtendedTimeout {
 			timeout = 30 * time.Second
