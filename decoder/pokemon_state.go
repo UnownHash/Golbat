@@ -133,6 +133,10 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 			pokemon.newRecord = false
 			pokemon.ClearDirty()
 			pokemonRtreeUpdatePokemonOnGet(pokemon)
+
+			// Rehydrated from DB: re-stamp the TTL (despawn-based / jittered) so the
+			// entry doesn't keep the flat placeholder default — see remainingDuration.
+			pokemonCache.Set(encounterId, pokemon, pokemon.remainingDuration(time.Now().Unix()))
 		}
 	}
 

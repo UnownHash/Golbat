@@ -44,3 +44,16 @@ func TestRemainingDurationUnverifiedIsJittered(t *testing.T) {
 		t.Errorf("expected jitter to produce varied TTLs, got %d distinct values", len(seen))
 	}
 }
+
+func TestRemainingDurationVerifiedBoundary(t *testing.T) {
+	now := int64(1_000_000)
+	// timeLeft = 60+expire-now; exactly 60 clamps to a minute, 61 is honored.
+	atBoundary := &Pokemon{PokemonData: PokemonData{ExpireTimestampVerified: true, ExpireTimestamp: null.IntFrom(now)}}
+	if got := atBoundary.remainingDuration(now); got != time.Minute {
+		t.Errorf("timeLeft=60 → %v, want 1m", got)
+	}
+	justOver := &Pokemon{PokemonData: PokemonData{ExpireTimestampVerified: true, ExpireTimestamp: null.IntFrom(now + 1)}}
+	if got := justOver.remainingDuration(now); got != 61*time.Second {
+		t.Errorf("timeLeft=61 → %v, want 61s", got)
+	}
+}
