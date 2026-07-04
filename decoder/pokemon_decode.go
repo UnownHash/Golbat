@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -65,15 +65,27 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.newRecord
 }
 
+const (
+	// pokemonUnverifiedTTL (+ jitter) replaces the flat cache-default TTL
+	// for pokemon without a verified despawn. The jitter prevents
+	// restart-synchronized cohorts (preload + cold-cache ingest all
+	// stamped in the same few minutes) from expiring in one giant
+	// ttlcache sweep an hour later.
+	pokemonUnverifiedTTL       = 55 * time.Minute
+	pokemonUnverifiedTTLJitter = 10 * time.Minute
+)
+
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
-	remaining := ttlcache.DefaultTTL
 	if pokemon.ExpireTimestampVerified {
 		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
-		if timeLeft > 1 {
-			remaining = time.Duration(timeLeft) * time.Second
+		if timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
 		}
+		// At/past despawn: keep briefly for late queries rather than
+		// granting a fresh hour to a corpse.
+		return time.Minute
 	}
-	return remaining
+	return pokemonUnverifiedTTL + rand.N(pokemonUnverifiedTTLJitter)
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {

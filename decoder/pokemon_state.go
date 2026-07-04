@@ -16,6 +16,7 @@ import (
 
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
+	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -84,7 +85,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 		// Only called if key doesn't exist - our Pokemon wins
 		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 		return &dbPokemon
-	})
+	}, ttlcache.WithTTL[uint64, *Pokemon](dbPokemon.remainingDuration(time.Now().Unix())))
 
 	pokemon := existingPokemon.Value()
 	pokemon.Lock(caller)
