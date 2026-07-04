@@ -66,6 +66,7 @@ var fortTreeMutex sync.RWMutex
 var fortTree rtree.RTreeG[string]
 
 func initFortRtree() {
+	fortTreeEvictor = newTreeEvictor[string]("fort", treeEvictorQueueSize, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMapOf[string, FortLookup]()
 }
 
@@ -261,6 +262,27 @@ func addFortToTree(id string, lat float64, lon float64) {
 func evictFortFromTree(fortId string, lat, lon float64) {
 	fortLookupCache.Delete(fortId)
 	removeFortFromTree(fortId, lat, lon)
+}
+
+var fortTreeEvictor *treeEvictor[string]
+
+// flushFortTreeEvictions removes a batch of evicted forts from the spatial
+// index under a single tree-mutex acquisition (same re-add reasoning as
+// flushPokemonTreeEvictions).
+func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
+	fortTreeMutex.Lock()
+	for _, e := range entries {
+		fortTree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
+	}
+	fortTreeMutex.Unlock()
+}
+
+// deferFortEviction is the O(1) eviction-callback path: lookup cache is
+// cleared inline (lock-free) so scans skip the fort immediately, tree
+// removal is batched.
+func deferFortEviction(fortId string, lat, lon float64) {
+	fortLookupCache.Delete(fortId)
+	fortTreeEvictor.Enqueue(fortId, lat, lon)
 }
 
 func removeFortFromTree(fortId string, lat, lon float64) {

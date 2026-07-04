@@ -106,7 +106,7 @@ func initDataCache() {
 	if config.Config.FortInMemory {
 		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
 			p := item.Value()
-			evictFortFromTree(p.Id, p.Lat, p.Lon)
+			deferFortEviction(p.Id, p.Lat, p.Lon)
 		})
 	}
 
@@ -118,7 +118,7 @@ func initDataCache() {
 	if config.Config.FortInMemory {
 		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
 			g := item.Value()
-			evictFortFromTree(g.Id, g.Lat, g.Lon)
+			deferFortEviction(g.Id, g.Lat, g.Lon)
 		})
 	}
 
@@ -131,7 +131,7 @@ func initDataCache() {
 		clearStationBattleState(item.Key())
 		if config.Config.FortInMemory {
 			s := item.Value()
-			evictFortFromTree(s.Id, s.Lat, s.Lon)
+			deferFortEviction(s.Id, s.Lat, s.Lon)
 		}
 	})
 
