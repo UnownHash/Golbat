@@ -89,6 +89,16 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
+// cacheShardCount resolves tuning.cache_shards; more shards mean smaller
+// per-shard expiry sweeps and finer-grained write locking at the cost of
+// more cleanup goroutines.
+func cacheShardCount() int {
+	if n := config.Config.Tuning.CacheShards; n > 0 {
+		return n
+	}
+	return runtime.NumCPU()
+}
+
 func initDataCache() {
 	// Sharded caches for high-concurrency tables
 	// When fort_in_memory is enabled, extend TTL to 25 hours so that the
@@ -99,19 +109,19 @@ func initDataCache() {
 	}
 
 	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
-		NumShards:  runtime.NumCPU(),
+		NumShards:  cacheShardCount(),
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
 
 	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
-		NumShards:  runtime.NumCPU(),
+		NumShards:  cacheShardCount(),
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
 
 	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
-		NumShards:  runtime.NumCPU(),
+		NumShards:  cacheShardCount(),
 		TTL:        fortCacheTTL,
 		KeyToShard: StringKeyToShard,
 	})
@@ -141,7 +151,7 @@ func initDataCache() {
 	go s2CellCache.Start()
 
 	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
-		NumShards:  runtime.NumCPU(),
+		NumShards:  cacheShardCount(),
 		TTL:        60 * time.Minute,
 		KeyToShard: Int64KeyToShard,
 	})
@@ -149,7 +159,7 @@ func initDataCache() {
 	// Pokemon cache: sharded for high concurrency
 	// By picking NumShards to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
 	pokemonCache = NewShardedCache(ShardedCacheConfig[uint64, *Pokemon]{
-		NumShards:         runtime.NumCPU(),
+		NumShards:         cacheShardCount(),
 		TTL:               60 * time.Minute,
 		KeyToShard:        Uint64KeyToShard,
 		DisableTouchOnHit: true, // Pokemon will last 60 mins from when we first see them not last see them
