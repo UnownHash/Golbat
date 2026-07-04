@@ -53,6 +53,26 @@ var pokemonFormCount *xsync.MapOf[pokemonFormKey, int64]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
+const (
+	treeEvictorQueueSize = 131072
+	treeEvictorBatchSize = 512
+)
+
+var pokemonTreeEvictor *treeEvictor[uint64]
+
+// flushPokemonTreeEvictions removes a batch of evicted pokemon from the
+// spatial index under a single tree-mutex acquisition. If a pokemon was
+// re-added at the same coordinates between eviction and flush, the tree
+// holds two identical entries and Delete removes one, leaving the fresh
+// entry intact; a re-add at new coordinates is untouched by this delete.
+func flushPokemonTreeEvictions(entries []treeEvictionEntry[uint64]) {
+	pokemonTreeMutex.Lock()
+	for _, e := range entries {
+		pokemonTree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
+	}
+	pokemonTreeMutex.Unlock()
+}
+
 func adjustPokemonFormCount(key pokemonFormKey, delta int64) {
 	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, bool) {
 		newValue := oldValue + delta
@@ -64,11 +84,20 @@ func initPokemonRtree() {
 	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
 	pokemonFormCount = xsync.NewMapOf[pokemonFormKey, int64]()
 
-	// Set up OnEviction callback on all shards
+	pokemonTreeEvictor = newTreeEvictor[uint64]("pokemon", treeEvictorQueueSize, treeEvictorBatchSize, flushPokemonTreeEvictions)
+
+	// This callback runs synchronously inside ttlcache's expiry sweep,
+	// which holds the shard's write lock for the WHOLE sweep — it must be
+	// O(1). Lookup-cache removal is lock-free and happens inline so scans
+	// stop seeing the pokemon immediately; the tree removal is deferred
+	// to the batched evictor.
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
 		pokemon := v.Value()
-		removePokemonFromTree(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
-		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
+		pokemonId := uint64(pokemon.Id)
+		if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
+			adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
+		}
+		pokemonTreeEvictor.Enqueue(pokemonId, pokemon.Lat, pokemon.Lon)
 	})
 }
 
