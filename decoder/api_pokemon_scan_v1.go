@@ -167,9 +167,7 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 
 	lockedTime := time.Since(start)
 

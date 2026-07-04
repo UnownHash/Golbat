@@ -81,9 +81,7 @@ func internalGetPokemonInArea[F any](
 	pokemonExamined := 0
 	pokemonSkipped := 0
 
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 
 	lockedTime := time.Since(start)
 	totalPokemon := pokemonTree2.Len()

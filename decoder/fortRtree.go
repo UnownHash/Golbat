@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -68,6 +69,21 @@ type FortLookup struct {
 var fortLookupCache *xsync.MapOf[string, FortLookup]
 var fortTreeMutex sync.RWMutex
 var fortTree rtree.RTreeG[string]
+
+var fortTreeSnapshot atomic.Pointer[treeSnapshot[string]]
+
+// getFortTreeSnapshot: see getPokemonTreeSnapshot.
+func getFortTreeSnapshot() *rtree.RTreeG[string] {
+	if snap := fortTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+		return &snap.tree
+	}
+	fortTreeMutex.RLock()
+	tree := *fortTree.Copy()
+	fortTreeMutex.RUnlock()
+	snap := &treeSnapshot[string]{tree: tree, createdAt: time.Now()}
+	fortTreeSnapshot.Store(snap)
+	return &snap.tree
+}
 
 func initFortRtree() {
 	fortTreeEvictor = newTreeEvictor[string]("fort", treeEvictorQueueSize, treeEvictorBatchSize, flushFortTreeEvictions)

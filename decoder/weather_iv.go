@@ -53,9 +53,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	cellHi := cellBound.Hi()
 
 	start := time.Now()
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 	lockedTime := time.Since(start)
 
 	startUnix := start.Unix()

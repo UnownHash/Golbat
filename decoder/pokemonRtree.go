@@ -4,6 +4,8 @@ import (
 	"context"
 	"math"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"golbat/config"
 
@@ -52,6 +54,40 @@ var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
 var pokemonFormCount *xsync.MapOf[pokemonFormKey, int64]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
+
+// treeSnapshotMaxAge bounds scan-snapshot staleness. Scans re-verify hits
+// against the lookup caches (and lock records for final results), so a
+// slightly stale spatial index only costs a few extra skips/misses.
+const treeSnapshotMaxAge = time.Second
+
+type treeSnapshot[K comparable] struct {
+	tree      rtree.RTreeG[K]
+	createdAt time.Time
+}
+
+var pokemonTreeSnapshot atomic.Pointer[treeSnapshot[uint64]]
+
+// getPokemonTreeSnapshot returns a read-only spatial index snapshot shared
+// by all scans, refreshed at most every treeSnapshotMaxAge. This replaces
+// per-request Copy(), which kept the live tree permanently copy-on-write.
+// Callers must only call Search on the result.
+func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
+	if snap := pokemonTreeSnapshot.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+		return &snap.tree
+	}
+	pokemonTreeMutex.RLock()
+	tree := *pokemonTree.Copy()
+	pokemonTreeMutex.RUnlock()
+	snap := &treeSnapshot[uint64]{tree: tree, createdAt: time.Now()}
+	pokemonTreeSnapshot.Store(snap)
+	return &snap.tree
+}
+
+// invalidateTreeSnapshots is a test helper.
+func invalidateTreeSnapshots() {
+	pokemonTreeSnapshot.Store(nil)
+	fortTreeSnapshot.Store(nil)
+}
 
 const (
 	treeEvictorQueueSize = 131072

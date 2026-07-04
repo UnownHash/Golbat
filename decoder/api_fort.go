@@ -245,9 +245,7 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 	fortsSkipped := 0
 	now := time.Now().Unix()
 
-	fortTreeMutex.RLock()
-	fortTreeCopy := fortTree.Copy()
-	fortTreeMutex.RUnlock()
+	fortTreeCopy := getFortTreeSnapshot()
 
 	lockedTime := time.Since(start)
 
@@ -434,9 +432,7 @@ func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestop
 	now := time.Now().Unix()
 	totalMatched := 0
 
-	fortTreeMutex.RLock()
-	fortTreeCopy := fortTree.Copy()
-	fortTreeMutex.RUnlock()
+	fortTreeCopy := getFortTreeSnapshot()
 
 	lockedTime := time.Since(start)
 

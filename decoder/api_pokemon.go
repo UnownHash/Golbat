@@ -80,9 +80,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 		return nil, fmt.Errorf("SearchPokemon - the distance between max and min points is greater than the configurable max distance")
 	}
 
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 
 	maxPokemon := config.Config.Tuning.MaxPokemonResults
 	if request.Limit > 0 && request.Limit < maxPokemon {
