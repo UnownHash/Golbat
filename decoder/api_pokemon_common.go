@@ -90,6 +90,9 @@ func internalGetPokemonInArea[F any](
 
 	performScan := func() {
 		pokemonMatched := 0
+		// The shared snapshot can briefly hold duplicate points for one id
+		// (eviction delete still queued while a save re-added the point).
+		seen := make(map[uint64]struct{})
 		pokemonTree2.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
@@ -134,6 +137,10 @@ func internalGetPokemonInArea[F any](
 				}
 
 				if matched {
+					if _, dup := seen[pokemonId]; dup {
+						return true
+					}
+					seen[pokemonId] = struct{}{}
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {

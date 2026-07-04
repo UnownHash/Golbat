@@ -250,6 +250,9 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 	lockedTime := time.Since(start)
 
 	var returnKeys []string
+	// Dedupe: the shared snapshot can briefly hold duplicate points for one
+	// id (eviction delete still queued while a save re-added the point).
+	seen := make(map[string]struct{})
 
 	fortTreeCopy.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
 		func(min, max [2]float64, fortId string) bool {
@@ -274,6 +277,10 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 			}
 
 			if matched {
+				if _, dup := seen[fortId]; dup {
+					return true
+				}
+				seen[fortId] = struct{}{}
 				returnKeys = append(returnKeys, fortId)
 				if len(returnKeys) >= maxForts {
 					log.Infof("GetFortsInArea - result would exceed maximum size (%d), stopping scan", maxForts)
@@ -431,6 +438,8 @@ func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestop
 
 	now := time.Now().Unix()
 	totalMatched := 0
+	// Dedupe: see internalGetForts.
+	seenCombined := make(map[string]struct{})
 
 	fortTreeCopy := getFortTreeSnapshot()
 
@@ -459,6 +468,10 @@ func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestop
 			}
 
 			if matched {
+				if _, dup := seenCombined[fortId]; dup {
+					return true
+				}
+				seenCombined[fortId] = struct{}{}
 				switch fortLookup.FortType {
 				case GYM:
 					gymKeys = append(gymKeys, fortId)

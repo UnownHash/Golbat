@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
 
@@ -96,13 +95,15 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 
 	// Atomically cache the loaded Pokestop - if another goroutine raced us,
 	// we'll get their Pokestop and use that instead (ensuring same mutex)
-	existingPokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+	existingPokestop, found := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		// Only called if key doesn't exist - our Pokestop wins
-		if config.Config.FortInMemory {
-			fortRtreeUpdatePokestopOnGet(&dbPokestop)
-		}
 		return &dbPokestop
 	})
+	if !found && config.Config.FortInMemory {
+		// Index out here — the GetOrSetFunc closure runs under the cache
+		// shard's write lock and must not take the fort tree mutex.
+		fortRtreeUpdatePokestopOnGet(&dbPokestop)
+	}
 
 	pokestop := existingPokestop.Value()
 	pokestop.Lock(caller)
@@ -364,7 +365,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	createPokestopFortWebhooks(pokestop)
 
 	if isNewRecord {
-		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
+		pokestopCache.Set(pokestop.Id, pokestop, fortCacheEntryTTL())
 		pokestop.newRecord = false
 	}
 	pokestop.ClearDirty()

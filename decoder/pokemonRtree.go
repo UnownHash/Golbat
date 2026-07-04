@@ -72,7 +72,9 @@ var pokemonTreeSnapshot atomic.Pointer[treeSnapshot[uint64]]
 // per-request Copy(), which kept the live tree permanently copy-on-write.
 // Double-checked under the lock so a burst of scans arriving at expiry
 // produces one Copy(), not one per caller. Copy() mutates the source tree's
-// COW stamp — full lock required. Callers must only call Search on the result.
+// COW stamp — full lock required. The result is shared by concurrent
+// goroutines: only read-only operations (Search, Nearby, Len) are safe on
+// it — never Copy, Insert, Delete, or Replace.
 func refreshTreeSnapshot[K comparable](snapPtr *atomic.Pointer[treeSnapshot[K]], mu *sync.RWMutex, tree *rtree.RTreeG[K]) *rtree.RTreeG[K] {
 	if snap := snapPtr.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
 		return &snap.tree
@@ -129,19 +131,36 @@ func initPokemonRtree() {
 
 	pokemonTreeEvictor = newTreeEvictor[uint64]("pokemon", treeEvictorQueueSize, treeEvictorBatchSize, flushPokemonTreeEvictions)
 
-	// This callback runs synchronously inside ttlcache's expiry sweep,
-	// which holds the shard's write lock for the WHOLE sweep — it must be
-	// O(1). Lookup-cache removal is lock-free and happens inline so scans
-	// stop seeing the pokemon immediately; the tree removal is deferred
-	// to the batched evictor.
+	// ttlcache runs each eviction callback on its own goroutine (see
+	// Cache.OnEviction: the registered fn is wrapped in `go fn(...)`), so
+	// this races concurrent updaters holding the entity lock — the cleanup
+	// itself is serialized in handlePokemonEviction.
 	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
-		pokemon := v.Value()
-		pokemonId := uint64(pokemon.Id)
-		if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
-			adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
-		}
-		pokemonTreeEvictor.Enqueue(pokemonId, pokemon.Lat, pokemon.Lon)
+		handlePokemonEviction(v.Value())
 	})
+}
+
+// handlePokemonEviction removes an evicted pokemon from the lookup cache
+// (inline, lock-free — scans stop seeing it immediately) and defers its
+// tree removal to the batched evictor. It runs on ttlcache's per-eviction
+// goroutine, so it takes the entity lock to serialize against updaters: if
+// a save re-cached the pokemon after the eviction fired, the lookup and
+// tree entries are current and must be left alone — cleaning them would
+// make a live, cached pokemon invisible to every scan.
+func handlePokemonEviction(pokemon *Pokemon) {
+	pokemonId := uint64(pokemon.Id)
+	pokemon.Lock("cacheEviction")
+	defer pokemon.Unlock()
+
+	if pokemonCache.Get(pokemonId) != nil {
+		// Re-cached (same pokemon re-saved, or a successor record created)
+		// — its owner maintains the lookup/tree entries now.
+		return
+	}
+	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
+		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
+	}
+	pokemonTreeEvictor.Enqueue(pokemonId, pokemon.Lat, pokemon.Lon)
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
@@ -163,7 +182,11 @@ func valueOrMinus1(n null.Int) int {
 	return -1
 }
 
-func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
+// updatePokemonLookup refreshes the scan lookup entry and reports whether
+// one already existed — false means an eviction removed it (and the tree
+// point) while the caller held the entity lock, so the caller must restore
+// the tree point.
+func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) bool {
 	pokemonId := uint64(pokemon.Id)
 
 	pokemonLookupCacheItem, existed := pokemonLookupCache.Load(pokemonId)
@@ -210,6 +233,8 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	if !existed || oldKey != newKey {
 		adjustPokemonFormCount(newKey, 1)
 	}
+
+	return existed
 }
 
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {

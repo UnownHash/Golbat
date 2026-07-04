@@ -89,11 +89,11 @@ func initFortRtree() {
 	if config.Config.FortInMemory {
 		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
 			p := item.Value()
-			deferFortEviction(p.Id, p.Lat, p.Lon)
+			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
 		})
 		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
 			g := item.Value()
-			deferFortEviction(g.Id, g.Lat, g.Lon)
+			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
 		})
 	}
 
@@ -101,7 +101,7 @@ func initFortRtree() {
 		clearStationBattleState(item.Key())
 		if config.Config.FortInMemory {
 			s := item.Value()
-			deferFortEviction(s.Id, s.Lat, s.Lon)
+			deferFortEviction(STATION, s.Id, s.Lat, s.Lon)
 		}
 	})
 }
@@ -301,10 +301,22 @@ func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
 	flushTreeEvictions(&fortTreeMutex, &fortTree, entries)
 }
 
-// deferFortEviction is the O(1) eviction-callback path: lookup cache is
+// deferFortEviction is the eviction-callback cleanup path: lookup cache is
 // cleared inline (lock-free) so scans skip the fort immediately, tree
-// removal is batched.
-func deferFortEviction(fortId string, lat, lon float64) {
+// removal is batched. ttlcache runs eviction callbacks on their own
+// goroutines, racing fort saves and genericUpdateFort's synchronous
+// cleanup, so guard before touching shared state:
+//   - lookup entry already gone → a deleted fort; genericUpdateFort already
+//     removed the tree point, and enqueueing an unpaired delete here could
+//     erase the point of a fort restored in the meantime.
+//   - lookup entry belongs to a different fort type → the fort converted
+//     (pokestop↔gym) and this is the stale counterpart's cache entry
+//     expiring; the live counterpart owns the lookup and tree point now.
+func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
+	fl, ok := fortLookupCache.Load(fortId)
+	if !ok || fl.FortType != expected {
+		return
+	}
 	fortLookupCache.Delete(fortId)
 	fortTreeEvictor.Enqueue(fortId, lat, lon)
 }

@@ -7,6 +7,35 @@ import (
 	"github.com/guregu/null/v6"
 )
 
+func TestEncounterStatsDurationKeepsDedupWindow(t *testing.T) {
+	now := int64(1_000_000)
+
+	// Past-despawn verified: 0 → encounter cache default (full dedup window),
+	// NOT the pokemon cache's 1-minute clamp.
+	past := &Pokemon{PokemonData: PokemonData{
+		ExpireTimestampVerified: true,
+		ExpireTimestamp:         null.IntFrom(now - 300),
+	}}
+	if got := past.encounterStatsDuration(now); got != 0 {
+		t.Errorf("past-despawn encounterStatsDuration = %v, want 0 (cache default)", got)
+	}
+
+	// Unverified: 0 → default window, no jitter.
+	unverified := &Pokemon{PokemonData: PokemonData{ExpireTimestampVerified: false}}
+	if got := unverified.encounterStatsDuration(now); got != 0 {
+		t.Errorf("unverified encounterStatsDuration = %v, want 0 (cache default)", got)
+	}
+
+	// Verified future despawn: real remaining time.
+	future := &Pokemon{PokemonData: PokemonData{
+		ExpireTimestampVerified: true,
+		ExpireTimestamp:         null.IntFrom(now + 600),
+	}}
+	if got, want := future.encounterStatsDuration(now), 660*time.Second; got != want {
+		t.Errorf("future encounterStatsDuration = %v, want %v", got, want)
+	}
+}
+
 func TestRemainingDurationVerifiedFutureDespawn(t *testing.T) {
 	now := int64(1_000_000)
 	p := &Pokemon{PokemonData: PokemonData{

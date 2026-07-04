@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -237,7 +236,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 	createStationWebhooksWithBattles(station, battles, battleSnapshot, isNewRecord, now)
 	if isNewRecord {
-		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
+		stationCache.Set(station.Id, station, fortCacheEntryTTL())
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {

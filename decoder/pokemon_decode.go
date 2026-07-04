@@ -88,6 +88,19 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 	return pokemonUnverifiedTTL + rand.N(pokemonUnverifiedTTLJitter)
 }
 
+// encounterStatsDuration is the TTL for the encounter-dedup stats cache.
+// Distinct from the pokemon-cache TTL: past-despawn and unverified entries
+// must keep the cache's full default window so late or retried protos still
+// deduplicate instead of inflating per-area encounter/shiny stats.
+func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
+	if pokemon.ExpireTimestampVerified {
+		if timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
+		}
+	}
+	return 0 // the encounter cache interprets 0 as its default TTL
+}
+
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
@@ -203,7 +216,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.ExpirationTimeMs / 1000))
 		pokemon.SetExpireTimestampVerified(true)
 		// if we have cached an encounter for this pokemon, update the TTL.
-		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.remainingDuration(timestampMs/1000))
+		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.encounterStatsDuration(timestampMs/1000))
 	} else {
 		pokemon.SetExpireTimestampVerified(false)
 	}

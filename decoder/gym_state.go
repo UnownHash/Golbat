@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -85,13 +84,15 @@ func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, c
 
 	// Atomically cache the loaded Gym - if another goroutine raced us,
 	// we'll get their Gym and use that instead (ensuring same mutex)
-	existingGym, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
-		// Only called if key doesn't exist - our Pokestop wins
-		if config.Config.FortInMemory {
-			fortRtreeUpdateGymOnGet(&dbGym)
-		}
+	existingGym, found := gymCache.GetOrSetFunc(fortId, func() *Gym {
+		// Only called if key doesn't exist - our Gym wins
 		return &dbGym
 	})
+	if !found && config.Config.FortInMemory {
+		// Index out here — the GetOrSetFunc closure runs under the cache
+		// shard's write lock and must not take the fort tree mutex.
+		fortRtreeUpdateGymOnGet(&dbGym)
+	}
 
 	gym := existingGym.Value()
 	gym.Lock(caller)
@@ -357,7 +358,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		gym.changedFields = gym.changedFields[:0]
 	}
 	if isNewRecord {
-		gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
+		gymCache.Set(gym.Id, gym, fortCacheEntryTTL())
 		gym.newRecord = false
 	}
 	gym.ClearDirty()

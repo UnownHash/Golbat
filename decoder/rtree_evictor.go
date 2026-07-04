@@ -14,11 +14,13 @@ type treeEvictionEntry[K comparable] struct {
 }
 
 // treeEvictor defers R-tree removals out of cache-eviction callbacks.
-// ttlcache invokes eviction callbacks synchronously while holding the
-// shard's write lock for the whole expiry sweep, so per-item work there
-// must be O(1). Enqueue is called from that context; a single worker
-// drains the channel and flushes removals in batches so the global tree
-// mutex is taken once per batch instead of once per item.
+// ttlcache runs each eviction callback on its own goroutine (Cache.OnEviction
+// wraps the registered fn in `go fn(...)`), so a mass-expiry sweep used to
+// spawn thousands of goroutines all contending for the global tree write
+// lock — the convoy that froze savers holding entity locks. Enqueue collapses
+// that to a channel send; a single worker drains the channel and flushes
+// removals in batches so the tree mutex is taken once per ~batchSize items
+// by one goroutine instead of once per item by thousands.
 type treeEvictor[K comparable] struct {
 	name      string
 	ch        chan treeEvictionEntry[K]
@@ -42,9 +44,11 @@ func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush fu
 	return e
 }
 
-// Enqueue queues a removal. Blocks only if the channel is full, which
-// restores (batched) backpressure rather than dropping the entry and
-// leaking a ghost point in the tree.
+// Enqueue queues a removal. Blocks only if the channel is full — that
+// parks the per-eviction callback goroutines (bounded by the number of
+// evicted items) rather than dropping entries and leaking ghost points in
+// the tree. It does NOT throttle the cache sweep itself, which never waits
+// on its eviction callbacks.
 func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 	defer func() {
 		// Sending on a closed channel panics; Close is only used by

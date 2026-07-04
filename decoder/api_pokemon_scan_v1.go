@@ -172,6 +172,9 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 	lockedTime := time.Since(start)
 
 	performScan := func() (returnKeys []uint64) {
+		// Dedupe: the shared snapshot can briefly hold duplicate points for
+		// one id (eviction delete still queued while a save re-added it).
+		seen := make(map[uint64]struct{})
 		pokemonMatched := 0
 		pokemonTree2.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
@@ -206,6 +209,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				}
 
 				if globalFilterMatched || specificFilterMatched {
+					if _, dup := seen[pokemonId]; dup {
+						return true
+					}
+					seen[pokemonId] = struct{}{}
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {

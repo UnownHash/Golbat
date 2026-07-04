@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"runtime"
 	"sync"
 	"time"
@@ -110,6 +111,18 @@ func cacheShardCount() int {
 		return n
 	}
 	return runtime.NumCPU()
+}
+
+// fortCacheEntryTTL is the per-entry TTL for pokestop/gym/station cache
+// inserts. Jittered so a restart's preload cohort (stamped within minutes)
+// doesn't expire in one synchronized sweep — the fort analogue of the
+// pokemon TTL jitter. Touch-on-hit refreshes each entry to its own
+// jittered TTL, so actively-seen forts never expire.
+func fortCacheEntryTTL() time.Duration {
+	if config.Config.FortInMemory {
+		return 25*time.Hour + rand.N(2*time.Hour)
+	}
+	return time.Hour + rand.N(10*time.Minute)
 }
 
 func initDataCache() {

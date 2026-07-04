@@ -81,11 +81,16 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
-	existingPokemon, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	existingPokemon, found := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		// Only called if key doesn't exist - our Pokemon wins
-		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 		return &dbPokemon
 	}, ttlcache.WithTTL[uint64, *Pokemon](dbPokemon.remainingDuration(time.Now().Unix())))
+	if !found {
+		// Our dbPokemon won the insert. Index it out here — the GetOrSetFunc
+		// closure runs under the cache shard's write lock and must not take
+		// the tree mutex (tree-lock-under-shard-lock inversion).
+		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
+	}
 
 	pokemon := existingPokemon.Value()
 	pokemon.Lock(caller)
@@ -249,15 +254,26 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	// Update pokemon rtree (immediate, not queued)
+	addedToTree := false
 	if isNewRecord {
 		addPokemonToTree(pokemon)
+		addedToTree = true
 	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
 		// Position changed - update R-tree by removing from old position and adding to new
 		removePokemonFromTree(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
 		addPokemonToTree(pokemon)
+		addedToTree = true
 	}
 
-	updatePokemonLookup(pokemon, changePvpField, pvpResults)
+	lookupExisted := updatePokemonLookup(pokemon, changePvpField, pvpResults)
+	if !lookupExisted && !addedToTree {
+		// The lookup entry vanished for an existing pokemon: a cache
+		// eviction fired while we held the entity lock and already removed
+		// (or queued removal of) the tree point. Re-insert it so this live,
+		// about-to-be-re-cached pokemon stays scannable; a queued eviction
+		// delete pairs off against the older duplicate point.
+		addPokemonToTree(pokemon)
+	}
 
 	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))

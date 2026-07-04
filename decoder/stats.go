@@ -195,7 +195,7 @@ func updateEncounterStats(pokemon *Pokemon) {
 		statsCollector.IncDuplicateEncounters(false)
 	}
 
-	encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.remainingDuration(time.Now().Unix()))
+	encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(time.Now().Unix()))
 
 	pokemonIdStr := strconv.Itoa(int(pokemon.PokemonId))
 	var formId int
@@ -341,7 +341,7 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 
 	// If we have a cache entry, it means we updated it. So now let's store it.
 	if encounterCacheVal != nil {
-		encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.remainingDuration(now))
+		encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(now))
 	}
 
 	if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
