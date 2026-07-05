@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -104,6 +105,13 @@ func LoadStatsGeofences() {
 	if err := ReadGeofences(); err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("No geofence file found, skipping")
+			return
+		}
+		if errors.Is(err, ErrNoGeofenceData) {
+			// Koji unreachable with no cache at boot: start degraded (no
+			// area matching) instead of crash-looping until Koji recovers.
+			// A later successful reload restores matching.
+			log.Errorf("GEO: starting without geofences: %v", err)
 			return
 		}
 		panic(fmt.Sprintf("Error reading geofences: %v", err))

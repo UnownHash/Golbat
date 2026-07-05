@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -30,10 +31,24 @@ var statsTree atomic.Value
 var nestTree atomic.Value
 var statsS2Lookup atomic.Value
 
-// s2BuildGeneration guards against a slow, stale S2 build (from an older
-// geofence reload) overwriting a newer one: only the latest generation may
-// publish its result.
+// ErrNoGeofenceData signals that no geofence source was available (Koji
+// down with no cache, or missing file). Startup treats it as a degraded
+// start, reloads keep the previous indexes.
+var ErrNoGeofenceData = errors.New("no geofence data available")
+
+// geofenceReloadMu serializes ReadGeofences: concurrent reloads otherwise
+// race the content hash against the tree/lookup publications (a loser's
+// stale tree could be published after the winner's hash, gating future
+// reloads of the newer content off as "unchanged").
+var geofenceReloadMu sync.Mutex
+
+// s2BuildGeneration + s2PublishMu guard against a slow, stale S2 build
+// (from an older geofence reload) overwriting a newer one: only the latest
+// generation may publish, and the check-and-store is atomic under the
+// mutex (a bare Load-then-Store lets an old build slip in between a newer
+// reload's placeholder store and its generation bump).
 var s2BuildGeneration atomic.Int64
+var s2PublishMu sync.Mutex
 
 var kojiUrl = ""
 var kojiBearerToken = ""
@@ -104,6 +119,9 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 }
 
 func ReadGeofences() error {
+	geofenceReloadMu.Lock()
+	defer geofenceReloadMu.Unlock()
+
 	var statsFeatureCollection *geojson.FeatureCollection
 	var sourceBytes []byte
 
@@ -152,8 +170,9 @@ func ReadGeofences() error {
 	if statsFeatureCollection == nil {
 		// Koji fetch failed with no usable cache: keep serving the previous
 		// indexes rather than publishing an empty tree (which would silently
-		// unmatch every pokemon until the next successful reload).
-		return errors.New("no geofence data available; keeping previous geofences")
+		// unmatch every pokemon until the next successful reload). At startup
+		// there are no previous indexes — callers must degrade, not panic.
+		return ErrNoGeofenceData
 	}
 
 	if !geofenceContentChanged(sourceBytes) {
@@ -167,6 +186,11 @@ func ReadGeofences() error {
 	statsTree.Store(newStatsTree)
 
 	if config.Config.Tuning.S2CellLookup {
+		// Bump the generation BEFORE dropping the previous lookup, and make
+		// publish an atomic check-and-store under s2PublishMu, so an older
+		// in-flight build can never publish after this reload's placeholder.
+		s2PublishMu.Lock()
+		gen := s2BuildGeneration.Add(1)
 		// Drop the previous lookup for the duration of the rebuild so the
 		// whole window serves the NEW fences consistently through the
 		// compiled-polygon fallback — otherwise cells interior to the old
@@ -175,17 +199,21 @@ func ReadGeofences() error {
 		// means this only ever happens on a real edit.
 		var rebuilding *geo.S2CellLookup
 		statsS2Lookup.Store(rebuilding)
+		s2PublishMu.Unlock()
 
 		// The S2 covering can take a while for large projects; build it off
 		// the caller's thread so neither startup nor a geofence reload
-		// blocks on it. The generation counter makes a stale build lose to
-		// a newer reload's.
-		gen := s2BuildGeneration.Add(1)
+		// blocks on it.
 		go func() {
 			start := time.Now()
 			built := geo.BuildS2LookupFromFeatures(statsFeatureCollection)
-			if s2BuildGeneration.Load() == gen {
+			s2PublishMu.Lock()
+			current := s2BuildGeneration.Load() == gen
+			if current {
 				statsS2Lookup.Store(built)
+			}
+			s2PublishMu.Unlock()
+			if current {
 				log.Infof("GEO: S2 lookup ready after %s", time.Since(start).Round(time.Millisecond))
 			} else {
 				log.Infof("GEO: discarding stale S2 lookup build (newer reload in progress)")
