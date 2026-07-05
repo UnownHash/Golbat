@@ -58,11 +58,29 @@ func (l *S2CellLookup) Lookup(cellID s2.CellID) []AreaName {
 	if _, edge := l.edgeCells[cellID]; edge {
 		return nil
 	}
-	var areas []AreaName
+	// Fast path: the overwhelmingly common case is exactly one level
+	// holding a match — return the stored slice directly, no allocation.
+	// This runs on the per-save hot path.
+	var single []AreaName
+	var merged []AreaName
 	for level := cellID.Level(); level >= s2LookupMinLevel; level-- {
-		areas = append(areas, l.cells[cellID.Parent(level)]...)
+		hit := l.cells[cellID.Parent(level)]
+		if len(hit) == 0 {
+			continue
+		}
+		switch {
+		case single == nil && merged == nil:
+			single = hit
+		case merged == nil:
+			merged = append(append(make([]AreaName, 0, len(single)+len(hit)), single...), hit...)
+		default:
+			merged = append(merged, hit...)
+		}
 	}
-	return areas
+	if merged != nil {
+		return merged
+	}
+	return single
 }
 
 func (l *S2CellLookup) SizeBytes() int64 {

@@ -8,7 +8,6 @@ import (
 	"os"
 	"strconv"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -19,6 +18,7 @@ import (
 	"golbat/config"
 	"golbat/encounter_cache"
 	"golbat/geo"
+	"golbat/util"
 )
 
 type areaStatsCount struct {
@@ -173,10 +173,11 @@ func ReloadGeofenceAndClearStats() {
 		return
 	}
 
-	pokemonStatsLock.Lock()
-	pokemonStats = make(map[geo.AreaName]areaStatsCount)          // clear stats
-	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear count
-	pokemonStatsLock.Unlock()
+	// Clear via an in-band barrier so the queued event backlog (tagged with
+	// pre-reload area names) drains into the OLD maps and the cut is clean.
+	// Blocking send is fine here: this runs on the reload endpoint's
+	// goroutine, not the decode path, and the worker always drains.
+	pokemonStatsEvents <- pokemonStatsEvent{clearMaps: true}
 }
 
 // pokemonStatsSnapshot carries the fields the stats aggregation reads,
@@ -244,6 +245,7 @@ type pokemonStatsEvent struct {
 	areas     []geo.AreaName // save events only
 	now       int64
 	encounter bool // true: updateEncounterStats path; false: updatePokemonStats path
+	clearMaps bool // barrier event from ReloadGeofenceAndClearStats
 }
 
 // pokemonStatsEvents feeds the single stats-aggregation worker. Savers used
@@ -302,9 +304,17 @@ func statsAggregationWorker() {
 
 		pokemonStatsLock.Lock()
 		for i := range batch {
-			if batch[i].encounter {
+			switch {
+			case batch[i].clearMaps:
+				// In-band barrier: events enqueued before a geofence reload
+				// (carrying old area names) have all been aggregated above;
+				// clear here for a clean cut instead of clearing out-of-band
+				// and letting the queued backlog pollute the fresh maps.
+				pokemonStats = make(map[geo.AreaName]areaStatsCount)
+				pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
+			case batch[i].encounter:
 				updateEncounterStats(batch[i].snap)
-			} else {
+			default:
 				updatePokemonStats(batch[i].snap, batch[i].areas, batch[i].now)
 			}
 		}
@@ -319,22 +329,17 @@ func statsAggregationWorker() {
 // drains -> decoders burn their backlog and refill -> repeat (observed in
 // production as 3-5s shed storms every ~30s). Never block: drop the event,
 // count the drop, and report at most once per second.
-var (
-	statsEventsDropped atomic.Int64
-	statsDropLastLog   atomic.Int64 // unix nanos of last drop summary line
-)
+var statsEventDrops util.DropReporter
 
 func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
 	select {
 	case pokemonStatsEvents <- ev:
 	default:
 		statsCollector.IncStatsEventsDropped()
-		statsEventsDropped.Add(1)
-		now := time.Now().UnixNano()
-		if last := statsDropLastLog.Load(); now-last >= int64(time.Second) && statsDropLastLog.CompareAndSwap(last, now) {
+		statsEventDrops.Report(func(dropped int64) {
 			log.Warnf("[STATS_WORKER] dropped %d stats events in the last second (worker saturated, backlog %d/%d)",
-				statsEventsDropped.Swap(0), len(pokemonStatsEvents), cap(pokemonStatsEvents))
-		}
+				dropped, len(pokemonStatsEvents), cap(pokemonStatsEvents))
+		})
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"golbat/config"
 	db2 "golbat/db"
+	"golbat/util"
 )
 
 // rawSlotWaitWarning is the parked-time threshold above which a raw
@@ -36,13 +37,10 @@ var rawProcessingSem chan struct{}
 // rawProcessingWaiting counts goroutines parked on rawProcessingSem.
 var rawProcessingWaiting atomic.Int64
 
-// Shed logging is aggregated: during a sustained shed storm one line per
-// dropped packet is hundreds of log lines a second — log I/O amplifying
-// the overload it reports. At most one summary line per second.
-var (
-	rawShedCount   atomic.Int64
-	rawShedLastLog atomic.Int64 // unix nanos of last shed summary line
-)
+// Shed logging is aggregated via util.DropReporter: during a sustained
+// shed storm one line per dropped packet is hundreds of log lines a
+// second — log I/O amplifying the overload it reports.
+var rawShedDrops util.DropReporter
 
 // initSlowDbQueryLogging resolves tuning.slow_db_query_ms into the db
 // package's [DB_SLOW] threshold (0 = 1s default, negative = disabled).
@@ -103,15 +101,13 @@ func acquireRawProcessingSlot() (func(), bool) {
 		// can see backpressure instead of inferring it from throughput.
 		if waiting := rawProcessingWaiting.Add(1); waiting > rawQueueCap {
 			rawProcessingWaiting.Add(-1)
-			rawShedCount.Add(1)
 			if statsCollector != nil {
 				statsCollector.IncRawPacketsShed()
 			}
-			now := time.Now().UnixNano()
-			if last := rawShedLastLog.Load(); now-last >= int64(time.Second) && rawShedLastLog.CompareAndSwap(last, now) {
+			rawShedDrops.Report(func(dropped int64) {
 				log.Warnf("[RAW_LIMITER] shed %d packets in the last second (%d goroutines waiting for %d slots)",
-					rawShedCount.Swap(0), waiting-1, cap(sem))
-			}
+					dropped, waiting-1, cap(sem))
+			})
 			return nil, false
 		}
 		start := time.Now()

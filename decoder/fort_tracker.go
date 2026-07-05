@@ -10,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
+	"golbat/util"
 )
 
 // FortTracker provides memory-based tracking of forts (pokestops/gyms) per S2 cell
@@ -648,11 +649,17 @@ type fortTrackerEvent struct {
 var fortTrackerEvents = make(chan fortTrackerEvent, 8192)
 
 func fortTrackerWorker() {
-	ctx := context.Background()
 	for ev := range fortTrackerEvents {
+		// Bound each event's DB work: the decode path used to lend its 5s
+		// deadline to these deletes; without one, a single hung query would
+		// wedge staleness detection instance-wide until restart.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		checkRemovedForts(ctx, ev.dbDetails, ev.cellForts)
+		cancel()
 	}
 }
+
+var fortTrackerDrops util.DropReporter
 
 // CheckRemovedForts queues a GMO's cell contents for the tracker worker.
 // The map must not be mutated by the caller after this call.
@@ -663,7 +670,10 @@ func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts ma
 		// Tracker backlogged — dropping one GMO's staleness observation is
 		// harmless (forts must be missing for an hour across multiple scans
 		// before anything happens); wedging a decoder is not.
-		log.Warnf("[FORT_TRACKER] event queue full, dropping cell update (%d cells)", len(cellForts))
+		fortTrackerDrops.Report(func(dropped int64) {
+			log.Warnf("[FORT_TRACKER] dropped %d cell updates in the last second (worker backlogged, queue %d/%d)",
+				dropped, len(fortTrackerEvents), cap(fortTrackerEvents))
+		})
 	}
 }
 
