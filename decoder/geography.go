@@ -135,11 +135,11 @@ func MatchStatsGeofenceWithCell(lat, lon float64, cellId uint64) []geo.AreaName 
 			return areas
 		}
 	}
-	tree, _ := statsTree.Load().(*rtree.RTreeG[*geojson.Feature])
+	tree, _ := statsTree.Load().(*rtree.RTreeG[*geo.CompiledFence])
 	return geo.MatchGeofencesRtree(tree, lat, lon)
 }
 
 func MatchNestGeofence(lat, lon float64) []geo.AreaName {
-	tree, _ := nestTree.Load().(*rtree.RTreeG[*geojson.Feature])
+	tree, _ := nestTree.Load().(*rtree.RTreeG[*geo.CompiledFence])
 	return geo.MatchGeofencesRtree(tree, lat, lon)
 }
