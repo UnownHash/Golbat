@@ -56,6 +56,7 @@ func (col *noopCollector) SetWorkerBacklog(string, float64)            {}
 func (col *noopCollector) SetRawProcessingWaiting(float64)             {}
 func (col *noopCollector) IncRawPacketsShed()                          {}
 func (col *noopCollector) IncSlowDbQuery(string)                       {}
+func (col *noopCollector) IncStatsEventsDropped()                      {}
 func (col *noopCollector) SetWriteBehindQueueDepth(string, float64)    {}
 func (col *noopCollector) IncWriteBehindSquashed(string)               {}
 func (col *noopCollector) IncWriteBehindRateLimited(string)            {}

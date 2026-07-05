@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -277,18 +278,30 @@ func statsAggregationWorker() {
 	}
 }
 
-var statsQueueWarned bool // accessed only by enqueuers under no lock; advisory
+// Stats events are loss-tolerant (they are statistics); decode is not
+// block-tolerant. A saturated worker with a blocking send here re-couples
+// decode throughput to stats throughput and produces a fill-drain limit
+// cycle: channel fills -> every decoder freezes at this send -> worker
+// drains -> decoders burn their backlog and refill -> repeat (observed in
+// production as 3-5s shed storms every ~30s). Never block: drop the event,
+// count the drop, and report at most once per second.
+var (
+	statsEventsDropped atomic.Int64
+	statsDropLastLog   atomic.Int64 // unix nanos of last drop summary line
+)
 
 func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
-	if d := len(pokemonStatsEvents); d > cap(pokemonStatsEvents)/2 {
-		if !statsQueueWarned {
-			statsQueueWarned = true
-			log.Warnf("[STATS_WORKER] backlog %d/%d", d, cap(pokemonStatsEvents))
+	select {
+	case pokemonStatsEvents <- ev:
+	default:
+		statsCollector.IncStatsEventsDropped()
+		statsEventsDropped.Add(1)
+		now := time.Now().UnixNano()
+		if last := statsDropLastLog.Load(); now-last >= int64(time.Second) && statsDropLastLog.CompareAndSwap(last, now) {
+			log.Warnf("[STATS_WORKER] dropped %d stats events in the last second (worker saturated, backlog %d/%d)",
+				statsEventsDropped.Swap(0), len(pokemonStatsEvents), cap(pokemonStatsEvents))
 		}
-	} else if statsQueueWarned && d < cap(pokemonStatsEvents)/4 {
-		statsQueueWarned = false
 	}
-	pokemonStatsEvents <- ev
 }
 
 // update stats for an encounterId

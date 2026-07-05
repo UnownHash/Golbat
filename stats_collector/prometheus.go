@@ -359,6 +359,13 @@ var (
 			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
 		},
 	)
+	statsEventsDroppedCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "stats_events_dropped_total",
+			Help:      "Pokemon stats events dropped because the aggregation worker was saturated",
+		},
+	)
 	slowDbQueries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -730,6 +737,10 @@ func (col *promCollector) IncSlowDbQuery(caller string) {
 	slowDbQueries.WithLabelValues(caller).Inc()
 }
 
+func (col *promCollector) IncStatsEventsDropped() {
+	statsEventsDroppedCounter.Inc()
+}
+
 func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
 	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
 }
@@ -771,7 +782,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
-	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries)
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,
