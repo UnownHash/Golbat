@@ -1,7 +1,9 @@
 package decoder
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"sync/atomic"
@@ -35,6 +37,26 @@ var s2BuildGeneration atomic.Int64
 
 var kojiUrl = ""
 var kojiBearerToken = ""
+
+// lastGeofenceHash gates geofence re-indexing on actual content change, so
+// a no-op Koji reload neither rebuilds the S2 lookup nor drops the served
+// one. Holds a [32]byte sha256 sum.
+var lastGeofenceHash atomic.Value
+
+// geofenceContentChanged records and reports whether the geofence source
+// bytes differ from the previously indexed ones. nil/empty source counts
+// as changed (never skip indexing on an unhashable source).
+func geofenceContentChanged(source []byte) bool {
+	if len(source) == 0 {
+		return true
+	}
+	sum := sha256.Sum256(source)
+	if prev, ok := lastGeofenceHash.Load().([32]byte); ok && prev == sum {
+		return false
+	}
+	lastGeofenceHash.Store(sum)
+	return true
+}
 
 // kojiHTTPClient bounds the Koji fetch — http.DefaultClient has no timeout,
 // and a hung Koji must not wedge geofence reloads.
@@ -83,6 +105,7 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 
 func ReadGeofences() error {
 	var statsFeatureCollection *geojson.FeatureCollection
+	var sourceBytes []byte
 
 	if kojiUrl != "" {
 		fc, err := GetKojiGeofence(kojiUrl)
@@ -97,6 +120,7 @@ func ReadGeofences() error {
 					log.Warnf("KOJI: Unable to parse cached geofence - %s", geoerr)
 				} else {
 					statsFeatureCollection = fc
+					sourceBytes = geofence
 					log.Infof("KOJI: Loaded cached geofence")
 
 				}
@@ -108,6 +132,7 @@ func ReadGeofences() error {
 				log.Warnf("KOJI: Unable to cache geofence - %s", err)
 			}
 			statsFeatureCollection = fc
+			sourceBytes = bytes
 
 		}
 	} else {
@@ -121,6 +146,19 @@ func ReadGeofences() error {
 		}
 		log.Infof("GEO: Loaded geofence from geofence.json")
 		statsFeatureCollection = fc
+		sourceBytes = geofence
+	}
+
+	if statsFeatureCollection == nil {
+		// Koji fetch failed with no usable cache: keep serving the previous
+		// indexes rather than publishing an empty tree (which would silently
+		// unmatch every pokemon until the next successful reload).
+		return errors.New("no geofence data available; keeping previous geofences")
+	}
+
+	if !geofenceContentChanged(sourceBytes) {
+		log.Infof("GEO: geofence content unchanged; keeping existing indexes")
+		return nil
 	}
 
 	// Publish the rtree immediately — matching works through the (compiled)
@@ -129,6 +167,15 @@ func ReadGeofences() error {
 	statsTree.Store(newStatsTree)
 
 	if config.Config.Tuning.S2CellLookup {
+		// Drop the previous lookup for the duration of the rebuild so the
+		// whole window serves the NEW fences consistently through the
+		// compiled-polygon fallback — otherwise cells interior to the old
+		// fences would keep answering from the old epoch while everything
+		// else used the new one. The unchanged-content fast path above
+		// means this only ever happens on a real edit.
+		var rebuilding *geo.S2CellLookup
+		statsS2Lookup.Store(rebuilding)
+
 		// The S2 covering can take a while for large projects; build it off
 		// the caller's thread so neither startup nor a geofence reload
 		// blocks on it. The generation counter makes a stale build lose to
