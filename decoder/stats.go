@@ -244,7 +244,7 @@ type pokemonStatsEvent struct {
 // mutex became the decode-throughput ceiling (a goroutine dump showed 66 of
 // 96 decoders parked on it). One worker owning the maps removes the convoy;
 // enqueueing is a channel send.
-var pokemonStatsEvents = make(chan pokemonStatsEvent, 65536)
+var pokemonStatsEvents = make(chan pokemonStatsEvent, 262144)
 
 // StartWorkerBacklogReporter publishes background-worker queue depths to
 // the stats collector every 10s. Call from main after InitDataCache and
@@ -268,13 +268,39 @@ func StartWorkerBacklogReporter() {
 	}()
 }
 
+// statsAggregationWorker drains events in batches, holding pokemonStatsLock
+// once per batch: at production event rates the previous per-event lock
+// cycling (2-3 acquisitions each) was a measurable share of the worker's
+// per-event budget and the worker was saturating (backlog pegged, drops).
+// Batch lock holds are bounded (~ms); the flushers' map swaps wait at most
+// one batch.
 func statsAggregationWorker() {
+	const batchSize = 512
+	batch := make([]pokemonStatsEvent, 0, batchSize)
 	for ev := range pokemonStatsEvents {
-		if ev.encounter {
-			updateEncounterStats(ev.snap)
-		} else {
-			updatePokemonStats(ev.snap, ev.areas, ev.now)
+		batch = append(batch[:0], ev)
+	drain:
+		for len(batch) < batchSize {
+			select {
+			case next, ok := <-pokemonStatsEvents:
+				if !ok {
+					break drain
+				}
+				batch = append(batch, next)
+			default:
+				break drain
+			}
 		}
+
+		pokemonStatsLock.Lock()
+		for i := range batch {
+			if batch[i].encounter {
+				updateEncounterStats(batch[i].snap)
+			} else {
+				updatePokemonStats(batch[i].snap, batch[i].areas, batch[i].now)
+			}
+		}
+		pokemonStatsLock.Unlock()
 	}
 }
 
@@ -304,7 +330,8 @@ func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
 	}
 }
 
-// update stats for an encounterId
+// update stats for an encounterId.
+// Caller (the stats aggregation worker) must hold pokemonStatsLock.
 func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
@@ -347,12 +374,9 @@ func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 		formIdStr = strconv.Itoa(int(pokemon.Form.ValueOrZero()))
 	}
 
-	// For the DB
+	// For the DB (caller — the aggregation worker — holds pokemonStatsLock)
 	func() {
 		areaName := geo.AreaName{Parent: "world", Name: "world"}
-
-		pokemonStatsLock.Lock()
-		defer pokemonStatsLock.Unlock()
 
 		countStats, exists := pokemonCount[areaName]
 		if !exists {
@@ -390,6 +414,8 @@ func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 	}
 }
 
+// updatePokemonStats aggregates one save event into the stats maps.
+// Caller (the stats aggregation worker) must hold pokemonStatsLock.
 func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now int64) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
@@ -493,8 +519,6 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		statsResetCountIncr = 1
 	}
 
-	locked := false
-
 	var isHundo bool
 	var isNundo bool
 
@@ -516,11 +540,6 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		// Count stats
 
 		if pokemon.isNewRecord() || pokemon.oldValues.Cp != pokemon.Cp { // pokemon is new or CP has changed (encountered or re-encountered)
-			if !locked {
-				pokemonStatsLock.Lock()
-				locked = true
-			}
-
 			countStats, exists := pokemonCount[area]
 			if !exists {
 				countStats = &areaPokemonCountDetail{
@@ -561,11 +580,6 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
 			bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
 			verifiedReEncounterIncr > 0 {
-			if !locked {
-				pokemonStatsLock.Lock()
-				locked = true
-			}
-
 			areaStats := pokemonStats[area]
 			if bucket >= 0 {
 				areaStats.tthBucket[bucket]++
@@ -589,9 +603,6 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		}
 	}
 
-	if locked {
-		pokemonStatsLock.Unlock()
-	}
 }
 
 func updateRaidStats(gym *Gym, areas []geo.AreaName) {
