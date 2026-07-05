@@ -313,30 +313,33 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		data[i] = entry.Data
 	}
 
-	// TimedOn logs [DB_SLOW] with pool stats when the flush (including
-	// retries) is slow, in the same identifiable format as the entity
-	// loaders — so slow batch writes and slow under-lock retrievals can be
-	// correlated in one log stream.
+	// TimedOn logs [DB_SLOW] with pool stats when a flush attempt is slow,
+	// in the same identifiable format as the entity loaders — so slow batch
+	// writes and slow under-lock retrievals can be correlated in one log
+	// stream. Each attempt is timed individually: the deadlock-retry
+	// backoff sleeps must not be counted as database time (the retry
+	// warnings below record the attempts themselves).
 	pool := q.db.GeneralDb
 	if q.name == "pokemon" {
 		pool = q.db.PokemonDb
 	}
-	err := db.TimedOn(pool, fmt.Sprintf("writebehind.%s flush(%d entries)", q.name, len(entries)), func() error {
-		var err error
-		for attempt := 0; attempt <= deadlockRetries; attempt++ {
-			err = q.flushFunc(ctx, q.db, data)
-			if err == nil {
-				break
-			}
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlock && attempt < deadlockRetries {
-				log.Warnf("Write-behind [%s] deadlock on attempt %d/%d (%d entries), retrying...", q.name, attempt+1, deadlockRetries, len(entries))
-				time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
-				continue
-			}
+	caller := fmt.Sprintf("writebehind.%s flush(%d entries)", q.name, len(entries))
+
+	var err error
+	for attempt := 0; attempt <= deadlockRetries; attempt++ {
+		err = db.TimedOn(pool, caller, func() error {
+			return q.flushFunc(ctx, q.db, data)
+		})
+		if err == nil {
 			break
 		}
-		return err
-	})
+		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlock && attempt < deadlockRetries {
+			log.Warnf("Write-behind [%s] deadlock on attempt %d/%d (%d entries), retrying...", q.name, attempt+1, deadlockRetries, len(entries))
+			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+			continue
+		}
+		break
+	}
 	batchTime := time.Since(start).Seconds()
 	entryCount := len(entries)
 
