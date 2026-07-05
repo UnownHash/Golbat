@@ -26,7 +26,7 @@ require (
 	github.com/knadh/koanf/v2 v2.3.4
 	github.com/paulmach/orb v0.13.0
 	github.com/prometheus/client_golang v1.23.2
-	github.com/puzpuzpuz/xsync/v3 v3.5.1
+	github.com/puzpuzpuz/xsync/v4 v4.5.0
 	github.com/ringsaturn/tzf v1.2.1
 	github.com/sirupsen/logrus v1.9.4
 	github.com/tidwall/rtree v1.10.0

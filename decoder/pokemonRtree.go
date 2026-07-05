@@ -12,7 +12,7 @@ import (
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 )
@@ -50,8 +50,8 @@ type pokemonFormKey struct {
 	form      int16
 }
 
-var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
-var pokemonFormCount *xsync.MapOf[pokemonFormKey, int64]
+var pokemonLookupCache *xsync.Map[uint64, PokemonLookupCacheItem]
+var pokemonFormCount *xsync.Map[pokemonFormKey, int64]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
@@ -119,15 +119,18 @@ func flushPokemonTreeEvictions(entries []treeEvictionEntry[uint64]) {
 }
 
 func adjustPokemonFormCount(key pokemonFormKey, delta int64) {
-	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, bool) {
+	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, xsync.ComputeOp) {
 		newValue := oldValue + delta
-		return newValue, newValue <= 0 // delete entry when count reaches zero
+		if newValue <= 0 {
+			return 0, xsync.DeleteOp // delete entry when count reaches zero
+		}
+		return newValue, xsync.UpdateOp
 	})
 }
 
 func initPokemonRtree() {
-	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
-	pokemonFormCount = xsync.NewMapOf[pokemonFormKey, int64]()
+	pokemonLookupCache = xsync.NewMap[uint64, PokemonLookupCacheItem]()
+	pokemonFormCount = xsync.NewMap[pokemonFormKey, int64]()
 
 	pokemonTreeEvictor = newTreeEvictor[uint64]("pokemon", treeEvictorQueueSize, treeEvictorBatchSize, flushPokemonTreeEvictions)
 

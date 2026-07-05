@@ -12,7 +12,7 @@ import (
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
@@ -119,12 +119,12 @@ ON DUPLICATE KEY UPDATE
 `
 
 var (
-	stationBattleCache        *xsync.MapOf[string, stationBattleState]
+	stationBattleCache        *xsync.Map[string, stationBattleState]
 	stationBattleSnapshotSeed = maphash.MakeSeed()
 )
 
 func initStationBattleCache() {
-	stationBattleCache = xsync.NewMapOf[string, stationBattleState]()
+	stationBattleCache = xsync.NewMap[string, stationBattleState]()
 }
 
 func storeStationBattles(stationId string, battles []StationBattleData) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 
@@ -66,7 +66,7 @@ type FortLookup struct {
 	StationBattles     []FortLookupStationBattle
 }
 
-var fortLookupCache *xsync.MapOf[string, FortLookup]
+var fortLookupCache *xsync.Map[string, FortLookup]
 var fortTreeMutex sync.RWMutex
 var fortTree rtree.RTreeG[string]
 
@@ -79,7 +79,7 @@ func getFortTreeSnapshot() *rtree.RTreeG[string] {
 
 func initFortRtree() {
 	fortTreeEvictor = newTreeEvictor[string]("fort", treeEvictorQueueSize, treeEvictorBatchSize, flushFortTreeEvictions)
-	fortLookupCache = xsync.NewMapOf[string, FortLookup]()
+	fortLookupCache = xsync.NewMap[string, FortLookup]()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
 	// fortLookupCache are created (and after pokestopCache/gymCache/
