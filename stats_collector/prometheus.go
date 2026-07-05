@@ -359,6 +359,15 @@ var (
 			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
 		},
 	)
+	dbQueryDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "db_query_duration_seconds",
+			Help:      "Duration of timed database calls, by caller function",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14), // 1ms .. ~8s
+		},
+		[]string{"caller"},
+	)
 	statsEventsDroppedCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -741,6 +750,10 @@ func (col *promCollector) IncStatsEventsDropped() {
 	statsEventsDroppedCounter.Inc()
 }
 
+func (col *promCollector) ObserveDbQuery(caller string, seconds float64) {
+	dbQueryDuration.WithLabelValues(caller).Observe(seconds)
+}
+
 func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
 	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
 }
@@ -782,7 +795,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
-	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter)
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

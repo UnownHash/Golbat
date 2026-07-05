@@ -53,9 +53,6 @@ func Timed(caller string, fn func() error) error {
 // attribution to this call.
 func TimedOn(pool *sqlx.DB, caller string, fn func() error) error {
 	threshold := slowQueryLogThreshold.Load()
-	if threshold <= 0 {
-		return fn()
-	}
 
 	var beforeWaitCount int64
 	var beforeWaitDuration time.Duration
@@ -68,7 +65,14 @@ func TimedOn(pool *sqlx.DB, caller string, fn func() error) error {
 	start := time.Now()
 	err := fn()
 	took := time.Since(start)
-	if took <= time.Duration(threshold) {
+
+	// Every call feeds the duration histogram (averages/percentiles per
+	// caller in Grafana); the threshold only gates the slow-query log line
+	// and counter. threshold <= 0 disables slow logging, not measurement.
+	if statsCollector != nil {
+		statsCollector.ObserveDbQuery(callerTag(caller), took.Seconds())
+	}
+	if threshold <= 0 || took <= time.Duration(threshold) {
 		return err
 	}
 

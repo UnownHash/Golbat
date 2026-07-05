@@ -57,6 +57,7 @@ type StatsCollector interface {
 	IncRawPacketsShed()
 	IncSlowDbQuery(caller string)
 	IncStatsEventsDropped()
+	ObserveDbQuery(caller string, seconds float64)
 
 	// Write-behind queue metrics
 	SetWriteBehindQueueDepth(entityType string, depth float64)
