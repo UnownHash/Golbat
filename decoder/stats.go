@@ -288,19 +288,7 @@ func statsAggregationWorker() {
 	const batchSize = 512
 	batch := make([]pokemonStatsEvent, 0, batchSize)
 	for ev := range pokemonStatsEvents {
-		batch = append(batch[:0], ev)
-	drain:
-		for len(batch) < batchSize {
-			select {
-			case next, ok := <-pokemonStatsEvents:
-				if !ok {
-					break drain
-				}
-				batch = append(batch, next)
-			default:
-				break drain
-			}
-		}
+		batch = drainBatch(pokemonStatsEvents, append(batch[:0], ev), batchSize)
 
 		pokemonStatsLock.Lock()
 		for i := range batch {

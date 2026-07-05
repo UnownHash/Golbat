@@ -131,3 +131,27 @@ func TestS2LookupUsesCoarseInterior(t *testing.T) {
 		t.Errorf("interior cell count %d suggests coarse storage is not working", l.CellCount())
 	}
 }
+
+// The S2 fast path must agree with the polygon fallback on fences with
+// hole rings: cells inside a hole are excluded, cells crossing the hole
+// boundary fall back (nil), interior cells outside the hole match.
+func TestS2LookupHonorsHoles(t *testing.T) {
+	outer := square(50, 8, 0.5, true)
+	hole := square(50, 8, 0.1, false) // opposite winding, as GeoJSON prescribes
+	fc := geojson.NewFeatureCollection()
+	f := geojson.NewFeature(orb.Polygon{outer, hole})
+	f.Properties["name"] = "test"
+	fc.Append(f)
+
+	l := BuildS2LookupFromFeatures(fc)
+
+	if areas := l.Lookup(cell15(50, 8)); len(areas) != 0 {
+		t.Errorf("cell inside hole: got %v, want none", areas)
+	}
+	if areas := l.Lookup(cell15(50, 8.3)); len(areas) != 1 || areas[0].Name != "test" {
+		t.Errorf("interior cell outside hole: got %v, want [test]", areas)
+	}
+	if areas := l.Lookup(cell15(51.5, 8)); len(areas) != 0 {
+		t.Errorf("outside cell: got %v, want none", areas)
+	}
+}

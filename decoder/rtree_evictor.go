@@ -92,23 +92,29 @@ func (e *treeEvictor[K]) Close() {
 	<-e.done
 }
 
+// drainBatch appends immediately-available items from ch to buf, up to max
+// entries, without blocking. Shared by the tree writer and the stats
+// aggregation worker.
+func drainBatch[T any](ch <-chan T, buf []T, max int) []T {
+	for len(buf) < max {
+		select {
+		case v, ok := <-ch:
+			if !ok {
+				return buf
+			}
+			buf = append(buf, v)
+		default:
+			return buf
+		}
+	}
+	return buf
+}
+
 func (e *treeEvictor[K]) run() {
 	defer close(e.done)
 	buf := make([]treeEvictionEntry[K], 0, e.batchSize)
 	for entry := range e.ch {
-		buf = append(buf[:0], entry)
-	drain:
-		for len(buf) < e.batchSize {
-			select {
-			case next, ok := <-e.ch:
-				if !ok {
-					break drain
-				}
-				buf = append(buf, next)
-			default:
-				break drain
-			}
-		}
+		buf = drainBatch(e.ch, append(buf[:0], entry), e.batchSize)
 		e.flush(buf)
 		if pending := len(e.ch); pending > cap(e.ch)/2 {
 			now := time.Now().UnixNano()

@@ -201,13 +201,32 @@ func processPolygon(
 	loop.Normalize()
 	s2Polygon := s2.PolygonFromLoops([]*s2.Loop{loop})
 
+	// Hole rings become standalone normalized polygons: a cell fully inside
+	// a hole is not part of the fence (skipped entirely), a cell crossing a
+	// hole boundary is an edge cell (exact polygon fallback). This keeps
+	// the S2 fast path consistent with the CompiledFence fallback, which
+	// has always honored holes.
+	var holes []*s2.Polygon
+	for _, holeRing := range polygon[1:] {
+		if len(holeRing) == 0 {
+			continue
+		}
+		hp := make([]s2.Point, len(holeRing))
+		for i, p := range holeRing {
+			hp[i] = s2.PointFromLatLng(s2.LatLngFromDegrees(p.Lat(), p.Lon()))
+		}
+		hl := s2.LoopFromPoints(hp)
+		hl.Normalize()
+		holes = append(holes, s2.PolygonFromLoops([]*s2.Loop{hl}))
+	}
+
 	coverer := s2.RegionCoverer{
 		MinLevel: s2LookupMinLevel,
 		MaxLevel: S2LookupLevel,
 		MaxCells: 1 << 20,
 	}
 	for _, cellID := range coverer.Covering(s2Polygon) {
-		classifyCell(s2Polygon, cellID, area, addArea, addEdgeCell)
+		classifyCell(s2Polygon, holes, cellID, area, addArea, addEdgeCell)
 	}
 }
 
@@ -215,9 +234,11 @@ func processPolygon(
 // partially-covered cells subdivide until S2LookupLevel, where they become
 // edge cells (exact-polygon fallback territory). ContainsCell is exact,
 // unlike the previous 4-vertex sampling, which could misclassify concave
-// boundaries as interior.
+// boundaries as interior. Hole polygons exclude or edge the cells they
+// touch, keeping the fast path consistent with the polygon fallback.
 func classifyCell(
 	p *s2.Polygon,
+	holes []*s2.Polygon,
 	cellID s2.CellID,
 	area AreaName,
 	addArea func(s2.CellID, AreaName),
@@ -225,7 +246,25 @@ func classifyCell(
 ) {
 	cell := s2.CellFromCellID(cellID)
 	if p.ContainsCell(cell) {
-		addArea(cellID, area)
+		crossesHole := false
+		for _, hole := range holes {
+			if !hole.IntersectsCell(cell) {
+				continue
+			}
+			if hole.ContainsCell(cell) {
+				// Entirely inside a hole: not part of the fence at all.
+				return
+			}
+			crossesHole = true
+			break
+		}
+		if !crossesHole {
+			addArea(cellID, area)
+			return
+		}
+		// Hole boundary crosses this cell — subdivide or mark as edge.
+	} else if !p.IntersectsCell(cell) {
+		// Reachable via subdivision of a partially-covered parent.
 		return
 	}
 	if cellID.Level() >= S2LookupLevel {
@@ -234,7 +273,7 @@ func classifyCell(
 	}
 	for _, child := range cellID.Children() {
 		if p.IntersectsCell(s2.CellFromCellID(child)) {
-			classifyCell(p, child, area, addArea, addEdgeCell)
+			classifyCell(p, holes, child, area, addArea, addEdgeCell)
 		}
 	}
 }
