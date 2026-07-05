@@ -13,7 +13,6 @@ import (
 	"github.com/guregu/null/v6"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v4"
-	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
 )
 
@@ -314,19 +313,4 @@ func addPokemonToTree(pokemon *Pokemon) {
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
-}
-
-func removePokemonFromTree(pokemonId uint64, lat, lon float64) {
-	pokemonTreeMutex.Lock()
-	beforeLen := pokemonTree.Len()
-	pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, pokemonId)
-	afterLen := pokemonTree.Len()
-	pokemonTreeMutex.Unlock()
-	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
-		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
-	}
-
-	if beforeLen != afterLen+1 {
-		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, lat, lon, beforeLen, afterLen, pokemonLookupCache.Size())
-	}
 }
