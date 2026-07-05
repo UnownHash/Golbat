@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"sync/atomic"
+	"time"
 
 	"golbat/config"
 	"golbat/geo"
@@ -26,8 +27,18 @@ type KojiResponse struct {
 var statsTree atomic.Value
 var nestTree atomic.Value
 var statsS2Lookup atomic.Value
+
+// s2BuildGeneration guards against a slow, stale S2 build (from an older
+// geofence reload) overwriting a newer one: only the latest generation may
+// publish its result.
+var s2BuildGeneration atomic.Int64
+
 var kojiUrl = ""
 var kojiBearerToken = ""
+
+// kojiHTTPClient bounds the Koji fetch — http.DefaultClient has no timeout,
+// and a hung Koji must not wedge geofence reloads.
+var kojiHTTPClient = &http.Client{Timeout: 30 * time.Second}
 
 const geojsonFilename = "geojson/geofence.json"
 
@@ -54,7 +65,7 @@ func GetKojiGeofence(url string) (*geojson.FeatureCollection, error) {
 	req.Header.Add("Authorization", "Bearer "+kojiBearerToken)
 	req.Header.Add("Content-Type", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := kojiHTTPClient.Do(req)
 
 	if err != nil {
 		return nil, err
@@ -112,14 +123,31 @@ func ReadGeofences() error {
 		statsFeatureCollection = fc
 	}
 
+	// Publish the rtree immediately — matching works through the (compiled)
+	// polygon path while the S2 lookup builds.
 	newStatsTree := geo.LoadRtree(statsFeatureCollection)
-	var newStatsS2Lookup *geo.S2CellLookup
-	if config.Config.Tuning.S2CellLookup {
-		newStatsS2Lookup = geo.BuildS2LookupFromFeatures(statsFeatureCollection)
-	}
-
 	statsTree.Store(newStatsTree)
-	statsS2Lookup.Store(newStatsS2Lookup)
+
+	if config.Config.Tuning.S2CellLookup {
+		// The S2 covering can take a while for large projects; build it off
+		// the caller's thread so neither startup nor a geofence reload
+		// blocks on it. The generation counter makes a stale build lose to
+		// a newer reload's.
+		gen := s2BuildGeneration.Add(1)
+		go func() {
+			start := time.Now()
+			built := geo.BuildS2LookupFromFeatures(statsFeatureCollection)
+			if s2BuildGeneration.Load() == gen {
+				statsS2Lookup.Store(built)
+				log.Infof("GEO: S2 lookup ready after %s", time.Since(start).Round(time.Millisecond))
+			} else {
+				log.Infof("GEO: discarding stale S2 lookup build (newer reload in progress)")
+			}
+		}()
+	} else {
+		var disabled *geo.S2CellLookup
+		statsS2Lookup.Store(disabled)
+	}
 
 	return nil
 }

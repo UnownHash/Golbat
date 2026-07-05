@@ -11,7 +11,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const S2LookupLevel = 15
+const (
+	// S2LookupLevel is the level lookups arrive at (GMO cell ids are level 15).
+	S2LookupLevel = 15
+	// s2LookupMinLevel is the coarsest level interior containment is stored
+	// at. Large fences store their interior as a handful of coarse cells
+	// (resolved by Lookup's parent walk) instead of tens of thousands of
+	// level-15 cells — orders of magnitude less build time and memory.
+	s2LookupMinLevel = 10
+)
 
 type S2CellLookup struct {
 	cells     map[s2.CellID][]AreaName
@@ -25,7 +33,12 @@ func NewS2CellLookup() *S2CellLookup {
 	}
 }
 
-func (l *S2CellLookup) removeEdgeCells() int {
+// pruneEdgeOverlaps drops interior entries that coincide exactly with an
+// edge cell — Lookup bails to the polygon fallback for those, so the
+// entries would be dead weight. Unlike the previous implementation the
+// edge set itself is retained: it is what tells Lookup a level-15 cell
+// straddles some fence boundary.
+func (l *S2CellLookup) pruneEdgeOverlaps() int {
 	removed := 0
 	for cellID := range l.edgeCells {
 		if _, exists := l.cells[cellID]; exists {
@@ -33,18 +46,30 @@ func (l *S2CellLookup) removeEdgeCells() int {
 			removed++
 		}
 	}
-	l.edgeCells = nil // free memory
 	return removed
 }
 
+// Lookup resolves the areas containing a (level-15) cell. Returns nil when
+// the cell touches any fence boundary — the caller must fall back to exact
+// polygon matching. Interior containment may be recorded at any level from
+// the cell's own up to s2LookupMinLevel (overlapping fences may store at
+// different levels), so the parent chain is walked and results unioned.
 func (l *S2CellLookup) Lookup(cellID s2.CellID) []AreaName {
-	return l.cells[cellID]
+	if _, edge := l.edgeCells[cellID]; edge {
+		return nil
+	}
+	var areas []AreaName
+	for level := cellID.Level(); level >= s2LookupMinLevel; level-- {
+		areas = append(areas, l.cells[cellID.Parent(level)]...)
+	}
+	return areas
 }
 
 func (l *S2CellLookup) SizeBytes() int64 {
 	var size int64
 
 	size += int64(unsafe.Sizeof(l.cells))
+	size += int64(len(l.edgeCells)) * int64(unsafe.Sizeof(s2.CellID(0)))
 
 	for cellID, areas := range l.cells {
 		size += int64(unsafe.Sizeof(cellID))
@@ -123,11 +148,12 @@ func BuildS2LookupFromFeatures(featureCollection *geojson.FeatureCollection) *S2
 	close(workChan)
 	wg.Wait()
 
-	removed := lookup.removeEdgeCells()
-	log.Infof("GEO: Removed %d edge cells from lookup", removed)
+	removed := lookup.pruneEdgeOverlaps()
+	log.Infof("GEO: Pruned %d interior cells shadowed by edge cells", removed)
 
 	sizeMB := float64(lookup.SizeBytes()) / (1024 * 1024)
-	log.Infof("GEO: S2 lookup table built with %d cells, size: %.2f MB", lookup.CellCount(), sizeMB)
+	log.Infof("GEO: S2 lookup table built with %d interior cells, %d edge cells, size: %.2f MB",
+		lookup.CellCount(), len(lookup.edgeCells), sizeMB)
 
 	return lookup
 }
@@ -150,27 +176,47 @@ func processPolygon(
 	}
 
 	loop := s2.LoopFromPoints(points)
+	// GeoJSON in the wild carries both winding orders. S2 interprets a
+	// clockwise ring as its complement — the whole planet minus the fence —
+	// and the forced fine-level covering of "the planet" effectively never
+	// finishes. Normalize picks the interpretation with area < 2*pi.
+	loop.Normalize()
 	s2Polygon := s2.PolygonFromLoops([]*s2.Loop{loop})
 
 	coverer := s2.RegionCoverer{
-		MinLevel: S2LookupLevel,
+		MinLevel: s2LookupMinLevel,
 		MaxLevel: S2LookupLevel,
+		MaxCells: 1 << 20,
 	}
-	covering := coverer.Covering(s2Polygon)
+	for _, cellID := range coverer.Covering(s2Polygon) {
+		classifyCell(s2Polygon, cellID, area, addArea, addEdgeCell)
+	}
+}
 
-	for _, cellID := range covering {
-		cell := s2.CellFromCellID(cellID)
-		allInside := true
-		for i := range 4 {
-			if !s2Polygon.ContainsPoint(cell.Vertex(i)) {
-				allInside = false
-				break
-			}
-		}
-		if allInside {
-			addArea(cellID, area)
-		} else {
-			addEdgeCell(cellID)
+// classifyCell stores fully-contained cells as interior at their own level;
+// partially-covered cells subdivide until S2LookupLevel, where they become
+// edge cells (exact-polygon fallback territory). ContainsCell is exact,
+// unlike the previous 4-vertex sampling, which could misclassify concave
+// boundaries as interior.
+func classifyCell(
+	p *s2.Polygon,
+	cellID s2.CellID,
+	area AreaName,
+	addArea func(s2.CellID, AreaName),
+	addEdgeCell func(s2.CellID),
+) {
+	cell := s2.CellFromCellID(cellID)
+	if p.ContainsCell(cell) {
+		addArea(cellID, area)
+		return
+	}
+	if cellID.Level() >= S2LookupLevel {
+		addEdgeCell(cellID)
+		return
+	}
+	for _, child := range cellID.Children() {
+		if p.IntersectsCell(s2.CellFromCellID(child)) {
+			classifyCell(p, child, area, addArea, addEdgeCell)
 		}
 	}
 }

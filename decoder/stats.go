@@ -151,15 +151,20 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 func ReloadGeofenceAndClearStats() {
 	log.Info("Reloading stats geofence")
 
-	pokemonStatsLock.Lock()
-	defer pokemonStatsLock.Unlock()
-
+	// Load and index the geofence BEFORE taking the stats lock. Geofence
+	// publication is atomic.Value-based and needs no lock, while
+	// updatePokemonStats/updateEncounterStats take pokemonStatsLock under
+	// the pokemon entity lock — holding it across a Koji fetch and
+	// rtree/S2 rebuild would freeze every pokemon save for the duration.
 	if err := ReadGeofences(); err != nil {
 		log.Errorf("Error reading geofences during hot-reload: %v", err)
 		return
 	}
+
+	pokemonStatsLock.Lock()
 	pokemonStats = make(map[geo.AreaName]areaStatsCount)          // clear stats
 	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear count
+	pokemonStatsLock.Unlock()
 }
 
 // update stats for an encounterId
