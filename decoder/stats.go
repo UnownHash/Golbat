@@ -803,11 +803,14 @@ func logPokemonStats(statsDb *sqlx.DB) {
 		}
 
 		if len(rows) > 0 {
-			_, err := statsDb.NamedExec(
-				"INSERT INTO pokemon_area_stats "+
-					"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
-					"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
-				rows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.pokemon_area_stats (%d rows)", len(rows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO pokemon_area_stats "+
+						"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
+						"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
+					rows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting pokemon_area_stats: %v", err)
 			}
@@ -919,12 +922,15 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 					rowsToWrite := rows[i:end]
 
-					_, err := statsDb.NamedExec(
-						fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, form_id, `count`)"+
-							" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count)"+
-							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
-						rowsToWrite,
-					)
+					err := timedDbQuery(fmt.Sprintf("statsWriter.%s (%d rows)", table, len(rowsToWrite)), statsDb, func() error {
+						_, err := statsDb.NamedExec(
+							fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, form_id, `count`)"+
+								" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count)"+
+								" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
+							rowsToWrite,
+						)
+						return err
+					})
 					if err != nil {
 						log.Errorf("Error inserting %s: %v", table, err)
 					}
@@ -950,12 +956,15 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 				rowsToWrite := rows[i:end]
 
-				_, err := statsDb.NamedExec(
-					"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, form_id, `count`, total)"+
-						" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count, :total)"+
-						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
-					rowsToWrite,
-				)
+				err := timedDbQuery(fmt.Sprintf("statsWriter.pokemon_shiny_stats (%d rows)", len(rowsToWrite)), statsDb, func() error {
+					_, err := statsDb.NamedExec(
+						"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, form_id, `count`, total)"+
+							" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count, :total)"+
+							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
+						rowsToWrite,
+					)
+					return err
+				})
 				if err != nil {
 					log.Errorf("Error inserting pokemon_shiny_stats: %v", err)
 				}
@@ -1023,11 +1032,14 @@ func logRaidStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO raid_stats "+
-					"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, `count`)"+
-					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.raid_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO raid_stats "+
+						"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, `count`)"+
+						" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :count)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)
 			}
@@ -1082,11 +1094,14 @@ func logInvasionStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO invasion_stats "+
-					"(date, area, fence, `character`, `count`)"+
-					" VALUES (:date, :area, :fence, :character, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.invasion_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO invasion_stats "+
+						"(date, area, fence, `character`, `count`)"+
+						" VALUES (:date, :area, :fence, :character, :count)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting invasion_stats: %v", err)
 			}
@@ -1166,13 +1181,16 @@ func logQuestStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO quest_stats "+
-					"(date, area, fence, reward_type, pokemon_id, item_id, item_amount, `count`) "+
-					"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :item_amount, :count) "+
-					"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
-				batchRows,
-			)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.quest_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO quest_stats "+
+						"(date, area, fence, reward_type, pokemon_id, item_id, item_amount, `count`) "+
+						"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :item_amount, :count) "+
+						"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
+					batchRows,
+				)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting quest_stats: %v", err)
 			}
