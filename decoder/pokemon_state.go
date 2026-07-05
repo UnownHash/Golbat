@@ -281,7 +281,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}
-	updatePokemonStats(pokemon, areas, now)
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
 
 	if dbDebugEnabled {
 		pokemon.changedFields = pokemon.changedFields[:0]

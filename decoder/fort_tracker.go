@@ -65,6 +65,7 @@ func InitFortTracker(staleThresholdSeconds int64, minMissCount int) {
 		staleThreshold: staleThresholdSeconds,
 		minMissCount:   minMissCount,
 	}
+	go fortTrackerWorker()
 	log.Infof("FortTracker: initialized with stale threshold of %d seconds, min miss count %d", staleThresholdSeconds, minMissCount)
 }
 
@@ -632,9 +633,44 @@ func clearFortWithLock[T comparable](ctx context.Context, dbDetails db.DbDetails
 	}
 }
 
-// CheckRemovedForts uses the in-memory fort tracker for fast detection.
-// Iterates cellForts directly — its keyset already matches mapCells.
+// fortTrackerEvent is one GMO's worth of cell contents queued for the
+// tracker worker.
+type fortTrackerEvent struct {
+	dbDetails db.DbDetails
+	cellForts map[uint64]*FortTrackerGMOContents
+}
+
+// fortTrackerEvents feeds the single tracker worker. Decoders used to run
+// ProcessCellUpdate inline, all serializing on the tracker's global mutex
+// (a goroutine dump showed 27 of 96 decoders parked on it). Staleness
+// detection is hour-granularity work — there is no reason for it to be
+// synchronous in the decode path. One worker owns all tracker writes.
+var fortTrackerEvents = make(chan fortTrackerEvent, 8192)
+
+func fortTrackerWorker() {
+	ctx := context.Background()
+	for ev := range fortTrackerEvents {
+		checkRemovedForts(ctx, ev.dbDetails, ev.cellForts)
+	}
+}
+
+// CheckRemovedForts queues a GMO's cell contents for the tracker worker.
+// The map must not be mutated by the caller after this call.
 func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts map[uint64]*FortTrackerGMOContents) {
+	select {
+	case fortTrackerEvents <- fortTrackerEvent{dbDetails: dbDetails, cellForts: cellForts}:
+	default:
+		// Tracker backlogged — dropping one GMO's staleness observation is
+		// harmless (forts must be missing for an hour across multiple scans
+		// before anything happens); wedging a decoder is not.
+		log.Warnf("[FORT_TRACKER] event queue full, dropping cell update (%d cells)", len(cellForts))
+	}
+}
+
+// checkRemovedForts uses the in-memory fort tracker for fast detection.
+// Iterates cellForts directly — its keyset already matches mapCells.
+// Runs only on the tracker worker goroutine.
+func checkRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts map[uint64]*FortTrackerGMOContents) {
 	for cellId, cf := range cellForts {
 		// Process cell through tracker - returns stale and converted forts.
 		// nil result means this GMO timestamp is older than last processed for this cell.

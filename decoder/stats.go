@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guregu/null/v6"
+
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 
@@ -94,6 +96,7 @@ func initLiveStats() {
 	encounterCache = encounter_cache.NewEncounterCache(60 * time.Minute)
 	// TODO: fix later to shutdown cleanly, if we care.
 	go encounterCache.Run(context.Background())
+	go statsAggregationWorker()
 }
 
 func LoadStatsGeofences() {
@@ -167,8 +170,107 @@ func ReloadGeofenceAndClearStats() {
 	pokemonStatsLock.Unlock()
 }
 
+// pokemonStatsSnapshot carries the fields the stats aggregation reads,
+// copied while the entity lock is held so the aggregation worker never
+// touches a live Pokemon. Field names mirror Pokemon so the aggregation
+// functions below keep their original bodies.
+type pokemonStatsSnapshot struct {
+	Id                      Uint64Str
+	PokemonId               int16
+	Form                    null.Int
+	Cp                      null.Int
+	AtkIv, DefIv, StaIv     null.Int
+	SeenType                null.String
+	Username                null.String
+	Shiny                   null.Bool
+	Updated                 null.Int
+	ExpireTimestamp         null.Int
+	ExpireTimestampVerified bool
+	newRecord               bool
+	oldValues               struct {
+		SeenType  null.String
+		Cp        null.Int
+		PokemonId int16
+	}
+}
+
+func (s *pokemonStatsSnapshot) isNewRecord() bool { return s.newRecord }
+
+// encounterStatsDuration: see (*Pokemon).encounterStatsDuration.
+func (s *pokemonStatsSnapshot) encounterStatsDuration(now int64) time.Duration {
+	if s.ExpireTimestampVerified {
+		if timeLeft := 60 + s.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
+		}
+	}
+	return 0
+}
+
+// statsSnapshot must be called while holding the pokemon's entity lock.
+func (pokemon *Pokemon) statsSnapshot() *pokemonStatsSnapshot {
+	s := &pokemonStatsSnapshot{
+		Id:                      pokemon.Id,
+		PokemonId:               pokemon.PokemonId,
+		Form:                    pokemon.Form,
+		Cp:                      pokemon.Cp,
+		AtkIv:                   pokemon.AtkIv,
+		DefIv:                   pokemon.DefIv,
+		StaIv:                   pokemon.StaIv,
+		SeenType:                pokemon.SeenType,
+		Username:                pokemon.Username,
+		Shiny:                   pokemon.Shiny,
+		Updated:                 pokemon.Updated,
+		ExpireTimestamp:         pokemon.ExpireTimestamp,
+		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
+		newRecord:               pokemon.isNewRecord(),
+	}
+	s.oldValues.SeenType = pokemon.oldValues.SeenType
+	s.oldValues.Cp = pokemon.oldValues.Cp
+	s.oldValues.PokemonId = pokemon.oldValues.PokemonId
+	return s
+}
+
+type pokemonStatsEvent struct {
+	snap      *pokemonStatsSnapshot
+	areas     []geo.AreaName // save events only
+	now       int64
+	encounter bool // true: updateEncounterStats path; false: updatePokemonStats path
+}
+
+// pokemonStatsEvents feeds the single stats-aggregation worker. Savers used
+// to run the aggregation inline, under the pokemon entity lock, all
+// contending on pokemonStatsLock — with fast geofence matching that global
+// mutex became the decode-throughput ceiling (a goroutine dump showed 66 of
+// 96 decoders parked on it). One worker owning the maps removes the convoy;
+// enqueueing is a channel send.
+var pokemonStatsEvents = make(chan pokemonStatsEvent, 65536)
+
+func statsAggregationWorker() {
+	for ev := range pokemonStatsEvents {
+		if ev.encounter {
+			updateEncounterStats(ev.snap)
+		} else {
+			updatePokemonStats(ev.snap, ev.areas, ev.now)
+		}
+	}
+}
+
+var statsQueueWarned bool // accessed only by enqueuers under no lock; advisory
+
+func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
+	if d := len(pokemonStatsEvents); d > cap(pokemonStatsEvents)/2 {
+		if !statsQueueWarned {
+			statsQueueWarned = true
+			log.Warnf("[STATS_WORKER] backlog %d/%d", d, cap(pokemonStatsEvents))
+		}
+	} else if statsQueueWarned && d < cap(pokemonStatsEvents)/4 {
+		statsQueueWarned = false
+	}
+	pokemonStatsEvents <- ev
+}
+
 // update stats for an encounterId
-func updateEncounterStats(pokemon *Pokemon) {
+func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
 	// And double check that we have IVs, anyway.
@@ -253,7 +355,7 @@ func updateEncounterStats(pokemon *Pokemon) {
 	}
 }
 
-func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
+func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now int64) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{

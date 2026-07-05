@@ -30,7 +30,7 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	updateEncounterStats(pokemon)
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
 	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
@@ -62,7 +62,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	updateEncounterStats(pokemon)
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
 	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
@@ -81,7 +81,7 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	updateEncounterStats(pokemon)
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
 	return fmt.Sprintf("%d Tappable Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
