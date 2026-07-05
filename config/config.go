@@ -145,7 +145,7 @@ type tuning struct {
 	S2CellLookup                   bool    `koanf:"s2_cell_lookup"`             // Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups, default: false
 	CacheShards                    int     `koanf:"cache_shards"`               // shards per in-memory entity cache; 0 = number of CPUs. Raise on very large instances to shrink per-shard expiry sweeps.
 	RawProcessingConcurrency       int     `koanf:"raw_processing_concurrency"` // max concurrent raw-proto processing goroutines; 0 = auto (4x CPUs, capped at 96), -1 = unlimited
-	SlowDbQueryMs                  int     `koanf:"slow_db_query_ms"`           // log [DB_SLOW] for entity queries slower than this; 0 = default (1000), -1 = disabled
+	SlowDbQueryMs                  int     `koanf:"slow_db_query_ms"`           // log [DB_SLOW] for entity queries and write-behind batch flushes slower than this (ms); 0 = default (1000), -1 = disabled
 }
 
 type scanRule struct {

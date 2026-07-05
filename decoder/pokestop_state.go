@@ -34,7 +34,7 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
-	return timedDbQuery("loadPokestopFromDatabase", func() error {
+	return timedDbQuery("loadPokestopFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, pokestop,
 			`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
 		statsCollector.IncDbQuery("select pokestop", err)
@@ -66,7 +66,7 @@ func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool
 
 	// Check database
 	var exists bool
-	err := timedDbQuery("DoesPokestopExist", func() error {
+	err := timedDbQuery("DoesPokestopExist", db.GeneralDb, func() error {
 		return db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
 	})
 	if err != nil {

@@ -13,7 +13,7 @@ import (
 )
 
 func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string, route *Route) error {
-	return timedDbQuery("loadRouteFromDatabase", func() error {
+	return timedDbQuery("loadRouteFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, route,
 			`SELECT * FROM route WHERE route.id = ?`, routeId)
 		statsCollector.IncDbQuery("select route", err)

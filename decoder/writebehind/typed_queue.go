@@ -3,6 +3,7 @@ package writebehind
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -312,19 +313,30 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		data[i] = entry.Data
 	}
 
-	var err error
-	for attempt := 0; attempt <= deadlockRetries; attempt++ {
-		err = q.flushFunc(ctx, q.db, data)
-		if err == nil {
+	// TimedOn logs [DB_SLOW] with pool stats when the flush (including
+	// retries) is slow, in the same identifiable format as the entity
+	// loaders — so slow batch writes and slow under-lock retrievals can be
+	// correlated in one log stream.
+	pool := q.db.GeneralDb
+	if q.name == "pokemon" {
+		pool = q.db.PokemonDb
+	}
+	err := db.TimedOn(pool, fmt.Sprintf("writebehind.%s flush(%d entries)", q.name, len(entries)), func() error {
+		var err error
+		for attempt := 0; attempt <= deadlockRetries; attempt++ {
+			err = q.flushFunc(ctx, q.db, data)
+			if err == nil {
+				break
+			}
+			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlock && attempt < deadlockRetries {
+				log.Warnf("Write-behind [%s] deadlock on attempt %d/%d (%d entries), retrying...", q.name, attempt+1, deadlockRetries, len(entries))
+				time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
+				continue
+			}
 			break
 		}
-		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == mysqlDeadlock && attempt < deadlockRetries {
-			log.Warnf("Write-behind [%s] deadlock on attempt %d/%d (%d entries), retrying...", q.name, attempt+1, deadlockRetries, len(entries))
-			time.Sleep(time.Duration(50*(attempt+1)) * time.Millisecond)
-			continue
-		}
-		break
-	}
+		return err
+	})
 	batchTime := time.Since(start).Seconds()
 	entryCount := len(entries)
 

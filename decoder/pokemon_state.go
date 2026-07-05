@@ -45,7 +45,7 @@ func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, fun
 }
 
 func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId uint64, pokemon *Pokemon) error {
-	return timedDbQuery("loadPokemonFromDatabase", func() error {
+	return timedDbQuery("loadPokemonFromDatabase", db.PokemonDb, func() error {
 		err := db.PokemonDb.GetContext(ctx, pokemon,
 			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
 			strconv.FormatUint(encounterId, 10))

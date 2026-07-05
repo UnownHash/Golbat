@@ -202,7 +202,7 @@ func (weather *Weather) SetWarnWeather(v null.Bool) {
 }
 
 func loadWeatherFromDatabase(ctx context.Context, db db.DbDetails, weatherId int64, weather *Weather) error {
-	return timedDbQuery("loadWeatherFromDatabase", func() error {
+	return timedDbQuery("loadWeatherFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, weather,
 			"SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
 		statsCollector.IncDbQuery("select weather", err)

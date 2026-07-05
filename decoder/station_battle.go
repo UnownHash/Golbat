@@ -611,7 +611,7 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 
 func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) ([]StationBattleData, error) {
 	var battles []StationBattleData
-	err := timedDbQuery("loadStationBattlesForStation", func() error {
+	err := timedDbQuery("loadStationBattlesForStation", dbDetails.GeneralDb, func() error {
 		err := dbDetails.GeneralDb.SelectContext(ctx, &battles, `
 		SELECT `+stationBattleSelectColumns+`
 		FROM station_battle

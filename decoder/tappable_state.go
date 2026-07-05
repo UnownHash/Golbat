@@ -15,7 +15,7 @@ import (
 )
 
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
-	return timedDbQuery("loadTappableFromDatabase", func() error {
+	return timedDbQuery("loadTappableFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, tappable,
 			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
          FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))

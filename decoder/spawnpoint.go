@@ -163,7 +163,7 @@ func (s *Spawnpoint) SetLastSeen(v int64) {
 }
 
 func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
-	return timedDbQuery("loadSpawnpointFromDatabase", func() error {
+	return timedDbQuery("loadSpawnpointFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, spawnpoint,
 			"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
 		statsCollector.IncDbQuery("select spawnpoint", err)

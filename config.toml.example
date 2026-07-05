@@ -86,7 +86,7 @@ profile_contention = false  # Collect data for contention (use with above) - has
 s2_cell_lookup = false      # Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups. (default: false)
 # cache_shards = 0             # shards per in-memory entity cache; 0 = number of CPUs
 # raw_processing_concurrency = 0  # max concurrent raw-proto decoders; 0 = auto (4x CPUs, max 96), -1 = unlimited
-# slow_db_query_ms = 0         # log [DB_SLOW] for entity queries slower than this many ms; 0 = default (1000), -1 = disabled
+# slow_db_query_ms = 0         # log [DB_SLOW] (with pool stats) for entity queries and write-behind batch flushes slower than this many ms; 0 = default (1000), -1 = disabled
 
 # When enabled, reduce_updates will make fort update debounce windows much longer
 # to reduce database churn. Specifically, gym/pokestop/station debounce will be
