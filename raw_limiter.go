@@ -15,12 +15,17 @@ import (
 // processing goroutine logs how long it waited for a semaphore slot.
 const rawSlotWaitWarning = time.Second
 
-// rawQueueFactor bounds how many goroutines may park waiting for a slot
-// (rawQueueFactor × the concurrency limit). Beyond that the packet is shed:
-// the ingest endpoints have already replied success, so each parked
-// goroutine pins its decoded payload in memory — during a sustained stall
-// an unbounded queue turns into an OOM.
-const rawQueueFactor = 8
+// defaultRawQueueFactor bounds how many goroutines may park waiting for a
+// slot (factor × the concurrency limit; tuning.raw_processing_queue_factor
+// overrides). Beyond that the packet is shed: the ingest endpoints have
+// already replied success, so each parked goroutine pins its decoded
+// payload in memory — during a sustained stall an unbounded queue turns
+// into an OOM. The default rides out a ~2s database micro-stall at high
+// ingest rates; sheds should only happen during genuine sustained overload.
+const defaultRawQueueFactor = 32
+
+// rawQueueCap is the resolved parked-goroutine cap (0 = unlimited mode).
+var rawQueueCap int64
 
 // rawProcessingSem bounds concurrent raw-proto processing goroutines
 // (HTTP /raw and gRPC). nil means unlimited. Excess submissions park here
@@ -63,6 +68,12 @@ func initRawProcessingLimiter() {
 		n = min(4*runtime.NumCPU(), 96)
 	}
 	rawProcessingSem = make(chan struct{}, n)
+
+	factor := config.Config.Tuning.RawProcessingQueueFactor
+	if factor <= 0 {
+		factor = defaultRawQueueFactor
+	}
+	rawQueueCap = int64(factor * n)
 }
 
 // acquireRawProcessingSlot blocks until a processing slot is free and
@@ -79,7 +90,7 @@ func acquireRawProcessingSlot() (func(), bool) {
 	default:
 		// Saturated — park (bounded), and surface long waits so operators
 		// can see backpressure instead of inferring it from throughput.
-		if waiting := rawProcessingWaiting.Add(1); waiting > int64(rawQueueFactor*cap(sem)) {
+		if waiting := rawProcessingWaiting.Add(1); waiting > rawQueueCap {
 			rawProcessingWaiting.Add(-1)
 			rawShedCount.Add(1)
 			now := time.Now().UnixNano()

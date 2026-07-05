@@ -85,14 +85,14 @@ func TestRawLimiterShedsWhenParkedQueueFull(t *testing.T) {
 		t.Fatal("first slot must not be shed")
 	}
 
-	// Simulate a full parked queue (rawQueueFactor × limit already waiting).
-	rawProcessingWaiting.Store(int64(rawQueueFactor * 1))
+	// Simulate a full parked queue (cap already waiting).
+	rawProcessingWaiting.Store(rawQueueCap)
 
 	if _, ok := acquireRawProcessingSlot(); ok {
 		t.Fatal("expected shed when parked queue exceeds cap")
 	}
-	if got := rawProcessingWaiting.Load(); got != int64(rawQueueFactor) {
-		t.Errorf("shed must not leak the waiting counter: got %d, want %d", got, rawQueueFactor)
+	if got := rawProcessingWaiting.Load(); got != rawQueueCap {
+		t.Errorf("shed must not leak the waiting counter: got %d, want %d", got, rawQueueCap)
 	}
 
 	rawProcessingWaiting.Store(0)
