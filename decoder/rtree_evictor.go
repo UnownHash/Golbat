@@ -2,6 +2,8 @@ package decoder
 
 import (
 	"sync"
+	"sync/atomic"
+	"time"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -37,6 +39,8 @@ type treeEvictor[K comparable] struct {
 
 	closeOnce sync.Once
 	done      chan struct{}
+
+	lastBacklogWarn atomic.Int64 // unix nanos; backlog warnings at most 1/s
 }
 
 // The flush callback must not retain the slice after returning; the buffer is reused.
@@ -107,7 +111,10 @@ func (e *treeEvictor[K]) run() {
 		}
 		e.flush(buf)
 		if pending := len(e.ch); pending > cap(e.ch)/2 {
-			log.Warnf("[TREE_EVICTOR] %s backlog %d/%d", e.name, pending, cap(e.ch))
+			now := time.Now().UnixNano()
+			if last := e.lastBacklogWarn.Load(); now-last >= int64(time.Second) && e.lastBacklogWarn.CompareAndSwap(last, now) {
+				log.Warnf("[TREE_EVICTOR] %s backlog %d/%d", e.name, pending, cap(e.ch))
+			}
 		}
 	}
 }

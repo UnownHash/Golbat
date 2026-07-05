@@ -130,8 +130,8 @@ func PreloadPreservedPokemon(dbDetails db.DbDetails) int32 {
 				// Add to cache with appropriate TTL
 				pokemonCache.Set(uint64(pokemon.Id), pokemon, ttl)
 
-				// Update rtree
-				pokemonRtreeUpdatePokemonOnGet(pokemon)
+				// Update rtree (direct: pre-traffic, avoids flooding the tree worker)
+				pokemonRtreePreloadInsert(pokemon)
 
 				c := atomic.AddInt32(&count, 1)
 				if c%10000 == 0 {

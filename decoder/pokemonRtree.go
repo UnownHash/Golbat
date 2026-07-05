@@ -95,7 +95,7 @@ func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
 }
 
 const (
-	treeEvictorQueueSize = 131072
+	treeEvictorQueueSize = 262144
 	treeEvictorBatchSize = 512
 )
 
@@ -191,6 +191,18 @@ func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	if !inMap {
 		queuePokemonTreeInsert(pokemon)
 		// this pokemon won't be available for pvp searches
+		updatePokemonLookup(pokemon, false, nil)
+	}
+}
+
+// pokemonRtreePreloadInsert is the startup-preload variant: inserts
+// directly instead of through the tree worker. Preload runs before traffic
+// (no contention to avoid) and its parallel workers would otherwise flood
+// the writer channel — and a full channel blocks enqueuers, which at
+// runtime includes savers holding entity locks.
+func pokemonRtreePreloadInsert(pokemon *Pokemon) {
+	if _, inMap := pokemonLookupCache.Load(uint64(pokemon.Id)); !inMap {
+		addPokemonToTree(pokemon)
 		updatePokemonLookup(pokemon, false, nil)
 	}
 }
