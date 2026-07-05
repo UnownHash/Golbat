@@ -66,10 +66,12 @@ type StationBattleWebhook struct {
 }
 
 func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
-	err := db.GeneralDb.GetContext(ctx, station,
-		`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
-	statsCollector.IncDbQuery("select station", err)
-	return err
+	return timedDbQuery("loadStationFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, station,
+			`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
+		statsCollector.IncDbQuery("select station", err)
+		return err
+	})
 }
 
 // peekStationRecord - cache-only lookup, no DB fallback, returns locked.

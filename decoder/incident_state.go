@@ -19,10 +19,12 @@ import (
 const incidentSelectColumns = "id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form"
 
 func loadIncidentFromDatabase(ctx context.Context, db db.DbDetails, incidentId string, incident *Incident) error {
-	err := db.GeneralDb.GetContext(ctx, incident,
-		"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
-	statsCollector.IncDbQuery("select incident", err)
-	return err
+	return timedDbQuery("loadIncidentFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, incident,
+			"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
+		statsCollector.IncDbQuery("select incident", err)
+		return err
+	})
 }
 
 // peekIncidentRecord - cache-only lookup, no DB fallback, returns locked.

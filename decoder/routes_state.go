@@ -13,10 +13,12 @@ import (
 )
 
 func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string, route *Route) error {
-	err := db.GeneralDb.GetContext(ctx, route,
-		`SELECT * FROM route WHERE route.id = ?`, routeId)
-	statsCollector.IncDbQuery("select route", err)
-	return err
+	return timedDbQuery("loadRouteFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, route,
+			`SELECT * FROM route WHERE route.id = ?`, routeId)
+		statsCollector.IncDbQuery("select route", err)
+		return err
+	})
 }
 
 // peekRouteRecord - cache-only lookup, no DB fallback, returns locked.

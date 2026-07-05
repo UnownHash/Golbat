@@ -8,6 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
+	db2 "golbat/db"
 )
 
 // rawSlotWaitWarning is the parked-time threshold above which a raw
@@ -29,6 +30,20 @@ var rawProcessingSem chan struct{}
 
 // rawProcessingWaiting counts goroutines parked on rawProcessingSem.
 var rawProcessingWaiting atomic.Int64
+
+// initSlowDbQueryLogging resolves tuning.slow_db_query_ms into the db
+// package's [DB_SLOW] threshold (0 = 1s default, negative = disabled).
+func initSlowDbQueryLogging() {
+	ms := config.Config.Tuning.SlowDbQueryMs
+	switch {
+	case ms == 0:
+		db2.SetSlowQueryLogThreshold(time.Second)
+	case ms < 0:
+		db2.SetSlowQueryLogThreshold(0)
+	default:
+		db2.SetSlowQueryLogThreshold(time.Duration(ms) * time.Millisecond)
+	}
+}
 
 func initRawProcessingLimiter() {
 	n := config.Config.Tuning.RawProcessingConcurrency

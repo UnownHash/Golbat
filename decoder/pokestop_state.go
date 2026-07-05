@@ -34,13 +34,15 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
-	err := db.GeneralDb.GetContext(ctx, pokestop,
-		`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
-	statsCollector.IncDbQuery("select pokestop", err)
-	if err == nil {
-		pokestop.afterLoadFromDB()
-	}
-	return err
+	return timedDbQuery("loadPokestopFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, pokestop,
+			`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
+		statsCollector.IncDbQuery("select pokestop", err)
+		if err == nil {
+			pokestop.afterLoadFromDB()
+		}
+		return err
+	})
 }
 
 // PeekPokestopRecord - cache-only lookup, no DB fallback, returns locked.
@@ -64,7 +66,9 @@ func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool
 
 	// Check database
 	var exists bool
-	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
+	err := timedDbQuery("DoesPokestopExist", func() error {
+		return db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
+	})
 	if err != nil {
 		return false
 	}

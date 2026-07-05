@@ -163,10 +163,12 @@ func (s *Spawnpoint) SetLastSeen(v int64) {
 }
 
 func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
-	err := db.GeneralDb.GetContext(ctx, spawnpoint,
-		"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
-	statsCollector.IncDbQuery("select spawnpoint", err)
-	return err
+	return timedDbQuery("loadSpawnpointFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, spawnpoint,
+			"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
+		statsCollector.IncDbQuery("select spawnpoint", err)
+		return err
+	})
 }
 
 // peekSpawnpointRecord - cache-only lookup, no DB fallback, returns locked.

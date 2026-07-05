@@ -217,6 +217,7 @@ func main() {
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
 	initRawProcessingLimiter()
+	initSlowDbQueryLogging()
 	InitDeviceCache()
 
 	wg.Add(1)

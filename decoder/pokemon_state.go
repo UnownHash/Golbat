@@ -45,12 +45,13 @@ func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, fun
 }
 
 func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId uint64, pokemon *Pokemon) error {
-	err := db.PokemonDb.GetContext(ctx, pokemon,
-		"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
-		strconv.FormatUint(encounterId, 10))
-	statsCollector.IncDbQuery("select pokemon", err)
-
-	return err
+	return timedDbQuery("loadPokemonFromDatabase", func() error {
+		err := db.PokemonDb.GetContext(ctx, pokemon,
+			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
+			strconv.FormatUint(encounterId, 10))
+		statsCollector.IncDbQuery("select pokemon", err)
+		return err
+	})
 }
 
 // getPokemonRecordReadOnly acquires lock but does NOT take snapshot.

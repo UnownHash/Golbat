@@ -15,11 +15,13 @@ import (
 )
 
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
-	err := db.GeneralDb.GetContext(ctx, tappable,
-		`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
+	return timedDbQuery("loadTappableFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, tappable,
+			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
          FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
-	statsCollector.IncDbQuery("select tappable", err)
-	return err
+		statsCollector.IncDbQuery("select tappable", err)
+		return err
+	})
 }
 
 // PeekTappableRecord - cache-only lookup, no DB fallback, returns locked.

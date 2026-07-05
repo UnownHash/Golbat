@@ -28,9 +28,11 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 	power_up_end_timestamp, description, defenders, rsvps`
 
 func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
-	err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
-	statsCollector.IncDbQuery("select gym", err)
-	return err
+	return timedDbQuery("loadGymFromDatabase", func() error {
+		err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
+		statsCollector.IncDbQuery("select gym", err)
+		return err
+	})
 }
 
 // DoesGymExist checks if a gym exists in cache or database without acquiring a lock.
@@ -43,7 +45,9 @@ func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 
 	// Check database
 	var exists bool
-	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM gym WHERE id = ?)", fortId)
+	err := timedDbQuery("DoesGymExist", func() error {
+		return db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM gym WHERE id = ?)", fortId)
+	})
 	if err != nil {
 		return false
 	}
