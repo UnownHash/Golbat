@@ -74,6 +74,17 @@ func initRawProcessingLimiter() {
 		factor = defaultRawQueueFactor
 	}
 	rawQueueCap = int64(factor * n)
+
+	// Publish the parked-queue depth every 10s so dashboards can see
+	// decode backpressure building before sheds start.
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for range ticker.C {
+			if statsCollector != nil {
+				statsCollector.SetRawProcessingWaiting(float64(rawProcessingWaiting.Load()))
+			}
+		}
+	}()
 }
 
 // acquireRawProcessingSlot blocks until a processing slot is free and
@@ -93,6 +104,9 @@ func acquireRawProcessingSlot() (func(), bool) {
 		if waiting := rawProcessingWaiting.Add(1); waiting > rawQueueCap {
 			rawProcessingWaiting.Add(-1)
 			rawShedCount.Add(1)
+			if statsCollector != nil {
+				statsCollector.IncRawPacketsShed()
+			}
 			now := time.Now().UnixNano()
 			if last := rawShedLastLog.Load(); now-last >= int64(time.Second) && rawShedLastLog.CompareAndSwap(last, now) {
 				log.Warnf("[RAW_LIMITER] shed %d packets in the last second (%d goroutines waiting for %d slots)",

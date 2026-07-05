@@ -60,6 +60,9 @@ func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 	e.ch <- treeEvictionEntry[K]{id: id, lat: lat, lon: lon}
 }
 
+// QueueLen reports the current backlog for metrics.
+func (e *treeEvictor[K]) QueueLen() int { return len(e.ch) }
+
 // Close stops the worker after draining queued entries. Test/shutdown use.
 func (e *treeEvictor[K]) Close() {
 	e.closeOnce.Do(func() { close(e.ch) })

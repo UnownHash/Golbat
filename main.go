@@ -218,6 +218,7 @@ func main() {
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
 	initRawProcessingLimiter()
 	initSlowDbQueryLogging()
+	decoder.StartWorkerBacklogReporter()
 	InitDeviceCache()
 
 	wg.Add(1)

@@ -245,6 +245,28 @@ type pokemonStatsEvent struct {
 // enqueueing is a channel send.
 var pokemonStatsEvents = make(chan pokemonStatsEvent, 65536)
 
+// StartWorkerBacklogReporter publishes background-worker queue depths to
+// the stats collector every 10s. Call from main after InitDataCache and
+// SetStatsCollector.
+func StartWorkerBacklogReporter() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for range ticker.C {
+			if statsCollector == nil {
+				continue
+			}
+			statsCollector.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
+			statsCollector.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
+			if pokemonTreeEvictor != nil {
+				statsCollector.SetWorkerBacklog("tree_evictor_pokemon", float64(pokemonTreeEvictor.QueueLen()))
+			}
+			if fortTreeEvictor != nil {
+				statsCollector.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
+			}
+		}
+	}()
+}
+
 func statsAggregationWorker() {
 	for ev := range pokemonStatsEvents {
 		if ev.encounter {

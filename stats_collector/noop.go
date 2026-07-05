@@ -52,6 +52,10 @@ func (col *noopCollector) UpdateMaxBattleCount([]geo.AreaName, int64)           
 func (col *noopCollector) IncFortChange(string)                                  {}
 
 // Write-behind queue metrics (noop)
+func (col *noopCollector) SetWorkerBacklog(string, float64)            {}
+func (col *noopCollector) SetRawProcessingWaiting(float64)             {}
+func (col *noopCollector) IncRawPacketsShed()                          {}
+func (col *noopCollector) IncSlowDbQuery(string)                       {}
 func (col *noopCollector) SetWriteBehindQueueDepth(string, float64)    {}
 func (col *noopCollector) IncWriteBehindSquashed(string)               {}
 func (col *noopCollector) IncWriteBehindRateLimited(string)            {}

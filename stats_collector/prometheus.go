@@ -336,6 +336,38 @@ var (
 		[]string{"change_type"},
 	)
 
+	// Hot-path health metrics
+	workerBacklog = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "worker_backlog",
+			Help:      "Queued items in background worker channels (stats aggregator, fort tracker, tree evictors)",
+		},
+		[]string{"worker"},
+	)
+	rawProcessingWaitingGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "raw_processing_waiting",
+			Help:      "Goroutines parked waiting for a raw processing slot",
+		},
+	)
+	rawPacketsShed = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "raw_packets_shed_total",
+			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
+		},
+	)
+	slowDbQueries = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "slow_db_queries_total",
+			Help:      "Database calls exceeding the DB_SLOW log threshold, by caller",
+		},
+		[]string{"caller"},
+	)
+
 	// Write-behind queue metrics
 	writeBehindQueueDepth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -682,6 +714,22 @@ func (col *promCollector) IncFortChange(changeType string) {
 	fortChange.WithLabelValues(changeType).Inc()
 }
 
+func (col *promCollector) SetWorkerBacklog(worker string, depth float64) {
+	workerBacklog.WithLabelValues(worker).Set(depth)
+}
+
+func (col *promCollector) SetRawProcessingWaiting(waiting float64) {
+	rawProcessingWaitingGauge.Set(waiting)
+}
+
+func (col *promCollector) IncRawPacketsShed() {
+	rawPacketsShed.Inc()
+}
+
+func (col *promCollector) IncSlowDbQuery(caller string) {
+	slowDbQueries.WithLabelValues(caller).Inc()
+}
+
 func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
 	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
 }
@@ -723,6 +771,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

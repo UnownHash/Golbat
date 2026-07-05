@@ -1,12 +1,22 @@
 package db
 
 import (
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 )
+
+// callerTag strips per-call detail ("flush(512 entries)") from a caller
+// string so the prometheus label keeps bounded cardinality.
+func callerTag(caller string) string {
+	if i := strings.IndexAny(caller, " ("); i > 0 {
+		return caller[:i]
+	}
+	return caller
+}
 
 // slowQueryLogThreshold holds the duration (nanoseconds) above which Timed
 // logs a [DB_SLOW] warning. <= 0 disables logging.
@@ -62,6 +72,9 @@ func TimedOn(pool *sqlx.DB, caller string, fn func() error) error {
 		return err
 	}
 
+	if statsCollector != nil {
+		statsCollector.IncSlowDbQuery(callerTag(caller))
+	}
 	if pool != nil {
 		s := pool.Stats()
 		log.Warnf("[DB_SLOW] %s took %s (err: %v) pool[inUse=%d idle=%d max=%d waits+%d poolWait+%s]",
