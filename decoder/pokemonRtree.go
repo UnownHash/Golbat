@@ -101,15 +101,20 @@ const (
 
 var pokemonTreeEvictor *treeEvictor[uint64]
 
-// flushTreeEvictions removes a batch of evicted entries from a spatial
-// index under a single tree-mutex acquisition. If an entry was re-added at
-// the same coordinates between eviction and flush, the tree holds two
-// identical entries and Delete removes one, leaving the fresh entry intact;
-// a re-add at new coordinates is untouched by this delete.
+// flushTreeEvictions applies a batch of tree mutations, in enqueue order,
+// under a single tree-mutex acquisition. Deletes match on (coords, id), so
+// a stale duplicate delete (e.g. eviction racing a position move) finds
+// nothing and is harmless; duplicate identical inserts leave a second
+// point that the next delete pairs off against (rtree is a multiset).
 func flushTreeEvictions[K comparable](mu *sync.RWMutex, tree *rtree.RTreeG[K], entries []treeEvictionEntry[K]) {
 	mu.Lock()
 	for _, e := range entries {
-		tree.Delete([2]float64{e.lon, e.lat}, [2]float64{e.lon, e.lat}, e.id)
+		point := [2]float64{e.lon, e.lat}
+		if e.op == treeOpInsert {
+			tree.Insert(point, point, e.id)
+		} else {
+			tree.Delete(point, point, e.id)
+		}
 	}
 	mu.Unlock()
 }
@@ -166,13 +171,25 @@ func handlePokemonEviction(pokemon *Pokemon) {
 	pokemonTreeEvictor.Enqueue(pokemonId, pokemon.Lat, pokemon.Lon)
 }
 
+// queuePokemonTreeInsert / queuePokemonTreeRemove are the runtime-path tree
+// mutations: ordered through the single tree worker so savers (which hold
+// entity locks) never contend on the tree mutex. Preload and tests use the
+// direct add/remove functions below.
+func queuePokemonTreeInsert(pokemon *Pokemon) {
+	pokemonTreeEvictor.EnqueueInsert(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
+}
+
+func queuePokemonTreeRemove(pokemonId uint64, lat, lon float64) {
+	pokemonTreeEvictor.Enqueue(pokemonId, lat, lon)
+}
+
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	pokemonId := uint64(pokemon.Id)
 
 	_, inMap := pokemonLookupCache.Load(pokemonId)
 
 	if !inMap {
-		addPokemonToTree(pokemon)
+		queuePokemonTreeInsert(pokemon)
 		// this pokemon won't be available for pvp searches
 		updatePokemonLookup(pokemon, false, nil)
 	}

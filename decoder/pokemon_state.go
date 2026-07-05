@@ -254,15 +254,19 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
-	// Update pokemon rtree (immediate, not queued)
+	// Update pokemon rtree: queued through the single tree worker (ordered),
+	// so this save never touches the tree mutex while holding the entity
+	// lock — production dumps showed 90+ savers convoyed there behind
+	// eviction drains. Scan visibility lags by worker latency (ms), well
+	// inside the 1s snapshot staleness budget.
 	addedToTree := false
 	if isNewRecord {
-		addPokemonToTree(pokemon)
+		queuePokemonTreeInsert(pokemon)
 		addedToTree = true
 	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
-		// Position changed - update R-tree by removing from old position and adding to new
-		removePokemonFromTree(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
-		addPokemonToTree(pokemon)
+		// Position changed - remove old point, add new (ordered pair)
+		queuePokemonTreeRemove(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
+		queuePokemonTreeInsert(pokemon)
 		addedToTree = true
 	}
 
@@ -273,7 +277,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		// (or queued removal of) the tree point. Re-insert it so this live,
 		// about-to-be-re-cached pokemon stays scannable; a queued eviction
 		// delete pairs off against the older duplicate point.
-		addPokemonToTree(pokemon)
+		queuePokemonTreeInsert(pokemon)
 	}
 
 	// Webhooks and stats happen immediately (not queued)

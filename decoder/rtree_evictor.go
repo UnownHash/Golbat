@@ -6,8 +6,16 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// treeEvictionEntry is one deferred R-tree removal.
+type treeOp uint8
+
+const (
+	treeOpDelete treeOp = iota
+	treeOpInsert
+)
+
+// treeEvictionEntry is one deferred R-tree mutation (insert or delete).
 type treeEvictionEntry[K comparable] struct {
+	op  treeOp
 	id  K
 	lat float64
 	lon float64
@@ -44,12 +52,23 @@ func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush fu
 	return e
 }
 
-// Enqueue queues a removal. Blocks only if the channel is full — that
-// parks the per-eviction callback goroutines (bounded by the number of
-// evicted items) rather than dropping entries and leaking ghost points in
-// the tree. It does NOT throttle the cache sweep itself, which never waits
-// on its eviction callbacks.
+// Enqueue queues a removal; EnqueueInsert queues an insertion. All tree
+// mutations flow through one ordered channel and one worker: production
+// goroutine dumps showed 90+ savers convoyed on the tree write mutex
+// behind eviction drains and COW clone chains — with a single writer,
+// savers never touch the mutex at all, and only the worker and the ~1/s
+// snapshot refresh remain as lock parties. Blocks only if the channel is
+// full (bounded backpressure) rather than dropping entries and leaking
+// ghost/missing points in the tree.
 func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
+	e.enqueue(treeEvictionEntry[K]{op: treeOpDelete, id: id, lat: lat, lon: lon})
+}
+
+func (e *treeEvictor[K]) EnqueueInsert(id K, lat, lon float64) {
+	e.enqueue(treeEvictionEntry[K]{op: treeOpInsert, id: id, lat: lat, lon: lon})
+}
+
+func (e *treeEvictor[K]) enqueue(entry treeEvictionEntry[K]) {
 	defer func() {
 		// Sending on a closed channel panics; Close is only used by
 		// tests and shutdown, where losing the entry is acceptable.
@@ -57,7 +76,7 @@ func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 			log.Debugf("[TREE_EVICTOR] %s enqueue after close dropped: %v", e.name, r)
 		}
 	}()
-	e.ch <- treeEvictionEntry[K]{id: id, lat: lat, lon: lon}
+	e.ch <- entry
 }
 
 // QueueLen reports the current backlog for metrics.
