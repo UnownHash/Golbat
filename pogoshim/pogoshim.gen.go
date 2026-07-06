@@ -4,6 +4,7 @@ package pogoshim
 
 import (
 	"iter"
+	"strings"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -33,8 +34,17 @@ func (l ScalarList) At(i int) protoreflect.Value { return l.l.Get(i) }
 // AddFriendQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AddFriendQuestProto message.
 type AddFriendQuestProto struct{ m protoreflect.Message }
 
-// AsAddFriendQuestProto wraps a parsed message (e.g. from hyperpb).
-func AsAddFriendQuestProto(m protoreflect.Message) AddFriendQuestProto { return AddFriendQuestProto{m} }
+// AsAddFriendQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AddFriendQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAddFriendQuestProto(m protoreflect.Message) AddFriendQuestProto {
+	if m == nil || !m.IsValid() {
+		return AddFriendQuestProto{}
+	}
+	return AddFriendQuestProto{m}
+}
 
 func (x AddFriendQuestProto) IsZero() bool { return x.m == nil }
 
@@ -48,8 +58,15 @@ func (x AddFriendQuestProto) GetAddedFriendIds() ScalarList {
 // AvatarItemDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AvatarItemDisplayProto message.
 type AvatarItemDisplayProto struct{ m protoreflect.Message }
 
-// AsAvatarItemDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsAvatarItemDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AvatarItemDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsAvatarItemDisplayProto(m protoreflect.Message) AvatarItemDisplayProto {
+	if m == nil || !m.IsValid() {
+		return AvatarItemDisplayProto{}
+	}
 	return AvatarItemDisplayProto{m}
 }
 
@@ -59,21 +76,28 @@ func (x AvatarItemDisplayProto) GetIconAddress() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_AvatarItemDisplayProto_icon_address).String()
+	return strings.Clone(x.m.Get(fd_AvatarItemDisplayProto_icon_address).String())
 }
 
 func (x AvatarItemDisplayProto) GetDisplayStringId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_AvatarItemDisplayProto_display_string_id).String()
+	return strings.Clone(x.m.Get(fd_AvatarItemDisplayProto_display_string_id).String())
 }
 
 // AvatarStoreLinkProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AvatarStoreLinkProto message.
 type AvatarStoreLinkProto struct{ m protoreflect.Message }
 
-// AsAvatarStoreLinkProto wraps a parsed message (e.g. from hyperpb).
+// AsAvatarStoreLinkProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AvatarStoreLinkProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsAvatarStoreLinkProto(m protoreflect.Message) AvatarStoreLinkProto {
+	if m == nil || !m.IsValid() {
+		return AvatarStoreLinkProto{}
+	}
 	return AvatarStoreLinkProto{m}
 }
 
@@ -83,21 +107,30 @@ func (x AvatarStoreLinkProto) GetArticleId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_AvatarStoreLinkProto_article_id).String()
+	return strings.Clone(x.m.Get(fd_AvatarStoreLinkProto_article_id).String())
 }
 
 func (x AvatarStoreLinkProto) GetGroupName() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_AvatarStoreLinkProto_group_name).String()
+	return strings.Clone(x.m.Get(fd_AvatarStoreLinkProto_group_name).String())
 }
 
 // BattleQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleQuestProto message.
 type BattleQuestProto struct{ m protoreflect.Message }
 
-// AsBattleQuestProto wraps a parsed message (e.g. from hyperpb).
-func AsBattleQuestProto(m protoreflect.Message) BattleQuestProto { return BattleQuestProto{m} }
+// AsBattleQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleQuestProto(m protoreflect.Message) BattleQuestProto {
+	if m == nil || !m.IsValid() {
+		return BattleQuestProto{}
+	}
+	return BattleQuestProto{m}
+}
 
 func (x BattleQuestProto) IsZero() bool { return x.m == nil }
 
@@ -111,8 +144,15 @@ func (x BattleQuestProto) GetBattleId() ScalarList {
 // BreadBattleCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.BreadBattleCreateDetail message.
 type BreadBattleCreateDetail struct{ m protoreflect.Message }
 
-// AsBreadBattleCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsBreadBattleCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BreadBattleCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsBreadBattleCreateDetail(m protoreflect.Message) BreadBattleCreateDetail {
+	if m == nil || !m.IsValid() {
+		return BreadBattleCreateDetail{}
+	}
 	return BreadBattleCreateDetail{m}
 }
 
@@ -128,8 +168,15 @@ func (x BreadBattleCreateDetail) GetBreadBattleLevel() pogo.BreadBattleLevel {
 // BreadBattleDetailProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BreadBattleDetailProto message.
 type BreadBattleDetailProto struct{ m protoreflect.Message }
 
-// AsBreadBattleDetailProto wraps a parsed message (e.g. from hyperpb).
+// AsBreadBattleDetailProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BreadBattleDetailProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsBreadBattleDetailProto(m protoreflect.Message) BreadBattleDetailProto {
+	if m == nil || !m.IsValid() {
+		return BreadBattleDetailProto{}
+	}
 	return BreadBattleDetailProto{m}
 }
 
@@ -229,8 +276,17 @@ func (x BreadBattleDetailProto) GetMaxRecommendedPlayerCount() int32 {
 // BreadMoveSlotProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BreadMoveSlotProto message.
 type BreadMoveSlotProto struct{ m protoreflect.Message }
 
-// AsBreadMoveSlotProto wraps a parsed message (e.g. from hyperpb).
-func AsBreadMoveSlotProto(m protoreflect.Message) BreadMoveSlotProto { return BreadMoveSlotProto{m} }
+// AsBreadMoveSlotProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BreadMoveSlotProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBreadMoveSlotProto(m protoreflect.Message) BreadMoveSlotProto {
+	if m == nil || !m.IsValid() {
+		return BreadMoveSlotProto{}
+	}
+	return BreadMoveSlotProto{m}
+}
 
 func (x BreadMoveSlotProto) IsZero() bool { return x.m == nil }
 
@@ -251,8 +307,15 @@ func (x BreadMoveSlotProto) GetMoveLevel() pogo.BreadMoveLevels {
 // BuddyEvolutionWalkQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BuddyEvolutionWalkQuestProto message.
 type BuddyEvolutionWalkQuestProto struct{ m protoreflect.Message }
 
-// AsBuddyEvolutionWalkQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsBuddyEvolutionWalkQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BuddyEvolutionWalkQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsBuddyEvolutionWalkQuestProto(m protoreflect.Message) BuddyEvolutionWalkQuestProto {
+	if m == nil || !m.IsValid() {
+		return BuddyEvolutionWalkQuestProto{}
+	}
 	return BuddyEvolutionWalkQuestProto{m}
 }
 
@@ -268,8 +331,15 @@ func (x BuddyEvolutionWalkQuestProto) GetLastKmRecorded() float32 {
 // CaptureProbabilityProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CaptureProbabilityProto message.
 type CaptureProbabilityProto struct{ m protoreflect.Message }
 
-// AsCaptureProbabilityProto wraps a parsed message (e.g. from hyperpb).
+// AsCaptureProbabilityProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CaptureProbabilityProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsCaptureProbabilityProto(m protoreflect.Message) CaptureProbabilityProto {
+	if m == nil || !m.IsValid() {
+		return CaptureProbabilityProto{}
+	}
 	return CaptureProbabilityProto{m}
 }
 
@@ -299,8 +369,15 @@ func (x CaptureProbabilityProto) GetReticleDifficultyScale() float64 {
 // CatchPokemonQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CatchPokemonQuestProto message.
 type CatchPokemonQuestProto struct{ m protoreflect.Message }
 
-// AsCatchPokemonQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsCatchPokemonQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CatchPokemonQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsCatchPokemonQuestProto(m protoreflect.Message) CatchPokemonQuestProto {
+	if m == nil || !m.IsValid() {
+		return CatchPokemonQuestProto{}
+	}
 	return CatchPokemonQuestProto{m}
 }
 
@@ -323,8 +400,15 @@ func (x CatchPokemonQuestProto) GetActiveEncounterId() uint64 {
 // CharacterDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CharacterDisplayProto message.
 type CharacterDisplayProto struct{ m protoreflect.Message }
 
-// AsCharacterDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsCharacterDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CharacterDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsCharacterDisplayProto(m protoreflect.Message) CharacterDisplayProto {
+	if m == nil || !m.IsValid() {
+		return CharacterDisplayProto{}
+	}
 	return CharacterDisplayProto{m}
 }
 
@@ -347,8 +431,17 @@ func (x CharacterDisplayProto) GetCharacter() pogo.EnumWrapper_InvasionCharacter
 // ClientMapCellProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientMapCellProto message.
 type ClientMapCellProto struct{ m protoreflect.Message }
 
-// AsClientMapCellProto wraps a parsed message (e.g. from hyperpb).
-func AsClientMapCellProto(m protoreflect.Message) ClientMapCellProto { return ClientMapCellProto{m} }
+// AsClientMapCellProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientMapCellProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientMapCellProto(m protoreflect.Message) ClientMapCellProto {
+	if m == nil || !m.IsValid() {
+		return ClientMapCellProto{}
+	}
+	return ClientMapCellProto{m}
+}
 
 func (x ClientMapCellProto) IsZero() bool { return x.m == nil }
 
@@ -433,7 +526,7 @@ func (x ClientMapCellProto) GetRouteListHash() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_ClientMapCellProto_route_list_hash).String()
+	return strings.Clone(x.m.Get(fd_ClientMapCellProto_route_list_hash).String())
 }
 
 func (x ClientMapCellProto) GetHyperlocalExperiment() HyperlocalExperimentClientProtoList {
@@ -467,8 +560,15 @@ func (x ClientMapCellProto) GetTappables() TappableList {
 // ClientSpawnPointProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientSpawnPointProto message.
 type ClientSpawnPointProto struct{ m protoreflect.Message }
 
-// AsClientSpawnPointProto wraps a parsed message (e.g. from hyperpb).
+// AsClientSpawnPointProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientSpawnPointProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsClientSpawnPointProto(m protoreflect.Message) ClientSpawnPointProto {
+	if m == nil || !m.IsValid() {
+		return ClientSpawnPointProto{}
+	}
 	return ClientSpawnPointProto{m}
 }
 
@@ -491,8 +591,17 @@ func (x ClientSpawnPointProto) GetLongitude() float64 {
 // ClientWeatherProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientWeatherProto message.
 type ClientWeatherProto struct{ m protoreflect.Message }
 
-// AsClientWeatherProto wraps a parsed message (e.g. from hyperpb).
-func AsClientWeatherProto(m protoreflect.Message) ClientWeatherProto { return ClientWeatherProto{m} }
+// AsClientWeatherProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientWeatherProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientWeatherProto(m protoreflect.Message) ClientWeatherProto {
+	if m == nil || !m.IsValid() {
+		return ClientWeatherProto{}
+	}
+	return ClientWeatherProto{m}
+}
 
 func (x ClientWeatherProto) IsZero() bool { return x.m == nil }
 
@@ -541,8 +650,17 @@ func (x ClientWeatherProto) GetAlerts() WeatherAlertProtoList {
 // ContestDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestDisplayProto message.
 type ContestDisplayProto struct{ m protoreflect.Message }
 
-// AsContestDisplayProto wraps a parsed message (e.g. from hyperpb).
-func AsContestDisplayProto(m protoreflect.Message) ContestDisplayProto { return ContestDisplayProto{m} }
+// AsContestDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestDisplayProto(m protoreflect.Message) ContestDisplayProto {
+	if m == nil || !m.IsValid() {
+		return ContestDisplayProto{}
+	}
+	return ContestDisplayProto{m}
+}
 
 func (x ContestDisplayProto) IsZero() bool { return x.m == nil }
 
@@ -556,8 +674,15 @@ func (x ContestDisplayProto) GetStyle() pogo.EnumWrapper_PokestopStyle {
 // DailyBuddyAffectionQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DailyBuddyAffectionQuestProto message.
 type DailyBuddyAffectionQuestProto struct{ m protoreflect.Message }
 
-// AsDailyBuddyAffectionQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsDailyBuddyAffectionQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DailyBuddyAffectionQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsDailyBuddyAffectionQuestProto(m protoreflect.Message) DailyBuddyAffectionQuestProto {
+	if m == nil || !m.IsValid() {
+		return DailyBuddyAffectionQuestProto{}
+	}
 	return DailyBuddyAffectionQuestProto{m}
 }
 
@@ -580,8 +705,17 @@ func (x DailyBuddyAffectionQuestProto) GetDailyAffectionCounter() DailyCounterPr
 // DailyCounterProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DailyCounterProto message.
 type DailyCounterProto struct{ m protoreflect.Message }
 
-// AsDailyCounterProto wraps a parsed message (e.g. from hyperpb).
-func AsDailyCounterProto(m protoreflect.Message) DailyCounterProto { return DailyCounterProto{m} }
+// AsDailyCounterProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DailyCounterProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsDailyCounterProto(m protoreflect.Message) DailyCounterProto {
+	if m == nil || !m.IsValid() {
+		return DailyCounterProto{}
+	}
+	return DailyCounterProto{m}
+}
 
 func (x DailyCounterProto) IsZero() bool { return x.m == nil }
 
@@ -609,8 +743,17 @@ func (x DailyCounterProto) GetBucketsPerDay() int32 {
 // DailyQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DailyQuestProto message.
 type DailyQuestProto struct{ m protoreflect.Message }
 
-// AsDailyQuestProto wraps a parsed message (e.g. from hyperpb).
-func AsDailyQuestProto(m protoreflect.Message) DailyQuestProto { return DailyQuestProto{m} }
+// AsDailyQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DailyQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsDailyQuestProto(m protoreflect.Message) DailyQuestProto {
+	if m == nil || !m.IsValid() {
+		return DailyQuestProto{}
+	}
+	return DailyQuestProto{m}
+}
 
 func (x DailyQuestProto) IsZero() bool { return x.m == nil }
 
@@ -638,8 +781,15 @@ func (x DailyQuestProto) GetPrevStreakNotificationTimestampMs() int64 {
 // DaysWithARowQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DaysWithARowQuestProto message.
 type DaysWithARowQuestProto struct{ m protoreflect.Message }
 
-// AsDaysWithARowQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsDaysWithARowQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DaysWithARowQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsDaysWithARowQuestProto(m protoreflect.Message) DaysWithARowQuestProto {
+	if m == nil || !m.IsValid() {
+		return DaysWithARowQuestProto{}
+	}
 	return DaysWithARowQuestProto{m}
 }
 
@@ -655,8 +805,17 @@ func (x DaysWithARowQuestProto) GetLastWindow() int32 {
 // DiskCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.DiskCreateDetail message.
 type DiskCreateDetail struct{ m protoreflect.Message }
 
-// AsDiskCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsDiskCreateDetail(m protoreflect.Message) DiskCreateDetail { return DiskCreateDetail{m} }
+// AsDiskCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DiskCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsDiskCreateDetail(m protoreflect.Message) DiskCreateDetail {
+	if m == nil || !m.IsValid() {
+		return DiskCreateDetail{}
+	}
+	return DiskCreateDetail{m}
+}
 
 func (x DiskCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -671,14 +830,21 @@ func (x DiskCreateDetail) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_DiskCreateDetail_fort_id).String()
+	return strings.Clone(x.m.Get(fd_DiskCreateDetail_fort_id).String())
 }
 
 // DiskEncounterOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DiskEncounterOutProto message.
 type DiskEncounterOutProto struct{ m protoreflect.Message }
 
-// AsDiskEncounterOutProto wraps a parsed message (e.g. from hyperpb).
+// AsDiskEncounterOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DiskEncounterOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsDiskEncounterOutProto(m protoreflect.Message) DiskEncounterOutProto {
+	if m == nil || !m.IsValid() {
+		return DiskEncounterOutProto{}
+	}
 	return DiskEncounterOutProto{m}
 }
 
@@ -736,8 +902,17 @@ func (x DiskEncounterOutProto) GetArplusAttemptsUntilFlee() int32 {
 // DisplayWeatherProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DisplayWeatherProto message.
 type DisplayWeatherProto struct{ m protoreflect.Message }
 
-// AsDisplayWeatherProto wraps a parsed message (e.g. from hyperpb).
-func AsDisplayWeatherProto(m protoreflect.Message) DisplayWeatherProto { return DisplayWeatherProto{m} }
+// AsDisplayWeatherProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DisplayWeatherProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsDisplayWeatherProto(m protoreflect.Message) DisplayWeatherProto {
+	if m == nil || !m.IsValid() {
+		return DisplayWeatherProto{}
+	}
+	return DisplayWeatherProto{m}
+}
 
 func (x DisplayWeatherProto) IsZero() bool { return x.m == nil }
 
@@ -793,8 +968,17 @@ func (x DisplayWeatherProto) GetSpecialEffectLevel() pogo.DisplayWeatherProto_Di
 // EggCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.EggCreateDetail message.
 type EggCreateDetail struct{ m protoreflect.Message }
 
-// AsEggCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsEggCreateDetail(m protoreflect.Message) EggCreateDetail { return EggCreateDetail{m} }
+// AsEggCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EggCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEggCreateDetail(m protoreflect.Message) EggCreateDetail {
+	if m == nil || !m.IsValid() {
+		return EggCreateDetail{}
+	}
+	return EggCreateDetail{m}
+}
 
 func (x EggCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -822,8 +1006,15 @@ func (x EggCreateDetail) GetReceivedTimeMs() int64 {
 // EggDistributionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EggDistributionProto message.
 type EggDistributionProto struct{ m protoreflect.Message }
 
-// AsEggDistributionProto wraps a parsed message (e.g. from hyperpb).
+// AsEggDistributionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EggDistributionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsEggDistributionProto(m protoreflect.Message) EggDistributionProto {
+	if m == nil || !m.IsValid() {
+		return EggDistributionProto{}
+	}
 	return EggDistributionProto{m}
 }
 
@@ -839,8 +1030,15 @@ func (x EggDistributionProto) GetEggDistribution() EggDistributionProto_EggDistr
 // EggDistributionProto_EggDistributionEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EggDistributionProto.EggDistributionEntryProto message.
 type EggDistributionProto_EggDistributionEntryProto struct{ m protoreflect.Message }
 
-// AsEggDistributionProto_EggDistributionEntryProto wraps a parsed message (e.g. from hyperpb).
+// AsEggDistributionProto_EggDistributionEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EggDistributionProto_EggDistributionEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsEggDistributionProto_EggDistributionEntryProto(m protoreflect.Message) EggDistributionProto_EggDistributionEntryProto {
+	if m == nil || !m.IsValid() {
+		return EggDistributionProto_EggDistributionEntryProto{}
+	}
 	return EggDistributionProto_EggDistributionEntryProto{m}
 }
 
@@ -877,8 +1075,17 @@ func (x EggDistributionProto_EggDistributionEntryProto) GetPokemonDisplay() Poke
 // EggTelemetryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EggTelemetryProto message.
 type EggTelemetryProto struct{ m protoreflect.Message }
 
-// AsEggTelemetryProto wraps a parsed message (e.g. from hyperpb).
-func AsEggTelemetryProto(m protoreflect.Message) EggTelemetryProto { return EggTelemetryProto{m} }
+// AsEggTelemetryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EggTelemetryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEggTelemetryProto(m protoreflect.Message) EggTelemetryProto {
+	if m == nil || !m.IsValid() {
+		return EggTelemetryProto{}
+	}
+	return EggTelemetryProto{m}
+}
 
 func (x EggTelemetryProto) IsZero() bool { return x.m == nil }
 
@@ -886,7 +1093,7 @@ func (x EggTelemetryProto) GetEggLootTableId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_EggTelemetryProto_egg_loot_table_id).String()
+	return strings.Clone(x.m.Get(fd_EggTelemetryProto_egg_loot_table_id).String())
 }
 
 func (x EggTelemetryProto) GetOriginalEggSlotType() pogo.EggSlotType {
@@ -899,8 +1106,17 @@ func (x EggTelemetryProto) GetOriginalEggSlotType() pogo.EggSlotType {
 // EncounterOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EncounterOutProto message.
 type EncounterOutProto struct{ m protoreflect.Message }
 
-// AsEncounterOutProto wraps a parsed message (e.g. from hyperpb).
-func AsEncounterOutProto(m protoreflect.Message) EncounterOutProto { return EncounterOutProto{m} }
+// AsEncounterOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EncounterOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEncounterOutProto(m protoreflect.Message) EncounterOutProto {
+	if m == nil || !m.IsValid() {
+		return EncounterOutProto{}
+	}
+	return EncounterOutProto{m}
+}
 
 func (x EncounterOutProto) IsZero() bool { return x.m == nil }
 
@@ -963,8 +1179,15 @@ func (x EncounterOutProto) GetArplusAttemptsUntilFlee() int32 {
 // EvolutionQuestInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EvolutionQuestInfoProto message.
 type EvolutionQuestInfoProto struct{ m protoreflect.Message }
 
-// AsEvolutionQuestInfoProto wraps a parsed message (e.g. from hyperpb).
+// AsEvolutionQuestInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EvolutionQuestInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsEvolutionQuestInfoProto(m protoreflect.Message) EvolutionQuestInfoProto {
+	if m == nil || !m.IsValid() {
+		return EvolutionQuestInfoProto{}
+	}
 	return EvolutionQuestInfoProto{m}
 }
 
@@ -974,14 +1197,14 @@ func (x EvolutionQuestInfoProto) GetQuestRequirementTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_EvolutionQuestInfoProto_quest_requirement_template_id).String()
+	return strings.Clone(x.m.Get(fd_EvolutionQuestInfoProto_quest_requirement_template_id).String())
 }
 
 func (x EvolutionQuestInfoProto) GetDescription() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_EvolutionQuestInfoProto_description).String()
+	return strings.Clone(x.m.Get(fd_EvolutionQuestInfoProto_description).String())
 }
 
 func (x EvolutionQuestInfoProto) GetTarget() int32 {
@@ -994,8 +1217,15 @@ func (x EvolutionQuestInfoProto) GetTarget() int32 {
 // EvolveIntoPokemonQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EvolveIntoPokemonQuestProto message.
 type EvolveIntoPokemonQuestProto struct{ m protoreflect.Message }
 
-// AsEvolveIntoPokemonQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsEvolveIntoPokemonQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EvolveIntoPokemonQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsEvolveIntoPokemonQuestProto(m protoreflect.Message) EvolveIntoPokemonQuestProto {
+	if m == nil || !m.IsValid() {
+		return EvolveIntoPokemonQuestProto{}
+	}
 	return EvolveIntoPokemonQuestProto{m}
 }
 
@@ -1011,8 +1241,17 @@ func (x EvolveIntoPokemonQuestProto) GetUniquePokemonId() ScalarList {
 // FortPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortPokemonProto message.
 type FortPokemonProto struct{ m protoreflect.Message }
 
-// AsFortPokemonProto wraps a parsed message (e.g. from hyperpb).
-func AsFortPokemonProto(m protoreflect.Message) FortPokemonProto { return FortPokemonProto{m} }
+// AsFortPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FortPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFortPokemonProto(m protoreflect.Message) FortPokemonProto {
+	if m == nil || !m.IsValid() {
+		return FortPokemonProto{}
+	}
+	return FortPokemonProto{m}
+}
 
 func (x FortPokemonProto) IsZero() bool { return x.m == nil }
 
@@ -1040,8 +1279,17 @@ func (x FortPokemonProto) GetSpawnType() pogo.FortPokemonProto_SpawnType {
 // FortVpsInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortVpsInfoProto message.
 type FortVpsInfoProto struct{ m protoreflect.Message }
 
-// AsFortVpsInfoProto wraps a parsed message (e.g. from hyperpb).
-func AsFortVpsInfoProto(m protoreflect.Message) FortVpsInfoProto { return FortVpsInfoProto{m} }
+// AsFortVpsInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FortVpsInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFortVpsInfoProto(m protoreflect.Message) FortVpsInfoProto {
+	if m == nil || !m.IsValid() {
+		return FortVpsInfoProto{}
+	}
+	return FortVpsInfoProto{m}
+}
 
 func (x FortVpsInfoProto) IsZero() bool { return x.m == nil }
 
@@ -1056,21 +1304,21 @@ func (x FortVpsInfoProto) GetAnchorId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_FortVpsInfoProto_anchor_id).String()
+	return strings.Clone(x.m.Get(fd_FortVpsInfoProto_anchor_id).String())
 }
 
 func (x FortVpsInfoProto) GetAnchorPayload() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_FortVpsInfoProto_anchor_payload).String()
+	return strings.Clone(x.m.Get(fd_FortVpsInfoProto_anchor_payload).String())
 }
 
 func (x FortVpsInfoProto) GetHintImageUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_FortVpsInfoProto_hint_image_url).String()
+	return strings.Clone(x.m.Get(fd_FortVpsInfoProto_hint_image_url).String())
 }
 
 func (x FortVpsInfoProto) GetIsHintImagePoiImage() bool {
@@ -1174,8 +1422,15 @@ func (x FortVpsInfoProto) GetVpsDisallowedDetails() FortVpsInfoProto_VpsDisallow
 // FortVpsInfoProto_VpsDisallowedDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortVpsInfoProto.VpsDisallowedDetailsProto message.
 type FortVpsInfoProto_VpsDisallowedDetailsProto struct{ m protoreflect.Message }
 
-// AsFortVpsInfoProto_VpsDisallowedDetailsProto wraps a parsed message (e.g. from hyperpb).
+// AsFortVpsInfoProto_VpsDisallowedDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FortVpsInfoProto_VpsDisallowedDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsFortVpsInfoProto_VpsDisallowedDetailsProto(m protoreflect.Message) FortVpsInfoProto_VpsDisallowedDetailsProto {
+	if m == nil || !m.IsValid() {
+		return FortVpsInfoProto_VpsDisallowedDetailsProto{}
+	}
 	return FortVpsInfoProto_VpsDisallowedDetailsProto{m}
 }
 
@@ -1198,8 +1453,15 @@ func (x FortVpsInfoProto_VpsDisallowedDetailsProto) GetPreviousState() pogo.VpsE
 // GameplayWeatherProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GameplayWeatherProto message.
 type GameplayWeatherProto struct{ m protoreflect.Message }
 
-// AsGameplayWeatherProto wraps a parsed message (e.g. from hyperpb).
+// AsGameplayWeatherProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GameplayWeatherProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsGameplayWeatherProto(m protoreflect.Message) GameplayWeatherProto {
+	if m == nil || !m.IsValid() {
+		return GameplayWeatherProto{}
+	}
 	return GameplayWeatherProto{m}
 }
 
@@ -1215,8 +1477,15 @@ func (x GameplayWeatherProto) GetGameplayCondition() pogo.GameplayWeatherProto_W
 // GeotargetedQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GeotargetedQuestProto message.
 type GeotargetedQuestProto struct{ m protoreflect.Message }
 
-// AsGeotargetedQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsGeotargetedQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GeotargetedQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsGeotargetedQuestProto(m protoreflect.Message) GeotargetedQuestProto {
+	if m == nil || !m.IsValid() {
+		return GeotargetedQuestProto{}
+	}
 	return GeotargetedQuestProto{m}
 }
 
@@ -1226,21 +1495,21 @@ func (x GeotargetedQuestProto) GetName() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_GeotargetedQuestProto_name).String()
+	return strings.Clone(x.m.Get(fd_GeotargetedQuestProto_name).String())
 }
 
 func (x GeotargetedQuestProto) GetCallToActionLink() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_GeotargetedQuestProto_call_to_action_link).String()
+	return strings.Clone(x.m.Get(fd_GeotargetedQuestProto_call_to_action_link).String())
 }
 
 func (x GeotargetedQuestProto) GetImageUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_GeotargetedQuestProto_image_url).String()
+	return strings.Clone(x.m.Get(fd_GeotargetedQuestProto_image_url).String())
 }
 
 func (x GeotargetedQuestProto) GetLatitude() float64 {
@@ -1261,14 +1530,21 @@ func (x GeotargetedQuestProto) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_GeotargetedQuestProto_fort_id).String()
+	return strings.Clone(x.m.Get(fd_GeotargetedQuestProto_fort_id).String())
 }
 
 // GetMapObjectsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetMapObjectsOutProto message.
 type GetMapObjectsOutProto struct{ m protoreflect.Message }
 
-// AsGetMapObjectsOutProto wraps a parsed message (e.g. from hyperpb).
+// AsGetMapObjectsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetMapObjectsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsGetMapObjectsOutProto(m protoreflect.Message) GetMapObjectsOutProto {
+	if m == nil || !m.IsValid() {
+		return GetMapObjectsOutProto{}
+	}
 	return GetMapObjectsOutProto{m}
 }
 
@@ -1319,8 +1595,15 @@ func (x GetMapObjectsOutProto) GetTwilightPeriod() pogo.GetMapObjectsOutProto_Tw
 // GetStardustQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetStardustQuestProto message.
 type GetStardustQuestProto struct{ m protoreflect.Message }
 
-// AsGetStardustQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsGetStardustQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetStardustQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsGetStardustQuestProto(m protoreflect.Message) GetStardustQuestProto {
+	if m == nil || !m.IsValid() {
+		return GetStardustQuestProto{}
+	}
 	return GetStardustQuestProto{m}
 }
 
@@ -1336,8 +1619,17 @@ func (x GetStardustQuestProto) GetStardust() int32 {
 // GymDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymDisplayProto message.
 type GymDisplayProto struct{ m protoreflect.Message }
 
-// AsGymDisplayProto wraps a parsed message (e.g. from hyperpb).
-func AsGymDisplayProto(m protoreflect.Message) GymDisplayProto { return GymDisplayProto{m} }
+// AsGymDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymDisplayProto(m protoreflect.Message) GymDisplayProto {
+	if m == nil || !m.IsValid() {
+		return GymDisplayProto{}
+	}
+	return GymDisplayProto{m}
+}
 
 func (x GymDisplayProto) IsZero() bool { return x.m == nil }
 
@@ -1379,8 +1671,17 @@ func (x GymDisplayProto) GetOccupiedMillis() int64 {
 // GymEventProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymEventProto message.
 type GymEventProto struct{ m protoreflect.Message }
 
-// AsGymEventProto wraps a parsed message (e.g. from hyperpb).
-func AsGymEventProto(m protoreflect.Message) GymEventProto { return GymEventProto{m} }
+// AsGymEventProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymEventProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymEventProto(m protoreflect.Message) GymEventProto {
+	if m == nil || !m.IsValid() {
+		return GymEventProto{}
+	}
+	return GymEventProto{m}
+}
 
 func (x GymEventProto) IsZero() bool { return x.m == nil }
 
@@ -1388,7 +1689,7 @@ func (x GymEventProto) GetTrainer() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_GymEventProto_trainer).String()
+	return strings.Clone(x.m.Get(fd_GymEventProto_trainer).String())
 }
 
 func (x GymEventProto) GetTimestampMs() int64 {
@@ -1422,8 +1723,15 @@ func (x GymEventProto) GetPokemonId() uint64 {
 // HoloholoARBoundaryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.HoloholoARBoundaryProto message.
 type HoloholoARBoundaryProto struct{ m protoreflect.Message }
 
-// AsHoloholoARBoundaryProto wraps a parsed message (e.g. from hyperpb).
+// AsHoloholoARBoundaryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.HoloholoARBoundaryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsHoloholoARBoundaryProto(m protoreflect.Message) HoloholoARBoundaryProto {
+	if m == nil || !m.IsValid() {
+		return HoloholoARBoundaryProto{}
+	}
 	return HoloholoARBoundaryProto{m}
 }
 
@@ -1446,8 +1754,15 @@ func (x HoloholoARBoundaryProto) GetBoundaryAreaInSquareMeters() float64 {
 // HoloholoARBoundaryVertexProto wraps a hyperpb/protoreflect POGOProtos.Rpc.HoloholoARBoundaryVertexProto message.
 type HoloholoARBoundaryVertexProto struct{ m protoreflect.Message }
 
-// AsHoloholoARBoundaryVertexProto wraps a parsed message (e.g. from hyperpb).
+// AsHoloholoARBoundaryVertexProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.HoloholoARBoundaryVertexProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsHoloholoARBoundaryVertexProto(m protoreflect.Message) HoloholoARBoundaryVertexProto {
+	if m == nil || !m.IsValid() {
+		return HoloholoARBoundaryVertexProto{}
+	}
 	return HoloholoARBoundaryVertexProto{m}
 }
 
@@ -1477,8 +1792,15 @@ func (x HoloholoARBoundaryVertexProto) GetZ() float64 {
 // HoloholoMeshMetadata wraps a hyperpb/protoreflect POGOProtos.Rpc.HoloholoMeshMetadata message.
 type HoloholoMeshMetadata struct{ m protoreflect.Message }
 
-// AsHoloholoMeshMetadata wraps a parsed message (e.g. from hyperpb).
+// AsHoloholoMeshMetadata wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.HoloholoMeshMetadata .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsHoloholoMeshMetadata(m protoreflect.Message) HoloholoMeshMetadata {
+	if m == nil || !m.IsValid() {
+		return HoloholoMeshMetadata{}
+	}
 	return HoloholoMeshMetadata{m}
 }
 
@@ -1494,8 +1816,15 @@ func (x HoloholoMeshMetadata) GetArBoundaries() HoloholoARBoundaryProtoList {
 // HyperlocalExperimentClientProto wraps a hyperpb/protoreflect POGOProtos.Rpc.HyperlocalExperimentClientProto message.
 type HyperlocalExperimentClientProto struct{ m protoreflect.Message }
 
-// AsHyperlocalExperimentClientProto wraps a parsed message (e.g. from hyperpb).
+// AsHyperlocalExperimentClientProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.HyperlocalExperimentClientProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsHyperlocalExperimentClientProto(m protoreflect.Message) HyperlocalExperimentClientProto {
+	if m == nil || !m.IsValid() {
+		return HyperlocalExperimentClientProto{}
+	}
 	return HyperlocalExperimentClientProto{m}
 }
 
@@ -1547,14 +1876,23 @@ func (x HyperlocalExperimentClientProto) GetChallengeBonusKey() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_HyperlocalExperimentClientProto_challenge_bonus_key).String()
+	return strings.Clone(x.m.Get(fd_HyperlocalExperimentClientProto_challenge_bonus_key).String())
 }
 
 // IncenseCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.IncenseCreateDetail message.
 type IncenseCreateDetail struct{ m protoreflect.Message }
 
-// AsIncenseCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsIncenseCreateDetail(m protoreflect.Message) IncenseCreateDetail { return IncenseCreateDetail{m} }
+// AsIncenseCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IncenseCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsIncenseCreateDetail(m protoreflect.Message) IncenseCreateDetail {
+	if m == nil || !m.IsValid() {
+		return IncenseCreateDetail{}
+	}
+	return IncenseCreateDetail{m}
+}
 
 func (x IncenseCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -1568,8 +1906,17 @@ func (x IncenseCreateDetail) GetIncenseType() pogo.Item {
 // IncidentRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.IncidentRewardProto message.
 type IncidentRewardProto struct{ m protoreflect.Message }
 
-// AsIncidentRewardProto wraps a parsed message (e.g. from hyperpb).
-func AsIncidentRewardProto(m protoreflect.Message) IncidentRewardProto { return IncidentRewardProto{m} }
+// AsIncidentRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IncidentRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsIncidentRewardProto(m protoreflect.Message) IncidentRewardProto {
+	if m == nil || !m.IsValid() {
+		return IncidentRewardProto{}
+	}
+	return IncidentRewardProto{m}
+}
 
 func (x IncidentRewardProto) IsZero() bool { return x.m == nil }
 
@@ -1577,14 +1924,21 @@ func (x IncidentRewardProto) GetInvasionSpawnGroupTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_IncidentRewardProto_invasion_spawn_group_template_id).String()
+	return strings.Clone(x.m.Get(fd_IncidentRewardProto_invasion_spawn_group_template_id).String())
 }
 
 // InvasionCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.InvasionCreateDetail message.
 type InvasionCreateDetail struct{ m protoreflect.Message }
 
-// AsInvasionCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsInvasionCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InvasionCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsInvasionCreateDetail(m protoreflect.Message) InvasionCreateDetail {
+	if m == nil || !m.IsValid() {
+		return InvasionCreateDetail{}
+	}
 	return InvasionCreateDetail{m}
 }
 
@@ -1600,8 +1954,15 @@ func (x InvasionCreateDetail) GetOrigin() pogo.EnumWrapper_InvasionCharacter {
 // InvasionFinishedDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InvasionFinishedDisplayProto message.
 type InvasionFinishedDisplayProto struct{ m protoreflect.Message }
 
-// AsInvasionFinishedDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsInvasionFinishedDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InvasionFinishedDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsInvasionFinishedDisplayProto(m protoreflect.Message) InvasionFinishedDisplayProto {
+	if m == nil || !m.IsValid() {
+		return InvasionFinishedDisplayProto{}
+	}
 	return InvasionFinishedDisplayProto{m}
 }
 
@@ -1617,8 +1978,15 @@ func (x InvasionFinishedDisplayProto) GetStyle() pogo.EnumWrapper_PokestopStyle 
 // IrisSocialDeploymentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.IrisSocialDeploymentProto message.
 type IrisSocialDeploymentProto struct{ m protoreflect.Message }
 
-// AsIrisSocialDeploymentProto wraps a parsed message (e.g. from hyperpb).
+// AsIrisSocialDeploymentProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IrisSocialDeploymentProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsIrisSocialDeploymentProto(m protoreflect.Message) IrisSocialDeploymentProto {
+	if m == nil || !m.IsValid() {
+		return IrisSocialDeploymentProto{}
+	}
 	return IrisSocialDeploymentProto{m}
 }
 
@@ -1628,7 +1996,7 @@ func (x IrisSocialDeploymentProto) GetDeployedFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_IrisSocialDeploymentProto_deployed_fort_id).String()
+	return strings.Clone(x.m.Get(fd_IrisSocialDeploymentProto_deployed_fort_id).String())
 }
 
 func (x IrisSocialDeploymentProto) GetPokemonDeployedSinceMs() int64 {
@@ -1648,8 +2016,15 @@ func (x IrisSocialDeploymentProto) GetPokemonReturnedAtMs() int64 {
 // IrisSocialEventTelemetry_Position wraps a hyperpb/protoreflect POGOProtos.Rpc.IrisSocialEventTelemetry.Position message.
 type IrisSocialEventTelemetry_Position struct{ m protoreflect.Message }
 
-// AsIrisSocialEventTelemetry_Position wraps a parsed message (e.g. from hyperpb).
+// AsIrisSocialEventTelemetry_Position wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IrisSocialEventTelemetry_Position .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsIrisSocialEventTelemetry_Position(m protoreflect.Message) IrisSocialEventTelemetry_Position {
+	if m == nil || !m.IsValid() {
+		return IrisSocialEventTelemetry_Position{}
+	}
 	return IrisSocialEventTelemetry_Position{m}
 }
 
@@ -1679,8 +2054,15 @@ func (x IrisSocialEventTelemetry_Position) GetZ() float64 {
 // IrisSocialEventTelemetry_Rotation wraps a hyperpb/protoreflect POGOProtos.Rpc.IrisSocialEventTelemetry.Rotation message.
 type IrisSocialEventTelemetry_Rotation struct{ m protoreflect.Message }
 
-// AsIrisSocialEventTelemetry_Rotation wraps a parsed message (e.g. from hyperpb).
+// AsIrisSocialEventTelemetry_Rotation wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IrisSocialEventTelemetry_Rotation .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsIrisSocialEventTelemetry_Rotation(m protoreflect.Message) IrisSocialEventTelemetry_Rotation {
+	if m == nil || !m.IsValid() {
+		return IrisSocialEventTelemetry_Rotation{}
+	}
 	return IrisSocialEventTelemetry_Rotation{m}
 }
 
@@ -1717,8 +2099,17 @@ func (x IrisSocialEventTelemetry_Rotation) GetW() float64 {
 // ItemRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ItemRewardProto message.
 type ItemRewardProto struct{ m protoreflect.Message }
 
-// AsItemRewardProto wraps a parsed message (e.g. from hyperpb).
-func AsItemRewardProto(m protoreflect.Message) ItemRewardProto { return ItemRewardProto{m} }
+// AsItemRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ItemRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsItemRewardProto(m protoreflect.Message) ItemRewardProto {
+	if m == nil || !m.IsValid() {
+		return ItemRewardProto{}
+	}
+	return ItemRewardProto{m}
+}
 
 func (x ItemRewardProto) IsZero() bool { return x.m == nil }
 
@@ -1739,8 +2130,15 @@ func (x ItemRewardProto) GetAmount() int32 {
 // LocationCardDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.LocationCardDisplayProto message.
 type LocationCardDisplayProto struct{ m protoreflect.Message }
 
-// AsLocationCardDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsLocationCardDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.LocationCardDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsLocationCardDisplayProto(m protoreflect.Message) LocationCardDisplayProto {
+	if m == nil || !m.IsValid() {
+		return LocationCardDisplayProto{}
+	}
 	return LocationCardDisplayProto{m}
 }
 
@@ -1756,8 +2154,17 @@ func (x LocationCardDisplayProto) GetLocationCard() pogo.LocationCard {
 // MapPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MapPokemonProto message.
 type MapPokemonProto struct{ m protoreflect.Message }
 
-// AsMapPokemonProto wraps a parsed message (e.g. from hyperpb).
-func AsMapPokemonProto(m protoreflect.Message) MapPokemonProto { return MapPokemonProto{m} }
+// AsMapPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MapPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMapPokemonProto(m protoreflect.Message) MapPokemonProto {
+	if m == nil || !m.IsValid() {
+		return MapPokemonProto{}
+	}
+	return MapPokemonProto{m}
+}
 
 func (x MapPokemonProto) IsZero() bool { return x.m == nil }
 
@@ -1765,7 +2172,7 @@ func (x MapPokemonProto) GetSpawnpointId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_MapPokemonProto_spawnpoint_id).String()
+	return strings.Clone(x.m.Get(fd_MapPokemonProto_spawnpoint_id).String())
 }
 
 func (x MapPokemonProto) GetEncounterId() uint64 {
@@ -1820,8 +2227,15 @@ func (x MapPokemonProto) GetPokemonDisplay() PokemonDisplayProto {
 // MiniCollectionPokemon wraps a hyperpb/protoreflect POGOProtos.Rpc.MiniCollectionPokemon message.
 type MiniCollectionPokemon struct{ m protoreflect.Message }
 
-// AsMiniCollectionPokemon wraps a parsed message (e.g. from hyperpb).
+// AsMiniCollectionPokemon wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MiniCollectionPokemon .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsMiniCollectionPokemon(m protoreflect.Message) MiniCollectionPokemon {
+	if m == nil || !m.IsValid() {
+		return MiniCollectionPokemon{}
+	}
 	return MiniCollectionPokemon{m}
 }
 
@@ -1872,8 +2286,17 @@ func (x MiniCollectionPokemon) GetRequireAlignmentToMatch() bool {
 // MiniCollectionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MiniCollectionProto message.
 type MiniCollectionProto struct{ m protoreflect.Message }
 
-// AsMiniCollectionProto wraps a parsed message (e.g. from hyperpb).
-func AsMiniCollectionProto(m protoreflect.Message) MiniCollectionProto { return MiniCollectionProto{m} }
+// AsMiniCollectionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MiniCollectionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMiniCollectionProto(m protoreflect.Message) MiniCollectionProto {
+	if m == nil || !m.IsValid() {
+		return MiniCollectionProto{}
+	}
+	return MiniCollectionProto{m}
+}
 
 func (x MiniCollectionProto) IsZero() bool { return x.m == nil }
 
@@ -1894,8 +2317,17 @@ func (x MiniCollectionProto) GetCompleted() bool {
 // MultiPartQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MultiPartQuestProto message.
 type MultiPartQuestProto struct{ m protoreflect.Message }
 
-// AsMultiPartQuestProto wraps a parsed message (e.g. from hyperpb).
-func AsMultiPartQuestProto(m protoreflect.Message) MultiPartQuestProto { return MultiPartQuestProto{m} }
+// AsMultiPartQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MultiPartQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMultiPartQuestProto(m protoreflect.Message) MultiPartQuestProto {
+	if m == nil || !m.IsValid() {
+		return MultiPartQuestProto{}
+	}
+	return MultiPartQuestProto{m}
+}
 
 func (x MultiPartQuestProto) IsZero() bool { return x.m == nil }
 
@@ -1909,8 +2341,17 @@ func (x MultiPartQuestProto) GetSubQuests() QuestProtoList {
 // NearbyPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NearbyPokemonProto message.
 type NearbyPokemonProto struct{ m protoreflect.Message }
 
-// AsNearbyPokemonProto wraps a parsed message (e.g. from hyperpb).
-func AsNearbyPokemonProto(m protoreflect.Message) NearbyPokemonProto { return NearbyPokemonProto{m} }
+// AsNearbyPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NearbyPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsNearbyPokemonProto(m protoreflect.Message) NearbyPokemonProto {
+	if m == nil || !m.IsValid() {
+		return NearbyPokemonProto{}
+	}
+	return NearbyPokemonProto{m}
+}
 
 func (x NearbyPokemonProto) IsZero() bool { return x.m == nil }
 
@@ -1939,14 +2380,14 @@ func (x NearbyPokemonProto) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_NearbyPokemonProto_fort_id).String()
+	return strings.Clone(x.m.Get(fd_NearbyPokemonProto_fort_id).String())
 }
 
 func (x NearbyPokemonProto) GetFortImageUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_NearbyPokemonProto_fort_image_url).String()
+	return strings.Clone(x.m.Get(fd_NearbyPokemonProto_fort_image_url).String())
 }
 
 func (x NearbyPokemonProto) HasPokemonDisplay() bool {
@@ -1966,8 +2407,15 @@ func (x NearbyPokemonProto) GetPokemonDisplay() PokemonDisplayProto {
 // NeutralAvatarLootItemDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NeutralAvatarLootItemDisplayProto message.
 type NeutralAvatarLootItemDisplayProto struct{ m protoreflect.Message }
 
-// AsNeutralAvatarLootItemDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsNeutralAvatarLootItemDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NeutralAvatarLootItemDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsNeutralAvatarLootItemDisplayProto(m protoreflect.Message) NeutralAvatarLootItemDisplayProto {
+	if m == nil || !m.IsValid() {
+		return NeutralAvatarLootItemDisplayProto{}
+	}
 	return NeutralAvatarLootItemDisplayProto{m}
 }
 
@@ -2004,8 +2452,15 @@ func (x NeutralAvatarLootItemDisplayProto) GetLink() AvatarStoreLinkProto {
 // NeutralAvatarLootItemTemplateProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NeutralAvatarLootItemTemplateProto message.
 type NeutralAvatarLootItemTemplateProto struct{ m protoreflect.Message }
 
-// AsNeutralAvatarLootItemTemplateProto wraps a parsed message (e.g. from hyperpb).
+// AsNeutralAvatarLootItemTemplateProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NeutralAvatarLootItemTemplateProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsNeutralAvatarLootItemTemplateProto(m protoreflect.Message) NeutralAvatarLootItemTemplateProto {
+	if m == nil || !m.IsValid() {
+		return NeutralAvatarLootItemTemplateProto{}
+	}
 	return NeutralAvatarLootItemTemplateProto{m}
 }
 
@@ -2015,21 +2470,28 @@ func (x NeutralAvatarLootItemTemplateProto) GetItemTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_NeutralAvatarLootItemTemplateProto_item_template_id).String()
+	return strings.Clone(x.m.Get(fd_NeutralAvatarLootItemTemplateProto_item_template_id).String())
 }
 
 func (x NeutralAvatarLootItemTemplateProto) GetDisplayTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_NeutralAvatarLootItemTemplateProto_display_template_id).String()
+	return strings.Clone(x.m.Get(fd_NeutralAvatarLootItemTemplateProto_display_template_id).String())
 }
 
 // PhotobombCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.PhotobombCreateDetail message.
 type PhotobombCreateDetail struct{ m protoreflect.Message }
 
-// AsPhotobombCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsPhotobombCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PhotobombCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPhotobombCreateDetail(m protoreflect.Message) PhotobombCreateDetail {
+	if m == nil || !m.IsValid() {
+		return PhotobombCreateDetail{}
+	}
 	return PhotobombCreateDetail{m}
 }
 
@@ -2045,8 +2507,15 @@ func (x PhotobombCreateDetail) GetCaughtInPhotobomb() bool {
 // PlayerAttributeRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerAttributeRewardProto message.
 type PlayerAttributeRewardProto struct{ m protoreflect.Message }
 
-// AsPlayerAttributeRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsPlayerAttributeRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerAttributeRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPlayerAttributeRewardProto(m protoreflect.Message) PlayerAttributeRewardProto {
+	if m == nil || !m.IsValid() {
+		return PlayerAttributeRewardProto{}
+	}
 	return PlayerAttributeRewardProto{m}
 }
 
@@ -2056,14 +2525,14 @@ func (x PlayerAttributeRewardProto) GetKey() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PlayerAttributeRewardProto_key).String()
+	return strings.Clone(x.m.Get(fd_PlayerAttributeRewardProto_key).String())
 }
 
 func (x PlayerAttributeRewardProto) GetValue() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PlayerAttributeRewardProto_value).String()
+	return strings.Clone(x.m.Get(fd_PlayerAttributeRewardProto_value).String())
 }
 
 func (x PlayerAttributeRewardProto) GetOverwriteExistingAttribute() bool {
@@ -2083,8 +2552,15 @@ func (x PlayerAttributeRewardProto) GetDurationMins() int32 {
 // PokemonBonusStatLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonBonusStatLevelProto message.
 type PokemonBonusStatLevelProto struct{ m protoreflect.Message }
 
-// AsPokemonBonusStatLevelProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonBonusStatLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonBonusStatLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonBonusStatLevelProto(m protoreflect.Message) PokemonBonusStatLevelProto {
+	if m == nil || !m.IsValid() {
+		return PokemonBonusStatLevelProto{}
+	}
 	return PokemonBonusStatLevelProto{m}
 }
 
@@ -2114,8 +2590,15 @@ func (x PokemonBonusStatLevelProto) GetBonusIndividualStamina() int32 {
 // PokemonCandyRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonCandyRewardProto message.
 type PokemonCandyRewardProto struct{ m protoreflect.Message }
 
-// AsPokemonCandyRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonCandyRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonCandyRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonCandyRewardProto(m protoreflect.Message) PokemonCandyRewardProto {
+	if m == nil || !m.IsValid() {
+		return PokemonCandyRewardProto{}
+	}
 	return PokemonCandyRewardProto{m}
 }
 
@@ -2138,8 +2621,15 @@ func (x PokemonCandyRewardProto) GetAmount() int32 {
 // PokemonCombatStatsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonCombatStatsProto message.
 type PokemonCombatStatsProto struct{ m protoreflect.Message }
 
-// AsPokemonCombatStatsProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonCombatStatsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonCombatStatsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonCombatStatsProto(m protoreflect.Message) PokemonCombatStatsProto {
+	if m == nil || !m.IsValid() {
+		return PokemonCombatStatsProto{}
+	}
 	return PokemonCombatStatsProto{m}
 }
 
@@ -2162,8 +2652,15 @@ func (x PokemonCombatStatsProto) GetNumTotal() int32 {
 // PokemonContestInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonContestInfoProto message.
 type PokemonContestInfoProto struct{ m protoreflect.Message }
 
-// AsPokemonContestInfoProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonContestInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonContestInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonContestInfoProto(m protoreflect.Message) PokemonContestInfoProto {
+	if m == nil || !m.IsValid() {
+		return PokemonContestInfoProto{}
+	}
 	return PokemonContestInfoProto{m}
 }
 
@@ -2173,7 +2670,7 @@ func (x PokemonContestInfoProto) GetContestId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonContestInfoProto_contest_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonContestInfoProto_contest_id).String())
 }
 
 func (x PokemonContestInfoProto) GetContestEndTimeMs() int64 {
@@ -2193,8 +2690,17 @@ func (x PokemonContestInfoProto) GetFreeUpTimeMs() int64 {
 // PokemonCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonCreateDetail message.
 type PokemonCreateDetail struct{ m protoreflect.Message }
 
-// AsPokemonCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsPokemonCreateDetail(m protoreflect.Message) PokemonCreateDetail { return PokemonCreateDetail{m} }
+// AsPokemonCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPokemonCreateDetail(m protoreflect.Message) PokemonCreateDetail {
+	if m == nil || !m.IsValid() {
+		return PokemonCreateDetail{}
+	}
+	return PokemonCreateDetail{m}
+}
 
 func (x PokemonCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -2383,8 +2889,17 @@ func (x PokemonCreateDetail) GetBreadBattleDetail() BreadBattleCreateDetail {
 // PokemonDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonDisplayProto message.
 type PokemonDisplayProto struct{ m protoreflect.Message }
 
-// AsPokemonDisplayProto wraps a parsed message (e.g. from hyperpb).
-func AsPokemonDisplayProto(m protoreflect.Message) PokemonDisplayProto { return PokemonDisplayProto{m} }
+// AsPokemonDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPokemonDisplayProto(m protoreflect.Message) PokemonDisplayProto {
+	if m == nil || !m.IsValid() {
+		return PokemonDisplayProto{}
+	}
+	return PokemonDisplayProto{m}
+}
 
 func (x PokemonDisplayProto) IsZero() bool { return x.m == nil }
 
@@ -2524,8 +3039,15 @@ func (x PokemonDisplayProto) GetIsStrongPokemon() bool {
 // PokemonEggRewardDistributionEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEggRewardDistributionEntryProto message.
 type PokemonEggRewardDistributionEntryProto struct{ m protoreflect.Message }
 
-// AsPokemonEggRewardDistributionEntryProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEggRewardDistributionEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEggRewardDistributionEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEggRewardDistributionEntryProto(m protoreflect.Message) PokemonEggRewardDistributionEntryProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEggRewardDistributionEntryProto{}
+	}
 	return PokemonEggRewardDistributionEntryProto{m}
 }
 
@@ -2555,8 +3077,15 @@ func (x PokemonEggRewardDistributionEntryProto) GetWeight() float64 {
 // PokemonEggRewardDistributionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEggRewardDistributionProto message.
 type PokemonEggRewardDistributionProto struct{ m protoreflect.Message }
 
-// AsPokemonEggRewardDistributionProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEggRewardDistributionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEggRewardDistributionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEggRewardDistributionProto(m protoreflect.Message) PokemonEggRewardDistributionProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEggRewardDistributionProto{}
+	}
 	return PokemonEggRewardDistributionProto{m}
 }
 
@@ -2572,8 +3101,15 @@ func (x PokemonEggRewardDistributionProto) GetEntries() PokemonEggRewardDistribu
 // PokemonEggRewardEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEggRewardEntryProto message.
 type PokemonEggRewardEntryProto struct{ m protoreflect.Message }
 
-// AsPokemonEggRewardEntryProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEggRewardEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEggRewardEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEggRewardEntryProto(m protoreflect.Message) PokemonEggRewardEntryProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEggRewardEntryProto{}
+	}
 	return PokemonEggRewardEntryProto{m}
 }
 
@@ -2610,8 +3146,15 @@ func (x PokemonEggRewardEntryProto) GetHatchDistKm() float64 {
 // PokemonEggRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEggRewardProto message.
 type PokemonEggRewardProto struct{ m protoreflect.Message }
 
-// AsPokemonEggRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEggRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEggRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEggRewardProto(m protoreflect.Message) PokemonEggRewardProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEggRewardProto{}
+	}
 	return PokemonEggRewardProto{m}
 }
 
@@ -2648,8 +3191,15 @@ func (x PokemonEggRewardProto) GetHatchDistKm() float64 {
 // PokemonEncounterRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEncounterRewardProto message.
 type PokemonEncounterRewardProto struct{ m protoreflect.Message }
 
-// AsPokemonEncounterRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEncounterRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEncounterRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEncounterRewardProto(m protoreflect.Message) PokemonEncounterRewardProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEncounterRewardProto{}
+	}
 	return PokemonEncounterRewardProto{m}
 }
 
@@ -2756,8 +3306,15 @@ func (x PokemonEncounterRewardProto) GetIsFeaturedPokemon() bool {
 // PokemonEvolutionQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonEvolutionQuestProto message.
 type PokemonEvolutionQuestProto struct{ m protoreflect.Message }
 
-// AsPokemonEvolutionQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonEvolutionQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonEvolutionQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonEvolutionQuestProto(m protoreflect.Message) PokemonEvolutionQuestProto {
+	if m == nil || !m.IsValid() {
+		return PokemonEvolutionQuestProto{}
+	}
 	return PokemonEvolutionQuestProto{m}
 }
 
@@ -2808,8 +3365,17 @@ func (x PokemonEvolutionQuestProto) GetForm() pogo.PokemonDisplayProto_Form {
 // PokemonFortProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonFortProto message.
 type PokemonFortProto struct{ m protoreflect.Message }
 
-// AsPokemonFortProto wraps a parsed message (e.g. from hyperpb).
-func AsPokemonFortProto(m protoreflect.Message) PokemonFortProto { return PokemonFortProto{m} }
+// AsPokemonFortProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonFortProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPokemonFortProto(m protoreflect.Message) PokemonFortProto {
+	if m == nil || !m.IsValid() {
+		return PokemonFortProto{}
+	}
+	return PokemonFortProto{m}
+}
 
 func (x PokemonFortProto) IsZero() bool { return x.m == nil }
 
@@ -2817,7 +3383,7 @@ func (x PokemonFortProto) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_fort_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_fort_id).String())
 }
 
 func (x PokemonFortProto) GetLastModifiedMs() int64 {
@@ -3013,7 +3579,7 @@ func (x PokemonFortProto) GetImageUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_image_url).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_image_url).String())
 }
 
 func (x PokemonFortProto) GetInEvent() bool {
@@ -3027,14 +3593,14 @@ func (x PokemonFortProto) GetBannerUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_banner_url).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_banner_url).String())
 }
 
 func (x PokemonFortProto) GetPartnerId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_partner_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_partner_id).String())
 }
 
 func (x PokemonFortProto) GetChallengeQuestCompleted() bool {
@@ -3083,14 +3649,14 @@ func (x PokemonFortProto) GetGeostoreTombstoneMessageKey() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_geostore_tombstone_message_key).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_geostore_tombstone_message_key).String())
 }
 
 func (x PokemonFortProto) GetGeostoreSuspensionMessageKey() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonFortProto_geostore_suspension_message_key).String()
+	return strings.Clone(x.m.Get(fd_PokemonFortProto_geostore_suspension_message_key).String())
 }
 
 func (x PokemonFortProto) GetPowerUpProgressPoints() int32 {
@@ -3180,8 +3746,15 @@ func (x PokemonFortProto) GetTappable() Tappable {
 // PokemonIndividualStatRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonIndividualStatRewardProto message.
 type PokemonIndividualStatRewardProto struct{ m protoreflect.Message }
 
-// AsPokemonIndividualStatRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonIndividualStatRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonIndividualStatRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonIndividualStatRewardProto(m protoreflect.Message) PokemonIndividualStatRewardProto {
+	if m == nil || !m.IsValid() {
+		return PokemonIndividualStatRewardProto{}
+	}
 	return PokemonIndividualStatRewardProto{m}
 }
 
@@ -3211,8 +3784,15 @@ func (x PokemonIndividualStatRewardProto) GetStatIncreaseAmount() int32 {
 // PokemonMegaEvolutionLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonMegaEvolutionLevelProto message.
 type PokemonMegaEvolutionLevelProto struct{ m protoreflect.Message }
 
-// AsPokemonMegaEvolutionLevelProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonMegaEvolutionLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonMegaEvolutionLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonMegaEvolutionLevelProto(m protoreflect.Message) PokemonMegaEvolutionLevelProto {
+	if m == nil || !m.IsValid() {
+		return PokemonMegaEvolutionLevelProto{}
+	}
 	return PokemonMegaEvolutionLevelProto{m}
 }
 
@@ -3249,8 +3829,15 @@ func (x PokemonMegaEvolutionLevelProto) GetMegaPointDailyCounters() PokemonMegaE
 // PokemonMegaEvolutionPointDailyCountersProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonMegaEvolutionPointDailyCountersProto message.
 type PokemonMegaEvolutionPointDailyCountersProto struct{ m protoreflect.Message }
 
-// AsPokemonMegaEvolutionPointDailyCountersProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonMegaEvolutionPointDailyCountersProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonMegaEvolutionPointDailyCountersProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonMegaEvolutionPointDailyCountersProto(m protoreflect.Message) PokemonMegaEvolutionPointDailyCountersProto {
+	if m == nil || !m.IsValid() {
+		return PokemonMegaEvolutionPointDailyCountersProto{}
+	}
 	return PokemonMegaEvolutionPointDailyCountersProto{m}
 }
 
@@ -3273,8 +3860,17 @@ func (x PokemonMegaEvolutionPointDailyCountersProto) GetMegaEvo() DailyCounterPr
 // PokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonProto message.
 type PokemonProto struct{ m protoreflect.Message }
 
-// AsPokemonProto wraps a parsed message (e.g. from hyperpb).
-func AsPokemonProto(m protoreflect.Message) PokemonProto { return PokemonProto{m} }
+// AsPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPokemonProto(m protoreflect.Message) PokemonProto {
+	if m == nil || !m.IsValid() {
+		return PokemonProto{}
+	}
+	return PokemonProto{m}
+}
 
 func (x PokemonProto) IsZero() bool { return x.m == nil }
 
@@ -3331,14 +3927,14 @@ func (x PokemonProto) GetDeployedFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_deployed_fort_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_deployed_fort_id).String())
 }
 
 func (x PokemonProto) GetOwnerName() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_owner_name).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_owner_name).String())
 }
 
 func (x PokemonProto) GetIsEgg() bool {
@@ -3436,7 +4032,7 @@ func (x PokemonProto) GetEggIncubatorId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_egg_incubator_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_egg_incubator_id).String())
 }
 
 func (x PokemonProto) GetCreationTimeMs() int64 {
@@ -3471,7 +4067,7 @@ func (x PokemonProto) GetNickname() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_nickname).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_nickname).String())
 }
 
 func (x PokemonProto) GetFromFort() bool {
@@ -3576,7 +4172,7 @@ func (x PokemonProto) GetOriginalOwnerNickname() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_original_owner_nickname).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_original_owner_nickname).String())
 }
 
 func (x PokemonProto) GetTradedTimeMs() int64 {
@@ -3639,7 +4235,7 @@ func (x PokemonProto) GetLimitedPokemonIdentifier() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_limited_pokemon_identifier).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_limited_pokemon_identifier).String())
 }
 
 func (x PokemonProto) GetPreBoostedCp() int32 {
@@ -3849,7 +4445,7 @@ func (x PokemonProto) GetDeployedStationId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonProto_deployed_station_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonProto_deployed_station_id).String())
 }
 
 func (x PokemonProto) GetDeployedStationExpirationTimeMs() int64 {
@@ -3890,8 +4486,15 @@ func (x PokemonProto) GetBonusStatLevel() PokemonBonusStatLevelProto {
 // PokemonReachCpQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonReachCpQuestProto message.
 type PokemonReachCpQuestProto struct{ m protoreflect.Message }
 
-// AsPokemonReachCpQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonReachCpQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonReachCpQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonReachCpQuestProto(m protoreflect.Message) PokemonReachCpQuestProto {
+	if m == nil || !m.IsValid() {
+		return PokemonReachCpQuestProto{}
+	}
 	return PokemonReachCpQuestProto{m}
 }
 
@@ -3900,8 +4503,15 @@ func (x PokemonReachCpQuestProto) IsZero() bool { return x.m == nil }
 // PokemonStatsLimitsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonStatsLimitsProto message.
 type PokemonStatsLimitsProto struct{ m protoreflect.Message }
 
-// AsPokemonStatsLimitsProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonStatsLimitsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonStatsLimitsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonStatsLimitsProto(m protoreflect.Message) PokemonStatsLimitsProto {
+	if m == nil || !m.IsValid() {
+		return PokemonStatsLimitsProto{}
+	}
 	return PokemonStatsLimitsProto{m}
 }
 
@@ -3966,8 +4576,15 @@ func (x PokemonStatsLimitsProto) GetMaxHp() int32 {
 // PokemonSummaryFortProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonSummaryFortProto message.
 type PokemonSummaryFortProto struct{ m protoreflect.Message }
 
-// AsPokemonSummaryFortProto wraps a parsed message (e.g. from hyperpb).
+// AsPokemonSummaryFortProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonSummaryFortProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokemonSummaryFortProto(m protoreflect.Message) PokemonSummaryFortProto {
+	if m == nil || !m.IsValid() {
+		return PokemonSummaryFortProto{}
+	}
 	return PokemonSummaryFortProto{m}
 }
 
@@ -3977,7 +4594,7 @@ func (x PokemonSummaryFortProto) GetFortSummaryId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokemonSummaryFortProto_fort_summary_id).String()
+	return strings.Clone(x.m.Get(fd_PokemonSummaryFortProto_fort_summary_id).String())
 }
 
 func (x PokemonSummaryFortProto) GetLastModifiedMs() int64 {
@@ -4004,8 +4621,15 @@ func (x PokemonSummaryFortProto) GetLongitude() float64 {
 // PokestopDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokestopDisplayProto message.
 type PokestopDisplayProto struct{ m protoreflect.Message }
 
-// AsPokestopDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsPokestopDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokestopDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokestopDisplayProto(m protoreflect.Message) PokestopDisplayProto {
+	if m == nil || !m.IsValid() {
+		return PokestopDisplayProto{}
+	}
 	return PokestopDisplayProto{m}
 }
 
@@ -4015,14 +4639,21 @@ func (x PokestopDisplayProto) GetStyleConfigAddress() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokestopDisplayProto_style_config_address).String()
+	return strings.Clone(x.m.Get(fd_PokestopDisplayProto_style_config_address).String())
 }
 
 // PokestopIncidentDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokestopIncidentDisplayProto message.
 type PokestopIncidentDisplayProto struct{ m protoreflect.Message }
 
-// AsPokestopIncidentDisplayProto wraps a parsed message (e.g. from hyperpb).
+// AsPokestopIncidentDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokestopIncidentDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPokestopIncidentDisplayProto(m protoreflect.Message) PokestopIncidentDisplayProto {
+	if m == nil || !m.IsValid() {
+		return PokestopIncidentDisplayProto{}
+	}
 	return PokestopIncidentDisplayProto{m}
 }
 
@@ -4074,7 +4705,7 @@ func (x PokestopIncidentDisplayProto) GetIncidentId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_PokestopIncidentDisplayProto_incident_id).String()
+	return strings.Clone(x.m.Get(fd_PokestopIncidentDisplayProto_incident_id).String())
 }
 
 func (x PokestopIncidentDisplayProto) GetIncidentStartMs() int64 {
@@ -4150,8 +4781,15 @@ func (x PokestopIncidentDisplayProto) GetIsCrossStopIncident() bool {
 // PostcardCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.PostcardCreateDetail message.
 type PostcardCreateDetail struct{ m protoreflect.Message }
 
-// AsPostcardCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsPostcardCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PostcardCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsPostcardCreateDetail(m protoreflect.Message) PostcardCreateDetail {
+	if m == nil || !m.IsValid() {
+		return PostcardCreateDetail{}
+	}
 	return PostcardCreateDetail{m}
 }
 
@@ -4174,8 +4812,15 @@ func (x PostcardCreateDetail) GetReceivedTimeMs() int64 {
 // QuestBranchRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestBranchRewardProto message.
 type QuestBranchRewardProto struct{ m protoreflect.Message }
 
-// AsQuestBranchRewardProto wraps a parsed message (e.g. from hyperpb).
+// AsQuestBranchRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestBranchRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsQuestBranchRewardProto(m protoreflect.Message) QuestBranchRewardProto {
+	if m == nil || !m.IsValid() {
+		return QuestBranchRewardProto{}
+	}
 	return QuestBranchRewardProto{m}
 }
 
@@ -4191,8 +4836,17 @@ func (x QuestBranchRewardProto) GetRewards() QuestRewardProtoList {
 // QuestConditionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestConditionProto message.
 type QuestConditionProto struct{ m protoreflect.Message }
 
-// AsQuestConditionProto wraps a parsed message (e.g. from hyperpb).
-func AsQuestConditionProto(m protoreflect.Message) QuestConditionProto { return QuestConditionProto{m} }
+// AsQuestConditionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestConditionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestConditionProto(m protoreflect.Message) QuestConditionProto {
+	if m == nil || !m.IsValid() {
+		return QuestConditionProto{}
+	}
+	return QuestConditionProto{m}
+}
 
 func (x QuestConditionProto) IsZero() bool { return x.m == nil }
 
@@ -4962,8 +5616,17 @@ func (x QuestConditionProto) GetType() pogo.QuestConditionProto_ConditionType {
 // QuestCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestCreateDetail message.
 type QuestCreateDetail struct{ m protoreflect.Message }
 
-// AsQuestCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsQuestCreateDetail(m protoreflect.Message) QuestCreateDetail { return QuestCreateDetail{m} }
+// AsQuestCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestCreateDetail(m protoreflect.Message) QuestCreateDetail {
+	if m == nil || !m.IsValid() {
+		return QuestCreateDetail{}
+	}
+	return QuestCreateDetail{m}
+}
 
 func (x QuestCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -4977,8 +5640,17 @@ func (x QuestCreateDetail) GetOrigin() pogo.EncounterType {
 // QuestGoalProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestGoalProto message.
 type QuestGoalProto struct{ m protoreflect.Message }
 
-// AsQuestGoalProto wraps a parsed message (e.g. from hyperpb).
-func AsQuestGoalProto(m protoreflect.Message) QuestGoalProto { return QuestGoalProto{m} }
+// AsQuestGoalProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestGoalProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestGoalProto(m protoreflect.Message) QuestGoalProto {
+	if m == nil || !m.IsValid() {
+		return QuestGoalProto{}
+	}
+	return QuestGoalProto{m}
+}
 
 func (x QuestGoalProto) IsZero() bool { return x.m == nil }
 
@@ -4999,8 +5671,17 @@ func (x QuestGoalProto) GetTarget() int32 {
 // QuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestProto message.
 type QuestProto struct{ m protoreflect.Message }
 
-// AsQuestProto wraps a parsed message (e.g. from hyperpb).
-func AsQuestProto(m protoreflect.Message) QuestProto { return QuestProto{m} }
+// AsQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestProto(m protoreflect.Message) QuestProto {
+	if m == nil || !m.IsValid() {
+		return QuestProto{}
+	}
+	return QuestProto{m}
+}
 
 func (x QuestProto) IsZero() bool { return x.m == nil }
 
@@ -5295,7 +5976,7 @@ func (x QuestProto) GetQuestId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_quest_id).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_quest_id).String())
 }
 
 func (x QuestProto) GetQuestSeed() int64 {
@@ -5316,7 +5997,7 @@ func (x QuestProto) GetTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_template_id).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_template_id).String())
 }
 
 func (x QuestProto) GetProgress() int32 {
@@ -5379,7 +6060,7 @@ func (x QuestProto) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_fort_id).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_fort_id).String())
 }
 
 func (x QuestProto) GetAdminGenerated() bool {
@@ -5435,7 +6116,7 @@ func (x QuestProto) GetRewardPokemonIconUrl() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_reward_pokemon_icon_url).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_reward_pokemon_icon_url).String())
 }
 
 func (x QuestProto) GetEndTimestampMs() int64 {
@@ -5533,14 +6214,21 @@ func (x QuestProto) GetTimeZoneId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_time_zone_id).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_time_zone_id).String())
 }
 
 // QuestProto_ReferralInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestProto.ReferralInfoProto message.
 type QuestProto_ReferralInfoProto struct{ m protoreflect.Message }
 
-// AsQuestProto_ReferralInfoProto wraps a parsed message (e.g. from hyperpb).
+// AsQuestProto_ReferralInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestProto_ReferralInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsQuestProto_ReferralInfoProto(m protoreflect.Message) QuestProto_ReferralInfoProto {
+	if m == nil || !m.IsValid() {
+		return QuestProto_ReferralInfoProto{}
+	}
 	return QuestProto_ReferralInfoProto{m}
 }
 
@@ -5550,7 +6238,7 @@ func (x QuestProto_ReferralInfoProto) GetReferrerId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestProto_ReferralInfoProto_referrer_id).String()
+	return strings.Clone(x.m.Get(fd_QuestProto_ReferralInfoProto_referrer_id).String())
 }
 
 func (x QuestProto_ReferralInfoProto) GetCompletionMessageSent() bool {
@@ -5563,8 +6251,17 @@ func (x QuestProto_ReferralInfoProto) GetCompletionMessageSent() bool {
 // QuestRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestRewardProto message.
 type QuestRewardProto struct{ m protoreflect.Message }
 
-// AsQuestRewardProto wraps a parsed message (e.g. from hyperpb).
-func AsQuestRewardProto(m protoreflect.Message) QuestRewardProto { return QuestRewardProto{m} }
+// AsQuestRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestRewardProto(m protoreflect.Message) QuestRewardProto {
+	if m == nil || !m.IsValid() {
+		return QuestRewardProto{}
+	}
+	return QuestRewardProto{m}
+}
 
 func (x QuestRewardProto) IsZero() bool { return x.m == nil }
 
@@ -5614,14 +6311,14 @@ func (x QuestRewardProto) GetAvatarTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestRewardProto_avatar_template_id).String()
+	return strings.Clone(x.m.Get(fd_QuestRewardProto_avatar_template_id).String())
 }
 
 func (x QuestRewardProto) GetQuestTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestRewardProto_quest_template_id).String()
+	return strings.Clone(x.m.Get(fd_QuestRewardProto_quest_template_id).String())
 }
 
 func (x QuestRewardProto) HasPokemonEncounter() bool {
@@ -5733,7 +6430,7 @@ func (x QuestRewardProto) GetNeutralAvatarTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_QuestRewardProto_neutral_avatar_template_id).String()
+	return strings.Clone(x.m.Get(fd_QuestRewardProto_neutral_avatar_template_id).String())
 }
 
 func (x QuestRewardProto) HasNeutralAvatarItemTemplate() bool {
@@ -5802,8 +6499,17 @@ func (x QuestRewardProto) GetType() pogo.QuestRewardProto_Type {
 // QuestWalkProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestWalkProto message.
 type QuestWalkProto struct{ m protoreflect.Message }
 
-// AsQuestWalkProto wraps a parsed message (e.g. from hyperpb).
-func AsQuestWalkProto(m protoreflect.Message) QuestWalkProto { return QuestWalkProto{m} }
+// AsQuestWalkProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestWalkProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestWalkProto(m protoreflect.Message) QuestWalkProto {
+	if m == nil || !m.IsValid() {
+		return QuestWalkProto{}
+	}
+	return QuestWalkProto{m}
+}
 
 func (x QuestWalkProto) IsZero() bool { return x.m == nil }
 
@@ -5817,8 +6523,17 @@ func (x QuestWalkProto) GetQuestStartKmWalked() float32 {
 // RaidCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidCreateDetail message.
 type RaidCreateDetail struct{ m protoreflect.Message }
 
-// AsRaidCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsRaidCreateDetail(m protoreflect.Message) RaidCreateDetail { return RaidCreateDetail{m} }
+// AsRaidCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RaidCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRaidCreateDetail(m protoreflect.Message) RaidCreateDetail {
+	if m == nil || !m.IsValid() {
+		return RaidCreateDetail{}
+	}
+	return RaidCreateDetail{m}
+}
 
 func (x RaidCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -5853,8 +6568,17 @@ func (x RaidCreateDetail) GetTempEvoId() pogo.HoloTemporaryEvolutionId {
 // RaidInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidInfoProto message.
 type RaidInfoProto struct{ m protoreflect.Message }
 
-// AsRaidInfoProto wraps a parsed message (e.g. from hyperpb).
-func AsRaidInfoProto(m protoreflect.Message) RaidInfoProto { return RaidInfoProto{m} }
+// AsRaidInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RaidInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRaidInfoProto(m protoreflect.Message) RaidInfoProto {
+	if m == nil || !m.IsValid() {
+		return RaidInfoProto{}
+	}
+	return RaidInfoProto{m}
+}
 
 func (x RaidInfoProto) IsZero() bool { return x.m == nil }
 
@@ -5939,7 +6663,7 @@ func (x RaidInfoProto) GetCampaignId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_RaidInfoProto_campaign_id).String()
+	return strings.Clone(x.m.Get(fd_RaidInfoProto_campaign_id).String())
 }
 
 func (x RaidInfoProto) GetRaidBall() pogo.Item {
@@ -6015,8 +6739,17 @@ func (x RaidInfoProto) GetDefaultRaidBall() pogo.Item {
 // RaidVisualEffect wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidVisualEffect message.
 type RaidVisualEffect struct{ m protoreflect.Message }
 
-// AsRaidVisualEffect wraps a parsed message (e.g. from hyperpb).
-func AsRaidVisualEffect(m protoreflect.Message) RaidVisualEffect { return RaidVisualEffect{m} }
+// AsRaidVisualEffect wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RaidVisualEffect .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRaidVisualEffect(m protoreflect.Message) RaidVisualEffect {
+	if m == nil || !m.IsValid() {
+		return RaidVisualEffect{}
+	}
+	return RaidVisualEffect{m}
+}
 
 func (x RaidVisualEffect) IsZero() bool { return x.m == nil }
 
@@ -6024,7 +6757,7 @@ func (x RaidVisualEffect) GetEffectAssetKey() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_RaidVisualEffect_effect_asset_key).String()
+	return strings.Clone(x.m.Get(fd_RaidVisualEffect_effect_asset_key).String())
 }
 
 func (x RaidVisualEffect) GetStartMillis() int64 {
@@ -6044,8 +6777,15 @@ func (x RaidVisualEffect) GetStopMillis() int64 {
 // SpinPokestopQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SpinPokestopQuestProto message.
 type SpinPokestopQuestProto struct{ m protoreflect.Message }
 
-// AsSpinPokestopQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsSpinPokestopQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.SpinPokestopQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsSpinPokestopQuestProto(m protoreflect.Message) SpinPokestopQuestProto {
+	if m == nil || !m.IsValid() {
+		return SpinPokestopQuestProto{}
+	}
 	return SpinPokestopQuestProto{m}
 }
 
@@ -6061,8 +6801,17 @@ func (x SpinPokestopQuestProto) GetFortIds() ScalarList {
 // StationCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.StationCreateDetail message.
 type StationCreateDetail struct{ m protoreflect.Message }
 
-// AsStationCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsStationCreateDetail(m protoreflect.Message) StationCreateDetail { return StationCreateDetail{m} }
+// AsStationCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StationCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStationCreateDetail(m protoreflect.Message) StationCreateDetail {
+	if m == nil || !m.IsValid() {
+		return StationCreateDetail{}
+	}
+	return StationCreateDetail{m}
+}
 
 func (x StationCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -6076,8 +6825,17 @@ func (x StationCreateDetail) GetCaughtInWild() bool {
 // StationProto wraps a hyperpb/protoreflect POGOProtos.Rpc.StationProto message.
 type StationProto struct{ m protoreflect.Message }
 
-// AsStationProto wraps a parsed message (e.g. from hyperpb).
-func AsStationProto(m protoreflect.Message) StationProto { return StationProto{m} }
+// AsStationProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StationProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStationProto(m protoreflect.Message) StationProto {
+	if m == nil || !m.IsValid() {
+		return StationProto{}
+	}
+	return StationProto{m}
+}
 
 func (x StationProto) IsZero() bool { return x.m == nil }
 
@@ -6085,7 +6843,7 @@ func (x StationProto) GetId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_StationProto_id).String()
+	return strings.Clone(x.m.Get(fd_StationProto_id).String())
 }
 
 func (x StationProto) GetLat() float64 {
@@ -6106,7 +6864,7 @@ func (x StationProto) GetName() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_StationProto_name).String()
+	return strings.Clone(x.m.Get(fd_StationProto_name).String())
 }
 
 func (x StationProto) HasBattleDetails() bool {
@@ -6168,8 +6926,17 @@ func (x StationProto) GetIsInactive() bool {
 // StickerRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.StickerRewardProto message.
 type StickerRewardProto struct{ m protoreflect.Message }
 
-// AsStickerRewardProto wraps a parsed message (e.g. from hyperpb).
-func AsStickerRewardProto(m protoreflect.Message) StickerRewardProto { return StickerRewardProto{m} }
+// AsStickerRewardProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StickerRewardProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStickerRewardProto(m protoreflect.Message) StickerRewardProto {
+	if m == nil || !m.IsValid() {
+		return StickerRewardProto{}
+	}
+	return StickerRewardProto{m}
+}
 
 func (x StickerRewardProto) IsZero() bool { return x.m == nil }
 
@@ -6177,7 +6944,7 @@ func (x StickerRewardProto) GetStickerId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_StickerRewardProto_sticker_id).String()
+	return strings.Clone(x.m.Get(fd_StickerRewardProto_sticker_id).String())
 }
 
 func (x StickerRewardProto) GetAmount() int32 {
@@ -6190,8 +6957,15 @@ func (x StickerRewardProto) GetAmount() int32 {
 // SubmitSleepRecordsQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SubmitSleepRecordsQuestProto message.
 type SubmitSleepRecordsQuestProto struct{ m protoreflect.Message }
 
-// AsSubmitSleepRecordsQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsSubmitSleepRecordsQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.SubmitSleepRecordsQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsSubmitSleepRecordsQuestProto(m protoreflect.Message) SubmitSleepRecordsQuestProto {
+	if m == nil || !m.IsValid() {
+		return SubmitSleepRecordsQuestProto{}
+	}
 	return SubmitSleepRecordsQuestProto{m}
 }
 
@@ -6207,8 +6981,15 @@ func (x SubmitSleepRecordsQuestProto) GetNumDays() int32 {
 // TakeSnapshotQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TakeSnapshotQuestProto message.
 type TakeSnapshotQuestProto struct{ m protoreflect.Message }
 
-// AsTakeSnapshotQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsTakeSnapshotQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TakeSnapshotQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsTakeSnapshotQuestProto(m protoreflect.Message) TakeSnapshotQuestProto {
+	if m == nil || !m.IsValid() {
+		return TakeSnapshotQuestProto{}
+	}
 	return TakeSnapshotQuestProto{m}
 }
 
@@ -6224,8 +7005,17 @@ func (x TakeSnapshotQuestProto) GetUniquePokemonId() ScalarList {
 // Tappable wraps a hyperpb/protoreflect POGOProtos.Rpc.Tappable message.
 type Tappable struct{ m protoreflect.Message }
 
-// AsTappable wraps a parsed message (e.g. from hyperpb).
-func AsTappable(m protoreflect.Message) Tappable { return Tappable{m} }
+// AsTappable wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.Tappable .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsTappable(m protoreflect.Message) Tappable {
+	if m == nil || !m.IsValid() {
+		return Tappable{}
+	}
+	return Tappable{m}
+}
 
 func (x Tappable) IsZero() bool { return x.m == nil }
 
@@ -6289,7 +7079,7 @@ func (x Tappable) GetTappableTypeId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_Tappable_tappable_type_id).String()
+	return strings.Clone(x.m.Get(fd_Tappable_tappable_type_id).String())
 }
 
 func (x Tappable) GetExpirationTimeMs() int64 {
@@ -6302,8 +7092,17 @@ func (x Tappable) GetExpirationTimeMs() int64 {
 // TappableLocation wraps a hyperpb/protoreflect POGOProtos.Rpc.TappableLocation message.
 type TappableLocation struct{ m protoreflect.Message }
 
-// AsTappableLocation wraps a parsed message (e.g. from hyperpb).
-func AsTappableLocation(m protoreflect.Message) TappableLocation { return TappableLocation{m} }
+// AsTappableLocation wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TappableLocation .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsTappableLocation(m protoreflect.Message) TappableLocation {
+	if m == nil || !m.IsValid() {
+		return TappableLocation{}
+	}
+	return TappableLocation{m}
+}
 
 func (x TappableLocation) IsZero() bool { return x.m == nil }
 
@@ -6311,21 +7110,28 @@ func (x TappableLocation) GetSpawnpointId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_TappableLocation_spawnpoint_id).String()
+	return strings.Clone(x.m.Get(fd_TappableLocation_spawnpoint_id).String())
 }
 
 func (x TappableLocation) GetFortId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_TappableLocation_fort_id).String()
+	return strings.Clone(x.m.Get(fd_TappableLocation_fort_id).String())
 }
 
 // TradePokemonQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TradePokemonQuestProto message.
 type TradePokemonQuestProto struct{ m protoreflect.Message }
 
-// AsTradePokemonQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsTradePokemonQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TradePokemonQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsTradePokemonQuestProto(m protoreflect.Message) TradePokemonQuestProto {
+	if m == nil || !m.IsValid() {
+		return TradePokemonQuestProto{}
+	}
 	return TradePokemonQuestProto{m}
 }
 
@@ -6341,8 +7147,15 @@ func (x TradePokemonQuestProto) GetFriendId() ScalarList {
 // TravelRouteQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TravelRouteQuestProto message.
 type TravelRouteQuestProto struct{ m protoreflect.Message }
 
-// AsTravelRouteQuestProto wraps a parsed message (e.g. from hyperpb).
+// AsTravelRouteQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TravelRouteQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsTravelRouteQuestProto(m protoreflect.Message) TravelRouteQuestProto {
+	if m == nil || !m.IsValid() {
+		return TravelRouteQuestProto{}
+	}
 	return TravelRouteQuestProto{m}
 }
 
@@ -6358,8 +7171,15 @@ func (x TravelRouteQuestProto) GetRouteId() ScalarList {
 // TutorialCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.TutorialCreateDetail message.
 type TutorialCreateDetail struct{ m protoreflect.Message }
 
-// AsTutorialCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsTutorialCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TutorialCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsTutorialCreateDetail(m protoreflect.Message) TutorialCreateDetail {
+	if m == nil || !m.IsValid() {
+		return TutorialCreateDetail{}
+	}
 	return TutorialCreateDetail{m}
 }
 
@@ -6375,8 +7195,15 @@ func (x TutorialCreateDetail) GetCaughtInWild() bool {
 // VsSeekerCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.VsSeekerCreateDetail message.
 type VsSeekerCreateDetail struct{ m protoreflect.Message }
 
-// AsVsSeekerCreateDetail wraps a parsed message (e.g. from hyperpb).
+// AsVsSeekerCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.VsSeekerCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsVsSeekerCreateDetail(m protoreflect.Message) VsSeekerCreateDetail {
+	if m == nil || !m.IsValid() {
+		return VsSeekerCreateDetail{}
+	}
 	return VsSeekerCreateDetail{m}
 }
 
@@ -6393,14 +7220,23 @@ func (x VsSeekerCreateDetail) GetLeague() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_VsSeekerCreateDetail_league).String()
+	return strings.Clone(x.m.Get(fd_VsSeekerCreateDetail_league).String())
 }
 
 // WeatherAlertProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WeatherAlertProto message.
 type WeatherAlertProto struct{ m protoreflect.Message }
 
-// AsWeatherAlertProto wraps a parsed message (e.g. from hyperpb).
-func AsWeatherAlertProto(m protoreflect.Message) WeatherAlertProto { return WeatherAlertProto{m} }
+// AsWeatherAlertProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WeatherAlertProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWeatherAlertProto(m protoreflect.Message) WeatherAlertProto {
+	if m == nil || !m.IsValid() {
+		return WeatherAlertProto{}
+	}
+	return WeatherAlertProto{m}
+}
 
 func (x WeatherAlertProto) IsZero() bool { return x.m == nil }
 
@@ -6421,8 +7257,17 @@ func (x WeatherAlertProto) GetWarnWeather() bool {
 // WildCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.WildCreateDetail message.
 type WildCreateDetail struct{ m protoreflect.Message }
 
-// AsWildCreateDetail wraps a parsed message (e.g. from hyperpb).
-func AsWildCreateDetail(m protoreflect.Message) WildCreateDetail { return WildCreateDetail{m} }
+// AsWildCreateDetail wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WildCreateDetail .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWildCreateDetail(m protoreflect.Message) WildCreateDetail {
+	if m == nil || !m.IsValid() {
+		return WildCreateDetail{}
+	}
+	return WildCreateDetail{m}
+}
 
 func (x WildCreateDetail) IsZero() bool { return x.m == nil }
 
@@ -6436,8 +7281,17 @@ func (x WildCreateDetail) GetCaughtInWild() bool {
 // WildPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WildPokemonProto message.
 type WildPokemonProto struct{ m protoreflect.Message }
 
-// AsWildPokemonProto wraps a parsed message (e.g. from hyperpb).
-func AsWildPokemonProto(m protoreflect.Message) WildPokemonProto { return WildPokemonProto{m} }
+// AsWildPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WildPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWildPokemonProto(m protoreflect.Message) WildPokemonProto {
+	if m == nil || !m.IsValid() {
+		return WildPokemonProto{}
+	}
+	return WildPokemonProto{m}
+}
 
 func (x WildPokemonProto) IsZero() bool { return x.m == nil }
 
@@ -6473,7 +7327,7 @@ func (x WildPokemonProto) GetSpawnPointId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_WildPokemonProto_spawn_point_id).String()
+	return strings.Clone(x.m.Get(fd_WildPokemonProto_spawn_point_id).String())
 }
 
 func (x WildPokemonProto) HasPokemon() bool {
@@ -6500,8 +7354,15 @@ func (x WildPokemonProto) GetTimeTillHiddenMs() int32 {
 // WithAuthProviderTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithAuthProviderTypeProto message.
 type WithAuthProviderTypeProto struct{ m protoreflect.Message }
 
-// AsWithAuthProviderTypeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithAuthProviderTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithAuthProviderTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithAuthProviderTypeProto(m protoreflect.Message) WithAuthProviderTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithAuthProviderTypeProto{}
+	}
 	return WithAuthProviderTypeProto{m}
 }
 
@@ -6517,8 +7378,17 @@ func (x WithAuthProviderTypeProto) GetAuthProviderType() ScalarList {
 // WithBadgeTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBadgeTypeProto message.
 type WithBadgeTypeProto struct{ m protoreflect.Message }
 
-// AsWithBadgeTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithBadgeTypeProto(m protoreflect.Message) WithBadgeTypeProto { return WithBadgeTypeProto{m} }
+// AsWithBadgeTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithBadgeTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithBadgeTypeProto(m protoreflect.Message) WithBadgeTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithBadgeTypeProto{}
+	}
+	return WithBadgeTypeProto{m}
+}
 
 func (x WithBadgeTypeProto) IsZero() bool { return x.m == nil }
 
@@ -6553,8 +7423,15 @@ func (x WithBadgeTypeProto) GetBadgeTypesToExclude() ScalarList {
 // WithBreadDoughPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBreadDoughPokemonProto message.
 type WithBreadDoughPokemonProto struct{ m protoreflect.Message }
 
-// AsWithBreadDoughPokemonProto wraps a parsed message (e.g. from hyperpb).
+// AsWithBreadDoughPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithBreadDoughPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithBreadDoughPokemonProto(m protoreflect.Message) WithBreadDoughPokemonProto {
+	if m == nil || !m.IsValid() {
+		return WithBreadDoughPokemonProto{}
+	}
 	return WithBreadDoughPokemonProto{m}
 }
 
@@ -6563,8 +7440,15 @@ func (x WithBreadDoughPokemonProto) IsZero() bool { return x.m == nil }
 // WithBreadMoveTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBreadMoveTypeProto message.
 type WithBreadMoveTypeProto struct{ m protoreflect.Message }
 
-// AsWithBreadMoveTypeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithBreadMoveTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithBreadMoveTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithBreadMoveTypeProto(m protoreflect.Message) WithBreadMoveTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithBreadMoveTypeProto{}
+	}
 	return WithBreadMoveTypeProto{m}
 }
 
@@ -6580,8 +7464,15 @@ func (x WithBreadMoveTypeProto) GetBreadMove() BreadMoveSlotProtoList {
 // WithBreadPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBreadPokemonProto message.
 type WithBreadPokemonProto struct{ m protoreflect.Message }
 
-// AsWithBreadPokemonProto wraps a parsed message (e.g. from hyperpb).
+// AsWithBreadPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithBreadPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithBreadPokemonProto(m protoreflect.Message) WithBreadPokemonProto {
+	if m == nil || !m.IsValid() {
+		return WithBreadPokemonProto{}
+	}
 	return WithBreadPokemonProto{m}
 }
 
@@ -6590,8 +7481,17 @@ func (x WithBreadPokemonProto) IsZero() bool { return x.m == nil }
 // WithBuddyProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBuddyProto message.
 type WithBuddyProto struct{ m protoreflect.Message }
 
-// AsWithBuddyProto wraps a parsed message (e.g. from hyperpb).
-func AsWithBuddyProto(m protoreflect.Message) WithBuddyProto { return WithBuddyProto{m} }
+// AsWithBuddyProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithBuddyProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithBuddyProto(m protoreflect.Message) WithBuddyProto {
+	if m == nil || !m.IsValid() {
+		return WithBuddyProto{}
+	}
+	return WithBuddyProto{m}
+}
 
 func (x WithBuddyProto) IsZero() bool { return x.m == nil }
 
@@ -6612,8 +7512,17 @@ func (x WithBuddyProto) GetMustBeOnMap() bool {
 // WithCombatTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithCombatTypeProto message.
 type WithCombatTypeProto struct{ m protoreflect.Message }
 
-// AsWithCombatTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithCombatTypeProto(m protoreflect.Message) WithCombatTypeProto { return WithCombatTypeProto{m} }
+// AsWithCombatTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithCombatTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithCombatTypeProto(m protoreflect.Message) WithCombatTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithCombatTypeProto{}
+	}
+	return WithCombatTypeProto{m}
+}
 
 func (x WithCombatTypeProto) IsZero() bool { return x.m == nil }
 
@@ -6627,8 +7536,15 @@ func (x WithCombatTypeProto) GetCombatType() ScalarList {
 // WithDailyBuddyAffectionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithDailyBuddyAffectionProto message.
 type WithDailyBuddyAffectionProto struct{ m protoreflect.Message }
 
-// AsWithDailyBuddyAffectionProto wraps a parsed message (e.g. from hyperpb).
+// AsWithDailyBuddyAffectionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithDailyBuddyAffectionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithDailyBuddyAffectionProto(m protoreflect.Message) WithDailyBuddyAffectionProto {
+	if m == nil || !m.IsValid() {
+		return WithDailyBuddyAffectionProto{}
+	}
 	return WithDailyBuddyAffectionProto{m}
 }
 
@@ -6644,8 +7560,15 @@ func (x WithDailyBuddyAffectionProto) GetMinBuddyAffectionEarnedToday() int32 {
 // WithDailyCaptureBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithDailyCaptureBonusProto message.
 type WithDailyCaptureBonusProto struct{ m protoreflect.Message }
 
-// AsWithDailyCaptureBonusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithDailyCaptureBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithDailyCaptureBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithDailyCaptureBonusProto(m protoreflect.Message) WithDailyCaptureBonusProto {
+	if m == nil || !m.IsValid() {
+		return WithDailyCaptureBonusProto{}
+	}
 	return WithDailyCaptureBonusProto{m}
 }
 
@@ -6654,8 +7577,15 @@ func (x WithDailyCaptureBonusProto) IsZero() bool { return x.m == nil }
 // WithDailySpinBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithDailySpinBonusProto message.
 type WithDailySpinBonusProto struct{ m protoreflect.Message }
 
-// AsWithDailySpinBonusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithDailySpinBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithDailySpinBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithDailySpinBonusProto(m protoreflect.Message) WithDailySpinBonusProto {
+	if m == nil || !m.IsValid() {
+		return WithDailySpinBonusProto{}
+	}
 	return WithDailySpinBonusProto{m}
 }
 
@@ -6664,8 +7594,17 @@ func (x WithDailySpinBonusProto) IsZero() bool { return x.m == nil }
 // WithDeviceTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithDeviceTypeProto message.
 type WithDeviceTypeProto struct{ m protoreflect.Message }
 
-// AsWithDeviceTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithDeviceTypeProto(m protoreflect.Message) WithDeviceTypeProto { return WithDeviceTypeProto{m} }
+// AsWithDeviceTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithDeviceTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithDeviceTypeProto(m protoreflect.Message) WithDeviceTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithDeviceTypeProto{}
+	}
+	return WithDeviceTypeProto{m}
+}
 
 func (x WithDeviceTypeProto) IsZero() bool { return x.m == nil }
 
@@ -6679,8 +7618,17 @@ func (x WithDeviceTypeProto) GetDeviceType() ScalarList {
 // WithDistanceProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithDistanceProto message.
 type WithDistanceProto struct{ m protoreflect.Message }
 
-// AsWithDistanceProto wraps a parsed message (e.g. from hyperpb).
-func AsWithDistanceProto(m protoreflect.Message) WithDistanceProto { return WithDistanceProto{m} }
+// AsWithDistanceProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithDistanceProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithDistanceProto(m protoreflect.Message) WithDistanceProto {
+	if m == nil || !m.IsValid() {
+		return WithDistanceProto{}
+	}
+	return WithDistanceProto{m}
+}
 
 func (x WithDistanceProto) IsZero() bool { return x.m == nil }
 
@@ -6694,8 +7642,15 @@ func (x WithDistanceProto) GetDistanceKm() float64 {
 // WithElapsedTimeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithElapsedTimeProto message.
 type WithElapsedTimeProto struct{ m protoreflect.Message }
 
-// AsWithElapsedTimeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithElapsedTimeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithElapsedTimeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithElapsedTimeProto(m protoreflect.Message) WithElapsedTimeProto {
+	if m == nil || !m.IsValid() {
+		return WithElapsedTimeProto{}
+	}
 	return WithElapsedTimeProto{m}
 }
 
@@ -6711,8 +7666,15 @@ func (x WithElapsedTimeProto) GetElapsedTimeMs() int64 {
 // WithEncounterTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithEncounterTypeProto message.
 type WithEncounterTypeProto struct{ m protoreflect.Message }
 
-// AsWithEncounterTypeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithEncounterTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithEncounterTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithEncounterTypeProto(m protoreflect.Message) WithEncounterTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithEncounterTypeProto{}
+	}
 	return WithEncounterTypeProto{m}
 }
 
@@ -6728,8 +7690,17 @@ func (x WithEncounterTypeProto) GetEncounterType() ScalarList {
 // WithFortIdProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithFortIdProto message.
 type WithFortIdProto struct{ m protoreflect.Message }
 
-// AsWithFortIdProto wraps a parsed message (e.g. from hyperpb).
-func AsWithFortIdProto(m protoreflect.Message) WithFortIdProto { return WithFortIdProto{m} }
+// AsWithFortIdProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithFortIdProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithFortIdProto(m protoreflect.Message) WithFortIdProto {
+	if m == nil || !m.IsValid() {
+		return WithFortIdProto{}
+	}
+	return WithFortIdProto{m}
+}
 
 func (x WithFortIdProto) IsZero() bool { return x.m == nil }
 
@@ -6743,8 +7714,15 @@ func (x WithFortIdProto) GetFortIds() ScalarList {
 // WithFriendLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithFriendLevelProto message.
 type WithFriendLevelProto struct{ m protoreflect.Message }
 
-// AsWithFriendLevelProto wraps a parsed message (e.g. from hyperpb).
+// AsWithFriendLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithFriendLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithFriendLevelProto(m protoreflect.Message) WithFriendLevelProto {
+	if m == nil || !m.IsValid() {
+		return WithFriendLevelProto{}
+	}
 	return WithFriendLevelProto{m}
 }
 
@@ -6760,8 +7738,15 @@ func (x WithFriendLevelProto) GetFriendshipLevelMilestone() ScalarList {
 // WithFriendsRaidProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithFriendsRaidProto message.
 type WithFriendsRaidProto struct{ m protoreflect.Message }
 
-// AsWithFriendsRaidProto wraps a parsed message (e.g. from hyperpb).
+// AsWithFriendsRaidProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithFriendsRaidProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithFriendsRaidProto(m protoreflect.Message) WithFriendsRaidProto {
+	if m == nil || !m.IsValid() {
+		return WithFriendsRaidProto{}
+	}
 	return WithFriendsRaidProto{m}
 }
 
@@ -6784,8 +7769,17 @@ func (x WithFriendsRaidProto) GetMinFriendsInRaid() int32 {
 // WithGblRankProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithGblRankProto message.
 type WithGblRankProto struct{ m protoreflect.Message }
 
-// AsWithGblRankProto wraps a parsed message (e.g. from hyperpb).
-func AsWithGblRankProto(m protoreflect.Message) WithGblRankProto { return WithGblRankProto{m} }
+// AsWithGblRankProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithGblRankProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithGblRankProto(m protoreflect.Message) WithGblRankProto {
+	if m == nil || !m.IsValid() {
+		return WithGblRankProto{}
+	}
+	return WithGblRankProto{m}
+}
 
 func (x WithGblRankProto) IsZero() bool { return x.m == nil }
 
@@ -6799,8 +7793,15 @@ func (x WithGblRankProto) GetRank() int32 {
 // WithInvasionCharacterProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithInvasionCharacterProto message.
 type WithInvasionCharacterProto struct{ m protoreflect.Message }
 
-// AsWithInvasionCharacterProto wraps a parsed message (e.g. from hyperpb).
+// AsWithInvasionCharacterProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithInvasionCharacterProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithInvasionCharacterProto(m protoreflect.Message) WithInvasionCharacterProto {
+	if m == nil || !m.IsValid() {
+		return WithInvasionCharacterProto{}
+	}
 	return WithInvasionCharacterProto{m}
 }
 
@@ -6823,8 +7824,17 @@ func (x WithInvasionCharacterProto) GetInvasionCharacter() ScalarList {
 // WithItemProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithItemProto message.
 type WithItemProto struct{ m protoreflect.Message }
 
-// AsWithItemProto wraps a parsed message (e.g. from hyperpb).
-func AsWithItemProto(m protoreflect.Message) WithItemProto { return WithItemProto{m} }
+// AsWithItemProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithItemProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithItemProto(m protoreflect.Message) WithItemProto {
+	if m == nil || !m.IsValid() {
+		return WithItemProto{}
+	}
+	return WithItemProto{m}
+}
 
 func (x WithItemProto) IsZero() bool { return x.m == nil }
 
@@ -6845,8 +7855,17 @@ func (x WithItemProto) GetItems() ScalarList {
 // WithItemTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithItemTypeProto message.
 type WithItemTypeProto struct{ m protoreflect.Message }
 
-// AsWithItemTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithItemTypeProto(m protoreflect.Message) WithItemTypeProto { return WithItemTypeProto{m} }
+// AsWithItemTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithItemTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithItemTypeProto(m protoreflect.Message) WithItemTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithItemTypeProto{}
+	}
+	return WithItemTypeProto{m}
+}
 
 func (x WithItemTypeProto) IsZero() bool { return x.m == nil }
 
@@ -6860,8 +7879,17 @@ func (x WithItemTypeProto) GetItemType() ScalarList {
 // WithLocationProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithLocationProto message.
 type WithLocationProto struct{ m protoreflect.Message }
 
-// AsWithLocationProto wraps a parsed message (e.g. from hyperpb).
-func AsWithLocationProto(m protoreflect.Message) WithLocationProto { return WithLocationProto{m} }
+// AsWithLocationProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithLocationProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithLocationProto(m protoreflect.Message) WithLocationProto {
+	if m == nil || !m.IsValid() {
+		return WithLocationProto{}
+	}
+	return WithLocationProto{m}
+}
 
 func (x WithLocationProto) IsZero() bool { return x.m == nil }
 
@@ -6875,8 +7903,17 @@ func (x WithLocationProto) GetS2CellId() ScalarList {
 // WithMaxCpProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithMaxCpProto message.
 type WithMaxCpProto struct{ m protoreflect.Message }
 
-// AsWithMaxCpProto wraps a parsed message (e.g. from hyperpb).
-func AsWithMaxCpProto(m protoreflect.Message) WithMaxCpProto { return WithMaxCpProto{m} }
+// AsWithMaxCpProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithMaxCpProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithMaxCpProto(m protoreflect.Message) WithMaxCpProto {
+	if m == nil || !m.IsValid() {
+		return WithMaxCpProto{}
+	}
+	return WithMaxCpProto{m}
+}
 
 func (x WithMaxCpProto) IsZero() bool { return x.m == nil }
 
@@ -6890,8 +7927,17 @@ func (x WithMaxCpProto) GetMaxCp() int32 {
 // WithNpcCombatProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithNpcCombatProto message.
 type WithNpcCombatProto struct{ m protoreflect.Message }
 
-// AsWithNpcCombatProto wraps a parsed message (e.g. from hyperpb).
-func AsWithNpcCombatProto(m protoreflect.Message) WithNpcCombatProto { return WithNpcCombatProto{m} }
+// AsWithNpcCombatProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithNpcCombatProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithNpcCombatProto(m protoreflect.Message) WithNpcCombatProto {
+	if m == nil || !m.IsValid() {
+		return WithNpcCombatProto{}
+	}
+	return WithNpcCombatProto{m}
+}
 
 func (x WithNpcCombatProto) IsZero() bool { return x.m == nil }
 
@@ -6912,8 +7958,15 @@ func (x WithNpcCombatProto) GetCombatNpcTrainerId() ScalarList {
 // WithOpponentPokemonBattleStatusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithOpponentPokemonBattleStatusProto message.
 type WithOpponentPokemonBattleStatusProto struct{ m protoreflect.Message }
 
-// AsWithOpponentPokemonBattleStatusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithOpponentPokemonBattleStatusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithOpponentPokemonBattleStatusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithOpponentPokemonBattleStatusProto(m protoreflect.Message) WithOpponentPokemonBattleStatusProto {
+	if m == nil || !m.IsValid() {
+		return WithOpponentPokemonBattleStatusProto{}
+	}
 	return WithOpponentPokemonBattleStatusProto{m}
 }
 
@@ -6936,8 +7989,17 @@ func (x WithOpponentPokemonBattleStatusProto) GetOpponentPokemonType() ScalarLis
 // WithPageTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPageTypeProto message.
 type WithPageTypeProto struct{ m protoreflect.Message }
 
-// AsWithPageTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithPageTypeProto(m protoreflect.Message) WithPageTypeProto { return WithPageTypeProto{m} }
+// AsWithPageTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPageTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithPageTypeProto(m protoreflect.Message) WithPageTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithPageTypeProto{}
+	}
+	return WithPageTypeProto{m}
+}
 
 func (x WithPageTypeProto) IsZero() bool { return x.m == nil }
 
@@ -6951,8 +8013,15 @@ func (x WithPageTypeProto) GetPageType() pogo.PageType {
 // WithPlayerLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPlayerLevelProto message.
 type WithPlayerLevelProto struct{ m protoreflect.Message }
 
-// AsWithPlayerLevelProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPlayerLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPlayerLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPlayerLevelProto(m protoreflect.Message) WithPlayerLevelProto {
+	if m == nil || !m.IsValid() {
+		return WithPlayerLevelProto{}
+	}
 	return WithPlayerLevelProto{m}
 }
 
@@ -6968,8 +8037,15 @@ func (x WithPlayerLevelProto) GetLevel() int32 {
 // WithPoiSponsorIdProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPoiSponsorIdProto message.
 type WithPoiSponsorIdProto struct{ m protoreflect.Message }
 
-// AsWithPoiSponsorIdProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPoiSponsorIdProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPoiSponsorIdProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPoiSponsorIdProto(m protoreflect.Message) WithPoiSponsorIdProto {
+	if m == nil || !m.IsValid() {
+		return WithPoiSponsorIdProto{}
+	}
 	return WithPoiSponsorIdProto{m}
 }
 
@@ -6985,8 +8061,15 @@ func (x WithPoiSponsorIdProto) GetSponsorId() ScalarList {
 // WithPokemonAlignmentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonAlignmentProto message.
 type WithPokemonAlignmentProto struct{ m protoreflect.Message }
 
-// AsWithPokemonAlignmentProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonAlignmentProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonAlignmentProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonAlignmentProto(m protoreflect.Message) WithPokemonAlignmentProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonAlignmentProto{}
+	}
 	return WithPokemonAlignmentProto{m}
 }
 
@@ -7002,8 +8085,15 @@ func (x WithPokemonAlignmentProto) GetAlignment() ScalarList {
 // WithPokemonCategoryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonCategoryProto message.
 type WithPokemonCategoryProto struct{ m protoreflect.Message }
 
-// AsWithPokemonCategoryProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonCategoryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonCategoryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonCategoryProto(m protoreflect.Message) WithPokemonCategoryProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonCategoryProto{}
+	}
 	return WithPokemonCategoryProto{m}
 }
 
@@ -7013,7 +8103,7 @@ func (x WithPokemonCategoryProto) GetCategoryName() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_WithPokemonCategoryProto_category_name).String()
+	return strings.Clone(x.m.Get(fd_WithPokemonCategoryProto_category_name).String())
 }
 
 func (x WithPokemonCategoryProto) GetPokemonIds() ScalarList {
@@ -7026,8 +8116,15 @@ func (x WithPokemonCategoryProto) GetPokemonIds() ScalarList {
 // WithPokemonCostumeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonCostumeProto message.
 type WithPokemonCostumeProto struct{ m protoreflect.Message }
 
-// AsWithPokemonCostumeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonCostumeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonCostumeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonCostumeProto(m protoreflect.Message) WithPokemonCostumeProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonCostumeProto{}
+	}
 	return WithPokemonCostumeProto{m}
 }
 
@@ -7043,8 +8140,17 @@ func (x WithPokemonCostumeProto) GetRequireNoCostume() bool {
 // WithPokemonCpProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonCpProto message.
 type WithPokemonCpProto struct{ m protoreflect.Message }
 
-// AsWithPokemonCpProto wraps a parsed message (e.g. from hyperpb).
-func AsWithPokemonCpProto(m protoreflect.Message) WithPokemonCpProto { return WithPokemonCpProto{m} }
+// AsWithPokemonCpProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonCpProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithPokemonCpProto(m protoreflect.Message) WithPokemonCpProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonCpProto{}
+	}
+	return WithPokemonCpProto{m}
+}
 
 func (x WithPokemonCpProto) IsZero() bool { return x.m == nil }
 
@@ -7065,8 +8171,15 @@ func (x WithPokemonCpProto) GetMinCp() int32 {
 // WithPokemonFormProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonFormProto message.
 type WithPokemonFormProto struct{ m protoreflect.Message }
 
-// AsWithPokemonFormProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonFormProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonFormProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonFormProto(m protoreflect.Message) WithPokemonFormProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonFormProto{}
+	}
 	return WithPokemonFormProto{m}
 }
 
@@ -7082,8 +8195,15 @@ func (x WithPokemonFormProto) GetForms() ScalarList {
 // WithPokemonLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonLevelProto message.
 type WithPokemonLevelProto struct{ m protoreflect.Message }
 
-// AsWithPokemonLevelProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonLevelProto(m protoreflect.Message) WithPokemonLevelProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonLevelProto{}
+	}
 	return WithPokemonLevelProto{m}
 }
 
@@ -7099,8 +8219,15 @@ func (x WithPokemonLevelProto) GetMaxLevel() bool {
 // WithPokemonMoveProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonMoveProto message.
 type WithPokemonMoveProto struct{ m protoreflect.Message }
 
-// AsWithPokemonMoveProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonMoveProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonMoveProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonMoveProto(m protoreflect.Message) WithPokemonMoveProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonMoveProto{}
+	}
 	return WithPokemonMoveProto{m}
 }
 
@@ -7116,8 +8243,15 @@ func (x WithPokemonMoveProto) GetMoveIds() ScalarList {
 // WithPokemonSizeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonSizeProto message.
 type WithPokemonSizeProto struct{ m protoreflect.Message }
 
-// AsWithPokemonSizeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonSizeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonSizeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonSizeProto(m protoreflect.Message) WithPokemonSizeProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonSizeProto{}
+	}
 	return WithPokemonSizeProto{m}
 }
 
@@ -7133,8 +8267,15 @@ func (x WithPokemonSizeProto) GetPokemonSize() ScalarList {
 // WithPokemonTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonTypeProto message.
 type WithPokemonTypeProto struct{ m protoreflect.Message }
 
-// AsWithPokemonTypeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithPokemonTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPokemonTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithPokemonTypeProto(m protoreflect.Message) WithPokemonTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithPokemonTypeProto{}
+	}
 	return WithPokemonTypeProto{m}
 }
 
@@ -7150,8 +8291,17 @@ func (x WithPokemonTypeProto) GetPokemonType() ScalarList {
 // WithPvpCombatProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPvpCombatProto message.
 type WithPvpCombatProto struct{ m protoreflect.Message }
 
-// AsWithPvpCombatProto wraps a parsed message (e.g. from hyperpb).
-func AsWithPvpCombatProto(m protoreflect.Message) WithPvpCombatProto { return WithPvpCombatProto{m} }
+// AsWithPvpCombatProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithPvpCombatProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithPvpCombatProto(m protoreflect.Message) WithPvpCombatProto {
+	if m == nil || !m.IsValid() {
+		return WithPvpCombatProto{}
+	}
+	return WithPvpCombatProto{m}
+}
 
 func (x WithPvpCombatProto) IsZero() bool { return x.m == nil }
 
@@ -7179,8 +8329,15 @@ func (x WithPvpCombatProto) GetCombatLeagueBadge() pogo.HoloBadgeType {
 // WithQuestContextProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithQuestContextProto message.
 type WithQuestContextProto struct{ m protoreflect.Message }
 
-// AsWithQuestContextProto wraps a parsed message (e.g. from hyperpb).
+// AsWithQuestContextProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithQuestContextProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithQuestContextProto(m protoreflect.Message) WithQuestContextProto {
+	if m == nil || !m.IsValid() {
+		return WithQuestContextProto{}
+	}
 	return WithQuestContextProto{m}
 }
 
@@ -7196,8 +8353,17 @@ func (x WithQuestContextProto) GetContext() pogo.QuestProto_Context {
 // WithRaidLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithRaidLevelProto message.
 type WithRaidLevelProto struct{ m protoreflect.Message }
 
-// AsWithRaidLevelProto wraps a parsed message (e.g. from hyperpb).
-func AsWithRaidLevelProto(m protoreflect.Message) WithRaidLevelProto { return WithRaidLevelProto{m} }
+// AsWithRaidLevelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithRaidLevelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithRaidLevelProto(m protoreflect.Message) WithRaidLevelProto {
+	if m == nil || !m.IsValid() {
+		return WithRaidLevelProto{}
+	}
+	return WithRaidLevelProto{m}
+}
 
 func (x WithRaidLevelProto) IsZero() bool { return x.m == nil }
 
@@ -7211,8 +8377,15 @@ func (x WithRaidLevelProto) GetRaidLevel() ScalarList {
 // WithRaidLocationProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithRaidLocationProto message.
 type WithRaidLocationProto struct{ m protoreflect.Message }
 
-// AsWithRaidLocationProto wraps a parsed message (e.g. from hyperpb).
+// AsWithRaidLocationProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithRaidLocationProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithRaidLocationProto(m protoreflect.Message) WithRaidLocationProto {
+	if m == nil || !m.IsValid() {
+		return WithRaidLocationProto{}
+	}
 	return WithRaidLocationProto{m}
 }
 
@@ -7228,8 +8401,15 @@ func (x WithRaidLocationProto) GetLocation() pogo.RaidLocationRequirement {
 // WithRouteTravelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithRouteTravelProto message.
 type WithRouteTravelProto struct{ m protoreflect.Message }
 
-// AsWithRouteTravelProto wraps a parsed message (e.g. from hyperpb).
+// AsWithRouteTravelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithRouteTravelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithRouteTravelProto(m protoreflect.Message) WithRouteTravelProto {
+	if m == nil || !m.IsValid() {
+		return WithRouteTravelProto{}
+	}
 	return WithRouteTravelProto{m}
 }
 
@@ -7238,8 +8418,17 @@ func (x WithRouteTravelProto) IsZero() bool { return x.m == nil }
 // WithSingleDayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithSingleDayProto message.
 type WithSingleDayProto struct{ m protoreflect.Message }
 
-// AsWithSingleDayProto wraps a parsed message (e.g. from hyperpb).
-func AsWithSingleDayProto(m protoreflect.Message) WithSingleDayProto { return WithSingleDayProto{m} }
+// AsWithSingleDayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithSingleDayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithSingleDayProto(m protoreflect.Message) WithSingleDayProto {
+	if m == nil || !m.IsValid() {
+		return WithSingleDayProto{}
+	}
+	return WithSingleDayProto{m}
+}
 
 func (x WithSingleDayProto) IsZero() bool { return x.m == nil }
 
@@ -7253,8 +8442,15 @@ func (x WithSingleDayProto) GetLastWindow() int64 {
 // WithSuperEffectiveChargeMoveProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithSuperEffectiveChargeMoveProto message.
 type WithSuperEffectiveChargeMoveProto struct{ m protoreflect.Message }
 
-// AsWithSuperEffectiveChargeMoveProto wraps a parsed message (e.g. from hyperpb).
+// AsWithSuperEffectiveChargeMoveProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithSuperEffectiveChargeMoveProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithSuperEffectiveChargeMoveProto(m protoreflect.Message) WithSuperEffectiveChargeMoveProto {
+	if m == nil || !m.IsValid() {
+		return WithSuperEffectiveChargeMoveProto{}
+	}
 	return WithSuperEffectiveChargeMoveProto{m}
 }
 
@@ -7263,8 +8459,15 @@ func (x WithSuperEffectiveChargeMoveProto) IsZero() bool { return x.m == nil }
 // WithTappableTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithTappableTypeProto message.
 type WithTappableTypeProto struct{ m protoreflect.Message }
 
-// AsWithTappableTypeProto wraps a parsed message (e.g. from hyperpb).
+// AsWithTappableTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithTappableTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithTappableTypeProto(m protoreflect.Message) WithTappableTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithTappableTypeProto{}
+	}
 	return WithTappableTypeProto{m}
 }
 
@@ -7281,14 +8484,23 @@ func (x WithTappableTypeProto) GetTappableTypeId() string {
 	if x.m == nil {
 		return ""
 	}
-	return x.m.Get(fd_WithTappableTypeProto_tappable_type_id).String()
+	return strings.Clone(x.m.Get(fd_WithTappableTypeProto_tappable_type_id).String())
 }
 
 // WithTempEvoIdProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithTempEvoIdProto message.
 type WithTempEvoIdProto struct{ m protoreflect.Message }
 
-// AsWithTempEvoIdProto wraps a parsed message (e.g. from hyperpb).
-func AsWithTempEvoIdProto(m protoreflect.Message) WithTempEvoIdProto { return WithTempEvoIdProto{m} }
+// AsWithTempEvoIdProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithTempEvoIdProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithTempEvoIdProto(m protoreflect.Message) WithTempEvoIdProto {
+	if m == nil || !m.IsValid() {
+		return WithTempEvoIdProto{}
+	}
+	return WithTempEvoIdProto{m}
+}
 
 func (x WithTempEvoIdProto) IsZero() bool { return x.m == nil }
 
@@ -7302,8 +8514,17 @@ func (x WithTempEvoIdProto) GetMegaForm() ScalarList {
 // WithThrowTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithThrowTypeProto message.
 type WithThrowTypeProto struct{ m protoreflect.Message }
 
-// AsWithThrowTypeProto wraps a parsed message (e.g. from hyperpb).
-func AsWithThrowTypeProto(m protoreflect.Message) WithThrowTypeProto { return WithThrowTypeProto{m} }
+// AsWithThrowTypeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithThrowTypeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithThrowTypeProto(m protoreflect.Message) WithThrowTypeProto {
+	if m == nil || !m.IsValid() {
+		return WithThrowTypeProto{}
+	}
+	return WithThrowTypeProto{m}
+}
 
 func (x WithThrowTypeProto) IsZero() bool { return x.m == nil }
 
@@ -7324,8 +8545,17 @@ func (x WithThrowTypeProto) GetHit() bool {
 // WithTotalDaysProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithTotalDaysProto message.
 type WithTotalDaysProto struct{ m protoreflect.Message }
 
-// AsWithTotalDaysProto wraps a parsed message (e.g. from hyperpb).
-func AsWithTotalDaysProto(m protoreflect.Message) WithTotalDaysProto { return WithTotalDaysProto{m} }
+// AsWithTotalDaysProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithTotalDaysProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsWithTotalDaysProto(m protoreflect.Message) WithTotalDaysProto {
+	if m == nil || !m.IsValid() {
+		return WithTotalDaysProto{}
+	}
+	return WithTotalDaysProto{m}
+}
 
 func (x WithTotalDaysProto) IsZero() bool { return x.m == nil }
 
@@ -7339,8 +8569,15 @@ func (x WithTotalDaysProto) GetLastWindow() int32 {
 // WithTraineePokemonAttributesProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithTraineePokemonAttributesProto message.
 type WithTraineePokemonAttributesProto struct{ m protoreflect.Message }
 
-// AsWithTraineePokemonAttributesProto wraps a parsed message (e.g. from hyperpb).
+// AsWithTraineePokemonAttributesProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithTraineePokemonAttributesProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithTraineePokemonAttributesProto(m protoreflect.Message) WithTraineePokemonAttributesProto {
+	if m == nil || !m.IsValid() {
+		return WithTraineePokemonAttributesProto{}
+	}
 	return WithTraineePokemonAttributesProto{m}
 }
 
@@ -7356,8 +8593,15 @@ func (x WithTraineePokemonAttributesProto) GetTraineeAttribute() ScalarList {
 // WithUniquePokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithUniquePokemonProto message.
 type WithUniquePokemonProto struct{ m protoreflect.Message }
 
-// AsWithUniquePokemonProto wraps a parsed message (e.g. from hyperpb).
+// AsWithUniquePokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithUniquePokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithUniquePokemonProto(m protoreflect.Message) WithUniquePokemonProto {
+	if m == nil || !m.IsValid() {
+		return WithUniquePokemonProto{}
+	}
 	return WithUniquePokemonProto{m}
 }
 
@@ -7366,8 +8610,15 @@ func (x WithUniquePokemonProto) IsZero() bool { return x.m == nil }
 // WithUniquePokestopProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithUniquePokestopProto message.
 type WithUniquePokestopProto struct{ m protoreflect.Message }
 
-// AsWithUniquePokestopProto wraps a parsed message (e.g. from hyperpb).
+// AsWithUniquePokestopProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithUniquePokestopProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithUniquePokestopProto(m protoreflect.Message) WithUniquePokestopProto {
+	if m == nil || !m.IsValid() {
+		return WithUniquePokestopProto{}
+	}
 	return WithUniquePokestopProto{m}
 }
 
@@ -7383,8 +8634,15 @@ func (x WithUniquePokestopProto) GetContext() pogo.WithUniquePokestopProto_Conte
 // WithUniqueRouteTravelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithUniqueRouteTravelProto message.
 type WithUniqueRouteTravelProto struct{ m protoreflect.Message }
 
-// AsWithUniqueRouteTravelProto wraps a parsed message (e.g. from hyperpb).
+// AsWithUniqueRouteTravelProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithUniqueRouteTravelProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithUniqueRouteTravelProto(m protoreflect.Message) WithUniqueRouteTravelProto {
+	if m == nil || !m.IsValid() {
+		return WithUniqueRouteTravelProto{}
+	}
 	return WithUniqueRouteTravelProto{m}
 }
 
@@ -7393,8 +8651,15 @@ func (x WithUniqueRouteTravelProto) IsZero() bool { return x.m == nil }
 // WithWeatherBoostProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithWeatherBoostProto message.
 type WithWeatherBoostProto struct{ m protoreflect.Message }
 
-// AsWithWeatherBoostProto wraps a parsed message (e.g. from hyperpb).
+// AsWithWeatherBoostProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithWeatherBoostProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithWeatherBoostProto(m protoreflect.Message) WithWeatherBoostProto {
+	if m == nil || !m.IsValid() {
+		return WithWeatherBoostProto{}
+	}
 	return WithWeatherBoostProto{m}
 }
 
@@ -7403,8 +8668,15 @@ func (x WithWeatherBoostProto) IsZero() bool { return x.m == nil }
 // WithWinBattleStatusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithWinBattleStatusProto message.
 type WithWinBattleStatusProto struct{ m protoreflect.Message }
 
-// AsWithWinBattleStatusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithWinBattleStatusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithWinBattleStatusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithWinBattleStatusProto(m protoreflect.Message) WithWinBattleStatusProto {
+	if m == nil || !m.IsValid() {
+		return WithWinBattleStatusProto{}
+	}
 	return WithWinBattleStatusProto{m}
 }
 
@@ -7413,8 +8685,15 @@ func (x WithWinBattleStatusProto) IsZero() bool { return x.m == nil }
 // WithWinGymBattleStatusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithWinGymBattleStatusProto message.
 type WithWinGymBattleStatusProto struct{ m protoreflect.Message }
 
-// AsWithWinGymBattleStatusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithWinGymBattleStatusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithWinGymBattleStatusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithWinGymBattleStatusProto(m protoreflect.Message) WithWinGymBattleStatusProto {
+	if m == nil || !m.IsValid() {
+		return WithWinGymBattleStatusProto{}
+	}
 	return WithWinGymBattleStatusProto{m}
 }
 
@@ -7423,8 +8702,15 @@ func (x WithWinGymBattleStatusProto) IsZero() bool { return x.m == nil }
 // WithWinRaidStatusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithWinRaidStatusProto message.
 type WithWinRaidStatusProto struct{ m protoreflect.Message }
 
-// AsWithWinRaidStatusProto wraps a parsed message (e.g. from hyperpb).
+// AsWithWinRaidStatusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.WithWinRaidStatusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
 func AsWithWinRaidStatusProto(m protoreflect.Message) WithWinRaidStatusProto {
+	if m == nil || !m.IsValid() {
+		return WithWinRaidStatusProto{}
+	}
 	return WithWinRaidStatusProto{m}
 }
 
