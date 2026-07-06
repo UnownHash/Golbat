@@ -37,6 +37,7 @@ type runConfig struct {
 	ingest         string // "none" | "alloc" | "pool" — simulate the per-packet payload buffer
 	discardUnknown bool
 	engine         string // "std" | "vt" | "vtpool" | "hyperpb"
+	hyperpbPGO     bool
 }
 
 type report struct {
@@ -161,8 +162,10 @@ func engineRegistry(engine string) (map[string]readers.Reader, error) {
 		return readers.RegistryVTPool, nil
 	case "hyperpb":
 		return readers.RegistryHyperpb, nil
+	case "hypershim":
+		return readers.RegistryHypershim, nil
 	default:
-		return nil, fmt.Errorf("unknown engine %q (std|vt|vtpool|hyperpb)", engine)
+		return nil, fmt.Errorf("unknown engine %q (std|vt|vtpool|hyperpb|hypershim)", engine)
 	}
 }
 
@@ -209,6 +212,17 @@ func run(cfg runConfig) (report, error) {
 		}
 		sort.Strings(known)
 		return report{}, fmt.Errorf("corpus at %s has no payloads with readers (have readers: %s)", cfg.corpusDir, strings.Join(known, ", "))
+	}
+
+	if (cfg.engine == "hyperpb" || cfg.engine == "hypershim") && cfg.hyperpbPGO {
+		samples := map[string][][]byte{}
+		for method, payloads := range byMethod {
+			n := min(len(payloads), 32)
+			for i := 0; i < n; i++ {
+				samples[method] = append(samples[method], payloads[i].Data)
+			}
+		}
+		readers.InitHyperpbPGO(samples)
 	}
 
 	o := proto.UnmarshalOptions{NoLazyDecoding: cfg.nolazy, DiscardUnknown: cfg.discardUnknown}
@@ -307,6 +321,7 @@ func main() {
 	flag.StringVar(&cfg.ingest, "ingest", "none", "payload buffer simulation: none|alloc|pool")
 	flag.BoolVar(&cfg.discardUnknown, "discardunknown", false, "proto.UnmarshalOptions.DiscardUnknown")
 	flag.StringVar(&cfg.engine, "engine", "std", "decode engine: std|vt|vtpool|hyperpb")
+	flag.BoolVar(&cfg.hyperpbPGO, "hyperpb-pgo", true, "profile-guided recompilation for the hyperpb engine")
 	flag.Parse()
 
 	rep, err := run(cfg)
