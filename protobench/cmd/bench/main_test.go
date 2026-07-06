@@ -77,15 +77,24 @@ func TestHistPercentileSingleSampleMidBucket(t *testing.T) {
 // the last bucket boundary may be +Inf, so when the matching sample falls in
 // that open-ended bucket, histPercentile must fall back to the bucket's
 // finite lower edge instead.
+//
+// Buckets are {0, 0.0005, 0.001, +Inf} rather than {0, 0.001, +Inf}: with the
+// latter, the pre-fix first-bucket-return bug (target truncates to 0, so
+// cum >= target is trivially true at the very first bucket) happens to
+// return the same boundary (0.001) as the correct answer, so it wouldn't
+// have failed. With the extra 0.0005 boundary, the buggy path returns the
+// first bucket's upper edge (0.0005) while the correct path returns the
+// actual (final, open-ended) bucket's finite lower edge (0.001) -- distinct
+// values, so this test would catch a regression of that bug.
 func TestHistPercentileFinalInfBucket(t *testing.T) {
-	buckets := []float64{0, 0.001, math.Inf(1)}
+	buckets := []float64{0, 0.0005, 0.001, math.Inf(1)}
 	before := &metrics.Float64Histogram{
-		Counts:  []uint64{0, 0},
+		Counts:  []uint64{0, 0, 0},
 		Buckets: buckets,
 	}
 	// The one sample falls in the final, open-ended bucket [0.001, +Inf).
 	after := &metrics.Float64Histogram{
-		Counts:  []uint64{0, 1},
+		Counts:  []uint64{0, 0, 1},
 		Buckets: buckets,
 	}
 	want := time.Duration(0.001 * float64(time.Second)) // bucket's lower (finite) edge
