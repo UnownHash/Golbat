@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
-	"runtime"
 	"sync"
 	"time"
 
@@ -57,15 +56,15 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *ShardedCache[string, *Pokestop]
-var gymCache *ShardedCache[string, *Gym]
-var stationCache *ShardedCache[string, *Station]
+var pokestopCache *OtterCache[string, *Pokestop]
+var gymCache *OtterCache[string, *Gym]
+var stationCache *OtterCache[string, *Station]
 var tappableCache *ttlcache.Cache[uint64, *Tappable]
 var weatherCache *ttlcache.Cache[int64, *Weather]
 var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
 var s2CellCache *ttlcache.Cache[uint64, *S2Cell]
-var spawnpointCache *ShardedCache[int64, *Spawnpoint]
-var pokemonCache *ShardedCache[uint64, *Pokemon]
+var spawnpointCache *OtterCache[int64, *Spawnpoint]
+var pokemonCache *OtterCache[uint64, *Pokemon]
 var incidentCache *ttlcache.Cache[string, *Incident]
 var playerCache *ttlcache.Cache[string, *Player]
 var routeCache *ttlcache.Cache[string, *Route]
@@ -103,16 +102,6 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
-// cacheShardCount resolves tuning.cache_shards; more shards mean smaller
-// per-shard expiry sweeps and finer-grained write locking at the cost of
-// more cleanup goroutines.
-func cacheShardCount() int {
-	if n := config.Config.Tuning.CacheShards; n > 0 {
-		return n
-	}
-	return runtime.NumCPU()
-}
-
 // fortCacheEntryTTL is the per-entry TTL for pokestop/gym/station cache
 // inserts. Jittered so a restart's preload cohort (stamped within minutes)
 // doesn't expire in one synchronized sweep — the fort analogue of the
@@ -134,37 +123,25 @@ func initDataCache() {
 		fortCacheTTL = 25 * time.Hour
 	}
 
-	// Forts are read once per GMO fort entry; per-Get touch-on-hit cost
-	// (heap+list under shard locks) measured ~3.4% of total CPU in
-	// production. Hysteresis touch keeps actively-seen forts resident with
-	// one refresh per entry per TTL period; refresh TTLs are re-jittered.
-	fortTouchRefreshBelow := 10 * time.Minute
-	if config.Config.FortInMemory {
-		fortTouchRefreshBelow = 2 * time.Hour
-	}
-
-	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
-		NumShards:         cacheShardCount(),
-		TTL:               fortCacheTTL,
-		KeyToShard:        StringKeyToShard,
-		TouchRefreshBelow: fortTouchRefreshBelow,
-		TouchRefreshTTL:   fortCacheEntryTTL,
+	// Fort caches: touch-on-hit keeps actively-seen forts resident past
+	// their (jittered, set-at-save) TTLs; otter touches via the timing
+	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
+	pokestopCache = NewOtterCache(OtterCacheConfig[string, *Pokestop]{
+		Name:       "pokestop",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
 	})
 
-	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
-		NumShards:         cacheShardCount(),
-		TTL:               fortCacheTTL,
-		KeyToShard:        StringKeyToShard,
-		TouchRefreshBelow: fortTouchRefreshBelow,
-		TouchRefreshTTL:   fortCacheEntryTTL,
+	gymCache = NewOtterCache(OtterCacheConfig[string, *Gym]{
+		Name:       "gym",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
 	})
 
-	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
-		NumShards:         cacheShardCount(),
-		TTL:               fortCacheTTL,
-		KeyToShard:        StringKeyToShard,
-		TouchRefreshBelow: fortTouchRefreshBelow,
-		TouchRefreshTTL:   fortCacheEntryTTL,
+	stationCache = NewOtterCache(OtterCacheConfig[string, *Station]{
+		Name:       "station",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
 	})
 	// OnEviction registrations for pokestopCache/gymCache/stationCache are
 	// registered in initFortRtree() (called below), after fortTreeEvictor
@@ -191,23 +168,20 @@ func initDataCache() {
 	)
 	go s2CellCache.Start()
 
-	// Spawnpoints are read once per wild sighting (lock-free fast paths do
-	// a cache Get each); hysteresis touch replaces per-Get heap work with
-	// one refresh per spawnpoint per ~45min.
-	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
-		NumShards:         cacheShardCount(),
-		TTL:               60 * time.Minute,
-		KeyToShard:        Int64KeyToShard,
-		TouchRefreshBelow: 15 * time.Minute,
+	// Spawnpoints are read once per wild sighting; touch-on-hit keeps
+	// active spawnpoints resident.
+	spawnpointCache = NewOtterCache(OtterCacheConfig[int64, *Spawnpoint]{
+		Name:       "spawnpoint",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
 	})
 
-	// Pokemon cache: sharded for high concurrency
-	// By picking NumShards to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
-	pokemonCache = NewShardedCache(ShardedCacheConfig[uint64, *Pokemon]{
-		NumShards:         cacheShardCount(),
-		TTL:               60 * time.Minute,
-		KeyToShard:        Uint64KeyToShard,
-		DisableTouchOnHit: true, // Pokemon will last 60 mins from when we first see them not last see them
+	// Pokemon TTLs encode despawn times (remainingDuration) and must never
+	// extend on read: writing-based expiry only.
+	pokemonCache = NewOtterCache(OtterCacheConfig[uint64, *Pokemon]{
+		Name:       "pokemon",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: false,
 	})
 	initPokemonRtree()
 	initFortRtree()

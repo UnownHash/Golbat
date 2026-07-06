@@ -7,7 +7,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
@@ -56,9 +55,7 @@ func PreservePokemonToDatabase(dbDetails db.DbDetails) {
 	}
 
 	// Stream through cache, batching writes
-	pokemonCache.Range(func(item *ttlcache.Item[uint64, *Pokemon]) bool {
-		pokemon := item.Value()
-
+	pokemonCache.Range(func(_ uint64, pokemon *Pokemon) bool {
 		// Skip if expired or no valid expire timestamp (no lock needed at shutdown)
 		if !pokemon.ExpireTimestamp.Valid || pokemon.ExpireTimestamp.Int64 <= now {
 			skipped++

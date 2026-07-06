@@ -16,7 +16,6 @@ import (
 
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -82,10 +81,10 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
-	existingPokemon, found := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	existingPokemon, found := pokemonCache.GetOrSetFuncTTL(encounterId, func() *Pokemon {
 		// Only called if key doesn't exist - our Pokemon wins
 		return &dbPokemon
-	}, ttlcache.WithTTL[uint64, *Pokemon](dbPokemon.remainingDuration(time.Now().Unix())))
+	}, dbPokemon.remainingDuration(time.Now().Unix()))
 	if !found {
 		// Our dbPokemon won the insert. Index it out here — the GetOrSetFunc
 		// closure runs under the cache shard's write lock and must not take

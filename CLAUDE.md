@@ -131,11 +131,11 @@ type Pokestop struct {
 
 ## Caching
 
-### ShardedCache
+### OtterCache (hot entities)
 
-High-contention entities (pokestop, gym, station, spawnpoint, pokemon) use `ShardedCache[K, V]` — a generic wrapper over multiple `ttlcache.Cache` instances. Keys are distributed across shards (`tuning.cache_shards`, default `runtime.NumCPU()`) via maphash (strings) or identity (integers), reducing lock contention on the underlying cache maps.
+High-contention entities (pokestop, gym, station, spawnpoint, pokemon — plus the encounter stats cache) use `OtterCache[K, V]` (`decoder/otter_cache.go`), a hardened adapter over otter v2 (Caffeine-style: lock-free reads, hierarchical timing-wheel expiry). The adapter bakes in two non-negotiable behaviors: eviction events are re-dispatched to a single bounded-queue dispatcher goroutine (otter's default is a goroutine per event, and raw inline delivery could deadlock handlers that take entity locks), and only Expired/Deleted causes reach handlers (otter fires Replacement on overwriting live entries, which Golbat does routinely — a Replacement event reaching the eviction guards would enqueue bogus tree deletes). Per-entry TTLs ride on the value (otter has no per-call TTL); touch-on-hit is a per-cache flag choosing `ExpiryAccessingFunc` (forts, spawnpoints — reads reset the entry's own TTL, ~free via the timer wheel) vs `ExpiryWritingFunc` (pokemon — TTL encodes despawn time, must never extend on read). No sharding: the table is internally concurrent (`tuning.cache_shards` is obsolete).
 
-**Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — shard counts, fort TTLs, and eviction-callback registration all depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
+**Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — fort TTLs and eviction-callback registration depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
 
 ### TTL Cache
 

@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"context"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -11,7 +10,6 @@ import (
 
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/tidwall/rtree"
 )
@@ -142,8 +140,8 @@ func initPokemonRtree() {
 	// Cache.OnEviction: the registered fn is wrapped in `go fn(...)`), so
 	// this races concurrent updaters holding the entity lock — the cleanup
 	// itself is serialized in handlePokemonEviction.
-	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
-		handlePokemonEviction(v.Value())
+	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ EvictionReason) {
+		handlePokemonEviction(pokemon)
 	})
 }
 

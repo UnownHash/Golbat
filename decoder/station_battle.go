@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/jmoiron/sqlx"
 	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
@@ -640,13 +639,11 @@ func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails
 }
 
 func finalizePreloadedStationBattles(populateRtree bool) {
-	stationCache.Range(func(item *ttlcache.Item[string, *Station]) bool {
-		stationId := item.Key()
+	stationCache.Range(func(stationId string, station *Station) bool {
 		if _, ok := stationBattleCache.Load(stationId); !ok {
 			storeStationBattles(stationId, nil)
 		}
 		if populateRtree {
-			station := item.Value()
 			station.Lock("preloadStationBattles")
 			fortRtreeUpdateStationOnSave(station)
 			station.Unlock()

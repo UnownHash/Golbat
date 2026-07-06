@@ -1,14 +1,12 @@
 package decoder
 
 import (
-	"context"
 	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -87,20 +85,17 @@ func initFortRtree() {
 	// function), so callbacks can never observe a nil evictor or lookup
 	// cache. Mirrors the structure of initPokemonRtree.
 	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
-			p := item.Value()
+		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ EvictionReason) {
 			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
 		})
-		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
-			g := item.Value()
+		gymCache.OnEviction(func(_ string, g *Gym, _ EvictionReason) {
 			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
 		})
 	}
 
-	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
-		clearStationBattleState(item.Key())
+	stationCache.OnEviction(func(stationId string, s *Station, _ EvictionReason) {
+		clearStationBattleState(stationId)
 		if config.Config.FortInMemory {
-			s := item.Value()
 			deferFortEviction(STATION, s.Id, s.Lat, s.Lon)
 		}
 	})
