@@ -63,6 +63,10 @@ func ReadConfig() (configDefinition, error) {
 			WriteBehindBatchSize:           50,  // entries per batch
 			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},
+		RawCapture: rawCapture{
+			Dir:            "capture",
+			PerBucketLimit: 200, // x5 buckets = max 1000 payloads/method
+		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
 			ProactiveIVSwitchingToDB: false,

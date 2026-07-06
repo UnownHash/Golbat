@@ -27,6 +27,7 @@ type configDefinition struct {
 	Pvp                     pvp            `koanf:"pvp"`
 	Koji                    koji           `koanf:"koji"`
 	Tuning                  tuning         `koanf:"tuning"`
+	RawCapture              rawCapture     `koanf:"raw_capture"`
 	Weather                 weather        `koanf:"weather"`
 	ScanRules               []scanRule     `koanf:"scan_rules"`
 	StatsIntervals          statsIntervals `koanf:"stats_intervals"`
@@ -143,6 +144,14 @@ type tuning struct {
 	WriteBehindBatchSize           int     `koanf:"write_behind_batch_size"`    // entries per batch, default: 50
 	WriteBehindBatchTimeoutMs      int     `koanf:"write_behind_batch_timeout"` // max wait for batch in ms, default: 100
 	S2CellLookup                   bool    `koanf:"s2_cell_lookup"`             // Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups, default: false
+}
+
+// rawCapture samples raw proto payloads to disk for the protobench decode
+// harness. See docs/superpowers/specs/2026-07-05-proto-decoding-gc-design.md.
+type rawCapture struct {
+	Enabled        bool   `koanf:"enabled"`
+	Dir            string `koanf:"dir"`
+	PerBucketLimit int    `koanf:"per_bucket_limit"`
 }
 
 type scanRule struct {

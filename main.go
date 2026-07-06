@@ -67,6 +67,12 @@ func main() {
 
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
+	if config.Config.RawCapture.Enabled {
+		if err := startRawCapture(config.Config.RawCapture.Dir, config.Config.RawCapture.PerBucketLimit); err != nil {
+			log.Errorf("raw capture disabled: %v", err)
+		}
+	}
+
 	// Both Sentry & Pyroscope are optional and off by default. Read more:
 	// https://docs.sentry.io/platforms/go
 	// https://pyroscope.io/docs/golang

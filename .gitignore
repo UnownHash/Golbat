@@ -24,3 +24,4 @@ docker-compose.yml
 /geojson/*
 vbase.proto
 __debug_bin
+/capture/

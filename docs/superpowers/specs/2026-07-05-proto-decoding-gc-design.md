@@ -72,10 +72,10 @@ happens.
      than taking the first N. This guarantees the corpus includes the
      complex shapes (raid-heavy GMOs, invasion/event payloads, stations,
      multi-reward quests) that a small uniform sample would miss.
-   - **Metadata sidecar** per payload (method, byte size, capture
-     timestamp) so benchmarks can select subsets: microbenchmarks run a
-     small representative slice per bucket; sustained volume runs replay
-     the full corpus.
+   - **Path-encoded metadata** per payload (`<METHOD>/<unixMilli>_<sizeBytes>.bin`)
+     so benchmarks can select subsets: microbenchmarks run a small
+     representative slice per bucket; sustained volume runs replay the full
+     corpus.
    Fixtures live in a gitignored local directory (payloads may contain
    account-adjacent data; not committed to the public repo). This hook is
    the only Golbat change in Phase 0 (instrumentation-only, debug-gated).
