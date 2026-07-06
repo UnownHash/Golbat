@@ -167,7 +167,10 @@ func handlePokemonEviction(pokemon *Pokemon) {
 	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
 		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
 	}
-	pokemonTreeEvictor.Enqueue(pokemonId, pokemon.Lat, pokemon.Lon)
+	// Non-blocking: eviction callbacks are one goroutine per item and this
+	// one holds the entity lock — see treeEvictor.Enqueue for the incident
+	// a blocking send here caused.
+	pokemonTreeEvictor.TryEnqueue(pokemonId, pokemon.Lat, pokemon.Lon)
 }
 
 // queuePokemonTreeInsert / queuePokemonTreeRemove are the runtime-path tree

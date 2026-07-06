@@ -6,6 +6,8 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+
+	"golbat/util"
 )
 
 type treeOp uint8
@@ -41,6 +43,7 @@ type treeEvictor[K comparable] struct {
 	done      chan struct{}
 
 	lastBacklogWarn atomic.Int64 // unix nanos; backlog warnings at most 1/s
+	drops           util.DropReporter
 }
 
 // The flush callback must not retain the slice after returning; the buffer is reused.
@@ -61,11 +64,41 @@ func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush fu
 // goroutine dumps showed 90+ savers convoyed on the tree write mutex
 // behind eviction drains and COW clone chains — with a single writer,
 // savers never touch the mutex at all, and only the worker and the ~1/s
-// snapshot refresh remain as lock parties. Blocks only if the channel is
-// full (bounded backpressure) rather than dropping entries and leaking
-// ghost/missing points in the tree.
+// snapshot refresh remain as lock parties.
+//
+// Blocking sends are safe ONLY for callers whose concurrency is bounded
+// (savers: capped by the raw-processing limiter). Eviction callbacks run
+// on one goroutine per evicted item — with a full channel during a mass
+// expiry, blocking there parked millions of goroutines, each holding an
+// entity lock and 8KB of stack, strangling the scheduler until the drain
+// rate collapsed (overnight production incident: channel pegged at cap
+// for >1h, entity locks held for minutes, worker at ~500 ops/s). Those
+// callers use TryEnqueue and drop instead: a dropped delete leaves a
+// ghost tree point, which scans already tolerate (candidates are verified
+// against the lookup cache, cleaned inline before the enqueue).
 func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 	e.enqueue(treeEvictionEntry[K]{op: treeOpDelete, id: id, lat: lat, lon: lon})
+}
+
+// TryEnqueue queues a removal without blocking. Returns false (entry
+// dropped) if the channel is full. For unbounded-concurrency callers
+// (eviction callbacks); see Enqueue for why they must never block.
+func (e *treeEvictor[K]) TryEnqueue(id K, lat, lon float64) bool {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Debugf("[TREE_EVICTOR] %s try-enqueue after close dropped: %v", e.name, r)
+		}
+	}()
+	select {
+	case e.ch <- treeEvictionEntry[K]{op: treeOpDelete, id: id, lat: lat, lon: lon}:
+		return true
+	default:
+		e.drops.Report(func(dropped int64) {
+			log.Warnf("[TREE_EVICTOR] %s dropped %d evictions in the last second (queue full %d/%d; ghost points until restart)",
+				e.name, dropped, len(e.ch), cap(e.ch))
+		})
+		return false
+	}
 }
 
 func (e *treeEvictor[K]) EnqueueInsert(id K, lat, lon float64) {

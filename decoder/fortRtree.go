@@ -318,7 +318,9 @@ func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
 		return
 	}
 	fortLookupCache.Delete(fortId)
-	fortTreeEvictor.Enqueue(fortId, lat, lon)
+	// Non-blocking for the same reason as the pokemon eviction callback:
+	// per-item goroutines must never park on a full channel.
+	fortTreeEvictor.TryEnqueue(fortId, lat, lon)
 }
 
 func removeFortFromTree(fortId string, lat, lon float64) {
