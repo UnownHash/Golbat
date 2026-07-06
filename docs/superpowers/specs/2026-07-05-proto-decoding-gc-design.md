@@ -60,12 +60,25 @@ is simulable at volume without integrating anything, so the decode
 methodology is proven (or killed) before any of the ~31-file migration
 happens.
 
-1. **Payload corpus**: debug-gated capture hook on the raw path writing N raw
-   protobuf payloads per method type (default N=25; GMO, Encounter,
-   FortDetails, …) from prod to disk. Fixtures live in a gitignored local directory (payloads may
-   contain account-adjacent data; not committed to the public repo). This
-   hook is the only Golbat change in Phase 0 (instrumentation-only,
-   debug-gated).
+1. **Payload corpus**: debug-gated capture hook on the raw path writing raw
+   protobuf payloads per method type (GMO, Encounter, FortDetails, …) from
+   prod to disk, sized and sampled for diversity, not just volume:
+   - **Default 1,000 payloads per method type**, captured over a window of
+     at least 24 hours so day/night spawn cycles, raid hours, and event
+     content are represented (disk cost is trivial — order of 1 GB).
+   - **Size-stratified sampling**: payload size is the cheapest proxy for
+     message complexity, so capture fills per-size-bucket quotas (e.g.,
+     p0–p50 / p50–p90 / p90–p99 / p99+ by observed size per method) rather
+     than taking the first N. This guarantees the corpus includes the
+     complex shapes (raid-heavy GMOs, invasion/event payloads, stations,
+     multi-reward quests) that a small uniform sample would miss.
+   - **Metadata sidecar** per payload (method, byte size, capture
+     timestamp) so benchmarks can select subsets: microbenchmarks run a
+     small representative slice per bucket; sustained volume runs replay
+     the full corpus.
+   Fixtures live in a gitignored local directory (payloads may contain
+   account-adjacent data; not committed to the public repo). This hook is
+   the only Golbat change in Phase 0 (instrumentation-only, debug-gated).
 2. **Standalone decode harness** — a separate Go module (`protobench/`, own
    `go.mod`, in-repo). Separate module is mandatory, not stylistic: a second
    generated copy of `vbase.proto` in the same binary as `golbat/pogo`
