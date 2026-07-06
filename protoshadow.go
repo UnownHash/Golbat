@@ -89,8 +89,12 @@ func compareDigest[T any](method string, payload []byte, wrap func(protoreflect.
 // folded, then the field's value, so that (a) an all-zero-value message
 // still produces a non-trivial digest and (b) two fields that happen to
 // share a value can't be swapped without changing the digest. Floats are
-// folded via their raw bits (no arithmetic), strings via their raw bytes,
-// and repeated fields fold their length before their elements.
+// folded via their raw bits (no arithmetic), strings via their length
+// followed by their raw bytes (removing tag/value ambiguity), and repeated
+// fields fold their length before their elements. Before descending into
+// any singular (optional) message field, its Has<Field>() presence bit is
+// folded first, so an absent submessage and a present-but-all-default one
+// produce different digests.
 
 func foldU64(h hash.Hash64, tag int, v uint64) {
 	var buf [16]byte
@@ -118,9 +122,7 @@ func foldF64(h hash.Hash64, tag int, v float64) {
 }
 
 func foldStr(h hash.Hash64, tag int, s string) {
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], uint64(tag))
-	_, _ = h.Write(buf[:])
+	foldLen(h, tag, len(s))
 	_, _ = h.Write([]byte(s))
 }
 
@@ -139,7 +141,11 @@ func digestPokemonDisplay(h hash.Hash64, d pogoshim.PokemonDisplayProto) {
 	foldI64(h, 8, d.GetTemporaryEvolutionFinishMs())
 	foldI64(h, 9, int64(d.GetAlignment()))
 	foldI64(h, 10, int64(d.GetPokemonBadge()))
-	foldI64(h, 11, int64(d.GetLocationCard().GetLocationCard()))
+	foldBool(h, 11, d.HasLocationCard())
+	if d.HasLocationCard() {
+		foldI64(h, 12, int64(d.GetLocationCard().GetLocationCard()))
+	}
+	foldI64(h, 13, int64(d.GetBreadModeEnum()))
 }
 
 func digestPokemon(h hash.Hash64, p pogoshim.PokemonProto) {
@@ -155,7 +161,11 @@ func digestPokemon(h hash.Hash64, p pogoshim.PokemonProto) {
 	foldI64(h, 29, int64(p.GetIndividualStamina()))
 	foldF32(h, 30, p.GetCpMultiplier())
 	foldI64(h, 31, int64(p.GetSize()))
-	digestPokemonDisplay(h, p.GetPokemonDisplay())
+	foldI64(h, 32, int64(p.GetStamina()))
+	foldBool(h, 33, p.HasPokemonDisplay())
+	if p.HasPokemonDisplay() {
+		digestPokemonDisplay(h, p.GetPokemonDisplay())
+	}
 }
 
 func digestCaptureProbability(h hash.Hash64, c pogoshim.CaptureProbabilityProto) {
@@ -179,7 +189,10 @@ func digestWild(h hash.Hash64, w pogoshim.WildPokemonProto) {
 	foldF64(h, 53, w.GetLongitude())
 	foldStr(h, 54, w.GetSpawnPointId())
 	foldI64(h, 55, int64(w.GetTimeTillHiddenMs()))
-	digestPokemon(h, w.GetPokemon())
+	foldBool(h, 56, w.HasPokemon())
+	if w.HasPokemon() {
+		digestPokemon(h, w.GetPokemon())
+	}
 }
 
 func digestNearby(h hash.Hash64, n pogoshim.NearbyPokemonProto) {
@@ -188,7 +201,10 @@ func digestNearby(h hash.Hash64, n pogoshim.NearbyPokemonProto) {
 	foldU64(h, 62, n.GetEncounterId())
 	foldStr(h, 63, n.GetFortId())
 	foldStr(h, 64, n.GetFortImageUrl())
-	digestPokemonDisplay(h, n.GetPokemonDisplay())
+	foldBool(h, 65, n.HasPokemonDisplay())
+	if n.HasPokemonDisplay() {
+		digestPokemonDisplay(h, n.GetPokemonDisplay())
+	}
 }
 
 func digestMapPokemon(h hash.Hash64, m pogoshim.MapPokemonProto) {
@@ -198,7 +214,10 @@ func digestMapPokemon(h hash.Hash64, m pogoshim.MapPokemonProto) {
 	foldI64(h, 73, m.GetExpirationTimeMs())
 	foldF64(h, 74, m.GetLatitude())
 	foldF64(h, 75, m.GetLongitude())
-	digestPokemonDisplay(h, m.GetPokemonDisplay())
+	foldBool(h, 76, m.HasPokemonDisplay())
+	if m.HasPokemonDisplay() {
+		digestPokemonDisplay(h, m.GetPokemonDisplay())
+	}
 }
 
 func digestIncidentDisplay(h hash.Hash64, p pogoshim.PokestopIncidentDisplayProto) {
@@ -206,9 +225,12 @@ func digestIncidentDisplay(h hash.Hash64, p pogoshim.PokestopIncidentDisplayProt
 	foldI64(h, 81, p.GetIncidentStartMs())
 	foldI64(h, 82, p.GetIncidentExpirationMs())
 	foldI64(h, 83, int64(p.GetIncidentDisplayType()))
-	cd := p.GetCharacterDisplay()
-	foldI64(h, 84, int64(cd.GetStyle()))
-	foldI64(h, 85, int64(cd.GetCharacter()))
+	foldBool(h, 86, p.HasCharacterDisplay())
+	if p.HasCharacterDisplay() {
+		cd := p.GetCharacterDisplay()
+		foldI64(h, 84, int64(cd.GetStyle()))
+		foldI64(h, 85, int64(cd.GetCharacter()))
+	}
 }
 
 func digestRaidInfo(h hash.Hash64, r pogoshim.RaidInfoProto) {
@@ -217,7 +239,10 @@ func digestRaidInfo(h hash.Hash64, r pogoshim.RaidInfoProto) {
 	foldI64(h, 92, r.GetRaidSeed())
 	foldI64(h, 93, r.GetRaidBattleMs())
 	foldI64(h, 94, int64(r.GetRaidLevel()))
-	digestPokemon(h, r.GetRaidPokemon())
+	foldBool(h, 95, r.HasRaidPokemon())
+	if r.HasRaidPokemon() {
+		digestPokemon(h, r.GetRaidPokemon())
+	}
 }
 
 func digestFort(h hash.Hash64, f pogoshim.PokemonFortProto) {
@@ -243,11 +268,17 @@ func digestFort(h hash.Hash64, f pogoshim.PokemonFortProto) {
 	foldStr(h, 124, f.GetPartnerId())
 	foldBool(h, 125, f.GetIsInBattle())
 	foldI64(h, 126, int64(f.GetGuardPokemonId()))
-	digestPokemonDisplay(h, f.GetGuardPokemonDisplay())
+	foldBool(h, 132, f.HasGuardPokemonDisplay())
+	if f.HasGuardPokemonDisplay() {
+		digestPokemonDisplay(h, f.GetGuardPokemonDisplay())
+	}
 
-	gd := f.GetGymDisplay()
-	foldI64(h, 127, int64(gd.GetSlotsAvailable()))
-	foldI64(h, 128, int64(gd.GetTotalGymCp()))
+	foldBool(h, 133, f.HasGymDisplay())
+	if f.HasGymDisplay() {
+		gd := f.GetGymDisplay()
+		foldI64(h, 127, int64(gd.GetSlotsAvailable()))
+		foldI64(h, 128, int64(gd.GetTotalGymCp()))
+	}
 
 	foldBool(h, 129, f.HasRaidInfo())
 	if f.HasRaidInfo() {
@@ -263,20 +294,29 @@ func digestFort(h hash.Hash64, f pogoshim.PokemonFortProto) {
 	if f.HasPokestopDisplay() {
 		digestIncidentDisplay(h, f.GetPokestopDisplay())
 	}
+
+	foldBool(h, 134, f.GetIsExRaidEligible())
 }
 
 func digestWeather(h hash.Hash64, w pogoshim.ClientWeatherProto) {
 	foldI64(h, 140, w.GetS2CellId())
-	foldI64(h, 141, int64(w.GetGameplayWeather().GetGameplayCondition()))
 
-	dw := w.GetDisplayWeather()
-	foldI64(h, 142, int64(dw.GetCloudLevel()))
-	foldI64(h, 143, int64(dw.GetRainLevel()))
-	foldI64(h, 144, int64(dw.GetWindLevel()))
-	foldI64(h, 145, int64(dw.GetSnowLevel()))
-	foldI64(h, 146, int64(dw.GetFogLevel()))
-	foldI64(h, 147, int64(dw.GetSpecialEffectLevel()))
-	foldI64(h, 148, int64(dw.GetWindDirection()))
+	foldBool(h, 152, w.HasGameplayWeather())
+	if w.HasGameplayWeather() {
+		foldI64(h, 141, int64(w.GetGameplayWeather().GetGameplayCondition()))
+	}
+
+	foldBool(h, 153, w.HasDisplayWeather())
+	if w.HasDisplayWeather() {
+		dw := w.GetDisplayWeather()
+		foldI64(h, 142, int64(dw.GetCloudLevel()))
+		foldI64(h, 143, int64(dw.GetRainLevel()))
+		foldI64(h, 144, int64(dw.GetWindLevel()))
+		foldI64(h, 145, int64(dw.GetSnowLevel()))
+		foldI64(h, 146, int64(dw.GetFogLevel()))
+		foldI64(h, 147, int64(dw.GetSpecialEffectLevel()))
+		foldI64(h, 148, int64(dw.GetWindDirection()))
+	}
 
 	alerts := w.GetAlerts()
 	foldLen(h, 149, alerts.Len())

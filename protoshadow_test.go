@@ -1,6 +1,7 @@
 package main
 
 import (
+	"hash/fnv"
 	"strconv"
 	"sync"
 	"testing"
@@ -330,6 +331,48 @@ func TestShadowDigestGmoDetectsCorruption(t *testing.T) {
 	corruptedDigest := digestViaStd(t, engMethodGmo, corruptedPayload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
 	if originalDigest == corruptedDigest {
 		t.Fatal("expected corrupted payload (Cp+1) to produce a different digest")
+	}
+}
+
+// digestPokemonViaStd unmarshals payload with the std protobuf-go engine,
+// wraps it in the pogoshim surface, and folds it through digestPokemon --
+// bypassing the method/engine dispatch machinery since this test only cares
+// about the digest's presence-vs-absence sensitivity for a bare PokemonProto.
+func digestPokemonViaStd(t *testing.T, payload []byte) uint64 {
+	t.Helper()
+	m := &pogo.PokemonProto{}
+	if err := proto.Unmarshal(payload, m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	h := fnv.New64a()
+	digestPokemon(h, pogoshim.AsPokemonProto(m.ProtoReflect()))
+	return h.Sum64()
+}
+
+// TestShadowDigestPresenceOnlyDivergesFromAbsent guards the presence-folding
+// fix directly: a submessage that is present-but-empty must digest
+// differently from the same submessage being entirely absent. Before the
+// fix, digestPokemon descended into PokemonDisplay unconditionally, so an
+// absent PokemonDisplay and a present-but-all-default PokemonDisplay folded
+// identically (both all-zero fields) -- exactly the divergence a shadow
+// digest must not miss.
+func TestShadowDigestPresenceOnlyDivergesFromAbsent(t *testing.T) {
+	present := &pogo.PokemonProto{PokemonDisplay: &pogo.PokemonDisplayProto{}}
+	absent := &pogo.PokemonProto{}
+
+	presentPayload, err := proto.Marshal(present)
+	if err != nil {
+		t.Fatalf("marshal present: %v", err)
+	}
+	absentPayload, err := proto.Marshal(absent)
+	if err != nil {
+		t.Fatalf("marshal absent: %v", err)
+	}
+
+	presentDigest := digestPokemonViaStd(t, presentPayload)
+	absentDigest := digestPokemonViaStd(t, absentPayload)
+	if presentDigest == absentDigest {
+		t.Fatal("expected a present-but-empty PokemonDisplay to digest differently than an absent one")
 	}
 }
 
