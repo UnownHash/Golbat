@@ -2,6 +2,7 @@ package main
 
 import (
 	"hash/fnv"
+	"reflect"
 	"strconv"
 	"sync"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"golbat/config"
+	"golbat/decoder"
 	"golbat/pogo"
 	"golbat/pogoshim"
 	"golbat/stats_collector"
@@ -551,4 +553,196 @@ func TestMaybeShadowSkipsWhenLiveEngineIsStd(t *testing.T) {
 	}
 
 	setEngine(engMethodGmo, "hyperpb") // restore TestMain's baseline for other tests
+}
+
+// --- Task 7 Step 2: full-GMO engine-flip differential test -----------------
+
+// buildTestGmoForWalkDifferential extends buildTestGmo with a fort-level
+// ActivePokemon: decodeGMO's own walk builds RawMapPokemonData from
+// fort.GetActivePokemon() (not mapCell.GetCatchablePokemon(), which digestGmo
+// folds for shadow coverage but decodeGMO never reads), so without this the
+// walk's fort.HasActivePokemon()/GetActivePokemon() branch would never fire
+// and "map pokemon" would be silently absent from the differential below.
+func buildTestGmoForWalkDifferential(wildCp int32) *pogo.GetMapObjectsOutProto {
+	gmo := buildTestGmo(wildCp)
+	gmo.MapCell[0].Fort[0].ActivePokemon = buildTestCatchable()
+	return gmo
+}
+
+// gmoWalkSnapshot captures, as plain Go values only (never a pogoshim type --
+// those must not outlive the decode closure they came from), the same
+// representative fields decodeGMO's per-cell walk extracts for every entity
+// family: forts (incl. the fort-tracker Gyms/Pokestops classification),
+// fort-embedded map pokemon, wild/nearby pokemon, stations, weather, and the
+// isCellNotEmpty-gated cell id list.
+type gmoWalkSnapshot struct {
+	newMapCells []uint64
+	cellForts   map[uint64]*decoder.FortTrackerGMOContents
+
+	fortIds   []string
+	fortTypes []pogo.FortType
+	fortTeams []pogo.Team
+
+	mapPokemonEncounterIds  []uint64
+	mapPokemonSpawnpointIds []string
+
+	wildEncounterIds  []uint64
+	wildSpawnPointIds []string
+	wildPokemonCps    []int32
+
+	nearbyEncounterIds []uint64
+	nearbyFortIds      []string
+
+	stationIds   []string
+	stationNames []string
+
+	weatherCellIds    []int64
+	weatherConditions []int32
+}
+
+// walkGmoForTest decodes payload under the given engine via the exact
+// decodeWithArena entry point decodeGMO uses, and mirrors decodeGMO's own
+// closure body (same loops, same shim getters, same isCellNotEmpty gate and
+// fort-tracker bookkeeping) to build a plain-value snapshot instead of
+// calling the decoder batch functions.
+//
+// decodeGMO itself cannot be driven end to end in this suite: its batch
+// calls (UpdateFortBatch/UpdatePokemonBatch/UpdateStationBatch/...) reach
+// getOrCreate*Record, which touches db.DbDetails.GeneralDb/PokemonDb on a
+// cache miss, and this repo has no DB-mocking test harness (no sqlmock or
+// sqlite-backed DbDetails anywhere in the test suite -- confirmed absent, not
+// merely unused here). Mirroring the walk against the same shim accessors
+// UpdateFortBatch/UpdatePokemonBatch/UpdateStationBatch/UpdateClientWeatherBatch
+// consume is the documented fallback (see task-7-brief.md Step 2) for
+// asserting identical entity outcomes across engines without a live DB.
+func walkGmoForTest(t *testing.T, engine string, payload []byte) gmoWalkSnapshot {
+	t.Helper()
+	setEngine(engMethodGmo, engine)
+	if engine == "hyperpb" && hyperEngines[engMethodGmo] == nil {
+		t.Fatal("hyperEngines[engMethodGmo] is nil; hyperpb subtest would silently fall back to decodeStd")
+	}
+
+	snap := gmoWalkSnapshot{cellForts: make(map[uint64]*decoder.FortTrackerGMOContents)}
+
+	_, err := decodeWithArena(engMethodGmo, payload, pogoshim.AsGetMapObjectsOutProto,
+		func(gmo pogoshim.GetMapObjectsOutProto) string {
+			for cell := range gmo.GetMapCell().All() {
+				snap.cellForts[cell.GetS2CellId()] = &decoder.FortTrackerGMOContents{
+					Pokestops: make([]string, 0),
+					Gyms:      make([]string, 0),
+					Timestamp: cell.GetAsOfTimeMs(),
+				}
+
+				if isCellNotEmpty(cell) {
+					snap.newMapCells = append(snap.newMapCells, cell.GetS2CellId())
+				}
+
+				for fort := range cell.GetFort().All() {
+					snap.fortIds = append(snap.fortIds, fort.GetFortId())
+					snap.fortTypes = append(snap.fortTypes, fort.GetFortType())
+					snap.fortTeams = append(snap.fortTeams, fort.GetTeam())
+
+					if cf, ok := snap.cellForts[cell.GetS2CellId()]; ok {
+						switch fort.GetFortType() {
+						case pogo.FortType_GYM:
+							cf.Gyms = append(cf.Gyms, fort.GetFortId())
+						case pogo.FortType_CHECKPOINT:
+							cf.Pokestops = append(cf.Pokestops, fort.GetFortId())
+						}
+					}
+
+					if fort.HasActivePokemon() {
+						mp := fort.GetActivePokemon()
+						snap.mapPokemonEncounterIds = append(snap.mapPokemonEncounterIds, mp.GetEncounterId())
+						snap.mapPokemonSpawnpointIds = append(snap.mapPokemonSpawnpointIds, mp.GetSpawnpointId())
+					}
+				}
+				for mon := range cell.GetWildPokemon().All() {
+					snap.wildEncounterIds = append(snap.wildEncounterIds, mon.GetEncounterId())
+					snap.wildSpawnPointIds = append(snap.wildSpawnPointIds, mon.GetSpawnPointId())
+					snap.wildPokemonCps = append(snap.wildPokemonCps, mon.GetPokemon().GetCp())
+				}
+				for mon := range cell.GetNearbyPokemon().All() {
+					snap.nearbyEncounterIds = append(snap.nearbyEncounterIds, mon.GetEncounterId())
+					snap.nearbyFortIds = append(snap.nearbyFortIds, mon.GetFortId())
+				}
+				for station := range cell.GetStations().All() {
+					snap.stationIds = append(snap.stationIds, station.GetId())
+					snap.stationNames = append(snap.stationNames, station.GetName())
+				}
+			}
+
+			for w := range gmo.GetClientWeather().All() {
+				snap.weatherCellIds = append(snap.weatherCellIds, w.GetS2CellId())
+				snap.weatherConditions = append(snap.weatherConditions, int32(w.GetGameplayWeather().GetGameplayCondition()))
+			}
+			return ""
+		})
+	if err != nil {
+		t.Fatalf("decodeWithArena(%s) failed: %v", engine, err)
+	}
+	return snap
+}
+
+// TestGmoEngineFlipDifferential is Task 7 Step 2's full-GMO differential
+// case: a synthetic GMO containing every entity type the GMO pipeline reads
+// (gym fort w/ raid+guard display, pokestop fort w/ incidents, fort-embedded
+// map pokemon, wild/nearby pokemon, weather w/ alerts, station w/ battle
+// details) must (a) shadow-compare true across engines via the production
+// digest, and (b) walk to byte-identical entity outcomes for representative
+// fields of every entity type whether decodeGMO's engine is std or hyperpb.
+func TestGmoEngineFlipDifferential(t *testing.T) {
+	prevEngine := config.Config.ProtoEngine.Gmo
+	defer setEngine(engMethodGmo, prevEngine)
+
+	gmo := buildTestGmoForWalkDifferential(500)
+	payload, err := proto.Marshal(gmo)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if !shadowCompare(engMethodGmo, payload) {
+		t.Fatal("shadowCompare(engMethodGmo, payload) = false, want true for a well-formed full-entity-coverage GMO")
+	}
+
+	stdSnap := walkGmoForTest(t, "std", payload)
+	hyperSnap := walkGmoForTest(t, "hyperpb", payload)
+
+	if !reflect.DeepEqual(stdSnap, hyperSnap) {
+		t.Fatalf("walk snapshot mismatch:\nstd:     %+v\nhyperpb: %+v", stdSnap, hyperSnap)
+	}
+
+	// Spot-check representative fields per entity type so the equality
+	// assertion above isn't vacuously satisfied by two empty snapshots.
+	if got := stdSnap.fortIds; len(got) != 2 || got[0] != "GYM1" || got[1] != "STOP1" {
+		t.Fatalf("unexpected fort ids: %v", got)
+	}
+	if got := stdSnap.fortTeams; len(got) != 2 || got[0] != pogo.Team_TEAM_RED {
+		t.Fatalf("unexpected fort teams: %v", got)
+	}
+	if got := stdSnap.mapPokemonEncounterIds; len(got) != 1 || got[0] != 555555 {
+		t.Fatalf("unexpected map pokemon encounter ids: %v", got)
+	}
+	if got := stdSnap.wildEncounterIds; len(got) != 1 || got[0] != 123456789 {
+		t.Fatalf("unexpected wild encounter ids: %v", got)
+	}
+	if got := stdSnap.wildSpawnPointIds; len(got) != 1 || got[0] != "abcd1234" {
+		t.Fatalf("unexpected wild spawn point ids: %v", got)
+	}
+	if got := stdSnap.nearbyEncounterIds; len(got) != 1 || got[0] != 987654321 {
+		t.Fatalf("unexpected nearby encounter ids: %v", got)
+	}
+	if got := stdSnap.stationIds; len(got) != 1 || got[0] != "STATION1" {
+		t.Fatalf("unexpected station ids: %v", got)
+	}
+	if got := stdSnap.weatherCellIds; len(got) != 1 || got[0] != 12345 {
+		t.Fatalf("unexpected weather cell ids: %v", got)
+	}
+	if got := stdSnap.cellForts[999]; got == nil || len(got.Gyms) != 1 || got.Gyms[0] != "GYM1" ||
+		len(got.Pokestops) != 1 || got.Pokestops[0] != "STOP1" || got.Timestamp != 1000 {
+		t.Fatalf("unexpected cellForts contents: %+v", got)
+	}
+	if len(stdSnap.newMapCells) != 1 || stdSnap.newMapCells[0] != 999 {
+		t.Fatalf("unexpected newMapCells: %v", stdSnap.newMapCells)
+	}
 }

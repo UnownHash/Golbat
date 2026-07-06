@@ -472,131 +472,136 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 }
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
-	decodedGmo := &pogo.GetMapObjectsOutProto{}
+	maybeShadow(engMethodGmo, protoData.Data)
+	res, err := decodeWithArena(engMethodGmo, protoData.Data,
+		pogoshim.AsGetMapObjectsOutProto,
+		func(gmo pogoshim.GetMapObjectsOutProto) string {
+			if gmo.GetStatus() != pogo.GetMapObjectsOutProto_SUCCESS {
+				statsCollector.IncDecodeGMO("error", "non_success")
+				res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, gmo.GetStatus(),
+					pogo.GetMapObjectsOutProto_Status_name[int32(gmo.GetStatus())])
+				return res
+			}
 
-	if err := proto.Unmarshal(protoData.Data, decodedGmo); err != nil {
-		statsCollector.IncDecodeGMO("error", "parse")
-		log.Errorf("Failed to parse %s", err)
-	}
+			var newForts []decoder.RawFortData
+			var newStations []decoder.RawStationData
+			var newWildPokemon []decoder.RawWildPokemonData
+			var newNearbyPokemon []decoder.RawNearbyPokemonData
+			var newMapPokemon []decoder.RawMapPokemonData
+			var newMapCells []uint64
 
-	if decodedGmo.Status != pogo.GetMapObjectsOutProto_SUCCESS {
-		statsCollector.IncDecodeGMO("error", "non_success")
-		res := fmt.Sprintf(`GetMapObjectsOutProto: Ignored non-success value %d:%s`, decodedGmo.Status,
-			pogo.GetMapObjectsOutProto_Status_name[int32(decodedGmo.Status)])
-		return res
-	}
+			// track forts per cell for memory-based cleanup (every map cell gets an
+			// entry, so empty fort lists are seen as "no forts" by the tracker)
+			cellForts := make(map[uint64]*decoder.FortTrackerGMOContents)
 
-	var newForts []decoder.RawFortData
-	var newStations []decoder.RawStationData
-	var newWildPokemon []decoder.RawWildPokemonData
-	var newNearbyPokemon []decoder.RawNearbyPokemonData
-	var newMapPokemon []decoder.RawMapPokemonData
-	var newMapCells []uint64
+			cells := gmo.GetMapCell()
+			if cells.Len() == 0 {
+				return "Skipping GetMapObjectsOutProto: No map cells found"
+			}
+			for cell := range cells.All() {
+				cellForts[cell.GetS2CellId()] = &decoder.FortTrackerGMOContents{
+					Pokestops: make([]string, 0),
+					Gyms:      make([]string, 0),
+					Timestamp: cell.GetAsOfTimeMs(),
+				}
 
-	// track forts per cell for memory-based cleanup (every map cell gets an
-	// entry, so empty fort lists are seen as "no forts" by the tracker)
-	cellForts := make(map[uint64]*decoder.FortTrackerGMOContents)
+				if isCellNotEmpty(cell) {
+					newMapCells = append(newMapCells, cell.GetS2CellId())
+				}
 
-	if len(decodedGmo.MapCell) == 0 {
-		return "Skipping GetMapObjectsOutProto: No map cells found"
-	}
-	for _, mapCell := range decodedGmo.MapCell {
-		cellForts[mapCell.S2CellId] = &decoder.FortTrackerGMOContents{
-			Pokestops: make([]string, 0),
-			Gyms:      make([]string, 0),
-			Timestamp: mapCell.AsOfTimeMs,
-		}
+				for fort := range cell.GetFort().All() {
+					newForts = append(newForts, decoder.RawFortData{Cell: cell.GetS2CellId(), Data: fort, Timestamp: cell.GetAsOfTimeMs()})
 
-		if isCellNotEmpty(mapCell) {
-			newMapCells = append(newMapCells, mapCell.S2CellId)
-		}
+					// track fort by type for memory-based cleanup (only if tracker enabled)
+					if cf, ok := cellForts[cell.GetS2CellId()]; ok {
+						switch fort.GetFortType() {
+						case pogo.FortType_GYM:
+							cf.Gyms = append(cf.Gyms, fort.GetFortId())
+						case pogo.FortType_CHECKPOINT:
+							cf.Pokestops = append(cf.Pokestops, fort.GetFortId())
+						}
+					}
 
-		for _, fort := range mapCell.Fort {
-			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: pogoshim.AsPokemonFortProto(fort.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
-
-			// track fort by type for memory-based cleanup (only if tracker enabled)
-			if cf, ok := cellForts[mapCell.S2CellId]; ok {
-				switch fort.FortType {
-				case pogo.FortType_GYM:
-					cf.Gyms = append(cf.Gyms, fort.FortId)
-				case pogo.FortType_CHECKPOINT:
-					cf.Pokestops = append(cf.Pokestops, fort.FortId)
+					if fort.HasActivePokemon() {
+						newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: cell.GetS2CellId(), Data: fort.GetActivePokemon(), Timestamp: cell.GetAsOfTimeMs()})
+					}
+				}
+				for mon := range cell.GetWildPokemon().All() {
+					newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: cell.GetS2CellId(), Data: mon, Timestamp: cell.GetAsOfTimeMs()})
+				}
+				for mon := range cell.GetNearbyPokemon().All() {
+					newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: cell.GetS2CellId(), Data: mon, Timestamp: cell.GetAsOfTimeMs()})
+				}
+				for station := range cell.GetStations().All() {
+					newStations = append(newStations, decoder.RawStationData{Cell: cell.GetS2CellId(), Data: station})
 				}
 			}
 
-			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsMapPokemonProto(fort.ActivePokemon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
+			var newClientWeather []pogoshim.ClientWeatherProto
+			for w := range gmo.GetClientWeather().All() {
+				newClientWeather = append(newClientWeather, w)
 			}
-		}
-		for _, mon := range mapCell.WildPokemon {
-			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsWildPokemonProto(mon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
-		}
-		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsNearbyPokemonProto(mon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
-		}
-		for _, station := range mapCell.Stations {
-			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: pogoshim.AsStationProto(station.ProtoReflect())})
-		}
-	}
 
-	var newClientWeather []pogoshim.ClientWeatherProto
-	for _, w := range decodedGmo.ClientWeather {
-		newClientWeather = append(newClientWeather, pogoshim.AsClientWeatherProto(w.ProtoReflect()))
-	}
-
-	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
-		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
-	}
-	var weatherUpdates []decoder.WeatherUpdate
-	if scanParameters.ProcessWeather {
-		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather, decodedGmo.MapCell[0].AsOfTimeMs, protoData.Account)
-	}
-	if scanParameters.ProcessPokemon {
-		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, newClientWeather, protoData.Account)
-		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
-			for _, weatherUpdate := range weatherUpdates {
-				go func(weatherUpdate decoder.WeatherUpdate) {
-					decoder.ProactiveIVSwitchSem <- true
-					defer func() { <-decoder.ProactiveIVSwitchSem }()
-					decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, decodedGmo.MapCell[0].AsOfTimeMs/1000)
-				}(weatherUpdate)
+			if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+				decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
 			}
-		}
+			var weatherUpdates []decoder.WeatherUpdate
+			if scanParameters.ProcessWeather {
+				weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather, cells.At(0).GetAsOfTimeMs(), protoData.Account)
+			}
+			if scanParameters.ProcessPokemon {
+				decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, newClientWeather, protoData.Account)
+				if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
+					for _, weatherUpdate := range weatherUpdates {
+						go func(weatherUpdate decoder.WeatherUpdate) {
+							decoder.ProactiveIVSwitchSem <- true
+							defer func() { <-decoder.ProactiveIVSwitchSem }()
+							decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, cells.At(0).GetAsOfTimeMs()/1000)
+						}(weatherUpdate)
+					}
+				}
+			}
+			if scanParameters.ProcessStations {
+				decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
+			}
+
+			if scanParameters.ProcessCells {
+				decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
+			}
+
+			if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
+				decoder.CheckRemovedForts(ctx, dbDetails, cellForts)
+			}
+
+			newFortsLen := len(newForts)
+			newStationsLen := len(newStations)
+			newWildPokemonLen := len(newWildPokemon)
+			newNearbyPokemonLen := len(newNearbyPokemon)
+			newMapPokemonLen := len(newMapPokemon)
+			newClientWeatherLen := len(newClientWeather)
+			newMapCellsLen := len(newMapCells)
+
+			statsCollector.IncDecodeGMO("ok", "")
+			statsCollector.AddDecodeGMOType("fort", float64(newFortsLen))
+			statsCollector.AddDecodeGMOType("station", float64(newStationsLen))
+			statsCollector.AddDecodeGMOType("wild_pokemon", float64(newWildPokemonLen))
+			statsCollector.AddDecodeGMOType("nearby_pokemon", float64(newNearbyPokemonLen))
+			statsCollector.AddDecodeGMOType("map_pokemon", float64(newMapPokemonLen))
+			statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
+			statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
+
+			return fmt.Sprintf("%d cells containing %d forts %d stations %d mon %d nearby", newMapCellsLen, newFortsLen, newStationsLen, newWildPokemonLen, newNearbyPokemonLen)
+		})
+	if err != nil {
+		statsCollector.IncDecodeGMO("error", "parse")
+		log.Errorf("Failed to parse %s", err)
+		return fmt.Sprintf("Failed to parse %s", err)
 	}
-	if scanParameters.ProcessStations {
-		decoder.UpdateStationBatch(ctx, dbDetails, scanParameters, newStations)
-	}
-
-	if scanParameters.ProcessCells {
-		decoder.UpdateClientMapS2CellBatch(ctx, dbDetails, newMapCells)
-	}
-
-	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
-		decoder.CheckRemovedForts(ctx, dbDetails, cellForts)
-	}
-
-	newFortsLen := len(newForts)
-	newStationsLen := len(newStations)
-	newWildPokemonLen := len(newWildPokemon)
-	newNearbyPokemonLen := len(newNearbyPokemon)
-	newMapPokemonLen := len(newMapPokemon)
-	newClientWeatherLen := len(decodedGmo.ClientWeather)
-	newMapCellsLen := len(newMapCells)
-
-	statsCollector.IncDecodeGMO("ok", "")
-	statsCollector.AddDecodeGMOType("fort", float64(newFortsLen))
-	statsCollector.AddDecodeGMOType("station", float64(newStationsLen))
-	statsCollector.AddDecodeGMOType("wild_pokemon", float64(newWildPokemonLen))
-	statsCollector.AddDecodeGMOType("nearby_pokemon", float64(newNearbyPokemonLen))
-	statsCollector.AddDecodeGMOType("map_pokemon", float64(newMapPokemonLen))
-	statsCollector.AddDecodeGMOType("weather", float64(newClientWeatherLen))
-	statsCollector.AddDecodeGMOType("cell", float64(newMapCellsLen))
-
-	return fmt.Sprintf("%d cells containing %d forts %d stations %d mon %d nearby", newMapCellsLen, newFortsLen, newStationsLen, newWildPokemonLen, newNearbyPokemonLen)
+	return res
 }
 
-func isCellNotEmpty(mapCell *pogo.ClientMapCellProto) bool {
-	return len(mapCell.Stations) > 0 || len(mapCell.Fort) > 0 || len(mapCell.WildPokemon) > 0 || len(mapCell.NearbyPokemon) > 0 || len(mapCell.CatchablePokemon) > 0
+func isCellNotEmpty(cell pogoshim.ClientMapCellProto) bool {
+	return cell.GetStations().Len() > 0 || cell.GetFort().Len() > 0 || cell.GetWildPokemon().Len() > 0 || cell.GetNearbyPokemon().Len() > 0 || cell.GetCatchablePokemon().Len() > 0
 }
 
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
