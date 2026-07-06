@@ -32,10 +32,18 @@ import (
 //     the event with once-per-second accounting (evictions are
 //     drop-tolerant: ghost tree points are already handled).
 //  2. Only CauseExpiration and CauseInvalidation reach the handler.
-//     otter fires CauseReplacement on overwriting a live entry — Golbat
-//     re-Sets live entries routinely (TTL re-stamps, re-caches), and a
-//     Replacement event reaching the eviction guards would enqueue bogus
-//     tree deletes. ttlcache fired nothing on overwrite; parity is kept.
+//     otter fires CauseReplacement on overwriting a live entry, and
+//     Golbat's save paths Set live entries on every save — always the
+//     SAME pointer (values are never replaced): getOrCreate inserts the
+//     entity with the cache default TTL, and the save's Set stamps the
+//     real per-entry TTL over it (despawn-derived pokemon TTLs, jittered
+//     fort TTLs). A Replacement event reaching the eviction guards would
+//     enqueue a bogus tree delete for a live entity on every save.
+//     ttlcache fired nothing on overwrite; parity is kept. (Set rather
+//     than UpdateTTL on the save paths is deliberate: its upsert arm
+//     re-caches an entity evicted mid-save, without which the save's
+//     lookup/tree self-heal would leak entries the already-fired eviction
+//     callback can no longer clean.)
 type OtterCache[K comparable, V any] struct {
 	c          *otter.Cache[K, otterVal[V]]
 	defaultTTL time.Duration
