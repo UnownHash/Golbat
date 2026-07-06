@@ -477,6 +477,16 @@ var (
 			Help:      "Number of S2Cells written in the last batch flush",
 		},
 	)
+
+	// Proto decode engine shadow verification
+	protoShadow = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "proto_shadow_total",
+			Help:      "Total number of sampled hyperpb-vs-std shadow decode comparisons",
+		},
+		[]string{"method", "result"},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -806,6 +816,10 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 	s2CellBatchSize.Set(float64(size))
 }
 
+func (col *promCollector) IncProtoShadow(method string, result string) {
+	protoShadow.WithLabelValues(method, result).Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
@@ -827,6 +841,7 @@ func initPrometheus() {
 		writeBehindErrors, writeBehindWrites, writeBehindLatency,
 		writeBehindBatches, writeBehindBatchSize, writeBehindBatchTime,
 		s2CellBatchSize,
+		protoShadow,
 	)
 }
 

@@ -73,6 +73,9 @@ type StatsCollector interface {
 
 	// S2Cell batch metrics
 	SetS2CellBatchSize(size int)
+
+	// Proto decode engine shadow verification
+	IncProtoShadow(method string, result string)
 }
 
 type Config interface {

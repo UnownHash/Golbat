@@ -69,6 +69,7 @@ func (col *noopCollector) IncWriteBehindBatches(string)                {}
 func (col *noopCollector) ObserveWriteBehindBatchSize(string, float64) {}
 func (col *noopCollector) ObserveWriteBehindBatchTime(string, float64) {}
 func (col *noopCollector) SetS2CellBatchSize(int)                      {}
+func (col *noopCollector) IncProtoShadow(string, string)               {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}
