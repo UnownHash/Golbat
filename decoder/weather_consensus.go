@@ -26,9 +26,7 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 	if weatherConsensusCache == nil {
 		return nil
 	}
-	item := weatherConsensusCache.Get(cellId)
-	if item != nil {
-		state := item.Value()
+	if state, ok := weatherConsensusCache.Get(cellId); ok {
 		if hourKey > state.HourKey {
 			state.reset(hourKey)
 		}

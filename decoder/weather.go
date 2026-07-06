@@ -215,8 +215,7 @@ func loadWeatherFromDatabase(ctx context.Context, db db.DbDetails, weatherId int
 // peekWeatherRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekWeatherRecord(weatherId int64, caller string) (*Weather, func(), error) {
-	if item := weatherCache.Get(weatherId); item != nil {
-		weather := item.Value()
+	if weather, ok := weatherCache.Get(weatherId); ok {
 		weather.Lock(caller)
 		return weather, func() { weather.Unlock() }, nil
 	}
@@ -228,8 +227,7 @@ func peekWeatherRecord(weatherId int64, caller string) (*Weather, func(), error)
 // Caller MUST call returned unlock function if non-nil.
 func getWeatherRecordReadOnly(ctx context.Context, db db.DbDetails, weatherId int64, caller string) (*Weather, func(), error) {
 	// Check cache first
-	if item := weatherCache.Get(weatherId); item != nil {
-		weather := item.Value()
+	if weather, ok := weatherCache.Get(weatherId); ok {
 		weather.Lock(caller)
 		return weather, func() { weather.Unlock() }, nil
 	}
@@ -246,11 +244,9 @@ func getWeatherRecordReadOnly(ctx context.Context, db db.DbDetails, weatherId in
 
 	// Atomically cache the loaded Weather - if another goroutine raced us,
 	// we'll get their Weather and use that instead (ensuring same mutex)
-	existingWeather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+	weather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
 		return &dbWeather
 	})
-
-	weather := existingWeather.Value()
 	weather.Lock(caller)
 	return weather, func() { weather.Unlock() }, nil
 }
@@ -270,11 +266,9 @@ func getWeatherRecordForUpdate(ctx context.Context, db db.DbDetails, weatherId i
 // Caller MUST call returned unlock function.
 func getOrCreateWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64, caller string) (*Weather, func(), error) {
 	// Create new Weather atomically - function only called if key doesn't exist
-	weatherItem, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+	weather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
 		return &Weather{Id: weatherId, newRecord: true}
 	})
-
-	weather := weatherItem.Value()
 	weather.Lock(caller)
 
 	if weather.newRecord {

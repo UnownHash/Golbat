@@ -143,7 +143,7 @@ Lower-contention entities (incident, weather, route, tappable, player, s2cell, d
 
 ### Configuration
 
-- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter prevents a restart's preload cohort from expiring in one synchronized sweep.
+- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter spreads a restart cohort's expiry so downstream work (tree deletes, tracker events, DB reloads) arrives as a stream, not a burst (with otter there is no reader-blocking sweep; jitter survives as burst smoothing).
 - **Pokemon cache**: per-entry TTL from `remainingDuration` with `DisableTouchOnHit = true` — verified despawns get despawn time + 60 s (clamped to 1 minute once at/past despawn), unverified get 55–65 min with per-pokemon jitter.
 - **All other caches**: 60-minute TTL (weather consensus: 2 hours).
 

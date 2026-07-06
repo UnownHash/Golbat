@@ -226,8 +226,7 @@ func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpoint
 // peekSpawnpointRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekSpawnpointRecord(spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
-	if item := spawnpointCache.Get(spawnpointId); item != nil {
-		spawnpoint := item.Value()
+	if spawnpoint, ok := spawnpointCache.Get(spawnpointId); ok {
 		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
@@ -238,8 +237,7 @@ func peekSpawnpointRecord(spawnpointId int64, caller string) (*Spawnpoint, func(
 // Caller MUST call returned unlock function if non-nil.
 func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Check cache first
-	if item := spawnpointCache.Get(spawnpointId); item != nil {
-		spawnpoint := item.Value()
+	if spawnpoint, ok := spawnpointCache.Get(spawnpointId); ok {
 		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
@@ -257,11 +255,9 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 
 	// Atomically cache the loaded Spawnpoint - if another goroutine raced us,
 	// we'll get their Spawnpoint and use that instead (ensuring same mutex)
-	existingSpawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+	spawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
 		return &dbSpawnpoint
 	})
-
-	spawnpoint := existingSpawnpoint.Value()
 	spawnpoint.Lock(caller)
 	return spawnpoint, func() { spawnpoint.Unlock() }, nil
 }
@@ -270,11 +266,9 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 // Caller MUST call returned unlock function.
 func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Create new Spawnpoint atomically - function only called if key doesn't exist
-	spawnpointItem, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+	spawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
 		return &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnpointId}, newRecord: true}
 	})
-
-	spawnpoint := spawnpointItem.Value()
 	spawnpoint.Lock(caller)
 
 	if spawnpoint.newRecord {
@@ -345,8 +339,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 	// path below, unchanged. Lat/lon are not re-verified here: a
 	// spawnpoint's id derives from its location, and the locked path
 	// re-checks position at least every LastSeen refresh.
-	if item := spawnpointCache.Get(spawnId); item != nil {
-		sp := item.Value()
+	if sp, ok := spawnpointCache.Get(spawnId); ok {
 		if despawn, known, synced := sp.DespawnSecFast(); synced {
 			if last := sp.LastSeenFast(); last > 0 && time.Now().Unix()-last <= GetUpdateThreshold(21600) {
 				if !hasTTH || (known && despawnSecUnchanged(int64(despawn), int64(secondOfHour))) {

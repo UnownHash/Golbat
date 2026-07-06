@@ -35,8 +35,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 	for _, cellId := range cellIds {
 		var s2Cell *S2Cell
 
-		if c := s2CellCache.Get(cellId); c != nil {
-			cachedCell := c.Value()
+		if cachedCell, ok := s2CellCache.Get(cellId); ok {
 			if cachedCell.Updated > now-GetUpdateThreshold(900) {
 				continue
 			}

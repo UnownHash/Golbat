@@ -67,10 +67,11 @@ func (pokemon *Pokemon) isNewRecord() bool {
 
 const (
 	// pokemonUnverifiedTTL (+ jitter) replaces the flat cache-default TTL
-	// for pokemon without a verified despawn. The jitter prevents
+	// for pokemon without a verified despawn. The jitter spreads
 	// restart-synchronized cohorts (preload + cold-cache ingest all
-	// stamped in the same few minutes) from expiring in one giant
-	// ttlcache sweep an hour later.
+	// stamped in the same few minutes) so their expiry an hour later
+	// arrives as a stream of tree deletes and eviction events rather than
+	// one burst.
 	pokemonUnverifiedTTL       = 55 * time.Minute
 	pokemonUnverifiedTTLJitter = 10 * time.Minute
 )
@@ -325,8 +326,8 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	// entity mutex entirely — readers no longer queue behind writers that
 	// hold it across DB loads. Mirror not yet synced (0) falls through to
 	// the locked path below.
-	if item := spawnpointCache.Get(spawnId); item != nil {
-		if despawnSecond, known, synced := item.Value().DespawnSecFast(); synced {
+	if sp, ok := spawnpointCache.Get(spawnId); ok {
+		if despawnSecond, known, synced := sp.DespawnSecFast(); synced {
 			if known {
 				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
 			} else {

@@ -68,13 +68,13 @@ func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush fu
 // snapshot refresh remain as lock parties.
 //
 // Blocking sends are safe ONLY for callers whose concurrency is bounded
-// (savers: capped by the raw-processing limiter). Eviction callbacks run
-// on one goroutine per evicted item — with a full channel during a mass
-// expiry, blocking there parked millions of goroutines, each holding an
-// entity lock and 8KB of stack, strangling the scheduler until the drain
-// rate collapsed (overnight production incident: channel pegged at cap
-// for >1h, entity locks held for minutes, worker at ~500 ops/s). Those
-// callers use TryEnqueue and drop instead: a dropped delete leaves a
+// (savers: capped by the raw-processing limiter). Eviction callbacks use
+// TryEnqueue and drop on a full channel instead: they arrive on the
+// cache's single eviction dispatcher, and blocking that goroutine stalls
+// ALL eviction delivery for the cache. (Historically this was far worse —
+// ttlcache ran one goroutine per evicted item, and a blocking send here
+// parked millions of them holding entity locks during a mass expiry; the
+// overnight incident behind commit ed50bf8.) A dropped delete leaves a
 // ghost tree point, which scans already tolerate (candidates are verified
 // against the lookup cache, cleaned inline before the enqueue).
 func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
@@ -82,8 +82,8 @@ func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {
 }
 
 // TryEnqueue queues a removal without blocking. Returns false (entry
-// dropped) if the channel is full. For unbounded-concurrency callers
-// (eviction callbacks); see Enqueue for why they must never block.
+// dropped) if the channel is full. For eviction-dispatcher callers, which
+// must never block; see Enqueue.
 func (e *treeEvictor[K]) TryEnqueue(id K, lat, lon float64) bool {
 	defer func() {
 		if r := recover(); r != nil {

@@ -34,8 +34,7 @@ const pokemonSelectColumns = `id, pokemon_id, lat, lon, spawn_id, expire_timesta
 // Use for read-only checks which will not cause a backing database lookup
 // Caller must use returned unlock function
 func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, func(), error) {
-	if item := pokemonCache.Get(encounterId); item != nil {
-		pokemon := item.Value()
+	if pokemon, ok := pokemonCache.Get(encounterId); ok {
 		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
@@ -63,8 +62,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	}
 
 	// Check cache first
-	if item := pokemonCache.Get(encounterId); item != nil {
-		pokemon := item.Value()
+	if pokemon, ok := pokemonCache.Get(encounterId); ok {
 		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
@@ -81,7 +79,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
-	existingPokemon, found := pokemonCache.GetOrSetFuncTTL(encounterId, func() *Pokemon {
+	pokemon, found := pokemonCache.GetOrSetFuncTTL(encounterId, func() *Pokemon {
 		// Only called if key doesn't exist - our Pokemon wins
 		return &dbPokemon
 	}, dbPokemon.remainingDuration(time.Now().Unix()))
@@ -91,8 +89,6 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 		// the tree mutex (tree-lock-under-shard-lock inversion).
 		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 	}
-
-	pokemon := existingPokemon.Value()
 	pokemon.Lock(caller)
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
@@ -113,11 +109,9 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 // Caller MUST call returned unlock function.
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64, caller string) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
-	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	pokemon, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		return &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encounterId)}, newRecord: true}
 	})
-
-	pokemon := pokemonItem.Value()
 	pokemon.Lock(caller)
 
 	if config.Config.PokemonMemoryOnly {

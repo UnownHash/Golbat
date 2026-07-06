@@ -67,12 +67,6 @@ const (
 	EvictionDeleted
 )
 
-// CacheItem keeps call sites written against ttlcache's `item.Value()`
-// shape working unchanged (nil item = absent).
-type CacheItem[V any] struct{ v V }
-
-func (i *CacheItem[V]) Value() V { return i.v }
-
 // otterVal carries the entry's own TTL: otter has no per-call TTL argument;
 // per-entry TTLs are implemented via an ExpiryCalculator that reads the
 // duration back off the entry (Caffeine's "variable expiry" pattern).
@@ -145,13 +139,13 @@ func NewOtterCache[K comparable, V any](cfg OtterCacheConfig[K, V]) *OtterCache[
 	return oc
 }
 
-// Get returns the item, touching it per the cache's expiry policy.
-func (oc *OtterCache[K, V]) Get(key K) *CacheItem[V] {
+// Get returns the value and whether it was present, touching the entry per
+// the cache's expiry policy. Allocation-free: returning a wrapper object
+// here would heap-allocate once per hit on the hottest paths in the
+// process (spawnpoint/fort reads, millions per second).
+func (oc *OtterCache[K, V]) Get(key K) (V, bool) {
 	w, ok := oc.c.GetIfPresent(key)
-	if !ok {
-		return nil
-	}
-	return &CacheItem[V]{v: w.v}
+	return w.v, ok
 }
 
 func (oc *OtterCache[K, V]) Has(key K) bool {
@@ -168,16 +162,16 @@ func (oc *OtterCache[K, V]) Set(key K, value V, ttl time.Duration) {
 	oc.c.Set(key, otterVal[V]{v: value, ttl: ttl})
 }
 
-// GetOrSetFunc returns the existing item or atomically creates one via
+// GetOrSetFunc returns the existing value or atomically creates one via
 // factory (single winner: racing callers receive the same value). The bool
-// is true if the item already existed, mirroring ttlcache.
-func (oc *OtterCache[K, V]) GetOrSetFunc(key K, factory func() V) (*CacheItem[V], bool) {
+// is true if the value already existed, mirroring ttlcache.
+func (oc *OtterCache[K, V]) GetOrSetFunc(key K, factory func() V) (V, bool) {
 	created := false
 	w, _ := oc.c.ComputeIfAbsent(key, func() (otterVal[V], bool) {
 		created = true
 		return otterVal[V]{v: factory(), ttl: oc.defaultTTL}, false
 	})
-	return &CacheItem[V]{v: w.v}, !created
+	return w.v, !created
 }
 
 // GetOrSetFuncTTL is GetOrSetFunc with an explicit TTL for the created
@@ -185,7 +179,7 @@ func (oc *OtterCache[K, V]) GetOrSetFunc(key K, factory func() V) (*CacheItem[V]
 // GetOrSetFunc, the factory runs under internal cache synchronization for
 // the key's bucket — it must not acquire locks that can be held while
 // calling into this cache.
-func (oc *OtterCache[K, V]) GetOrSetFuncTTL(key K, factory func() V, ttl time.Duration) (*CacheItem[V], bool) {
+func (oc *OtterCache[K, V]) GetOrSetFuncTTL(key K, factory func() V, ttl time.Duration) (V, bool) {
 	if ttl <= 0 {
 		ttl = oc.defaultTTL
 	}
@@ -194,7 +188,7 @@ func (oc *OtterCache[K, V]) GetOrSetFuncTTL(key K, factory func() V, ttl time.Du
 		created = true
 		return otterVal[V]{v: factory(), ttl: ttl}, false
 	})
-	return &CacheItem[V]{v: w.v}, !created
+	return w.v, !created
 }
 
 // UpdateTTL re-arms the entry's expiry without rewriting the value (and

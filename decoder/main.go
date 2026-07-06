@@ -103,9 +103,11 @@ func (cl *gohbemLogger) Print(message string) {
 
 // fortCacheEntryTTL is the per-entry TTL for pokestop/gym/station cache
 // inserts. Jittered so a restart's preload cohort (stamped within minutes)
-// doesn't expire in one synchronized sweep — the fort analogue of the
-// pokemon TTL jitter. Touch-on-hit refreshes each entry to its own
-// jittered TTL, so actively-seen forts never expire.
+// doesn't expire as one mass burst of downstream work — tree deletes,
+// fort-tracker events, DB reload churn. (With otter there is no
+// reader-blocking sweep to defend against; the jitter survives purely as
+// burst smoothing.) Touch-on-hit refreshes each entry to its own jittered
+// TTL, so actively-seen forts never expire.
 func fortCacheEntryTTL() time.Duration {
 	if config.Config.FortInMemory {
 		return 25*time.Hour + rand.N(2*time.Hour)

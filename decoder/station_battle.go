@@ -669,7 +669,7 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	currentStationId := ""
 	currentBattles := make([]StationBattleData, 0)
 	flushCurrent := func() {
-		if currentStationId != "" && stationCache.Get(currentStationId) != nil {
+		if currentStationId != "" && stationCache.Has(currentStationId) {
 			storeStationBattles(currentStationId, currentBattles)
 			count += int32(len(currentBattles))
 		}

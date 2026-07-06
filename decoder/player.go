@@ -1046,9 +1046,7 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 }
 
 func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCode string) (*Player, error) {
-	inMemoryPlayer := playerCache.Get(name)
-	if inMemoryPlayer != nil {
-		player := inMemoryPlayer.Value()
+	if player, ok := playerCache.Get(name); ok {
 		return player, nil
 	}
 

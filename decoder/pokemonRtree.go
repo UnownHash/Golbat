@@ -158,7 +158,7 @@ func handlePokemonEviction(pokemon *Pokemon) {
 	pokemon.Lock("cacheEviction")
 	defer pokemon.Unlock()
 
-	if pokemonCache.Get(pokemonId) != nil {
+	if pokemonCache.Has(pokemonId) {
 		// Re-cached (same pokemon re-saved, or a successor record created)
 		// — its owner maintains the lookup/tree entries now.
 		return

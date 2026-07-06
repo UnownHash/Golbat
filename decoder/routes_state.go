@@ -22,8 +22,7 @@ func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string,
 // peekRouteRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekRouteRecord(routeId string, caller string) (*Route, func(), error) {
-	if item := routeCache.Get(routeId); item != nil {
-		route := item.Value()
+	if route, ok := routeCache.Get(routeId); ok {
 		route.Lock(caller)
 		return route, func() { route.Unlock() }, nil
 	}
@@ -35,8 +34,7 @@ func peekRouteRecord(routeId string, caller string) (*Route, func(), error) {
 // Caller MUST call returned unlock function if non-nil.
 func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string, caller string) (*Route, func(), error) {
 	// Check cache first
-	if item := routeCache.Get(routeId); item != nil {
-		route := item.Value()
+	if route, ok := routeCache.Get(routeId); ok {
 		route.Lock(caller)
 		return route, func() { route.Unlock() }, nil
 	}
@@ -53,11 +51,9 @@ func getRouteRecordReadOnly(ctx context.Context, db db.DbDetails, routeId string
 
 	// Atomically cache the loaded Route - if another goroutine raced us,
 	// we'll get their Route and use that instead (ensuring same mutex)
-	existingRoute, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
+	route, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
 		return &dbRoute
 	})
-
-	route := existingRoute.Value()
 	route.Lock(caller)
 	return route, func() { route.Unlock() }, nil
 }
@@ -77,11 +73,9 @@ func getRouteRecordForUpdate(ctx context.Context, db db.DbDetails, routeId strin
 // Caller MUST call returned unlock function.
 func getOrCreateRouteRecord(ctx context.Context, db db.DbDetails, routeId string, caller string) (*Route, func(), error) {
 	// Create new Route atomically - function only called if key doesn't exist
-	routeItem, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
+	route, _ := routeCache.GetOrSetFunc(routeId, func() *Route {
 		return &Route{RouteData: RouteData{Id: routeId}, newRecord: true}
 	})
-
-	route := routeItem.Value()
 	route.Lock(caller)
 
 	if route.newRecord {
