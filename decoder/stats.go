@@ -65,6 +65,7 @@ type raidPokemonKey struct {
 	pokemonId int16
 	formId    int
 	tempEvoId int
+	alignment int
 }
 
 type areaRaidCountDetail struct {
@@ -483,6 +484,7 @@ func updateRaidStats(gym *Gym, areas []geo.AreaName) {
 				pokemonId: int16(gym.RaidPokemonId.ValueOrZero()),
 				formId:    int(gym.RaidPokemonForm.ValueOrZero()),
 				tempEvoId: int(gym.RaidPokemonEvolution.ValueOrZero()),
+				alignment: int(gym.RaidPokemonAlignment.ValueOrZero()),
 			}
 			countStats[raidLevel].count[rk]++
 		}
@@ -866,6 +868,7 @@ type raidStatsDbRow struct {
 	PokemonId int    `db:"pokemon_id"`
 	FormId    int    `db:"form_id"`
 	TempEvoId int    `db:"temp_evo_id"`
+	Alignment int    `db:"alignment"`
 	Count     int    `db:"count"`
 }
 
@@ -893,6 +896,7 @@ func logRaidStats(statsDb *sqlx.DB) {
 					PokemonId: int(rk.pokemonId),
 					FormId:    rk.formId,
 					TempEvoId: rk.tempEvoId,
+					Alignment: rk.alignment,
 					Count:     count,
 				})
 			}
@@ -918,8 +922,8 @@ func logRaidStats(statsDb *sqlx.DB) {
 			batchRows := rows[i:end]
 			_, err := statsDb.NamedExec(
 				"INSERT INTO raid_stats "+
-					"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, `count`)"+
-					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :count)"+
+					"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, alignment, `count`)"+
+					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :alignment, :count)"+
 					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)
