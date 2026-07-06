@@ -25,7 +25,7 @@ type hyperEngine struct {
 		mu      sync.Mutex
 		pending *hyperpb.Profile
 		seen    int
-		done    bool
+		done    atomic.Bool
 	}
 }
 
@@ -54,7 +54,7 @@ func initProtoEngines() {
 func (e *hyperEngine) recordPGO(payload []byte) {
 	e.profile.mu.Lock()
 	defer e.profile.mu.Unlock()
-	if e.profile.done || e.profile.pending == nil {
+	if e.profile.done.Load() || e.profile.pending == nil {
 		return
 	}
 	ty := e.ty.Load()
@@ -66,7 +66,7 @@ func (e *hyperEngine) recordPGO(payload []byte) {
 	if e.profile.seen >= pgoWarmupSamples {
 		e.ty.Store(ty.Recompile(e.profile.pending))
 		e.profile.pending = nil
-		e.profile.done = true
+		e.profile.done.Store(true)
 		log.Infof("[PROTO_ENGINE] PGO recompile complete after %d samples", e.profile.seen)
 	}
 }
@@ -76,7 +76,7 @@ func decodeHyperpb[T any](method string, payload []byte, wrap func(protoreflect.
 	if e == nil {
 		return decodeStd(method, payload, wrap, process)
 	}
-	if !e.profile.done && config.Config.ProtoEngine.Pgo {
+	if !e.profile.done.Load() && config.Config.ProtoEngine.Pgo {
 		e.recordPGO(payload)
 	}
 	shared := e.arenas.Get().(*hyperpb.Shared)

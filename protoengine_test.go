@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"strconv"
+	"sync"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -29,6 +30,15 @@ func TestMain(m *testing.M) {
 	config.Config.ProtoEngine.ShadowSampleRate = 0.01
 	initProtoEngines()
 
+	// Guard against a silently broken hyperpb wiring: if initProtoEngines
+	// didn't populate an entry for one of these methods, decodeHyperpb would
+	// fall back to decodeStd without any test ever noticing.
+	for _, method := range []string{engMethodGmo, engMethodEncounter, engMethodDiskEncounter} {
+		if hyperEngines[method] == nil {
+			panic("initProtoEngines did not populate hyperEngines[" + method + "]")
+		}
+	}
+
 	os.Exit(m.Run())
 }
 
@@ -47,6 +57,9 @@ func TestDecodeWithArenaGmo(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodGmo, engine)
+			if engine == "hyperpb" && hyperEngines[engMethodGmo] == nil {
+				t.Fatal("hyperEngines[engMethodGmo] is nil; hyperpb subtest would silently fall back to decodeStd")
+			}
 
 			in := &pogo.GetMapObjectsOutProto{Status: pogo.GetMapObjectsOutProto_SUCCESS}
 			raw, err := proto.Marshal(in)
@@ -87,6 +100,9 @@ func TestDecodeWithArenaEncounter(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodEncounter, engine)
+			if engine == "hyperpb" && hyperEngines[engMethodEncounter] == nil {
+				t.Fatal("hyperEngines[engMethodEncounter] is nil; hyperpb subtest would silently fall back to decodeStd")
+			}
 
 			in := &pogo.EncounterOutProto{
 				Pokemon: &pogo.WildPokemonProto{
@@ -140,6 +156,9 @@ func TestDecodeWithArenaDiskEncounter(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodDiskEncounter, engine)
+			if engine == "hyperpb" && hyperEngines[engMethodDiskEncounter] == nil {
+				t.Fatal("hyperEngines[engMethodDiskEncounter] is nil; hyperpb subtest would silently fall back to decodeStd")
+			}
 
 			in := &pogo.DiskEncounterOutProto{
 				Result: pogo.DiskEncounterOutProto_SUCCESS,
@@ -195,5 +214,63 @@ func TestEngineForRespectsConfig(t *testing.T) {
 	}
 	if got := engineFor(engMethodGmo); got != want {
 		t.Fatalf("engineFor(gmo) = %q, want %q", got, want)
+	}
+}
+
+// TestDecodeWithArenaPGoRace exercises the PGO warmup/recompile path under
+// concurrent decodeWithArena callers. recordPGO mutates profile.seen and
+// profile.done under profile.mu, but decodeHyperpb's hot-path check of
+// profile.done happens outside that lock -- run with -race to catch a
+// regression back to a plain bool there.
+func TestDecodeWithArenaPGoRace(t *testing.T) {
+	const method = engMethodDiskEncounter
+	setEngine(method, "hyperpb")
+	if hyperEngines[method] == nil {
+		t.Fatalf("hyperEngines[%s] is nil; hyperpb engine not wired", method)
+	}
+	if !config.Config.ProtoEngine.Pgo {
+		t.Fatal("test requires config.Config.ProtoEngine.Pgo = true")
+	}
+
+	in := &pogo.DiskEncounterOutProto{
+		Result: pogo.DiskEncounterOutProto_SUCCESS,
+		Pokemon: &pogo.PokemonProto{
+			Cp: 321,
+		},
+		ActiveItem: pogo.Item_ITEM_RAZZ_BERRY,
+	}
+	raw, err := proto.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	const goroutines = 8
+	const iterations = 100 // 8*100 = 800, well over pgoWarmupSamples (256)
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, goroutines*iterations)
+	for g := 0; g < goroutines; g++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				_, err := decodeWithArena(method, raw, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
+					return d.GetResult().String()
+				})
+				if err != nil {
+					errCh <- err
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		t.Errorf("decode failed: %v", err)
+	}
+
+	if !hyperEngines[method].profile.done.Load() {
+		t.Fatal("expected PGO profile to be done after well over pgoWarmupSamples decodes")
 	}
 }
