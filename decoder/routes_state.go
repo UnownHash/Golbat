@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
-
 	"golbat/db"
 )
 
@@ -143,7 +141,7 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	}
 	route.ClearDirty()
 	if isNewRecord {
-		routeCache.Set(route.Id, route, ttlcache.DefaultTTL)
+		routeCache.Set(route.Id, route, 0 /* default TTL */)
 		route.newRecord = false
 	}
 	return nil

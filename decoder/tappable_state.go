@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
@@ -130,7 +129,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 	tappable.ClearDirty()
 	if isNewRecord {
-		tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
+		tappableCache.Set(tappable.Id, tappable, 0 /* default TTL */)
 		tappable.newRecord = false
 	}
 }

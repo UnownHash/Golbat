@@ -13,7 +13,6 @@ import (
 	"golbat/pogo"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -422,7 +421,7 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	spawnpoint.ClearDirty()
 	if isNewRecord {
 		spawnpoint.newRecord = false
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, 0 /* default TTL */)
 	}
 }
 

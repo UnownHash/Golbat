@@ -25,14 +25,15 @@ type treeEvictionEntry[K comparable] struct {
 	lon float64
 }
 
-// treeEvictor defers R-tree removals out of cache-eviction callbacks.
-// ttlcache runs each eviction callback on its own goroutine (Cache.OnEviction
-// wraps the registered fn in `go fn(...)`), so a mass-expiry sweep used to
-// spawn thousands of goroutines all contending for the global tree write
-// lock — the convoy that froze savers holding entity locks. Enqueue collapses
-// that to a channel send; a single worker drains the channel and flushes
-// removals in batches so the tree mutex is taken once per ~batchSize items
-// by one goroutine instead of once per item by thousands.
+// treeEvictor defers R-tree mutations out of cache-eviction callbacks and
+// saver hot paths. (Historically: ttlcache ran each eviction callback on
+// its own goroutine, so a mass-expiry sweep spawned thousands of goroutines
+// contending for the global tree write lock — the convoy that froze savers
+// holding entity locks. OtterCache now delivers evictions on one dispatcher
+// goroutine, but the batching worker remains the single tree writer.)
+// Enqueue collapses mutations to a channel send; a single worker drains the
+// channel and applies batches so the tree mutex is taken once per
+// ~batchSize items by one goroutine.
 type treeEvictor[K comparable] struct {
 	name      string
 	ch        chan treeEvictionEntry[K]

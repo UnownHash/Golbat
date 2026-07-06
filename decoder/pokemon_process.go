@@ -8,7 +8,6 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -53,7 +52,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		if unlock != nil {
 			unlock()
 		}
-		diskEncounterCache.Set(encounterId, encounter, ttlcache.DefaultTTL)
+		diskEncounterCache.Set(encounterId, encounter, 0 /* default TTL */)
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	defer unlock()

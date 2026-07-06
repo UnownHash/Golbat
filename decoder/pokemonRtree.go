@@ -136,10 +136,10 @@ func initPokemonRtree() {
 
 	pokemonTreeEvictor = newTreeEvictor[uint64]("pokemon", treeEvictorQueueSize, treeEvictorBatchSize, flushPokemonTreeEvictions)
 
-	// ttlcache runs each eviction callback on its own goroutine (see
-	// Cache.OnEviction: the registered fn is wrapped in `go fn(...)`), so
-	// this races concurrent updaters holding the entity lock — the cleanup
-	// itself is serialized in handlePokemonEviction.
+	// Eviction callbacks arrive on the OtterCache dispatcher goroutine —
+	// async relative to updaters holding the entity lock, so this races
+	// concurrent saves; the cleanup itself is serialized in
+	// handlePokemonEviction.
 	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ EvictionReason) {
 		handlePokemonEviction(pokemon)
 	})
@@ -147,8 +147,9 @@ func initPokemonRtree() {
 
 // handlePokemonEviction removes an evicted pokemon from the lookup cache
 // (inline, lock-free — scans stop seeing it immediately) and defers its
-// tree removal to the batched evictor. It runs on ttlcache's per-eviction
-// goroutine, so it takes the entity lock to serialize against updaters: if
+// tree removal to the batched evictor. It runs on the cache's eviction
+// dispatcher goroutine, so it takes the entity lock to serialize against
+// updaters: if
 // a save re-cached the pokemon after the eviction fired, the lookup and
 // tree entries are current and must be left alone — cleaning them would
 // make a live, cached pokemon invisible to every scan.

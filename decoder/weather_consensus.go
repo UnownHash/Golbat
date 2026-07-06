@@ -2,8 +2,6 @@ package decoder
 
 import (
 	"golbat/pogo"
-
-	"github.com/jellydator/ttlcache/v3"
 )
 
 type WeatherConsensusState struct {
@@ -34,12 +32,12 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 		if hourKey > state.HourKey {
 			state.reset(hourKey)
 		}
-		weatherConsensusCache.Set(cellId, state, ttlcache.DefaultTTL)
+		weatherConsensusCache.Set(cellId, state, 0 /* default TTL */)
 		return state
 	}
 	state := &WeatherConsensusState{}
 	state.reset(hourKey)
-	weatherConsensusCache.Set(cellId, state, ttlcache.DefaultTTL)
+	weatherConsensusCache.Set(cellId, state, 0 /* default TTL */)
 	return state
 }
 

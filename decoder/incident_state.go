@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -169,7 +168,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	incident.ClearDirty()
 	if isNewRecord {
 		incident.newRecord = false
-		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+		incidentCache.Set(incident.Id, incident, 0 /* default TTL */)
 	}
 }
 

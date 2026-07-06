@@ -450,9 +450,7 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-
 // GetHealth provides unrestricted health status for monitoring tools
 func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
-

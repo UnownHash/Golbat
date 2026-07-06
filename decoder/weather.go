@@ -11,7 +11,6 @@ import (
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -426,7 +425,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 	createWeatherWebhooks(weather)
 	weather.ClearDirty()
 	if weather.IsNewRecord() {
-		weatherCache.Set(weather.Id, weather, ttlcache.DefaultTTL)
+		weatherCache.Set(weather.Id, weather, 0 /* default TTL */)
 		weather.newRecord = false
 	}
 }

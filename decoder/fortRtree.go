@@ -298,9 +298,9 @@ func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
 
 // deferFortEviction is the eviction-callback cleanup path: lookup cache is
 // cleared inline (lock-free) so scans skip the fort immediately, tree
-// removal is batched. ttlcache runs eviction callbacks on their own
-// goroutines, racing fort saves and genericUpdateFort's synchronous
-// cleanup, so guard before touching shared state:
+// removal is batched. Eviction callbacks arrive on the cache dispatcher
+// goroutine — async relative to fort saves and genericUpdateFort's
+// synchronous cleanup — so guard before touching shared state:
 //   - lookup entry already gone → a deleted fort; genericUpdateFort already
 //     removed the tree point, and enqueueing an unpaired delete here could
 //     erase the point of a fort restored in the meantime.

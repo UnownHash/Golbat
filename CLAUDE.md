@@ -137,9 +137,9 @@ High-contention entities (pokestop, gym, station, spawnpoint, pokemon — plus t
 
 **Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — fort TTLs and eviction-callback registration depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
 
-### TTL Cache
+### Singleton caches
 
-Lower-contention entities (incident, weather, route, tappable, player, s2cell) use a single `ttlcache.Cache` instance.
+Lower-contention entities (incident, weather, route, tappable, player, s2cell, device) use unsharded `OtterCache` instances too — the whole codebase is on one cache model (ttlcache is no longer a dependency).
 
 ### Configuration
 
@@ -151,7 +151,7 @@ Lower-contention entities (incident, weather, route, tappable, player, s2cell) u
 
 Fort and pokemon caches register eviction callbacks that clean up the lookup-cache entry inline and hand the R-tree mutation to an ordered batching worker (`decoder/rtree_evictor.go`). Important facts about this path:
 
-- ttlcache runs each eviction callback on its **own goroutine** (`Cache.OnEviction` wraps callbacks in `go fn(...)`) — callbacks are NOT synchronized with the expiry sweep, cache operations, or entity-lock holders. The pokemon callback therefore takes the entity lock and skips cleanup if the pokemon was re-cached; the fort callback skips when the lookup entry is already gone (deleted fort) or owned by a different fort type (pokestop↔gym conversion).
+- Eviction callbacks arrive on each cache's single dispatcher goroutine (see `decoder/otter_cache.go`) — bounded, but still NOT synchronized with cache operations or entity-lock holders. The pokemon callback therefore takes the entity lock and skips cleanup if the pokemon was re-cached; the fort callback skips when the lookup entry is already gone (deleted fort) or owned by a different fort type (pokestop↔gym conversion).
 - **All runtime pokemon tree mutations go through the writer** — new-record inserts, position moves (delete+insert pairs), rehydration inserts, the eviction-race self-heal, and eviction deletes. Savers holding entity locks never touch `pokemonTreeMutex` (production dumps once showed 90+ savers convoyed there); only the worker and the ~1/s scan-snapshot refresh acquire it. Enqueue order is apply order; deletes match on (coords, id) so stale duplicates are no-ops; the rtree is a multiset so duplicate inserts self-correct. Startup preload uses direct inserts (pre-traffic) to avoid flooding the queue. Fort tree: deletes are queued, adds remain direct (low churn).
 - Mutations apply in batches (~512 per tree-mutex acquisition), so the tree may briefly hold a ghost point (harmless — scans consult the lookup cache) or a duplicate point for a re-added id (scan paths dedupe matched ids).
 - A save that finds its lookup entry missing re-queues the tree insert (`savePokemonRecordAsAtTime`), self-healing the eviction/re-add race.

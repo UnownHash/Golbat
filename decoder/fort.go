@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
@@ -195,7 +194,7 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
+		getMapFortsCache.Set(mapFort.Id, mapFort, 0 /* default TTL */)
 		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 	}
 	return status, output
