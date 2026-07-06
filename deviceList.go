@@ -4,7 +4,7 @@ import (
 	"golbat/config"
 	"time"
 
-	"golbat/decoder"
+	"golbat/cache"
 )
 
 type DeviceLocation struct {
@@ -14,10 +14,10 @@ type DeviceLocation struct {
 	ScanContext string
 }
 
-var deviceLocation *decoder.OtterCache[string, DeviceLocation]
+var deviceLocation *cache.OtterCache[string, DeviceLocation]
 
 func InitDeviceCache() {
-	deviceLocation = decoder.NewOtterCache(decoder.OtterCacheConfig[string, DeviceLocation]{
+	deviceLocation = cache.NewOtterCache(cache.OtterCacheConfig[string, DeviceLocation]{
 		Name:       "device_location",
 		DefaultTTL: time.Hour * time.Duration(config.Config.Cleanup.DeviceHours),
 		TouchOnHit: true,

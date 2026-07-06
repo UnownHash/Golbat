@@ -9,6 +9,8 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/cache"
 )
 
 type S2Cell struct {
@@ -48,7 +50,7 @@ func saveS2CellRecords(ctx context.Context, db db.DbDetails, cellIds []uint64) {
 			s2Cell.Longitude = mapS2Cell.CapBound().RectBound().Center().Lng.Degrees()
 			s2Cell.Level = null.IntFrom(int64(mapS2Cell.Level()))
 
-			s2CellCache.Set(s2Cell.Id, s2Cell, 0 /* default TTL */)
+			s2CellCache.Set(s2Cell.Id, s2Cell, cache.DefaultTTL)
 		}
 		s2Cell.Updated = now
 

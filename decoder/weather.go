@@ -12,6 +12,8 @@ import (
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/cache"
 )
 
 // Weather struct.
@@ -419,7 +421,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 	createWeatherWebhooks(weather)
 	weather.ClearDirty()
 	if weather.IsNewRecord() {
-		weatherCache.Set(weather.Id, weather, 0 /* default TTL */)
+		weatherCache.Set(weather.Id, weather, cache.DefaultTTL)
 		weather.newRecord = false
 	}
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/tidwall/rtree"
+
+	"golbat/cache"
 )
 
 type PokemonLookupCacheItem struct {
@@ -140,7 +142,7 @@ func initPokemonRtree() {
 	// async relative to updaters holding the entity lock, so this races
 	// concurrent saves; the cleanup itself is serialized in
 	// handlePokemonEviction.
-	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ EvictionReason) {
+	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ cache.EvictionReason) {
 		handlePokemonEviction(pokemon)
 	})
 }

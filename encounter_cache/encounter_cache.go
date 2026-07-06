@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/maypok86/otter/v2"
+	"golbat/cache"
 )
 
 // Value is the object that is inserted into the cache.
@@ -38,64 +38,48 @@ func (v *Value) NumAccountsSeen() int {
 // EncounterCache is an object that represents an auto-expiring
 // cache, providing methods to manage cache entries.
 //
-// Backed by otter v2 (lock-free reads, timing-wheel expiry): the previous
-// single ttlcache's per-Put heap ops and cohort sweeps ran on the stats
-// aggregation worker's critical path. Writing-based expiry only (reads do
-// not extend TTLs — same as the previous DisableTouchOnHit configuration).
+// A thin Value-semantics layer over the shared cache.OtterCache adapter
+// (writing-based expiry: reads do not extend TTLs — same as the previous
+// DisableTouchOnHit configuration).
 type EncounterCache struct {
 	// encounterCache is keyed by encounterId (Pokemon.Id).
 	// Note that since these are value types in the cache,
 	// there's built-in way to synchronize changes to the values.
 	// The current use of this cache is guarded by the stats aggregation
 	// worker being the only mutator.
-	encounterCache *otter.Cache[uint64, encEntry]
-	defaultTTL     time.Duration
-}
-
-// encEntry carries the per-entry TTL for otter's variable-expiry
-// calculator (otter has no per-call TTL argument).
-type encEntry struct {
-	v   Value
-	ttl time.Duration
+	encounterCache *cache.OtterCache[uint64, Value]
 }
 
 // UpdateTTL updates the ttl for a cache entry, if an entry
 // is cached for the encounterId. If no entry exists for the
 // encounterId, nothing is done.
-func (cache *EncounterCache) UpdateTTL(encounterId uint64, ttl time.Duration) {
-	if ttl <= 0 {
-		ttl = cache.defaultTTL
-	}
-	cache.encounterCache.SetExpiresAfter(encounterId, ttl)
+func (ec *EncounterCache) UpdateTTL(encounterId uint64, ttl time.Duration) {
+	ec.encounterCache.UpdateTTL(encounterId, ttl)
 }
 
 // Put will add or replace a cache entry. A ttl of 0 means to use the default
 // ttl.
-func (cache *EncounterCache) Put(encounterId uint64, value *Value, ttl time.Duration) {
+func (ec *EncounterCache) Put(encounterId uint64, value *Value, ttl time.Duration) {
 	if value != nil {
-		if ttl <= 0 {
-			ttl = cache.defaultTTL
-		}
-		cache.encounterCache.Set(encounterId, encEntry{v: *value, ttl: ttl})
+		ec.encounterCache.Set(encounterId, *value, ttl)
 	}
 }
 
 // Get will return the cache entry for the encounterId, if it exists.
 // Returns nil if it does not exist.
-func (cache *EncounterCache) Get(encounterId uint64) *Value {
-	entry, ok := cache.encounterCache.GetIfPresent(encounterId)
+func (ec *EncounterCache) Get(encounterId uint64) *Value {
+	value, ok := ec.encounterCache.Get(encounterId)
 	if !ok {
 		return nil
 	}
-	value := entry.v
 	return &value
 }
 
 // GetOrCreate will return the cache entry for the encounterId, if it
 // exists. If it does not exist, a new entry will be allocated and
 // returned, but not insertedt, yet.
-func (cache *EncounterCache) GetOrCreate(encounterId uint64) *Value {
-	value := cache.Get(encounterId)
+func (ec *EncounterCache) GetOrCreate(encounterId uint64) *Value {
+	value := ec.Get(encounterId)
 	if value == nil {
 		value = &Value{
 			accountsSeen: make(map[string]bool),
@@ -104,11 +88,10 @@ func (cache *EncounterCache) GetOrCreate(encounterId uint64) *Value {
 	return value
 }
 
-// Run blocks until 'ctx' is cancelled, then stops the cache's background
-// goroutines. (otter needs no explicit start; kept for API compatibility.)
-func (cache *EncounterCache) Run(ctx context.Context) {
+// Run blocks until 'ctx' is cancelled. (The underlying cache needs no
+// explicit start; kept for API compatibility.)
+func (ec *EncounterCache) Run(ctx context.Context) {
 	<-ctx.Done()
-	cache.encounterCache.StopAllGoroutines()
 }
 
 // NewEncounterCache creates and returns a new auto-expiring cache,
@@ -119,12 +102,10 @@ func NewEncounterCache(defaultTTL time.Duration) *EncounterCache {
 		defaultTTL = 60 * time.Minute
 	}
 	return &EncounterCache{
-		defaultTTL: defaultTTL,
-		encounterCache: otter.Must(&otter.Options[uint64, encEntry]{
-			ExpiryCalculator: otter.ExpiryWritingFunc[uint64, encEntry](
-				func(entry otter.Entry[uint64, encEntry]) time.Duration {
-					return entry.Value.ttl
-				}),
+		encounterCache: cache.NewOtterCache(cache.OtterCacheConfig[uint64, Value]{
+			Name:       "encounter_stats",
+			DefaultTTL: defaultTTL,
+			TouchOnHit: false,
 		}),
 	}
 }

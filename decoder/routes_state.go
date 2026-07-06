@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golbat/db"
+
+	"golbat/cache"
 )
 
 func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string, route *Route) error {
@@ -135,7 +137,7 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	}
 	route.ClearDirty()
 	if isNewRecord {
-		routeCache.Set(route.Id, route, 0 /* default TTL */)
+		routeCache.Set(route.Id, route, cache.DefaultTTL)
 		route.newRecord = false
 	}
 	return nil

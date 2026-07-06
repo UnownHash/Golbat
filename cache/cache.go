@@ -1,4 +1,7 @@
-package decoder
+// Package cache provides Golbat's hardened adapter over otter v2. It is a
+// leaf package (depends only on otter and golbat/util) so that decoder,
+// encounter_cache, and main can all share one cache implementation.
+package cache
 
 import (
 	"sync/atomic"
@@ -59,7 +62,11 @@ type otterEvictEvent[K comparable, V any] struct {
 	reason EvictionReason
 }
 
-// EvictionReason mirrors the two ttlcache reasons Golbat's handlers use.
+// DefaultTTL passed as a Set/GetOrSetFuncTTL ttl selects the cache's
+// configured default (any value <= 0 does).
+const DefaultTTL time.Duration = 0
+
+// EvictionReason mirrors the two reasons Golbat's handlers use.
 type EvictionReason int
 
 const (
@@ -85,17 +92,14 @@ type OtterCacheConfig[K comparable, V any] struct {
 	// whose TTL encodes the despawn time and must never extend on read).
 	// otter touches via the timing wheel (~ns), so plain touch-on-hit is
 	// affordable again; the hysteresis workaround is not carried over.
-	TouchOnHit      bool
-	InitialCapacity int
+	TouchOnHit bool
 }
 
 func NewOtterCache[K comparable, V any](cfg OtterCacheConfig[K, V]) *OtterCache[K, V] {
 	oc := &OtterCache[K, V]{
 		defaultTTL: cfg.DefaultTTL,
 		name:       cfg.Name,
-		evictCh:    make(chan otterEvictEvent[K, V], 65536),
 	}
-	go oc.evictDispatchLoop()
 
 	ttlOf := func(entry otter.Entry[K, otterVal[V]]) time.Duration {
 		return entry.Value.ttl
@@ -109,7 +113,6 @@ func NewOtterCache[K comparable, V any](cfg OtterCacheConfig[K, V]) *OtterCache[
 
 	opts := &otter.Options[K, otterVal[V]]{
 		ExpiryCalculator: expiry,
-		InitialCapacity:  cfg.InitialCapacity,
 		OnAtomicDeletion: func(ev otter.DeletionEvent[K, otterVal[V]]) {
 			if oc.onEvict.Load() == nil {
 				return
@@ -148,8 +151,12 @@ func (oc *OtterCache[K, V]) Get(key K) (V, bool) {
 	return w.v, ok
 }
 
+// Has reports existence without side effects: GetEntryQuietly skips the
+// hit-stats/read-buffer work and — on touch caches — does NOT extend the
+// entry's TTL, which a plain Get would (an existence probe must not
+// re-arm a fort's 25h TTL).
 func (oc *OtterCache[K, V]) Has(key K) bool {
-	_, ok := oc.c.GetIfPresent(key)
+	_, ok := oc.c.GetEntryQuietly(key)
 	return ok
 }
 
@@ -163,22 +170,17 @@ func (oc *OtterCache[K, V]) Set(key K, value V, ttl time.Duration) {
 }
 
 // GetOrSetFunc returns the existing value or atomically creates one via
-// factory (single winner: racing callers receive the same value). The bool
-// is true if the value already existed, mirroring ttlcache.
+// factory with the cache default TTL (single winner: racing callers
+// receive the same value). The bool is true if the value already existed.
+// See GetOrSetFuncTTL for the factory's locking contract.
 func (oc *OtterCache[K, V]) GetOrSetFunc(key K, factory func() V) (V, bool) {
-	created := false
-	w, _ := oc.c.ComputeIfAbsent(key, func() (otterVal[V], bool) {
-		created = true
-		return otterVal[V]{v: factory(), ttl: oc.defaultTTL}, false
-	})
-	return w.v, !created
+	return oc.GetOrSetFuncTTL(key, factory, DefaultTTL)
 }
 
 // GetOrSetFuncTTL is GetOrSetFunc with an explicit TTL for the created
-// entry (existing entries keep their own TTL). NOTE: as with ttlcache's
-// GetOrSetFunc, the factory runs under internal cache synchronization for
-// the key's bucket — it must not acquire locks that can be held while
-// calling into this cache.
+// entry (existing entries keep their own TTL). NOTE: the factory runs
+// under internal cache synchronization for the key's bucket — it must not
+// acquire locks that can be held while calling into this cache.
 func (oc *OtterCache[K, V]) GetOrSetFuncTTL(key K, factory func() V, ttl time.Duration) (V, bool) {
 	if ttl <= 0 {
 		ttl = oc.defaultTTL
@@ -192,7 +194,9 @@ func (oc *OtterCache[K, V]) GetOrSetFuncTTL(key K, factory func() V, ttl time.Du
 }
 
 // UpdateTTL re-arms the entry's expiry without rewriting the value (and
-// without firing any deletion event).
+// without firing any deletion event). Only sound on TouchOnHit=false
+// caches: the TTL stored inside the value is left stale, and a touch
+// cache's next read would re-arm the timer to that old value.
 func (oc *OtterCache[K, V]) UpdateTTL(key K, ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = oc.defaultTTL
@@ -202,16 +206,6 @@ func (oc *OtterCache[K, V]) UpdateTTL(key K, ttl time.Duration) {
 
 func (oc *OtterCache[K, V]) Delete(key K) {
 	oc.c.Invalidate(key)
-}
-
-func (oc *OtterCache[K, V]) DeleteAll() {
-	oc.c.InvalidateAll()
-}
-
-// Len is otter's EstimatedSize: exact enough for metrics/logging, which are
-// its only Golbat uses.
-func (oc *OtterCache[K, V]) Len() int {
-	return oc.c.EstimatedSize()
 }
 
 // Range iterates entries (weakly consistent snapshot; expired entries are
@@ -224,11 +218,23 @@ func (oc *OtterCache[K, V]) Range(fn func(key K, value V) bool) {
 	}
 }
 
-// OnEviction registers the eviction handler (at most one; last wins). It is
-// invoked on the cache's single dispatcher goroutine for Expired and
-// Deleted causes only — async relative to cache operations and entity-lock
-// holders (same delivery contract Golbat's guards were written against).
+// OnEviction registers the eviction handler (at most one, registered once,
+// at init time before the cache holds entries). It is invoked on the
+// cache's single dispatcher goroutine for Expired and Deleted causes only —
+// async relative to cache operations and entity-lock holders (same delivery
+// contract Golbat's guards were written against).
+//
+// The dispatcher channel and goroutine are created here, lazily: most
+// caches never register a handler, and eagerly allocating a 65,536-slot
+// channel plus a parked goroutine per cache cost ~20 MiB and ~11 idle
+// goroutines across the process. Publication is safe: evictCh is written
+// before the atomic onEvict store, and OnAtomicDeletion reads onEvict
+// (acquire) before touching evictCh.
 func (oc *OtterCache[K, V]) OnEviction(fn func(key K, value V, reason EvictionReason)) {
+	if oc.evictCh == nil {
+		oc.evictCh = make(chan otterEvictEvent[K, V], 65536)
+		go oc.evictDispatchLoop()
+	}
 	oc.onEvict.Store(&fn)
 }
 

@@ -12,6 +12,8 @@ import (
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/cache"
 )
 
 // Player struct. Name is the primary key.
@@ -1096,7 +1098,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		return nil, err
 	}
 
-	playerCache.Set(name, &player, 0 /* default TTL */)
+	playerCache.Set(name, &player, cache.DefaultTTL)
 	return &player, nil
 }
 
@@ -1248,7 +1250,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	player.ClearDirty()
 	if player.IsNewRecord() {
 		player.newRecord = false
-		playerCache.Set(player.Name, player, 0 /* default TTL */)
+		playerCache.Set(player.Name, player, cache.DefaultTTL)
 	}
 }
 

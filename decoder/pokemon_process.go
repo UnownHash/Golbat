@@ -9,6 +9,8 @@ import (
 	"golbat/pogo"
 
 	log "github.com/sirupsen/logrus"
+
+	"golbat/cache"
 )
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string, timestamp int64) string {
@@ -52,7 +54,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		if unlock != nil {
 			unlock()
 		}
-		diskEncounterCache.Set(encounterId, encounter, 0 /* default TTL */)
+		diskEncounterCache.Set(encounterId, encounter, cache.DefaultTTL)
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	defer unlock()

@@ -11,6 +11,8 @@ import (
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
+
+	"golbat/cache"
 )
 
 type Location struct {
@@ -194,7 +196,7 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, 0 /* default TTL */)
+		getMapFortsCache.Set(mapFort.Id, mapFort, cache.DefaultTTL)
 		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 	}
 	return status, output

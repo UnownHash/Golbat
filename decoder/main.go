@@ -18,6 +18,8 @@ import (
 	"golbat/pogo"
 	"golbat/stats_collector"
 	"golbat/webhooks"
+
+	"golbat/cache"
 )
 
 type RawFortData struct {
@@ -55,20 +57,20 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *OtterCache[string, *Pokestop]
-var gymCache *OtterCache[string, *Gym]
-var stationCache *OtterCache[string, *Station]
-var tappableCache *OtterCache[uint64, *Tappable]
-var weatherCache *OtterCache[int64, *Weather]
-var weatherConsensusCache *OtterCache[int64, *WeatherConsensusState]
-var s2CellCache *OtterCache[uint64, *S2Cell]
-var spawnpointCache *OtterCache[int64, *Spawnpoint]
-var pokemonCache *OtterCache[uint64, *Pokemon]
-var incidentCache *OtterCache[string, *Incident]
-var playerCache *OtterCache[string, *Player]
-var routeCache *OtterCache[string, *Route]
-var diskEncounterCache *OtterCache[uint64, *pogo.DiskEncounterOutProto]
-var getMapFortsCache *OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
+var pokestopCache *cache.OtterCache[string, *Pokestop]
+var gymCache *cache.OtterCache[string, *Gym]
+var stationCache *cache.OtterCache[string, *Station]
+var tappableCache *cache.OtterCache[uint64, *Tappable]
+var weatherCache *cache.OtterCache[int64, *Weather]
+var weatherConsensusCache *cache.OtterCache[int64, *WeatherConsensusState]
+var s2CellCache *cache.OtterCache[uint64, *S2Cell]
+var spawnpointCache *cache.OtterCache[int64, *Spawnpoint]
+var pokemonCache *cache.OtterCache[uint64, *Pokemon]
+var incidentCache *cache.OtterCache[string, *Incident]
+var playerCache *cache.OtterCache[string, *Player]
+var routeCache *cache.OtterCache[string, *Route]
+var diskEncounterCache *cache.OtterCache[uint64, *pogo.DiskEncounterOutProto]
+var getMapFortsCache *cache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
 
@@ -127,19 +129,19 @@ func initDataCache() {
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
 	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
-	pokestopCache = NewOtterCache(OtterCacheConfig[string, *Pokestop]{
+	pokestopCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Pokestop]{
 		Name:       "pokestop",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	gymCache = NewOtterCache(OtterCacheConfig[string, *Gym]{
+	gymCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Gym]{
 		Name:       "gym",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	stationCache = NewOtterCache(OtterCacheConfig[string, *Station]{
+	stationCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Station]{
 		Name:       "station",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
@@ -149,25 +151,25 @@ func initDataCache() {
 	// and fortLookupCache exist, so they can never fire against a nil
 	// evictor/lookup cache.
 
-	tappableCache = NewOtterCache(OtterCacheConfig[uint64, *Tappable]{
+	tappableCache = cache.NewOtterCache(cache.OtterCacheConfig[uint64, *Tappable]{
 		Name:       "tappable",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})
 
-	weatherCache = NewOtterCache(OtterCacheConfig[int64, *Weather]{
+	weatherCache = cache.NewOtterCache(cache.OtterCacheConfig[int64, *Weather]{
 		Name:       "weather",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})
 
-	weatherConsensusCache = NewOtterCache(OtterCacheConfig[int64, *WeatherConsensusState]{
+	weatherConsensusCache = cache.NewOtterCache(cache.OtterCacheConfig[int64, *WeatherConsensusState]{
 		Name:       "weather_consensus",
 		DefaultTTL: 2 * time.Hour,
 		TouchOnHit: true,
 	})
 
-	s2CellCache = NewOtterCache(OtterCacheConfig[uint64, *S2Cell]{
+	s2CellCache = cache.NewOtterCache(cache.OtterCacheConfig[uint64, *S2Cell]{
 		Name:       "s2cell",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
@@ -175,7 +177,7 @@ func initDataCache() {
 
 	// Spawnpoints are read once per wild sighting; touch-on-hit keeps
 	// active spawnpoints resident.
-	spawnpointCache = NewOtterCache(OtterCacheConfig[int64, *Spawnpoint]{
+	spawnpointCache = cache.NewOtterCache(cache.OtterCacheConfig[int64, *Spawnpoint]{
 		Name:       "spawnpoint",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
@@ -183,7 +185,7 @@ func initDataCache() {
 
 	// Pokemon TTLs encode despawn times (remainingDuration) and must never
 	// extend on read: writing-based expiry only.
-	pokemonCache = NewOtterCache(OtterCacheConfig[uint64, *Pokemon]{
+	pokemonCache = cache.NewOtterCache(cache.OtterCacheConfig[uint64, *Pokemon]{
 		Name:       "pokemon",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: false,
@@ -192,31 +194,31 @@ func initDataCache() {
 	initFortRtree()
 	initStationBattleCache()
 
-	incidentCache = NewOtterCache(OtterCacheConfig[string, *Incident]{
+	incidentCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Incident]{
 		Name:       "incident",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})
 
-	playerCache = NewOtterCache(OtterCacheConfig[string, *Player]{
+	playerCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Player]{
 		Name:       "player",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})
 
-	diskEncounterCache = NewOtterCache(OtterCacheConfig[uint64, *pogo.DiskEncounterOutProto]{
+	diskEncounterCache = cache.NewOtterCache(cache.OtterCacheConfig[uint64, *pogo.DiskEncounterOutProto]{
 		Name:       "disk_encounter",
 		DefaultTTL: 10 * time.Minute,
 		TouchOnHit: false,
 	})
 
-	getMapFortsCache = NewOtterCache(OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+	getMapFortsCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
 		Name:       "map_forts",
 		DefaultTTL: 5 * time.Minute,
 		TouchOnHit: false,
 	})
 
-	routeCache = NewOtterCache(OtterCacheConfig[string, *Route]{
+	routeCache = cache.NewOtterCache(cache.OtterCacheConfig[string, *Route]{
 		Name:       "route",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
@@ -286,14 +288,6 @@ func reloadOhbemFromMasterFile() {
 	} else {
 		log.Infof("ohbem reloaded from MasterFile cache")
 	}
-}
-
-func ClearPokestopCache() {
-	pokestopCache.DeleteAll()
-}
-
-func ClearGymCache() {
-	gymCache.DeleteAll()
 }
 
 const floatTolerance = 0.000001

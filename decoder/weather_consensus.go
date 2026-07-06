@@ -2,6 +2,8 @@ package decoder
 
 import (
 	"golbat/pogo"
+
+	"golbat/cache"
 )
 
 type WeatherConsensusState struct {
@@ -30,12 +32,13 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 		if hourKey > state.HourKey {
 			state.reset(hourKey)
 		}
-		weatherConsensusCache.Set(cellId, state, 0 /* default TTL */)
+		// No re-Set needed: this is a touch-on-hit cache, the Get above
+		// already re-armed the TTL, and state is a shared pointer.
 		return state
 	}
 	state := &WeatherConsensusState{}
 	state.reset(hourKey)
-	weatherConsensusCache.Set(cellId, state, 0 /* default TTL */)
+	weatherConsensusCache.Set(cellId, state, cache.DefaultTTL)
 	return state
 }
 
