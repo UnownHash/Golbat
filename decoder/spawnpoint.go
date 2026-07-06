@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
@@ -317,16 +317,17 @@ func Abs(x int64) int64 {
 	return x
 }
 
-func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
-	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon pogoshim.WildPokemonProto, timestampMs int64) {
+	spawnId, err := strconv.ParseInt(wildPokemon.GetSpawnPointId(), 16, 64)
 	if err != nil {
 		panic(err)
 	}
 
-	hasTTH := wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0
+	timeTillHiddenMs := wildPokemon.GetTimeTillHiddenMs()
+	hasTTH := timeTillHiddenMs <= 90000 && timeTillHiddenMs > 0
 	var secondOfHour int
 	if hasTTH {
-		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
+		expireTimeStamp := (timestampMs + int64(timeTillHiddenMs)) / 1000
 		date := time.Unix(expireTimeStamp, 0)
 		secondOfHour = date.Second() + date.Minute()*60
 	}
@@ -358,8 +359,8 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
 			return
 		}
-		spawnpoint.SetLat(wildPokemon.Latitude)
-		spawnpoint.SetLon(wildPokemon.Longitude)
+		spawnpoint.SetLat(wildPokemon.GetLatitude())
+		spawnpoint.SetLon(wildPokemon.GetLongitude())
 		spawnpoint.SetDespawnSec(null.IntFrom(int64(secondOfHour)))
 		spawnpointUpdate(ctx, db, spawnpoint)
 		unlock()
@@ -370,8 +371,8 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			return
 		}
 		if spawnpoint.newRecord {
-			spawnpoint.SetLat(wildPokemon.Latitude)
-			spawnpoint.SetLon(wildPokemon.Longitude)
+			spawnpoint.SetLat(wildPokemon.GetLatitude())
+			spawnpoint.SetLon(wildPokemon.GetLongitude())
 			spawnpointUpdate(ctx, db, spawnpoint)
 		} else {
 			spawnpointSeen(ctx, db, spawnpoint)

@@ -36,19 +36,19 @@ type RawStationData struct {
 
 type RawWildPokemonData struct {
 	Cell      uint64
-	Data      *pogo.WildPokemonProto
+	Data      pogoshim.WildPokemonProto
 	Timestamp int64
 }
 
 type RawNearbyPokemonData struct {
 	Cell      uint64
-	Data      *pogo.NearbyPokemonProto
+	Data      pogoshim.NearbyPokemonProto
 	Timestamp int64
 }
 
 type RawMapPokemonData struct {
 	Cell      uint64
-	Data      *pogo.MapPokemonProto
+	Data      pogoshim.MapPokemonProto
 	Timestamp int64
 }
 

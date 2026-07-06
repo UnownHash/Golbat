@@ -134,14 +134,14 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, weather []*pogo.ClientWeatherProto, username string) {
+func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, weather []pogoshim.ClientWeatherProto, username string) {
 	weatherLookup := make(map[int64]pogo.GameplayWeatherProto_WeatherCondition)
 	for _, weatherProto := range weather {
-		weatherLookup[weatherProto.S2CellId] = weatherProto.GameplayWeather.GameplayCondition
+		weatherLookup[weatherProto.GetS2CellId()] = weatherProto.GetGameplayWeather().GetGameplayCondition()
 	}
 
 	for _, wild := range wildPokemonList {
-		encounterId := wild.Data.EncounterId
+		encounterId := wild.Data.GetEncounterId()
 
 		// spawnpointUpdateFromWild doesn't need Pokemon lock
 		spawnpointUpdateFromWild(ctx, db, wild.Data, wild.Timestamp)
@@ -164,9 +164,9 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 	if scanParameters.ProcessNearby {
 		for _, nearby := range nearbyPokemonList {
-			encounterId := nearby.Data.EncounterId
+			encounterId := nearby.Data.GetEncounterId()
 
-			if nearby.Data.FortId != "" || scanParameters.ProcessNearbyCell {
+			if nearby.Data.GetFortId() != "" || scanParameters.ProcessNearbyCell {
 				pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.nearby")
 				if err != nil {
 					log.Printf("getOrCreatePokemonRecord: %s", err)
@@ -185,7 +185,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, mapPokemon := range mapPokemonList {
-		encounterId := mapPokemon.Data.EncounterId
+		encounterId := mapPokemon.Data.GetEncounterId()
 
 		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.map")
 		if err != nil {
@@ -213,30 +213,34 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
-func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []*pogo.ClientWeatherProto, timestampMs int64, account string) (updates []WeatherUpdate) {
+func UpdateClientWeatherBatch(ctx context.Context, db db.DbDetails, p []pogoshim.ClientWeatherProto, timestampMs int64, account string) (updates []WeatherUpdate) {
 	hourKey := timestampMs / time.Hour.Milliseconds()
 	for _, weatherProto := range p {
-		weather, unlock, err := getOrCreateWeatherRecord(ctx, db, weatherProto.S2CellId, "UpdateClientWeatherBatch")
+		// Extract the value-typed observation immediately: the shim (and its
+		// backing arena) must not be retained past this loop iteration.
+		obs := weatherObservationFromShim(weatherProto)
+
+		weather, unlock, err := getOrCreateWeatherRecord(ctx, db, obs.S2CellId, "UpdateClientWeatherBatch")
 		if err != nil {
 			log.Printf("getOrCreateWeatherRecord: %s", err)
 			continue
 		}
 
 		if weather.newRecord || timestampMs >= weather.UpdatedMs {
-			state := getWeatherConsensusState(weatherProto.S2CellId, hourKey)
+			state := getWeatherConsensusState(obs.S2CellId, hourKey)
 			if state != nil {
-				publish, publishProto := state.applyObservation(hourKey, account, weatherProto)
+				publish, publishedObs, havePublish := state.applyObservation(hourKey, account, obs)
 				if publish {
-					if publishProto == nil {
-						publishProto = weatherProto
+					if !havePublish {
+						publishedObs = obs
 					}
 					weather.UpdatedMs = timestampMs
-					weather.updateWeatherFromClientWeatherProto(publishProto)
+					weather.updateWeatherFromObservation(publishedObs)
 					saveWeatherRecord(ctx, db, weather)
 					if weather.oldValues.GameplayCondition != weather.GameplayCondition {
 						updates = append(updates, WeatherUpdate{
-							S2CellId:   publishProto.S2CellId,
-							NewWeather: int32(publishProto.GetGameplayWeather().GetGameplayCondition()),
+							S2CellId:   publishedObs.S2CellId,
+							NewWeather: publishedObs.GameplayCondition,
 						})
 					}
 				}

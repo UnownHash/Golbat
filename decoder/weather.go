@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	"golbat/db"
-	"golbat/pogo"
 	"golbat/webhooks"
 
 	"github.com/golang/geo/s2"
@@ -296,21 +295,21 @@ func weatherCellIdFromLatLon(lat, lon float64) int64 {
 	return int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(10))
 }
 
-func (weather *Weather) updateWeatherFromClientWeatherProto(clientWeather *pogo.ClientWeatherProto) {
-	weather.SetId(clientWeather.S2CellId)
-	s2cell := s2.CellFromCellID(s2.CellID(clientWeather.S2CellId))
+func (weather *Weather) updateWeatherFromObservation(obs weatherObservation) {
+	weather.SetId(obs.S2CellId)
+	s2cell := s2.CellFromCellID(s2.CellID(obs.S2CellId))
 	weather.SetLatitude(s2cell.CapBound().RectBound().Center().Lat.Degrees())
 	weather.SetLongitude(s2cell.CapBound().RectBound().Center().Lng.Degrees())
 	weather.SetLevel(null.IntFrom(int64(s2cell.Level())))
-	weather.SetGameplayCondition(null.IntFrom(int64(clientWeather.GameplayWeather.GameplayCondition)))
-	weather.SetWindDirection(null.IntFrom(int64(clientWeather.DisplayWeather.WindDirection)))
-	weather.SetCloudLevel(null.IntFrom(int64(clientWeather.DisplayWeather.CloudLevel)))
-	weather.SetRainLevel(null.IntFrom(int64(clientWeather.DisplayWeather.RainLevel)))
-	weather.SetWindLevel(null.IntFrom(int64(clientWeather.DisplayWeather.WindLevel)))
-	weather.SetSnowLevel(null.IntFrom(int64(clientWeather.DisplayWeather.SnowLevel)))
-	weather.SetFogLevel(null.IntFrom(int64(clientWeather.DisplayWeather.FogLevel)))
-	weather.SetSpecialEffectLevel(null.IntFrom(int64(clientWeather.DisplayWeather.SpecialEffectLevel)))
-	for _, alert := range clientWeather.Alerts {
+	weather.SetGameplayCondition(null.IntFrom(int64(obs.GameplayCondition)))
+	weather.SetWindDirection(null.IntFrom(int64(obs.WindDirection)))
+	weather.SetCloudLevel(null.IntFrom(int64(obs.CloudLevel)))
+	weather.SetRainLevel(null.IntFrom(int64(obs.RainLevel)))
+	weather.SetWindLevel(null.IntFrom(int64(obs.WindLevel)))
+	weather.SetSnowLevel(null.IntFrom(int64(obs.SnowLevel)))
+	weather.SetFogLevel(null.IntFrom(int64(obs.FogLevel)))
+	weather.SetSpecialEffectLevel(null.IntFrom(int64(obs.SpecialEffectLevel)))
+	for _, alert := range obs.Alerts {
 		weather.SetSeverity(null.IntFrom(int64(alert.Severity)))
 		weather.SetWarnWeather(null.BoolFrom(alert.WarnWeather))
 	}

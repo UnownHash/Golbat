@@ -525,18 +525,23 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			}
 
 			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
+				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsMapPokemonProto(fort.ActivePokemon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
 			}
 		}
 		for _, mon := range mapCell.WildPokemon {
-			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsWildPokemonProto(mon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
 		}
 		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: pogoshim.AsNearbyPokemonProto(mon.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
 		}
 		for _, station := range mapCell.Stations {
 			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: pogoshim.AsStationProto(station.ProtoReflect())})
 		}
+	}
+
+	var newClientWeather []pogoshim.ClientWeatherProto
+	for _, w := range decodedGmo.ClientWeather {
+		newClientWeather = append(newClientWeather, pogoshim.AsClientWeatherProto(w.ProtoReflect()))
 	}
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
@@ -544,10 +549,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	var weatherUpdates []decoder.WeatherUpdate
 	if scanParameters.ProcessWeather {
-		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, decodedGmo.ClientWeather, decodedGmo.MapCell[0].AsOfTimeMs, protoData.Account)
+		weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather, decodedGmo.MapCell[0].AsOfTimeMs, protoData.Account)
 	}
 	if scanParameters.ProcessPokemon {
-		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, decodedGmo.ClientWeather, protoData.Account)
+		decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, newClientWeather, protoData.Account)
 		if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
 			for _, weatherUpdate := range weatherUpdates {
 				go func(weatherUpdate decoder.WeatherUpdate) {

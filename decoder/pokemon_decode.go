@@ -122,31 +122,31 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
-func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto, time int64) bool {
-	pokemonDisplay := wildPokemon.Pokemon.PokemonDisplay
+func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon pogoshim.WildPokemonProto, time int64) bool {
+	pokemonDisplay := wildPokemon.GetPokemon().GetPokemonDisplay()
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
 	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
 		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
-		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
+		pokemon.PokemonId != int16(wildPokemon.GetPokemon().GetPokemonId()) ||
+		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.GetForm()) ||
+		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.GetWeatherBoostedCondition()) ||
+		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.GetCostume()) ||
+		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.GetGender()) ||
 		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
 }
 
 // nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
 // should be written.
-func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonProto, time int64) bool {
-	pokemonDisplay := wildPokemon.PokemonDisplay
+func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon pogoshim.NearbyPokemonProto, time int64) bool {
+	pokemonDisplay := wildPokemon.GetPokemonDisplay()
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
-	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
-		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender)
+	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.GetDisplayId()) ||
+		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.GetForm()) ||
+		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.GetWeatherBoostedCondition()) ||
+		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.GetCostume()) ||
+		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.GetGender())
 
 	if pokemonChanged {
 		return true
@@ -166,19 +166,19 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 	return false
 }
 
-func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon pogoshim.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
 	switch pokemon.SeenType.ValueOrZero() {
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
 	}
-	pokemon.addWildPokemon(ctx, db, pogoshim.AsWildPokemonProto(wildPokemon.ProtoReflect()), timestampMs, true)
+	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
 }
 
-func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon *pogo.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon pogoshim.MapPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 
 	if !pokemon.isNewRecord() {
 		// Do not ever overwrite lure details based on seeing it again in the GMO
@@ -187,9 +187,9 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 	pokemon.SetIsEvent(0)
 
-	pokemon.Id = Uint64Str(mapPokemon.EncounterId)
+	pokemon.Id = Uint64Str(mapPokemon.GetEncounterId())
 
-	spawnpointId := mapPokemon.SpawnpointId
+	spawnpointId := mapPokemon.GetSpawnpointId()
 
 	pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, spawnpointId, "updateFromMap")
 	if pokestop == nil {
@@ -202,8 +202,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
 	unlock()
 
-	if mapPokemon.PokemonDisplay != nil {
-		pokemon.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), pogoshim.AsPokemonDisplayProto(mapPokemon.PokemonDisplay.ProtoReflect()))
+	if mapPokemon.HasPokemonDisplay() {
+		pokemon.setPokemonDisplay(int16(mapPokemon.GetPokedexTypeId()), mapPokemon.GetPokemonDisplay())
 		pokemon.recomputeCpIfNeeded(ctx, db, weather)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
@@ -214,8 +214,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetUsername(null.StringFrom(username))
 	}
 
-	if mapPokemon.ExpirationTimeMs > 0 && !pokemon.ExpireTimestampVerified {
-		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.ExpirationTimeMs / 1000))
+	if mapPokemon.GetExpirationTimeMs() > 0 && !pokemon.ExpireTimestampVerified {
+		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.GetExpirationTimeMs() / 1000))
 		pokemon.SetExpireTimestampVerified(true)
 		// if we have cached an encounter for this pokemon, update the TTL.
 		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.encounterStatsDuration(timestampMs/1000))
@@ -237,10 +237,10 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	}
 }
 
-func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
+func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon pogoshim.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
-	pokestopId := nearbyPokemon.FortId
-	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), pogoshim.AsPokemonDisplayProto(nearbyPokemon.PokemonDisplay.ProtoReflect()))
+	pokestopId := nearbyPokemon.GetFortId()
+	pokemon.setPokemonDisplay(int16(nearbyPokemon.GetPokedexNumber()), nearbyPokemon.GetPokemonDisplay())
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 
