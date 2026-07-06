@@ -26,7 +26,10 @@ the gRPC raw receiver); the Nebula gRPC side-path is not captured.
 The lazy-annotation scan (`scripts/add_lazy_proto.py`) only greps Golbat's
 own sources for getter usage — it excludes `protobench/` itself, so the
 harness's own field reads in `readers/readers.go` can't strip annotations
-from the subtrees it's measuring. Current run: 57 fields marked `[lazy = true]`.
+from the subtrees it's measuring. Unused message-typed fields are annotated
+whether singular or repeated — protobuf-go v1.36's opaque API supports lazy
+decoding on repeated message fields too, so the measurement arm covers the
+full lever. Current run: 88 fields marked `[lazy = true]`.
 
 ## The three configurations
 

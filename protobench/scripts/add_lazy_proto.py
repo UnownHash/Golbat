@@ -146,15 +146,21 @@ def parse_proto_messages(proto_file, enum_names):
                     # Skip if already has lazy annotation
                     if '[lazy = true]' in line:
                         continue
-                    
-                    # Skip repeated fields (lazy doesn't apply)
-                    if line.startswith('repeated '):
-                        continue
+
+                    # Repeated message fields support [lazy = true] too: under the
+                    # opaque API (protobuf-go v1.36+), lazy decoding works for
+                    # repeated message-typed fields, not just singular ones. Strip
+                    # the "repeated " prefix before matching so the type/name regex
+                    # below still lines up; the parsed field is then treated like
+                    # any other message-typed field.
+                    field_line = line
+                    if field_line.startswith('repeated '):
+                        field_line = field_line[len('repeated '):]
 
                     # Match field: type field_name = number;
                     field_match = re.match(
                         r'^([A-Za-z0-9_\.]+)\s+([a-z_][a-z0-9_]*)\s*=\s*(\d+)\s*;',
-                        line
+                        field_line
                     )
                     if field_match:
                         field_type = field_match.group(1)
@@ -235,8 +241,10 @@ def add_lazy_annotations(proto_file, lazy_fields_by_message, dry_run=False):
                 
                 # Check each lazy field for this message
                 for field_name in lazy_fields_by_message[current_message]:
+                    # Type prefix may be "Type" or "repeated Type" — both are
+                    # eligible for [lazy = true] on message-typed fields.
                     pattern = re.compile(
-                        rf'^(\s*[A-Za-z0-9_]+\s+)({field_name}\s*=\s*\d+)(\s*;)\s*$'
+                        rf'^(\s*(?:repeated\s+)?[A-Za-z0-9_.]+\s+)({field_name}\s*=\s*\d+)(\s*;)\s*$'
                     )
                     match = pattern.match(line)
                     if match:
