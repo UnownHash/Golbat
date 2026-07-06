@@ -51,6 +51,12 @@ level_caps = [50, 51]           # Level caps used in PVP rankings
 #enabled = true
 #token = ""                 # Optional auth token for /metrics endpoint
 
+# Raw payload capture for the protobench decode harness (see protobench/README.md)
+#[raw_capture]
+#enabled = true
+#dir = "capture"            # payloads land in capture/<METHOD>/<ts>_<size>.bin
+#per_bucket_limit = 200     # x5 size buckets = max 1000 payloads/method
+
 # You can specify more than one webhook destination by including the [[webhooks]] section
 # multiple times.  The hook types can optionally be filtered by using the types array
 
