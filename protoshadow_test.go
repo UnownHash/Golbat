@@ -378,6 +378,71 @@ func TestShadowDigestPresenceOnlyDivergesFromAbsent(t *testing.T) {
 	}
 }
 
+// digestFortViaStd unmarshals payload with the std protobuf-go engine, wraps
+// it in the pogoshim surface, and folds it through digestFort -- bypassing
+// the GMO/method dispatch machinery since this test only cares about a bare
+// PokemonFortProto's digest sensitivity to active_pokemon.
+func digestFortViaStd(t *testing.T, payload []byte) uint64 {
+	t.Helper()
+	m := &pogo.PokemonFortProto{}
+	if err := proto.Unmarshal(payload, m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	h := fnv.New64a()
+	digestFort(h, pogoshim.AsPokemonFortProto(m.ProtoReflect()))
+	return h.Sum64()
+}
+
+// TestShadowDigestFortActivePokemonDiverges guards fort.active_pokemon
+// coverage: decodeGMO's lure pipeline reads fort.GetActivePokemon() (a
+// MapPokemonProto) directly (decode.go's UpdatePokemonBatch feed), so a
+// shadow digest that never folds active_pokemon would silently miss any
+// hyperpb/std divergence in the lure path. A fort with active_pokemon
+// present must digest differently both from the same fort with it absent,
+// and from a fort with different active_pokemon contents.
+func TestShadowDigestFortActivePokemonDiverges(t *testing.T) {
+	base := func(active *pogo.MapPokemonProto) *pogo.PokemonFortProto {
+		return &pogo.PokemonFortProto{
+			FortId:        "STOP1",
+			FortType:      pogo.FortType_CHECKPOINT,
+			Enabled:       true,
+			ActivePokemon: active,
+		}
+	}
+
+	absentPayload, err := proto.Marshal(base(nil))
+	if err != nil {
+		t.Fatalf("marshal absent: %v", err)
+	}
+	presentPayload, err := proto.Marshal(base(&pogo.MapPokemonProto{
+		SpawnpointId:  "abcd1234",
+		EncounterId:   555555,
+		PokedexTypeId: 4,
+	}))
+	if err != nil {
+		t.Fatalf("marshal present: %v", err)
+	}
+	differentPayload, err := proto.Marshal(base(&pogo.MapPokemonProto{
+		SpawnpointId:  "abcd1234",
+		EncounterId:   555556, // differs from "present" above
+		PokedexTypeId: 4,
+	}))
+	if err != nil {
+		t.Fatalf("marshal different: %v", err)
+	}
+
+	absentDigest := digestFortViaStd(t, absentPayload)
+	presentDigest := digestFortViaStd(t, presentPayload)
+	differentDigest := digestFortViaStd(t, differentPayload)
+
+	if absentDigest == presentDigest {
+		t.Fatal("expected a fort with active_pokemon present to digest differently than one with it absent")
+	}
+	if presentDigest == differentDigest {
+		t.Fatal("expected forts with different active_pokemon contents to digest differently")
+	}
+}
+
 func TestShadowDigestEncounterMatchesAcrossEngines(t *testing.T) {
 	enc := &pogo.EncounterOutProto{
 		Pokemon:    buildTestWild(777),

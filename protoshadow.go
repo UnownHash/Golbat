@@ -296,6 +296,14 @@ func digestFort(h hash.Hash64, f pogoshim.PokemonFortProto) {
 	}
 
 	foldBool(h, 134, f.GetIsExRaidEligible())
+
+	// active_pokemon feeds decodeGMO's lure pipeline (fort.GetActivePokemon()
+	// -> RawMapPokemonData in decode.go) independently of the pokestop
+	// display fields above, so it must be folded on its own.
+	foldBool(h, 135, f.HasActivePokemon())
+	if f.HasActivePokemon() {
+		digestMapPokemon(h, f.GetActivePokemon())
+	}
 }
 
 func digestWeather(h hash.Hash64, w pogoshim.ClientWeatherProto) {
