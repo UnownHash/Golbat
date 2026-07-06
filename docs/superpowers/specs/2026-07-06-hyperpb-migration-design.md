@@ -138,6 +138,14 @@ traffic, then set the engine flag; the flag flip is also the rollback lever.
 - **Proto version bumps** regenerate shims in the same one-command pipeline
   as `vbase.pb.go` (getter surface is compile-checked; drift = build error,
   by design).
+- **Go compiler PGO**: a committed `default.pgo` at the repo root makes
+  every build (incl. Docker) profile-guided automatically — measured +13%
+  on the shim decode path, and it benefits the std engine today too.
+  `make pgo-capture` (GOLBAT_URL/GOLBAT_SECRET env) pulls a 120 s CPU
+  profile from a running instance's authed pprof endpoint; refresh and
+  re-commit occasionally (game updates shift hot paths). The protobench
+  harness carries its own committed `cmd/bench/default.pgo`
+  (`make -C protobench pgo` refreshes it).
 - hyperpb pinned by version in go.mod; upgrades go through the protobench
   harness (equivalence + volume run) before Golbat sees them.
 - CLAUDE.md documents the engine architecture, the arena/buffer invariants,
