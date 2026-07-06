@@ -20,6 +20,11 @@ Copy payloads here as they accumulate (the harness uses whatever exists):
 
     PROTO_SRC=~/dev/ProtoMirror/vbase.proto scripts/gen.sh
 
+The lazy-annotation scan (`scripts/add_lazy_proto.py`) only greps Golbat's
+own sources for getter usage — it excludes `protobench/` itself, so the
+harness's own field reads in `readers/readers.go` can't strip annotations
+from the subtrees it's measuring. Current run: 57 fields marked `[lazy = true]`.
+
 ## The three configurations
 
 | Configuration | Command |

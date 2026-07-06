@@ -33,7 +33,7 @@ ENUM_NAMES = set()
 def get_used_getters(project_root):
     """Extract all getter methods used in Go code"""
     result = subprocess.run(
-        ["grep", "-rhoE", r"\.Get[A-Z][a-zA-Z0-9_]*\(\)", "--include=*.go", "."],
+        ["grep", "-rhoE", r"\.Get[A-Z][a-zA-Z0-9_]*\(\)", "--include=*.go", "--exclude-dir=protobench", "."],
         cwd=project_root,
         capture_output=True,
         text=True
@@ -54,7 +54,7 @@ def get_used_proto_types(project_root):
     since lazy only benefits messages we unmarshal, not ones we create/send.
     """
     result = subprocess.run(
-        ["grep", "-rhoE", r"pogo\.[A-Z][a-zA-Z0-9_]*", "--include=*.go", "."],
+        ["grep", "-rhoE", r"pogo\.[A-Z][a-zA-Z0-9_]*", "--include=*.go", "--exclude-dir=protobench", "."],
         cwd=project_root,
         capture_output=True,
         text=True
