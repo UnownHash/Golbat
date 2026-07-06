@@ -134,22 +134,37 @@ func initDataCache() {
 		fortCacheTTL = 25 * time.Hour
 	}
 
+	// Forts are read once per GMO fort entry; per-Get touch-on-hit cost
+	// (heap+list under shard locks) measured ~3.4% of total CPU in
+	// production. Hysteresis touch keeps actively-seen forts resident with
+	// one refresh per entry per TTL period; refresh TTLs are re-jittered.
+	fortTouchRefreshBelow := 10 * time.Minute
+	if config.Config.FortInMemory {
+		fortTouchRefreshBelow = 2 * time.Hour
+	}
+
 	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
-		NumShards:  cacheShardCount(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
+		NumShards:         cacheShardCount(),
+		TTL:               fortCacheTTL,
+		KeyToShard:        StringKeyToShard,
+		TouchRefreshBelow: fortTouchRefreshBelow,
+		TouchRefreshTTL:   fortCacheEntryTTL,
 	})
 
 	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
-		NumShards:  cacheShardCount(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
+		NumShards:         cacheShardCount(),
+		TTL:               fortCacheTTL,
+		KeyToShard:        StringKeyToShard,
+		TouchRefreshBelow: fortTouchRefreshBelow,
+		TouchRefreshTTL:   fortCacheEntryTTL,
 	})
 
 	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
-		NumShards:  cacheShardCount(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
+		NumShards:         cacheShardCount(),
+		TTL:               fortCacheTTL,
+		KeyToShard:        StringKeyToShard,
+		TouchRefreshBelow: fortTouchRefreshBelow,
+		TouchRefreshTTL:   fortCacheEntryTTL,
 	})
 	// OnEviction registrations for pokestopCache/gymCache/stationCache are
 	// registered in initFortRtree() (called below), after fortTreeEvictor
@@ -176,10 +191,14 @@ func initDataCache() {
 	)
 	go s2CellCache.Start()
 
+	// Spawnpoints are read once per wild sighting (lock-free fast paths do
+	// a cache Get each); hysteresis touch replaces per-Get heap work with
+	// one refresh per spawnpoint per ~45min.
 	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
-		NumShards:  cacheShardCount(),
-		TTL:        60 * time.Minute,
-		KeyToShard: Int64KeyToShard,
+		NumShards:         cacheShardCount(),
+		TTL:               60 * time.Minute,
+		KeyToShard:        Int64KeyToShard,
+		TouchRefreshBelow: 15 * time.Minute,
 	})
 
 	// Pokemon cache: sharded for high concurrency

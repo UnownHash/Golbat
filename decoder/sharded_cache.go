@@ -11,8 +11,10 @@ import (
 // ShardedCache is a generic sharded cache for improved concurrency.
 // It distributes entries across multiple ttlcache instances to reduce lock contention.
 type ShardedCache[K comparable, V any] struct {
-	shards     []*ttlcache.Cache[K, V]
-	keyToShard func(K) uint64
+	shards            []*ttlcache.Cache[K, V]
+	keyToShard        func(K) uint64
+	touchRefreshBelow time.Duration
+	touchRefreshTTL   func() time.Duration
 }
 
 // ShardedCacheConfig holds configuration for creating a ShardedCache
@@ -21,21 +23,37 @@ type ShardedCacheConfig[K comparable, V any] struct {
 	TTL               time.Duration
 	KeyToShard        func(K) uint64
 	DisableTouchOnHit bool
+
+	// TouchRefreshBelow enables hysteresis touch: ttlcache's touch-on-hit
+	// is disabled (its per-Get heap.Fix + list.MoveToFront under the shard
+	// lock measured ~3.4% of total production CPU on the fort caches), and
+	// instead Get/GetOrSetFunc re-Set the entry — one heap op — only when
+	// its remaining lifetime falls below this threshold. Entries that keep
+	// being accessed stay resident, exactly like touch-on-hit, at one
+	// refresh per entry per TTL period instead of per read. The refresh/
+	// eviction race is structurally impossible: refresh fires when hours
+	// remain, eviction only at zero.
+	TouchRefreshBelow time.Duration
+	// TouchRefreshTTL supplies the TTL for refreshes (e.g. re-jittered);
+	// nil uses the cache default.
+	TouchRefreshTTL func() time.Duration
 }
 
 // NewShardedCache creates a new sharded cache with the given configuration.
 // The keyToShard function converts keys to uint64 for shard selection.
 func NewShardedCache[K comparable, V any](config ShardedCacheConfig[K, V]) *ShardedCache[K, V] {
 	sc := &ShardedCache[K, V]{
-		shards:     make([]*ttlcache.Cache[K, V], config.NumShards),
-		keyToShard: config.KeyToShard,
+		shards:            make([]*ttlcache.Cache[K, V], config.NumShards),
+		keyToShard:        config.KeyToShard,
+		touchRefreshBelow: config.TouchRefreshBelow,
+		touchRefreshTTL:   config.TouchRefreshTTL,
 	}
 
 	for i := 0; i < config.NumShards; i++ {
 		opts := []ttlcache.Option[K, V]{
 			ttlcache.WithTTL[K, V](config.TTL),
 		}
-		if config.DisableTouchOnHit {
+		if config.DisableTouchOnHit || config.TouchRefreshBelow > 0 {
 			opts = append(opts, ttlcache.WithDisableTouchOnHit[K, V]())
 		}
 		sc.shards[i] = ttlcache.New[K, V](opts...)
@@ -52,7 +70,27 @@ func (sc *ShardedCache[K, V]) getShard(key K) *ttlcache.Cache[K, V] {
 
 // Get retrieves an item from the appropriate shard
 func (sc *ShardedCache[K, V]) Get(key K) *ttlcache.Item[K, V] {
-	return sc.getShard(key).Get(key)
+	shard := sc.getShard(key)
+	item := shard.Get(key)
+	sc.maybeRefresh(shard, key, item)
+	return item
+}
+
+// maybeRefresh implements hysteresis touch: re-Set the entry with a fresh
+// TTL only when its remaining lifetime is below the configured threshold.
+// Set on an existing key updates in place and fires no eviction callbacks.
+func (sc *ShardedCache[K, V]) maybeRefresh(shard *ttlcache.Cache[K, V], key K, item *ttlcache.Item[K, V]) {
+	if item == nil || sc.touchRefreshBelow <= 0 {
+		return
+	}
+	if time.Until(item.ExpiresAt()) >= sc.touchRefreshBelow {
+		return
+	}
+	ttl := ttlcache.DefaultTTL
+	if sc.touchRefreshTTL != nil {
+		ttl = sc.touchRefreshTTL()
+	}
+	shard.Set(key, item.Value(), ttl)
 }
 
 // Set stores an item in the appropriate shard
@@ -102,7 +140,12 @@ func (sc *ShardedCache[K, V]) DeleteAll() {
 // The bool return value is true if the item was found, false if created
 // during the execution of the method.
 func (sc *ShardedCache[K, V]) GetOrSetFunc(key K, createFunc func() V, opts ...ttlcache.Option[K, V]) (*ttlcache.Item[K, V], bool) {
-	return sc.getShard(key).GetOrSetFunc(key, createFunc, opts...)
+	shard := sc.getShard(key)
+	item, found := shard.GetOrSetFunc(key, createFunc, opts...)
+	if found {
+		sc.maybeRefresh(shard, key, item)
+	}
+	return item, found
 }
 
 // --- Key conversion helpers ---
