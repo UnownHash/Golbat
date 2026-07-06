@@ -151,8 +151,11 @@ func (g *gen) message(name string, md protoreflect.MessageDescriptor) {
 			sub := goName(f.Message())
 			fmt.Fprintf(&g.out, "func (x %s) Has%s() bool {\n\treturn x.m != nil && x.m.Has(%s)\n}\n\n",
 				name, goCamelCase(string(f.Name())), fdVar(name, f))
-			fmt.Fprintf(&g.out, "func (x %s) %s() %s {\n\tif x.m == nil || !x.m.Has(%s) {\n\t\treturn %s{}\n\t}\n\treturn %s{x.m.Get(%s).Message()}\n}\n\n",
-				name, getter, sub, fdVar(name, f), sub, sub, fdVar(name, f))
+			// Single protoreflect call: Get on an absent message field
+			// returns an invalid empty view without allocating (verified in
+			// TestHyperGetAbsentMessageSemantics), so no separate Has.
+			fmt.Fprintf(&g.out, "func (x %s) %s() %s {\n\tif x.m == nil {\n\t\treturn %s{}\n\t}\n\tif v := x.m.Get(%s).Message(); v.IsValid() {\n\t\treturn %s{v}\n\t}\n\treturn %s{}\n}\n\n",
+				name, getter, sub, sub, fdVar(name, f), sub, sub)
 		default:
 			g.scalarGetter(name, getter, f)
 		}
@@ -195,7 +198,7 @@ func (g *gen) listTypes() {
 		fmt.Fprintf(&g.out, "type %sList struct{ l protoreflect.List }\n\n", elem)
 		fmt.Fprintf(&g.out, "func (l %sList) Len() int {\n\tif l.l == nil {\n\t\treturn 0\n\t}\n\treturn l.l.Len()\n}\n\n", elem)
 		fmt.Fprintf(&g.out, "func (l %sList) At(i int) %s { return %s{l.l.Get(i).Message()} }\n\n", elem, elem, elem)
-		fmt.Fprintf(&g.out, "func (l %sList) All() iter.Seq[%s] {\n\treturn func(yield func(%s) bool) {\n\t\tfor i := 0; i < l.Len(); i++ {\n\t\t\tif !yield(l.At(i)) {\n\t\t\t\treturn\n\t\t\t}\n\t\t}\n\t}\n}\n\n", elem, elem, elem)
+		fmt.Fprintf(&g.out, "func (l %sList) All() iter.Seq[%s] {\n\treturn func(yield func(%s) bool) {\n\t\tif l.l == nil {\n\t\t\treturn\n\t\t}\n\t\tfor i, n := 0, l.l.Len(); i < n; i++ {\n\t\t\tif !yield(%s{l.l.Get(i).Message()}) {\n\t\t\t\treturn\n\t\t\t}\n\t\t}\n\t}\n}\n\n", elem, elem, elem, elem)
 	}
 }
 

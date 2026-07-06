@@ -91,3 +91,31 @@ scripts/genshim.sh   # hypershim typed accessors
 PROTOBENCH_CORPUS=../corpus-frozen go test ./readers/ -run TestEnginesAgree  # correctness
 go run ./cmd/bench -corpus ../corpus-frozen -workers 12 -duration 25s -engine <engine> [-ballast-mb 2048]
 ```
+
+## Addendum (same day): shim-layer v2 + Go compiler PGO
+
+Generator changes: message getters fused to a single protoreflect call
+(`Get` + `IsValid` — Get on an absent message field returns an invalid view
+with zero allocations, verified by `TestHyperGetAbsentMessageSemantics`)
+replacing `Has`+`Get`; `All()` iterators hoist `Len()` out of the loop
+condition. Go compiler PGO (`go build -pgo=<cpuprofile from cmd/bench>`)
+adds profile-guided inlining + interface devirtualization on top.
+
+Interleaved 15 s runs, GMO, 12 workers (decodes/s):
+
+| build | hypershim v2 | hyperpb hand-rolled |
+|---|---|---|
+| no PGO | 57.4k / 47.6k* | 56.1k / 55.3k |
+| compiler PGO | **64.6k / 64.5k** | 60.3k / 62.0k |
+
+*thermal outlier — PGO runs were notably more stable.
+
+- The v2 fused getters erase (and slightly invert) the former ~1.7% shim
+  penalty: the shims now beat the hand-rolled walk, which still pays
+  Has+Get per submessage.
+- Compiler PGO: +13% on the shim engine (+9–11% hand-rolled) — it inlines
+  the hot getters and devirtualizes protoreflect.Message calls to hyperpb's
+  concrete type. For Golbat: collect a prod CPU profile, commit it as
+  `default.pgo`, and the standard build picks it up automatically.
+- Combined hypershim v2 + PGO ≈ **+87% over the std baseline** (34.4k) on
+  the same corpus, before any live-heap ballast effect.

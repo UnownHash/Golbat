@@ -15,6 +15,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/metrics"
+	"runtime/pprof"
 	"sort"
 	"strings"
 	"sync"
@@ -322,7 +323,22 @@ func main() {
 	flag.BoolVar(&cfg.discardUnknown, "discardunknown", false, "proto.UnmarshalOptions.DiscardUnknown")
 	flag.StringVar(&cfg.engine, "engine", "std", "decode engine: std|vt|vtpool|hyperpb")
 	flag.BoolVar(&cfg.hyperpbPGO, "hyperpb-pgo", true, "profile-guided recompilation for the hyperpb engine")
+	cpuprofile := flag.String("cpuprofile", "", "write CPU profile to file (for go-compiler PGO builds)")
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "cpuprofile:", err)
+			os.Exit(1)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			fmt.Fprintln(os.Stderr, "cpuprofile:", err)
+			os.Exit(1)
+		}
+		defer pprof.StopCPUProfile()
+	}
 
 	rep, err := run(cfg)
 	if err != nil {
