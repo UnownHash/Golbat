@@ -25,3 +25,4 @@ docker-compose.yml
 vbase.proto
 __debug_bin
 /capture/
+/corpus-frozen/

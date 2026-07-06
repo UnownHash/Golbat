@@ -28,12 +28,15 @@ import (
 )
 
 type runConfig struct {
-	corpusDir string
-	workers   int
-	duration  time.Duration
-	nolazy    bool
-	ballastMB int
-	methods   string // CSV filter; empty = all with readers
+	corpusDir      string
+	workers        int
+	duration       time.Duration
+	nolazy         bool
+	ballastMB      int
+	methods        string // CSV filter; empty = all with readers
+	ingest         string // "none" | "alloc" | "pool" — simulate the per-packet payload buffer
+	discardUnknown bool
+	engine         string // "std" | "vt" | "vtpool" | "hyperpb"
 }
 
 type report struct {
@@ -147,7 +150,27 @@ func readMetrics() map[string]metrics.Value {
 	return out
 }
 
+// engineRegistry maps -engine values to reader sets.
+func engineRegistry(engine string) (map[string]readers.Reader, error) {
+	switch engine {
+	case "", "std":
+		return readers.Registry, nil
+	case "vt":
+		return readers.RegistryVT, nil
+	case "vtpool":
+		return readers.RegistryVTPool, nil
+	case "hyperpb":
+		return readers.RegistryHyperpb, nil
+	default:
+		return nil, fmt.Errorf("unknown engine %q (std|vt|vtpool|hyperpb)", engine)
+	}
+}
+
 func run(cfg runConfig) (report, error) {
+	registry, err := engineRegistry(cfg.engine)
+	if err != nil {
+		return report{}, err
+	}
 	byMethod, err := corpus.Load(cfg.corpusDir)
 	if err != nil {
 		return report{}, err
@@ -167,7 +190,7 @@ func run(cfg runConfig) (report, error) {
 	perMethodIdx := map[string]int{}
 	var methodNames []string
 	for method, payloads := range byMethod {
-		reader, ok := readers.Registry[method]
+		reader, ok := registry[method]
 		if !ok || (len(filter) > 0 && !filter[method]) {
 			continue
 		}
@@ -180,16 +203,42 @@ func run(cfg runConfig) (report, error) {
 		}
 	}
 	if len(items) == 0 {
-		known := make([]string, 0, len(readers.Registry))
-		for m := range readers.Registry {
+		known := make([]string, 0, len(registry))
+		for m := range registry {
 			known = append(known, m)
 		}
 		sort.Strings(known)
 		return report{}, fmt.Errorf("corpus at %s has no payloads with readers (have readers: %s)", cfg.corpusDir, strings.Join(known, ", "))
 	}
 
-	o := proto.UnmarshalOptions{NoLazyDecoding: cfg.nolazy}
+	o := proto.UnmarshalOptions{NoLazyDecoding: cfg.nolazy, DiscardUnknown: cfg.discardUnknown}
 	ballast := buildBallast(cfg.ballastMB)
+
+	// Ingest simulation: Golbat allocates a fresh payload buffer per packet
+	// (base64 output on the HTTP path). "alloc" reproduces that cost so the
+	// harness matches prod; "pool" models a sync.Pool for those buffers; the
+	// delta between the two is the buffer-pooling win. "none" (default)
+	// hands the shared corpus slice straight to the reader.
+	var bufPool sync.Pool
+	prepare := func(data []byte) ([]byte, func()) {
+		switch cfg.ingest {
+		case "alloc":
+			buf := make([]byte, len(data))
+			copy(buf, data)
+			return buf, func() {}
+		case "pool":
+			v, _ := bufPool.Get().(*[]byte)
+			if v == nil || cap(*v) < len(data) {
+				b := make([]byte, len(data))
+				v = &b
+			}
+			buf := (*v)[:len(data)]
+			copy(buf, data)
+			return buf, func() { bufPool.Put(v) }
+		default:
+			return data, func() {}
+		}
+	}
 
 	perMethod := make([]atomic.Uint64, len(methodNames))
 	var decodes, bytes atomic.Uint64
@@ -205,9 +254,11 @@ func run(cfg runConfig) (report, error) {
 			rng := rand.New(rand.NewSource(seed))
 			for time.Now().Before(deadline) {
 				it := items[rng.Intn(len(items))]
-				if err := it.reader(it.data, o); err != nil {
+				buf, release := prepare(it.data)
+				if err := it.reader(buf, o); err != nil {
 					panic(fmt.Sprintf("decode %s: %v", it.method, err))
 				}
+				release()
 				decodes.Add(1)
 				bytes.Add(uint64(len(it.data)))
 				perMethod[perMethodIdx[it.method]].Add(1)
@@ -253,6 +304,9 @@ func main() {
 	flag.BoolVar(&cfg.nolazy, "nolazy", false, "NoLazyDecoding (only meaningful with -tags protoopaque)")
 	flag.IntVar(&cfg.ballastMB, "ballast-mb", 0, "pointer-dense live-heap ballast")
 	flag.StringVar(&cfg.methods, "methods", "", "CSV method filter")
+	flag.StringVar(&cfg.ingest, "ingest", "none", "payload buffer simulation: none|alloc|pool")
+	flag.BoolVar(&cfg.discardUnknown, "discardunknown", false, "proto.UnmarshalOptions.DiscardUnknown")
+	flag.StringVar(&cfg.engine, "engine", "std", "decode engine: std|vt|vtpool|hyperpb")
 	flag.Parse()
 
 	rep, err := run(cfg)
@@ -269,8 +323,8 @@ func main() {
 			lazyState = "enabled"
 		}
 	}
-	fmt.Printf("build=%s lazy=%s workers=%d duration=%s ballast=%dMB\n",
-		buildMode, lazyState, cfg.workers, rep.elapsed.Round(time.Millisecond), cfg.ballastMB)
+	fmt.Printf("build=%s engine=%s lazy=%s workers=%d duration=%s ballast=%dMB ingest=%s discardunknown=%v\n",
+		buildMode, cfg.engine, lazyState, cfg.workers, rep.elapsed.Round(time.Millisecond), cfg.ballastMB, cfg.ingest, cfg.discardUnknown)
 	fmt.Printf("decodes:      %d (%.0f/s)\n", rep.decodes, float64(rep.decodes)/rep.elapsed.Seconds())
 	fmt.Printf("throughput:   %.1f MB/s\n", float64(rep.bytes)/1e6/rep.elapsed.Seconds())
 	fmt.Printf("alloc/decode: %.0f B, %.1f objects\n",
