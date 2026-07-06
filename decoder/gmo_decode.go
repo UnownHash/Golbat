@@ -20,8 +20,8 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	//var stopsToModify []string
 
 	for _, fort := range p {
-		fortId := fort.Data.FortId
-		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
+		fortId := fort.Data.GetFortId()
+		if fort.Data.GetFortType() == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
 			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
 				log.Errorf("getOrCreatePokestopRecord: %s", err)
@@ -55,27 +55,34 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				}
 			}
 
-			incidents := fort.Data.PokestopDisplays
-			if incidents == nil && fort.Data.PokestopDisplay != nil {
-				incidents = []*pogo.PokestopIncidentDisplayProto{fort.Data.PokestopDisplay}
-			}
-
-			for _, incidentProto := range incidents {
-				if incidentProto.IncidentId == "" {
-					continue
+			processIncidentDisplay := func(incidentProto pogoshim.PokestopIncidentDisplayProto) {
+				incidentId := incidentProto.GetIncidentId()
+				if incidentId == "" {
+					return
 				}
-				incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentProto.IncidentId, fortId, "UpdateFortBatch")
+				incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentId, fortId, "UpdateFortBatch")
 				if err != nil {
 					log.Errorf("getOrCreateIncidentRecord: %s", err)
-					continue
+					return
 				}
 				incident.updateFromPokestopIncidentDisplay(incidentProto)
 				saveIncidentRecord(ctx, db, incident)
 				unlock()
 			}
+
+			// Prefer the plural pokestop_displays repeated field; only fall
+			// back to the singular pokestop_display when the plural field is
+			// absent (mirrors the pre-shim `incidents == nil` nil-slice check).
+			if displays := fort.Data.GetPokestopDisplays(); displays.Len() > 0 {
+				for i := 0; i < displays.Len(); i++ {
+					processIncidentDisplay(displays.At(i))
+				}
+			} else if fort.Data.HasPokestopDisplay() {
+				processIncidentDisplay(fort.Data.GetPokestopDisplay())
+			}
 		}
 
-		if fort.Data.FortType == pogo.FortType_GYM && scanParameters.ProcessGyms {
+		if fort.Data.GetFortType() == pogo.FortType_GYM && scanParameters.ProcessGyms {
 			gym, gymUnlock, err := getOrCreateGymRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
 				log.Errorf("getOrCreateGymRecord: %s", err)
@@ -114,14 +121,14 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
-		stationId := stationProto.Data.Id
+		stationId := stationProto.Data.GetId()
 		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId, "UpdateStationBatch")
 		if err != nil {
 			log.Errorf("getOrCreateStationRecord: %s", err)
 			continue
 		}
 		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
-		syncStationBattlesFromProto(station, stationProto.Data.BattleDetails)
+		syncStationBattlesFromProto(station, stationProto.Data.GetBattleDetails())
 		saveStationRecord(ctx, db, station)
 		unlock()
 	}

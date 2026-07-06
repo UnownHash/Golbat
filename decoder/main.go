@@ -25,13 +25,13 @@ import (
 
 type RawFortData struct {
 	Cell      uint64
-	Data      *pogo.PokemonFortProto
+	Data      pogoshim.PokemonFortProto
 	Timestamp int64
 }
 
 type RawStationData struct {
 	Cell uint64
-	Data *pogo.StationProto
+	Data pogoshim.StationProto
 }
 
 type RawWildPokemonData struct {

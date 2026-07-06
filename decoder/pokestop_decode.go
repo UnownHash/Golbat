@@ -9,32 +9,35 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/tz"
 	"golbat/util"
 )
 
 var LureTime int64 = 1800
 
-func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64, now int64) *Pokestop {
-	stop.SetId(fortData.FortId)
-	stop.SetLat(fortData.Latitude)
-	stop.SetLon(fortData.Longitude)
+func (stop *Pokestop) updatePokestopFromFort(fortData pogoshim.PokemonFortProto, cellId uint64, now int64) *Pokestop {
+	stop.SetId(fortData.GetFortId())
+	stop.SetLat(fortData.GetLatitude())
+	stop.SetLon(fortData.GetLongitude())
 
-	stop.SetPartnerId(null.NewString(fortData.PartnerId, fortData.PartnerId != ""))
-	stop.SetSponsorId(null.IntFrom(int64(fortData.Sponsor)))
-	stop.SetEnabled(null.BoolFrom(fortData.Enabled))
-	stop.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible)))
-	stop.SetPowerUpPoints(null.IntFrom(int64(fortData.PowerUpProgressPoints)))
+	partnerId := fortData.GetPartnerId()
+	stop.SetPartnerId(null.NewString(partnerId, partnerId != ""))
+	stop.SetSponsorId(null.IntFrom(int64(fortData.GetSponsor())))
+	stop.SetEnabled(null.BoolFrom(fortData.GetEnabled()))
+	stop.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.GetIsArScanEligible())))
+	stop.SetPowerUpPoints(null.IntFrom(int64(fortData.GetPowerUpProgressPoints())))
 	powerUpLevel, powerUpEndTimestamp := calculatePowerUpPoints(fortData)
 	stop.SetPowerUpLevel(powerUpLevel)
 	stop.SetPowerUpEndTimestamp(powerUpEndTimestamp)
 
 	// lasModifiedMs is also modified when incident happens
-	lastModifiedTimestamp := fortData.LastModifiedMs / 1000
+	lastModifiedTimestamp := fortData.GetLastModifiedMs() / 1000
 	stop.SetLastModifiedTimestamp(null.IntFrom(lastModifiedTimestamp))
 
-	if len(fortData.ActiveFortModifier) > 0 {
-		lureId := int16(fortData.ActiveFortModifier[0])
+	activeFortModifier := fortData.GetActiveFortModifier()
+	if activeFortModifier.Len() > 0 {
+		lureId := int16(activeFortModifier.At(0).Enum())
 		if lureId >= 501 && lureId <= 510 {
 			lureEnd := lastModifiedTimestamp + LureTime
 			oldLureEnd := stop.LureExpireTimestamp.ValueOrZero()
@@ -54,8 +57,8 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		}
 	}
 
-	if fortData.ImageUrl != "" {
-		stop.SetUrl(null.StringFrom(fortData.ImageUrl))
+	if imageUrl := fortData.GetImageUrl(); imageUrl != "" {
+		stop.SetUrl(null.StringFrom(imageUrl))
 	}
 	stop.SetCellId(null.IntFrom(int64(cellId)))
 

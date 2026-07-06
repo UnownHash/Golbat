@@ -7,28 +7,30 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/util"
 )
 
-func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
-	station.SetId(stationProto.Id)
-	name := stationProto.Name
+func (station *Station) updateFromStationProto(stationProto pogoshim.StationProto, cellId uint64) *Station {
+	station.SetId(stationProto.GetId())
+	protoName := stationProto.GetName()
+	name := protoName
 	// NOTE: Some names have more than 255 runes, which won't fit in our
 	// varchar(255).
-	if truncateStr, truncated := util.TruncateUTF8(stationProto.Name, 255); truncated {
+	if truncateStr, truncated := util.TruncateUTF8(protoName, 255); truncated {
 		log.Debugf("truncating name for station id '%s'. Orig name: %s",
-			stationProto.Id,
-			stationProto.Name,
+			stationProto.GetId(),
+			protoName,
 		)
 		name = truncateStr
 	}
 	station.SetName(name)
-	station.SetLat(stationProto.Lat)
-	station.SetLon(stationProto.Lng)
-	station.SetStartTime(stationProto.StartTimeMs / 1000)
-	station.SetEndTime(stationProto.EndTimeMs / 1000)
-	station.SetCooldownComplete(stationProto.CooldownCompleteMs)
-	station.SetIsBattleAvailable(stationProto.IsBreadBattleAvailable)
+	station.SetLat(stationProto.GetLat())
+	station.SetLon(stationProto.GetLng())
+	station.SetStartTime(stationProto.GetStartTimeMs() / 1000)
+	station.SetEndTime(stationProto.GetEndTimeMs() / 1000)
+	station.SetCooldownComplete(stationProto.GetCooldownCompleteMs())
+	station.SetIsBattleAvailable(stationProto.GetIsBreadBattleAvailable())
 	station.SetCellId(int64(cellId))
 	return station
 }

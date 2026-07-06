@@ -512,7 +512,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		}
 
 		for _, fort := range mapCell.Fort {
-			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: fort, Timestamp: mapCell.AsOfTimeMs})
+			newForts = append(newForts, decoder.RawFortData{Cell: mapCell.S2CellId, Data: pogoshim.AsPokemonFortProto(fort.ProtoReflect()), Timestamp: mapCell.AsOfTimeMs})
 
 			// track fort by type for memory-based cleanup (only if tracker enabled)
 			if cf, ok := cellForts[mapCell.S2CellId]; ok {
@@ -535,7 +535,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
 		}
 		for _, station := range mapCell.Stations {
-			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
+			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: pogoshim.AsStationProto(station.ProtoReflect())})
 		}
 	}
 

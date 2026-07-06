@@ -1,6 +1,9 @@
 package util
 
-import "golbat/pogo"
+import (
+	"golbat/pogo"
+	"golbat/pogoshim"
+)
 
 var TeamIdToName = map[int8]string{
 	0: "harmony",
@@ -32,5 +35,16 @@ func ExtractBackgroundFromDisplay(display *pogo.PokemonDisplayProto) *int64 {
 		return nil
 	}
 	result := int64(display.LocationCard.LocationCard)
+	return &result
+}
+
+// ExtractBackgroundFromDisplayShim mirrors ExtractBackgroundFromDisplay for
+// callers that have already wrapped their PokemonDisplayProto via pogoshim
+// (hyperpb/protoreflect decode paths, e.g. gym GuardPokemonDisplay).
+func ExtractBackgroundFromDisplayShim(display pogoshim.PokemonDisplayProto) *int64 {
+	if !display.HasLocationCard() {
+		return nil
+	}
+	result := int64(display.GetLocationCard().GetLocationCard())
 	return &result
 }

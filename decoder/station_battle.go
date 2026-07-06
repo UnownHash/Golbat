@@ -15,7 +15,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
 type StationBattleData struct {
@@ -157,12 +157,12 @@ func hasLoadedStationBattles(stationId string) bool {
 	return ok && state.Loaded
 }
 
-func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattleDetailProto) {
+func syncStationBattlesFromProto(station *Station, battleDetail pogoshim.BreadBattleDetailProto) {
 	if station == nil {
 		return
 	}
 	now := time.Now().Unix()
-	if battleDetail == nil {
+	if battleDetail.IsZero() {
 		storeStationBattles(station.Id, nil)
 		return
 	}
@@ -171,19 +171,19 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 	}
 }
 
-func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
-	if stationId == "" || battleDetail == nil {
+func stationBattleFromProto(stationId string, battleDetail pogoshim.BreadBattleDetailProto, updated int64) *StationBattleData {
+	if stationId == "" || battleDetail.IsZero() {
 		return nil
 	}
 	battle := &StationBattleData{
 		BreadBattleSeed: battleDetail.GetBreadBattleSeed(),
 		StationId:       stationId,
 		BattleLevel:     int16(battleDetail.GetBattleLevel()),
-		BattleStart:     int64(battleDetail.GetBattleWindowStartMs() / 1000),
-		BattleEnd:       int64(battleDetail.GetBattleWindowEndMs() / 1000),
+		BattleStart:     battleDetail.GetBattleWindowStartMs() / 1000,
+		BattleEnd:       battleDetail.GetBattleWindowEndMs() / 1000,
 		Updated:         updated,
 	}
-	if pokemon := battleDetail.GetBattlePokemon(); pokemon != nil {
+	if pokemon := battleDetail.GetBattlePokemon(); battleDetail.HasBattlePokemon() {
 		battle.BattlePokemonId = null.IntFrom(int64(pokemon.GetPokemonId()))
 		battle.BattlePokemonMove1 = null.IntFrom(int64(pokemon.GetMove1()))
 		battle.BattlePokemonMove2 = null.IntFrom(int64(pokemon.GetMove2()))
@@ -194,7 +194,7 @@ func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDeta
 		battle.BattlePokemonBreadMode = null.IntFrom(int64(pokemon.GetPokemonDisplay().GetBreadModeEnum()))
 		battle.BattlePokemonStamina = null.IntFrom(int64(pokemon.GetStamina()))
 		battle.BattlePokemonCpMultiplier = null.FloatFrom(float64(pokemon.GetCpMultiplier()))
-		if rewardPokemon := battleDetail.GetRewardPokemon(); rewardPokemon != nil && pokemon.GetPokemonId() != rewardPokemon.GetPokemonId() {
+		if rewardPokemon := battleDetail.GetRewardPokemon(); battleDetail.HasRewardPokemon() && pokemon.GetPokemonId() != rewardPokemon.GetPokemonId() {
 			log.Infof("[DYNAMAX] Pokemon reward differs from battle: Battle %v - Reward %v", pokemon, rewardPokemon)
 		}
 	}

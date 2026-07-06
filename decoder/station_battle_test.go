@@ -11,6 +11,7 @@ import (
 	"golbat/decoder/writebehind"
 	"golbat/geo"
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/stats_collector"
 	"golbat/webhooks"
 )
@@ -425,15 +426,16 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 		},
 	}
 
-	syncStationBattlesFromProto(station, &pogo.BreadBattleDetailProto{
+	battleDetail := &pogo.BreadBattleDetailProto{
 		BreadBattleSeed:     7,
 		BattleWindowStartMs: (now - 60) * 1000,
 		BattleWindowEndMs:   (now + 3600) * 1000,
 		BattleLevel:         pogo.BreadBattleLevel_BREAD_BATTLE_LEVEL_2,
 		BattlePokemon:       &pogo.PokemonProto{PokemonId: 133},
-	})
+	}
+	syncStationBattlesFromProto(station, pogoshim.AsBreadBattleDetailProto(battleDetail.ProtoReflect()))
 
-	syncStationBattlesFromProto(station, nil)
+	syncStationBattlesFromProto(station, pogoshim.BreadBattleDetailProto{})
 
 	state, ok := stationBattleCache.Load(station.Id)
 	if !ok || !state.Loaded || len(state.Battles) != 0 {

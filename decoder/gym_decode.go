@@ -11,6 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/util"
 )
 
@@ -21,10 +22,10 @@ func escapeLike(s string) string {
 	return s
 }
 
-func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int) {
+func calculatePowerUpPoints(fortData pogoshim.PokemonFortProto) (null.Int, null.Int) {
 	now := time.Now().Unix()
-	powerUpLevelExpirationMs := int64(fortData.PowerUpLevelExpirationMs) / 1000
-	powerUpPoints := int64(fortData.PowerUpProgressPoints)
+	powerUpLevelExpirationMs := fortData.GetPowerUpLevelExpirationMs() / 1000
+	powerUpPoints := int64(fortData.GetPowerUpProgressPoints())
 	var powerUpLevel null.Int
 	powerUpEndTimestamp := null.NewInt(0, false)
 	if powerUpPoints < 50 {
@@ -45,7 +46,7 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 	return powerUpLevel, powerUpEndTimestamp
 }
 
-func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64, timestampMs int64) *Gym {
+func (gym *Gym) updateGymFromFort(fortData pogoshim.PokemonFortProto, cellId uint64, timestampMs int64) *Gym {
 	type pokemonDisplay struct {
 		Form                  int    `json:"form,omitempty"`
 		Costume               int    `json:"costume,omitempty"`
@@ -57,61 +58,62 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		Badge                 int    `json:"badge,omitempty"`
 		Background            *int64 `json:"background,omitempty"`
 	}
-	gym.SetId(fortData.FortId)
-	gym.SetLat(fortData.Latitude)
-	gym.SetLon(fortData.Longitude)
-	gym.SetEnabled(null.IntFrom(util.BoolToInt[int64](fortData.Enabled)))
-	gym.SetGuardingPokemonId(null.IntFrom(int64(fortData.GuardPokemonId)))
-	if fortData.GuardPokemonDisplay == nil {
+	gym.SetId(fortData.GetFortId())
+	gym.SetLat(fortData.GetLatitude())
+	gym.SetLon(fortData.GetLongitude())
+	gym.SetEnabled(null.IntFrom(util.BoolToInt[int64](fortData.GetEnabled())))
+	gym.SetGuardingPokemonId(null.IntFrom(int64(fortData.GetGuardPokemonId())))
+	if !fortData.HasGuardPokemonDisplay() {
 		gym.SetGuardingPokemonDisplay(null.NewString("", false))
 	} else {
+		guardDisplay := fortData.GetGuardPokemonDisplay()
 		display, _ := json.Marshal(pokemonDisplay{
-			Form:                  int(fortData.GuardPokemonDisplay.Form),
-			Costume:               int(fortData.GuardPokemonDisplay.Costume),
-			Gender:                int(fortData.GuardPokemonDisplay.Gender),
-			Shiny:                 fortData.GuardPokemonDisplay.Shiny,
-			TempEvolution:         int(fortData.GuardPokemonDisplay.CurrentTempEvolution),
-			TempEvolutionFinishMs: fortData.GuardPokemonDisplay.TemporaryEvolutionFinishMs,
-			Alignment:             int(fortData.GuardPokemonDisplay.Alignment),
-			Badge:                 int(fortData.GuardPokemonDisplay.PokemonBadge),
-			Background:            util.ExtractBackgroundFromDisplay(fortData.GuardPokemonDisplay),
+			Form:                  int(guardDisplay.GetForm()),
+			Costume:               int(guardDisplay.GetCostume()),
+			Gender:                int(guardDisplay.GetGender()),
+			Shiny:                 guardDisplay.GetShiny(),
+			TempEvolution:         int(guardDisplay.GetCurrentTempEvolution()),
+			TempEvolutionFinishMs: guardDisplay.GetTemporaryEvolutionFinishMs(),
+			Alignment:             int(guardDisplay.GetAlignment()),
+			Badge:                 int(guardDisplay.GetPokemonBadge()),
+			Background:            util.ExtractBackgroundFromDisplayShim(guardDisplay),
 		})
 		gym.SetGuardingPokemonDisplay(null.StringFrom(string(display)))
 	}
-	gym.SetTeamId(null.IntFrom(int64(fortData.Team)))
-	if fortData.GymDisplay != nil {
-		gym.SetAvailableSlots(null.IntFrom(int64(fortData.GymDisplay.SlotsAvailable)))
+	gym.SetTeamId(null.IntFrom(int64(fortData.GetTeam())))
+	if fortData.HasGymDisplay() {
+		gym.SetAvailableSlots(null.IntFrom(int64(fortData.GetGymDisplay().GetSlotsAvailable())))
 	} else {
 		gym.SetAvailableSlots(null.IntFrom(6)) // this may be an incorrect assumption
 	}
-	gym.SetLastModifiedTimestamp(null.IntFrom(fortData.LastModifiedMs / 1000))
-	gym.SetExRaidEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsExRaidEligible)))
+	gym.SetLastModifiedTimestamp(null.IntFrom(fortData.GetLastModifiedMs() / 1000))
+	gym.SetExRaidEligible(null.IntFrom(util.BoolToInt[int64](fortData.GetIsExRaidEligible())))
 
-	if fortData.ImageUrl != "" {
-		gym.SetUrl(null.StringFrom(fortData.ImageUrl))
+	if fortData.GetImageUrl() != "" {
+		gym.SetUrl(null.StringFrom(fortData.GetImageUrl()))
 	}
-	gym.SetInBattle(null.IntFrom(util.BoolToInt[int64](fortData.IsInBattle)))
-	gym.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.IsArScanEligible)))
-	gym.SetPowerUpPoints(null.IntFrom(int64(fortData.PowerUpProgressPoints)))
+	gym.SetInBattle(null.IntFrom(util.BoolToInt[int64](fortData.GetIsInBattle())))
+	gym.SetArScanEligible(null.IntFrom(util.BoolToInt[int64](fortData.GetIsArScanEligible())))
+	gym.SetPowerUpPoints(null.IntFrom(int64(fortData.GetPowerUpProgressPoints())))
 
 	powerUpLevel, powerUpEndTimestamp := calculatePowerUpPoints(fortData)
 	gym.SetPowerUpLevel(powerUpLevel)
 	gym.SetPowerUpEndTimestamp(powerUpEndTimestamp)
 
-	if fortData.PartnerId == "" {
+	if fortData.GetPartnerId() == "" {
 		gym.SetPartnerId(null.NewString("", false))
 	} else {
-		gym.SetPartnerId(null.StringFrom(fortData.PartnerId))
+		gym.SetPartnerId(null.StringFrom(fortData.GetPartnerId()))
 	}
 
-	if fortData.ImageUrl != "" {
-		gym.SetUrl(null.StringFrom(fortData.ImageUrl))
+	if fortData.GetImageUrl() != "" {
+		gym.SetUrl(null.StringFrom(fortData.GetImageUrl()))
 	}
-	if fortData.Team == 0 { // check!!
+	if fortData.GetTeam() == 0 { // check!!
 		gym.SetTotalCp(null.IntFrom(0))
 	} else {
-		if fortData.GymDisplay != nil {
-			totalCp := int64(fortData.GymDisplay.TotalGymCp)
+		if fortData.HasGymDisplay() {
+			totalCp := int64(fortData.GetGymDisplay().GetTotalGymCp())
 			if gym.TotalCp.Int64-totalCp > 100 || totalCp-gym.TotalCp.Int64 > 100 {
 				gym.SetTotalCp(null.IntFrom(totalCp))
 			}
@@ -120,11 +122,12 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		}
 	}
 
-	if fortData.RaidInfo != nil {
-		gym.SetRaidEndTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidEndMs) / 1000))
-		gym.SetRaidSpawnTimestamp(null.IntFrom(int64(fortData.RaidInfo.RaidSpawnMs) / 1000))
-		gym.SetRaidSeed(null.IntFrom(fortData.RaidInfo.RaidSeed))
-		raidBattleTimestamp := int64(fortData.RaidInfo.RaidBattleMs) / 1000
+	if fortData.HasRaidInfo() {
+		raidInfo := fortData.GetRaidInfo()
+		gym.SetRaidEndTimestamp(null.IntFrom(raidInfo.GetRaidEndMs() / 1000))
+		gym.SetRaidSpawnTimestamp(null.IntFrom(raidInfo.GetRaidSpawnMs() / 1000))
+		gym.SetRaidSeed(null.IntFrom(raidInfo.GetRaidSeed()))
+		raidBattleTimestamp := raidInfo.GetRaidBattleMs() / 1000
 
 		if gym.RaidBattleTimestamp.ValueOrZero() != raidBattleTimestamp {
 			// We are reporting a new raid, clear rsvp data
@@ -132,17 +135,19 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		}
 		gym.SetRaidBattleTimestamp(null.IntFrom(raidBattleTimestamp))
 
-		gym.SetRaidLevel(null.IntFrom(int64(fortData.RaidInfo.RaidLevel)))
-		if fortData.RaidInfo.RaidPokemon != nil {
-			gym.SetRaidPokemonId(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonId)))
-			gym.SetRaidPokemonMove1(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move1)))
-			gym.SetRaidPokemonMove2(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Move2)))
-			gym.SetRaidPokemonForm(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Form)))
-			gym.SetRaidPokemonAlignment(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Alignment)))
-			gym.SetRaidPokemonCp(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.Cp)))
-			gym.SetRaidPokemonGender(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Gender)))
-			gym.SetRaidPokemonCostume(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.Costume)))
-			gym.SetRaidPokemonEvolution(null.IntFrom(int64(fortData.RaidInfo.RaidPokemon.PokemonDisplay.CurrentTempEvolution)))
+		gym.SetRaidLevel(null.IntFrom(int64(raidInfo.GetRaidLevel())))
+		if raidInfo.HasRaidPokemon() {
+			raidPokemon := raidInfo.GetRaidPokemon()
+			raidPokemonDisplay := raidPokemon.GetPokemonDisplay()
+			gym.SetRaidPokemonId(null.IntFrom(int64(raidPokemon.GetPokemonId())))
+			gym.SetRaidPokemonMove1(null.IntFrom(int64(raidPokemon.GetMove1())))
+			gym.SetRaidPokemonMove2(null.IntFrom(int64(raidPokemon.GetMove2())))
+			gym.SetRaidPokemonForm(null.IntFrom(int64(raidPokemonDisplay.GetForm())))
+			gym.SetRaidPokemonAlignment(null.IntFrom(int64(raidPokemonDisplay.GetAlignment())))
+			gym.SetRaidPokemonCp(null.IntFrom(int64(raidPokemon.GetCp())))
+			gym.SetRaidPokemonGender(null.IntFrom(int64(raidPokemonDisplay.GetGender())))
+			gym.SetRaidPokemonCostume(null.IntFrom(int64(raidPokemonDisplay.GetCostume())))
+			gym.SetRaidPokemonEvolution(null.IntFrom(int64(raidPokemonDisplay.GetCurrentTempEvolution())))
 		} else {
 			gym.SetRaidPokemonId(null.IntFrom(0))
 			gym.SetRaidPokemonMove1(null.IntFrom(0))
@@ -259,7 +264,7 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		gym.SetDefenders(null.StringFrom(string(bDefenders)))
 
 		if fortProto := status.PokemonFortProto; fortProto != nil {
-			gym.updateGymFromFort(fortProto, 0, 0)
+			gym.updateGymFromFort(pogoshim.AsPokemonFortProto(fortProto.ProtoReflect()), 0, 0)
 		}
 	}
 

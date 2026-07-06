@@ -5,22 +5,30 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pogo.PokestopIncidentDisplayProto) {
-	incident.SetId(pokestopDisplay.IncidentId)
-	incident.SetStartTime(int64(pokestopDisplay.IncidentStartMs / 1000))
-	incident.SetExpirationTime(int64(pokestopDisplay.IncidentExpirationMs / 1000))
-	incident.SetDisplayType(int16(pokestopDisplay.IncidentDisplayType))
+// updateFromPokestopIncidentDisplay reads the character_display oneof member
+// via pokestopDisplay.GetCharacterDisplay(). This is emitted by pogoshimgen
+// like any other message-kind field getter (Has+Get+IsValid) because the
+// generator iterates MessageDescriptor.Fields() without special-casing oneof
+// membership - protoreflect.Message.Get on a oneof field that is unset, or
+// set to a different member, returns an invalid/zero value exactly as it
+// does for a plain optional message field. Verified for both std and hyperpb
+// wraps in TestUpdateFromPokestopIncidentDisplayOneofShim (fort_shim_test.go).
+func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay pogoshim.PokestopIncidentDisplayProto) {
+	incident.SetId(pokestopDisplay.GetIncidentId())
+	incident.SetStartTime(pokestopDisplay.GetIncidentStartMs() / 1000)
+	incident.SetExpirationTime(pokestopDisplay.GetIncidentExpirationMs() / 1000)
+	incident.SetDisplayType(int16(pokestopDisplay.GetIncidentDisplayType()))
 	if (incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_MALE) || incident.Character == int16(pogo.EnumWrapper_CHARACTER_DECOY_GRUNT_FEMALE)) && incident.Confirmed {
 		log.Debugf("Incident has already been confirmed as a decoy: %s", incident.Id)
 		return
 	}
-	characterDisplay := pokestopDisplay.GetCharacterDisplay()
-	if characterDisplay != nil {
-		// team := pokestopDisplay.Open
-		incident.SetStyle(int16(characterDisplay.Style))
-		incident.SetCharacter(int16(characterDisplay.Character))
+	if pokestopDisplay.HasCharacterDisplay() {
+		characterDisplay := pokestopDisplay.GetCharacterDisplay()
+		incident.SetStyle(int16(characterDisplay.GetStyle()))
+		incident.SetCharacter(int16(characterDisplay.GetCharacter()))
 	} else {
 		incident.SetStyle(0)
 		incident.SetCharacter(0)
