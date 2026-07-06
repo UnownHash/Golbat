@@ -498,6 +498,14 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			if cells.Len() == 0 {
 				return "Skipping GetMapObjectsOutProto: No map cells found"
 			}
+			// Hoisted into a plain int64 now, while cells is still backed by a
+			// live arena. cells (and everything under it) is arena-allocated by
+			// the hyperpb engine and is only valid for the lifetime of this
+			// process closure; decodeHyperpb frees/pools the arena once this
+			// closure returns. ProactiveIVSwitch runs on goroutines that can
+			// outlive the closure, so it must never retain a reference into
+			// cells directly (see capture below).
+			firstCellAsOfTimeMs := cells.At(0).GetAsOfTimeMs()
 			for cell := range cells.All() {
 				cellForts[cell.GetS2CellId()] = &decoder.FortTrackerGMOContents{
 					Pokestops: make([]string, 0),
@@ -547,16 +555,22 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			}
 			var weatherUpdates []decoder.WeatherUpdate
 			if scanParameters.ProcessWeather {
-				weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather, cells.At(0).GetAsOfTimeMs(), protoData.Account)
+				weatherUpdates = decoder.UpdateClientWeatherBatch(ctx, dbDetails, newClientWeather, firstCellAsOfTimeMs, protoData.Account)
 			}
 			if scanParameters.ProcessPokemon {
 				decoder.UpdatePokemonBatch(ctx, dbDetails, scanParameters, newWildPokemon, newNearbyPokemon, newMapPokemon, newClientWeather, protoData.Account)
 				if scanParameters.ProcessWeather && scanParameters.ProactiveIVSwitching {
+					// Only plain values (weatherUpdate, firstCellAsOfTimeMs/1000) are
+					// captured here — never cells or any arena-backed pogoshim type.
+					// These goroutines are throttled by ProactiveIVSwitchSem, not by
+					// this closure's lifetime, and can still be running long after
+					// decodeHyperpb has returned the arena to its pool.
+					asOfTimeSec := firstCellAsOfTimeMs / 1000
 					for _, weatherUpdate := range weatherUpdates {
 						go func(weatherUpdate decoder.WeatherUpdate) {
 							decoder.ProactiveIVSwitchSem <- true
 							defer func() { <-decoder.ProactiveIVSwitchSem }()
-							decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, cells.At(0).GetAsOfTimeMs()/1000)
+							decoder.ProactiveIVSwitch(ctx, dbDetails, weatherUpdate, scanParameters.ProactiveIVSwitchingToDB, asOfTimeSec)
 						}(weatherUpdate)
 					}
 				}
