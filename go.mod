@@ -37,6 +37,7 @@ require (
 )
 
 require (
+	buf.build/go/hyperpb v0.1.3 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bytedance/gopkg v0.1.4 // indirect
@@ -77,6 +78,7 @@ require (
 	github.com/ringsaturn/tzf-dist v0.0.2026-b-fix1 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/tidwall/geoindex v1.7.0 // indirect
+	github.com/timandy/routine v1.1.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
