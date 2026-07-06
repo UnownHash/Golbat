@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"golbat/db"
@@ -41,6 +42,41 @@ type Spawnpoint struct {
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+
+	// despawnSecFast mirrors DespawnSec for the lock-free read path
+	// (setExpireTimestampFromSpawnpoint runs once per wild/nearby pokemon
+	// and needs only this one value — taking the entity mutex for it queued
+	// readers behind writers holding the lock across DB loads).
+	// Encoding: 0 = not yet synced (fall back to the locked path),
+	// -1 = DespawnSec known-null, 1..3600 = DespawnSec+1.
+	// Lives on Spawnpoint, not SpawnpointData: atomics must not be copied
+	// into write-behind snapshots.
+	despawnSecFast atomic.Int32 `db:"-" json:"-"`
+}
+
+// syncDespawnFast publishes DespawnSec to the lock-free mirror. Call after
+// any mutation or DB load of DespawnSec (caller holds the entity lock, or
+// has exclusive access during load).
+func (s *Spawnpoint) syncDespawnFast() {
+	if s.DespawnSec.Valid {
+		s.despawnSecFast.Store(int32(s.DespawnSec.Int64) + 1)
+	} else {
+		s.despawnSecFast.Store(-1)
+	}
+}
+
+// DespawnSecFast returns (despawnSec, known, synced) without any locking.
+// synced=false means the mirror has not been populated yet — callers must
+// fall back to the locked read path.
+func (s *Spawnpoint) DespawnSecFast() (int, bool, bool) {
+	switch v := s.despawnSecFast.Load(); {
+	case v == 0:
+		return 0, false, false
+	case v < 0:
+		return 0, false, true
+	default:
+		return int(v - 1), true, true
+	}
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -105,6 +141,11 @@ func (s *Spawnpoint) SetLon(v float64) {
 
 // SetDespawnSec sets despawn_sec with 2-second tolerance logic
 func (s *Spawnpoint) SetDespawnSec(v null.Int) {
+	// Republish the lock-free mirror on every exit path (this function has
+	// several early returns); no-change calls harmlessly re-store the same
+	// value and heal a not-yet-synced mirror.
+	defer s.syncDespawnFast()
+
 	// Handle validity changes
 	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
 		if dbDebugEnabled {
@@ -141,7 +182,6 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 		s.dirty = true
 	}
 }
-
 func (s *Spawnpoint) SetUpdated(v int64) {
 	if s.Updated != v {
 		if dbDebugEnabled {
@@ -201,6 +241,7 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 		return nil, nil, err
 	}
 	dbSpawnpoint.ClearDirty()
+	dbSpawnpoint.syncDespawnFast()
 
 	// Atomically cache the loaded Spawnpoint - if another goroutine raced us,
 	// we'll get their Spawnpoint and use that instead (ensuring same mutex)
@@ -236,6 +277,7 @@ func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpoin
 			// We loaded from DB
 			spawnpoint.newRecord = false
 			spawnpoint.ClearDirty()
+			spawnpoint.syncDespawnFast()
 		}
 	}
 

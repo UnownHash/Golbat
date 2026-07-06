@@ -319,26 +319,49 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 
 	pokemon.ExpireTimestampVerified = false
+
+	// Lock-free fast path: this runs once per wild/nearby pokemon and needs
+	// only the spawnpoint's despawn second. The atomic mirror avoids the
+	// entity mutex entirely — readers no longer queue behind writers that
+	// hold it across DB loads. Mirror not yet synced (0) falls through to
+	// the locked path below.
+	if item := spawnpointCache.Get(spawnId); item != nil {
+		if despawnSecond, known, synced := item.Value().DespawnSecFast(); synced {
+			if known {
+				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+			} else {
+				pokemon.setUnknownTimestamp(timestampMs / 1000)
+			}
+			return
+		}
+	}
+
 	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "setExpireTimestampFromSpawnpoint")
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
 
-		date := time.Unix(timestampMs/1000, 0)
-		secondOfHour := date.Second() + date.Minute()*60
-
-		despawnOffset := despawnSecond - secondOfHour
-		if despawnOffset < 0 {
-			despawnOffset += 3600
-		}
-		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
-		pokemon.SetExpireTimestampVerified(true)
+		pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
 	} else {
 		if unlock != nil {
 			unlock()
 		}
 		pokemon.setUnknownTimestamp(timestampMs / 1000)
 	}
+}
+
+// applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
+// verified expire timestamp for this pokemon.
+func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
+	date := time.Unix(timestampMs/1000, 0)
+	secondOfHour := date.Second() + date.Minute()*60
+
+	despawnOffset := despawnSecond - secondOfHour
+	if despawnOffset < 0 {
+		despawnOffset += 3600
+	}
+	pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+	pokemon.SetExpireTimestampVerified(true)
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
