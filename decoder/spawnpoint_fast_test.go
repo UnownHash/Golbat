@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"testing"
+	"time"
 
 	"github.com/guregu/null/v6"
 )
@@ -66,5 +67,61 @@ func TestApplyVerifiedDespawn(t *testing.T) {
 		if got != c.wantOffset {
 			t.Fatalf("despawn %d: offset=%d want %d", c.despawnSec, got, c.wantOffset)
 		}
+	}
+}
+
+// The writer fast path must skip the lock exactly when nothing would
+// change: known spawnpoint, fresh LastSeen, and (with a TTH) a despawn
+// second inside SetDespawnSec's tolerance. despawnSecUnchanged is the
+// shared predicate.
+func TestDespawnSecUnchanged(t *testing.T) {
+	cases := []struct {
+		old, new int64
+		want     bool
+	}{
+		{1800, 1800, true},
+		{1800, 1802, true},
+		{1800, 1803, false},
+		{0, 3599, true},  // hour wraparound
+		{3599, 1, true},  // hour wraparound
+		{3, 3599, false}, // outside wraparound window
+	}
+	for _, c := range cases {
+		if got := despawnSecUnchanged(c.old, c.new); got != c.want {
+			t.Errorf("despawnSecUnchanged(%d,%d)=%v want %v", c.old, c.new, got, c.want)
+		}
+	}
+}
+
+// A persisted, fresh spawnpoint must be provably skippable from the
+// mirrors alone; an unpersisted or stale one must not be.
+func TestWriterFastPathPreconditions(t *testing.T) {
+	now := time.Now().Unix()
+
+	fresh := &Spawnpoint{SpawnpointData: SpawnpointData{Id: 1, DespawnSec: null.IntFrom(1200), LastSeen: now}}
+	fresh.syncFastFields()
+	if _, known, synced := fresh.DespawnSecFast(); !synced || !known {
+		t.Fatal("persisted spawnpoint must expose synced+known despawn")
+	}
+	if last := fresh.LastSeenFast(); last != now {
+		t.Fatalf("LastSeenFast=%d want %d", last, now)
+	}
+
+	// New record that resolved to no DB row: despawn authoritative-null,
+	// but lastSeenFast stays 0 so the writer fast path stays disabled
+	// until first persist.
+	unpersisted := &Spawnpoint{SpawnpointData: SpawnpointData{Id: 2}, newRecord: true}
+	unpersisted.syncDespawnFast()
+	if _, known, synced := unpersisted.DespawnSecFast(); !synced || known {
+		t.Fatal("no-row spawnpoint must expose synced+null despawn")
+	}
+	if unpersisted.LastSeenFast() != 0 {
+		t.Fatal("unpersisted spawnpoint must report LastSeenFast=0")
+	}
+
+	// SetLastSeen publishes the mirror on every path.
+	unpersisted.SetLastSeen(now)
+	if unpersisted.LastSeenFast() != now {
+		t.Fatal("SetLastSeen must publish lastSeenFast")
 	}
 }
