@@ -63,3 +63,13 @@ fails, the migration (Phase 1) does not happen.
 New method = capture dir appears automatically; add a reader in
 readers/readers.go mirroring the fields Golbat's decoder reads and register
 it in readers.Registry.
+
+## Engines beyond the opaque/lazy gate
+
+The volume runner's `-engine` flag selects alternative decode engines
+(`std`, `vt`, `vtpool`, `hyperpb`, `hypershim`); `-ingest`, `-discardunknown`
+and `GOGC` explore engine-independent knobs. Regenerate with
+`scripts/genvt.sh` (vtprotobuf, pruned closure) and `scripts/genshim.sh`
+(typed hyperpb accessors). Cross-engine correctness is enforced by
+`TestEnginesAgree*` — every engine must produce identical Sink deltas on
+every payload. Findings and the Golbat recommendation live in RESULTS.md.
