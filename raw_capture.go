@@ -155,8 +155,24 @@ func (w *rawCaptureWorker) write(item captureItem) {
 	if c[bucket] >= w.perBucketLimit {
 		return
 	}
-	rel := captureFilename(item.method, time.Now().UnixMilli(), len(item.data))
-	path := filepath.Join(w.dir, rel)
+	// The worker is single-threaded, so filenames only collide when two
+	// same-size payloads land in the same millisecond. Bump tsMs until the
+	// path is free rather than silently overwriting (which would double-count
+	// quota for one file on disk).
+	tsMs := time.Now().UnixMilli()
+	var path string
+	const maxCollisionAttempts = 1000
+	for attempt := 0; ; attempt++ {
+		path = filepath.Join(w.dir, captureFilename(item.method, tsMs, len(item.data)))
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			break
+		}
+		if attempt >= maxCollisionAttempts {
+			log.Warnf("[RAW_CAPTURE] giving up on filename collision after %d attempts: %s", maxCollisionAttempts, path)
+			return
+		}
+		tsMs++
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		if n := w.writeFails.Add(1); n%1000 == 1 {
 			log.Warnf("[RAW_CAPTURE] mkdir: %v (%d write failures so far)", err, n)

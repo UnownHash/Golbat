@@ -83,6 +83,43 @@ func TestCaptureWorkerWritesAndEnforcesQuota(t *testing.T) {
 	}
 }
 
+// TestCaptureSameMsFilenameCollisionUniquified guards against the write()
+// path silently overwriting a file when two same-size payloads are written
+// in the same millisecond (identical <ts>_<size>.bin name): both should
+// land on disk as distinct files instead of one clobbering the other while
+// quota is charged twice.
+func TestCaptureSameMsFilenameCollisionUniquified(t *testing.T) {
+	dir := t.TempDir()
+	if err := startRawCapture(dir, 2); err != nil { // quota of 2, same bucket
+		t.Fatal(err)
+	}
+	defer stopRawCaptureForTest()
+
+	// Same size (same bucket, likely-colliding filename), different content.
+	CaptureRawPayload("COLLISION_TEST", []byte("aaaa"))
+	CaptureRawPayload("COLLISION_TEST", []byte("bbbb"))
+
+	deadline := time.Now().Add(2 * time.Second)
+	var files []os.DirEntry
+	for time.Now().Before(deadline) {
+		files, _ = os.ReadDir(filepath.Join(dir, "COLLISION_TEST"))
+		if len(files) >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2 distinct files (no collision overwrite)", len(files))
+	}
+	names := map[string]bool{}
+	for _, f := range files {
+		names[f.Name()] = true
+	}
+	if len(names) != 2 {
+		t.Fatalf("files were not uniquely named: %v", names)
+	}
+}
+
 func TestCaptureDisabledIsNoop(t *testing.T) {
 	rawCaptureWorkerPtr.Store(nil)
 	CaptureRawPayload("ENCOUNTER", []byte("x")) // must not panic
