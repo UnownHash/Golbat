@@ -17,6 +17,7 @@ import (
 	"golbat/decoder"
 	"golbat/external"
 	pb "golbat/grpc"
+	"golbat/pogoshim"
 	"golbat/stats_collector"
 	"golbat/webhooks"
 
@@ -76,6 +77,14 @@ func main() {
 	// Compile per-method proto decode engines (hyperpb arenas + PGO warmup)
 	// now that config is loaded. No-op stub on unsupported platforms.
 	initProtoEngines()
+
+	// decoder cannot import package main (where engine selection lives), so
+	// the GMO path's disk-encounter cache-replay decode capability
+	// (gmo_decode.go) is wired in via a function value, the same pattern as
+	// SetWebhooksSender/SetStatsCollector below.
+	decoder.SetDiskEncounterDecoder(func(payload []byte, process func(pogoshim.DiskEncounterOutProto) string) (string, error) {
+		return decodeWithArena(engMethodDiskEncounter, payload, pogoshim.AsDiskEncounterOutProto, process)
+	})
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:
 	// https://docs.sentry.io/platforms/go

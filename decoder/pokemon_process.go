@@ -7,18 +7,19 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 
 	log "github.com/sirupsen/logrus"
 
 	"golbat/ottercache"
 )
 
-func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string, timestamp int64) string {
-	if encounter.Pokemon == nil {
+func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter pogoshim.EncounterOutProto, username string, timestamp int64) string {
+	if !encounter.HasPokemon() {
 		return "No encounter"
 	}
 
-	encounterId := encounter.Pokemon.EncounterId
+	encounterId := encounter.GetPokemon().GetEncounterId()
 
 	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonFromEncounter")
 	if err != nil {
@@ -33,15 +34,21 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	// even if we have the pokemon record already.
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
-	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
+	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.GetPokemon().GetEncounterId(), encounterId, pokemon.PokemonId, encounter.GetPokemon().GetPokemon().GetCp())
 }
 
-func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.DiskEncounterOutProto, username string) string {
-	if encounter.Pokemon == nil {
+// UpdatePokemonRecordWithDiskEncounterProto processes a decoded disk
+// encounter. payload carries the same raw DISK_ENCOUNTER bytes that
+// decoded to encounter: on the no-previous-GMO fallback path, the raw
+// bytes (not the shim, which is only valid for the lifetime of the arena
+// backing decodeWithArena's process closure) are cached for replay once
+// the corresponding map pokemon shows up in a later GMO.
+func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDetails, encounter pogoshim.DiskEncounterOutProto, payload []byte, username string) string {
+	if !encounter.HasPokemon() {
 		return "No encounter"
 	}
 
-	encounterId := uint64(encounter.Pokemon.PokemonDisplay.DisplayId)
+	encounterId := uint64(encounter.GetPokemon().GetPokemonDisplay().GetDisplayId())
 
 	pokemon, unlock, err := getPokemonRecordForUpdate(ctx, db, encounterId, "UpdatePokemonFromDiskEncounter")
 	if err != nil {
@@ -54,7 +61,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		if unlock != nil {
 			unlock()
 		}
-		diskEncounterCache.Set(encounterId, encounter, ottercache.DefaultTTL)
+		diskEncounterCache.Set(encounterId, payload, ottercache.DefaultTTL)
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	defer unlock()
@@ -65,7 +72,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	// even if we have the pokemon record already.
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
-	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.GetPokemon().GetCp())
 }
 
 func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string, timestampMs int64) string {

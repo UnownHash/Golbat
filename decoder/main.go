@@ -16,6 +16,7 @@ import (
 	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/stats_collector"
 	"golbat/webhooks"
 
@@ -69,7 +70,19 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
-var diskEncounterCache *ottercache.OtterCache[uint64, *pogo.DiskEncounterOutProto]
+var diskEncounterCache *ottercache.OtterCache[uint64, []byte]
+
+// diskEncounterDecodeFunc decodes a raw DISK_ENCOUNTER payload (cached as
+// bytes, not a parsed shim: a hyperpb-backed shim's arena does not outlive
+// the decode call that produced it) via the configured proto engine
+// (hyperpb or std) and returns the result of process. decoder cannot import
+// package main, where the engine selection (decodeWithArena) lives, so this
+// is dependency-injected from main the same way SetWebhooksSender/
+// SetStatsCollector are — see SetDiskEncounterDecoder below.
+type diskEncounterDecodeFunc func(payload []byte, process func(pogoshim.DiskEncounterOutProto) string) (string, error)
+
+var diskEncounterDecoder diskEncounterDecodeFunc
+
 var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
@@ -212,7 +225,7 @@ func initDataCache() {
 		TouchOnHit: true,
 	})
 
-	diskEncounterCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *pogo.DiskEncounterOutProto]{
+	diskEncounterCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, []byte]{
 		Name:       "disk_encounter",
 		DefaultTTL: 10 * time.Minute,
 		TouchOnHit: false,
@@ -330,6 +343,13 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 
 func SetStatsCollector(collector stats_collector.StatsCollector) {
 	statsCollector = collector
+}
+
+// SetDiskEncounterDecoder wires the proto-engine decode capability needed by
+// the GMO path's disk-encounter cache replay (gmo_decode.go). Must be called
+// from main() during startup, alongside SetWebhooksSender/SetStatsCollector.
+func SetDiskEncounterDecoder(f diskEncounterDecodeFunc) {
+	diskEncounterDecoder = f
 }
 
 // InitWriteBehindQueue initializes the typed write-behind queues

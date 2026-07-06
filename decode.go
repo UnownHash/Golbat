@@ -8,6 +8,7 @@ import (
 
 	"golbat/decoder"
 	"golbat/pogo"
+	"golbat/pogoshim"
 
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
@@ -376,41 +377,49 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 }
 
 func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {
-	decodedEncounterInfo := &pogo.EncounterOutProto{}
-	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+	maybeShadow(engMethodEncounter, sDec)
+	res, err := decodeWithArena(engMethodEncounter, sDec,
+		pogoshim.AsEncounterOutProto,
+		func(enc pogoshim.EncounterOutProto) string {
+			if enc.GetStatus() != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
+				statsCollector.IncDecodeEncounter("error", "non_success")
+				res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, enc.GetStatus(),
+					pogo.EncounterOutProto_Status_name[int32(enc.GetStatus())])
+				return res
+			}
+
+			statsCollector.IncDecodeEncounter("ok", "")
+			return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, enc, username, timestampMs)
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if decodedEncounterInfo.Status != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
-		statsCollector.IncDecodeEncounter("error", "non_success")
-		res := fmt.Sprintf(`EncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Status,
-			pogo.EncounterOutProto_Status_name[int32(decodedEncounterInfo.Status)])
-		return res
-	}
-
-	statsCollector.IncDecodeEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
+	return res
 }
 
 func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
-	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
-	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+	maybeShadow(engMethodDiskEncounter, sDec)
+	res, err := decodeWithArena(engMethodDiskEncounter, sDec,
+		pogoshim.AsDiskEncounterOutProto,
+		func(enc pogoshim.DiskEncounterOutProto) string {
+			if enc.GetResult() != pogo.DiskEncounterOutProto_SUCCESS {
+				statsCollector.IncDecodeDiskEncounter("error", "non_success")
+				res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, enc.GetResult(),
+					pogo.DiskEncounterOutProto_Result_name[int32(enc.GetResult())])
+				return res
+			}
+
+			statsCollector.IncDecodeDiskEncounter("ok", "")
+			return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, enc, sDec, username)
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if decodedEncounterInfo.Result != pogo.DiskEncounterOutProto_SUCCESS {
-		statsCollector.IncDecodeDiskEncounter("error", "non_success")
-		res := fmt.Sprintf(`DiskEncounterOutProto: Ignored non-success value %d:%s`, decodedEncounterInfo.Result,
-			pogo.DiskEncounterOutProto_Result_name[int32(decodedEncounterInfo.Result)])
-		return res
-	}
-
-	statsCollector.IncDecodeDiskEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return res
 }
 
 func decodeStartIncident(ctx context.Context, sDec []byte) string {

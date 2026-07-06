@@ -8,6 +8,7 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawFortData) {
@@ -186,9 +187,17 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		}
 
 		pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
-		if diskEncounter, ok := diskEncounterCache.Get(encounterId); ok {
+		if payload, ok := diskEncounterCache.Get(encounterId); ok {
 			diskEncounterCache.Delete(encounterId)
-			pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
+			// The shim decoded from payload (hyperpb or std, whichever the
+			// engine picks) must not outlive this process closure, so the
+			// full update happens inside it.
+			if _, err := diskEncounterDecoder(payload, func(diskEncounter pogoshim.DiskEncounterOutProto) string {
+				pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
+				return ""
+			}); err != nil {
+				log.Errorf("Failed to decode stored disk encounter for %d: %s", encounterId, err)
+			}
 			//log.Infof("Processed stored disk encounter")
 		}
 		savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)

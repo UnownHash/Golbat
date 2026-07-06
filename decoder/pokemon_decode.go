@@ -13,6 +13,7 @@ import (
 	"golbat/db"
 	"golbat/grpc"
 	"golbat/pogo"
+	"golbat/pogoshim"
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
@@ -102,21 +103,21 @@ func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
 	return 0 // the encounter cache interprets 0 as its default TTL
 }
 
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
-	if wildPokemon.EncounterId != uint64(pokemon.Id) {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon pogoshim.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
+	if wildPokemon.GetEncounterId() != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
-	pokemon.SetLat(wildPokemon.Latitude)
-	pokemon.SetLon(wildPokemon.Longitude)
+	pokemon.SetLat(wildPokemon.GetLatitude())
+	pokemon.SetLon(wildPokemon.GetLongitude())
 
-	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
+	spawnId, err := strconv.ParseInt(wildPokemon.GetSpawnPointId(), 16, 64)
 	if err != nil {
 		panic(err)
 	}
 	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
-	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	pokemon.setPokemonDisplay(int16(wildPokemon.GetPokemon().GetPokemonId()), wildPokemon.GetPokemon().GetPokemonDisplay())
 }
 
 // wildSignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -171,7 +172,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	case "", SeenType_Cell, SeenType_NearbyStop:
 		pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
 	}
-	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
+	pokemon.addWildPokemon(ctx, db, pogoshim.AsWildPokemonProto(wildPokemon.ProtoReflect()), timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
@@ -202,7 +203,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	unlock()
 
 	if mapPokemon.PokemonDisplay != nil {
-		pokemon.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), mapPokemon.PokemonDisplay)
+		pokemon.setPokemonDisplay(int16(mapPokemon.PokedexTypeId), pogoshim.AsPokemonDisplayProto(mapPokemon.PokemonDisplay.ProtoReflect()))
 		pokemon.recomputeCpIfNeeded(ctx, db, weather)
 		// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 		// shiny = mapPokemon.pokemonDisplay.shiny
@@ -239,7 +240,7 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
 	pokestopId := nearbyPokemon.FortId
-	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
+	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), pogoshim.AsPokemonDisplayProto(nearbyPokemon.PokemonDisplay.ProtoReflect()))
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 
@@ -722,27 +723,27 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 }
 
 // caller should setPokemonDisplay prior to calling this
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto pogoshim.PokemonProto, username string) {
 	pokemon.SetUsername(null.StringFrom(username))
-	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
-	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
-	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
-	pokemon.SetMove2(null.IntFrom(int64(proto.Move2)))
-	pokemon.SetHeight(null.FloatFrom(float64(proto.HeightM)))
-	pokemon.SetSize(null.IntFrom(int64(proto.Size)))
-	pokemon.SetWeight(null.FloatFrom(float64(proto.WeightKg)))
+	pokemon.SetShiny(null.BoolFrom(proto.GetPokemonDisplay().GetShiny()))
+	pokemon.SetCp(null.IntFrom(int64(proto.GetCp())))
+	pokemon.SetMove1(null.IntFrom(int64(proto.GetMove1())))
+	pokemon.SetMove2(null.IntFrom(int64(proto.GetMove2())))
+	pokemon.SetHeight(null.FloatFrom(float64(proto.GetHeightM())))
+	pokemon.SetSize(null.IntFrom(int64(proto.GetSize())))
+	pokemon.SetWeight(null.FloatFrom(float64(proto.GetWeightKg())))
 
 	scan := grpc.PokemonScan{
 		Weather:     int32(pokemon.Weather.Int64),
 		Strong:      pokemon.IsStrong.Bool,
-		Attack:      proto.IndividualAttack,
-		Defense:     proto.IndividualDefense,
-		Stamina:     proto.IndividualStamina,
+		Attack:      proto.GetIndividualAttack(),
+		Defense:     proto.GetIndividualDefense(),
+		Stamina:     proto.GetIndividualStamina(),
 		CellWeather: int32(pokemon.Weather.Int64),
-		Pokemon:     int32(proto.PokemonId),
-		Costume:     int32(proto.PokemonDisplay.Costume),
-		Gender:      int32(proto.PokemonDisplay.Gender),
-		Form:        int32(proto.PokemonDisplay.Form),
+		Pokemon:     int32(proto.GetPokemonId()),
+		Costume:     int32(proto.GetPokemonDisplay().GetCostume()),
+		Gender:      int32(proto.GetPokemonDisplay().GetGender()),
+		Form:        int32(proto.GetPokemonDisplay().GetForm()),
 	}
 	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
 		weather, unlock, err := peekWeatherRecord(weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon), "addEncounterPokemon")
@@ -755,12 +756,13 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			unlock()
 		}
 	}
-	if proto.CpMultiplier < 0.734 {
-		scan.Level = int32((58.215688455154954*proto.CpMultiplier-2.7012478057856497)*proto.CpMultiplier + 1.3220677708486794)
-	} else if proto.CpMultiplier < .795 {
-		scan.Level = int32(171.34093607855277*proto.CpMultiplier - 94.95626666368578)
+	cpMultiplier := proto.GetCpMultiplier()
+	if cpMultiplier < 0.734 {
+		scan.Level = int32((58.215688455154954*cpMultiplier-2.7012478057856497)*cpMultiplier + 1.3220677708486794)
+	} else if cpMultiplier < .795 {
+		scan.Level = int32(171.34093607855277*cpMultiplier - 94.95626666368578)
 	} else {
-		scan.Level = int32(199.99995231630976*proto.CpMultiplier - 117.55996066890287)
+		scan.Level = int32(199.99995231630976*cpMultiplier - 117.55996066890287)
 	}
 
 	caughtIv, err := pokemon.detectDitto(&scan)
@@ -797,14 +799,14 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	}
 }
 
-func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
+func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData pogoshim.EncounterOutProto, username string, timestampMs int64) {
 	pokemon.SetIsEvent(0)
-	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
+	pokemon.addWildPokemon(ctx, db, encounterData.GetPokemon(), timestampMs, false)
 	// tappable encounter can also be available in seen as normal encounter once tapped
 	if pokemon.isSeenFromTappable() {
 		pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
 	}
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.GetPokemon().GetPokemon(), username)
 
 	if !pokemon.CellId.Valid {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -817,11 +819,11 @@ func (pokemon *Pokemon) isSeenFromTappable() bool {
 	return pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter && pokemon.SeenType.ValueOrZero() != SeenType_TappableLureEncounter
 }
 
-func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
+func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData pogoshim.DiskEncounterOutProto, username string) {
 	pokemon.SetIsEvent(0)
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	pokemon.setPokemonDisplay(int16(encounterData.GetPokemon().GetPokemonId()), encounterData.GetPokemon().GetPokemonDisplay())
 	pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.GetPokemon(), username)
 }
 
 func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
@@ -850,11 +852,11 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	if !pokemon.Username.Valid {
 		pokemon.SetUsername(null.StringFrom(username))
 	}
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), pogoshim.AsPokemonDisplayProto(encounterData.Pokemon.PokemonDisplay.ProtoReflect()))
+	pokemon.addEncounterPokemon(ctx, db, pogoshim.AsPokemonProto(encounterData.Pokemon.ProtoReflect()), username)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
+func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display pogoshim.PokemonDisplayProto) {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
@@ -866,14 +868,14 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			oldId = pokemon.PokemonId
 			oldForm = pokemon.Form
 		}
-		if oldId != pokemonId || oldForm != null.IntFrom(int64(display.Form)) ||
-			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
-			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
-			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
+		if oldId != pokemonId || oldForm != null.IntFrom(int64(display.GetForm())) ||
+			pokemon.Costume != null.IntFrom(int64(display.GetCostume())) ||
+			pokemon.Gender != null.IntFrom(int64(display.GetGender())) ||
+			pokemon.IsStrong.ValueOrZero() != display.GetIsStrongPokemon() {
 			log.Debugf("Pokemon %d changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
 				pokemon.IsStrong.ValueOrZero(),
-				pokemonId, display.Form, display.Costume, display.Gender, display.IsStrongPokemon)
+				pokemonId, display.GetForm(), display.GetCostume(), display.GetGender(), display.GetIsStrongPokemon())
 			pokemon.SetWeight(null.NewFloat(0, false))
 			pokemon.SetHeight(null.NewFloat(0, false))
 			pokemon.SetSize(null.NewInt(0, false))
@@ -891,18 +893,18 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 		pokemon.SetPokemonId(pokemonId)
 	}
 	if pokemon.IsDitto {
-		pokemon.SetDisplayPokemonForm(null.IntFrom(int64(display.Form)))
+		pokemon.SetDisplayPokemonForm(null.IntFrom(int64(display.GetForm())))
 		pokemon.SetForm(null.IntFrom(0))
 	} else {
-		pokemon.SetForm(null.IntFrom(int64(display.Form)))
+		pokemon.SetForm(null.IntFrom(int64(display.GetForm())))
 	}
-	pokemon.SetGender(null.IntFrom(int64(display.Gender)))
-	pokemon.SetCostume(null.IntFrom(int64(display.Costume)))
+	pokemon.SetGender(null.IntFrom(int64(display.GetGender())))
+	pokemon.SetCostume(null.IntFrom(int64(display.GetCostume())))
 	if !pokemon.isNewRecord() {
-		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
+		pokemon.repopulateIv(int64(display.GetWeatherBoostedCondition()), display.GetIsStrongPokemon())
 	}
-	pokemon.SetWeather(null.IntFrom(int64(display.WeatherBoostedCondition)))
-	pokemon.SetIsStrong(null.BoolFrom(display.IsStrongPokemon))
+	pokemon.SetWeather(null.IntFrom(int64(display.GetWeatherBoostedCondition())))
+	pokemon.SetIsStrong(null.BoolFrom(display.GetIsStrongPokemon()))
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
