@@ -1,0 +1,7 @@
+=== RUN   TestScenarioCallbackThroughput
+=== RUN   TestScenarioCallbackThroughput/proto
+    scenario_test.go:344: RESULT cbthroughput/proto delivered=1000000 dropped=0 of=1000000 window=10.065s rate=99353/s max_goroutines=19
+--- PASS: TestScenarioCallbackThroughput (12.21s)
+    --- PASS: TestScenarioCallbackThroughput/proto (12.21s)
+PASS
+ok  	golbat/cachebench	12.408s

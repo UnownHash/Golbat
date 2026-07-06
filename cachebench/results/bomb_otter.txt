@@ -1,0 +1,10 @@
+=== RUN   TestScenarioCallbackBomb
+=== RUN   TestScenarioCallbackBomb/otter/stall
+    scenario_test.go:469: RESULT cbbomb/otter/stall delivered=200000 of=200000 stall_goroutines=19 max_goroutines=19 drain_after_recovery=250ms probe_set_max=80µs
+=== RUN   TestScenarioCallbackBomb/otter/slow
+    scenario_test.go:469: RESULT cbbomb/otter/slow delivered=200000 of=200000 stall_goroutines=19 max_goroutines=19 drain_after_recovery=17.002s probe_set_max=42µs
+--- PASS: TestScenarioCallbackBomb (37.38s)
+    --- PASS: TestScenarioCallbackBomb/otter/stall (10.31s)
+    --- PASS: TestScenarioCallbackBomb/otter/slow (27.07s)
+PASS
+ok  	golbat/cachebench	37.573s

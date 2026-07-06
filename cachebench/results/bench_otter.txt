@@ -1,0 +1,13 @@
+goos: darwin
+goarch: arm64
+pkg: golbat/cachebench
+cpu: Apple M3 Pro
+BenchmarkReadHot/otter/g8-12           	49304044	        63.43 ns/op	     108 B/op	       0 allocs/op
+BenchmarkReadHot/otter/g32-12          	38202014	        53.64 ns/op	     108 B/op	       0 allocs/op
+BenchmarkReadHot/otter/g96-12          	51972039	        49.97 ns/op	     108 B/op	       0 allocs/op
+BenchmarkTouch/otter/touch/get-12      	77828475	        30.19 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTouch/otter/notouch/get-12    	92857993	        24.35 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetOrSetStorm/otter-12        	100000000	        28.22 ns/op	      24 B/op	       1 allocs/op
+BenchmarkSingleGoroutineConsumer/otter-12         	 4943000	       535.7 ns/op	    1108 B/op	       2 allocs/op
+PASS
+ok  	golbat/cachebench	53.604s

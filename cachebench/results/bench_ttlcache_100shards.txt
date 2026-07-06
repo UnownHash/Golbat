@@ -1,0 +1,11 @@
+goos: darwin
+goarch: arm64
+pkg: golbat/cachebench
+cpu: Apple M3 Pro
+BenchmarkReadHot/ttlcache/g8-12      	15580684	       163.1 ns/op	     102 B/op	       0 allocs/op
+BenchmarkReadHot/ttlcache/g32-12     	19513575	       130.3 ns/op	     102 B/op	       0 allocs/op
+BenchmarkReadHot/ttlcache/g96-12     	23857754	        95.53 ns/op	     102 B/op	       0 allocs/op
+BenchmarkTouch/ttlcache/touch/get-12 	15798498	       132.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTouch/ttlcache/notouch/get-12         	32303907	        85.26 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	golbat/cachebench	45.251s

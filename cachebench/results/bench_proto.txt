@@ -1,0 +1,13 @@
+goos: darwin
+goarch: arm64
+pkg: golbat/cachebench
+cpu: Apple M3 Pro
+BenchmarkReadHot/proto/g8-12           	62304420	        42.43 ns/op	     108 B/op	       0 allocs/op
+BenchmarkReadHot/proto/g32-12          	64110127	        56.17 ns/op	     110 B/op	       0 allocs/op
+BenchmarkReadHot/proto/g96-12          	46260724	        81.55 ns/op	     109 B/op	       0 allocs/op
+BenchmarkTouch/proto/touch/get-12      	100000000	        26.93 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTouch/proto/notouch/get-12    	100000000	        28.71 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetOrSetStorm/proto-12        	100000000	        23.95 ns/op	      24 B/op	       1 allocs/op
+BenchmarkSingleGoroutineConsumer/proto-12         	 5342182	       456.4 ns/op	    1139 B/op	       3 allocs/op
+PASS
+ok  	golbat/cachebench	51.941s
