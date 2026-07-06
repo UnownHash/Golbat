@@ -107,13 +107,15 @@ Golbat supports two protobuf decoders selected by method type via `[proto_engine
 
 **Shadow verification** (config `shadow_sample_rate`, default 0.01):
 - Sampled dual-decode: both engines process a subset of packets, compare decoded field digests.
-- Mismatch → `golbat_proto_shadow_total{result="mismatch"}` incremented, `[PROTO_SHADOW]` log at DEBUG.
+- Mismatch → `golbat_proto_shadow_total{result="mismatch"}` incremented, `[PROTO_SHADOW]` log at ERROR.
 - Set to 0 to disable; useful for validating engine parity after updates.
 
-**Hyperpb PGO warmup** (config `proto_engine.pgo`, default `true`):
-- On startup, 256 sample packets are pre-decoded to warm up CPU-profile-guided optimization.
-- `default.pgo` (committed to repo) applies automatically in all builds via Go's `//go:build pgo.auto` support.
-- Refresh PGO periodically: `GOLBAT_URL=https://host:9001 GOLBAT_SECRET=... make pgo-capture` on a production instance captures a profile and commits it.
+**Go compiler PGO** (`default.pgo`, build-time):
+- `default.pgo` (committed to repo) is automatically applied by Go (>= 1.21) when building the main package via the default `-pgo=auto` build flag.
+
+**Hyperpb runtime PGO** (config `proto_engine.pgo`, default `true`):
+- On startup, the first 256 packets per method are processed to record a live-traffic profile; parser tables are then recompiled using the captured profile.
+- Refresh periodically: `GOLBAT_URL=https://host:9001 GOLBAT_SECRET=... make pgo-capture` on a production instance captures a profile and commits it.
 
 ## Entity Model
 

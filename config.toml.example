@@ -109,12 +109,12 @@ reduce_updates = false
 # Only used for methods below; others use standard decoder. To rollback, flip method values
 # back to "std" and restart.
 gmo = "hyperpb"                 # GetMapObjects (primary data source)
-encounter = "hyperpb"           # Pokemon encounter & disk encounter
+encounter = "hyperpb"           # Pokemon encounter
 disk_encounter = "hyperpb"      # Disk encounters (Interacted)
 
 # Shadow verification: sample rate [0.0-1.0] for dual-decoding both engines to verify
 # compatibility. Set to 0 to disable. Mismatches surface as golbat_proto_shadow_total{result="mismatch"}
-# and log [PROTO_SHADOW] at DEBUG level.
+# and log [PROTO_SHADOW] at ERROR level.
 shadow_sample_rate = 0.01
 
 # PGO warmup: capture a profile from the heavy user via `make pgo-capture` and commit
