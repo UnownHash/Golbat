@@ -66,6 +66,14 @@ type otterEvictEvent[K comparable, V any] struct {
 // configured default (any value <= 0 does).
 const DefaultTTL time.Duration = 0
 
+// DroppedEvictionsHook, when set (once, at init), receives the per-second
+// aggregated count of eviction events dropped by a saturated dispatcher.
+// These drops are the one loss in the system with no self-heal (a dropped
+// pokemon eviction event leaks its lookup-cache entry until restart), so
+// they warrant a metric, not just a log line. A hook keeps this a leaf
+// package: the metrics collector lives with the caller.
+var DroppedEvictionsHook func(cacheName string, dropped int64)
+
 // EvictionReason mirrors the two reasons Golbat's handlers use.
 type EvictionReason int
 
@@ -132,6 +140,9 @@ func NewOtterCache[K comparable, V any](cfg OtterCacheConfig[K, V]) *OtterCache[
 			case oc.evictCh <- otterEvictEvent[K, V]{key: ev.Key, value: ev.Value.v, reason: reason}:
 			default:
 				oc.drops.Report(func(dropped int64) {
+					if hook := DroppedEvictionsHook; hook != nil {
+						hook(oc.name, dropped)
+					}
 					log.Warnf("[CACHE_EVICT] %s dropped %d eviction events in the last second (dispatcher backlogged %d/%d)",
 						oc.name, dropped, len(oc.evictCh), cap(oc.evictCh))
 				})
@@ -236,6 +247,12 @@ func (oc *OtterCache[K, V]) OnEviction(fn func(key K, value V, reason EvictionRe
 		go oc.evictDispatchLoop()
 	}
 	oc.onEvict.Store(&fn)
+}
+
+// EvictQueueLen reports the eviction dispatcher's backlog (0 when no
+// handler is registered).
+func (oc *OtterCache[K, V]) EvictQueueLen() int {
+	return len(oc.evictCh)
 }
 
 func (oc *OtterCache[K, V]) evictDispatchLoop() {

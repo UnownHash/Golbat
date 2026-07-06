@@ -245,7 +245,10 @@ whose throughput can fall below the event rate.** A saturated worker with
 blocking producers produced a production fill-drain limit cycle (all
 decoders frozen at the enqueue for 3–5s every ~30s). Loss-tolerant paths
 drop and count (`util.DropReporter` aggregates to one log line/second;
-each drop path has a Prometheus counter). The stats worker drains in
+stats drops and cache eviction-event drops have Prometheus counters —
+the latter is the one loss with no self-heal, leaking lookup entries
+until restart; tree-delete and fort-tracker drops are log-only because
+scans/rescans self-heal them). The stats worker drains in
 batches of 512 and takes `pokemonStatsLock` once per batch; geofence
 reloads clear the stats maps via an in-band barrier event so queued
 events with pre-reload area names drain into the old maps.

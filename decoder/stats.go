@@ -268,6 +268,10 @@ func StartWorkerBacklogReporter() {
 			}
 			statsCollector.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
 			statsCollector.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
+			statsCollector.SetWorkerBacklog("cache_evict_pokemon", float64(pokemonCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_pokestop", float64(pokestopCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_gym", float64(gymCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_station", float64(stationCache.EvictQueueLen()))
 			if pokemonTreeEvictor != nil {
 				statsCollector.SetWorkerBacklog("tree_evictor_pokemon", float64(pokemonTreeEvictor.QueueLen()))
 			}

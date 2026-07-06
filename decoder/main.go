@@ -126,6 +126,12 @@ func initDataCache() {
 		fortCacheTTL = 25 * time.Hour
 	}
 
+	// Cache eviction-event drops are the one non-self-healing loss; feed
+	// them to prometheus alongside the [CACHE_EVICT] log line.
+	cache.DroppedEvictionsHook = func(cacheName string, dropped int64) {
+		statsCollector.AddCacheEvictionsDropped(cacheName, float64(dropped))
+	}
+
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
 	// wheel, so per-read touch is ~free (no hysteresis workaround needed).

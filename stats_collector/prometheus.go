@@ -375,6 +375,14 @@ var (
 			Help:      "Pokemon stats events dropped because the aggregation worker was saturated",
 		},
 	)
+	cacheEvictionsDropped = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "cache_eviction_events_dropped_total",
+			Help:      "Cache eviction events dropped by a saturated dispatcher; these leak lookup entries until restart (the one non-self-healing drop path)",
+		},
+		[]string{"cache"},
+	)
 	slowDbQueries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -750,6 +758,10 @@ func (col *promCollector) IncStatsEventsDropped() {
 	statsEventsDroppedCounter.Inc()
 }
 
+func (col *promCollector) AddCacheEvictionsDropped(cache string, n float64) {
+	cacheEvictionsDropped.WithLabelValues(cache).Add(n)
+}
+
 func (col *promCollector) ObserveDbQuery(caller string, seconds float64) {
 	dbQueryDuration.WithLabelValues(caller).Observe(seconds)
 }
@@ -795,7 +807,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
-	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration)
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

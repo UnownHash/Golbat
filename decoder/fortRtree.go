@@ -78,7 +78,10 @@ func getFortTreeSnapshot() *rtree.RTreeG[string] {
 }
 
 func initFortRtree() {
-	fortTreeEvictor = newTreeEvictor[string]("fort", treeEvictorQueueSize, treeEvictorBatchSize, flushFortTreeEvictions)
+	// Fort tree churn is a fraction of pokemon's, and this evictor's only
+	// producer drops on full (deferFortEviction) — 64k of headroom is
+	// plenty and saves ~7.5 MiB vs sharing the pokemon constant.
+	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
