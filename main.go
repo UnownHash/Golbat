@@ -73,6 +73,10 @@ func main() {
 
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
+	// Compile per-method proto decode engines (hyperpb arenas + PGO warmup)
+	// now that config is loaded. No-op stub on unsupported platforms.
+	initProtoEngines()
+
 	// Both Sentry & Pyroscope are optional and off by default. Read more:
 	// https://docs.sentry.io/platforms/go
 	// https://pyroscope.io/docs/golang

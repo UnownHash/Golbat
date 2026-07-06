@@ -63,6 +63,13 @@ func ReadConfig() (configDefinition, error) {
 			WriteBehindBatchSize:           50,  // entries per batch
 			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},
+		ProtoEngine: protoEngine{
+			Gmo:              "hyperpb",
+			Encounter:        "hyperpb",
+			DiskEncounter:    "hyperpb",
+			ShadowSampleRate: 0.01,
+			Pgo:              true,
+		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
 			ProactiveIVSwitchingToDB: false,
