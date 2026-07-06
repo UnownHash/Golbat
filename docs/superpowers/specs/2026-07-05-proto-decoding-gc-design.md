@@ -53,19 +53,54 @@ migration — are directly addressed below.
 
 Three phases, each independently mergeable, each gated on measurement.
 
-### Phase 0 — Measurement foundation (merges first, zero prod risk)
+### Phase 0 — Prove the methodology standalone (no Golbat integration)
+
+Golbat's dominant decode pattern is decode → read fields → drop for GC. That
+is simulable at volume without integrating anything, so the decode
+methodology is proven (or killed) before any of the ~31-file migration
+happens.
 
 1. **Payload corpus**: debug-gated capture hook on the raw path writing N raw
    protobuf payloads per method type (default N=25; GMO, Encounter,
    FortDetails, …) from prod to disk. Fixtures live in a gitignored local directory (payloads may
-   contain account-adjacent data; not committed to the public repo).
-2. **Benchmark harness**: `BenchmarkDecode<Method>` over the corpus (ns/op,
-   B/op, allocs/op), plus an end-to-end variant through `decode()` so
-   post-decode field-copy and lazy pay-on-access costs are captured.
+   contain account-adjacent data; not committed to the public repo). This
+   hook is the only Golbat change in Phase 0 (instrumentation-only,
+   debug-gated).
+2. **Standalone decode harness** — a separate Go module (`protobench/`, own
+   `go.mod`, in-repo). Separate module is mandatory, not stylistic: a second
+   generated copy of `vbase.proto` in the same binary as `golbat/pogo`
+   panics the global proto registry on duplicate file registration. The
+   module contains:
+   - Its own pogo package generated at `API_HYBRID` **with lazy annotations
+     already applied**, giving three configurations from one package:
+     **(a)** default build = open struct layout (current-Golbat baseline);
+     **(b)** `-tags protoopaque` = opaque with lazy active;
+     **(c)** `-tags protoopaque` + `proto.UnmarshalOptions{NoLazyDecoding:
+     true}` = opaque without lazy. Hybrid getters compile identically in all
+     three modes, so the harness code is written once.
+   - **Access simulation**: per-method reader functions that call exactly
+     the getter set Golbat's decode path uses (derived from the same
+     used-getter analysis `add_lazy_proto.py` performs), mimicking
+     decode → read → drop.
+   - **Volume runs**: configurable worker count (default 96, mirroring
+     `raw_processing_concurrency`) decoding the corpus in a sustained loop;
+     reports decodes/s, ns/op, B/op, allocs/op, GC CPU share
+     (`runtime/metrics` `/cpu/classes/gc/...` deltas), heap in-use, and
+     pause distribution. An optional pointer-dense heap ballast flag
+     approximates Golbat's large live caches, since GC mark cost scales
+     with live heap.
 3. **Prod baseline**: alloc/heap/CPU profiles at peak; record GC CPU share and
-   decode-duration distribution as the before-picture.
+   decode-duration distribution as the before-picture for the later canary
+   phases.
 
-### Phase 1 — Opaque API migration
+**Phase 0 exit gate (decides whether Phase 1 happens at all)**: configuration
+(b) or (c) must beat (a) at volume on allocation rate and harness GC CPU
+share (provisional target ≥20% allocs/op reduction on the GMO workload,
+firmed up once the corpus exists). The harness proves *relative* methodology
+gain; absolute prod numbers still come from the canary phases, since prod GC
+shares the heap with caches, R-trees, and write-behind queues.
+
+### Phase 1 — Opaque API migration (starts only if the Phase 0 gate passes)
 
 **1a. Codegen + call-site rewrite (default behavior unchanged):**
 - Port `updateproto.sh` + Makefile target from `len-optimize`, updated to:
@@ -104,15 +139,19 @@ Three phases, each independently mergeable, each gated on measurement.
 - **Runtime A/B switch**: thread a config flag through the unmarshal calls
   using `proto.UnmarshalOptions{NoLazyDecoding: true}`. Ships defaulted to
   lazy **off**; same binary flips it on canary.
-- Gate: decode allocs/op down on the corpus benchmarks (provisional target
-  ≥20% on the GMO benchmark, to be firmed up once Phase 0 baselines exist);
-  GC CPU share down on canary; `inuse_space` flat (pinned-buffer failure
-  mode).
+- Note: the Phase-0 harness runs lazy **without** the retention denylist
+  (nothing is retained in a decode → read → drop loop); the denylist exists
+  purely for Golbat integration, where retained protos would pin buffers.
+- Gate: the Phase-0 harness win reproduces in prod — GC CPU share down on
+  canary with the flag flipped; `inuse_space` flat (pinned-buffer failure
+  mode); decode-duration histogram neutral-or-better.
 
 ### Rollout, rollback, operations
 
-- Shipping order: Phase 0 → 1a → 1b canary → flip → Phase 2 (flag off) →
-  canary A/B → default-on.
+- Shipping order: Phase 0 (corpus + standalone harness, **exit gate**) →
+  1a → 1b canary → flip → Phase 2 (flag off) → canary A/B → default-on.
+  If the Phase 0 gate fails, the effort stops with only the capture hook and
+  harness merged — no migration cost incurred.
 - Rollback levers: config flag off (lazy); build without tag (opaque,
   pre-flip); revert regen commit (post-flip).
 - **One-command regen**: `updateproto.sh` (denylist + lazy script + pinned
@@ -128,7 +167,8 @@ Three phases, each independently mergeable, each gated on measurement.
 | open2opaque semantic drift (presence semantics) | Differential decode test over the corpus in both build modes |
 | Lazy pinning of receive buffers via retained protos | Retention denylist; canary watch on `inuse_space` |
 | Rebase races with in-flight branches | Regen and rewrite both scripted; rerunning is cheap |
-| Lazy access-time overhead where fields *are* read | Unused-fields-only annotation policy; end-to-end benchmark variant |
+| Lazy access-time overhead where fields *are* read | Unused-fields-only annotation policy; harness access simulation exercises the real getter set |
+| Harness not representative of prod GC (live heap, other subsystems) | Pointer-dense ballast option; harness gates on relative gain only; prod canaries remain the absolute gates |
 | Upstream vbase.proto churn per game version | One-command pipeline, annotations auto-regenerated |
 
 ## Out of scope
