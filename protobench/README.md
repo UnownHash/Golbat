@@ -16,6 +16,9 @@ Copy payloads here as they accumulate (the harness uses whatever exists):
 
     rsync -a prod:/path/to/golbat/capture/ ../capture/
 
+Capture only covers payloads dispatched through `decode()` (HTTP `/raw` and
+the gRPC raw receiver); the Nebula gRPC side-path is not captured.
+
 ## Generate the proto package (once, and after each vbase.proto update)
 
     PROTO_SRC=~/dev/ProtoMirror/vbase.proto scripts/gen.sh
