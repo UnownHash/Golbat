@@ -10,6 +10,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"math"
 	"math/rand"
 	"os"
 	"runtime"
@@ -95,16 +96,42 @@ func histPercentile(before, after *metrics.Float64Histogram, q float64) time.Dur
 	if total == 0 {
 		return 0
 	}
-	target := uint64(q * float64(total))
+	// Ceil with a floor of 1: with few samples, truncating (e.g. total==1)
+	// makes any q land on target 0, which is trivially <= the first
+	// bucket's count and misreports the percentile as the first bucket.
+	target := uint64(math.Ceil(q * float64(total)))
+	if target == 0 {
+		target = 1
+	}
 	var cum uint64
 	for i, d := range deltas {
 		cum += d
 		if cum >= target {
 			// Buckets has len(Counts)+1 boundaries; use the bucket's upper edge.
-			return time.Duration(after.Buckets[i+1] * float64(time.Second))
+			return boundaryDuration(after.Buckets, i+1)
 		}
 	}
-	return time.Duration(after.Buckets[len(after.Buckets)-1] * float64(time.Second))
+	return boundaryDuration(after.Buckets, len(after.Buckets)-1)
+}
+
+// boundaryDuration converts the bucket boundary at buckets[idx] to a
+// Duration. Float64Histogram documents that the outermost boundaries may be
+// +Inf/-Inf (open-ended buckets); converting that directly via
+// time.Duration(math.Inf(1) * float64(time.Second)) is implementation-defined
+// garbage. When the boundary is non-finite, fall back to the bucket's other
+// (lower) edge; if that is non-finite too, report 0.
+func boundaryDuration(buckets []float64, idx int) time.Duration {
+	v := buckets[idx]
+	if math.IsInf(v, 0) {
+		if idx == 0 {
+			return 0
+		}
+		v = buckets[idx-1]
+		if math.IsInf(v, 0) {
+			return 0
+		}
+	}
+	return time.Duration(v * float64(time.Second))
 }
 
 func readMetrics() map[string]metrics.Value {
@@ -153,7 +180,12 @@ func run(cfg runConfig) (report, error) {
 		}
 	}
 	if len(items) == 0 {
-		return report{}, fmt.Errorf("corpus at %s has no payloads with readers (have readers: GET_MAP_OBJECTS, ENCOUNTER)", cfg.corpusDir)
+		known := make([]string, 0, len(readers.Registry))
+		for m := range readers.Registry {
+			known = append(known, m)
+		}
+		sort.Strings(known)
+		return report{}, fmt.Errorf("corpus at %s has no payloads with readers (have readers: %s)", cfg.corpusDir, strings.Join(known, ", "))
 	}
 
 	o := proto.UnmarshalOptions{NoLazyDecoding: cfg.nolazy}
