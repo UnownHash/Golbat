@@ -74,6 +74,11 @@ Level 30+ is required for most methods to ensure data quality.
 
 Processing is gated by `ScanParameters` — a set of boolean flags resolved from config scan rules based on the request's `scan_context` and geographic location. This allows different scan areas to process different entity types.
 
+Raw payloads can be sampled to disk (`raw_capture` config, size-stratified
+per method) to feed `protobench/` — a standalone decode benchmarking module
+(own go.mod; see protobench/README.md and
+docs/superpowers/specs/2026-07-05-proto-decoding-gc-design.md).
+
 ## Entity Model
 
 ### Struct Pattern
