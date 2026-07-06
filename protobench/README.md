@@ -23,13 +23,16 @@ the gRPC raw receiver); the Nebula gRPC side-path is not captured.
 
     PROTO_SRC=~/dev/ProtoMirror/vbase.proto scripts/gen.sh
 
-The lazy-annotation scan (`scripts/add_lazy_proto.py`) only greps Golbat's
-own sources for getter usage — it excludes `protobench/` itself, so the
-harness's own field reads in `readers/readers.go` can't strip annotations
-from the subtrees it's measuring. Unused message-typed fields are annotated
-whether singular or repeated — protobuf-go v1.36's opaque API supports lazy
-decoding on repeated message fields too, so the measurement arm covers the
-full lever. Current run: 88 fields marked `[lazy = true]`.
+The lazy-annotation scan (`scripts/add_lazy_proto.py`) unions two getter
+scans: Golbat's own sources (excluding `protobench/`) and
+`protobench/readers/` only. The readers are hand-built from Golbat's decode
+paths, so they encode the direct field reads (`cell.Fort`, `wild.Pokemon`,
+…) that a getter grep over unmigrated Golbat code cannot see — without
+them, hot subtrees get annotated lazy and configuration (b) measures a
+pathological setup (lazy overhead paid on every access) instead of a
+realistic one. Unused message-typed fields are annotated whether singular
+or repeated — protobuf-go v1.36's opaque API supports lazy decoding on
+repeated message fields too. Current run: 70 fields marked `[lazy = true]`.
 
 ## The three configurations
 

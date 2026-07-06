@@ -31,19 +31,33 @@ ENUM_NAMES = set()
 
 
 def get_used_getters(project_root):
-    """Extract all getter methods used in Go code"""
-    result = subprocess.run(
-        ["grep", "-rhoE", r"\.Get[A-Z][a-zA-Z0-9_]*\(\)", "--include=*.go", "--exclude-dir=protobench", "."],
-        cwd=project_root,
-        capture_output=True,
-        text=True
-    )
+    """Extract all getter methods used in Go code.
+
+    Two scan roots, unioned:
+    - Golbat sources (protobench excluded): getter-style accesses.
+    - protobench/readers only: the access-simulation readers are hand-built
+      from Golbat's decode paths and therefore encode Golbat's *direct*
+      field reads (cell.Fort, wild.Pokemon, ...) that a getter grep over
+      unmigrated Golbat code cannot see. Without this, hot subtrees get
+      annotated lazy and the harness measures a pathological configuration
+      (lazy overhead paid on every access) instead of a realistic one.
+    """
     getters = set()
-    for line in result.stdout.strip().split('\n'):
-        if line:
-            match = re.match(r'\.Get([A-Z][a-zA-Z0-9_]*)\(\)', line)
-            if match:
-                getters.add(match.group(1))
+    for cwd, args in (
+        (project_root, ["--exclude-dir=protobench", "."]),
+        (os.path.join(project_root, "protobench", "readers"), ["."]),
+    ):
+        result = subprocess.run(
+            ["grep", "-rhoE", r"\.Get[A-Z][a-zA-Z0-9_]*\(\)", "--include=*.go"] + args,
+            cwd=cwd,
+            capture_output=True,
+            text=True
+        )
+        for line in result.stdout.strip().split('\n'):
+            if line:
+                match = re.match(r'\.Get([A-Z][a-zA-Z0-9_]*)\(\)', line)
+                if match:
+                    getters.add(match.group(1))
     return getters
 
 
