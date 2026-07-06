@@ -31,6 +31,7 @@ type rawCaptureWorker struct {
 	perBucketLimit int
 	ch             chan captureItem
 	drops          atomic.Int64
+	writeFails     atomic.Int64
 	counts         map[string]*[captureBuckets]int // worker-goroutine only
 	stop           chan struct{}
 }
@@ -157,11 +158,15 @@ func (w *rawCaptureWorker) write(item captureItem) {
 	rel := captureFilename(item.method, time.Now().UnixMilli(), len(item.data))
 	path := filepath.Join(w.dir, rel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		log.Warnf("[RAW_CAPTURE] mkdir: %v", err)
+		if n := w.writeFails.Add(1); n%1000 == 1 {
+			log.Warnf("[RAW_CAPTURE] mkdir: %v (%d write failures so far)", err, n)
+		}
 		return
 	}
 	if err := os.WriteFile(path, item.data, 0o644); err != nil {
-		log.Warnf("[RAW_CAPTURE] write: %v", err)
+		if n := w.writeFails.Add(1); n%1000 == 1 {
+			log.Warnf("[RAW_CAPTURE] write: %v (%d write failures so far)", err, n)
+		}
 		return
 	}
 	c[bucket]++
