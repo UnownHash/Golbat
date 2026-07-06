@@ -111,7 +111,7 @@ Golbat supports two protobuf decoders selected by method type via `[proto_engine
 - Set to 0 to disable; useful for validating engine parity after updates.
 
 **Go compiler PGO** (`default.pgo`, build-time):
-- `default.pgo` (committed to repo) is automatically applied by Go (>= 1.21) when building the main package via the default `-pgo=auto` build flag.
+- `default.pgo`, when present, is automatically applied by Go (>= 1.21) when building the main package via the default `-pgo=auto` build flag. It is captured via `make pgo-capture` (see below) and should be committed to the repo once a production profile exists — not yet present on this branch.
 
 **Hyperpb runtime PGO** (config `proto_engine.pgo`, default `true`):
 - On startup, the first 256 packets per method are processed to record a live-traffic profile; parser tables are then recompiled using the captured profile.

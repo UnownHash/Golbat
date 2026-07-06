@@ -274,3 +274,39 @@ func TestDecodeWithArenaPGoRace(t *testing.T) {
 		t.Fatal("expected PGO profile to be done after well over pgoWarmupSamples decodes")
 	}
 }
+
+// TestInvalidProtoEngineValuesDetectsTypo guards the config-typo warning:
+// engineFor() silently treats anything other than "hyperpb" as "std", so a
+// mistyped value (e.g. "hyperbp") must be flagged rather than passing
+// through unnoticed.
+func TestInvalidProtoEngineValuesDetectsTypo(t *testing.T) {
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+
+	config.Config.ProtoEngine.Gmo = "hyperbp" // typo for "hyperpb"
+	config.Config.ProtoEngine.Encounter = "std"
+	config.Config.ProtoEngine.DiskEncounter = "hyperpb"
+
+	bad := invalidProtoEngineValues()
+	if len(bad) != 1 {
+		t.Fatalf("expected exactly one invalid value, got %v", bad)
+	}
+	if v, ok := bad[engMethodGmo]; !ok || v != "hyperbp" {
+		t.Fatalf("expected gmo=%q flagged as invalid, got %v", "hyperbp", bad)
+	}
+}
+
+// TestInvalidProtoEngineValuesAcceptsValidValues ensures the two recognized
+// values never produce a false-positive warning.
+func TestInvalidProtoEngineValuesAcceptsValidValues(t *testing.T) {
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+
+	config.Config.ProtoEngine.Gmo = "std"
+	config.Config.ProtoEngine.Encounter = "hyperpb"
+	config.Config.ProtoEngine.DiskEncounter = "std"
+
+	if bad := invalidProtoEngineValues(); len(bad) != 0 {
+		t.Fatalf("expected no invalid values, got %v", bad)
+	}
+}

@@ -78,6 +78,11 @@ func main() {
 	// now that config is loaded. No-op stub on unsupported platforms.
 	initProtoEngines()
 
+	// engineFor() silently falls back to "std" for any [proto_engine] value
+	// it doesn't recognize; warn loudly here so a config typo (e.g.
+	// "hyperbp") doesn't go unnoticed.
+	warnInvalidProtoEngineValues()
+
 	// decoder cannot import package main (where engine selection lives), so
 	// the GMO path's disk-encounter cache-replay decode capability
 	// (gmo_decode.go) is wired in via a function value, the same pattern as

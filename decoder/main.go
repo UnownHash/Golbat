@@ -83,6 +83,11 @@ type diskEncounterDecodeFunc func(payload []byte, process func(pogoshim.DiskEnco
 
 var diskEncounterDecoder diskEncounterDecodeFunc
 
+// getMapFortsCache retains the decoded *pogo.GetMapFortsOutProto_FortProto
+// itself (not just extracted fields), so GET_MAP_FORTS must stay on the std
+// engine (or this cache must be changed to copy out the values it needs)
+// before that method is ever flipped to hyperpb -- see the hyperpb migration
+// plan before changing proto_engine for this method.
 var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
