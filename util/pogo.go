@@ -1,7 +1,6 @@
 package util
 
 import (
-	"golbat/pogo"
 	"golbat/pogoshim"
 )
 
@@ -30,17 +29,9 @@ var IncidentTypeToName = map[int8]string{
 	9: "showcase",
 }
 
-func ExtractBackgroundFromDisplay(display *pogo.PokemonDisplayProto) *int64 {
-	if display.LocationCard == nil {
-		return nil
-	}
-	result := int64(display.LocationCard.LocationCard)
-	return &result
-}
-
-// ExtractBackgroundFromDisplayShim mirrors ExtractBackgroundFromDisplay for
-// callers that have already wrapped their PokemonDisplayProto via pogoshim
-// (hyperpb/protoreflect decode paths, e.g. gym GuardPokemonDisplay).
+// ExtractBackgroundFromDisplayShim extracts the location-card background id
+// from a pogoshim-wrapped PokemonDisplayProto (hyperpb/protoreflect decode
+// paths, e.g. gym GuardPokemonDisplay).
 func ExtractBackgroundFromDisplayShim(display pogoshim.PokemonDisplayProto) *int64 {
 	if !display.HasLocationCard() {
 		return nil

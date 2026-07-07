@@ -105,12 +105,30 @@ s2_cell_lookup = false      # Pre-compute S2 cell lookup for faster geofence mat
 reduce_updates = false
 
 [proto_engine]
-# Decoder selection per method type: "hyperpb" (high-performance) or "std" (standard fallback)
-# Only used for methods below; others use standard decoder. To rollback, flip method values
-# back to "std" and restart.
+# Decoder engine per method: "hyperpb" (arena-allocated, high-performance) or
+# "std" (protobuf-go, standard fallback). Every client-proto method Golbat
+# decodes goes through this selection (see protoengine.go's engineSpecs for
+# the full method -> handle mapping); the push-gateway lobby-count path is the
+# one exception -- it only ever reads a few scalars, so it stays on plain
+# proto.Unmarshal unconditionally (see decode_push_gateway.go).
+#
+# Resolution order per method (engineFor in protoengine.go):
+#   1. The legacy keys below (gmo/encounter/disk_encounter), if non-empty --
+#      win outright, preserving pre-Wave-3 config compatibility.
+#   2. [proto_engine.overrides].<method>, if present and non-empty.
+#   3. `default` below.
+# A value that is neither "std" nor "hyperpb" (typo, e.g. "hyperbp") logs one
+# [PROTO_ENGINE] warning at startup and runs on "std".
+#
+# Legacy keys: leave "" (or remove) to let a method fall through to
+# [proto_engine.overrides]/default instead.
 gmo = "hyperpb"                 # GetMapObjects (primary data source)
 encounter = "hyperpb"           # Pokemon encounter
 disk_encounter = "hyperpb"      # Disk encounters (Interacted)
+
+# Default engine for every method not pinned by a legacy key above or an
+# entry in [proto_engine.overrides].
+default = "hyperpb"
 
 # Shadow verification: sample rate [0.0-1.0] for dual-decoding both engines to verify
 # compatibility. Set to 0 to disable. Mismatches surface as golbat_proto_shadow_total{result="mismatch"}
@@ -120,6 +138,33 @@ shadow_sample_rate = 0.01
 # PGO warmup: capture a profile from the heavy user via `make pgo-capture` and commit
 # default.pgo to enable production PGO builds. Set pgo=false to disable runtime warmup.
 pgo = true
+
+# Per-method engine pins, keyed by the [proto_engine] resolution name (the
+# "method" argument to engineFor -- see protoengine.go's engMethod* constants
+# and engineSpecs table for the authoritative list). Every key below is
+# commented out by default (no overrides, everything follows `default`);
+# uncomment and set "std" to roll back a single method without flipping
+# `default` (and therefore every other method) to "std" too. Config is only
+# read at startup, so any change here still needs a restart to take effect.
+[proto_engine.overrides]
+# gmo = "std"                   # GetMapObjects (also settable via the legacy key above)
+# encounter = "std"             # Pokemon encounter (also settable via the legacy key above)
+# disk_encounter = "std"        # Disk encounters / Interacted (also settable via the legacy key above)
+# fort_details = "std"          # FortDetails (pokestop/gym detail lookups)
+# gym_info = "std"              # GymGetInfo (gym defenders/detail)
+# quest = "std"                 # FortSearch (quest rewards)
+# get_map_forts = "std"         # GetMapForts (bulk fort name/image data)
+# routes = "std"                # GetRoutes
+# start_incident = "std"        # StartIncident (invasions)
+# open_invasion = "std"         # OpenInvasionCombatSession (request + data)
+# nebula_battle_state = "std"   # Nebula/Rocket battle state
+# contest_data = "std"          # GetContestData (request + data)
+# size_contest_entry = "std"    # GetPokemonSizeLeaderboardEntry (request + data)
+# station_details = "std"       # GetStationedPokemonDetails (request + data)
+# tappable = "std"              # ProcessTappable (request + data)
+# event_rsvps = "std"           # GetEventRsvps (request + data)
+# event_rsvp_count = "std"      # GetEventRsvpCount
+# social = "std"                # Proxy request/response + friend details + player search
 
 [weather]
 proactive_iv_switching = true       # Enable proactive IV switching upon weather changes (default: true)

@@ -139,6 +139,8 @@ func TestUpdateFromProcessTappableProto_OtherRewardTypes(t *testing.T) {
 		{"xl_candy", &pogo.LootItemProto{Type: &pogo.LootItemProto_XlCandy{XlCandy: pogo.HoloPokemonId_SQUIRTLE}}},
 		{"follower_pokemon", &pogo.LootItemProto{Type: &pogo.LootItemProto_FollowerPokemon{FollowerPokemon: &pogo.FollowerPokemonProto{}}}},
 		{"neutral_avatar_template_id", &pogo.LootItemProto{Type: &pogo.LootItemProto_NeutralAvatarTemplateId{NeutralAvatarTemplateId: "NAT1"}}},
+		{"neutral_avatar_item_template", &pogo.LootItemProto{Type: &pogo.LootItemProto_NeutralAvatarItemTemplate{NeutralAvatarItemTemplate: &pogo.NeutralAvatarLootItemTemplateProto{}}}},
+		{"neutral_avatar_item_display", &pogo.LootItemProto{Type: &pogo.LootItemProto_NeutralAvatarItemDisplay{NeutralAvatarItemDisplay: &pogo.NeutralAvatarLootItemDisplayProto{}}}},
 	}
 
 	for _, v := range variants {

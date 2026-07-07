@@ -32,12 +32,29 @@ engines, and compares digests — your safety net while a new proto soaks.
    Commit the regenerated file together with your change.
 3. What you get per message: `pogoshim.As<Msg>(protoreflect.Message)`,
    protoc-style getters (`GetFortId() string`, enums typed as `pogo.<Enum>`,
-   float32 stays float32), `Has<Field>()` for submessages, list wrappers with
-   `Len()/At(i)/All()`. Strings/bytes are **cloned out of the arena** — safe
-   to retain. Oneof members get ordinary `Get`/`Has` accessors.
-   **Not generated: map-field accessors** — if your proto has map fields,
-   read them through raw protoreflect (`shim` exposes nothing; wrap the
-   parent message yourself) or extend the generator first.
+   float32 stays float32), `Has<Field>()`/`Get<Field>()` for submessages
+   (`Get` degrades to a zero shim when absent — no separate nil check
+   needed), list wrappers with `Len()/At(i)/All()`. Singular strings/bytes
+   are **cloned out of the arena** — safe to retain past the decode call.
+   Repeated string fields get a `StringList` (its `At` clones the same way)
+   instead of the untyped `ScalarList` every other repeated scalar/enum field
+   gets — `ScalarList.At` returns a raw `protoreflect.Value` whose
+   `.String()`/`.Bytes()` is an unsafe arena view, not safe to retain.
+   A scalar/enum field that is a member of a genuine (explicitly declared,
+   non-synthetic) oneof also gets `Has<Field>()` — needed to disambiguate
+   siblings a zero-value check can't (e.g. `LootItemProto`'s 14-way reward
+   oneof: `GetItem() == 0` doesn't tell "item explicitly set to enum 0" apart
+   from "some other member is set"). A plain proto3 optional scalar's
+   synthetic oneof does *not* get this treatment — its zero-default `Get`
+   already matches plain-scalar semantics.
+   **Not generated: map-field accessors** — `gen.collect`/`gen.message` both
+   skip any `field.IsMap()` field (a message reachable only through a map
+   field gets no shim type at all, not just a missing accessor). Hand-write
+   what you need following `pogoshim/manual.go`'s pattern (cached
+   `FieldDescriptor` vars, `Has`/`Get` accessors chaining to a zero shim,
+   `strings.Clone` on extracted strings) — see that file's header comment —
+   or teach the generator proper map support if the need grows past one or
+   two call sites.
 
 ## Step 2: Register an engine handle
 
@@ -84,7 +101,7 @@ func decodeFoo(ctx context.Context, sDec []byte) string {
 
 Request+Data methods nest: decode the Request in an outer `decodeWithArena`,
 decode Data inside its process closure (both shims usable together; both
-arenas freed after processing). See `decodeOpenInvasion` once Wave 3 lands.
+arenas freed after processing). See `decodeOpenInvasion` for the template.
 
 ## Step 4: Write the decoder processing
 
