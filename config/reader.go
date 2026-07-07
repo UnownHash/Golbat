@@ -66,7 +66,13 @@ func ReadConfig() (configDefinition, error) {
 		ProtoEngine: protoEngine{
 			Default:          "hyperpb",
 			ShadowSampleRate: 0.01,
-			Pgo:              true,
+			// Runtime PGO recompilation is OFF by default: hyperpb v0.1.3's
+			// Recompile produces a parser that duplicates repeated-string
+			// elements (caught live by shadow verification on fort_details;
+			// minimal repro in TestHyperpbRecompileRepeatedStringDuplication).
+			// The baseline compiled parser is unaffected. Re-enable once the
+			// upstream fix lands — the canary test flips red when it does.
+			Pgo: false,
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,

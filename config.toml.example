@@ -136,9 +136,13 @@ default = "hyperpb"
 # and log [PROTO_SHADOW] at ERROR level.
 shadow_sample_rate = 0.01
 
-# PGO warmup: capture a profile from the heavy user via `make pgo-capture` and commit
-# default.pgo to enable production PGO builds. Set pgo=false to disable runtime warmup.
-pgo = true
+# Hyperpb runtime PGO warmup (profile the first 256 packets/method, then
+# recompile the parser). DEFAULT OFF: hyperpb v0.1.3's Recompile produces a
+# parser that duplicates repeated-string elements (caught by shadow
+# verification; see TestHyperpbRecompileRepeatedStringDuplication). Leave
+# false until the upstream fix lands. Unrelated to Go compiler PGO
+# (default.pgo / `make pgo-capture`), which is safe and recommended.
+pgo = false
 
 # Per-method engine pins, keyed by the [proto_engine] resolution name (the
 # "method" argument to engineFor -- see protoengine.go's engMethod* constants
