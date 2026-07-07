@@ -222,6 +222,12 @@ func ReadGeofences() error {
 	} else {
 		var disabled *geo.S2CellLookup
 		statsS2Lookup.Store(disabled)
+		if n := len(statsFeatureCollection.Features); n > 100 {
+			log.Warnf("GEO: %d geofences loaded with tuning.s2_cell_lookup disabled — "+
+				"every pokemon/fort save runs polygon matching against overlapping fences. "+
+				"Large projects measured 5x+ cheaper area matching with s2_cell_lookup = true "+
+				"(builds an S2 cell index in the background; costs memory proportional to fence area)", n)
+		}
 	}
 
 	return nil
