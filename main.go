@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 	_ "time/tzdata"
@@ -239,6 +240,16 @@ func main() {
 
 	if cfg.Tuning.ExtendedTimeout {
 		log.Info("Extended timeout enabled")
+	}
+
+	if n := cfg.Tuning.GoGCPercent; n > 0 {
+		prev := debug.SetGCPercent(n)
+		log.Infof("GC target set to %d%% (was %d%%): cycles ~%.1fx less frequent, peak heap up to ~%.1fx live",
+			n, prev, float64(100+n)/float64(100+prev), 1+float64(n)/100)
+	}
+	if m := cfg.Tuning.GoMemLimitMiB; m > 0 {
+		debug.SetMemoryLimit(int64(m) << 20)
+		log.Infof("Go memory limit set to %d MiB", m)
 	}
 
 	if cfg.Cleanup.Pokemon && (!cfg.PokemonMemoryOnly || cfg.PreserveInMemoryPokemon) {
