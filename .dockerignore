@@ -1,5 +1,6 @@
 .idea
 Dockerfile
 config.toml
+cache/
 logs/
 golbat
