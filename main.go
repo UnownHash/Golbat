@@ -418,7 +418,7 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		if err == context.DeadlineExceeded {
-			log.Warn("Graceful shutdown timed out, exiting.")
+			log.Warn("http server drain timed out after 5s (in-flight requests dropped); continuing shutdown — write-behind flush and pokemon preservation still run")
 		} else {
 			log.Errorf("Error during http server shutdown: %s", err)
 		}
