@@ -32,6 +32,21 @@ func (l ScalarList) Len() int {
 
 func (l ScalarList) At(i int) protoreflect.Value { return l.l.Get(i) }
 
+// StringList wraps a repeated string field. Unlike ScalarList.At (which
+// returns a raw protoreflect.Value whose .String() is an unsafe view into
+// the parse's arena-backed payload copy), At clones its result so callers
+// can retain individual elements without pinning the whole payload.
+type StringList struct{ l protoreflect.List }
+
+func (l StringList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l StringList) At(i int) string { return strings.Clone(l.l.Get(i).String()) }
+
 // AdDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.AdDetails message.
 type AdDetails struct{ m protoreflect.Message }
 
@@ -146,11 +161,11 @@ func AsAddFriendQuestProto(m protoreflect.Message) AddFriendQuestProto {
 
 func (x AddFriendQuestProto) IsZero() bool { return x.m == nil }
 
-func (x AddFriendQuestProto) GetAddedFriendIds() ScalarList {
+func (x AddFriendQuestProto) GetAddedFriendIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_AddFriendQuestProto_added_friend_ids).List()}
+	return StringList{x.m.Get(fd_AddFriendQuestProto_added_friend_ids).List()}
 }
 
 // AppliedAttackDefenseBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedAttackDefenseBonusProto message.
@@ -2140,11 +2155,11 @@ func AsBattleQuestProto(m protoreflect.Message) BattleQuestProto {
 
 func (x BattleQuestProto) IsZero() bool { return x.m == nil }
 
-func (x BattleQuestProto) GetBattleId() ScalarList {
+func (x BattleQuestProto) GetBattleId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_BattleQuestProto_battle_id).List()}
+	return StringList{x.m.Get(fd_BattleQuestProto_battle_id).List()}
 }
 
 // BattleResourceProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleResourceProto message.
@@ -3079,11 +3094,11 @@ func (x ClientMapCellProto) GetWildPokemon() WildPokemonProtoList {
 	return WildPokemonProtoList{x.m.Get(fd_ClientMapCellProto_wild_pokemon).List()}
 }
 
-func (x ClientMapCellProto) GetDeletedObject() ScalarList {
+func (x ClientMapCellProto) GetDeletedObject() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_ClientMapCellProto_deleted_object).List()}
+	return StringList{x.m.Get(fd_ClientMapCellProto_deleted_object).List()}
 }
 
 func (x ClientMapCellProto) GetIsTruncatedList() bool {
@@ -5999,11 +6014,11 @@ func (x FortDetailsOutProto) GetName() string {
 	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_name).String())
 }
 
-func (x FortDetailsOutProto) GetImageUrl() ScalarList {
+func (x FortDetailsOutProto) GetImageUrl() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_FortDetailsOutProto_image_url).List()}
+	return StringList{x.m.Get(fd_FortDetailsOutProto_image_url).List()}
 }
 
 func (x FortDetailsOutProto) GetFp() int32 {
@@ -6090,11 +6105,11 @@ func (x FortDetailsOutProto) GetEventInfo() EventInfoProto {
 	return EventInfoProto{}
 }
 
-func (x FortDetailsOutProto) GetPromoDescription() ScalarList {
+func (x FortDetailsOutProto) GetPromoDescription() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_FortDetailsOutProto_promo_description).List()}
+	return StringList{x.m.Get(fd_FortDetailsOutProto_promo_description).List()}
 }
 
 func (x FortDetailsOutProto) GetCallToActionLink() string {
@@ -6835,11 +6850,11 @@ func AsGamDetails(m protoreflect.Message) GamDetails {
 
 func (x GamDetails) IsZero() bool { return x.m == nil }
 
-func (x GamDetails) GetGamRequestKeywords() ScalarList {
+func (x GamDetails) GetGamRequestKeywords() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_GamDetails_gam_request_keywords).List()}
+	return StringList{x.m.Get(fd_GamDetails_gam_request_keywords).List()}
 }
 
 // GameplayWeatherProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GameplayWeatherProto message.
@@ -7440,11 +7455,11 @@ func (x GetRoutesOutProto_RouteTab) GetTitleStringId() string {
 	return strings.Clone(x.m.Get(fd_GetRoutesOutProto_RouteTab_title_string_id).String())
 }
 
-func (x GetRoutesOutProto_RouteTab) GetRouteIds() ScalarList {
+func (x GetRoutesOutProto_RouteTab) GetRouteIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_GetRoutesOutProto_RouteTab_route_ids).List()}
+	return StringList{x.m.Get(fd_GetRoutesOutProto_RouteTab_route_ids).List()}
 }
 
 // GetStardustQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetStardustQuestProto message.
@@ -7840,11 +7855,11 @@ func (x GiftBoxProto) GetFortImageUrl() string {
 	return strings.Clone(x.m.Get(fd_GiftBoxProto_fort_image_url).String())
 }
 
-func (x GiftBoxProto) GetStickersSent() ScalarList {
+func (x GiftBoxProto) GetStickersSent() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_GiftBoxProto_stickers_sent).List()}
+	return StringList{x.m.Get(fd_GiftBoxProto_stickers_sent).List()}
 }
 
 func (x GiftBoxProto) GetShareTrainerInfoWithPostcard() bool {
@@ -8316,18 +8331,18 @@ func (x GymGetInfoOutProto) GetDisplayWeather() DisplayWeatherProto {
 	return DisplayWeatherProto{}
 }
 
-func (x GymGetInfoOutProto) GetPromoImage() ScalarList {
+func (x GymGetInfoOutProto) GetPromoImage() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_GymGetInfoOutProto_promo_image).List()}
+	return StringList{x.m.Get(fd_GymGetInfoOutProto_promo_image).List()}
 }
 
-func (x GymGetInfoOutProto) GetPromoDescription() ScalarList {
+func (x GymGetInfoOutProto) GetPromoDescription() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_GymGetInfoOutProto_promo_description).List()}
+	return StringList{x.m.Get(fd_GymGetInfoOutProto_promo_description).List()}
 }
 
 func (x GymGetInfoOutProto) GetCallToActionLink() string {
@@ -10007,18 +10022,18 @@ func AsMultiSelectorProto(m protoreflect.Message) MultiSelectorProto {
 
 func (x MultiSelectorProto) IsZero() bool { return x.m == nil }
 
-func (x MultiSelectorProto) GetKeys() ScalarList {
+func (x MultiSelectorProto) GetKeys() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_MultiSelectorProto_keys).List()}
+	return StringList{x.m.Get(fd_MultiSelectorProto_keys).List()}
 }
 
-func (x MultiSelectorProto) GetNextSteps() ScalarList {
+func (x MultiSelectorProto) GetNextSteps() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_MultiSelectorProto_next_steps).List()}
+	return StringList{x.m.Get(fd_MultiSelectorProto_next_steps).List()}
 }
 
 // NearbyPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NearbyPokemonProto message.
@@ -10260,11 +10275,11 @@ func (x NpcEncounterProto_NpcEncounterStep) GetEvent() NpcEventProto {
 	return NpcEventProto{}
 }
 
-func (x NpcEncounterProto_NpcEncounterStep) GetNextStep() ScalarList {
+func (x NpcEncounterProto_NpcEncounterStep) GetNextStep() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_next_step).List()}
+	return StringList{x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_next_step).List()}
 }
 
 func (x NpcEncounterProto_NpcEncounterStep) GetNpcDialog() QuestDialogProtoList {
@@ -13428,11 +13443,11 @@ func (x PokemonFortProto) GetArExperiencesAllowed() bool {
 	return x.m.Get(fd_PokemonFortProto_ar_experiences_allowed).Bool()
 }
 
-func (x PokemonFortProto) GetStampCollectionIds() ScalarList {
+func (x PokemonFortProto) GetStampCollectionIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_PokemonFortProto_stamp_collection_ids).List()}
+	return StringList{x.m.Get(fd_PokemonFortProto_stamp_collection_ids).List()}
 }
 
 func (x PokemonFortProto) HasTappable() bool {
@@ -14042,11 +14057,11 @@ func (x PokemonProto) GetPokemonTagIds() ScalarList {
 	return ScalarList{x.m.Get(fd_PokemonProto_pokemon_tag_ids).List()}
 }
 
-func (x PokemonProto) GetOriginEvents() ScalarList {
+func (x PokemonProto) GetOriginEvents() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_PokemonProto_origin_events).List()}
+	return StringList{x.m.Get(fd_PokemonProto_origin_events).List()}
 }
 
 func (x PokemonProto) GetEggSlotType() pogo.EggSlotType {
@@ -17325,11 +17340,11 @@ func (x RoutePin) GetMessage() string {
 	return strings.Clone(x.m.Get(fd_RoutePin_message).String())
 }
 
-func (x RoutePin) GetStickerIds() ScalarList {
+func (x RoutePin) GetStickerIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_RoutePin_sticker_ids).List()}
+	return StringList{x.m.Get(fd_RoutePin_sticker_ids).List()}
 }
 
 func (x RoutePin) GetStickerTotal() int32 {
@@ -17808,11 +17823,11 @@ func (x SharedRouteProto) GetPins() RoutePinList {
 	return RoutePinList{x.m.Get(fd_SharedRouteProto_pins).List()}
 }
 
-func (x SharedRouteProto) GetTags() ScalarList {
+func (x SharedRouteProto) GetTags() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_SharedRouteProto_tags).List()}
+	return StringList{x.m.Get(fd_SharedRouteProto_tags).List()}
 }
 
 func (x SharedRouteProto) HasSponsorMetadata() bool {
@@ -17972,11 +17987,11 @@ func AsSpinPokestopQuestProto(m protoreflect.Message) SpinPokestopQuestProto {
 
 func (x SpinPokestopQuestProto) IsZero() bool { return x.m == nil }
 
-func (x SpinPokestopQuestProto) GetFortIds() ScalarList {
+func (x SpinPokestopQuestProto) GetFortIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_SpinPokestopQuestProto_fort_ids).List()}
+	return StringList{x.m.Get(fd_SpinPokestopQuestProto_fort_ids).List()}
 }
 
 // SponsoredDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SponsoredDetailsProto message.
@@ -17996,18 +18011,18 @@ func AsSponsoredDetailsProto(m protoreflect.Message) SponsoredDetailsProto {
 
 func (x SponsoredDetailsProto) IsZero() bool { return x.m == nil }
 
-func (x SponsoredDetailsProto) GetPromoImageUrl() ScalarList {
+func (x SponsoredDetailsProto) GetPromoImageUrl() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_SponsoredDetailsProto_promo_image_url).List()}
+	return StringList{x.m.Get(fd_SponsoredDetailsProto_promo_image_url).List()}
 }
 
-func (x SponsoredDetailsProto) GetPromoDescription() ScalarList {
+func (x SponsoredDetailsProto) GetPromoDescription() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_SponsoredDetailsProto_promo_description).List()}
+	return StringList{x.m.Get(fd_SponsoredDetailsProto_promo_description).List()}
 }
 
 func (x SponsoredDetailsProto) GetCallToActionLink() string {
@@ -18642,11 +18657,11 @@ func AsTradePokemonQuestProto(m protoreflect.Message) TradePokemonQuestProto {
 
 func (x TradePokemonQuestProto) IsZero() bool { return x.m == nil }
 
-func (x TradePokemonQuestProto) GetFriendId() ScalarList {
+func (x TradePokemonQuestProto) GetFriendId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_TradePokemonQuestProto_friend_id).List()}
+	return StringList{x.m.Get(fd_TradePokemonQuestProto_friend_id).List()}
 }
 
 // TravelRouteQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TravelRouteQuestProto message.
@@ -18666,11 +18681,11 @@ func AsTravelRouteQuestProto(m protoreflect.Message) TravelRouteQuestProto {
 
 func (x TravelRouteQuestProto) IsZero() bool { return x.m == nil }
 
-func (x TravelRouteQuestProto) GetRouteId() ScalarList {
+func (x TravelRouteQuestProto) GetRouteId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_TravelRouteQuestProto_route_id).List()}
+	return StringList{x.m.Get(fd_TravelRouteQuestProto_route_id).List()}
 }
 
 // TutorialCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.TutorialCreateDetail message.
@@ -18939,11 +18954,11 @@ func AsWithAuthProviderTypeProto(m protoreflect.Message) WithAuthProviderTypePro
 
 func (x WithAuthProviderTypeProto) IsZero() bool { return x.m == nil }
 
-func (x WithAuthProviderTypeProto) GetAuthProviderType() ScalarList {
+func (x WithAuthProviderTypeProto) GetAuthProviderType() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_WithAuthProviderTypeProto_auth_provider_type).List()}
+	return StringList{x.m.Get(fd_WithAuthProviderTypeProto_auth_provider_type).List()}
 }
 
 // WithBadgeTypeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithBadgeTypeProto message.
@@ -19275,11 +19290,11 @@ func AsWithFortIdProto(m protoreflect.Message) WithFortIdProto {
 
 func (x WithFortIdProto) IsZero() bool { return x.m == nil }
 
-func (x WithFortIdProto) GetFortIds() ScalarList {
+func (x WithFortIdProto) GetFortIds() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_WithFortIdProto_fort_ids).List()}
+	return StringList{x.m.Get(fd_WithFortIdProto_fort_ids).List()}
 }
 
 // WithFriendLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithFriendLevelProto message.
@@ -19519,11 +19534,11 @@ func (x WithNpcCombatProto) GetRequiresWin() bool {
 	return x.m.Get(fd_WithNpcCombatProto_requires_win).Bool()
 }
 
-func (x WithNpcCombatProto) GetCombatNpcTrainerId() ScalarList {
+func (x WithNpcCombatProto) GetCombatNpcTrainerId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_WithNpcCombatProto_combat_npc_trainer_id).List()}
+	return StringList{x.m.Get(fd_WithNpcCombatProto_combat_npc_trainer_id).List()}
 }
 
 // WithOpponentPokemonBattleStatusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithOpponentPokemonBattleStatusProto message.
@@ -19622,11 +19637,11 @@ func AsWithPoiSponsorIdProto(m protoreflect.Message) WithPoiSponsorIdProto {
 
 func (x WithPoiSponsorIdProto) IsZero() bool { return x.m == nil }
 
-func (x WithPoiSponsorIdProto) GetSponsorId() ScalarList {
+func (x WithPoiSponsorIdProto) GetSponsorId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_WithPoiSponsorIdProto_sponsor_id).List()}
+	return StringList{x.m.Get(fd_WithPoiSponsorIdProto_sponsor_id).List()}
 }
 
 // WithPokemonAlignmentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.WithPokemonAlignmentProto message.
@@ -19883,11 +19898,11 @@ func (x WithPvpCombatProto) GetRequiresWin() bool {
 	return x.m.Get(fd_WithPvpCombatProto_requires_win).Bool()
 }
 
-func (x WithPvpCombatProto) GetCombatLeagueTemplateId() ScalarList {
+func (x WithPvpCombatProto) GetCombatLeagueTemplateId() StringList {
 	if x.m == nil {
-		return ScalarList{}
+		return StringList{}
 	}
-	return ScalarList{x.m.Get(fd_WithPvpCombatProto_combat_league_template_id).List()}
+	return StringList{x.m.Get(fd_WithPvpCombatProto_combat_league_template_id).List()}
 }
 
 func (x WithPvpCombatProto) GetCombatLeagueBadge() pogo.HoloBadgeType {

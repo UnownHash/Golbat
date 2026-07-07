@@ -150,3 +150,124 @@ func TestStringGetterDoesNotPinArenaPayload(t *testing.T) {
 	}
 	runtime.KeepAlive(retained)
 }
+
+// buildLargeFortDetailsPayload builds a FortDetailsOutProto whose repeated
+// ImageUrl field carries one short, distinguishable element (index 0) plus
+// many large filler elements, totalling roughly targetBytes of wire data.
+// Mirrors the real Gym/Pokestop call sites (decoder/gym_decode.go,
+// decoder/pokestop_decode.go), which only ever read ImageUrl[0].
+func buildLargeFortDetailsPayload(t *testing.T, targetBytes int) []byte {
+	t.Helper()
+	const dummyLen = 1500
+	dummy := make([]byte, dummyLen)
+	for i := range dummy {
+		dummy[i] = byte('a' + i%26)
+	}
+
+	numEntries := targetBytes/dummyLen + 2 // +2: proto tag/length overhead per entry, round up
+	if numEntries < 2 {
+		numEntries = 2
+	}
+
+	imageUrls := make([]string, 0, numEntries)
+	imageUrls = append(imageUrls, "IMG0000000") // exactly 10 bytes, index 0
+	for i := 1; i < numEntries; i++ {
+		imageUrls = append(imageUrls, string(dummy))
+	}
+
+	fort := &pogo.FortDetailsOutProto{
+		Id:       "FORT000000",
+		Name:     "Test Fort",
+		ImageUrl: imageUrls,
+	}
+	raw, err := proto.Marshal(fort)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+	if len(raw) < targetBytes {
+		t.Fatalf("payload smaller than requested: got %d want >= %d", len(raw), targetBytes)
+	}
+	return raw
+}
+
+// TestRepeatedStringListDoesNotPinArenaPayload is a regression test for the
+// StringList arena-retention hazard: pogoshimgen used to route repeated
+// STRING fields through the untyped ScalarList, whose At(i) returns a raw
+// protoreflect.Value -- calling .String() on it (as the two real call sites
+// below once did) yields the same unsafe.String arena view that scalarGetter
+// already clones out of for *singular* string fields. StringList.At now
+// clones (strings.Clone) so repeated-field callers get the same protection.
+//
+// This mirrors TestStringGetterDoesNotPinArenaPayload's methodology but
+// reads element 0 of a *repeated* string field (ImageUrl) via
+// pogoshim.StringList.At -- the exact accessor
+// decoder/gym_decode.go:updateGymFromFortProto and
+// decoder/pokestop_decode.go:updatePokestopFromFortDetailsProto use to
+// populate Gym.Url/Pokestop.Url. Before the generator fix, this measured
+// ~53MB of heap growth retaining 300 ten-byte strings (one ~176KB payload
+// copy pinned per retained string); after the fix it is expected to be near
+// zero, well under the bound below.
+func TestRepeatedStringListDoesNotPinArenaPayload(t *testing.T) {
+	const iterations = 300
+	const targetPayloadBytes = 176_000
+	const maxHeapGrowthBytes = 20 << 20 // 20MB -- generous margin over near-zero, far below the ~53MB pre-fix pin
+
+	payload := buildLargeFortDetailsPayload(t, targetPayloadBytes)
+	t.Logf("payload size: %d bytes, iterations: %d, naive pin would be ~%dMB",
+		len(payload), iterations, len(payload)*iterations/(1<<20))
+
+	ty := hyperpb.CompileMessageDescriptor((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor())
+
+	runtime.GC()
+	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
+
+	retained := make([]string, 0, iterations)
+	for i := 0; i < iterations; i++ {
+		shared := new(hyperpb.Shared)
+		msg := shared.NewMessage(ty)
+		if err := msg.Unmarshal(payload); err != nil {
+			t.Fatalf("iteration %d: unmarshal: %v", i, err)
+		}
+
+		fortData := pogoshim.AsFortDetailsOutProto(msg.ProtoReflect())
+		imageUrls := fortData.GetImageUrl()
+		if imageUrls.Len() == 0 {
+			t.Fatalf("iteration %d: no image urls", i)
+		}
+
+		url := imageUrls.At(0)
+		if len(url) != 10 {
+			t.Fatalf("iteration %d: expected a 10-byte image url, got %q (%d bytes)", i, url, len(url))
+		}
+		retained = append(retained, url)
+
+		shared.Free()
+	}
+
+	runtime.GC()
+	runtime.GC()
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+
+	var delta int64
+	if after.HeapInuse > before.HeapInuse {
+		delta = int64(after.HeapInuse - before.HeapInuse)
+	}
+	t.Logf("HeapInuse before=%d after=%d delta=%d (%.2fMB); bound=%dMB",
+		before.HeapInuse, after.HeapInuse, delta, float64(delta)/(1<<20), maxHeapGrowthBytes/(1<<20))
+
+	if delta > maxHeapGrowthBytes {
+		t.Fatalf("heap grew by %.2fMB retaining %d small strings from a repeated field -- exceeds %dMB bound; "+
+			"StringList.At is likely aliasing the arena payload instead of cloning",
+			float64(delta)/(1<<20), iterations, maxHeapGrowthBytes/(1<<20))
+	}
+
+	// Sanity: the retained strings must still be correct/live (and this
+	// keeps `retained` reachable through the measurement above).
+	if retained[0] != "IMG0000000" || retained[iterations-1] != "IMG0000000" {
+		t.Fatalf("unexpected retained values: first=%q last=%q", retained[0], retained[iterations-1])
+	}
+	runtime.KeepAlive(retained)
+}

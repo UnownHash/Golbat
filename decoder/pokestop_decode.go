@@ -193,7 +193,7 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto pogoshim.FortSearc
 			if ids := info.GetCombatNpcTrainerId(); ids.Len() > 0 {
 				templateIds = make([]string, ids.Len())
 				for i := range templateIds {
-					templateIds[i] = ids.At(i).String()
+					templateIds[i] = ids.At(i)
 				}
 			}
 			infoData["template_ids"] = templateIds
@@ -454,7 +454,7 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData pogoshim.FortD
 	stop.SetLat(fortData.GetLatitude())
 	stop.SetLon(fortData.GetLongitude())
 	if imageUrls := fortData.GetImageUrl(); imageUrls.Len() > 0 {
-		stop.SetUrl(null.StringFrom(imageUrls.At(0).String()))
+		stop.SetUrl(null.StringFrom(imageUrls.At(0)))
 	}
 	stop.SetName(null.StringFrom(fortData.GetName()))
 

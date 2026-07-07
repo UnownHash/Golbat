@@ -184,7 +184,7 @@ func (gym *Gym) updateGymFromFortProto(fortData pogoshim.FortDetailsOutProto) *G
 	gym.SetLat(fortData.GetLatitude())
 	gym.SetLon(fortData.GetLongitude())
 	if imageUrls := fortData.GetImageUrl(); imageUrls.Len() > 0 {
-		gym.SetUrl(null.StringFrom(imageUrls.At(0).String()))
+		gym.SetUrl(null.StringFrom(imageUrls.At(0)))
 	}
 	gym.SetName(null.StringFrom(fortData.GetName()))
 
