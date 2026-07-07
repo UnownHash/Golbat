@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"math"
 	"runtime"
 	"sync"
 	"unsafe"
@@ -186,11 +187,11 @@ func processPolygon(
 		return
 	}
 
-	// Convert orb.Polygon to s2.Loop for efficient covering
-	ring := polygon[0] // outer ring
-	points := make([]s2.Point, len(ring))
-	for i, p := range ring {
-		points[i] = s2.PointFromLatLng(s2.LatLngFromDegrees(p.Lat(), p.Lon()))
+	// Convert the outer ring to a sanitized s2.Loop (see ringToS2Points)
+	points := ringToS2Points(polygon[0])
+	if len(points) < 3 {
+		log.Warnf("GEO: fence %s/%s has a degenerate outer ring (<3 distinct vertices); skipped from S2 index (polygon fallback still applies)", area.Parent, area.Name)
+		return
 	}
 
 	loop := s2.LoopFromPoints(points)
@@ -199,6 +200,19 @@ func processPolygon(
 	// and the forced fine-level covering of "the planet" effectively never
 	// finishes. Normalize picks the interpretation with area < 2*pi.
 	loop.Normalize()
+	if err := loop.Validate(); err != nil {
+		log.Warnf("GEO: fence %s/%s produced an invalid S2 loop (%v); skipped from S2 index (polygon fallback still applies)", area.Parent, area.Name, err)
+		return
+	}
+	// Inverted-loop guard: a pathological ring can survive Normalize
+	// covering the COMPLEMENT of the fence — one production file had 14
+	// such fences, each producing a planet-sized covering (6.3M interior
+	// cells, 4.5 GB, OOM on small hosts). No legitimate scan fence
+	// approaches 25% of Earth.
+	if loop.Area() > math.Pi {
+		log.Warnf("GEO: fence %s/%s covers %.0f%% of the planet after normalization — inverted or corrupt ring; skipped from S2 index (polygon fallback still applies)", area.Parent, area.Name, 100*loop.Area()/(4*math.Pi))
+		return
+	}
 	s2Polygon := s2.PolygonFromLoops([]*s2.Loop{loop})
 
 	// Hole rings become standalone normalized polygons: a cell fully inside
@@ -211,12 +225,16 @@ func processPolygon(
 		if len(holeRing) == 0 {
 			continue
 		}
-		hp := make([]s2.Point, len(holeRing))
-		for i, p := range holeRing {
-			hp[i] = s2.PointFromLatLng(s2.LatLngFromDegrees(p.Lat(), p.Lon()))
+		hp := ringToS2Points(holeRing)
+		if len(hp) < 3 {
+			continue
 		}
 		hl := s2.LoopFromPoints(hp)
 		hl.Normalize()
+		if hl.Validate() != nil || hl.Area() > math.Pi {
+			log.Warnf("GEO: fence %s/%s has an invalid hole ring; hole ignored in S2 index", area.Parent, area.Name)
+			continue
+		}
 		holes = append(holes, s2.PolygonFromLoops([]*s2.Loop{hl}))
 	}
 
@@ -228,6 +246,31 @@ func processPolygon(
 	for _, cellID := range coverer.Covering(s2Polygon) {
 		classifyCell(s2Polygon, holes, cellID, area, addArea, addEdgeCell)
 	}
+}
+
+// ringToS2Points converts a GeoJSON ring to s2 points, dropping the closing
+// duplicate vertex and any consecutive duplicates. GeoJSON rings repeat the
+// first vertex as the last; s2 loops are implicitly closed and a repeated
+// vertex creates a degenerate edge — an INVALID loop on which Normalize's
+// turning-angle math is undefined. In one production geofence file, 14 of
+// 100 city fences (valid GeoJSON, clean vertices) came out INVERTED from
+// exactly this, each covering the whole planet minus the city.
+func ringToS2Points(ring orb.Ring) []s2.Point {
+	points := make([]s2.Point, 0, len(ring))
+	var last s2.Point
+	for i, p := range ring {
+		pt := s2.PointFromLatLng(s2.LatLngFromDegrees(p.Lat(), p.Lon()))
+		if i > 0 && pt == last {
+			continue
+		}
+		points = append(points, pt)
+		last = pt
+	}
+	// drop closing duplicate (ring[0] repeated at the end)
+	if len(points) > 1 && points[0] == points[len(points)-1] {
+		points = points[:len(points)-1]
+	}
+	return points
 }
 
 // classifyCell stores fully-contained cells as interior at their own level;
