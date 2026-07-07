@@ -219,6 +219,13 @@ func (oc *OtterCache[K, V]) Delete(key K) {
 	oc.c.Invalidate(key)
 }
 
+// Len is otter's EstimatedSize — approximate under concurrent mutation,
+// exact enough for its caller (the shutdown preserve pass logging how
+// many rows it is about to write).
+func (oc *OtterCache[K, V]) Len() int {
+	return oc.c.EstimatedSize()
+}
+
 // Range iterates entries (weakly consistent snapshot; expired entries are
 // skipped). Return false from fn to stop.
 func (oc *OtterCache[K, V]) Range(fn func(key K, value V) bool) {
