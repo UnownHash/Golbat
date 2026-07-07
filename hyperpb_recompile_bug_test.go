@@ -10,7 +10,8 @@ import (
 )
 
 // TestHyperpbRecompileRepeatedStringDuplication is a CANARY for the hyperpb
-// v0.1.3 bug that made proto_engine.pgo default to false: a profile-guided
+// v0.1.3 bug (https://github.com/bufbuild/hyperpb-go/issues/39) that
+// made proto_engine.pgo default to false: a profile-guided
 // Recompile produces a parser that duplicates repeated-string elements
 // (image_url decodes with 2 entries instead of 1). Found live by shadow
 // verification on fort_details traffic; the baseline compiled parser is
