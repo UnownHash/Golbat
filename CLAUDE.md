@@ -351,6 +351,8 @@ Enabled by `config.Config.FortInMemory`. Fort cache TTL is extended to 25 hours 
 
 **Incident data** on FortLookup is updated separately via `updatePokestopIncidentLookup()` because incidents load after pokestops during preload, and incident updates come through a different code path than pokestop updates.
 
+**Scaling caveat (fort scans are low-traffic today; this is the pre-scoped lever if that changes):** FortLookup's value layout is already right — flat scalars by value, one fetch per candidate, no pointer chain (the design the pokemon lookup converged to in the de-pointer change). The weakness at pokemon-like scan volumes would be **string keys**: ~35-byte fort IDs are hashed per Load, key-compared per bucket walk, and stored as entries in the R-tree itself (pointer-laden tree nodes; ~2M string objects in every GC mark). The fix, when a profile demands it: intern fort IDs to dense integers at save/delete and key both the tree and the lookup map by the intern ID — one change removes the hashing, the compares, and the tree/GC pointer load together.
+
 ### Scanning and DNF Filters
 
 #### Pokemon Scan
