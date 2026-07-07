@@ -13,7 +13,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/tidwall/rtree"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 // PokemonLookupCacheItem holds the scan-filter data INLINE BY VALUE.
@@ -152,7 +152,7 @@ func initPokemonRtree() {
 	// async relative to updaters holding the entity lock, so this races
 	// concurrent saves; the cleanup itself is serialized in
 	// handlePokemonEviction.
-	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ cache.EvictionReason) {
+	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ ottercache.EvictionReason) {
 		handlePokemonEviction(pokemon)
 	})
 }

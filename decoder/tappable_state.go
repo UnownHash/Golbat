@@ -12,7 +12,7 @@ import (
 
 	"golbat/db"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
@@ -125,7 +125,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 	tappable.ClearDirty()
 	if isNewRecord {
-		tappableCache.Set(tappable.Id, tappable, cache.DefaultTTL)
+		tappableCache.Set(tappable.Id, tappable, ottercache.DefaultTTL)
 		tappable.newRecord = false
 	}
 }

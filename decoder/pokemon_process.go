@@ -10,7 +10,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails, encounter *pogo.EncounterOutProto, username string, timestamp int64) string {
@@ -54,7 +54,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		if unlock != nil {
 			unlock()
 		}
-		diskEncounterCache.Set(encounterId, encounter, cache.DefaultTTL)
+		diskEncounterCache.Set(encounterId, encounter, ottercache.DefaultTTL)
 		return fmt.Sprintf("%d Disk encounter without previous GMO - Pokemon stored for later", encounterId)
 	}
 	defer unlock()

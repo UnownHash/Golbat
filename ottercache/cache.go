@@ -1,7 +1,11 @@
-// Package cache provides Golbat's hardened adapter over otter v2. It is a
-// leaf package (depends only on otter and golbat/util) so that decoder,
-// encounter_cache, and main can all share one cache implementation.
-package cache
+// Package ottercache provides Golbat's hardened adapter over otter v2. It
+// is a leaf package (depends only on otter and golbat/util) so that
+// decoder, encounter_cache, and main can all share one cache
+// implementation. (Named ottercache, not cache: the runtime's `cache/`
+// data directory — koji geofences, master data — is docker- and
+// git-ignored, and a package named cache/ is excluded from the Docker
+// build context.)
+package ottercache
 
 import (
 	"sync/atomic"

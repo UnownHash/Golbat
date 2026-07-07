@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 // Value is the object that is inserted into the cache.
@@ -38,7 +38,7 @@ func (v *Value) NumAccountsSeen() int {
 // EncounterCache is an object that represents an auto-expiring
 // cache, providing methods to manage cache entries.
 //
-// A thin Value-semantics layer over the shared cache.OtterCache adapter
+// A thin Value-semantics layer over the shared ottercache.OtterCache adapter
 // (writing-based expiry: reads do not extend TTLs — same as the previous
 // DisableTouchOnHit configuration).
 type EncounterCache struct {
@@ -47,7 +47,7 @@ type EncounterCache struct {
 	// there's built-in way to synchronize changes to the values.
 	// The current use of this cache is guarded by the stats aggregation
 	// worker being the only mutator.
-	encounterCache *cache.OtterCache[uint64, Value]
+	encounterCache *ottercache.OtterCache[uint64, Value]
 }
 
 // UpdateTTL updates the ttl for a cache entry, if an entry
@@ -102,7 +102,7 @@ func NewEncounterCache(defaultTTL time.Duration) *EncounterCache {
 		defaultTTL = 60 * time.Minute
 	}
 	return &EncounterCache{
-		encounterCache: cache.NewOtterCache(cache.OtterCacheConfig[uint64, Value]{
+		encounterCache: ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, Value]{
 			Name:       "encounter_stats",
 			DefaultTTL: defaultTTL,
 			TouchOnHit: false,

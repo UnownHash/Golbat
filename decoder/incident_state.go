@@ -12,7 +12,7 @@ import (
 	"golbat/db"
 	"golbat/webhooks"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 // incidentSelectColumns defines the columns for incident queries.
@@ -164,7 +164,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	incident.ClearDirty()
 	if isNewRecord {
 		incident.newRecord = false
-		incidentCache.Set(incident.Id, incident, cache.DefaultTTL)
+		incidentCache.Set(incident.Id, incident, ottercache.DefaultTTL)
 	}
 }
 

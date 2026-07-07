@@ -13,7 +13,7 @@ import (
 
 	"golbat/config"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 type FortLookup struct {
@@ -90,15 +90,15 @@ func initFortRtree() {
 	// function), so callbacks can never observe a nil evictor or lookup
 	// cache. Mirrors the structure of initPokemonRtree.
 	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ cache.EvictionReason) {
+		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ ottercache.EvictionReason) {
 			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
 		})
-		gymCache.OnEviction(func(_ string, g *Gym, _ cache.EvictionReason) {
+		gymCache.OnEviction(func(_ string, g *Gym, _ ottercache.EvictionReason) {
 			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
 		})
 	}
 
-	stationCache.OnEviction(func(stationId string, s *Station, _ cache.EvictionReason) {
+	stationCache.OnEviction(func(stationId string, s *Station, _ ottercache.EvictionReason) {
 		clearStationBattleState(stationId)
 		if config.Config.FortInMemory {
 			deferFortEviction(STATION, s.Id, s.Lat, s.Lon)

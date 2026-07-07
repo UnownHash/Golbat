@@ -3,7 +3,7 @@ package decoder
 import (
 	"golbat/pogo"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 type WeatherConsensusState struct {
@@ -38,7 +38,7 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 	}
 	state := &WeatherConsensusState{}
 	state.reset(hourKey)
-	weatherConsensusCache.Set(cellId, state, cache.DefaultTTL)
+	weatherConsensusCache.Set(cellId, state, ottercache.DefaultTTL)
 	return state
 }
 

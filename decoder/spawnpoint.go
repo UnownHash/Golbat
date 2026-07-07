@@ -15,7 +15,7 @@ import (
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 
-	"golbat/cache"
+	"golbat/ottercache"
 )
 
 // spawnpointSelectColumns defines the columns for spawnpoint queries.
@@ -416,7 +416,7 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	spawnpoint.ClearDirty()
 	if isNewRecord {
 		spawnpoint.newRecord = false
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, cache.DefaultTTL)
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ottercache.DefaultTTL)
 	}
 }
 
