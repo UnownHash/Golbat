@@ -307,9 +307,11 @@ func TestDecodeWithArenaPGoRace(t *testing.T) {
 }
 
 // TestPgoWarmupDeadlineStopsRecording guards the Wave 3 PGO deadline:
-// recordPGO must no-op once pgoWarmupDeadline has elapsed since
-// startPgoWarmupClock() ran, even far short of pgoWarmupSamples, so a
-// rarely-hit method doesn't pay the double-parse warmup cost forever.
+// once pgoWarmupDeadline has elapsed since startPgoWarmupClock() ran, even
+// far short of pgoWarmupSamples, recordPGO must record no further samples,
+// keep the BASELINE parser (no recompile), release the pending profile
+// (recorder medians measured ~28MB resident across the 28-handle fleet),
+// and flip done so the hot path stops entering recordPGO at all.
 func TestPgoWarmupDeadlineStopsRecording(t *testing.T) {
 	if !hyperpbSupported {
 		t.Skip("no PGO warmup concept on the std-only build")
@@ -323,6 +325,7 @@ func TestPgoWarmupDeadlineStopsRecording(t *testing.T) {
 
 	eng := newProtoEngine(engMethodFortDetails, (*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(),
 		func() proto.Message { return &pogo.FortDetailsOutProto{} })
+	baselineTy := eng.ty.Load()
 
 	// Simulate the warmup deadline having already passed.
 	pgoWarmupDeadlineAt.Store(time.Now().Add(-time.Minute).UnixNano())
@@ -334,10 +337,16 @@ func TestPgoWarmupDeadlineStopsRecording(t *testing.T) {
 	eng.recordPGO(raw)
 
 	if eng.profile.seen != 0 {
-		t.Fatalf("expected recordPGO to no-op past the warmup deadline, but profile.seen = %d", eng.profile.seen)
+		t.Fatalf("expected recordPGO to record no samples past the warmup deadline, but profile.seen = %d", eng.profile.seen)
 	}
-	if eng.profile.done.Load() {
-		t.Fatal("expected profile.done to remain false past the warmup deadline (no recompile should have happened)")
+	if eng.ty.Load() != baselineTy {
+		t.Fatal("expected the baseline parser to be kept past the warmup deadline (no recompile)")
+	}
+	if eng.profile.pending != nil {
+		t.Fatal("expected the pending profile to be released at the warmup deadline")
+	}
+	if !eng.profile.done.Load() {
+		t.Fatal("expected profile.done to be set at the warmup deadline so the hot path stops calling recordPGO")
 	}
 }
 
