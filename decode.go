@@ -144,22 +144,25 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 		// We should either assume AR quest, or trace inventory like RDM probably
 		return "No AR quest info"
 	}
-	decodedQuest := &pogo.FortSearchOutProto{}
-	if err := proto.Unmarshal(sDec, decodedQuest); err != nil {
+	maybeShadow(engMethodQuest, sDec)
+	res, err := decodeWithArena(engMethodQuest, questEngine, sDec,
+		pogoshim.AsFortSearchOutProto,
+		func(decodedQuest pogoshim.FortSearchOutProto) string {
+			if decodedQuest.GetResult() != pogo.FortSearchOutProto_SUCCESS {
+				statsCollector.IncDecodeQuest("error", "non_success")
+				res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.GetResult(),
+					pogo.FortSearchOutProto_Result_name[int32(decodedQuest.GetResult())])
+				return res
+			}
+
+			return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeQuest("error", "parse")
 		return "Parse failure"
 	}
-
-	if decodedQuest.Result != pogo.FortSearchOutProto_SUCCESS {
-		statsCollector.IncDecodeQuest("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedQuest.Result,
-			pogo.FortSearchOutProto_Result_name[int32(decodedQuest.Result)])
-		return res
-	}
-
-	return decoder.UpdatePokestopWithQuest(ctx, dbDetails, decodedQuest, *haveAr)
-
+	return res
 }
 
 func decodeSocialActionWithRequest(request []byte, payload []byte) string {
@@ -263,24 +266,28 @@ func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byt
 }
 
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
-	decodedFort := &pogo.FortDetailsOutProto{}
-	if err := proto.Unmarshal(sDec, decodedFort); err != nil {
+	maybeShadow(engMethodFortDetails, sDec)
+	res, err := decodeWithArena(engMethodFortDetails, fortDetailsEngine, sDec,
+		pogoshim.AsFortDetailsOutProto,
+		func(decodedFort pogoshim.FortDetailsOutProto) string {
+			switch decodedFort.GetFortType() {
+			case pogo.FortType_CHECKPOINT:
+				statsCollector.IncDecodeFortDetails("ok", "pokestop")
+				return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
+			case pogo.FortType_GYM:
+				statsCollector.IncDecodeFortDetails("ok", "gym")
+				return decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
+			}
+
+			statsCollector.IncDecodeFortDetails("ok", "unknown")
+			return "Unknown fort type"
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeFortDetails("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	switch decodedFort.FortType {
-	case pogo.FortType_CHECKPOINT:
-		statsCollector.IncDecodeFortDetails("ok", "pokestop")
-		return decoder.UpdatePokestopRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
-	case pogo.FortType_GYM:
-		statsCollector.IncDecodeFortDetails("ok", "gym")
-		return decoder.UpdateGymRecordWithFortDetailsOutProto(ctx, dbDetails, decodedFort)
-	}
-
-	statsCollector.IncDecodeFortDetails("ok", "unknown")
-	return "Unknown fort type"
+	return res
 }
 
 func decodeGetMapForts(ctx context.Context, sDec []byte) string {
@@ -358,22 +365,26 @@ func decodeGetRoutes(ctx context.Context, payload []byte) string {
 }
 
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
-	decodedGymInfo := &pogo.GymGetInfoOutProto{}
-	if err := proto.Unmarshal(sDec, decodedGymInfo); err != nil {
+	maybeShadow(engMethodGymInfo, sDec)
+	res, err := decodeWithArena(engMethodGymInfo, gymInfoEngine, sDec,
+		pogoshim.AsGymGetInfoOutProto,
+		func(decodedGymInfo pogoshim.GymGetInfoOutProto) string {
+			if decodedGymInfo.GetResult() != pogo.GymGetInfoOutProto_SUCCESS {
+				statsCollector.IncDecodeGetGymInfo("error", "non_success")
+				res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.GetResult(),
+					pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.GetResult())])
+				return res
+			}
+
+			statsCollector.IncDecodeGetGymInfo("ok", "")
+			return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeGetGymInfo("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if decodedGymInfo.Result != pogo.GymGetInfoOutProto_SUCCESS {
-		statsCollector.IncDecodeGetGymInfo("error", "non_success")
-		res := fmt.Sprintf(`GymGetInfoOutProto: Ignored non-success value %d:%s`, decodedGymInfo.Result,
-			pogo.GymGetInfoOutProto_Result_name[int32(decodedGymInfo.Result)])
-		return res
-	}
-
-	statsCollector.IncDecodeGetGymInfo("ok", "")
-	return decoder.UpdateGymRecordWithGymInfoProto(ctx, dbDetails, decodedGymInfo)
+	return res
 }
 
 func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {

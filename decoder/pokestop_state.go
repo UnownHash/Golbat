@@ -478,7 +478,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 	if getMapFort, ok := getMapFortsCache.Get(pokestop.Id); ok {
 		getMapFortsCache.Delete(pokestop.Id)
-		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
+		pokestop.updatePokestopFromMapFortSummary(getMapFort)
 		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
 	}
 }

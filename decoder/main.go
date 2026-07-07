@@ -15,7 +15,6 @@ import (
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
-	"golbat/pogo"
 	"golbat/pogoshim"
 	"golbat/stats_collector"
 	"golbat/webhooks"
@@ -83,12 +82,40 @@ type diskEncounterDecodeFunc func(payload []byte, process func(pogoshim.DiskEnco
 
 var diskEncounterDecoder diskEncounterDecodeFunc
 
-// getMapFortsCache retains the decoded *pogo.GetMapFortsOutProto_FortProto
-// itself (not just extracted fields), so GET_MAP_FORTS must stay on the std
-// engine (or this cache must be changed to copy out the values it needs)
-// before that method is ever flipped to hyperpb -- see the hyperpb migration
-// plan before changing proto_engine for this method.
-var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
+// mapFortSummary is the Golbat-owned copy of the GetMapFortsOutProto_FortProto
+// fields the fort-details/gym-info "we saw this fort before we knew about it"
+// path needs. getMapFortsCache stores this value type (never the shim or the
+// underlying proto/arena) so GET_MAP_FORTS is safe to run on either proto
+// engine -- retaining a hyperpb-backed shim past its arena's lifetime is the
+// one thing that is never allowed (see CLAUDE.md's proto engine invariants).
+type mapFortSummary struct {
+	Id        string
+	Latitude  float64
+	Longitude float64
+	ImageUrl  string
+	Name      string
+}
+
+// mapFortSummaryFromShim extracts mapFortSummary's fields from a parsed
+// GetMapFortsOutProto_FortProto at cache-Set time, before the shim (and any
+// arena backing it) goes out of scope.
+func mapFortSummaryFromShim(f pogoshim.GetMapFortsOutProto_FortProto) mapFortSummary {
+	summary := mapFortSummary{
+		Id:        f.GetId(),
+		Latitude:  f.GetLatitude(),
+		Longitude: f.GetLongitude(),
+		Name:      f.GetName(),
+	}
+	if images := f.GetImage(); images.Len() > 0 {
+		summary.ImageUrl = images.At(0).GetUrl()
+	}
+	return summary
+}
+
+// getMapFortsCache holds map-fort summaries for forts Golbat didn't yet know
+// about when a GET_MAP_FORTS response arrived, keyed by fort ID, so a later
+// FORT_DETAILS/GYM_GET_INFO for the same fort can backfill name/url/location.
+var getMapFortsCache *ottercache.OtterCache[string, mapFortSummary]
 
 var ProactiveIVSwitchSem chan bool
 
@@ -236,7 +263,7 @@ func initDataCache() {
 		TouchOnHit: false,
 	})
 
-	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, mapFortSummary]{
 		Name:       "map_forts",
 		DefaultTTL: 5 * time.Minute,
 		TouchOnHit: false,

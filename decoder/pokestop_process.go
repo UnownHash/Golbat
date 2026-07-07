@@ -11,10 +11,11 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.Id, "UpdatePokestopFromFortDetails")
+func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort pogoshim.FortDetailsOutProto) string {
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.GetId(), "UpdatePokestopFromFortDetails")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
@@ -25,23 +26,23 @@ func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDe
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
-	return fmt.Sprintf("%s %s", fort.Id, fort.Name)
+	return fmt.Sprintf("%s %s", fort.GetId(), fort.GetName())
 }
 
-func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.FortSearchOutProto, haveAr bool) string {
+func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest pogoshim.FortSearchOutProto, haveAr bool) string {
 	haveArStr := "NoAR"
 	if haveAr {
 		haveArStr = "AR"
 	}
 
-	if quest.ChallengeQuest == nil {
+	if !quest.HasChallengeQuest() {
 		statsCollector.IncDecodeQuest("error", "no_quest")
-		return fmt.Sprintf("%s %s Blank quest", quest.FortId, haveArStr)
+		return fmt.Sprintf("%s %s Blank quest", quest.GetFortId(), haveArStr)
 	}
 
 	statsCollector.IncDecodeQuest("ok", haveArStr)
 
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId, "UpdatePokestopWithQuest")
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.GetFortId(), "UpdatePokestopWithQuest")
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -56,7 +57,7 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	areas := MatchStatsGeofenceWithCell(pokestop.Lat, pokestop.Lon, uint64(pokestop.CellId.ValueOrZero()))
 	updateQuestStats(pokestop, haveAr, areas)
 
-	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
+	return fmt.Sprintf("%s %s %s", quest.GetFortId(), haveArStr, questTitle)
 }
 
 func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
@@ -90,7 +91,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	}
 	defer unlock()
 
-	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
+	pokestop.updatePokestopFromMapFortSummary(mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect())))
 	savePokestopRecord(ctx, db, pokestop)
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }

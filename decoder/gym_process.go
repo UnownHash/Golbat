@@ -8,10 +8,11 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	gym, unlock, err := getOrCreateGymRecord(ctx, db, fort.Id, "UpdateGymFromFortDetails")
+func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort pogoshim.FortDetailsOutProto) string {
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, fort.GetId(), "UpdateGymFromFortDetails")
 	if err != nil {
 		return err.Error()
 	}
@@ -25,8 +26,8 @@ func UpdateGymRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymInfo *pogo.GymGetInfoOutProto) string {
-	gym, unlock, err := getOrCreateGymRecord(ctx, db, gymInfo.GymStatusAndDefenders.PokemonFortProto.FortId, "UpdateGymFromGymInfo")
+func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymInfo pogoshim.GymGetInfoOutProto) string {
+	gym, unlock, err := getOrCreateGymRecord(ctx, db, gymInfo.GetGymStatusAndDefenders().GetPokemonFortProto().GetFortId(), "UpdateGymFromGymInfo")
 	if err != nil {
 		return err.Error()
 	}
@@ -51,7 +52,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	}
 	defer unlock()
 
-	gym.updateGymFromGetMapFortsOutProto(mapFort, false)
+	gym.updateGymFromMapFortSummary(mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect())), false)
 	saveGymRecord(ctx, db, gym)
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }

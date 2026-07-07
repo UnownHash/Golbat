@@ -10,6 +10,7 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 	"golbat/webhooks"
 
 	"golbat/ottercache"
@@ -196,7 +197,8 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ottercache.DefaultTTL)
+		summary := mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect()))
+		getMapFortsCache.Set(mapFort.Id, summary, ottercache.DefaultTTL)
 		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 	}
 	return status, output

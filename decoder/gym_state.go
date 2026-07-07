@@ -481,7 +481,7 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 	if getMapFort, ok := getMapFortsCache.Get(gym.Id); ok {
 		getMapFortsCache.Delete(gym.Id)
-		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
+		gym.updateGymFromMapFortSummary(getMapFort, skipName)
 		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
 	}
 }
