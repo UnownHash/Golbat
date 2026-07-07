@@ -273,9 +273,9 @@ func buildTestGmo(wildCp int32) *pogo.GetMapObjectsOutProto {
 
 // --- helpers to pull a uint64 digest through decodeStd/decodeHyperpb -------
 
-func digestViaStd[T any](t *testing.T, method string, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) uint64 {
+func digestViaStd[T any](t *testing.T, eng *protoEngineHandle, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) uint64 {
 	t.Helper()
-	s, err := decodeStd(method, payload, wrap, func(v T) string { return strconv.FormatUint(digest(v), 16) })
+	s, err := decodeStd(eng, payload, wrap, func(v T) string { return strconv.FormatUint(digest(v), 16) })
 	if err != nil {
 		t.Fatalf("decodeStd failed: %v", err)
 	}
@@ -286,9 +286,9 @@ func digestViaStd[T any](t *testing.T, method string, payload []byte, wrap func(
 	return n
 }
 
-func digestViaHyperpb[T any](t *testing.T, method string, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) uint64 {
+func digestViaHyperpb[T any](t *testing.T, eng *protoEngineHandle, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) uint64 {
 	t.Helper()
-	s, err := decodeHyperpb(method, payload, wrap, func(v T) string { return strconv.FormatUint(digest(v), 16) })
+	s, err := decodeHyperpb(eng, payload, wrap, func(v T) string { return strconv.FormatUint(digest(v), 16) })
 	if err != nil {
 		t.Fatalf("decodeHyperpb failed: %v", err)
 	}
@@ -306,8 +306,8 @@ func TestShadowDigestGmoMatchesAcrossEngines(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	stdDigest := digestViaStd(t, engMethodGmo, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
-	hyperDigest := digestViaHyperpb(t, engMethodGmo, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
+	stdDigest := digestViaStd(t, gmoEngine, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
+	hyperDigest := digestViaHyperpb(t, gmoEngine, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
 	if stdDigest != hyperDigest {
 		t.Fatalf("digest mismatch: std=%x hyperpb=%x", stdDigest, hyperDigest)
 	}
@@ -329,8 +329,8 @@ func TestShadowDigestGmoDetectsCorruption(t *testing.T) {
 		t.Fatalf("marshal corrupted: %v", err)
 	}
 
-	originalDigest := digestViaStd(t, engMethodGmo, originalPayload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
-	corruptedDigest := digestViaStd(t, engMethodGmo, corruptedPayload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
+	originalDigest := digestViaStd(t, gmoEngine, originalPayload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
+	corruptedDigest := digestViaStd(t, gmoEngine, corruptedPayload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
 	if originalDigest == corruptedDigest {
 		t.Fatal("expected corrupted payload (Cp+1) to produce a different digest")
 	}
@@ -461,8 +461,8 @@ func TestShadowDigestEncounterMatchesAcrossEngines(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	stdDigest := digestViaStd(t, engMethodEncounter, payload, pogoshim.AsEncounterOutProto, digestEncounter)
-	hyperDigest := digestViaHyperpb(t, engMethodEncounter, payload, pogoshim.AsEncounterOutProto, digestEncounter)
+	stdDigest := digestViaStd(t, encounterEngine, payload, pogoshim.AsEncounterOutProto, digestEncounter)
+	hyperDigest := digestViaHyperpb(t, encounterEngine, payload, pogoshim.AsEncounterOutProto, digestEncounter)
 	if stdDigest != hyperDigest {
 		t.Fatalf("digest mismatch: std=%x hyperpb=%x", stdDigest, hyperDigest)
 	}
@@ -477,7 +477,7 @@ func TestShadowDigestEncounterMatchesAcrossEngines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal corrupted: %v", err)
 	}
-	corruptedDigest := digestViaStd(t, engMethodEncounter, corruptedPayload, pogoshim.AsEncounterOutProto, digestEncounter)
+	corruptedDigest := digestViaStd(t, encounterEngine, corruptedPayload, pogoshim.AsEncounterOutProto, digestEncounter)
 	if stdDigest == corruptedDigest {
 		t.Fatal("expected corrupted encounter payload (Cp+1) to produce a different digest")
 	}
@@ -499,8 +499,8 @@ func TestShadowDigestDiskEncounterMatchesAcrossEngines(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	stdDigest := digestViaStd(t, engMethodDiskEncounter, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
-	hyperDigest := digestViaHyperpb(t, engMethodDiskEncounter, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
+	stdDigest := digestViaStd(t, diskEncounterEngine, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
+	hyperDigest := digestViaHyperpb(t, diskEncounterEngine, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
 	if stdDigest != hyperDigest {
 		t.Fatalf("digest mismatch: std=%x hyperpb=%x", stdDigest, hyperDigest)
 	}
@@ -514,7 +514,7 @@ func TestShadowDigestDiskEncounterMatchesAcrossEngines(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal corrupted: %v", err)
 	}
-	corruptedDigest := digestViaStd(t, engMethodDiskEncounter, corruptedPayload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
+	corruptedDigest := digestViaStd(t, diskEncounterEngine, corruptedPayload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
 	if stdDigest == corruptedDigest {
 		t.Fatal("expected corrupted disk encounter payload (Cp+1) to produce a different digest")
 	}
@@ -683,13 +683,13 @@ type gmoWalkSnapshot struct {
 func walkGmoForTest(t *testing.T, engine string, payload []byte) gmoWalkSnapshot {
 	t.Helper()
 	setEngine(engMethodGmo, engine)
-	if engine == "hyperpb" && hyperEngines[engMethodGmo] == nil {
-		t.Fatal("hyperEngines[engMethodGmo] is nil; hyperpb subtest would silently fall back to decodeStd")
+	if engine == "hyperpb" && gmoEngine == nil {
+		t.Fatal("gmoEngine is nil; hyperpb subtest would silently fall back to decodeStd")
 	}
 
 	snap := gmoWalkSnapshot{cellForts: make(map[uint64]*decoder.FortTrackerGMOContents)}
 
-	_, err := decodeWithArena(engMethodGmo, payload, pogoshim.AsGetMapObjectsOutProto,
+	_, err := decodeWithArena(engMethodGmo, gmoEngine, payload, pogoshim.AsGetMapObjectsOutProto,
 		func(gmo pogoshim.GetMapObjectsOutProto) string {
 			for cell := range gmo.GetMapCell().All() {
 				snap.cellForts[cell.GetS2CellId()] = &decoder.FortTrackerGMOContents{

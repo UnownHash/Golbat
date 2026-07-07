@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -26,16 +27,46 @@ func TestMain(m *testing.M) {
 	config.Config.ProtoEngine.Gmo = "hyperpb"
 	config.Config.ProtoEngine.Encounter = "hyperpb"
 	config.Config.ProtoEngine.DiskEncounter = "hyperpb"
+	config.Config.ProtoEngine.Default = "hyperpb"
 	config.Config.ProtoEngine.Pgo = true
 	config.Config.ProtoEngine.ShadowSampleRate = 0.01
 	initProtoEngines()
 
 	// Guard against a silently broken hyperpb wiring: if initProtoEngines
-	// didn't populate an entry for one of these methods, decodeHyperpb would
+	// didn't populate one of these package-var handles, decodeHyperpb would
 	// fall back to decodeStd without any test ever noticing.
-	for _, method := range []string{engMethodGmo, engMethodEncounter, engMethodDiskEncounter} {
-		if hyperEngines[method] == nil {
-			panic("initProtoEngines did not populate hyperEngines[" + method + "]")
+	for name, eng := range map[string]*protoEngineHandle{
+		engMethodGmo:               gmoEngine,
+		engMethodEncounter:         encounterEngine,
+		engMethodDiskEncounter:     diskEncounterEngine,
+		engMethodFortDetails:       fortDetailsEngine,
+		engMethodGymInfo:           gymInfoEngine,
+		engMethodQuest:             questEngine,
+		engMethodGetMapForts:       mapFortsEngine,
+		engMethodRoutes:            routesEngine,
+		engMethodStartIncident:     startIncidentEngine,
+		"open_invasion_request":    openInvasionReqEngine,
+		"open_invasion_data":       openInvasionEngine,
+		engMethodNebulaBattleState: battleStateEngine,
+		"contest_data_request":     contestDataReqEngine,
+		"contest_data_data":        contestDataEngine,
+		"size_entry_request":       sizeEntryReqEngine,
+		"size_entry_data":          sizeEntryEngine,
+		"station_details_request":  stationDetailsReqEngine,
+		"station_details_data":     stationDetailsEngine,
+		"tappable_request":         tappableReqEngine,
+		"tappable_data":            tappableEngine,
+		"rsvp_request":             rsvpReqEngine,
+		"rsvp_data":                rsvpEngine,
+		engMethodEventRsvpCount:    rsvpCountEngine,
+		"proxy_request":            proxyReqEngine,
+		"proxy_response":           proxyRespEngine,
+		"friend_details":           friendDetailsEngine,
+		"search_player_out":        searchPlayerOutEngine,
+		"search_player_req":        searchPlayerReqEngine,
+	} {
+		if eng == nil {
+			panic("initProtoEngines did not populate the " + name + " engine handle")
 		}
 	}
 
@@ -57,8 +88,8 @@ func TestDecodeWithArenaGmo(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodGmo, engine)
-			if engine == "hyperpb" && hyperEngines[engMethodGmo] == nil {
-				t.Fatal("hyperEngines[engMethodGmo] is nil; hyperpb subtest would silently fall back to decodeStd")
+			if engine == "hyperpb" && gmoEngine == nil {
+				t.Fatal("gmoEngine is nil; hyperpb subtest would silently fall back to decodeStd")
 			}
 
 			in := &pogo.GetMapObjectsOutProto{Status: pogo.GetMapObjectsOutProto_SUCCESS}
@@ -68,7 +99,7 @@ func TestDecodeWithArenaGmo(t *testing.T) {
 			}
 
 			var called bool
-			got, err := decodeWithArena(engMethodGmo, raw, pogoshim.AsGetMapObjectsOutProto, func(g pogoshim.GetMapObjectsOutProto) string {
+			got, err := decodeWithArena(engMethodGmo, gmoEngine, raw, pogoshim.AsGetMapObjectsOutProto, func(g pogoshim.GetMapObjectsOutProto) string {
 				called = true
 				return g.GetStatus().String()
 			})
@@ -83,7 +114,7 @@ func TestDecodeWithArenaGmo(t *testing.T) {
 			}
 
 			called = false
-			if _, err := decodeWithArena(engMethodGmo, malformedPayload, pogoshim.AsGetMapObjectsOutProto, func(g pogoshim.GetMapObjectsOutProto) string {
+			if _, err := decodeWithArena(engMethodGmo, gmoEngine, malformedPayload, pogoshim.AsGetMapObjectsOutProto, func(g pogoshim.GetMapObjectsOutProto) string {
 				called = true
 				return ""
 			}); err == nil {
@@ -100,8 +131,8 @@ func TestDecodeWithArenaEncounter(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodEncounter, engine)
-			if engine == "hyperpb" && hyperEngines[engMethodEncounter] == nil {
-				t.Fatal("hyperEngines[engMethodEncounter] is nil; hyperpb subtest would silently fall back to decodeStd")
+			if engine == "hyperpb" && encounterEngine == nil {
+				t.Fatal("encounterEngine is nil; hyperpb subtest would silently fall back to decodeStd")
 			}
 
 			in := &pogo.EncounterOutProto{
@@ -121,7 +152,7 @@ func TestDecodeWithArenaEncounter(t *testing.T) {
 			}
 
 			var called bool
-			got, err := decodeWithArena(engMethodEncounter, raw, pogoshim.AsEncounterOutProto, func(e pogoshim.EncounterOutProto) string {
+			got, err := decodeWithArena(engMethodEncounter, encounterEngine, raw, pogoshim.AsEncounterOutProto, func(e pogoshim.EncounterOutProto) string {
 				called = true
 				w := e.GetPokemon()
 				p := w.GetPokemon()
@@ -139,7 +170,7 @@ func TestDecodeWithArenaEncounter(t *testing.T) {
 			}
 
 			called = false
-			if _, err := decodeWithArena(engMethodEncounter, malformedPayload, pogoshim.AsEncounterOutProto, func(e pogoshim.EncounterOutProto) string {
+			if _, err := decodeWithArena(engMethodEncounter, encounterEngine, malformedPayload, pogoshim.AsEncounterOutProto, func(e pogoshim.EncounterOutProto) string {
 				called = true
 				return ""
 			}); err == nil {
@@ -156,8 +187,8 @@ func TestDecodeWithArenaDiskEncounter(t *testing.T) {
 	for _, engine := range []string{"std", "hyperpb"} {
 		t.Run(engine, func(t *testing.T) {
 			setEngine(engMethodDiskEncounter, engine)
-			if engine == "hyperpb" && hyperEngines[engMethodDiskEncounter] == nil {
-				t.Fatal("hyperEngines[engMethodDiskEncounter] is nil; hyperpb subtest would silently fall back to decodeStd")
+			if engine == "hyperpb" && diskEncounterEngine == nil {
+				t.Fatal("diskEncounterEngine is nil; hyperpb subtest would silently fall back to decodeStd")
 			}
 
 			in := &pogo.DiskEncounterOutProto{
@@ -173,7 +204,7 @@ func TestDecodeWithArenaDiskEncounter(t *testing.T) {
 			}
 
 			var called bool
-			got, err := decodeWithArena(engMethodDiskEncounter, raw, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
+			got, err := decodeWithArena(engMethodDiskEncounter, diskEncounterEngine, raw, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
 				called = true
 				return d.GetResult().String() + "|" + d.GetActiveItem().String() + "|" + strconv.Itoa(int(d.GetPokemon().GetCp()))
 			})
@@ -189,7 +220,7 @@ func TestDecodeWithArenaDiskEncounter(t *testing.T) {
 			}
 
 			called = false
-			if _, err := decodeWithArena(engMethodDiskEncounter, malformedPayload, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
+			if _, err := decodeWithArena(engMethodDiskEncounter, diskEncounterEngine, malformedPayload, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
 				called = true
 				return ""
 			}); err == nil {
@@ -225,8 +256,8 @@ func TestEngineForRespectsConfig(t *testing.T) {
 func TestDecodeWithArenaPGoRace(t *testing.T) {
 	const method = engMethodDiskEncounter
 	setEngine(method, "hyperpb")
-	if hyperEngines[method] == nil {
-		t.Fatalf("hyperEngines[%s] is nil; hyperpb engine not wired", method)
+	if diskEncounterEngine == nil {
+		t.Fatalf("diskEncounterEngine is nil; hyperpb engine not wired")
 	}
 	if !config.Config.ProtoEngine.Pgo {
 		t.Fatal("test requires config.Config.ProtoEngine.Pgo = true")
@@ -254,7 +285,7 @@ func TestDecodeWithArenaPGoRace(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
-				_, err := decodeWithArena(method, raw, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
+				_, err := decodeWithArena(method, diskEncounterEngine, raw, pogoshim.AsDiskEncounterOutProto, func(d pogoshim.DiskEncounterOutProto) string {
 					return d.GetResult().String()
 				})
 				if err != nil {
@@ -270,8 +301,72 @@ func TestDecodeWithArenaPGoRace(t *testing.T) {
 		t.Errorf("decode failed: %v", err)
 	}
 
-	if !hyperEngines[method].profile.done.Load() {
+	if !diskEncounterEngine.profile.done.Load() {
 		t.Fatal("expected PGO profile to be done after well over pgoWarmupSamples decodes")
+	}
+}
+
+// TestPgoWarmupDeadlineStopsRecording guards the Wave 3 PGO deadline:
+// recordPGO must no-op once pgoWarmupDeadline has elapsed since
+// startPgoWarmupClock() ran, even far short of pgoWarmupSamples, so a
+// rarely-hit method doesn't pay the double-parse warmup cost forever.
+func TestPgoWarmupDeadlineStopsRecording(t *testing.T) {
+	if !hyperpbSupported {
+		t.Skip("no PGO warmup concept on the std-only build")
+	}
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+	config.Config.ProtoEngine.Pgo = true
+
+	savedDeadline := pgoWarmupDeadlineAt.Load()
+	defer pgoWarmupDeadlineAt.Store(savedDeadline)
+
+	eng := newProtoEngine(engMethodFortDetails, (*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(),
+		func() proto.Message { return &pogo.FortDetailsOutProto{} })
+
+	// Simulate the warmup deadline having already passed.
+	pgoWarmupDeadlineAt.Store(time.Now().Add(-time.Minute).UnixNano())
+
+	raw, err := proto.Marshal(&pogo.FortDetailsOutProto{Id: "FORT1"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	eng.recordPGO(raw)
+
+	if eng.profile.seen != 0 {
+		t.Fatalf("expected recordPGO to no-op past the warmup deadline, but profile.seen = %d", eng.profile.seen)
+	}
+	if eng.profile.done.Load() {
+		t.Fatal("expected profile.done to remain false past the warmup deadline (no recompile should have happened)")
+	}
+}
+
+// TestPgoWarmupDeadlineNotYetExpiredStillRecords is the control case for
+// TestPgoWarmupDeadlineStopsRecording: with a deadline safely in the
+// future, recordPGO must behave normally (profile.seen increments).
+func TestPgoWarmupDeadlineNotYetExpiredStillRecords(t *testing.T) {
+	if !hyperpbSupported {
+		t.Skip("no PGO warmup concept on the std-only build")
+	}
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+	config.Config.ProtoEngine.Pgo = true
+
+	savedDeadline := pgoWarmupDeadlineAt.Load()
+	defer pgoWarmupDeadlineAt.Store(savedDeadline)
+	pgoWarmupDeadlineAt.Store(time.Now().Add(pgoWarmupDeadline).UnixNano())
+
+	eng := newProtoEngine(engMethodFortDetails, (*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(),
+		func() proto.Message { return &pogo.FortDetailsOutProto{} })
+
+	raw, err := proto.Marshal(&pogo.FortDetailsOutProto{Id: "FORT1"})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	eng.recordPGO(raw)
+
+	if eng.profile.seen != 1 {
+		t.Fatalf("expected recordPGO to record one sample before the deadline, got profile.seen = %d", eng.profile.seen)
 	}
 }
 
@@ -308,5 +403,144 @@ func TestInvalidProtoEngineValuesAcceptsValidValues(t *testing.T) {
 
 	if bad := invalidProtoEngineValues(); len(bad) != 0 {
 		t.Fatalf("expected no invalid values, got %v", bad)
+	}
+}
+
+// TestInvalidProtoEngineValuesCoversDefaultAndOverrides extends the typo
+// guard to the Wave 3 config surface: Default and each Overrides entry must
+// be flagged exactly like the legacy per-method keys, under a descriptive
+// "default"/"overrides.<method>" key, while an empty value (the "inherit"
+// sentinel used throughout this config) must never be flagged.
+func TestInvalidProtoEngineValuesCoversDefaultAndOverrides(t *testing.T) {
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+
+	config.Config.ProtoEngine.Gmo = ""
+	config.Config.ProtoEngine.Encounter = ""
+	config.Config.ProtoEngine.DiskEncounter = ""
+	config.Config.ProtoEngine.Default = "hyperbp" // typo
+	config.Config.ProtoEngine.Overrides = map[string]string{
+		engMethodFortDetails: "hyperpb",  // valid
+		engMethodGymInfo:     "",         // valid (inherit)
+		engMethodQuest:       "hyperbop", // typo
+	}
+
+	bad := invalidProtoEngineValues()
+	if len(bad) != 2 {
+		t.Fatalf("expected exactly two invalid values, got %v", bad)
+	}
+	if v, ok := bad["default"]; !ok || v != "hyperbp" {
+		t.Fatalf("expected default=%q flagged as invalid, got %v", "hyperbp", bad)
+	}
+	if v, ok := bad["overrides."+engMethodQuest]; !ok || v != "hyperbop" {
+		t.Fatalf("expected overrides.%s=%q flagged as invalid, got %v", engMethodQuest, "hyperbop", bad)
+	}
+}
+
+// TestEngineForResolutionMatrix exercises engineFor's full resolution order:
+// an explicit legacy key wins outright when non-empty; otherwise a
+// per-method override; otherwise the package default. Table-driven across
+// legacy set/unset x override set/unset x default, per the task brief.
+func TestEngineForResolutionMatrix(t *testing.T) {
+	saved := config.Config.ProtoEngine
+	defer func() { config.Config.ProtoEngine = saved }()
+
+	resolve := func(want string) string {
+		if !hyperpbSupported {
+			return "std"
+		}
+		return want
+	}
+
+	cases := []struct {
+		name     string
+		legacy   string // engMethodGmo's legacy field only
+		override string // engMethodFortDetails's Overrides entry only
+		def      string
+		method   string
+		want     string
+	}{
+		{"no legacy, no override: default hyperpb wins", "", "", "hyperpb", engMethodFortDetails, resolve("hyperpb")},
+		{"no legacy, no override: default std wins", "", "", "std", engMethodFortDetails, "std"},
+		{"no legacy: override hyperpb beats default std", "", "hyperpb", "std", engMethodFortDetails, resolve("hyperpb")},
+		{"no legacy: override std beats default hyperpb", "", "std", "hyperpb", engMethodFortDetails, "std"},
+		{"no legacy: empty override falls through to default", "", "", "std", engMethodFortDetails, "std"},
+		{"legacy std beats override+default hyperpb", "std", "hyperpb", "hyperpb", engMethodGmo, "std"},
+		{"legacy hyperpb beats override+default std", "hyperpb", "std", "std", engMethodGmo, resolve("hyperpb")},
+		{"legacy empty falls through to default (no override for gmo)", "", "", "std", engMethodGmo, "std"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			config.Config.ProtoEngine.Gmo = ""
+			config.Config.ProtoEngine.Encounter = ""
+			config.Config.ProtoEngine.DiskEncounter = ""
+			if c.method == engMethodGmo {
+				config.Config.ProtoEngine.Gmo = c.legacy
+			}
+			config.Config.ProtoEngine.Default = c.def
+			config.Config.ProtoEngine.Overrides = map[string]string{}
+			if c.method != engMethodGmo || c.override != "" {
+				config.Config.ProtoEngine.Overrides[c.method] = c.override
+			}
+
+			if got := engineFor(c.method); got != c.want {
+				t.Fatalf("engineFor(%s) = %q, want %q", c.method, got, c.want)
+			}
+		})
+	}
+}
+
+// TestDecodeWithArenaFortDetails is the task brief's "one new-root decode
+// via both engines" case: fort_details has no legacy config field, so this
+// also exercises the Overrides path end to end against a real new-root
+// handle (fortDetailsEngine) rather than one of the three original methods.
+func TestDecodeWithArenaFortDetails(t *testing.T) {
+	saved := config.Config.ProtoEngine.Overrides
+	defer func() { config.Config.ProtoEngine.Overrides = saved }()
+
+	for _, engine := range []string{"std", "hyperpb"} {
+		t.Run(engine, func(t *testing.T) {
+			config.Config.ProtoEngine.Overrides = map[string]string{engMethodFortDetails: engine}
+			if engine == "hyperpb" && fortDetailsEngine == nil {
+				t.Fatal("fortDetailsEngine is nil; hyperpb subtest would silently fall back to decodeStd")
+			}
+
+			in := &pogo.FortDetailsOutProto{
+				Id:        "FORT1",
+				Latitude:  12.5,
+				Longitude: -54.25,
+				FortType:  pogo.FortType_CHECKPOINT,
+			}
+			raw, err := proto.Marshal(in)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+
+			var called bool
+			got, err := decodeWithArena(engMethodFortDetails, fortDetailsEngine, raw, pogoshim.AsFortDetailsOutProto, func(fd pogoshim.FortDetailsOutProto) string {
+				called = true
+				return fd.GetId()
+			})
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !called {
+				t.Fatal("process was not called")
+			}
+			if got != in.Id {
+				t.Fatalf("got %q want %q", got, in.Id)
+			}
+
+			called = false
+			if _, err := decodeWithArena(engMethodFortDetails, fortDetailsEngine, malformedPayload, pogoshim.AsFortDetailsOutProto, func(fd pogoshim.FortDetailsOutProto) string {
+				called = true
+				return ""
+			}); err == nil {
+				t.Fatal("expected error for malformed payload")
+			}
+			if called {
+				t.Fatal("process must not be called when unmarshal fails")
+			}
+		})
 	}
 }

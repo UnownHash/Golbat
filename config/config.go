@@ -154,12 +154,21 @@ type tuning struct {
 // protoEngine selects the client-proto decode engine per method and the
 // shadow-verification sampling rate. "hyperpb" = arena decoding via
 // buf.build/go/hyperpb behind pogoshim accessors; "std" = protobuf-go.
+//
+// Resolution order (see engineFor in protoengine.go): Gmo/Encounter/
+// DiskEncounter, if explicitly non-empty, win outright for backward config
+// compatibility with pre-Wave-3 deployments; otherwise Overrides[method];
+// otherwise Default. Gmo/Encounter/DiskEncounter default to "" (inherit) so
+// an existing config.toml with no [proto_engine] section at all keeps
+// today's effective behavior (Default's "hyperpb" default) unchanged.
 type protoEngine struct {
-	Gmo              string  `koanf:"gmo"`
-	Encounter        string  `koanf:"encounter"`
-	DiskEncounter    string  `koanf:"disk_encounter"`
-	ShadowSampleRate float64 `koanf:"shadow_sample_rate"`
-	Pgo              bool    `koanf:"pgo"`
+	Gmo              string            `koanf:"gmo"`
+	Encounter        string            `koanf:"encounter"`
+	DiskEncounter    string            `koanf:"disk_encounter"`
+	Default          string            `koanf:"default"`
+	Overrides        map[string]string `koanf:"overrides"`
+	ShadowSampleRate float64           `koanf:"shadow_sample_rate"`
+	Pgo              bool              `koanf:"pgo"`
 }
 
 type scanRule struct {

@@ -378,7 +378,7 @@ func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
 
 func decodeEncounter(ctx context.Context, sDec []byte, username string, timestampMs int64) string {
 	maybeShadow(engMethodEncounter, sDec)
-	res, err := decodeWithArena(engMethodEncounter, sDec,
+	res, err := decodeWithArena(engMethodEncounter, encounterEngine, sDec,
 		pogoshim.AsEncounterOutProto,
 		func(enc pogoshim.EncounterOutProto) string {
 			if enc.GetStatus() != pogo.EncounterOutProto_ENCOUNTER_SUCCESS {
@@ -401,7 +401,7 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 
 func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
 	maybeShadow(engMethodDiskEncounter, sDec)
-	res, err := decodeWithArena(engMethodDiskEncounter, sDec,
+	res, err := decodeWithArena(engMethodDiskEncounter, diskEncounterEngine, sDec,
 		pogoshim.AsDiskEncounterOutProto,
 		func(enc pogoshim.DiskEncounterOutProto) string {
 			if enc.GetResult() != pogo.DiskEncounterOutProto_SUCCESS {
@@ -473,7 +473,7 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	maybeShadow(engMethodGmo, protoData.Data)
-	res, err := decodeWithArena(engMethodGmo, protoData.Data,
+	res, err := decodeWithArena(engMethodGmo, gmoEngine, protoData.Data,
 		pogoshim.AsGetMapObjectsOutProto,
 		func(gmo pogoshim.GetMapObjectsOutProto) string {
 			if gmo.GetStatus() != pogo.GetMapObjectsOutProto_SUCCESS {

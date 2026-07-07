@@ -64,9 +64,7 @@ func ReadConfig() (configDefinition, error) {
 			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},
 		ProtoEngine: protoEngine{
-			Gmo:              "hyperpb",
-			Encounter:        "hyperpb",
-			DiskEncounter:    "hyperpb",
+			Default:          "hyperpb",
 			ShadowSampleRate: 0.01,
 			Pgo:              true,
 		},

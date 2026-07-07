@@ -88,7 +88,7 @@ func main() {
 	// (gmo_decode.go) is wired in via a function value, the same pattern as
 	// SetWebhooksSender/SetStatsCollector below.
 	decoder.SetDiskEncounterDecoder(func(payload []byte, process func(pogoshim.DiskEncounterOutProto) string) (string, error) {
-		return decodeWithArena(engMethodDiskEncounter, payload, pogoshim.AsDiskEncounterOutProto, process)
+		return decodeWithArena(engMethodDiskEncounter, diskEncounterEngine, payload, pogoshim.AsDiskEncounterOutProto, process)
 	})
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:

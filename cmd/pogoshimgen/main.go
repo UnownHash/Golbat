@@ -69,18 +69,65 @@ func goCamelCase(s string) string {
 	return b.String()
 }
 
-// goName computes the protoc-gen-go type name for a (possibly nested)
-// message or enum descriptor: path components joined with underscores.
+// pogoRpcPackage is the proto package every message/enum in golbat/pogo
+// lives under; goName strips it before computing a Go identifier, mirroring
+// protogen.newGoIdent's use of FullName relative to the file's package.
+const pogoRpcPackage = "POGOProtos.Rpc."
+
+// goName computes the protoc-gen-go Go identifier for a (possibly nested)
+// message or enum descriptor. This is NOT simply the path components joined
+// with underscores: protoc-gen-go derives it by taking the descriptor's
+// FullName relative to the proto package and running it through
+// internal/strs.GoCamelCase (see google.golang.org/protobuf/compiler/
+// protogen.newGoIdent), which drops a "." immediately followed by a
+// lowercase letter -- merging that word into the previous one instead of
+// underscore-joining it. Most nested types (conventionally PascalCase, e.g.
+// "Foo.CharacterDisplay") happen to produce the same result either way, but
+// a nested type whose declared name starts lowercase (e.g. this proto set's
+// "ContestPokemonAlignmentFocusProto.alignment", or
+// "ButterflyCollectorRewardEncounterProto.request") does not:
+// GoCamelCase yields "ContestPokemonAlignmentFocusProtoAlignment" (no
+// underscore), which is the actual generated identifier -- a naive
+// underscore-join would silently reference a type that doesn't exist.
 func goName(d protoreflect.Descriptor) string {
-	var parts []string
-	for cur := d; cur != nil; {
-		if _, ok := cur.(protoreflect.FileDescriptor); ok {
-			break
+	return goCamelCasePath(strings.TrimPrefix(string(d.FullName()), pogoRpcPackage))
+}
+
+// goCamelCasePath is a direct port of protoc-gen-go's internal/strs.GoCamelCase
+// (an internal package, hence copied rather than imported), applied to a
+// FullName's package-relative, dot-separated path instead of a single
+// underscore-separated field name. See goName's doc comment for why this
+// must match exactly rather than approximate it.
+func goCamelCasePath(s string) string {
+	var b []byte
+	isLower := func(c byte) bool { return 'a' <= c && c <= 'z' }
+	isDigit := func(c byte) bool { return '0' <= c && c <= '9' }
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '.' && i+1 < len(s) && isLower(s[i+1]):
+			// Skip over '.' in ".{{lowercase}}": the next word merges
+			// directly into the previous one instead of getting a "_".
+		case c == '.':
+			b = append(b, '_') // convert '.' to '_'
+		case c == '_' && (i == 0 || s[i-1] == '.'):
+			// Convert initial '_' to ensure we start with a capital letter.
+			b = append(b, 'X')
+		case c == '_' && i+1 < len(s) && isLower(s[i+1]):
+			// Skip over '_' in "_{{lowercase}}".
+		case isDigit(c):
+			b = append(b, c)
+		default:
+			if isLower(c) {
+				c -= 'a' - 'A'
+			}
+			b = append(b, c)
+			for ; i+1 < len(s) && isLower(s[i+1]); i++ {
+				b = append(b, s[i+1])
+			}
 		}
-		parts = append([]string{string(cur.Name())}, parts...)
-		cur = cur.Parent()
 	}
-	return strings.Join(parts, "_")
+	return string(b)
 }
 
 type gen struct {
@@ -255,11 +302,26 @@ func sortedBoolKeys(m map[string]bool) []string {
 	return out
 }
 
+// defaultRoots is the Wave 1-3 generator root set: the original GMO/encounter
+// trio plus every Wave 3 method's data and (where present) request proto --
+// see docs/superpowers/plans/2026-07-07-hyperpb-wave3.md's "New generator
+// roots" list. Every message transitively reachable from these gets a shim.
+const defaultRoots = "GetMapObjectsOutProto,EncounterOutProto,DiskEncounterOutProto," +
+	"FortDetailsOutProto,GymGetInfoOutProto,FortSearchOutProto,GetMapFortsOutProto," +
+	"GetRoutesOutProto,StartIncidentOutProto,OpenInvasionCombatSessionProto," +
+	"OpenInvasionCombatSessionOutProto,BattleStateOutProto,GetContestDataProto," +
+	"GetContestDataOutProto,GetPokemonSizeLeaderboardEntryProto," +
+	"GetPokemonSizeLeaderboardEntryOutProto,GetStationedPokemonDetailsProto," +
+	"GetStationedPokemonDetailsOutProto,ProcessTappableProto,ProcessTappableOutProto," +
+	"GetEventRsvpsProto,GetEventRsvpsOutProto,GetEventRsvpCountOutProto," +
+	"ProxyRequestProto,ProxyResponseProto,InternalGetFriendDetailsOutProto," +
+	"InternalSearchPlayerOutProto,InternalSearchPlayerProto"
+
 func main() {
 	outPath := flag.String("out", "pogoshim/pogoshim.gen.go", "output file")
 	pkg := flag.String("pkg", "pogoshim", "generated package name")
 	descPkg := flag.String("descpkg", "golbat/pogo", "package providing descriptors and enum types")
-	roots := flag.String("roots", "GetMapObjectsOutProto,EncounterOutProto,DiskEncounterOutProto", "root messages (CSV)")
+	roots := flag.String("roots", defaultRoots, "root messages (CSV)")
 	flag.Parse()
 
 	g := &gen{

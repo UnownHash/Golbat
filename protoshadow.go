@@ -50,32 +50,93 @@ func maybeShadow(method string, payload []byte) {
 // reports whether their field digests agree. It is a pure function (no
 // stats/logging side effects) so tests can assert the core correctness
 // property directly: for any well-formed payload this must return true.
+//
+// gmo/encounter/disk_encounter keep hand-written digest functions (below);
+// every other method falls back to digestMessageGeneric (protodigest.go) via
+// genericShadowEngine, which maps a method to the single *protoEngineHandle
+// its digest should run against. genericShadowEngine only covers methods
+// with exactly one wire proto to verify -- multi-proto methods (request+data
+// pairs, "social"'s nested payloads) are wired in by the task that adds
+// their decode.go call site, either by extending genericShadowEngine (if a
+// single proto is representative) or by adding a bespoke case here.
 func shadowCompare(method string, payload []byte) bool {
 	switch method {
 	case engMethodGmo:
-		return compareDigest(method, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
+		return compareDigest(gmoEngine, payload, pogoshim.AsGetMapObjectsOutProto, digestGmo)
 	case engMethodEncounter:
-		return compareDigest(method, payload, pogoshim.AsEncounterOutProto, digestEncounter)
+		return compareDigest(encounterEngine, payload, pogoshim.AsEncounterOutProto, digestEncounter)
 	case engMethodDiskEncounter:
-		return compareDigest(method, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
+		return compareDigest(diskEncounterEngine, payload, pogoshim.AsDiskEncounterOutProto, digestDiskEncounter)
 	default:
-		return true
+		eng := genericShadowEngine(method)
+		if eng == nil {
+			return true
+		}
+		return compareDigest(eng, payload, identityWrap, digestGenericAdapter)
 	}
+}
+
+// genericShadowEngine maps a method key to the single *protoEngineHandle
+// its shadow digest should decode, for methods with exactly one wire proto
+// (no hand-written digest). Returns nil for anything else -- including a
+// method with no handle wired here yet -- so shadowCompare's default case
+// is a safe no-op (matching its pre-Wave-3 behavior of skipping verification
+// for any method it doesn't recognize).
+func genericShadowEngine(method string) *protoEngineHandle {
+	switch method {
+	case engMethodFortDetails:
+		return fortDetailsEngine
+	case engMethodGymInfo:
+		return gymInfoEngine
+	case engMethodQuest:
+		return questEngine
+	case engMethodGetMapForts:
+		return mapFortsEngine
+	case engMethodRoutes:
+		return routesEngine
+	case engMethodStartIncident:
+		return startIncidentEngine
+	case engMethodNebulaBattleState:
+		return battleStateEngine
+	case engMethodEventRsvpCount:
+		return rsvpCountEngine
+	default:
+		return nil
+	}
+}
+
+// identityWrap is the "wrap" function for the generic-digest shadow path:
+// digestMessageGeneric operates directly on protoreflect.Message, so there is
+// no pogoshim type to wrap into.
+func identityWrap(m protoreflect.Message) protoreflect.Message { return m }
+
+// digestGenericAdapter folds m through digestMessageGeneric into a single
+// uint64, matching the (T) uint64 shape compareDigest expects from a
+// hand-written digest function.
+func digestGenericAdapter(m protoreflect.Message) uint64 {
+	h := fnv.New64a()
+	digestMessageGeneric(h, m)
+	return h.Sum64()
 }
 
 // compareDigest decodes payload once via decodeStd and once via
 // decodeHyperpb (the same arena/pool machinery the live hyperpb path uses),
 // folding each parse through the identical digest function, and compares
 // the results.
-func compareDigest[T any](method string, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) bool {
+func compareDigest[T any](eng *protoEngineHandle, payload []byte, wrap func(protoreflect.Message) T, digest func(T) uint64) bool {
 	process := func(v T) string { return strconv.FormatUint(digest(v), 16) }
 
-	stdDigest, err := decodeStd(method, payload, wrap, process)
+	method := ""
+	if eng != nil {
+		method = eng.method
+	}
+
+	stdDigest, err := decodeStd(eng, payload, wrap, process)
 	if err != nil {
 		log.Errorf("[PROTO_SHADOW] std decode failed method=%s payload_len=%d err=%s", method, len(payload), err)
 		return false
 	}
-	hyperDigest, err := decodeHyperpb(method, payload, wrap, process)
+	hyperDigest, err := decodeHyperpb(eng, payload, wrap, process)
 	if err != nil {
 		log.Errorf("[PROTO_SHADOW] hyperpb decode failed method=%s payload_len=%d err=%s", method, len(payload), err)
 		return false
@@ -127,6 +188,14 @@ func foldStr(h hash.Hash64, tag int, s string) {
 }
 
 func foldLen(h hash.Hash64, tag int, n int) { foldU64(h, tag, uint64(n)) }
+
+// foldBytes mirrors foldStr's length-prefix-then-raw-bytes shape for a
+// []byte field (used by digestMessageGeneric's BytesKind case; none of the
+// hand-written digests above currently fold a bytes field).
+func foldBytes(h hash.Hash64, tag int, b []byte) {
+	foldLen(h, tag, len(b))
+	_, _ = h.Write(b)
+}
 
 // --- Message-level digest folds ---------------------------------------------
 

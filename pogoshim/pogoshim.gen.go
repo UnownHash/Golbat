@@ -3,6 +3,7 @@
 package pogoshim
 
 import (
+	"bytes"
 	"iter"
 	"strings"
 
@@ -31,6 +32,103 @@ func (l ScalarList) Len() int {
 
 func (l ScalarList) At(i int) protoreflect.Value { return l.l.Get(i) }
 
+// AdDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.AdDetails message.
+type AdDetails struct{ m protoreflect.Message }
+
+// AsAdDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AdDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAdDetails(m protoreflect.Message) AdDetails {
+	if m == nil || !m.IsValid() {
+		return AdDetails{}
+	}
+	return AdDetails{m}
+}
+
+func (x AdDetails) IsZero() bool { return x.m == nil }
+
+func (x AdDetails) HasImageTextCreative() bool {
+	return x.m != nil && x.m.Has(fd_AdDetails_image_text_creative)
+}
+
+func (x AdDetails) GetImageTextCreative() ImageTextCreativeProto {
+	if x.m == nil {
+		return ImageTextCreativeProto{}
+	}
+	if v := x.m.Get(fd_AdDetails_image_text_creative).Message(); v.IsValid() {
+		return ImageTextCreativeProto{v}
+	}
+	return ImageTextCreativeProto{}
+}
+
+func (x AdDetails) GetEncryptedAdToken() []byte {
+	if x.m == nil {
+		return nil
+	}
+	return bytes.Clone(x.m.Get(fd_AdDetails_encrypted_ad_token).Bytes())
+}
+
+func (x AdDetails) GetImpressionTrackingTag() ImpressionTrackingTagList {
+	if x.m == nil {
+		return ImpressionTrackingTagList{}
+	}
+	return ImpressionTrackingTagList{x.m.Get(fd_AdDetails_impression_tracking_tag).List()}
+}
+
+func (x AdDetails) HasGamDetails() bool {
+	return x.m != nil && x.m.Has(fd_AdDetails_gam_details)
+}
+
+func (x AdDetails) GetGamDetails() GamDetails {
+	if x.m == nil {
+		return GamDetails{}
+	}
+	if v := x.m.Get(fd_AdDetails_gam_details).Message(); v.IsValid() {
+		return GamDetails{v}
+	}
+	return GamDetails{}
+}
+
+// AdProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AdProto message.
+type AdProto struct{ m protoreflect.Message }
+
+// AsAdProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AdProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAdProto(m protoreflect.Message) AdProto {
+	if m == nil || !m.IsValid() {
+		return AdProto{}
+	}
+	return AdProto{m}
+}
+
+func (x AdProto) IsZero() bool { return x.m == nil }
+
+func (x AdProto) HasAdDetails() bool {
+	return x.m != nil && x.m.Has(fd_AdProto_ad_details)
+}
+
+func (x AdProto) GetAdDetails() AdDetails {
+	if x.m == nil {
+		return AdDetails{}
+	}
+	if v := x.m.Get(fd_AdProto_ad_details).Message(); v.IsValid() {
+		return AdDetails{v}
+	}
+	return AdDetails{}
+}
+
+func (x AdProto) GetAdResponseStatus() pogo.AdResponseStatus {
+	if x.m == nil {
+		return pogo.AdResponseStatus(0)
+	}
+	return pogo.AdResponseStatus(x.m.Get(fd_AdProto_ad_response_status).Enum())
+}
+
 // AddFriendQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AddFriendQuestProto message.
 type AddFriendQuestProto struct{ m protoreflect.Message }
 
@@ -53,6 +151,414 @@ func (x AddFriendQuestProto) GetAddedFriendIds() ScalarList {
 		return ScalarList{}
 	}
 	return ScalarList{x.m.Get(fd_AddFriendQuestProto_added_friend_ids).List()}
+}
+
+// AppliedAttackDefenseBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedAttackDefenseBonusProto message.
+type AppliedAttackDefenseBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedAttackDefenseBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedAttackDefenseBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedAttackDefenseBonusProto(m protoreflect.Message) AppliedAttackDefenseBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedAttackDefenseBonusProto{}
+	}
+	return AppliedAttackDefenseBonusProto{m}
+}
+
+func (x AppliedAttackDefenseBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedAttackDefenseBonusProto) GetAttributes() AttackDefenseBonusAttributeSettingsProtoList {
+	if x.m == nil {
+		return AttackDefenseBonusAttributeSettingsProtoList{}
+	}
+	return AttackDefenseBonusAttributeSettingsProtoList{x.m.Get(fd_AppliedAttackDefenseBonusProto_attributes).List()}
+}
+
+// AppliedBonusEffectProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedBonusEffectProto message.
+type AppliedBonusEffectProto struct{ m protoreflect.Message }
+
+// AsAppliedBonusEffectProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedBonusEffectProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedBonusEffectProto(m protoreflect.Message) AppliedBonusEffectProto {
+	if m == nil || !m.IsValid() {
+		return AppliedBonusEffectProto{}
+	}
+	return AppliedBonusEffectProto{m}
+}
+
+func (x AppliedBonusEffectProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedBonusEffectProto) HasTimeBonus() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusEffectProto_time_bonus)
+}
+
+func (x AppliedBonusEffectProto) GetTimeBonus() AppliedTimeBonusProto {
+	if x.m == nil {
+		return AppliedTimeBonusProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusEffectProto_time_bonus).Message(); v.IsValid() {
+		return AppliedTimeBonusProto{v}
+	}
+	return AppliedTimeBonusProto{}
+}
+
+func (x AppliedBonusEffectProto) HasSpaceBonus() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusEffectProto_space_bonus)
+}
+
+func (x AppliedBonusEffectProto) GetSpaceBonus() AppliedSpaceBonusProto {
+	if x.m == nil {
+		return AppliedSpaceBonusProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusEffectProto_space_bonus).Message(); v.IsValid() {
+		return AppliedSpaceBonusProto{v}
+	}
+	return AppliedSpaceBonusProto{}
+}
+
+func (x AppliedBonusEffectProto) HasDayNightBonus() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusEffectProto_day_night_bonus)
+}
+
+func (x AppliedBonusEffectProto) GetDayNightBonus() AppliedDayNightBonusProto {
+	if x.m == nil {
+		return AppliedDayNightBonusProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusEffectProto_day_night_bonus).Message(); v.IsValid() {
+		return AppliedDayNightBonusProto{v}
+	}
+	return AppliedDayNightBonusProto{}
+}
+
+func (x AppliedBonusEffectProto) HasSlowFreezeBonus() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusEffectProto_slow_freeze_bonus)
+}
+
+func (x AppliedBonusEffectProto) GetSlowFreezeBonus() AppliedSlowFreezeBonusProto {
+	if x.m == nil {
+		return AppliedSlowFreezeBonusProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusEffectProto_slow_freeze_bonus).Message(); v.IsValid() {
+		return AppliedSlowFreezeBonusProto{v}
+	}
+	return AppliedSlowFreezeBonusProto{}
+}
+
+func (x AppliedBonusEffectProto) HasAttackDefenseBonus() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusEffectProto_attack_defense_bonus)
+}
+
+func (x AppliedBonusEffectProto) GetAttackDefenseBonus() AppliedAttackDefenseBonusProto {
+	if x.m == nil {
+		return AppliedAttackDefenseBonusProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusEffectProto_attack_defense_bonus).Message(); v.IsValid() {
+		return AppliedAttackDefenseBonusProto{v}
+	}
+	return AppliedAttackDefenseBonusProto{}
+}
+
+// AppliedBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedBonusProto message.
+type AppliedBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedBonusProto(m protoreflect.Message) AppliedBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedBonusProto{}
+	}
+	return AppliedBonusProto{m}
+}
+
+func (x AppliedBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedBonusProto) GetBonusType() pogo.PlayerBonusType {
+	if x.m == nil {
+		return pogo.PlayerBonusType(0)
+	}
+	return pogo.PlayerBonusType(x.m.Get(fd_AppliedBonusProto_bonus_type).Enum())
+}
+
+func (x AppliedBonusProto) GetExpirationTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AppliedBonusProto_expiration_time_ms).Int()
+}
+
+func (x AppliedBonusProto) GetAppliedTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AppliedBonusProto_applied_time_ms).Int()
+}
+
+func (x AppliedBonusProto) HasEffect() bool {
+	return x.m != nil && x.m.Has(fd_AppliedBonusProto_effect)
+}
+
+func (x AppliedBonusProto) GetEffect() AppliedBonusEffectProto {
+	if x.m == nil {
+		return AppliedBonusEffectProto{}
+	}
+	if v := x.m.Get(fd_AppliedBonusProto_effect).Message(); v.IsValid() {
+		return AppliedBonusEffectProto{v}
+	}
+	return AppliedBonusEffectProto{}
+}
+
+// AppliedBonusesProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedBonusesProto message.
+type AppliedBonusesProto struct{ m protoreflect.Message }
+
+// AsAppliedBonusesProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedBonusesProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedBonusesProto(m protoreflect.Message) AppliedBonusesProto {
+	if m == nil || !m.IsValid() {
+		return AppliedBonusesProto{}
+	}
+	return AppliedBonusesProto{m}
+}
+
+func (x AppliedBonusesProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedBonusesProto) GetItem() AppliedBonusProtoList {
+	if x.m == nil {
+		return AppliedBonusProtoList{}
+	}
+	return AppliedBonusProtoList{x.m.Get(fd_AppliedBonusesProto_item).List()}
+}
+
+// AppliedDayNightBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedDayNightBonusProto message.
+type AppliedDayNightBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedDayNightBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedDayNightBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedDayNightBonusProto(m protoreflect.Message) AppliedDayNightBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedDayNightBonusProto{}
+	}
+	return AppliedDayNightBonusProto{m}
+}
+
+func (x AppliedDayNightBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedDayNightBonusProto) GetIncenseItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_AppliedDayNightBonusProto_incense_item).Enum())
+}
+
+func (x AppliedDayNightBonusProto) HasIncenseSpawnDistribution() bool {
+	return x.m != nil && x.m.Has(fd_AppliedDayNightBonusProto_incense_spawn_distribution)
+}
+
+func (x AppliedDayNightBonusProto) GetIncenseSpawnDistribution() EggDistributionProto {
+	if x.m == nil {
+		return EggDistributionProto{}
+	}
+	if v := x.m.Get(fd_AppliedDayNightBonusProto_incense_spawn_distribution).Message(); v.IsValid() {
+		return EggDistributionProto{v}
+	}
+	return EggDistributionProto{}
+}
+
+// AppliedSlowFreezeBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedSlowFreezeBonusProto message.
+type AppliedSlowFreezeBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedSlowFreezeBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedSlowFreezeBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedSlowFreezeBonusProto(m protoreflect.Message) AppliedSlowFreezeBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedSlowFreezeBonusProto{}
+	}
+	return AppliedSlowFreezeBonusProto{m}
+}
+
+func (x AppliedSlowFreezeBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedSlowFreezeBonusProto) GetCatchCircleSpeedOverride() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AppliedSlowFreezeBonusProto_catch_circle_speed_override).Float())
+}
+
+func (x AppliedSlowFreezeBonusProto) GetCatchRateIncreaseMultiplier() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AppliedSlowFreezeBonusProto_catch_rate_increase_multiplier).Float())
+}
+
+func (x AppliedSlowFreezeBonusProto) GetCatchCircleSpeedChangeThreshold() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AppliedSlowFreezeBonusProto_catch_circle_speed_change_threshold).Float())
+}
+
+func (x AppliedSlowFreezeBonusProto) GetCatchCircleOuterTimeScaleOverride() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AppliedSlowFreezeBonusProto_catch_circle_outer_time_scale_override).Float())
+}
+
+// AppliedSpaceBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedSpaceBonusProto message.
+type AppliedSpaceBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedSpaceBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedSpaceBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedSpaceBonusProto(m protoreflect.Message) AppliedSpaceBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedSpaceBonusProto{}
+	}
+	return AppliedSpaceBonusProto{m}
+}
+
+func (x AppliedSpaceBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedSpaceBonusProto) GetPokemonVisibleRangeMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AppliedSpaceBonusProto_pokemon_visible_range_meters).Float()
+}
+
+func (x AppliedSpaceBonusProto) GetEncounterRangeMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AppliedSpaceBonusProto_encounter_range_meters).Float()
+}
+
+func (x AppliedSpaceBonusProto) GetServerAllowableEncounterRangeMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AppliedSpaceBonusProto_server_allowable_encounter_range_meters).Float()
+}
+
+// AppliedTimeBonusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AppliedTimeBonusProto message.
+type AppliedTimeBonusProto struct{ m protoreflect.Message }
+
+// AsAppliedTimeBonusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AppliedTimeBonusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAppliedTimeBonusProto(m protoreflect.Message) AppliedTimeBonusProto {
+	if m == nil || !m.IsValid() {
+		return AppliedTimeBonusProto{}
+	}
+	return AppliedTimeBonusProto{m}
+}
+
+func (x AppliedTimeBonusProto) IsZero() bool { return x.m == nil }
+
+func (x AppliedTimeBonusProto) GetAffectedItems() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_AppliedTimeBonusProto_affected_items).List()}
+}
+
+// AttackDefenseBonusAttributeSettingsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AttackDefenseBonusAttributeSettingsProto message.
+type AttackDefenseBonusAttributeSettingsProto struct{ m protoreflect.Message }
+
+// AsAttackDefenseBonusAttributeSettingsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AttackDefenseBonusAttributeSettingsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAttackDefenseBonusAttributeSettingsProto(m protoreflect.Message) AttackDefenseBonusAttributeSettingsProto {
+	if m == nil || !m.IsValid() {
+		return AttackDefenseBonusAttributeSettingsProto{}
+	}
+	return AttackDefenseBonusAttributeSettingsProto{m}
+}
+
+func (x AttackDefenseBonusAttributeSettingsProto) IsZero() bool { return x.m == nil }
+
+func (x AttackDefenseBonusAttributeSettingsProto) GetCombatTypes() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_AttackDefenseBonusAttributeSettingsProto_combat_types).List()}
+}
+
+func (x AttackDefenseBonusAttributeSettingsProto) GetAttackMultiplier() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AttackDefenseBonusAttributeSettingsProto_attack_multiplier).Float())
+}
+
+func (x AttackDefenseBonusAttributeSettingsProto) GetDefenseMultiplier() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AttackDefenseBonusAttributeSettingsProto_defense_multiplier).Float())
+}
+
+// AvatarArticleProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AvatarArticleProto message.
+type AvatarArticleProto struct{ m protoreflect.Message }
+
+// AsAvatarArticleProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AvatarArticleProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAvatarArticleProto(m protoreflect.Message) AvatarArticleProto {
+	if m == nil || !m.IsValid() {
+		return AvatarArticleProto{}
+	}
+	return AvatarArticleProto{m}
+}
+
+func (x AvatarArticleProto) IsZero() bool { return x.m == nil }
+
+func (x AvatarArticleProto) GetArticleId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_AvatarArticleProto_article_id).String())
+}
+
+func (x AvatarArticleProto) GetColor() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_AvatarArticleProto_color).Int())
+}
+
+func (x AvatarArticleProto) GetSlotId() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_AvatarArticleProto_slot_id).Int())
 }
 
 // AvatarItemDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AvatarItemDisplayProto message.
@@ -117,6 +623,1506 @@ func (x AvatarStoreLinkProto) GetGroupName() string {
 	return strings.Clone(x.m.Get(fd_AvatarStoreLinkProto_group_name).String())
 }
 
+// AwardItemProto wraps a hyperpb/protoreflect POGOProtos.Rpc.AwardItemProto message.
+type AwardItemProto struct{ m protoreflect.Message }
+
+// AsAwardItemProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AwardItemProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAwardItemProto(m protoreflect.Message) AwardItemProto {
+	if m == nil || !m.IsValid() {
+		return AwardItemProto{}
+	}
+	return AwardItemProto{m}
+}
+
+func (x AwardItemProto) IsZero() bool { return x.m == nil }
+
+func (x AwardItemProto) GetItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_AwardItemProto_item).Enum())
+}
+
+func (x AwardItemProto) GetItemCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_AwardItemProto_item_count).Int())
+}
+
+func (x AwardItemProto) GetBonusCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_AwardItemProto_bonus_count).Int())
+}
+
+// AwardedGymBadge wraps a hyperpb/protoreflect POGOProtos.Rpc.AwardedGymBadge message.
+type AwardedGymBadge struct{ m protoreflect.Message }
+
+// AsAwardedGymBadge wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.AwardedGymBadge .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsAwardedGymBadge(m protoreflect.Message) AwardedGymBadge {
+	if m == nil || !m.IsValid() {
+		return AwardedGymBadge{}
+	}
+	return AwardedGymBadge{m}
+}
+
+func (x AwardedGymBadge) IsZero() bool { return x.m == nil }
+
+func (x AwardedGymBadge) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_AwardedGymBadge_fort_id).String())
+}
+
+func (x AwardedGymBadge) GetGymBadgeType() pogo.GymBadgeType {
+	if x.m == nil {
+		return pogo.GymBadgeType(0)
+	}
+	return pogo.GymBadgeType(x.m.Get(fd_AwardedGymBadge_gym_badge_type).Enum())
+}
+
+func (x AwardedGymBadge) GetScore() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_AwardedGymBadge_score).Uint())
+}
+
+func (x AwardedGymBadge) HasGymBadgeStats() bool {
+	return x.m != nil && x.m.Has(fd_AwardedGymBadge_gym_badge_stats)
+}
+
+func (x AwardedGymBadge) GetGymBadgeStats() GymBadgeStats {
+	if x.m == nil {
+		return GymBadgeStats{}
+	}
+	if v := x.m.Get(fd_AwardedGymBadge_gym_badge_stats).Message(); v.IsValid() {
+		return GymBadgeStats{v}
+	}
+	return GymBadgeStats{}
+}
+
+func (x AwardedGymBadge) GetLastUpdateTimestampMs() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AwardedGymBadge_last_update_timestamp_ms).Uint()
+}
+
+func (x AwardedGymBadge) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_AwardedGymBadge_name).String())
+}
+
+func (x AwardedGymBadge) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_AwardedGymBadge_image_url).String())
+}
+
+func (x AwardedGymBadge) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_AwardedGymBadge_description).String())
+}
+
+func (x AwardedGymBadge) GetLatitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AwardedGymBadge_latitude).Float()
+}
+
+func (x AwardedGymBadge) GetLongitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AwardedGymBadge_longitude).Float()
+}
+
+func (x AwardedGymBadge) GetLastCheckTimestampMs() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_AwardedGymBadge_last_check_timestamp_ms).Uint()
+}
+
+func (x AwardedGymBadge) GetEarnedPoints() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_AwardedGymBadge_earned_points).Uint())
+}
+
+func (x AwardedGymBadge) GetProgress() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_AwardedGymBadge_progress).Float())
+}
+
+func (x AwardedGymBadge) GetLevelUp() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_AwardedGymBadge_level_up).Bool()
+}
+
+func (x AwardedGymBadge) HasRaids() bool {
+	return x.m != nil && x.m.Has(fd_AwardedGymBadge_raids)
+}
+
+func (x AwardedGymBadge) GetRaids() PlayerRaidInfoProto {
+	if x.m == nil {
+		return PlayerRaidInfoProto{}
+	}
+	if v := x.m.Get(fd_AwardedGymBadge_raids).Message(); v.IsValid() {
+		return PlayerRaidInfoProto{v}
+	}
+	return PlayerRaidInfoProto{}
+}
+
+// BattleEventProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto message.
+type BattleEventProto struct{ m protoreflect.Message }
+
+// AsBattleEventProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto(m protoreflect.Message) BattleEventProto {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto{}
+	}
+	return BattleEventProto{m}
+}
+
+func (x BattleEventProto) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto) HasBattleJoin() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_battle_join)
+}
+
+func (x BattleEventProto) GetBattleJoin() BattleEventProto_BattleJoin {
+	if x.m == nil {
+		return BattleEventProto_BattleJoin{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_battle_join).Message(); v.IsValid() {
+		return BattleEventProto_BattleJoin{v}
+	}
+	return BattleEventProto_BattleJoin{}
+}
+
+func (x BattleEventProto) HasBattleQuit() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_battle_quit)
+}
+
+func (x BattleEventProto) GetBattleQuit() BattleEventProto_BattleQuit {
+	if x.m == nil {
+		return BattleEventProto_BattleQuit{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_battle_quit).Message(); v.IsValid() {
+		return BattleEventProto_BattleQuit{v}
+	}
+	return BattleEventProto_BattleQuit{}
+}
+
+func (x BattleEventProto) HasAttack() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_attack)
+}
+
+func (x BattleEventProto) GetAttack() BattleEventProto_Attack {
+	if x.m == nil {
+		return BattleEventProto_Attack{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_attack).Message(); v.IsValid() {
+		return BattleEventProto_Attack{v}
+	}
+	return BattleEventProto_Attack{}
+}
+
+func (x BattleEventProto) HasDodge() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_dodge)
+}
+
+func (x BattleEventProto) GetDodge() BattleEventProto_Dodge {
+	if x.m == nil {
+		return BattleEventProto_Dodge{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_dodge).Message(); v.IsValid() {
+		return BattleEventProto_Dodge{v}
+	}
+	return BattleEventProto_Dodge{}
+}
+
+func (x BattleEventProto) HasShield() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_shield)
+}
+
+func (x BattleEventProto) GetShield() BattleEventProto_Shield {
+	if x.m == nil {
+		return BattleEventProto_Shield{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_shield).Message(); v.IsValid() {
+		return BattleEventProto_Shield{v}
+	}
+	return BattleEventProto_Shield{}
+}
+
+func (x BattleEventProto) HasSwapPokemon() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_swap_pokemon)
+}
+
+func (x BattleEventProto) GetSwapPokemon() BattleEventProto_SwapPokemon {
+	if x.m == nil {
+		return BattleEventProto_SwapPokemon{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_swap_pokemon).Message(); v.IsValid() {
+		return BattleEventProto_SwapPokemon{v}
+	}
+	return BattleEventProto_SwapPokemon{}
+}
+
+func (x BattleEventProto) HasItem() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_item)
+}
+
+func (x BattleEventProto) GetItem() BattleEventProto_BattleItem {
+	if x.m == nil {
+		return BattleEventProto_BattleItem{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_item).Message(); v.IsValid() {
+		return BattleEventProto_BattleItem{v}
+	}
+	return BattleEventProto_BattleItem{}
+}
+
+func (x BattleEventProto) HasTrainerAbility() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_trainer_ability)
+}
+
+func (x BattleEventProto) GetTrainerAbility() BattleEventProto_TrainerAbility {
+	if x.m == nil {
+		return BattleEventProto_TrainerAbility{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_trainer_ability).Message(); v.IsValid() {
+		return BattleEventProto_TrainerAbility{v}
+	}
+	return BattleEventProto_TrainerAbility{}
+}
+
+func (x BattleEventProto) HasStatChange() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_stat_change)
+}
+
+func (x BattleEventProto) GetStatChange() BattleEventProto_StatChange {
+	if x.m == nil {
+		return BattleEventProto_StatChange{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_stat_change).Message(); v.IsValid() {
+		return BattleEventProto_StatChange{v}
+	}
+	return BattleEventProto_StatChange{}
+}
+
+func (x BattleEventProto) HasStartBattle() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_start_battle)
+}
+
+func (x BattleEventProto) GetStartBattle() BattleEventProto_StartBattle {
+	if x.m == nil {
+		return BattleEventProto_StartBattle{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_start_battle).Message(); v.IsValid() {
+		return BattleEventProto_StartBattle{v}
+	}
+	return BattleEventProto_StartBattle{}
+}
+
+func (x BattleEventProto) HasTransform() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_transform)
+}
+
+func (x BattleEventProto) GetTransform() BattleEventProto_Transform {
+	if x.m == nil {
+		return BattleEventProto_Transform{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_transform).Message(); v.IsValid() {
+		return BattleEventProto_Transform{v}
+	}
+	return BattleEventProto_Transform{}
+}
+
+func (x BattleEventProto) HasAbilityTrigger() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_ability_trigger)
+}
+
+func (x BattleEventProto) GetAbilityTrigger() BattleEventProto_AbilityTrigger {
+	if x.m == nil {
+		return BattleEventProto_AbilityTrigger{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_ability_trigger).Message(); v.IsValid() {
+		return BattleEventProto_AbilityTrigger{v}
+	}
+	return BattleEventProto_AbilityTrigger{}
+}
+
+func (x BattleEventProto) HasBattleEnd() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_battle_end)
+}
+
+func (x BattleEventProto) GetBattleEnd() BattleEventProto_BattleEnd {
+	if x.m == nil {
+		return BattleEventProto_BattleEnd{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_battle_end).Message(); v.IsValid() {
+		return BattleEventProto_BattleEnd{v}
+	}
+	return BattleEventProto_BattleEnd{}
+}
+
+func (x BattleEventProto) HasCountdown() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_countdown)
+}
+
+func (x BattleEventProto) GetCountdown() BattleEventProto_Countdown {
+	if x.m == nil {
+		return BattleEventProto_Countdown{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_countdown).Message(); v.IsValid() {
+		return BattleEventProto_Countdown{v}
+	}
+	return BattleEventProto_Countdown{}
+}
+
+func (x BattleEventProto) HasDodgeSuccess() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_dodge_success)
+}
+
+func (x BattleEventProto) GetDodgeSuccess() BattleEventProto_DodgeSuccess {
+	if x.m == nil {
+		return BattleEventProto_DodgeSuccess{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_dodge_success).Message(); v.IsValid() {
+		return BattleEventProto_DodgeSuccess{v}
+	}
+	return BattleEventProto_DodgeSuccess{}
+}
+
+func (x BattleEventProto) HasFlinch() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_flinch)
+}
+
+func (x BattleEventProto) GetFlinch() BattleEventProto_Flinch {
+	if x.m == nil {
+		return BattleEventProto_Flinch{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_flinch).Message(); v.IsValid() {
+		return BattleEventProto_Flinch{v}
+	}
+	return BattleEventProto_Flinch{}
+}
+
+func (x BattleEventProto) HasBreadMove() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_bread_move)
+}
+
+func (x BattleEventProto) GetBreadMove() BattleEventProto_BreadMove {
+	if x.m == nil {
+		return BattleEventProto_BreadMove{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_bread_move).Message(); v.IsValid() {
+		return BattleEventProto_BreadMove{v}
+	}
+	return BattleEventProto_BreadMove{}
+}
+
+func (x BattleEventProto) HasSidelineAction() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_sideline_action)
+}
+
+func (x BattleEventProto) GetSidelineAction() BattleEventProto_SidelineAction {
+	if x.m == nil {
+		return BattleEventProto_SidelineAction{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_sideline_action).Message(); v.IsValid() {
+		return BattleEventProto_SidelineAction{v}
+	}
+	return BattleEventProto_SidelineAction{}
+}
+
+func (x BattleEventProto) HasAttackTelegraph() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_attack_telegraph)
+}
+
+func (x BattleEventProto) GetAttackTelegraph() BattleEventProto_AttackTelegraph {
+	if x.m == nil {
+		return BattleEventProto_AttackTelegraph{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_attack_telegraph).Message(); v.IsValid() {
+		return BattleEventProto_AttackTelegraph{v}
+	}
+	return BattleEventProto_AttackTelegraph{}
+}
+
+func (x BattleEventProto) HasCinematic() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_cinematic)
+}
+
+func (x BattleEventProto) GetCinematic() BattleEventProto_Cinematic {
+	if x.m == nil {
+		return BattleEventProto_Cinematic{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_cinematic).Message(); v.IsValid() {
+		return BattleEventProto_Cinematic{v}
+	}
+	return BattleEventProto_Cinematic{}
+}
+
+func (x BattleEventProto) HasConsensus() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_consensus)
+}
+
+func (x BattleEventProto) GetConsensus() BattleEventProto_Consensus {
+	if x.m == nil {
+		return BattleEventProto_Consensus{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_consensus).Message(); v.IsValid() {
+		return BattleEventProto_Consensus{v}
+	}
+	return BattleEventProto_Consensus{}
+}
+
+func (x BattleEventProto) HasAttackBoost() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_attack_boost)
+}
+
+func (x BattleEventProto) GetAttackBoost() BattleEventProto_AttackBoost {
+	if x.m == nil {
+		return BattleEventProto_AttackBoost{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_attack_boost).Message(); v.IsValid() {
+		return BattleEventProto_AttackBoost{v}
+	}
+	return BattleEventProto_AttackBoost{}
+}
+
+func (x BattleEventProto) HasWindow() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_window)
+}
+
+func (x BattleEventProto) GetWindow() BattleEventProto_Window {
+	if x.m == nil {
+		return BattleEventProto_Window{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_window).Message(); v.IsValid() {
+		return BattleEventProto_Window{v}
+	}
+	return BattleEventProto_Window{}
+}
+
+func (x BattleEventProto) GetType() pogo.BattleEventProto_EventType {
+	if x.m == nil {
+		return pogo.BattleEventProto_EventType(0)
+	}
+	return pogo.BattleEventProto_EventType(x.m.Get(fd_BattleEventProto_type).Enum())
+}
+
+func (x BattleEventProto) GetActorId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleEventProto_actor_id).String())
+}
+
+func (x BattleEventProto) GetTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_turn).Int()
+}
+
+// BattleEventProto_AbilityTrigger wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.AbilityTrigger message.
+type BattleEventProto_AbilityTrigger struct{ m protoreflect.Message }
+
+// AsBattleEventProto_AbilityTrigger wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_AbilityTrigger .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_AbilityTrigger(m protoreflect.Message) BattleEventProto_AbilityTrigger {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_AbilityTrigger{}
+	}
+	return BattleEventProto_AbilityTrigger{m}
+}
+
+func (x BattleEventProto_AbilityTrigger) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_AbilityTrigger) GetVfxKey() pogo.AbilityProto_AbilityType {
+	if x.m == nil {
+		return pogo.AbilityProto_AbilityType(0)
+	}
+	return pogo.AbilityProto_AbilityType(x.m.Get(fd_BattleEventProto_AbilityTrigger_vfx_key).Enum())
+}
+
+func (x BattleEventProto_AbilityTrigger) GetStopVfx() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_BattleEventProto_AbilityTrigger_stop_vfx).Bool()
+}
+
+// BattleEventProto_Attack wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Attack message.
+type BattleEventProto_Attack struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Attack wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Attack .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Attack(m protoreflect.Message) BattleEventProto_Attack {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Attack{}
+	}
+	return BattleEventProto_Attack{m}
+}
+
+func (x BattleEventProto_Attack) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Attack) GetAttackType() pogo.BattlePokemonProto_AttackType {
+	if x.m == nil {
+		return pogo.BattlePokemonProto_AttackType(0)
+	}
+	return pogo.BattlePokemonProto_AttackType(x.m.Get(fd_BattleEventProto_Attack_attack_type).Enum())
+}
+
+func (x BattleEventProto_Attack) GetScore() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_BattleEventProto_Attack_score).Float())
+}
+
+func (x BattleEventProto_Attack) GetMove() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_BattleEventProto_Attack_move).Enum())
+}
+
+func (x BattleEventProto_Attack) GetType() pogo.HoloPokemonType {
+	if x.m == nil {
+		return pogo.HoloPokemonType(0)
+	}
+	return pogo.HoloPokemonType(x.m.Get(fd_BattleEventProto_Attack_type).Enum())
+}
+
+func (x BattleEventProto_Attack) GetTargetId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleEventProto_Attack_target_id).String())
+}
+
+// BattleEventProto_AttackBoost wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.AttackBoost message.
+type BattleEventProto_AttackBoost struct{ m protoreflect.Message }
+
+// AsBattleEventProto_AttackBoost wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_AttackBoost .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_AttackBoost(m protoreflect.Message) BattleEventProto_AttackBoost {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_AttackBoost{}
+	}
+	return BattleEventProto_AttackBoost{m}
+}
+
+func (x BattleEventProto_AttackBoost) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_AttackBoost) GetMagnitude() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_AttackBoost_magnitude).Int())
+}
+
+// BattleEventProto_AttackTelegraph wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.AttackTelegraph message.
+type BattleEventProto_AttackTelegraph struct{ m protoreflect.Message }
+
+// AsBattleEventProto_AttackTelegraph wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_AttackTelegraph .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_AttackTelegraph(m protoreflect.Message) BattleEventProto_AttackTelegraph {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_AttackTelegraph{}
+	}
+	return BattleEventProto_AttackTelegraph{m}
+}
+
+func (x BattleEventProto_AttackTelegraph) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_AttackTelegraph) GetType() pogo.BattleEventProto_AttackTelegraph_AttackTelegraphType {
+	if x.m == nil {
+		return pogo.BattleEventProto_AttackTelegraph_AttackTelegraphType(0)
+	}
+	return pogo.BattleEventProto_AttackTelegraph_AttackTelegraphType(x.m.Get(fd_BattleEventProto_AttackTelegraph_type).Enum())
+}
+
+// BattleEventProto_BattleEnd wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BattleEnd message.
+type BattleEventProto_BattleEnd struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BattleEnd wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BattleEnd .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BattleEnd(m protoreflect.Message) BattleEventProto_BattleEnd {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BattleEnd{}
+	}
+	return BattleEventProto_BattleEnd{m}
+}
+
+func (x BattleEventProto_BattleEnd) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BattleEnd) GetReason() pogo.BattleEventProto_BattleEnd_Reason {
+	if x.m == nil {
+		return pogo.BattleEventProto_BattleEnd_Reason(0)
+	}
+	return pogo.BattleEventProto_BattleEnd_Reason(x.m.Get(fd_BattleEventProto_BattleEnd_reason).Enum())
+}
+
+// BattleEventProto_BattleItem wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BattleItem message.
+type BattleEventProto_BattleItem struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BattleItem wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BattleItem .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BattleItem(m protoreflect.Message) BattleEventProto_BattleItem {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BattleItem{}
+	}
+	return BattleEventProto_BattleItem{m}
+}
+
+func (x BattleEventProto_BattleItem) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BattleItem) GetItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_BattleEventProto_BattleItem_item).Enum())
+}
+
+// BattleEventProto_BattleJoin wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BattleJoin message.
+type BattleEventProto_BattleJoin struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BattleJoin wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BattleJoin .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BattleJoin(m protoreflect.Message) BattleEventProto_BattleJoin {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BattleJoin{}
+	}
+	return BattleEventProto_BattleJoin{m}
+}
+
+func (x BattleEventProto_BattleJoin) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BattleJoin) GetRoster() BattleEventProto_PositionalRosterEntryList {
+	if x.m == nil {
+		return BattleEventProto_PositionalRosterEntryList{}
+	}
+	return BattleEventProto_PositionalRosterEntryList{x.m.Get(fd_BattleEventProto_BattleJoin_roster).List()}
+}
+
+func (x BattleEventProto_BattleJoin) GetExtraResources() BattleResourceProtoList {
+	if x.m == nil {
+		return BattleResourceProtoList{}
+	}
+	return BattleResourceProtoList{x.m.Get(fd_BattleEventProto_BattleJoin_extra_resources).List()}
+}
+
+func (x BattleEventProto_BattleJoin) HasPlayerMetadata() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_BattleJoin_player_metadata)
+}
+
+func (x BattleEventProto_BattleJoin) GetPlayerMetadata() BattleEventProto_BattleJoin_PlayerMetadata {
+	if x.m == nil {
+		return BattleEventProto_BattleJoin_PlayerMetadata{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_BattleJoin_player_metadata).Message(); v.IsValid() {
+		return BattleEventProto_BattleJoin_PlayerMetadata{v}
+	}
+	return BattleEventProto_BattleJoin_PlayerMetadata{}
+}
+
+// BattleEventProto_BattleJoin_PlayerMetadata wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BattleJoin.PlayerMetadata message.
+type BattleEventProto_BattleJoin_PlayerMetadata struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BattleJoin_PlayerMetadata wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BattleJoin_PlayerMetadata .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BattleJoin_PlayerMetadata(m protoreflect.Message) BattleEventProto_BattleJoin_PlayerMetadata {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BattleJoin_PlayerMetadata{}
+	}
+	return BattleEventProto_BattleJoin_PlayerMetadata{m}
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetTrainerName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_trainer_name).String())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetTrainerPartyId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_trainer_party_id).String())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetMaxFriendshipLevel() pogo.FriendshipLevelMilestone {
+	if x.m == nil {
+		return pogo.FriendshipLevelMilestone(0)
+	}
+	return pogo.FriendshipLevelMilestone(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_max_friendship_level).Enum())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetRemote() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_remote).Bool()
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetNumLocalFriends() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_num_local_friends).Int())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetNumRemoteFriends() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_num_remote_friends).Int())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetOriginId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_origin_id).String())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) HasPlayerPublicProfile() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_BattleJoin_PlayerMetadata_player_public_profile)
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetPlayerPublicProfile() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_player_public_profile).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetMvtAvatarCustomizationScore() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_mvt_avatar_customization_score).Int())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetDistanceFromRaidMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_distance_from_raid_meters).Float()
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetBuddyPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_pokemon_id).Uint()
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetRecentDistanceWalkedKm() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_recent_distance_walked_km).Float()
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetBuddyOnMap() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_on_map).Bool()
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetBuddyLevel() pogo.BuddyLevel {
+	if x.m == nil {
+		return pogo.BuddyLevel(0)
+	}
+	return pogo.BuddyLevel(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_level).Enum())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetPlayerNumber() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_player_number).Int())
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) HasBattleBonuses() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_BattleJoin_PlayerMetadata_battle_bonuses)
+}
+
+func (x BattleEventProto_BattleJoin_PlayerMetadata) GetBattleBonuses() AppliedBonusesProto {
+	if x.m == nil {
+		return AppliedBonusesProto{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_BattleJoin_PlayerMetadata_battle_bonuses).Message(); v.IsValid() {
+		return AppliedBonusesProto{v}
+	}
+	return AppliedBonusesProto{}
+}
+
+// BattleEventProto_BattleQuit wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BattleQuit message.
+type BattleEventProto_BattleQuit struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BattleQuit wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BattleQuit .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BattleQuit(m protoreflect.Message) BattleEventProto_BattleQuit {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BattleQuit{}
+	}
+	return BattleEventProto_BattleQuit{m}
+}
+
+func (x BattleEventProto_BattleQuit) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BattleQuit) GetType() pogo.BattleEventProto_BattleQuit_QuitType {
+	if x.m == nil {
+		return pogo.BattleEventProto_BattleQuit_QuitType(0)
+	}
+	return pogo.BattleEventProto_BattleQuit_QuitType(x.m.Get(fd_BattleEventProto_BattleQuit_type).Enum())
+}
+
+func (x BattleEventProto_BattleQuit) HasWindow() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_BattleQuit_window)
+}
+
+func (x BattleEventProto_BattleQuit) GetWindow() BattleEventProto_Window {
+	if x.m == nil {
+		return BattleEventProto_Window{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_BattleQuit_window).Message(); v.IsValid() {
+		return BattleEventProto_Window{v}
+	}
+	return BattleEventProto_Window{}
+}
+
+// BattleEventProto_BreadMove wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.BreadMove message.
+type BattleEventProto_BreadMove struct{ m protoreflect.Message }
+
+// AsBattleEventProto_BreadMove wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_BreadMove .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_BreadMove(m protoreflect.Message) BattleEventProto_BreadMove {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_BreadMove{}
+	}
+	return BattleEventProto_BreadMove{m}
+}
+
+func (x BattleEventProto_BreadMove) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_BreadMove) GetType() pogo.BattleEventProto_BreadMove_MoveType {
+	if x.m == nil {
+		return pogo.BattleEventProto_BreadMove_MoveType(0)
+	}
+	return pogo.BattleEventProto_BreadMove_MoveType(x.m.Get(fd_BattleEventProto_BreadMove_type).Enum())
+}
+
+// BattleEventProto_Cinematic wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Cinematic message.
+type BattleEventProto_Cinematic struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Cinematic wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Cinematic .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Cinematic(m protoreflect.Message) BattleEventProto_Cinematic {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Cinematic{}
+	}
+	return BattleEventProto_Cinematic{m}
+}
+
+func (x BattleEventProto_Cinematic) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Cinematic) HasBreadMoveMetadata() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_Cinematic_bread_move_metadata)
+}
+
+func (x BattleEventProto_Cinematic) GetBreadMoveMetadata() BattleEventProto_Cinematic_BreadMoveMetadata {
+	if x.m == nil {
+		return BattleEventProto_Cinematic_BreadMoveMetadata{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_Cinematic_bread_move_metadata).Message(); v.IsValid() {
+		return BattleEventProto_Cinematic_BreadMoveMetadata{v}
+	}
+	return BattleEventProto_Cinematic_BreadMoveMetadata{}
+}
+
+func (x BattleEventProto_Cinematic) GetEventType() pogo.BattleEventProto_Cinematic_CinematicEventType {
+	if x.m == nil {
+		return pogo.BattleEventProto_Cinematic_CinematicEventType(0)
+	}
+	return pogo.BattleEventProto_Cinematic_CinematicEventType(x.m.Get(fd_BattleEventProto_Cinematic_event_type).Enum())
+}
+
+func (x BattleEventProto_Cinematic) GetBeginTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_Cinematic_begin_turn).Int()
+}
+
+func (x BattleEventProto_Cinematic) GetEndTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_Cinematic_end_turn).Int()
+}
+
+// BattleEventProto_Cinematic_BreadMoveMetadata wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Cinematic.BreadMoveMetadata message.
+type BattleEventProto_Cinematic_BreadMoveMetadata struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Cinematic_BreadMoveMetadata wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Cinematic_BreadMoveMetadata .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Cinematic_BreadMoveMetadata(m protoreflect.Message) BattleEventProto_Cinematic_BreadMoveMetadata {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Cinematic_BreadMoveMetadata{}
+	}
+	return BattleEventProto_Cinematic_BreadMoveMetadata{m}
+}
+
+func (x BattleEventProto_Cinematic_BreadMoveMetadata) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Cinematic_BreadMoveMetadata) GetMoveType() pogo.BattlePokemonProto_AttackType {
+	if x.m == nil {
+		return pogo.BattlePokemonProto_AttackType(0)
+	}
+	return pogo.BattlePokemonProto_AttackType(x.m.Get(fd_BattleEventProto_Cinematic_BreadMoveMetadata_move_type).Enum())
+}
+
+// BattleEventProto_Consensus wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Consensus message.
+type BattleEventProto_Consensus struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Consensus wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Consensus .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Consensus(m protoreflect.Message) BattleEventProto_Consensus {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Consensus{}
+	}
+	return BattleEventProto_Consensus{m}
+}
+
+func (x BattleEventProto_Consensus) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Consensus) GetBeginTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_Consensus_begin_turn).Int()
+}
+
+func (x BattleEventProto_Consensus) GetEndTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_Consensus_end_turn).Int()
+}
+
+func (x BattleEventProto_Consensus) GetUnblockedEventType() pogo.BattleEventProto_EventType {
+	if x.m == nil {
+		return pogo.BattleEventProto_EventType(0)
+	}
+	return pogo.BattleEventProto_EventType(x.m.Get(fd_BattleEventProto_Consensus_unblocked_event_type).Enum())
+}
+
+func (x BattleEventProto_Consensus) GetConsensusEventSubtype() pogo.BattleEventProto_Consensus_ConsensusEventSubType {
+	if x.m == nil {
+		return pogo.BattleEventProto_Consensus_ConsensusEventSubType(0)
+	}
+	return pogo.BattleEventProto_Consensus_ConsensusEventSubType(x.m.Get(fd_BattleEventProto_Consensus_consensus_event_subtype).Enum())
+}
+
+func (x BattleEventProto_Consensus) GetVoteEndTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_Consensus_vote_end_turn).Int()
+}
+
+func (x BattleEventProto_Consensus) GetUnblockedEventTypes() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_BattleEventProto_Consensus_unblocked_event_types).List()}
+}
+
+// BattleEventProto_Countdown wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Countdown message.
+type BattleEventProto_Countdown struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Countdown wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Countdown .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Countdown(m protoreflect.Message) BattleEventProto_Countdown {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Countdown{}
+	}
+	return BattleEventProto_Countdown{m}
+}
+
+func (x BattleEventProto_Countdown) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Countdown) GetCountdown() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_Countdown_countdown).Int())
+}
+
+// BattleEventProto_Dodge wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Dodge message.
+type BattleEventProto_Dodge struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Dodge wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Dodge .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Dodge(m protoreflect.Message) BattleEventProto_Dodge {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Dodge{}
+	}
+	return BattleEventProto_Dodge{m}
+}
+
+func (x BattleEventProto_Dodge) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Dodge) GetDirection() pogo.BattleEventProto_Dodge_DodgeDirectionType {
+	if x.m == nil {
+		return pogo.BattleEventProto_Dodge_DodgeDirectionType(0)
+	}
+	return pogo.BattleEventProto_Dodge_DodgeDirectionType(x.m.Get(fd_BattleEventProto_Dodge_direction).Enum())
+}
+
+// BattleEventProto_DodgeSuccess wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.DodgeSuccess message.
+type BattleEventProto_DodgeSuccess struct{ m protoreflect.Message }
+
+// AsBattleEventProto_DodgeSuccess wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_DodgeSuccess .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_DodgeSuccess(m protoreflect.Message) BattleEventProto_DodgeSuccess {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_DodgeSuccess{}
+	}
+	return BattleEventProto_DodgeSuccess{m}
+}
+
+func (x BattleEventProto_DodgeSuccess) IsZero() bool { return x.m == nil }
+
+// BattleEventProto_Flinch wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Flinch message.
+type BattleEventProto_Flinch struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Flinch wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Flinch .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Flinch(m protoreflect.Message) BattleEventProto_Flinch {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Flinch{}
+	}
+	return BattleEventProto_Flinch{m}
+}
+
+func (x BattleEventProto_Flinch) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Flinch) GetEffectiveness() pogo.BattleEventProto_Flinch_EffectienessType {
+	if x.m == nil {
+		return pogo.BattleEventProto_Flinch_EffectienessType(0)
+	}
+	return pogo.BattleEventProto_Flinch_EffectienessType(x.m.Get(fd_BattleEventProto_Flinch_effectiveness).Enum())
+}
+
+// BattleEventProto_PositionalRosterEntry wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.PositionalRosterEntry message.
+type BattleEventProto_PositionalRosterEntry struct{ m protoreflect.Message }
+
+// AsBattleEventProto_PositionalRosterEntry wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_PositionalRosterEntry .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_PositionalRosterEntry(m protoreflect.Message) BattleEventProto_PositionalRosterEntry {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_PositionalRosterEntry{}
+	}
+	return BattleEventProto_PositionalRosterEntry{m}
+}
+
+func (x BattleEventProto_PositionalRosterEntry) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_PositionalRosterEntry) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_BattleEventProto_PositionalRosterEntry_pokemon)
+}
+
+func (x BattleEventProto_PositionalRosterEntry) GetPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_BattleEventProto_PositionalRosterEntry_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x BattleEventProto_PositionalRosterEntry) GetPositionX() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_PositionalRosterEntry_position_x).Int())
+}
+
+func (x BattleEventProto_PositionalRosterEntry) GetPositionY() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_PositionalRosterEntry_position_y).Int())
+}
+
+func (x BattleEventProto_PositionalRosterEntry) GetStartEnergy() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_PositionalRosterEntry_start_energy).Int())
+}
+
+func (x BattleEventProto_PositionalRosterEntry) GetMaxMoves() BattleEventProto_PositionalRosterEntry_MaxMovesList {
+	if x.m == nil {
+		return BattleEventProto_PositionalRosterEntry_MaxMovesList{}
+	}
+	return BattleEventProto_PositionalRosterEntry_MaxMovesList{x.m.Get(fd_BattleEventProto_PositionalRosterEntry_max_moves).List()}
+}
+
+// BattleEventProto_PositionalRosterEntry_MaxMoves wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.PositionalRosterEntry.MaxMoves message.
+type BattleEventProto_PositionalRosterEntry_MaxMoves struct{ m protoreflect.Message }
+
+// AsBattleEventProto_PositionalRosterEntry_MaxMoves wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_PositionalRosterEntry_MaxMoves .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_PositionalRosterEntry_MaxMoves(m protoreflect.Message) BattleEventProto_PositionalRosterEntry_MaxMoves {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_PositionalRosterEntry_MaxMoves{}
+	}
+	return BattleEventProto_PositionalRosterEntry_MaxMoves{m}
+}
+
+func (x BattleEventProto_PositionalRosterEntry_MaxMoves) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_PositionalRosterEntry_MaxMoves) GetMoveType() pogo.BattleEventProto_BreadMove_MoveType {
+	if x.m == nil {
+		return pogo.BattleEventProto_BreadMove_MoveType(0)
+	}
+	return pogo.BattleEventProto_BreadMove_MoveType(x.m.Get(fd_BattleEventProto_PositionalRosterEntry_MaxMoves_move_type).Enum())
+}
+
+func (x BattleEventProto_PositionalRosterEntry_MaxMoves) GetMaxMove() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_BattleEventProto_PositionalRosterEntry_MaxMoves_max_move).Enum())
+}
+
+// BattleEventProto_Shield wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Shield message.
+type BattleEventProto_Shield struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Shield wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Shield .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Shield(m protoreflect.Message) BattleEventProto_Shield {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Shield{}
+	}
+	return BattleEventProto_Shield{m}
+}
+
+func (x BattleEventProto_Shield) IsZero() bool { return x.m == nil }
+
+// BattleEventProto_SidelineAction wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.SidelineAction message.
+type BattleEventProto_SidelineAction struct{ m protoreflect.Message }
+
+// AsBattleEventProto_SidelineAction wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_SidelineAction .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_SidelineAction(m protoreflect.Message) BattleEventProto_SidelineAction {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_SidelineAction{}
+	}
+	return BattleEventProto_SidelineAction{m}
+}
+
+func (x BattleEventProto_SidelineAction) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_SidelineAction) GetType() pogo.BattleEventProto_SidelineAction_SideLineType {
+	if x.m == nil {
+		return pogo.BattleEventProto_SidelineAction_SideLineType(0)
+	}
+	return pogo.BattleEventProto_SidelineAction_SideLineType(x.m.Get(fd_BattleEventProto_SidelineAction_type).Enum())
+}
+
+// BattleEventProto_StartBattle wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.StartBattle message.
+type BattleEventProto_StartBattle struct{ m protoreflect.Message }
+
+// AsBattleEventProto_StartBattle wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_StartBattle .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_StartBattle(m protoreflect.Message) BattleEventProto_StartBattle {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_StartBattle{}
+	}
+	return BattleEventProto_StartBattle{m}
+}
+
+func (x BattleEventProto_StartBattle) IsZero() bool { return x.m == nil }
+
+// BattleEventProto_StatChange wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.StatChange message.
+type BattleEventProto_StatChange struct{ m protoreflect.Message }
+
+// AsBattleEventProto_StatChange wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_StatChange .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_StatChange(m protoreflect.Message) BattleEventProto_StatChange {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_StatChange{}
+	}
+	return BattleEventProto_StatChange{m}
+}
+
+func (x BattleEventProto_StatChange) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_StatChange) GetStatStage() BattleEventProto_StatChange_StatStageList {
+	if x.m == nil {
+		return BattleEventProto_StatChange_StatStageList{}
+	}
+	return BattleEventProto_StatChange_StatStageList{x.m.Get(fd_BattleEventProto_StatChange_stat_stage).List()}
+}
+
+// BattleEventProto_StatChange_StatStage wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.StatChange.StatStage message.
+type BattleEventProto_StatChange_StatStage struct{ m protoreflect.Message }
+
+// AsBattleEventProto_StatChange_StatStage wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_StatChange_StatStage .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_StatChange_StatStage(m protoreflect.Message) BattleEventProto_StatChange_StatStage {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_StatChange_StatStage{}
+	}
+	return BattleEventProto_StatChange_StatStage{m}
+}
+
+func (x BattleEventProto_StatChange_StatStage) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_StatChange_StatStage) GetType() pogo.BattleEventProto_StatChange_StatStage_StatStageType {
+	if x.m == nil {
+		return pogo.BattleEventProto_StatChange_StatStage_StatStageType(0)
+	}
+	return pogo.BattleEventProto_StatChange_StatStage_StatStageType(x.m.Get(fd_BattleEventProto_StatChange_StatStage_type).Enum())
+}
+
+func (x BattleEventProto_StatChange_StatStage) GetDelta() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_StatChange_StatStage_delta).Int())
+}
+
+// BattleEventProto_SwapPokemon wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.SwapPokemon message.
+type BattleEventProto_SwapPokemon struct{ m protoreflect.Message }
+
+// AsBattleEventProto_SwapPokemon wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_SwapPokemon .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_SwapPokemon(m protoreflect.Message) BattleEventProto_SwapPokemon {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_SwapPokemon{}
+	}
+	return BattleEventProto_SwapPokemon{m}
+}
+
+func (x BattleEventProto_SwapPokemon) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_SwapPokemon) GetOutgoingPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_SwapPokemon_outgoing_pokemon_id).Uint()
+}
+
+func (x BattleEventProto_SwapPokemon) GetIncomingPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleEventProto_SwapPokemon_incoming_pokemon_id).Uint()
+}
+
+// BattleEventProto_TrainerAbility wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.TrainerAbility message.
+type BattleEventProto_TrainerAbility struct{ m protoreflect.Message }
+
+// AsBattleEventProto_TrainerAbility wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_TrainerAbility .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_TrainerAbility(m protoreflect.Message) BattleEventProto_TrainerAbility {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_TrainerAbility{}
+	}
+	return BattleEventProto_TrainerAbility{m}
+}
+
+func (x BattleEventProto_TrainerAbility) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_TrainerAbility) GetAbility() pogo.BattleEventProto_TrainerAbility_Ability {
+	if x.m == nil {
+		return pogo.BattleEventProto_TrainerAbility_Ability(0)
+	}
+	return pogo.BattleEventProto_TrainerAbility_Ability(x.m.Get(fd_BattleEventProto_TrainerAbility_ability).Enum())
+}
+
+// BattleEventProto_Transform wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Transform message.
+type BattleEventProto_Transform struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Transform wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Transform .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Transform(m protoreflect.Message) BattleEventProto_Transform {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Transform{}
+	}
+	return BattleEventProto_Transform{m}
+}
+
+func (x BattleEventProto_Transform) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Transform) GetVfxKey() pogo.AbilityProto_AbilityType {
+	if x.m == nil {
+		return pogo.AbilityProto_AbilityType(0)
+	}
+	return pogo.AbilityProto_AbilityType(x.m.Get(fd_BattleEventProto_Transform_vfx_key).Enum())
+}
+
+// BattleEventProto_Window wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleEventProto.Window message.
+type BattleEventProto_Window struct{ m protoreflect.Message }
+
+// AsBattleEventProto_Window wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleEventProto_Window .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleEventProto_Window(m protoreflect.Message) BattleEventProto_Window {
+	if m == nil || !m.IsValid() {
+		return BattleEventProto_Window{}
+	}
+	return BattleEventProto_Window{m}
+}
+
+func (x BattleEventProto_Window) IsZero() bool { return x.m == nil }
+
+func (x BattleEventProto_Window) GetOne() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_Window_one).Int())
+}
+
+func (x BattleEventProto_Window) GetTwo() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleEventProto_Window_two).Int())
+}
+
 // BattleQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleQuestProto message.
 type BattleQuestProto struct{ m protoreflect.Message }
 
@@ -139,6 +2145,270 @@ func (x BattleQuestProto) GetBattleId() ScalarList {
 		return ScalarList{}
 	}
 	return ScalarList{x.m.Get(fd_BattleQuestProto_battle_id).List()}
+}
+
+// BattleResourceProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleResourceProto message.
+type BattleResourceProto struct{ m protoreflect.Message }
+
+// AsBattleResourceProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleResourceProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleResourceProto(m protoreflect.Message) BattleResourceProto {
+	if m == nil || !m.IsValid() {
+		return BattleResourceProto{}
+	}
+	return BattleResourceProto{m}
+}
+
+func (x BattleResourceProto) IsZero() bool { return x.m == nil }
+
+func (x BattleResourceProto) GetItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_BattleResourceProto_item).Enum())
+}
+
+func (x BattleResourceProto) GetPokemonId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_BattleResourceProto_pokemon_id).Enum())
+}
+
+func (x BattleResourceProto) GetType() pogo.BattleResourceProto_ResourceType {
+	if x.m == nil {
+		return pogo.BattleResourceProto_ResourceType(0)
+	}
+	return pogo.BattleResourceProto_ResourceType(x.m.Get(fd_BattleResourceProto_type).Enum())
+}
+
+func (x BattleResourceProto) GetQuantity() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleResourceProto_quantity).Int())
+}
+
+func (x BattleResourceProto) GetMaxQuantity() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleResourceProto_max_quantity).Int())
+}
+
+func (x BattleResourceProto) GetDisabled() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_BattleResourceProto_disabled).Bool()
+}
+
+func (x BattleResourceProto) HasCooldownMetadata() bool {
+	return x.m != nil && x.m.Has(fd_BattleResourceProto_cooldown_metadata)
+}
+
+func (x BattleResourceProto) GetCooldownMetadata() BattleResourceProto_CooldownMetadata {
+	if x.m == nil {
+		return BattleResourceProto_CooldownMetadata{}
+	}
+	if v := x.m.Get(fd_BattleResourceProto_cooldown_metadata).Message(); v.IsValid() {
+		return BattleResourceProto_CooldownMetadata{v}
+	}
+	return BattleResourceProto_CooldownMetadata{}
+}
+
+// BattleResourceProto_CooldownMetadata wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleResourceProto.CooldownMetadata message.
+type BattleResourceProto_CooldownMetadata struct{ m protoreflect.Message }
+
+// AsBattleResourceProto_CooldownMetadata wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleResourceProto_CooldownMetadata .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleResourceProto_CooldownMetadata(m protoreflect.Message) BattleResourceProto_CooldownMetadata {
+	if m == nil || !m.IsValid() {
+		return BattleResourceProto_CooldownMetadata{}
+	}
+	return BattleResourceProto_CooldownMetadata{m}
+}
+
+func (x BattleResourceProto_CooldownMetadata) IsZero() bool { return x.m == nil }
+
+func (x BattleResourceProto_CooldownMetadata) GetLastUsedTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleResourceProto_CooldownMetadata_last_used_turn).Int()
+}
+
+func (x BattleResourceProto_CooldownMetadata) GetNextAvailableTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleResourceProto_CooldownMetadata_next_available_turn).Int()
+}
+
+// BattleStateOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleStateOutProto message.
+type BattleStateOutProto struct{ m protoreflect.Message }
+
+// AsBattleStateOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleStateOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleStateOutProto(m protoreflect.Message) BattleStateOutProto {
+	if m == nil || !m.IsValid() {
+		return BattleStateOutProto{}
+	}
+	return BattleStateOutProto{m}
+}
+
+func (x BattleStateOutProto) IsZero() bool { return x.m == nil }
+
+func (x BattleStateOutProto) HasBattleState() bool {
+	return x.m != nil && x.m.Has(fd_BattleStateOutProto_battle_state)
+}
+
+func (x BattleStateOutProto) GetBattleState() BattleStateProto {
+	if x.m == nil {
+		return BattleStateProto{}
+	}
+	if v := x.m.Get(fd_BattleStateOutProto_battle_state).Message(); v.IsValid() {
+		return BattleStateProto{v}
+	}
+	return BattleStateProto{}
+}
+
+func (x BattleStateOutProto) GetTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateOutProto_turn).Int()
+}
+
+func (x BattleStateOutProto) GetTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateOutProto_time_ms).Int()
+}
+
+func (x BattleStateOutProto) GetFullState() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_BattleStateOutProto_full_state).Bool()
+}
+
+func (x BattleStateOutProto) GetSerial() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateOutProto_serial).Int()
+}
+
+func (x BattleStateOutProto) GetError() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleStateOutProto_error).String())
+}
+
+// BattleStateProto wraps a hyperpb/protoreflect POGOProtos.Rpc.BattleStateProto message.
+type BattleStateProto struct{ m protoreflect.Message }
+
+// AsBattleStateProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.BattleStateProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsBattleStateProto(m protoreflect.Message) BattleStateProto {
+	if m == nil || !m.IsValid() {
+		return BattleStateProto{}
+	}
+	return BattleStateProto{m}
+}
+
+func (x BattleStateProto) IsZero() bool { return x.m == nil }
+
+func (x BattleStateProto) GetTurnStartMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateProto_turn_start_ms).Int()
+}
+
+func (x BattleStateProto) GetTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateProto_turn).Int()
+}
+
+func (x BattleStateProto) GetMsPerTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleStateProto_ms_per_turn).Int())
+}
+
+func (x BattleStateProto) GetCurrentActorId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_BattleStateProto_current_actor_id).String())
+}
+
+func (x BattleStateProto) GetState() pogo.BattleStateProto_State {
+	if x.m == nil {
+		return pogo.BattleStateProto_State(0)
+	}
+	return pogo.BattleStateProto_State(x.m.Get(fd_BattleStateProto_state).Enum())
+}
+
+func (x BattleStateProto) GetActiveActorCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleStateProto_active_actor_count).Int())
+}
+
+func (x BattleStateProto) GetEvents() BattleEventProtoList {
+	if x.m == nil {
+		return BattleEventProtoList{}
+	}
+	return BattleEventProtoList{x.m.Get(fd_BattleStateProto_events).List()}
+}
+
+func (x BattleStateProto) GetBattleEndTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateProto_battle_end_turn).Int()
+}
+
+func (x BattleStateProto) GetBattleStartTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_BattleStateProto_battle_start_turn).Int()
+}
+
+func (x BattleStateProto) GetUiMode() pogo.BattleStateProto_UIMode {
+	if x.m == nil {
+		return pogo.BattleStateProto_UIMode(0)
+	}
+	return pogo.BattleStateProto_UIMode(x.m.Get(fd_BattleStateProto_ui_mode).Enum())
+}
+
+func (x BattleStateProto) GetAlliedPokemonRemaining() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_BattleStateProto_allied_pokemon_remaining).Int())
 }
 
 // BreadBattleCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.BreadBattleCreateDetail message.
@@ -428,6 +2698,335 @@ func (x CharacterDisplayProto) GetCharacter() pogo.EnumWrapper_InvasionCharacter
 	return pogo.EnumWrapper_InvasionCharacter(x.m.Get(fd_CharacterDisplayProto_character).Enum())
 }
 
+// ClientContestIncidentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientContestIncidentProto message.
+type ClientContestIncidentProto struct{ m protoreflect.Message }
+
+// AsClientContestIncidentProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientContestIncidentProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientContestIncidentProto(m protoreflect.Message) ClientContestIncidentProto {
+	if m == nil || !m.IsValid() {
+		return ClientContestIncidentProto{}
+	}
+	return ClientContestIncidentProto{m}
+}
+
+func (x ClientContestIncidentProto) IsZero() bool { return x.m == nil }
+
+func (x ClientContestIncidentProto) GetContests() ContestProtoList {
+	if x.m == nil {
+		return ContestProtoList{}
+	}
+	return ContestProtoList{x.m.Get(fd_ClientContestIncidentProto_contests).List()}
+}
+
+// ClientDialogueLineProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientDialogueLineProto message.
+type ClientDialogueLineProto struct{ m protoreflect.Message }
+
+// AsClientDialogueLineProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientDialogueLineProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientDialogueLineProto(m protoreflect.Message) ClientDialogueLineProto {
+	if m == nil || !m.IsValid() {
+		return ClientDialogueLineProto{}
+	}
+	return ClientDialogueLineProto{m}
+}
+
+func (x ClientDialogueLineProto) IsZero() bool { return x.m == nil }
+
+func (x ClientDialogueLineProto) GetText() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientDialogueLineProto_text).String())
+}
+
+func (x ClientDialogueLineProto) GetCharacter() pogo.EnumWrapper_InvasionCharacter {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionCharacter(0)
+	}
+	return pogo.EnumWrapper_InvasionCharacter(x.m.Get(fd_ClientDialogueLineProto_character).Enum())
+}
+
+func (x ClientDialogueLineProto) GetExpression() pogo.EnumWrapper_InvasionCharacterExpression {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionCharacterExpression(0)
+	}
+	return pogo.EnumWrapper_InvasionCharacterExpression(x.m.Get(fd_ClientDialogueLineProto_expression).Enum())
+}
+
+func (x ClientDialogueLineProto) GetLeftAssetAddress() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientDialogueLineProto_left_asset_address).String())
+}
+
+func (x ClientDialogueLineProto) GetSide() pogo.ClientDialogueLineProto_Side {
+	if x.m == nil {
+		return pogo.ClientDialogueLineProto_Side(0)
+	}
+	return pogo.ClientDialogueLineProto_Side(x.m.Get(fd_ClientDialogueLineProto_side).Enum())
+}
+
+func (x ClientDialogueLineProto) HasDisplayOnlyLoot() bool {
+	return x.m != nil && x.m.Has(fd_ClientDialogueLineProto_display_only_loot)
+}
+
+func (x ClientDialogueLineProto) GetDisplayOnlyLoot() LootProto {
+	if x.m == nil {
+		return LootProto{}
+	}
+	if v := x.m.Get(fd_ClientDialogueLineProto_display_only_loot).Message(); v.IsValid() {
+		return LootProto{v}
+	}
+	return LootProto{}
+}
+
+// ClientFortModifierProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientFortModifierProto message.
+type ClientFortModifierProto struct{ m protoreflect.Message }
+
+// AsClientFortModifierProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientFortModifierProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientFortModifierProto(m protoreflect.Message) ClientFortModifierProto {
+	if m == nil || !m.IsValid() {
+		return ClientFortModifierProto{}
+	}
+	return ClientFortModifierProto{m}
+}
+
+func (x ClientFortModifierProto) IsZero() bool { return x.m == nil }
+
+func (x ClientFortModifierProto) GetModifierType() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_ClientFortModifierProto_modifier_type).Enum())
+}
+
+func (x ClientFortModifierProto) GetExpirationTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ClientFortModifierProto_expiration_time_ms).Int()
+}
+
+func (x ClientFortModifierProto) GetDeployingPlayerCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientFortModifierProto_deploying_player_codename).String())
+}
+
+// ClientIncidentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientIncidentProto message.
+type ClientIncidentProto struct{ m protoreflect.Message }
+
+// AsClientIncidentProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientIncidentProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientIncidentProto(m protoreflect.Message) ClientIncidentProto {
+	if m == nil || !m.IsValid() {
+		return ClientIncidentProto{}
+	}
+	return ClientIncidentProto{m}
+}
+
+func (x ClientIncidentProto) IsZero() bool { return x.m == nil }
+
+func (x ClientIncidentProto) GetIncidentId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientIncidentProto_incident_id).String())
+}
+
+func (x ClientIncidentProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientIncidentProto_fort_id).String())
+}
+
+func (x ClientIncidentProto) GetFortName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientIncidentProto_fort_name).String())
+}
+
+func (x ClientIncidentProto) GetPokestopImageUri() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientIncidentProto_pokestop_image_uri).String())
+}
+
+func (x ClientIncidentProto) GetCurrentStep() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_ClientIncidentProto_current_step).Int())
+}
+
+func (x ClientIncidentProto) GetStep() ClientIncidentStepProtoList {
+	if x.m == nil {
+		return ClientIncidentStepProtoList{}
+	}
+	return ClientIncidentStepProtoList{x.m.Get(fd_ClientIncidentProto_step).List()}
+}
+
+func (x ClientIncidentProto) HasCompletionDisplay() bool {
+	return x.m != nil && x.m.Has(fd_ClientIncidentProto_completion_display)
+}
+
+func (x ClientIncidentProto) GetCompletionDisplay() PokestopIncidentDisplayProto {
+	if x.m == nil {
+		return PokestopIncidentDisplayProto{}
+	}
+	if v := x.m.Get(fd_ClientIncidentProto_completion_display).Message(); v.IsValid() {
+		return PokestopIncidentDisplayProto{v}
+	}
+	return PokestopIncidentDisplayProto{}
+}
+
+func (x ClientIncidentProto) GetContext() pogo.EnumWrapper_InvasionContext {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionContext(0)
+	}
+	return pogo.EnumWrapper_InvasionContext(x.m.Get(fd_ClientIncidentProto_context).Enum())
+}
+
+func (x ClientIncidentProto) GetStartPhase() pogo.EnumWrapper_IncidentStartPhase {
+	if x.m == nil {
+		return pogo.EnumWrapper_IncidentStartPhase(0)
+	}
+	return pogo.EnumWrapper_IncidentStartPhase(x.m.Get(fd_ClientIncidentProto_start_phase).Enum())
+}
+
+// ClientIncidentStepProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientIncidentStepProto message.
+type ClientIncidentStepProto struct{ m protoreflect.Message }
+
+// AsClientIncidentStepProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientIncidentStepProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientIncidentStepProto(m protoreflect.Message) ClientIncidentStepProto {
+	if m == nil || !m.IsValid() {
+		return ClientIncidentStepProto{}
+	}
+	return ClientIncidentStepProto{m}
+}
+
+func (x ClientIncidentStepProto) IsZero() bool { return x.m == nil }
+
+func (x ClientIncidentStepProto) HasInvasionBattle() bool {
+	return x.m != nil && x.m.Has(fd_ClientIncidentStepProto_invasion_battle)
+}
+
+func (x ClientIncidentStepProto) GetInvasionBattle() ClientInvasionBattleStepProto {
+	if x.m == nil {
+		return ClientInvasionBattleStepProto{}
+	}
+	if v := x.m.Get(fd_ClientIncidentStepProto_invasion_battle).Message(); v.IsValid() {
+		return ClientInvasionBattleStepProto{v}
+	}
+	return ClientInvasionBattleStepProto{}
+}
+
+func (x ClientIncidentStepProto) HasInvasionEncounter() bool {
+	return x.m != nil && x.m.Has(fd_ClientIncidentStepProto_invasion_encounter)
+}
+
+func (x ClientIncidentStepProto) GetInvasionEncounter() ClientInvasionEncounterStepProto {
+	if x.m == nil {
+		return ClientInvasionEncounterStepProto{}
+	}
+	if v := x.m.Get(fd_ClientIncidentStepProto_invasion_encounter).Message(); v.IsValid() {
+		return ClientInvasionEncounterStepProto{v}
+	}
+	return ClientInvasionEncounterStepProto{}
+}
+
+func (x ClientIncidentStepProto) HasPokestopDialogue() bool {
+	return x.m != nil && x.m.Has(fd_ClientIncidentStepProto_pokestop_dialogue)
+}
+
+func (x ClientIncidentStepProto) GetPokestopDialogue() ClientPokestopNpcDialogueStepProto {
+	if x.m == nil {
+		return ClientPokestopNpcDialogueStepProto{}
+	}
+	if v := x.m.Get(fd_ClientIncidentStepProto_pokestop_dialogue).Message(); v.IsValid() {
+		return ClientPokestopNpcDialogueStepProto{v}
+	}
+	return ClientPokestopNpcDialogueStepProto{}
+}
+
+func (x ClientIncidentStepProto) HasPokestopSpin() bool {
+	return x.m != nil && x.m.Has(fd_ClientIncidentStepProto_pokestop_spin)
+}
+
+func (x ClientIncidentStepProto) GetPokestopSpin() ClientPokestopSpinStepProto {
+	if x.m == nil {
+		return ClientPokestopSpinStepProto{}
+	}
+	if v := x.m.Get(fd_ClientIncidentStepProto_pokestop_spin).Message(); v.IsValid() {
+		return ClientPokestopSpinStepProto{v}
+	}
+	return ClientPokestopSpinStepProto{}
+}
+
+// ClientInvasionBattleStepProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientInvasionBattleStepProto message.
+type ClientInvasionBattleStepProto struct{ m protoreflect.Message }
+
+// AsClientInvasionBattleStepProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientInvasionBattleStepProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientInvasionBattleStepProto(m protoreflect.Message) ClientInvasionBattleStepProto {
+	if m == nil || !m.IsValid() {
+		return ClientInvasionBattleStepProto{}
+	}
+	return ClientInvasionBattleStepProto{m}
+}
+
+func (x ClientInvasionBattleStepProto) IsZero() bool { return x.m == nil }
+
+func (x ClientInvasionBattleStepProto) GetCharacter() pogo.EnumWrapper_InvasionCharacter {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionCharacter(0)
+	}
+	return pogo.EnumWrapper_InvasionCharacter(x.m.Get(fd_ClientInvasionBattleStepProto_character).Enum())
+}
+
+// ClientInvasionEncounterStepProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientInvasionEncounterStepProto message.
+type ClientInvasionEncounterStepProto struct{ m protoreflect.Message }
+
+// AsClientInvasionEncounterStepProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientInvasionEncounterStepProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientInvasionEncounterStepProto(m protoreflect.Message) ClientInvasionEncounterStepProto {
+	if m == nil || !m.IsValid() {
+		return ClientInvasionEncounterStepProto{}
+	}
+	return ClientInvasionEncounterStepProto{m}
+}
+
+func (x ClientInvasionEncounterStepProto) IsZero() bool { return x.m == nil }
+
 // ClientMapCellProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientMapCellProto message.
 type ClientMapCellProto struct{ m protoreflect.Message }
 
@@ -557,6 +3156,168 @@ func (x ClientMapCellProto) GetTappables() TappableList {
 	return TappableList{x.m.Get(fd_ClientMapCellProto_tappables).List()}
 }
 
+// ClientPokestopNpcDialogueStepProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientPokestopNpcDialogueStepProto message.
+type ClientPokestopNpcDialogueStepProto struct{ m protoreflect.Message }
+
+// AsClientPokestopNpcDialogueStepProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientPokestopNpcDialogueStepProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientPokestopNpcDialogueStepProto(m protoreflect.Message) ClientPokestopNpcDialogueStepProto {
+	if m == nil || !m.IsValid() {
+		return ClientPokestopNpcDialogueStepProto{}
+	}
+	return ClientPokestopNpcDialogueStepProto{m}
+}
+
+func (x ClientPokestopNpcDialogueStepProto) IsZero() bool { return x.m == nil }
+
+func (x ClientPokestopNpcDialogueStepProto) GetDialogueLine() ClientDialogueLineProtoList {
+	if x.m == nil {
+		return ClientDialogueLineProtoList{}
+	}
+	return ClientDialogueLineProtoList{x.m.Get(fd_ClientPokestopNpcDialogueStepProto_dialogue_line).List()}
+}
+
+// ClientPokestopSpinStepProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientPokestopSpinStepProto message.
+type ClientPokestopSpinStepProto struct{ m protoreflect.Message }
+
+// AsClientPokestopSpinStepProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientPokestopSpinStepProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientPokestopSpinStepProto(m protoreflect.Message) ClientPokestopSpinStepProto {
+	if m == nil || !m.IsValid() {
+		return ClientPokestopSpinStepProto{}
+	}
+	return ClientPokestopSpinStepProto{m}
+}
+
+func (x ClientPokestopSpinStepProto) IsZero() bool { return x.m == nil }
+
+// ClientQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientQuestProto message.
+type ClientQuestProto struct{ m protoreflect.Message }
+
+// AsClientQuestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientQuestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientQuestProto(m protoreflect.Message) ClientQuestProto {
+	if m == nil || !m.IsValid() {
+		return ClientQuestProto{}
+	}
+	return ClientQuestProto{m}
+}
+
+func (x ClientQuestProto) IsZero() bool { return x.m == nil }
+
+func (x ClientQuestProto) HasQuest() bool {
+	return x.m != nil && x.m.Has(fd_ClientQuestProto_quest)
+}
+
+func (x ClientQuestProto) GetQuest() QuestProto {
+	if x.m == nil {
+		return QuestProto{}
+	}
+	if v := x.m.Get(fd_ClientQuestProto_quest).Message(); v.IsValid() {
+		return QuestProto{v}
+	}
+	return QuestProto{}
+}
+
+func (x ClientQuestProto) HasQuestDisplay() bool {
+	return x.m != nil && x.m.Has(fd_ClientQuestProto_quest_display)
+}
+
+func (x ClientQuestProto) GetQuestDisplay() QuestDisplayProto {
+	if x.m == nil {
+		return QuestDisplayProto{}
+	}
+	if v := x.m.Get(fd_ClientQuestProto_quest_display).Message(); v.IsValid() {
+		return QuestDisplayProto{v}
+	}
+	return QuestDisplayProto{}
+}
+
+// ClientRouteGetProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientRouteGetProto message.
+type ClientRouteGetProto struct{ m protoreflect.Message }
+
+// AsClientRouteGetProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientRouteGetProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientRouteGetProto(m protoreflect.Message) ClientRouteGetProto {
+	if m == nil || !m.IsValid() {
+		return ClientRouteGetProto{}
+	}
+	return ClientRouteGetProto{m}
+}
+
+func (x ClientRouteGetProto) IsZero() bool { return x.m == nil }
+
+func (x ClientRouteGetProto) HasRoute() bool {
+	return x.m != nil && x.m.Has(fd_ClientRouteGetProto_route)
+}
+
+func (x ClientRouteGetProto) GetRoute() SharedRouteProto {
+	if x.m == nil {
+		return SharedRouteProto{}
+	}
+	if v := x.m.Get(fd_ClientRouteGetProto_route).Message(); v.IsValid() {
+		return SharedRouteProto{v}
+	}
+	return SharedRouteProto{}
+}
+
+func (x ClientRouteGetProto) GetS2CellId() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_ClientRouteGetProto_s2_cell_id).List()}
+}
+
+// ClientRouteMapCellProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientRouteMapCellProto message.
+type ClientRouteMapCellProto struct{ m protoreflect.Message }
+
+// AsClientRouteMapCellProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ClientRouteMapCellProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsClientRouteMapCellProto(m protoreflect.Message) ClientRouteMapCellProto {
+	if m == nil || !m.IsValid() {
+		return ClientRouteMapCellProto{}
+	}
+	return ClientRouteMapCellProto{m}
+}
+
+func (x ClientRouteMapCellProto) IsZero() bool { return x.m == nil }
+
+func (x ClientRouteMapCellProto) GetS2CellId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ClientRouteMapCellProto_s2_cell_id).Uint()
+}
+
+func (x ClientRouteMapCellProto) GetRouteListHash() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ClientRouteMapCellProto_route_list_hash).String())
+}
+
+func (x ClientRouteMapCellProto) GetRoute() SharedRouteProtoList {
+	if x.m == nil {
+		return SharedRouteProtoList{}
+	}
+	return SharedRouteProtoList{x.m.Get(fd_ClientRouteMapCellProto_route).List()}
+}
+
 // ClientSpawnPointProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ClientSpawnPointProto message.
 type ClientSpawnPointProto struct{ m protoreflect.Message }
 
@@ -647,6 +3408,821 @@ func (x ClientWeatherProto) GetAlerts() WeatherAlertProtoList {
 	return WeatherAlertProtoList{x.m.Get(fd_ClientWeatherProto_alerts).List()}
 }
 
+// CombatActionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatActionProto message.
+type CombatActionProto struct{ m protoreflect.Message }
+
+// AsCombatActionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatActionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatActionProto(m protoreflect.Message) CombatActionProto {
+	if m == nil || !m.IsValid() {
+		return CombatActionProto{}
+	}
+	return CombatActionProto{m}
+}
+
+func (x CombatActionProto) IsZero() bool { return x.m == nil }
+
+func (x CombatActionProto) GetType() pogo.CombatActionProto_ActionType {
+	if x.m == nil {
+		return pogo.CombatActionProto_ActionType(0)
+	}
+	return pogo.CombatActionProto_ActionType(x.m.Get(fd_CombatActionProto_type).Enum())
+}
+
+func (x CombatActionProto) GetActionStartTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatActionProto_action_start_turn).Int())
+}
+
+func (x CombatActionProto) GetDurationTurns() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatActionProto_duration_turns).Int())
+}
+
+func (x CombatActionProto) GetAttackerIndex() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatActionProto_attacker_index).Int())
+}
+
+func (x CombatActionProto) GetTargetIndex() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatActionProto_target_index).Int())
+}
+
+func (x CombatActionProto) GetActivePokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatActionProto_active_pokemon_id).Uint()
+}
+
+func (x CombatActionProto) GetTargetPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatActionProto_target_pokemon_id).Uint()
+}
+
+func (x CombatActionProto) GetMinigameScore() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_CombatActionProto_minigame_score).Float())
+}
+
+func (x CombatActionProto) GetMove() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_CombatActionProto_move).Enum())
+}
+
+// CombatProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatProto message.
+type CombatProto struct{ m protoreflect.Message }
+
+// AsCombatProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatProto(m protoreflect.Message) CombatProto {
+	if m == nil || !m.IsValid() {
+		return CombatProto{}
+	}
+	return CombatProto{m}
+}
+
+func (x CombatProto) IsZero() bool { return x.m == nil }
+
+func (x CombatProto) GetCombatState() pogo.CombatProto_CombatState {
+	if x.m == nil {
+		return pogo.CombatProto_CombatState(0)
+	}
+	return pogo.CombatProto_CombatState(x.m.Get(fd_CombatProto_combat_state).Enum())
+}
+
+func (x CombatProto) GetCombatId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_CombatProto_combat_id).String())
+}
+
+func (x CombatProto) HasPlayer() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_player)
+}
+
+func (x CombatProto) GetPlayer() CombatProto_CombatPlayerProto {
+	if x.m == nil {
+		return CombatProto_CombatPlayerProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_player).Message(); v.IsValid() {
+		return CombatProto_CombatPlayerProto{v}
+	}
+	return CombatProto_CombatPlayerProto{}
+}
+
+func (x CombatProto) HasOpponent() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_opponent)
+}
+
+func (x CombatProto) GetOpponent() CombatProto_CombatPlayerProto {
+	if x.m == nil {
+		return CombatProto_CombatPlayerProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_opponent).Message(); v.IsValid() {
+		return CombatProto_CombatPlayerProto{v}
+	}
+	return CombatProto_CombatPlayerProto{}
+}
+
+func (x CombatProto) GetCombatStartMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_combat_start_ms).Int()
+}
+
+func (x CombatProto) GetCombatEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_combat_end_ms).Int()
+}
+
+func (x CombatProto) GetServerMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_server_ms).Int()
+}
+
+func (x CombatProto) GetCurrentTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_current_turn).Int())
+}
+
+func (x CombatProto) GetTurnStartMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_turn_start_ms).Int()
+}
+
+func (x CombatProto) GetMinigameEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_minigame_end_ms).Int()
+}
+
+func (x CombatProto) GetMinigameSubmitScoreEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_minigame_submit_score_end_ms).Int()
+}
+
+func (x CombatProto) GetChangePokemonEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_change_pokemon_end_ms).Int()
+}
+
+func (x CombatProto) GetQuickSwapCooldownDurationMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_quick_swap_cooldown_duration_ms).Int()
+}
+
+func (x CombatProto) GetStateChangeDelayUntilTurn() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_state_change_delay_until_turn).Int()
+}
+
+func (x CombatProto) HasMinigameData() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_minigame_data)
+}
+
+func (x CombatProto) GetMinigameData() CombatProto_MinigameProto {
+	if x.m == nil {
+		return CombatProto_MinigameProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_minigame_data).Message(); v.IsValid() {
+		return CombatProto_MinigameProto{v}
+	}
+	return CombatProto_MinigameProto{}
+}
+
+func (x CombatProto) GetCombatRequestCounter() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_combat_request_counter).Int())
+}
+
+func (x CombatProto) GetOpponentTriggered() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_CombatProto_opponent_triggered).Bool()
+}
+
+func (x CombatProto) GetOpponentRequestCounter() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_opponent_request_counter).Int())
+}
+
+// CombatProto_CombatPlayerProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatProto.CombatPlayerProto message.
+type CombatProto_CombatPlayerProto struct{ m protoreflect.Message }
+
+// AsCombatProto_CombatPlayerProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatProto_CombatPlayerProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatProto_CombatPlayerProto(m protoreflect.Message) CombatProto_CombatPlayerProto {
+	if m == nil || !m.IsValid() {
+		return CombatProto_CombatPlayerProto{}
+	}
+	return CombatProto_CombatPlayerProto{m}
+}
+
+func (x CombatProto_CombatPlayerProto) IsZero() bool { return x.m == nil }
+
+func (x CombatProto_CombatPlayerProto) HasPublicProfile() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPlayerProto_public_profile)
+}
+
+func (x CombatProto_CombatPlayerProto) GetPublicProfile() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPlayerProto_public_profile).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
+}
+
+func (x CombatProto_CombatPlayerProto) HasActivePokemon() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPlayerProto_active_pokemon)
+}
+
+func (x CombatProto_CombatPlayerProto) GetActivePokemon() CombatProto_CombatPokemonProto {
+	if x.m == nil {
+		return CombatProto_CombatPokemonProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPlayerProto_active_pokemon).Message(); v.IsValid() {
+		return CombatProto_CombatPokemonProto{v}
+	}
+	return CombatProto_CombatPokemonProto{}
+}
+
+func (x CombatProto_CombatPlayerProto) GetReservePokemon() CombatProto_CombatPokemonProtoList {
+	if x.m == nil {
+		return CombatProto_CombatPokemonProtoList{}
+	}
+	return CombatProto_CombatPokemonProtoList{x.m.Get(fd_CombatProto_CombatPlayerProto_reserve_pokemon).List()}
+}
+
+func (x CombatProto_CombatPlayerProto) GetFaintedPokemon() CombatProto_CombatPokemonProtoList {
+	if x.m == nil {
+		return CombatProto_CombatPokemonProtoList{}
+	}
+	return CombatProto_CombatPokemonProtoList{x.m.Get(fd_CombatProto_CombatPlayerProto_fainted_pokemon).List()}
+}
+
+func (x CombatProto_CombatPlayerProto) HasCurrentAction() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPlayerProto_current_action)
+}
+
+func (x CombatProto_CombatPlayerProto) GetCurrentAction() CombatActionProto {
+	if x.m == nil {
+		return CombatActionProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPlayerProto_current_action).Message(); v.IsValid() {
+		return CombatActionProto{v}
+	}
+	return CombatActionProto{}
+}
+
+func (x CombatProto_CombatPlayerProto) GetLockstepAck() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_CombatProto_CombatPlayerProto_lockstep_ack).Bool()
+}
+
+func (x CombatProto_CombatPlayerProto) GetLastUpdatedTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPlayerProto_last_updated_turn).Int())
+}
+
+func (x CombatProto_CombatPlayerProto) HasMinigameAction() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPlayerProto_minigame_action)
+}
+
+func (x CombatProto_CombatPlayerProto) GetMinigameAction() CombatActionProto {
+	if x.m == nil {
+		return CombatActionProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPlayerProto_minigame_action).Message(); v.IsValid() {
+		return CombatActionProto{v}
+	}
+	return CombatActionProto{}
+}
+
+func (x CombatProto_CombatPlayerProto) GetQuickSwapAvailableMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_CombatPlayerProto_quick_swap_available_ms).Int()
+}
+
+func (x CombatProto_CombatPlayerProto) GetMinigameDefenseChancesLeft() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPlayerProto_minigame_defense_chances_left).Int())
+}
+
+func (x CombatProto_CombatPlayerProto) GetCombatNpcPersonalityId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_CombatProto_CombatPlayerProto_combat_npc_personality_id).String())
+}
+
+func (x CombatProto_CombatPlayerProto) GetTimesCombatActionsCalled() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPlayerProto_times_combat_actions_called).Int())
+}
+
+func (x CombatProto_CombatPlayerProto) GetLobbyJoinTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_CombatPlayerProto_lobby_join_time_ms).Int()
+}
+
+func (x CombatProto_CombatPlayerProto) GetSuperEffectiveChargeAttacksUsed() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPlayerProto_super_effective_charge_attacks_used).Int())
+}
+
+func (x CombatProto_CombatPlayerProto) GetLastSnapshotActionType() pogo.CombatActionProto_ActionType {
+	if x.m == nil {
+		return pogo.CombatActionProto_ActionType(0)
+	}
+	return pogo.CombatActionProto_ActionType(x.m.Get(fd_CombatProto_CombatPlayerProto_last_snapshot_action_type).Enum())
+}
+
+func (x CombatProto_CombatPlayerProto) HasLastActivePokemon() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPlayerProto_last_active_pokemon)
+}
+
+func (x CombatProto_CombatPlayerProto) GetLastActivePokemon() CombatProto_CombatPokemonProto {
+	if x.m == nil {
+		return CombatProto_CombatPokemonProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPlayerProto_last_active_pokemon).Message(); v.IsValid() {
+		return CombatProto_CombatPokemonProto{v}
+	}
+	return CombatProto_CombatPokemonProto{}
+}
+
+// CombatProto_CombatPokemonIbfcProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatProto.CombatPokemonIbfcProto message.
+type CombatProto_CombatPokemonIbfcProto struct{ m protoreflect.Message }
+
+// AsCombatProto_CombatPokemonIbfcProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatProto_CombatPokemonIbfcProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatProto_CombatPokemonIbfcProto(m protoreflect.Message) CombatProto_CombatPokemonIbfcProto {
+	if m == nil || !m.IsValid() {
+		return CombatProto_CombatPokemonIbfcProto{}
+	}
+	return CombatProto_CombatPokemonIbfcProto{m}
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) IsZero() bool { return x.m == nil }
+
+func (x CombatProto_CombatPokemonIbfcProto) GetAnimationPlayTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonIbfcProto_animation_play_turn).Int())
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) GetVfxKey() pogo.IbfcVfxKey {
+	if x.m == nil {
+		return pogo.IbfcVfxKey(0)
+	}
+	return pogo.IbfcVfxKey(x.m.Get(fd_CombatProto_CombatPokemonIbfcProto_vfx_key).Enum())
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) HasPlayer() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPokemonIbfcProto_player)
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) GetPlayer() CombatProto_CombatPlayerProto {
+	if x.m == nil {
+		return CombatProto_CombatPlayerProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPokemonIbfcProto_player).Message(); v.IsValid() {
+		return CombatProto_CombatPlayerProto{v}
+	}
+	return CombatProto_CombatPlayerProto{}
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) GetUpdatedFlyoutDurationTurns() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonIbfcProto_updated_flyout_duration_turns).Int())
+}
+
+func (x CombatProto_CombatPokemonIbfcProto) GetIbfcTriggerMove() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonIbfcProto_ibfc_trigger_move).Int())
+}
+
+// CombatProto_CombatPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatProto.CombatPokemonProto message.
+type CombatProto_CombatPokemonProto struct{ m protoreflect.Message }
+
+// AsCombatProto_CombatPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatProto_CombatPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatProto_CombatPokemonProto(m protoreflect.Message) CombatProto_CombatPokemonProto {
+	if m == nil || !m.IsValid() {
+		return CombatProto_CombatPokemonProto{}
+	}
+	return CombatProto_CombatPokemonProto{m}
+}
+
+func (x CombatProto_CombatPokemonProto) IsZero() bool { return x.m == nil }
+
+func (x CombatProto_CombatPokemonProto) GetPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_CombatPokemonProto_pokemon_id).Uint()
+}
+
+func (x CombatProto_CombatPokemonProto) GetPokedexId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_CombatProto_CombatPokemonProto_pokedex_id).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetCp() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_cp).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetCpMultiplier() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_CombatProto_CombatPokemonProto_cp_multiplier).Float())
+}
+
+func (x CombatProto_CombatPokemonProto) GetStamina() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_stamina).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetMaxStamina() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_max_stamina).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetMove1() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_CombatProto_CombatPokemonProto_move1).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetMove2() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_CombatProto_CombatPokemonProto_move2).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetMove3() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_CombatProto_CombatPokemonProto_move3).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetEnergy() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_energy).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) HasPokemonDisplay() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPokemonProto_pokemon_display)
+}
+
+func (x CombatProto_CombatPokemonProto) GetPokemonDisplay() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPokemonProto_pokemon_display).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x CombatProto_CombatPokemonProto) GetIndividualAttack() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_individual_attack).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetIndividualDefense() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_individual_defense).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetIndividualStamina() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_individual_stamina).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetAttackStatStage() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_attack_stat_stage).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetDefenseStatStage() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_defense_stat_stage).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetBattlesWon() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_battles_won).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetBattlesLost() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_CombatPokemonProto_battles_lost).Int())
+}
+
+func (x CombatProto_CombatPokemonProto) GetNickname() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_CombatProto_CombatPokemonProto_nickname).String())
+}
+
+func (x CombatProto_CombatPokemonProto) GetPokeball() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_CombatProto_CombatPokemonProto_pokeball).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetHeightM() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_CombatProto_CombatPokemonProto_height_m).Float())
+}
+
+func (x CombatProto_CombatPokemonProto) GetWeightKg() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_CombatProto_CombatPokemonProto_weight_kg).Float())
+}
+
+func (x CombatProto_CombatPokemonProto) GetPokemonSize() pogo.HoloPokemonSize {
+	if x.m == nil {
+		return pogo.HoloPokemonSize(0)
+	}
+	return pogo.HoloPokemonSize(x.m.Get(fd_CombatProto_CombatPokemonProto_pokemon_size).Enum())
+}
+
+func (x CombatProto_CombatPokemonProto) GetNotableActionHistory() VsActionHistoryList {
+	if x.m == nil {
+		return VsActionHistoryList{}
+	}
+	return VsActionHistoryList{x.m.Get(fd_CombatProto_CombatPokemonProto_notable_action_history).List()}
+}
+
+func (x CombatProto_CombatPokemonProto) GetVsEffectTag() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_CombatProto_CombatPokemonProto_vs_effect_tag).List()}
+}
+
+func (x CombatProto_CombatPokemonProto) HasCombatPokemonIbfc() bool {
+	return x.m != nil && x.m.Has(fd_CombatProto_CombatPokemonProto_combat_pokemon_ibfc)
+}
+
+func (x CombatProto_CombatPokemonProto) GetCombatPokemonIbfc() CombatProto_CombatPokemonIbfcProto {
+	if x.m == nil {
+		return CombatProto_CombatPokemonIbfcProto{}
+	}
+	if v := x.m.Get(fd_CombatProto_CombatPokemonProto_combat_pokemon_ibfc).Message(); v.IsValid() {
+		return CombatProto_CombatPokemonIbfcProto{v}
+	}
+	return CombatProto_CombatPokemonIbfcProto{}
+}
+
+// CombatProto_MinigameProto wraps a hyperpb/protoreflect POGOProtos.Rpc.CombatProto.MinigameProto message.
+type CombatProto_MinigameProto struct{ m protoreflect.Message }
+
+// AsCombatProto_MinigameProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CombatProto_MinigameProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCombatProto_MinigameProto(m protoreflect.Message) CombatProto_MinigameProto {
+	if m == nil || !m.IsValid() {
+		return CombatProto_MinigameProto{}
+	}
+	return CombatProto_MinigameProto{m}
+}
+
+func (x CombatProto_MinigameProto) IsZero() bool { return x.m == nil }
+
+func (x CombatProto_MinigameProto) GetMinigameEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_MinigameProto_minigame_end_ms).Int()
+}
+
+func (x CombatProto_MinigameProto) GetMinigameSubmitScoreEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_CombatProto_MinigameProto_minigame_submit_score_end_ms).Int()
+}
+
+func (x CombatProto_MinigameProto) GetFlyInCompletionTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_MinigameProto_fly_in_completion_turn).Int())
+}
+
+func (x CombatProto_MinigameProto) GetFlyOutCompletionTurn() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_CombatProto_MinigameProto_fly_out_completion_turn).Int())
+}
+
+func (x CombatProto_MinigameProto) GetRenderModifiers() FormRenderModifierList {
+	if x.m == nil {
+		return FormRenderModifierList{}
+	}
+	return FormRenderModifierList{x.m.Get(fd_CombatProto_MinigameProto_render_modifiers).List()}
+}
+
+// ContestBuddyFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestBuddyFocusProto message.
+type ContestBuddyFocusProto struct{ m protoreflect.Message }
+
+// AsContestBuddyFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestBuddyFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestBuddyFocusProto(m protoreflect.Message) ContestBuddyFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestBuddyFocusProto{}
+	}
+	return ContestBuddyFocusProto{m}
+}
+
+func (x ContestBuddyFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestBuddyFocusProto) GetMinBuddyLevel() pogo.BuddyLevel {
+	if x.m == nil {
+		return pogo.BuddyLevel(0)
+	}
+	return pogo.BuddyLevel(x.m.Get(fd_ContestBuddyFocusProto_min_buddy_level).Enum())
+}
+
+// ContestCycleProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestCycleProto message.
+type ContestCycleProto struct{ m protoreflect.Message }
+
+// AsContestCycleProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestCycleProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestCycleProto(m protoreflect.Message) ContestCycleProto {
+	if m == nil || !m.IsValid() {
+		return ContestCycleProto{}
+	}
+	return ContestCycleProto{m}
+}
+
+func (x ContestCycleProto) IsZero() bool { return x.m == nil }
+
+func (x ContestCycleProto) GetStartTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestCycleProto_start_time_ms).Int()
+}
+
+func (x ContestCycleProto) GetEndTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestCycleProto_end_time_ms).Int()
+}
+
+func (x ContestCycleProto) GetContestOccurrence() pogo.ContestOccurrence {
+	if x.m == nil {
+		return pogo.ContestOccurrence(0)
+	}
+	return pogo.ContestOccurrence(x.m.Get(fd_ContestCycleProto_contest_occurrence).Enum())
+}
+
+func (x ContestCycleProto) GetCustomCycleWarmupDurationMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestCycleProto_custom_cycle_warmup_duration_ms).Int()
+}
+
+func (x ContestCycleProto) GetCustomCycleCooldownDurationMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestCycleProto_custom_cycle_cooldown_duration_ms).Int()
+}
+
+func (x ContestCycleProto) GetActivateEarlyTermination() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_ContestCycleProto_activate_early_termination).Bool()
+}
+
 // ContestDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestDisplayProto message.
 type ContestDisplayProto struct{ m protoreflect.Message }
 
@@ -669,6 +4245,744 @@ func (x ContestDisplayProto) GetStyle() pogo.EnumWrapper_PokestopStyle {
 		return pogo.EnumWrapper_PokestopStyle(0)
 	}
 	return pogo.EnumWrapper_PokestopStyle(x.m.Get(fd_ContestDisplayProto_style).Enum())
+}
+
+// ContestEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestEntryProto message.
+type ContestEntryProto struct{ m protoreflect.Message }
+
+// AsContestEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestEntryProto(m protoreflect.Message) ContestEntryProto {
+	if m == nil || !m.IsValid() {
+		return ContestEntryProto{}
+	}
+	return ContestEntryProto{m}
+}
+
+func (x ContestEntryProto) IsZero() bool { return x.m == nil }
+
+func (x ContestEntryProto) GetPokedexId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_ContestEntryProto_pokedex_id).Enum())
+}
+
+func (x ContestEntryProto) HasPokemonDisplay() bool {
+	return x.m != nil && x.m.Has(fd_ContestEntryProto_pokemon_display)
+}
+
+func (x ContestEntryProto) GetPokemonDisplay() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_ContestEntryProto_pokemon_display).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x ContestEntryProto) GetScore() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestEntryProto_score).Float()
+}
+
+func (x ContestEntryProto) GetRank() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_ContestEntryProto_rank).Int())
+}
+
+func (x ContestEntryProto) HasPlayerAvatar() bool {
+	return x.m != nil && x.m.Has(fd_ContestEntryProto_player_avatar)
+}
+
+func (x ContestEntryProto) GetPlayerAvatar() PlayerAvatarProto {
+	if x.m == nil {
+		return PlayerAvatarProto{}
+	}
+	if v := x.m.Get(fd_ContestEntryProto_player_avatar).Message(); v.IsValid() {
+		return PlayerAvatarProto{v}
+	}
+	return PlayerAvatarProto{}
+}
+
+func (x ContestEntryProto) GetTrainerName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestEntryProto_trainer_name).String())
+}
+
+func (x ContestEntryProto) GetTeam() pogo.Team {
+	if x.m == nil {
+		return pogo.Team(0)
+	}
+	return pogo.Team(x.m.Get(fd_ContestEntryProto_team).Enum())
+}
+
+func (x ContestEntryProto) GetPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ContestEntryProto_pokemon_id).Uint()
+}
+
+func (x ContestEntryProto) GetPlayerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestEntryProto_player_id).String())
+}
+
+func (x ContestEntryProto) GetPokemonNickname() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestEntryProto_pokemon_nickname).String())
+}
+
+func (x ContestEntryProto) HasPlayerNeutralAvatar() bool {
+	return x.m != nil && x.m.Has(fd_ContestEntryProto_player_neutral_avatar)
+}
+
+func (x ContestEntryProto) GetPlayerNeutralAvatar() PlayerNeutralAvatarProto {
+	if x.m == nil {
+		return PlayerNeutralAvatarProto{}
+	}
+	if v := x.m.Get(fd_ContestEntryProto_player_neutral_avatar).Message(); v.IsValid() {
+		return PlayerNeutralAvatarProto{v}
+	}
+	return PlayerNeutralAvatarProto{}
+}
+
+// ContestFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestFocusProto message.
+type ContestFocusProto struct{ m protoreflect.Message }
+
+// AsContestFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestFocusProto(m protoreflect.Message) ContestFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestFocusProto{}
+	}
+	return ContestFocusProto{m}
+}
+
+func (x ContestFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestFocusProto) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_pokemon)
+}
+
+func (x ContestFocusProto) GetPokemon() ContestPokemonFocusProto {
+	if x.m == nil {
+		return ContestPokemonFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_pokemon).Message(); v.IsValid() {
+		return ContestPokemonFocusProto{v}
+	}
+	return ContestPokemonFocusProto{}
+}
+
+func (x ContestFocusProto) HasGeneration() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_generation)
+}
+
+func (x ContestFocusProto) GetGeneration() ContestGenerationFocusProto {
+	if x.m == nil {
+		return ContestGenerationFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_generation).Message(); v.IsValid() {
+		return ContestGenerationFocusProto{v}
+	}
+	return ContestGenerationFocusProto{}
+}
+
+func (x ContestFocusProto) HasHatched() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_hatched)
+}
+
+func (x ContestFocusProto) GetHatched() ContestHatchedFocusProto {
+	if x.m == nil {
+		return ContestHatchedFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_hatched).Message(); v.IsValid() {
+		return ContestHatchedFocusProto{v}
+	}
+	return ContestHatchedFocusProto{}
+}
+
+func (x ContestFocusProto) HasMega() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_mega)
+}
+
+func (x ContestFocusProto) GetMega() ContestTemporaryEvolutionFocusProto {
+	if x.m == nil {
+		return ContestTemporaryEvolutionFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_mega).Message(); v.IsValid() {
+		return ContestTemporaryEvolutionFocusProto{v}
+	}
+	return ContestTemporaryEvolutionFocusProto{}
+}
+
+func (x ContestFocusProto) HasShiny() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_shiny)
+}
+
+func (x ContestFocusProto) GetShiny() ContestShinyFocusProto {
+	if x.m == nil {
+		return ContestShinyFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_shiny).Message(); v.IsValid() {
+		return ContestShinyFocusProto{v}
+	}
+	return ContestShinyFocusProto{}
+}
+
+func (x ContestFocusProto) HasType() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_type)
+}
+
+func (x ContestFocusProto) GetType() ContestPokemonTypeFocusProto {
+	if x.m == nil {
+		return ContestPokemonTypeFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_type).Message(); v.IsValid() {
+		return ContestPokemonTypeFocusProto{v}
+	}
+	return ContestPokemonTypeFocusProto{}
+}
+
+func (x ContestFocusProto) HasBuddy() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_buddy)
+}
+
+func (x ContestFocusProto) GetBuddy() ContestBuddyFocusProto {
+	if x.m == nil {
+		return ContestBuddyFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_buddy).Message(); v.IsValid() {
+		return ContestBuddyFocusProto{v}
+	}
+	return ContestBuddyFocusProto{}
+}
+
+func (x ContestFocusProto) HasPokemonClass() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_pokemon_class)
+}
+
+func (x ContestFocusProto) GetPokemonClass() ContestPokemonClassFocusProto {
+	if x.m == nil {
+		return ContestPokemonClassFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_pokemon_class).Message(); v.IsValid() {
+		return ContestPokemonClassFocusProto{v}
+	}
+	return ContestPokemonClassFocusProto{}
+}
+
+func (x ContestFocusProto) HasPokemonFamily() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_pokemon_family)
+}
+
+func (x ContestFocusProto) GetPokemonFamily() ContestPokemonFamilyFocusProto {
+	if x.m == nil {
+		return ContestPokemonFamilyFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_pokemon_family).Message(); v.IsValid() {
+		return ContestPokemonFamilyFocusProto{v}
+	}
+	return ContestPokemonFamilyFocusProto{}
+}
+
+func (x ContestFocusProto) HasAlignment() bool {
+	return x.m != nil && x.m.Has(fd_ContestFocusProto_alignment)
+}
+
+func (x ContestFocusProto) GetAlignment() ContestPokemonAlignmentFocusProto {
+	if x.m == nil {
+		return ContestPokemonAlignmentFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestFocusProto_alignment).Message(); v.IsValid() {
+		return ContestPokemonAlignmentFocusProto{v}
+	}
+	return ContestPokemonAlignmentFocusProto{}
+}
+
+// ContestGenerationFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestGenerationFocusProto message.
+type ContestGenerationFocusProto struct{ m protoreflect.Message }
+
+// AsContestGenerationFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestGenerationFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestGenerationFocusProto(m protoreflect.Message) ContestGenerationFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestGenerationFocusProto{}
+	}
+	return ContestGenerationFocusProto{m}
+}
+
+func (x ContestGenerationFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestGenerationFocusProto) GetPokemonGeneration() pogo.PokedexGenerationId {
+	if x.m == nil {
+		return pogo.PokedexGenerationId(0)
+	}
+	return pogo.PokedexGenerationId(x.m.Get(fd_ContestGenerationFocusProto_pokemon_generation).Enum())
+}
+
+// ContestHatchedFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestHatchedFocusProto message.
+type ContestHatchedFocusProto struct{ m protoreflect.Message }
+
+// AsContestHatchedFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestHatchedFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestHatchedFocusProto(m protoreflect.Message) ContestHatchedFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestHatchedFocusProto{}
+	}
+	return ContestHatchedFocusProto{m}
+}
+
+func (x ContestHatchedFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestHatchedFocusProto) GetRequireToBeHatched() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_ContestHatchedFocusProto_require_to_be_hatched).Bool()
+}
+
+// ContestMetricProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestMetricProto message.
+type ContestMetricProto struct{ m protoreflect.Message }
+
+// AsContestMetricProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestMetricProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestMetricProto(m protoreflect.Message) ContestMetricProto {
+	if m == nil || !m.IsValid() {
+		return ContestMetricProto{}
+	}
+	return ContestMetricProto{m}
+}
+
+func (x ContestMetricProto) IsZero() bool { return x.m == nil }
+
+func (x ContestMetricProto) GetPokemonMetric() pogo.ContestPokemonMetric {
+	if x.m == nil {
+		return pogo.ContestPokemonMetric(0)
+	}
+	return pogo.ContestPokemonMetric(x.m.Get(fd_ContestMetricProto_pokemon_metric).Enum())
+}
+
+func (x ContestMetricProto) GetRankingStandard() pogo.ContestRankingStandard {
+	if x.m == nil {
+		return pogo.ContestRankingStandard(0)
+	}
+	return pogo.ContestRankingStandard(x.m.Get(fd_ContestMetricProto_ranking_standard).Enum())
+}
+
+// ContestPokemonAlignmentFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestPokemonAlignmentFocusProto message.
+type ContestPokemonAlignmentFocusProto struct{ m protoreflect.Message }
+
+// AsContestPokemonAlignmentFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestPokemonAlignmentFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestPokemonAlignmentFocusProto(m protoreflect.Message) ContestPokemonAlignmentFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestPokemonAlignmentFocusProto{}
+	}
+	return ContestPokemonAlignmentFocusProto{m}
+}
+
+func (x ContestPokemonAlignmentFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestPokemonAlignmentFocusProto) GetRequiredAlignment() pogo.ContestPokemonAlignmentFocusProtoAlignment {
+	if x.m == nil {
+		return pogo.ContestPokemonAlignmentFocusProtoAlignment(0)
+	}
+	return pogo.ContestPokemonAlignmentFocusProtoAlignment(x.m.Get(fd_ContestPokemonAlignmentFocusProto_required_alignment).Enum())
+}
+
+// ContestPokemonClassFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestPokemonClassFocusProto message.
+type ContestPokemonClassFocusProto struct{ m protoreflect.Message }
+
+// AsContestPokemonClassFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestPokemonClassFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestPokemonClassFocusProto(m protoreflect.Message) ContestPokemonClassFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestPokemonClassFocusProto{}
+	}
+	return ContestPokemonClassFocusProto{m}
+}
+
+func (x ContestPokemonClassFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestPokemonClassFocusProto) GetRequiredClass() pogo.HoloPokemonClass {
+	if x.m == nil {
+		return pogo.HoloPokemonClass(0)
+	}
+	return pogo.HoloPokemonClass(x.m.Get(fd_ContestPokemonClassFocusProto_required_class).Enum())
+}
+
+// ContestPokemonFamilyFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestPokemonFamilyFocusProto message.
+type ContestPokemonFamilyFocusProto struct{ m protoreflect.Message }
+
+// AsContestPokemonFamilyFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestPokemonFamilyFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestPokemonFamilyFocusProto(m protoreflect.Message) ContestPokemonFamilyFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestPokemonFamilyFocusProto{}
+	}
+	return ContestPokemonFamilyFocusProto{m}
+}
+
+func (x ContestPokemonFamilyFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestPokemonFamilyFocusProto) GetRequiredFamily() pogo.HoloPokemonFamilyId {
+	if x.m == nil {
+		return pogo.HoloPokemonFamilyId(0)
+	}
+	return pogo.HoloPokemonFamilyId(x.m.Get(fd_ContestPokemonFamilyFocusProto_required_family).Enum())
+}
+
+// ContestPokemonFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestPokemonFocusProto message.
+type ContestPokemonFocusProto struct{ m protoreflect.Message }
+
+// AsContestPokemonFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestPokemonFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestPokemonFocusProto(m protoreflect.Message) ContestPokemonFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestPokemonFocusProto{}
+	}
+	return ContestPokemonFocusProto{m}
+}
+
+func (x ContestPokemonFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestPokemonFocusProto) GetPokedexId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_ContestPokemonFocusProto_pokedex_id).Enum())
+}
+
+func (x ContestPokemonFocusProto) HasPokemonDisplay() bool {
+	return x.m != nil && x.m.Has(fd_ContestPokemonFocusProto_pokemon_display)
+}
+
+func (x ContestPokemonFocusProto) GetPokemonDisplay() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_ContestPokemonFocusProto_pokemon_display).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x ContestPokemonFocusProto) GetRequireFormToMatch() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_ContestPokemonFocusProto_require_form_to_match).Bool()
+}
+
+// ContestPokemonTypeFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestPokemonTypeFocusProto message.
+type ContestPokemonTypeFocusProto struct{ m protoreflect.Message }
+
+// AsContestPokemonTypeFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestPokemonTypeFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestPokemonTypeFocusProto(m protoreflect.Message) ContestPokemonTypeFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestPokemonTypeFocusProto{}
+	}
+	return ContestPokemonTypeFocusProto{m}
+}
+
+func (x ContestPokemonTypeFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestPokemonTypeFocusProto) GetPokemonType1() pogo.HoloPokemonType {
+	if x.m == nil {
+		return pogo.HoloPokemonType(0)
+	}
+	return pogo.HoloPokemonType(x.m.Get(fd_ContestPokemonTypeFocusProto_pokemon_type1).Enum())
+}
+
+func (x ContestPokemonTypeFocusProto) GetPokemonType2() pogo.HoloPokemonType {
+	if x.m == nil {
+		return pogo.HoloPokemonType(0)
+	}
+	return pogo.HoloPokemonType(x.m.Get(fd_ContestPokemonTypeFocusProto_pokemon_type2).Enum())
+}
+
+// ContestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestProto message.
+type ContestProto struct{ m protoreflect.Message }
+
+// AsContestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestProto(m protoreflect.Message) ContestProto {
+	if m == nil || !m.IsValid() {
+		return ContestProto{}
+	}
+	return ContestProto{m}
+}
+
+func (x ContestProto) IsZero() bool { return x.m == nil }
+
+func (x ContestProto) GetContestId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestProto_contest_id).String())
+}
+
+func (x ContestProto) HasFocus() bool {
+	return x.m != nil && x.m.Has(fd_ContestProto_focus)
+}
+
+func (x ContestProto) GetFocus() ContestFocusProto {
+	if x.m == nil {
+		return ContestFocusProto{}
+	}
+	if v := x.m.Get(fd_ContestProto_focus).Message(); v.IsValid() {
+		return ContestFocusProto{v}
+	}
+	return ContestFocusProto{}
+}
+
+func (x ContestProto) HasMetric() bool {
+	return x.m != nil && x.m.Has(fd_ContestProto_metric)
+}
+
+func (x ContestProto) GetMetric() ContestMetricProto {
+	if x.m == nil {
+		return ContestMetricProto{}
+	}
+	if v := x.m.Get(fd_ContestProto_metric).Message(); v.IsValid() {
+		return ContestMetricProto{v}
+	}
+	return ContestMetricProto{}
+}
+
+func (x ContestProto) HasSchedule() bool {
+	return x.m != nil && x.m.Has(fd_ContestProto_schedule)
+}
+
+func (x ContestProto) GetSchedule() ContestScheduleProto {
+	if x.m == nil {
+		return ContestScheduleProto{}
+	}
+	if v := x.m.Get(fd_ContestProto_schedule).Message(); v.IsValid() {
+		return ContestScheduleProto{v}
+	}
+	return ContestScheduleProto{}
+}
+
+func (x ContestProto) GetRewardsTemplateId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestProto_rewards_template_id).String())
+}
+
+func (x ContestProto) GetFocuses() ContestFocusProtoList {
+	if x.m == nil {
+		return ContestFocusProtoList{}
+	}
+	return ContestFocusProtoList{x.m.Get(fd_ContestProto_focuses).List()}
+}
+
+func (x ContestProto) GetFocusStringKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ContestProto_focus_string_key).String())
+}
+
+func (x ContestProto) GetScalarScoreReferencePokemon() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_ContestProto_scalar_score_reference_pokemon).Enum())
+}
+
+func (x ContestProto) GetScalarScoreReferencePokemonForm() pogo.PokemonDisplayProto_Form {
+	if x.m == nil {
+		return pogo.PokemonDisplayProto_Form(0)
+	}
+	return pogo.PokemonDisplayProto_Form(x.m.Get(fd_ContestProto_scalar_score_reference_pokemon_form).Enum())
+}
+
+// ContestScheduleProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestScheduleProto message.
+type ContestScheduleProto struct{ m protoreflect.Message }
+
+// AsContestScheduleProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestScheduleProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestScheduleProto(m protoreflect.Message) ContestScheduleProto {
+	if m == nil || !m.IsValid() {
+		return ContestScheduleProto{}
+	}
+	return ContestScheduleProto{m}
+}
+
+func (x ContestScheduleProto) IsZero() bool { return x.m == nil }
+
+func (x ContestScheduleProto) HasContestCycle() bool {
+	return x.m != nil && x.m.Has(fd_ContestScheduleProto_contest_cycle)
+}
+
+func (x ContestScheduleProto) GetContestCycle() ContestCycleProto {
+	if x.m == nil {
+		return ContestCycleProto{}
+	}
+	if v := x.m.Get(fd_ContestScheduleProto_contest_cycle).Message(); v.IsValid() {
+		return ContestCycleProto{v}
+	}
+	return ContestCycleProto{}
+}
+
+// ContestShinyFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestShinyFocusProto message.
+type ContestShinyFocusProto struct{ m protoreflect.Message }
+
+// AsContestShinyFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestShinyFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestShinyFocusProto(m protoreflect.Message) ContestShinyFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestShinyFocusProto{}
+	}
+	return ContestShinyFocusProto{m}
+}
+
+func (x ContestShinyFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestShinyFocusProto) GetRequireToBeShiny() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_ContestShinyFocusProto_require_to_be_shiny).Bool()
+}
+
+// ContestTemporaryEvolutionFocusProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ContestTemporaryEvolutionFocusProto message.
+type ContestTemporaryEvolutionFocusProto struct{ m protoreflect.Message }
+
+// AsContestTemporaryEvolutionFocusProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ContestTemporaryEvolutionFocusProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsContestTemporaryEvolutionFocusProto(m protoreflect.Message) ContestTemporaryEvolutionFocusProto {
+	if m == nil || !m.IsValid() {
+		return ContestTemporaryEvolutionFocusProto{}
+	}
+	return ContestTemporaryEvolutionFocusProto{m}
+}
+
+func (x ContestTemporaryEvolutionFocusProto) IsZero() bool { return x.m == nil }
+
+func (x ContestTemporaryEvolutionFocusProto) GetTemporaryEvolutionRequired() pogo.HoloTemporaryEvolutionId {
+	if x.m == nil {
+		return pogo.HoloTemporaryEvolutionId(0)
+	}
+	return pogo.HoloTemporaryEvolutionId(x.m.Get(fd_ContestTemporaryEvolutionFocusProto_temporary_evolution_required).Enum())
+}
+
+func (x ContestTemporaryEvolutionFocusProto) GetRestriction() pogo.ContestTemporaryEvolutionFocusProto_Restriction {
+	if x.m == nil {
+		return pogo.ContestTemporaryEvolutionFocusProto_Restriction(0)
+	}
+	return pogo.ContestTemporaryEvolutionFocusProto_Restriction(x.m.Get(fd_ContestTemporaryEvolutionFocusProto_restriction).Enum())
+}
+
+// CreatorInfo wraps a hyperpb/protoreflect POGOProtos.Rpc.CreatorInfo message.
+type CreatorInfo struct{ m protoreflect.Message }
+
+// AsCreatorInfo wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.CreatorInfo .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsCreatorInfo(m protoreflect.Message) CreatorInfo {
+	if m == nil || !m.IsValid() {
+		return CreatorInfo{}
+	}
+	return CreatorInfo{m}
+}
+
+func (x CreatorInfo) IsZero() bool { return x.m == nil }
+
+func (x CreatorInfo) GetCreatorPlayerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_CreatorInfo_creator_player_id).String())
+}
+
+func (x CreatorInfo) GetCreatorCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_CreatorInfo_creator_codename).String())
+}
+
+func (x CreatorInfo) GetShowCreatorName() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_CreatorInfo_show_creator_name).Bool()
+}
+
+func (x CreatorInfo) HasPublicProfile() bool {
+	return x.m != nil && x.m.Has(fd_CreatorInfo_public_profile)
+}
+
+func (x CreatorInfo) GetPublicProfile() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_CreatorInfo_public_profile).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
 }
 
 // DailyBuddyAffectionQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DailyBuddyAffectionQuestProto message.
@@ -800,6 +5114,51 @@ func (x DaysWithARowQuestProto) GetLastWindow() int32 {
 		return 0
 	}
 	return int32(x.m.Get(fd_DaysWithARowQuestProto_last_window).Int())
+}
+
+// DeploymentTotalsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.DeploymentTotalsProto message.
+type DeploymentTotalsProto struct{ m protoreflect.Message }
+
+// AsDeploymentTotalsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.DeploymentTotalsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsDeploymentTotalsProto(m protoreflect.Message) DeploymentTotalsProto {
+	if m == nil || !m.IsValid() {
+		return DeploymentTotalsProto{}
+	}
+	return DeploymentTotalsProto{m}
+}
+
+func (x DeploymentTotalsProto) IsZero() bool { return x.m == nil }
+
+func (x DeploymentTotalsProto) GetTimesFed() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_DeploymentTotalsProto_times_fed).Int())
+}
+
+func (x DeploymentTotalsProto) GetBattlesWon() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_DeploymentTotalsProto_battles_won).Int())
+}
+
+func (x DeploymentTotalsProto) GetBattlesLost() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_DeploymentTotalsProto_battles_lost).Int())
+}
+
+func (x DeploymentTotalsProto) GetDeploymentDurationMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_DeploymentTotalsProto_deployment_duration_ms).Int()
 }
 
 // DiskCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.DiskCreateDetail message.
@@ -1176,6 +5535,193 @@ func (x EncounterOutProto) GetArplusAttemptsUntilFlee() int32 {
 	return int32(x.m.Get(fd_EncounterOutProto_arplus_attempts_until_flee).Int())
 }
 
+// EventInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EventInfoProto message.
+type EventInfoProto struct{ m protoreflect.Message }
+
+// AsEventInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EventInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEventInfoProto(m protoreflect.Message) EventInfoProto {
+	if m == nil || !m.IsValid() {
+		return EventInfoProto{}
+	}
+	return EventInfoProto{m}
+}
+
+func (x EventInfoProto) IsZero() bool { return x.m == nil }
+
+func (x EventInfoProto) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_EventInfoProto_image_url).String())
+}
+
+func (x EventInfoProto) GetIconUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_EventInfoProto_icon_url).String())
+}
+
+func (x EventInfoProto) GetNameKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_EventInfoProto_name_key).String())
+}
+
+// EventRsvpTimeslotProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EventRsvpTimeslotProto message.
+type EventRsvpTimeslotProto struct{ m protoreflect.Message }
+
+// AsEventRsvpTimeslotProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EventRsvpTimeslotProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEventRsvpTimeslotProto(m protoreflect.Message) EventRsvpTimeslotProto {
+	if m == nil || !m.IsValid() {
+		return EventRsvpTimeslotProto{}
+	}
+	return EventRsvpTimeslotProto{m}
+}
+
+func (x EventRsvpTimeslotProto) IsZero() bool { return x.m == nil }
+
+func (x EventRsvpTimeslotProto) GetTimeSlot() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_EventRsvpTimeslotProto_time_slot).Int()
+}
+
+func (x EventRsvpTimeslotProto) GetGoingCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_EventRsvpTimeslotProto_going_count).Int())
+}
+
+func (x EventRsvpTimeslotProto) GetMaybeCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_EventRsvpTimeslotProto_maybe_count).Int())
+}
+
+func (x EventRsvpTimeslotProto) GetRsvpPlayers() EventRsvpTimeslotProto_RsvpPlayerList {
+	if x.m == nil {
+		return EventRsvpTimeslotProto_RsvpPlayerList{}
+	}
+	return EventRsvpTimeslotProto_RsvpPlayerList{x.m.Get(fd_EventRsvpTimeslotProto_rsvp_players).List()}
+}
+
+// EventRsvpTimeslotProto_PlayerDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.EventRsvpTimeslotProto.PlayerDetails message.
+type EventRsvpTimeslotProto_PlayerDetails struct{ m protoreflect.Message }
+
+// AsEventRsvpTimeslotProto_PlayerDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EventRsvpTimeslotProto_PlayerDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEventRsvpTimeslotProto_PlayerDetails(m protoreflect.Message) EventRsvpTimeslotProto_PlayerDetails {
+	if m == nil || !m.IsValid() {
+		return EventRsvpTimeslotProto_PlayerDetails{}
+	}
+	return EventRsvpTimeslotProto_PlayerDetails{m}
+}
+
+func (x EventRsvpTimeslotProto_PlayerDetails) IsZero() bool { return x.m == nil }
+
+func (x EventRsvpTimeslotProto_PlayerDetails) GetNickname() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_EventRsvpTimeslotProto_PlayerDetails_nickname).String())
+}
+
+func (x EventRsvpTimeslotProto_PlayerDetails) HasInviterNeutralAvatar() bool {
+	return x.m != nil && x.m.Has(fd_EventRsvpTimeslotProto_PlayerDetails_inviter_neutral_avatar)
+}
+
+func (x EventRsvpTimeslotProto_PlayerDetails) GetInviterNeutralAvatar() PlayerNeutralAvatarProto {
+	if x.m == nil {
+		return PlayerNeutralAvatarProto{}
+	}
+	if v := x.m.Get(fd_EventRsvpTimeslotProto_PlayerDetails_inviter_neutral_avatar).Message(); v.IsValid() {
+		return PlayerNeutralAvatarProto{v}
+	}
+	return PlayerNeutralAvatarProto{}
+}
+
+func (x EventRsvpTimeslotProto_PlayerDetails) GetPlayerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_EventRsvpTimeslotProto_PlayerDetails_player_id).String())
+}
+
+// EventRsvpTimeslotProto_RsvpPlayer wraps a hyperpb/protoreflect POGOProtos.Rpc.EventRsvpTimeslotProto.RsvpPlayer message.
+type EventRsvpTimeslotProto_RsvpPlayer struct{ m protoreflect.Message }
+
+// AsEventRsvpTimeslotProto_RsvpPlayer wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.EventRsvpTimeslotProto_RsvpPlayer .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsEventRsvpTimeslotProto_RsvpPlayer(m protoreflect.Message) EventRsvpTimeslotProto_RsvpPlayer {
+	if m == nil || !m.IsValid() {
+		return EventRsvpTimeslotProto_RsvpPlayer{}
+	}
+	return EventRsvpTimeslotProto_RsvpPlayer{m}
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) IsZero() bool { return x.m == nil }
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) GetAnonymousCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_EventRsvpTimeslotProto_RsvpPlayer_anonymous_count).Int())
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) HasTrainerDetails() bool {
+	return x.m != nil && x.m.Has(fd_EventRsvpTimeslotProto_RsvpPlayer_trainer_details)
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) GetTrainerDetails() EventRsvpTimeslotProto_PlayerDetails {
+	if x.m == nil {
+		return EventRsvpTimeslotProto_PlayerDetails{}
+	}
+	if v := x.m.Get(fd_EventRsvpTimeslotProto_RsvpPlayer_trainer_details).Message(); v.IsValid() {
+		return EventRsvpTimeslotProto_PlayerDetails{v}
+	}
+	return EventRsvpTimeslotProto_PlayerDetails{}
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) GetRsvpSelection() pogo.RsvpSelection {
+	if x.m == nil {
+		return pogo.RsvpSelection(0)
+	}
+	return pogo.RsvpSelection(x.m.Get(fd_EventRsvpTimeslotProto_RsvpPlayer_rsvp_selection).Enum())
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) GetSharePreference() pogo.NameSharingPreferencesProto_Preference {
+	if x.m == nil {
+		return pogo.NameSharingPreferencesProto_Preference(0)
+	}
+	return pogo.NameSharingPreferencesProto_Preference(x.m.Get(fd_EventRsvpTimeslotProto_RsvpPlayer_share_preference).Enum())
+}
+
+func (x EventRsvpTimeslotProto_RsvpPlayer) GetIsFriend() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_EventRsvpTimeslotProto_RsvpPlayer_isFriend).Bool()
+}
+
 // EvolutionQuestInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.EvolutionQuestInfoProto message.
 type EvolutionQuestInfoProto struct{ m protoreflect.Message }
 
@@ -1238,6 +5784,396 @@ func (x EvolveIntoPokemonQuestProto) GetUniquePokemonId() ScalarList {
 	return ScalarList{x.m.Get(fd_EvolveIntoPokemonQuestProto_unique_pokemon_id).List()}
 }
 
+// FollowerPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FollowerPokemonProto message.
+type FollowerPokemonProto struct{ m protoreflect.Message }
+
+// AsFollowerPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FollowerPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFollowerPokemonProto(m protoreflect.Message) FollowerPokemonProto {
+	if m == nil || !m.IsValid() {
+		return FollowerPokemonProto{}
+	}
+	return FollowerPokemonProto{m}
+}
+
+func (x FollowerPokemonProto) IsZero() bool { return x.m == nil }
+
+func (x FollowerPokemonProto) GetPokemonId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_FollowerPokemonProto_pokemon_id).Enum())
+}
+
+func (x FollowerPokemonProto) GetAddress() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FollowerPokemonProto_address).String())
+}
+
+func (x FollowerPokemonProto) HasDisplay() bool {
+	return x.m != nil && x.m.Has(fd_FollowerPokemonProto_display)
+}
+
+func (x FollowerPokemonProto) GetDisplay() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_FollowerPokemonProto_display).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x FollowerPokemonProto) GetEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FollowerPokemonProto_end_ms).Int()
+}
+
+func (x FollowerPokemonProto) GetId() pogo.FollowerPokemonProto_FollowerId {
+	if x.m == nil {
+		return pogo.FollowerPokemonProto_FollowerId(0)
+	}
+	return pogo.FollowerPokemonProto_FollowerId(x.m.Get(fd_FollowerPokemonProto_id).Enum())
+}
+
+// FoodValue wraps a hyperpb/protoreflect POGOProtos.Rpc.FoodValue message.
+type FoodValue struct{ m protoreflect.Message }
+
+// AsFoodValue wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FoodValue .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFoodValue(m protoreflect.Message) FoodValue {
+	if m == nil || !m.IsValid() {
+		return FoodValue{}
+	}
+	return FoodValue{m}
+}
+
+func (x FoodValue) IsZero() bool { return x.m == nil }
+
+func (x FoodValue) GetMotivationIncrease() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_FoodValue_motivation_increase).Float())
+}
+
+func (x FoodValue) GetCpIncrease() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FoodValue_cp_increase).Int())
+}
+
+func (x FoodValue) GetFoodItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_FoodValue_food_item).Enum())
+}
+
+// FormRenderModifier wraps a hyperpb/protoreflect POGOProtos.Rpc.FormRenderModifier message.
+type FormRenderModifier struct{ m protoreflect.Message }
+
+// AsFormRenderModifier wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FormRenderModifier .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFormRenderModifier(m protoreflect.Message) FormRenderModifier {
+	if m == nil || !m.IsValid() {
+		return FormRenderModifier{}
+	}
+	return FormRenderModifier{m}
+}
+
+func (x FormRenderModifier) IsZero() bool { return x.m == nil }
+
+func (x FormRenderModifier) GetType() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_FormRenderModifier_type).List()}
+}
+
+func (x FormRenderModifier) GetEffectTarget() pogo.FormRenderModifier_EffectTarget {
+	if x.m == nil {
+		return pogo.FormRenderModifier_EffectTarget(0)
+	}
+	return pogo.FormRenderModifier_EffectTarget(x.m.Get(fd_FormRenderModifier_effect_target).Enum())
+}
+
+func (x FormRenderModifier) GetPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FormRenderModifier_pokemon_id).Uint()
+}
+
+func (x FormRenderModifier) GetPokedexId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_FormRenderModifier_pokedex_id).Enum())
+}
+
+func (x FormRenderModifier) GetPokemonForm() pogo.PokemonDisplayProto_Form {
+	if x.m == nil {
+		return pogo.PokemonDisplayProto_Form(0)
+	}
+	return pogo.PokemonDisplayProto_Form(x.m.Get(fd_FormRenderModifier_pokemon_form).Enum())
+}
+
+func (x FormRenderModifier) GetAlignment() pogo.PokemonDisplayProto_Alignment {
+	if x.m == nil {
+		return pogo.PokemonDisplayProto_Alignment(0)
+	}
+	return pogo.PokemonDisplayProto_Alignment(x.m.Get(fd_FormRenderModifier_alignment).Enum())
+}
+
+func (x FormRenderModifier) GetTransitionVfxKey() pogo.FormRenderModifier_TransitionVfxKey {
+	if x.m == nil {
+		return pogo.FormRenderModifier_TransitionVfxKey(0)
+	}
+	return pogo.FormRenderModifier_TransitionVfxKey(x.m.Get(fd_FormRenderModifier_transition_vfx_key).Enum())
+}
+
+func (x FormRenderModifier) GetEventTriggerTime() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FormRenderModifier_event_trigger_time).Int()
+}
+
+// FortDetailsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortDetailsOutProto message.
+type FortDetailsOutProto struct{ m protoreflect.Message }
+
+// AsFortDetailsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FortDetailsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFortDetailsOutProto(m protoreflect.Message) FortDetailsOutProto {
+	if m == nil || !m.IsValid() {
+		return FortDetailsOutProto{}
+	}
+	return FortDetailsOutProto{m}
+}
+
+func (x FortDetailsOutProto) IsZero() bool { return x.m == nil }
+
+func (x FortDetailsOutProto) GetId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_id).String())
+}
+
+func (x FortDetailsOutProto) GetTeam() pogo.Team {
+	if x.m == nil {
+		return pogo.Team(0)
+	}
+	return pogo.Team(x.m.Get(fd_FortDetailsOutProto_team).Enum())
+}
+
+func (x FortDetailsOutProto) GetPokemon() PokemonProtoList {
+	if x.m == nil {
+		return PokemonProtoList{}
+	}
+	return PokemonProtoList{x.m.Get(fd_FortDetailsOutProto_pokemon).List()}
+}
+
+func (x FortDetailsOutProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_name).String())
+}
+
+func (x FortDetailsOutProto) GetImageUrl() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_FortDetailsOutProto_image_url).List()}
+}
+
+func (x FortDetailsOutProto) GetFp() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortDetailsOutProto_fp).Int())
+}
+
+func (x FortDetailsOutProto) GetStamina() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortDetailsOutProto_stamina).Int())
+}
+
+func (x FortDetailsOutProto) GetMaxStamina() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortDetailsOutProto_max_stamina).Int())
+}
+
+func (x FortDetailsOutProto) GetFortType() pogo.FortType {
+	if x.m == nil {
+		return pogo.FortType(0)
+	}
+	return pogo.FortType(x.m.Get(fd_FortDetailsOutProto_fort_type).Enum())
+}
+
+func (x FortDetailsOutProto) GetLatitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FortDetailsOutProto_latitude).Float()
+}
+
+func (x FortDetailsOutProto) GetLongitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FortDetailsOutProto_longitude).Float()
+}
+
+func (x FortDetailsOutProto) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_description).String())
+}
+
+func (x FortDetailsOutProto) GetModifier() ClientFortModifierProtoList {
+	if x.m == nil {
+		return ClientFortModifierProtoList{}
+	}
+	return ClientFortModifierProtoList{x.m.Get(fd_FortDetailsOutProto_modifier).List()}
+}
+
+func (x FortDetailsOutProto) GetCloseSoon() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_FortDetailsOutProto_close_soon).Bool()
+}
+
+func (x FortDetailsOutProto) GetCheckinImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_checkin_image_url).String())
+}
+
+func (x FortDetailsOutProto) HasEventInfo() bool {
+	return x.m != nil && x.m.Has(fd_FortDetailsOutProto_event_info)
+}
+
+func (x FortDetailsOutProto) GetEventInfo() EventInfoProto {
+	if x.m == nil {
+		return EventInfoProto{}
+	}
+	if v := x.m.Get(fd_FortDetailsOutProto_event_info).Message(); v.IsValid() {
+		return EventInfoProto{v}
+	}
+	return EventInfoProto{}
+}
+
+func (x FortDetailsOutProto) GetPromoDescription() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_FortDetailsOutProto_promo_description).List()}
+}
+
+func (x FortDetailsOutProto) GetCallToActionLink() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_call_to_action_link).String())
+}
+
+func (x FortDetailsOutProto) HasSponsoredDetails() bool {
+	return x.m != nil && x.m.Has(fd_FortDetailsOutProto_sponsored_details)
+}
+
+func (x FortDetailsOutProto) GetSponsoredDetails() SponsoredDetailsProto {
+	if x.m == nil {
+		return SponsoredDetailsProto{}
+	}
+	if v := x.m.Get(fd_FortDetailsOutProto_sponsored_details).Message(); v.IsValid() {
+		return SponsoredDetailsProto{v}
+	}
+	return SponsoredDetailsProto{}
+}
+
+func (x FortDetailsOutProto) GetGeostoreTombstoneMessageKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_geostore_tombstone_message_key).String())
+}
+
+func (x FortDetailsOutProto) GetGeostoreSuspensionMessageKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortDetailsOutProto_geostore_suspension_message_key).String())
+}
+
+func (x FortDetailsOutProto) GetPoiImagesCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortDetailsOutProto_poi_images_count).Int())
+}
+
+func (x FortDetailsOutProto) GetPowerUpProgressPoints() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortDetailsOutProto_power_up_progress_points).Int())
+}
+
+func (x FortDetailsOutProto) GetPowerUpLevelExpirationMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FortDetailsOutProto_power_up_level_expiration_ms).Int()
+}
+
+func (x FortDetailsOutProto) GetNextFortCloseMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FortDetailsOutProto_next_fort_close_ms).Int()
+}
+
+func (x FortDetailsOutProto) GetIsVpsEligible() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_FortDetailsOutProto_is_vps_eligible).Bool()
+}
+
+func (x FortDetailsOutProto) GetVpsEnabledStatus() pogo.VpsEnabledStatus {
+	if x.m == nil {
+		return pogo.VpsEnabledStatus(0)
+	}
+	return pogo.VpsEnabledStatus(x.m.Get(fd_FortDetailsOutProto_vps_enabled_status).Enum())
+}
+
 // FortPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortPokemonProto message.
 type FortPokemonProto struct{ m protoreflect.Message }
 
@@ -1274,6 +6210,219 @@ func (x FortPokemonProto) GetSpawnType() pogo.FortPokemonProto_SpawnType {
 		return pogo.FortPokemonProto_SpawnType(0)
 	}
 	return pogo.FortPokemonProto_SpawnType(x.m.Get(fd_FortPokemonProto_spawn_type).Enum())
+}
+
+// FortSearchOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortSearchOutProto message.
+type FortSearchOutProto struct{ m protoreflect.Message }
+
+// AsFortSearchOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FortSearchOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFortSearchOutProto(m protoreflect.Message) FortSearchOutProto {
+	if m == nil || !m.IsValid() {
+		return FortSearchOutProto{}
+	}
+	return FortSearchOutProto{m}
+}
+
+func (x FortSearchOutProto) IsZero() bool { return x.m == nil }
+
+func (x FortSearchOutProto) GetResult() pogo.FortSearchOutProto_Result {
+	if x.m == nil {
+		return pogo.FortSearchOutProto_Result(0)
+	}
+	return pogo.FortSearchOutProto_Result(x.m.Get(fd_FortSearchOutProto_result).Enum())
+}
+
+func (x FortSearchOutProto) GetItems() AwardItemProtoList {
+	if x.m == nil {
+		return AwardItemProtoList{}
+	}
+	return AwardItemProtoList{x.m.Get(fd_FortSearchOutProto_items).List()}
+}
+
+func (x FortSearchOutProto) GetGemsAwarded() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortSearchOutProto_gems_awarded).Int())
+}
+
+func (x FortSearchOutProto) HasEggPokemon() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_egg_pokemon)
+}
+
+func (x FortSearchOutProto) GetEggPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_egg_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x FortSearchOutProto) GetXpAwarded() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortSearchOutProto_xp_awarded).Int())
+}
+
+func (x FortSearchOutProto) GetCooldownComplete() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FortSearchOutProto_cooldown_complete).Int()
+}
+
+func (x FortSearchOutProto) GetChainHackSequenceNumber() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortSearchOutProto_chain_hack_sequence_number).Int())
+}
+
+func (x FortSearchOutProto) HasAwardedGymBadge() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_awarded_gym_badge)
+}
+
+func (x FortSearchOutProto) GetAwardedGymBadge() AwardedGymBadge {
+	if x.m == nil {
+		return AwardedGymBadge{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_awarded_gym_badge).Message(); v.IsValid() {
+		return AwardedGymBadge{v}
+	}
+	return AwardedGymBadge{}
+}
+
+func (x FortSearchOutProto) HasLoot() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_loot)
+}
+
+func (x FortSearchOutProto) GetLoot() LootProto {
+	if x.m == nil {
+		return LootProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_loot).Message(); v.IsValid() {
+		return LootProto{v}
+	}
+	return LootProto{}
+}
+
+func (x FortSearchOutProto) HasBonusLoot() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_bonus_loot)
+}
+
+func (x FortSearchOutProto) GetBonusLoot() LootProto {
+	if x.m == nil {
+		return LootProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_bonus_loot).Message(); v.IsValid() {
+		return LootProto{v}
+	}
+	return LootProto{}
+}
+
+func (x FortSearchOutProto) GetRaidTickets() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FortSearchOutProto_raid_tickets).Int())
+}
+
+func (x FortSearchOutProto) HasTeamBonusLoot() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_team_bonus_loot)
+}
+
+func (x FortSearchOutProto) GetTeamBonusLoot() LootProto {
+	if x.m == nil {
+		return LootProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_team_bonus_loot).Message(); v.IsValid() {
+		return LootProto{v}
+	}
+	return LootProto{}
+}
+
+func (x FortSearchOutProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FortSearchOutProto_fort_id).String())
+}
+
+func (x FortSearchOutProto) HasChallengeQuest() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_challenge_quest)
+}
+
+func (x FortSearchOutProto) GetChallengeQuest() ClientQuestProto {
+	if x.m == nil {
+		return ClientQuestProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_challenge_quest).Message(); v.IsValid() {
+		return ClientQuestProto{v}
+	}
+	return ClientQuestProto{}
+}
+
+func (x FortSearchOutProto) HasGiftBox() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_gift_box)
+}
+
+func (x FortSearchOutProto) GetGiftBox() GiftBoxProto {
+	if x.m == nil {
+		return GiftBoxProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_gift_box).Message(); v.IsValid() {
+		return GiftBoxProto{v}
+	}
+	return GiftBoxProto{}
+}
+
+func (x FortSearchOutProto) HasSponsoredGift() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_sponsored_gift)
+}
+
+func (x FortSearchOutProto) GetSponsoredGift() AdDetails {
+	if x.m == nil {
+		return AdDetails{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_sponsored_gift).Message(); v.IsValid() {
+		return AdDetails{v}
+	}
+	return AdDetails{}
+}
+
+func (x FortSearchOutProto) HasPowerUpStopBonusLoot() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_power_up_stop_bonus_loot)
+}
+
+func (x FortSearchOutProto) GetPowerUpStopBonusLoot() LootProto {
+	if x.m == nil {
+		return LootProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_power_up_stop_bonus_loot).Message(); v.IsValid() {
+		return LootProto{v}
+	}
+	return LootProto{}
+}
+
+func (x FortSearchOutProto) HasAd() bool {
+	return x.m != nil && x.m.Has(fd_FortSearchOutProto_ad)
+}
+
+func (x FortSearchOutProto) GetAd() AdProto {
+	if x.m == nil {
+		return AdProto{}
+	}
+	if v := x.m.Get(fd_FortSearchOutProto_ad).Message(); v.IsValid() {
+		return AdProto{v}
+	}
+	return AdProto{}
 }
 
 // FortVpsInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FortVpsInfoProto message.
@@ -1450,6 +6599,249 @@ func (x FortVpsInfoProto_VpsDisallowedDetailsProto) GetPreviousState() pogo.VpsE
 	return pogo.VpsEnabledStatus(x.m.Get(fd_FortVpsInfoProto_VpsDisallowedDetailsProto_previous_state).Enum())
 }
 
+// FriendshipDataProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FriendshipDataProto message.
+type FriendshipDataProto struct{ m protoreflect.Message }
+
+// AsFriendshipDataProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FriendshipDataProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFriendshipDataProto(m protoreflect.Message) FriendshipDataProto {
+	if m == nil || !m.IsValid() {
+		return FriendshipDataProto{}
+	}
+	return FriendshipDataProto{m}
+}
+
+func (x FriendshipDataProto) IsZero() bool { return x.m == nil }
+
+func (x FriendshipDataProto) HasFriendshipLevelData() bool {
+	return x.m != nil && x.m.Has(fd_FriendshipDataProto_friendship_level_data)
+}
+
+func (x FriendshipDataProto) GetFriendshipLevelData() FriendshipLevelDataProto {
+	if x.m == nil {
+		return FriendshipLevelDataProto{}
+	}
+	if v := x.m.Get(fd_FriendshipDataProto_friendship_level_data).Message(); v.IsValid() {
+		return FriendshipLevelDataProto{v}
+	}
+	return FriendshipLevelDataProto{}
+}
+
+func (x FriendshipDataProto) GetGiftboxDetails() GiftBoxDetailsProtoList {
+	if x.m == nil {
+		return GiftBoxDetailsProtoList{}
+	}
+	return GiftBoxDetailsProtoList{x.m.Get(fd_FriendshipDataProto_giftbox_details).List()}
+}
+
+func (x FriendshipDataProto) GetCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FriendshipDataProto_codename).String())
+}
+
+func (x FriendshipDataProto) GetNickname() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_FriendshipDataProto_nickname).String())
+}
+
+func (x FriendshipDataProto) GetOpenTradeExpireMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FriendshipDataProto_open_trade_expire_ms).Int()
+}
+
+func (x FriendshipDataProto) GetIsLucky() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_FriendshipDataProto_is_lucky).Bool()
+}
+
+func (x FriendshipDataProto) GetLuckyCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FriendshipDataProto_lucky_count).Int())
+}
+
+// FriendshipLevelDataProto wraps a hyperpb/protoreflect POGOProtos.Rpc.FriendshipLevelDataProto message.
+type FriendshipLevelDataProto struct{ m protoreflect.Message }
+
+// AsFriendshipLevelDataProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.FriendshipLevelDataProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsFriendshipLevelDataProto(m protoreflect.Message) FriendshipLevelDataProto {
+	if m == nil || !m.IsValid() {
+		return FriendshipLevelDataProto{}
+	}
+	return FriendshipLevelDataProto{m}
+}
+
+func (x FriendshipLevelDataProto) IsZero() bool { return x.m == nil }
+
+func (x FriendshipLevelDataProto) GetBucket() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FriendshipLevelDataProto_bucket).Int()
+}
+
+func (x FriendshipLevelDataProto) GetPointsEarnedToday() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FriendshipLevelDataProto_points_earned_today).Int())
+}
+
+func (x FriendshipLevelDataProto) GetAwardedFriendshipMilestone() pogo.FriendshipLevelMilestone {
+	if x.m == nil {
+		return pogo.FriendshipLevelMilestone(0)
+	}
+	return pogo.FriendshipLevelMilestone(x.m.Get(fd_FriendshipLevelDataProto_awarded_friendship_milestone).Enum())
+}
+
+func (x FriendshipLevelDataProto) GetCurrentFriendshipMilestone() pogo.FriendshipLevelMilestone {
+	if x.m == nil {
+		return pogo.FriendshipLevelMilestone(0)
+	}
+	return pogo.FriendshipLevelMilestone(x.m.Get(fd_FriendshipLevelDataProto_current_friendship_milestone).Enum())
+}
+
+func (x FriendshipLevelDataProto) GetNextFriendshipMilestoneProgressPercentage() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_FriendshipLevelDataProto_next_friendship_milestone_progress_percentage).Float()
+}
+
+func (x FriendshipLevelDataProto) GetPointsTowardNextMilestone() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_FriendshipLevelDataProto_points_toward_next_milestone).Int())
+}
+
+// GMaxDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.GMaxDetails message.
+type GMaxDetails struct{ m protoreflect.Message }
+
+// AsGMaxDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GMaxDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGMaxDetails(m protoreflect.Message) GMaxDetails {
+	if m == nil || !m.IsValid() {
+		return GMaxDetails{}
+	}
+	return GMaxDetails{m}
+}
+
+func (x GMaxDetails) IsZero() bool { return x.m == nil }
+
+func (x GMaxDetails) GetPowerspotId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GMaxDetails_powerspot_id).String())
+}
+
+func (x GMaxDetails) GetBreadBattleSeed() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GMaxDetails_bread_battle_seed).Int()
+}
+
+func (x GMaxDetails) GetLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GMaxDetails_lat).Float()
+}
+
+func (x GMaxDetails) GetLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GMaxDetails_lng).Float()
+}
+
+func (x GMaxDetails) GetPowerspotTitle() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GMaxDetails_powerspot_title).String())
+}
+
+func (x GMaxDetails) GetBattleLevel() pogo.BreadBattleLevel {
+	if x.m == nil {
+		return pogo.BreadBattleLevel(0)
+	}
+	return pogo.BreadBattleLevel(x.m.Get(fd_GMaxDetails_battle_level).Enum())
+}
+
+func (x GMaxDetails) HasBattlePokemon() bool {
+	return x.m != nil && x.m.Has(fd_GMaxDetails_battle_pokemon)
+}
+
+func (x GMaxDetails) GetBattlePokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_GMaxDetails_battle_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x GMaxDetails) GetBattleWindowStartMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GMaxDetails_battle_window_start_ms).Int()
+}
+
+func (x GMaxDetails) GetBattleWindowEndMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GMaxDetails_battle_window_end_ms).Int()
+}
+
+// GamDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.GamDetails message.
+type GamDetails struct{ m protoreflect.Message }
+
+// AsGamDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GamDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGamDetails(m protoreflect.Message) GamDetails {
+	if m == nil || !m.IsValid() {
+		return GamDetails{}
+	}
+	return GamDetails{m}
+}
+
+func (x GamDetails) IsZero() bool { return x.m == nil }
+
+func (x GamDetails) GetGamRequestKeywords() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GamDetails_gam_request_keywords).List()}
+}
+
 // GameplayWeatherProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GameplayWeatherProto message.
 type GameplayWeatherProto struct{ m protoreflect.Message }
 
@@ -1533,6 +6925,296 @@ func (x GeotargetedQuestProto) GetFortId() string {
 	return strings.Clone(x.m.Get(fd_GeotargetedQuestProto_fort_id).String())
 }
 
+// GetContestDataOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetContestDataOutProto message.
+type GetContestDataOutProto struct{ m protoreflect.Message }
+
+// AsGetContestDataOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetContestDataOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetContestDataOutProto(m protoreflect.Message) GetContestDataOutProto {
+	if m == nil || !m.IsValid() {
+		return GetContestDataOutProto{}
+	}
+	return GetContestDataOutProto{m}
+}
+
+func (x GetContestDataOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetContestDataOutProto) GetStatus() pogo.GetContestDataOutProto_Status {
+	if x.m == nil {
+		return pogo.GetContestDataOutProto_Status(0)
+	}
+	return pogo.GetContestDataOutProto_Status(x.m.Get(fd_GetContestDataOutProto_status).Enum())
+}
+
+func (x GetContestDataOutProto) HasContestIncident() bool {
+	return x.m != nil && x.m.Has(fd_GetContestDataOutProto_contest_incident)
+}
+
+func (x GetContestDataOutProto) GetContestIncident() ClientContestIncidentProto {
+	if x.m == nil {
+		return ClientContestIncidentProto{}
+	}
+	if v := x.m.Get(fd_GetContestDataOutProto_contest_incident).Message(); v.IsValid() {
+		return ClientContestIncidentProto{v}
+	}
+	return ClientContestIncidentProto{}
+}
+
+// GetContestDataProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetContestDataProto message.
+type GetContestDataProto struct{ m protoreflect.Message }
+
+// AsGetContestDataProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetContestDataProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetContestDataProto(m protoreflect.Message) GetContestDataProto {
+	if m == nil || !m.IsValid() {
+		return GetContestDataProto{}
+	}
+	return GetContestDataProto{m}
+}
+
+func (x GetContestDataProto) IsZero() bool { return x.m == nil }
+
+func (x GetContestDataProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetContestDataProto_fort_id).String())
+}
+
+// GetEventRsvpCountOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetEventRsvpCountOutProto message.
+type GetEventRsvpCountOutProto struct{ m protoreflect.Message }
+
+// AsGetEventRsvpCountOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetEventRsvpCountOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetEventRsvpCountOutProto(m protoreflect.Message) GetEventRsvpCountOutProto {
+	if m == nil || !m.IsValid() {
+		return GetEventRsvpCountOutProto{}
+	}
+	return GetEventRsvpCountOutProto{m}
+}
+
+func (x GetEventRsvpCountOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetEventRsvpCountOutProto) GetStatus() pogo.GetEventRsvpCountOutProto_Result {
+	if x.m == nil {
+		return pogo.GetEventRsvpCountOutProto_Result(0)
+	}
+	return pogo.GetEventRsvpCountOutProto_Result(x.m.Get(fd_GetEventRsvpCountOutProto_status).Enum())
+}
+
+func (x GetEventRsvpCountOutProto) GetRsvpDetails() RsvpCountDetailsList {
+	if x.m == nil {
+		return RsvpCountDetailsList{}
+	}
+	return RsvpCountDetailsList{x.m.Get(fd_GetEventRsvpCountOutProto_rsvp_details).List()}
+}
+
+// GetEventRsvpsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetEventRsvpsOutProto message.
+type GetEventRsvpsOutProto struct{ m protoreflect.Message }
+
+// AsGetEventRsvpsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetEventRsvpsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetEventRsvpsOutProto(m protoreflect.Message) GetEventRsvpsOutProto {
+	if m == nil || !m.IsValid() {
+		return GetEventRsvpsOutProto{}
+	}
+	return GetEventRsvpsOutProto{m}
+}
+
+func (x GetEventRsvpsOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetEventRsvpsOutProto) GetStatus() pogo.GetEventRsvpsOutProto_Result {
+	if x.m == nil {
+		return pogo.GetEventRsvpsOutProto_Result(0)
+	}
+	return pogo.GetEventRsvpsOutProto_Result(x.m.Get(fd_GetEventRsvpsOutProto_status).Enum())
+}
+
+func (x GetEventRsvpsOutProto) GetRsvpTimeslots() EventRsvpTimeslotProtoList {
+	if x.m == nil {
+		return EventRsvpTimeslotProtoList{}
+	}
+	return EventRsvpTimeslotProtoList{x.m.Get(fd_GetEventRsvpsOutProto_rsvp_timeslots).List()}
+}
+
+// GetEventRsvpsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetEventRsvpsProto message.
+type GetEventRsvpsProto struct{ m protoreflect.Message }
+
+// AsGetEventRsvpsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetEventRsvpsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetEventRsvpsProto(m protoreflect.Message) GetEventRsvpsProto {
+	if m == nil || !m.IsValid() {
+		return GetEventRsvpsProto{}
+	}
+	return GetEventRsvpsProto{m}
+}
+
+func (x GetEventRsvpsProto) IsZero() bool { return x.m == nil }
+
+func (x GetEventRsvpsProto) HasRaid() bool {
+	return x.m != nil && x.m.Has(fd_GetEventRsvpsProto_raid)
+}
+
+func (x GetEventRsvpsProto) GetRaid() RaidDetails {
+	if x.m == nil {
+		return RaidDetails{}
+	}
+	if v := x.m.Get(fd_GetEventRsvpsProto_raid).Message(); v.IsValid() {
+		return RaidDetails{v}
+	}
+	return RaidDetails{}
+}
+
+func (x GetEventRsvpsProto) HasGmaxBattle() bool {
+	return x.m != nil && x.m.Has(fd_GetEventRsvpsProto_gmax_battle)
+}
+
+func (x GetEventRsvpsProto) GetGmaxBattle() GMaxDetails {
+	if x.m == nil {
+		return GMaxDetails{}
+	}
+	if v := x.m.Get(fd_GetEventRsvpsProto_gmax_battle).Message(); v.IsValid() {
+		return GMaxDetails{v}
+	}
+	return GMaxDetails{}
+}
+
+func (x GetEventRsvpsProto) GetTimeSlots() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GetEventRsvpsProto_time_slots).List()}
+}
+
+// GetMapFortsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetMapFortsOutProto message.
+type GetMapFortsOutProto struct{ m protoreflect.Message }
+
+// AsGetMapFortsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetMapFortsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetMapFortsOutProto(m protoreflect.Message) GetMapFortsOutProto {
+	if m == nil || !m.IsValid() {
+		return GetMapFortsOutProto{}
+	}
+	return GetMapFortsOutProto{m}
+}
+
+func (x GetMapFortsOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetMapFortsOutProto) GetFort() GetMapFortsOutProto_FortProtoList {
+	if x.m == nil {
+		return GetMapFortsOutProto_FortProtoList{}
+	}
+	return GetMapFortsOutProto_FortProtoList{x.m.Get(fd_GetMapFortsOutProto_fort).List()}
+}
+
+func (x GetMapFortsOutProto) GetStatus() pogo.GetMapFortsOutProto_Status {
+	if x.m == nil {
+		return pogo.GetMapFortsOutProto_Status(0)
+	}
+	return pogo.GetMapFortsOutProto_Status(x.m.Get(fd_GetMapFortsOutProto_status).Enum())
+}
+
+// GetMapFortsOutProto_FortProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetMapFortsOutProto.FortProto message.
+type GetMapFortsOutProto_FortProto struct{ m protoreflect.Message }
+
+// AsGetMapFortsOutProto_FortProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetMapFortsOutProto_FortProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetMapFortsOutProto_FortProto(m protoreflect.Message) GetMapFortsOutProto_FortProto {
+	if m == nil || !m.IsValid() {
+		return GetMapFortsOutProto_FortProto{}
+	}
+	return GetMapFortsOutProto_FortProto{m}
+}
+
+func (x GetMapFortsOutProto_FortProto) IsZero() bool { return x.m == nil }
+
+func (x GetMapFortsOutProto_FortProto) GetId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetMapFortsOutProto_FortProto_id).String())
+}
+
+func (x GetMapFortsOutProto_FortProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetMapFortsOutProto_FortProto_name).String())
+}
+
+func (x GetMapFortsOutProto_FortProto) GetLatitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GetMapFortsOutProto_FortProto_latitude).Float()
+}
+
+func (x GetMapFortsOutProto_FortProto) GetLongitude() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GetMapFortsOutProto_FortProto_longitude).Float()
+}
+
+func (x GetMapFortsOutProto_FortProto) GetImage() GetMapFortsOutProto_ImageList {
+	if x.m == nil {
+		return GetMapFortsOutProto_ImageList{}
+	}
+	return GetMapFortsOutProto_ImageList{x.m.Get(fd_GetMapFortsOutProto_FortProto_image).List()}
+}
+
+// GetMapFortsOutProto_Image wraps a hyperpb/protoreflect POGOProtos.Rpc.GetMapFortsOutProto.Image message.
+type GetMapFortsOutProto_Image struct{ m protoreflect.Message }
+
+// AsGetMapFortsOutProto_Image wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetMapFortsOutProto_Image .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetMapFortsOutProto_Image(m protoreflect.Message) GetMapFortsOutProto_Image {
+	if m == nil || !m.IsValid() {
+		return GetMapFortsOutProto_Image{}
+	}
+	return GetMapFortsOutProto_Image{m}
+}
+
+func (x GetMapFortsOutProto_Image) IsZero() bool { return x.m == nil }
+
+func (x GetMapFortsOutProto_Image) GetUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetMapFortsOutProto_Image_url).String())
+}
+
+func (x GetMapFortsOutProto_Image) GetId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetMapFortsOutProto_Image_id).String())
+}
+
 // GetMapObjectsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetMapObjectsOutProto message.
 type GetMapObjectsOutProto struct{ m protoreflect.Message }
 
@@ -1592,6 +7274,179 @@ func (x GetMapObjectsOutProto) GetTwilightPeriod() pogo.GetMapObjectsOutProto_Tw
 	return pogo.GetMapObjectsOutProto_TwilightPeriod(x.m.Get(fd_GetMapObjectsOutProto_twilight_period).Enum())
 }
 
+// GetPokemonSizeLeaderboardEntryOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetPokemonSizeLeaderboardEntryOutProto message.
+type GetPokemonSizeLeaderboardEntryOutProto struct{ m protoreflect.Message }
+
+// AsGetPokemonSizeLeaderboardEntryOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetPokemonSizeLeaderboardEntryOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetPokemonSizeLeaderboardEntryOutProto(m protoreflect.Message) GetPokemonSizeLeaderboardEntryOutProto {
+	if m == nil || !m.IsValid() {
+		return GetPokemonSizeLeaderboardEntryOutProto{}
+	}
+	return GetPokemonSizeLeaderboardEntryOutProto{m}
+}
+
+func (x GetPokemonSizeLeaderboardEntryOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetPokemonSizeLeaderboardEntryOutProto) GetStatus() pogo.GetPokemonSizeLeaderboardEntryOutProto_Status {
+	if x.m == nil {
+		return pogo.GetPokemonSizeLeaderboardEntryOutProto_Status(0)
+	}
+	return pogo.GetPokemonSizeLeaderboardEntryOutProto_Status(x.m.Get(fd_GetPokemonSizeLeaderboardEntryOutProto_status).Enum())
+}
+
+func (x GetPokemonSizeLeaderboardEntryOutProto) GetTotalEntries() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_GetPokemonSizeLeaderboardEntryOutProto_total_entries).Int())
+}
+
+func (x GetPokemonSizeLeaderboardEntryOutProto) GetContestEntries() ContestEntryProtoList {
+	if x.m == nil {
+		return ContestEntryProtoList{}
+	}
+	return ContestEntryProtoList{x.m.Get(fd_GetPokemonSizeLeaderboardEntryOutProto_contest_entries).List()}
+}
+
+// GetPokemonSizeLeaderboardEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetPokemonSizeLeaderboardEntryProto message.
+type GetPokemonSizeLeaderboardEntryProto struct{ m protoreflect.Message }
+
+// AsGetPokemonSizeLeaderboardEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetPokemonSizeLeaderboardEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetPokemonSizeLeaderboardEntryProto(m protoreflect.Message) GetPokemonSizeLeaderboardEntryProto {
+	if m == nil || !m.IsValid() {
+		return GetPokemonSizeLeaderboardEntryProto{}
+	}
+	return GetPokemonSizeLeaderboardEntryProto{m}
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) IsZero() bool { return x.m == nil }
+
+func (x GetPokemonSizeLeaderboardEntryProto) GetContestId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetPokemonSizeLeaderboardEntryProto_contest_id).String())
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) GetStartIndex() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_GetPokemonSizeLeaderboardEntryProto_start_index).Int())
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) GetEndIndex() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_GetPokemonSizeLeaderboardEntryProto_end_index).Int())
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) HasContestMetric() bool {
+	return x.m != nil && x.m.Has(fd_GetPokemonSizeLeaderboardEntryProto_contest_metric)
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) GetContestMetric() ContestMetricProto {
+	if x.m == nil {
+		return ContestMetricProto{}
+	}
+	if v := x.m.Get(fd_GetPokemonSizeLeaderboardEntryProto_contest_metric).Message(); v.IsValid() {
+		return ContestMetricProto{v}
+	}
+	return ContestMetricProto{}
+}
+
+func (x GetPokemonSizeLeaderboardEntryProto) GetIsRelativeToPlayer() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GetPokemonSizeLeaderboardEntryProto_is_relative_to_player).Bool()
+}
+
+// GetRoutesOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetRoutesOutProto message.
+type GetRoutesOutProto struct{ m protoreflect.Message }
+
+// AsGetRoutesOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetRoutesOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetRoutesOutProto(m protoreflect.Message) GetRoutesOutProto {
+	if m == nil || !m.IsValid() {
+		return GetRoutesOutProto{}
+	}
+	return GetRoutesOutProto{m}
+}
+
+func (x GetRoutesOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetRoutesOutProto) GetRouteMapCell() ClientRouteMapCellProtoList {
+	if x.m == nil {
+		return ClientRouteMapCellProtoList{}
+	}
+	return ClientRouteMapCellProtoList{x.m.Get(fd_GetRoutesOutProto_route_map_cell).List()}
+}
+
+func (x GetRoutesOutProto) GetStatus() pogo.GetRoutesOutProto_Status {
+	if x.m == nil {
+		return pogo.GetRoutesOutProto_Status(0)
+	}
+	return pogo.GetRoutesOutProto_Status(x.m.Get(fd_GetRoutesOutProto_status).Enum())
+}
+
+func (x GetRoutesOutProto) GetRouteTabs() GetRoutesOutProto_RouteTabList {
+	if x.m == nil {
+		return GetRoutesOutProto_RouteTabList{}
+	}
+	return GetRoutesOutProto_RouteTabList{x.m.Get(fd_GetRoutesOutProto_route_tabs).List()}
+}
+
+func (x GetRoutesOutProto) GetRouteList() ClientRouteGetProtoList {
+	if x.m == nil {
+		return ClientRouteGetProtoList{}
+	}
+	return ClientRouteGetProtoList{x.m.Get(fd_GetRoutesOutProto_route_list).List()}
+}
+
+// GetRoutesOutProto_RouteTab wraps a hyperpb/protoreflect POGOProtos.Rpc.GetRoutesOutProto.RouteTab message.
+type GetRoutesOutProto_RouteTab struct{ m protoreflect.Message }
+
+// AsGetRoutesOutProto_RouteTab wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetRoutesOutProto_RouteTab .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetRoutesOutProto_RouteTab(m protoreflect.Message) GetRoutesOutProto_RouteTab {
+	if m == nil || !m.IsValid() {
+		return GetRoutesOutProto_RouteTab{}
+	}
+	return GetRoutesOutProto_RouteTab{m}
+}
+
+func (x GetRoutesOutProto_RouteTab) IsZero() bool { return x.m == nil }
+
+func (x GetRoutesOutProto_RouteTab) GetTitleStringId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetRoutesOutProto_RouteTab_title_string_id).String())
+}
+
+func (x GetRoutesOutProto_RouteTab) GetRouteIds() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GetRoutesOutProto_RouteTab_route_ids).List()}
+}
+
 // GetStardustQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetStardustQuestProto message.
 type GetStardustQuestProto struct{ m protoreflect.Message }
 
@@ -1614,6 +7469,632 @@ func (x GetStardustQuestProto) GetStardust() int32 {
 		return 0
 	}
 	return int32(x.m.Get(fd_GetStardustQuestProto_stardust).Int())
+}
+
+// GetStationedPokemonDetailsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetStationedPokemonDetailsOutProto message.
+type GetStationedPokemonDetailsOutProto struct{ m protoreflect.Message }
+
+// AsGetStationedPokemonDetailsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetStationedPokemonDetailsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetStationedPokemonDetailsOutProto(m protoreflect.Message) GetStationedPokemonDetailsOutProto {
+	if m == nil || !m.IsValid() {
+		return GetStationedPokemonDetailsOutProto{}
+	}
+	return GetStationedPokemonDetailsOutProto{m}
+}
+
+func (x GetStationedPokemonDetailsOutProto) IsZero() bool { return x.m == nil }
+
+func (x GetStationedPokemonDetailsOutProto) GetResult() pogo.GetStationedPokemonDetailsOutProto_Result {
+	if x.m == nil {
+		return pogo.GetStationedPokemonDetailsOutProto_Result(0)
+	}
+	return pogo.GetStationedPokemonDetailsOutProto_Result(x.m.Get(fd_GetStationedPokemonDetailsOutProto_result).Enum())
+}
+
+func (x GetStationedPokemonDetailsOutProto) GetStationedPokemons() PlayerClientStationedPokemonProtoList {
+	if x.m == nil {
+		return PlayerClientStationedPokemonProtoList{}
+	}
+	return PlayerClientStationedPokemonProtoList{x.m.Get(fd_GetStationedPokemonDetailsOutProto_stationed_pokemons).List()}
+}
+
+func (x GetStationedPokemonDetailsOutProto) GetTotalNumStationedPokemon() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_GetStationedPokemonDetailsOutProto_total_num_stationed_pokemon).Int())
+}
+
+// GetStationedPokemonDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GetStationedPokemonDetailsProto message.
+type GetStationedPokemonDetailsProto struct{ m protoreflect.Message }
+
+// AsGetStationedPokemonDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GetStationedPokemonDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGetStationedPokemonDetailsProto(m protoreflect.Message) GetStationedPokemonDetailsProto {
+	if m == nil || !m.IsValid() {
+		return GetStationedPokemonDetailsProto{}
+	}
+	return GetStationedPokemonDetailsProto{m}
+}
+
+func (x GetStationedPokemonDetailsProto) IsZero() bool { return x.m == nil }
+
+func (x GetStationedPokemonDetailsProto) GetStationId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GetStationedPokemonDetailsProto_station_id).String())
+}
+
+func (x GetStationedPokemonDetailsProto) GetGetFullDetails() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GetStationedPokemonDetailsProto_get_full_details).Bool()
+}
+
+// GiftBoxDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GiftBoxDetailsProto message.
+type GiftBoxDetailsProto struct{ m protoreflect.Message }
+
+// AsGiftBoxDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GiftBoxDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGiftBoxDetailsProto(m protoreflect.Message) GiftBoxDetailsProto {
+	if m == nil || !m.IsValid() {
+		return GiftBoxDetailsProto{}
+	}
+	return GiftBoxDetailsProto{m}
+}
+
+func (x GiftBoxDetailsProto) IsZero() bool { return x.m == nil }
+
+func (x GiftBoxDetailsProto) GetGiftboxId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_giftbox_id).Uint()
+}
+
+func (x GiftBoxDetailsProto) GetSenderId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_sender_id).String())
+}
+
+func (x GiftBoxDetailsProto) GetSenderCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_sender_codename).String())
+}
+
+func (x GiftBoxDetailsProto) GetReceiverId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_receiver_id).String())
+}
+
+func (x GiftBoxDetailsProto) GetReceiverCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_receiver_codename).String())
+}
+
+func (x GiftBoxDetailsProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_fort_id).String())
+}
+
+func (x GiftBoxDetailsProto) GetFortName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_fort_name).String())
+}
+
+func (x GiftBoxDetailsProto) GetFortLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_fort_lat).Float()
+}
+
+func (x GiftBoxDetailsProto) GetFortLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_fort_lng).Float()
+}
+
+func (x GiftBoxDetailsProto) GetFortImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_fort_image_url).String())
+}
+
+func (x GiftBoxDetailsProto) GetCreationTimestamp() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_creation_timestamp).Int()
+}
+
+func (x GiftBoxDetailsProto) GetSentTimestamp() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_sent_timestamp).Int()
+}
+
+func (x GiftBoxDetailsProto) GetDeliveryPokemonId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_delivery_pokemon_id).Uint()
+}
+
+func (x GiftBoxDetailsProto) GetIsSponsored() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_is_sponsored).Bool()
+}
+
+func (x GiftBoxDetailsProto) GetStickersSent() StickerSentProtoList {
+	if x.m == nil {
+		return StickerSentProtoList{}
+	}
+	return StickerSentProtoList{x.m.Get(fd_GiftBoxDetailsProto_stickers_sent).List()}
+}
+
+func (x GiftBoxDetailsProto) GetShareTrainerInfoWithPostcard() pogo.PlayerPreferencesProto_PostcardTrainerInfoSharingPreference {
+	if x.m == nil {
+		return pogo.PlayerPreferencesProto_PostcardTrainerInfoSharingPreference(0)
+	}
+	return pogo.PlayerPreferencesProto_PostcardTrainerInfoSharingPreference(x.m.Get(fd_GiftBoxDetailsProto_share_trainer_info_with_postcard).Enum())
+}
+
+func (x GiftBoxDetailsProto) GetPinnedPostcardId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_pinned_postcard_id).String())
+}
+
+func (x GiftBoxDetailsProto) GetPinUpdateTimestampMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_pin_update_timestamp_ms).Int()
+}
+
+func (x GiftBoxDetailsProto) GetSaturdayClaimed() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GiftBoxDetailsProto_saturday_claimed).Bool()
+}
+
+func (x GiftBoxDetailsProto) GetSenderNiaAccountId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_sender_nia_account_id).String())
+}
+
+func (x GiftBoxDetailsProto) GetStampCollectionId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxDetailsProto_stamp_collection_id).String())
+}
+
+func (x GiftBoxDetailsProto) HasStampCollectionDetails() bool {
+	return x.m != nil && x.m.Has(fd_GiftBoxDetailsProto_stamp_collection_details)
+}
+
+func (x GiftBoxDetailsProto) GetStampCollectionDetails() StampCollectionGiftboxDetailsProto {
+	if x.m == nil {
+		return StampCollectionGiftboxDetailsProto{}
+	}
+	if v := x.m.Get(fd_GiftBoxDetailsProto_stamp_collection_details).Message(); v.IsValid() {
+		return StampCollectionGiftboxDetailsProto{v}
+	}
+	return StampCollectionGiftboxDetailsProto{}
+}
+
+// GiftBoxProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GiftBoxProto message.
+type GiftBoxProto struct{ m protoreflect.Message }
+
+// AsGiftBoxProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GiftBoxProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGiftBoxProto(m protoreflect.Message) GiftBoxProto {
+	if m == nil || !m.IsValid() {
+		return GiftBoxProto{}
+	}
+	return GiftBoxProto{m}
+}
+
+func (x GiftBoxProto) IsZero() bool { return x.m == nil }
+
+func (x GiftBoxProto) GetGiftboxId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_giftbox_id).Uint()
+}
+
+func (x GiftBoxProto) GetSenderId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_sender_id).String())
+}
+
+func (x GiftBoxProto) GetReceiverId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_receiver_id).String())
+}
+
+func (x GiftBoxProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_fort_id).String())
+}
+
+func (x GiftBoxProto) GetFortLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_fort_lat).Float()
+}
+
+func (x GiftBoxProto) GetFortLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_fort_lng).Float()
+}
+
+func (x GiftBoxProto) GetCreationTimestamp() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_creation_timestamp).Int()
+}
+
+func (x GiftBoxProto) GetSentTimestamp() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_sent_timestamp).Int()
+}
+
+func (x GiftBoxProto) GetSentBucket() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GiftBoxProto_sent_bucket).Int()
+}
+
+func (x GiftBoxProto) GetSaturdayClaimed() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GiftBoxProto_saturday_claimed).Bool()
+}
+
+func (x GiftBoxProto) GetSenderNiaId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_sender_nia_id).String())
+}
+
+func (x GiftBoxProto) GetSenderCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_sender_codename).String())
+}
+
+func (x GiftBoxProto) GetReceiverCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_receiver_codename).String())
+}
+
+func (x GiftBoxProto) GetFortName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_fort_name).String())
+}
+
+func (x GiftBoxProto) GetFortImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_fort_image_url).String())
+}
+
+func (x GiftBoxProto) GetStickersSent() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GiftBoxProto_stickers_sent).List()}
+}
+
+func (x GiftBoxProto) GetShareTrainerInfoWithPostcard() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GiftBoxProto_share_trainer_info_with_postcard).Bool()
+}
+
+func (x GiftBoxProto) GetPinnedPostcardId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_pinned_postcard_id).String())
+}
+
+func (x GiftBoxProto) GetStampCollectionId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftBoxProto_stamp_collection_id).String())
+}
+
+func (x GiftBoxProto) HasStampCollectionDetails() bool {
+	return x.m != nil && x.m.Has(fd_GiftBoxProto_stamp_collection_details)
+}
+
+func (x GiftBoxProto) GetStampCollectionDetails() StampCollectionGiftboxDetailsProto {
+	if x.m == nil {
+		return StampCollectionGiftboxDetailsProto{}
+	}
+	if v := x.m.Get(fd_GiftBoxProto_stamp_collection_details).Message(); v.IsValid() {
+		return StampCollectionGiftboxDetailsProto{v}
+	}
+	return StampCollectionGiftboxDetailsProto{}
+}
+
+// GiftExchangeEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GiftExchangeEntryProto message.
+type GiftExchangeEntryProto struct{ m protoreflect.Message }
+
+// AsGiftExchangeEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GiftExchangeEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGiftExchangeEntryProto(m protoreflect.Message) GiftExchangeEntryProto {
+	if m == nil || !m.IsValid() {
+		return GiftExchangeEntryProto{}
+	}
+	return GiftExchangeEntryProto{m}
+}
+
+func (x GiftExchangeEntryProto) IsZero() bool { return x.m == nil }
+
+func (x GiftExchangeEntryProto) HasGiftBox() bool {
+	return x.m != nil && x.m.Has(fd_GiftExchangeEntryProto_gift_box)
+}
+
+func (x GiftExchangeEntryProto) GetGiftBox() GiftBoxProto {
+	if x.m == nil {
+		return GiftBoxProto{}
+	}
+	if v := x.m.Get(fd_GiftExchangeEntryProto_gift_box).Message(); v.IsValid() {
+		return GiftBoxProto{v}
+	}
+	return GiftBoxProto{}
+}
+
+func (x GiftExchangeEntryProto) HasSenderProfile() bool {
+	return x.m != nil && x.m.Has(fd_GiftExchangeEntryProto_sender_profile)
+}
+
+func (x GiftExchangeEntryProto) GetSenderProfile() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_GiftExchangeEntryProto_sender_profile).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
+}
+
+func (x GiftExchangeEntryProto) GetSourceRouteId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftExchangeEntryProto_source_route_id).String())
+}
+
+func (x GiftExchangeEntryProto) GetRouteName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GiftExchangeEntryProto_route_name).String())
+}
+
+// GymBadgeStats wraps a hyperpb/protoreflect POGOProtos.Rpc.GymBadgeStats message.
+type GymBadgeStats struct{ m protoreflect.Message }
+
+// AsGymBadgeStats wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymBadgeStats .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymBadgeStats(m protoreflect.Message) GymBadgeStats {
+	if m == nil || !m.IsValid() {
+		return GymBadgeStats{}
+	}
+	return GymBadgeStats{m}
+}
+
+func (x GymBadgeStats) IsZero() bool { return x.m == nil }
+
+func (x GymBadgeStats) GetTotalTimeDefendedMs() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GymBadgeStats_total_time_defended_ms).Uint()
+}
+
+func (x GymBadgeStats) GetNumBattlesWon() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_GymBadgeStats_num_battles_won).Uint())
+}
+
+func (x GymBadgeStats) GetNumBerriesFed() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_GymBadgeStats_num_berries_fed).Uint())
+}
+
+func (x GymBadgeStats) GetNumDeploys() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_GymBadgeStats_num_deploys).Uint())
+}
+
+func (x GymBadgeStats) GetNumBattlesLost() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_GymBadgeStats_num_battles_lost).Uint())
+}
+
+func (x GymBadgeStats) GetGymBattles() GymBattleProtoList {
+	if x.m == nil {
+		return GymBattleProtoList{}
+	}
+	return GymBattleProtoList{x.m.Get(fd_GymBadgeStats_gym_battles).List()}
+}
+
+// GymBattleProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymBattleProto message.
+type GymBattleProto struct{ m protoreflect.Message }
+
+// AsGymBattleProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymBattleProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymBattleProto(m protoreflect.Message) GymBattleProto {
+	if m == nil || !m.IsValid() {
+		return GymBattleProto{}
+	}
+	return GymBattleProto{m}
+}
+
+func (x GymBattleProto) IsZero() bool { return x.m == nil }
+
+func (x GymBattleProto) GetBattleId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymBattleProto_battle_id).String())
+}
+
+func (x GymBattleProto) GetCompletedMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GymBattleProto_completed_ms).Int()
+}
+
+func (x GymBattleProto) GetIncrementedGymBattleFriends() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_GymBattleProto_incremented_gym_battle_friends).Bool()
+}
+
+// GymDefenderProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymDefenderProto message.
+type GymDefenderProto struct{ m protoreflect.Message }
+
+// AsGymDefenderProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymDefenderProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymDefenderProto(m protoreflect.Message) GymDefenderProto {
+	if m == nil || !m.IsValid() {
+		return GymDefenderProto{}
+	}
+	return GymDefenderProto{m}
+}
+
+func (x GymDefenderProto) IsZero() bool { return x.m == nil }
+
+func (x GymDefenderProto) HasMotivatedPokemon() bool {
+	return x.m != nil && x.m.Has(fd_GymDefenderProto_motivated_pokemon)
+}
+
+func (x GymDefenderProto) GetMotivatedPokemon() MotivatedPokemonProto {
+	if x.m == nil {
+		return MotivatedPokemonProto{}
+	}
+	if v := x.m.Get(fd_GymDefenderProto_motivated_pokemon).Message(); v.IsValid() {
+		return MotivatedPokemonProto{v}
+	}
+	return MotivatedPokemonProto{}
+}
+
+func (x GymDefenderProto) HasDeploymentTotals() bool {
+	return x.m != nil && x.m.Has(fd_GymDefenderProto_deployment_totals)
+}
+
+func (x GymDefenderProto) GetDeploymentTotals() DeploymentTotalsProto {
+	if x.m == nil {
+		return DeploymentTotalsProto{}
+	}
+	if v := x.m.Get(fd_GymDefenderProto_deployment_totals).Message(); v.IsValid() {
+		return DeploymentTotalsProto{v}
+	}
+	return DeploymentTotalsProto{}
+}
+
+func (x GymDefenderProto) HasTrainerPublicProfile() bool {
+	return x.m != nil && x.m.Has(fd_GymDefenderProto_trainer_public_profile)
+}
+
+func (x GymDefenderProto) GetTrainerPublicProfile() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_GymDefenderProto_trainer_public_profile).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
 }
 
 // GymDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymDisplayProto message.
@@ -1718,6 +8199,236 @@ func (x GymEventProto) GetPokemonId() uint64 {
 		return 0
 	}
 	return x.m.Get(fd_GymEventProto_pokemon_id).Uint()
+}
+
+// GymGetInfoOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymGetInfoOutProto message.
+type GymGetInfoOutProto struct{ m protoreflect.Message }
+
+// AsGymGetInfoOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymGetInfoOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymGetInfoOutProto(m protoreflect.Message) GymGetInfoOutProto {
+	if m == nil || !m.IsValid() {
+		return GymGetInfoOutProto{}
+	}
+	return GymGetInfoOutProto{m}
+}
+
+func (x GymGetInfoOutProto) IsZero() bool { return x.m == nil }
+
+func (x GymGetInfoOutProto) HasGymStatusAndDefenders() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_gym_status_and_defenders)
+}
+
+func (x GymGetInfoOutProto) GetGymStatusAndDefenders() GymStatusAndDefendersProto {
+	if x.m == nil {
+		return GymStatusAndDefendersProto{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_gym_status_and_defenders).Message(); v.IsValid() {
+		return GymStatusAndDefendersProto{v}
+	}
+	return GymStatusAndDefendersProto{}
+}
+
+func (x GymGetInfoOutProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_name).String())
+}
+
+func (x GymGetInfoOutProto) GetUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_url).String())
+}
+
+func (x GymGetInfoOutProto) GetResult() pogo.GymGetInfoOutProto_Result {
+	if x.m == nil {
+		return pogo.GymGetInfoOutProto_Result(0)
+	}
+	return pogo.GymGetInfoOutProto_Result(x.m.Get(fd_GymGetInfoOutProto_result).Enum())
+}
+
+func (x GymGetInfoOutProto) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_description).String())
+}
+
+func (x GymGetInfoOutProto) GetSecondaryUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_secondary_url).String())
+}
+
+func (x GymGetInfoOutProto) HasAwardedGymBadge() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_awarded_gym_badge)
+}
+
+func (x GymGetInfoOutProto) GetAwardedGymBadge() AwardedGymBadge {
+	if x.m == nil {
+		return AwardedGymBadge{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_awarded_gym_badge).Message(); v.IsValid() {
+		return AwardedGymBadge{v}
+	}
+	return AwardedGymBadge{}
+}
+
+func (x GymGetInfoOutProto) GetCheckinImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_checkin_image_url).String())
+}
+
+func (x GymGetInfoOutProto) HasEventInfo() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_event_info)
+}
+
+func (x GymGetInfoOutProto) GetEventInfo() EventInfoProto {
+	if x.m == nil {
+		return EventInfoProto{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_event_info).Message(); v.IsValid() {
+		return EventInfoProto{v}
+	}
+	return EventInfoProto{}
+}
+
+func (x GymGetInfoOutProto) HasDisplayWeather() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_display_weather)
+}
+
+func (x GymGetInfoOutProto) GetDisplayWeather() DisplayWeatherProto {
+	if x.m == nil {
+		return DisplayWeatherProto{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_display_weather).Message(); v.IsValid() {
+		return DisplayWeatherProto{v}
+	}
+	return DisplayWeatherProto{}
+}
+
+func (x GymGetInfoOutProto) GetPromoImage() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GymGetInfoOutProto_promo_image).List()}
+}
+
+func (x GymGetInfoOutProto) GetPromoDescription() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_GymGetInfoOutProto_promo_description).List()}
+}
+
+func (x GymGetInfoOutProto) GetCallToActionLink() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_call_to_action_link).String())
+}
+
+func (x GymGetInfoOutProto) GetServerMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_GymGetInfoOutProto_server_ms).Int()
+}
+
+func (x GymGetInfoOutProto) HasSponsoredDetails() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_sponsored_details)
+}
+
+func (x GymGetInfoOutProto) GetSponsoredDetails() SponsoredDetailsProto {
+	if x.m == nil {
+		return SponsoredDetailsProto{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_sponsored_details).Message(); v.IsValid() {
+		return SponsoredDetailsProto{v}
+	}
+	return SponsoredDetailsProto{}
+}
+
+func (x GymGetInfoOutProto) GetPoiImagesCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_GymGetInfoOutProto_poi_images_count).Int())
+}
+
+func (x GymGetInfoOutProto) GetGeostoreTombstoneMessageKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_geostore_tombstone_message_key).String())
+}
+
+func (x GymGetInfoOutProto) GetGeostoreSuspensionMessageKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_GymGetInfoOutProto_geostore_suspension_message_key).String())
+}
+
+func (x GymGetInfoOutProto) HasVpsInfo() bool {
+	return x.m != nil && x.m.Has(fd_GymGetInfoOutProto_vps_info)
+}
+
+func (x GymGetInfoOutProto) GetVpsInfo() FortVpsInfoProto {
+	if x.m == nil {
+		return FortVpsInfoProto{}
+	}
+	if v := x.m.Get(fd_GymGetInfoOutProto_vps_info).Message(); v.IsValid() {
+		return FortVpsInfoProto{v}
+	}
+	return FortVpsInfoProto{}
+}
+
+// GymStatusAndDefendersProto wraps a hyperpb/protoreflect POGOProtos.Rpc.GymStatusAndDefendersProto message.
+type GymStatusAndDefendersProto struct{ m protoreflect.Message }
+
+// AsGymStatusAndDefendersProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.GymStatusAndDefendersProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsGymStatusAndDefendersProto(m protoreflect.Message) GymStatusAndDefendersProto {
+	if m == nil || !m.IsValid() {
+		return GymStatusAndDefendersProto{}
+	}
+	return GymStatusAndDefendersProto{m}
+}
+
+func (x GymStatusAndDefendersProto) IsZero() bool { return x.m == nil }
+
+func (x GymStatusAndDefendersProto) HasPokemonFortProto() bool {
+	return x.m != nil && x.m.Has(fd_GymStatusAndDefendersProto_pokemon_fort_proto)
+}
+
+func (x GymStatusAndDefendersProto) GetPokemonFortProto() PokemonFortProto {
+	if x.m == nil {
+		return PokemonFortProto{}
+	}
+	if v := x.m.Get(fd_GymStatusAndDefendersProto_pokemon_fort_proto).Message(); v.IsValid() {
+		return PokemonFortProto{v}
+	}
+	return PokemonFortProto{}
+}
+
+func (x GymStatusAndDefendersProto) GetGymDefender() GymDefenderProtoList {
+	if x.m == nil {
+		return GymDefenderProtoList{}
+	}
+	return GymDefenderProtoList{x.m.Get(fd_GymStatusAndDefendersProto_gym_defender).List()}
 }
 
 // HoloholoARBoundaryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.HoloholoARBoundaryProto message.
@@ -1879,6 +8590,110 @@ func (x HyperlocalExperimentClientProto) GetChallengeBonusKey() string {
 	return strings.Clone(x.m.Get(fd_HyperlocalExperimentClientProto_challenge_bonus_key).String())
 }
 
+// ImageTextCreativeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ImageTextCreativeProto message.
+type ImageTextCreativeProto struct{ m protoreflect.Message }
+
+// AsImageTextCreativeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ImageTextCreativeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsImageTextCreativeProto(m protoreflect.Message) ImageTextCreativeProto {
+	if m == nil || !m.IsValid() {
+		return ImageTextCreativeProto{}
+	}
+	return ImageTextCreativeProto{m}
+}
+
+func (x ImageTextCreativeProto) IsZero() bool { return x.m == nil }
+
+func (x ImageTextCreativeProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_name).String())
+}
+
+func (x ImageTextCreativeProto) GetTitle() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_title).String())
+}
+
+func (x ImageTextCreativeProto) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_description).String())
+}
+
+func (x ImageTextCreativeProto) GetPreviewImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_preview_image_url).String())
+}
+
+func (x ImageTextCreativeProto) GetFullscreenImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_fullscreen_image_url).String())
+}
+
+func (x ImageTextCreativeProto) GetCtaLink() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_cta_link).String())
+}
+
+func (x ImageTextCreativeProto) GetWebArUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImageTextCreativeProto_web_ar_url).String())
+}
+
+func (x ImageTextCreativeProto) GetCtaText() pogo.CTAText {
+	if x.m == nil {
+		return pogo.CTAText(0)
+	}
+	return pogo.CTAText(x.m.Get(fd_ImageTextCreativeProto_cta_text).Enum())
+}
+
+// ImpressionTrackingTag wraps a hyperpb/protoreflect POGOProtos.Rpc.ImpressionTrackingTag message.
+type ImpressionTrackingTag struct{ m protoreflect.Message }
+
+// AsImpressionTrackingTag wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ImpressionTrackingTag .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsImpressionTrackingTag(m protoreflect.Message) ImpressionTrackingTag {
+	if m == nil || !m.IsValid() {
+		return ImpressionTrackingTag{}
+	}
+	return ImpressionTrackingTag{m}
+}
+
+func (x ImpressionTrackingTag) IsZero() bool { return x.m == nil }
+
+func (x ImpressionTrackingTag) GetTagId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImpressionTrackingTag_tag_id).String())
+}
+
+func (x ImpressionTrackingTag) GetBaseUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ImpressionTrackingTag_base_url).String())
+}
+
 // IncenseCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.IncenseCreateDetail message.
 type IncenseCreateDetail struct{ m protoreflect.Message }
 
@@ -1903,6 +8718,58 @@ func (x IncenseCreateDetail) GetIncenseType() pogo.Item {
 	return pogo.Item(x.m.Get(fd_IncenseCreateDetail_incense_type).Enum())
 }
 
+// IncidentLookupProto wraps a hyperpb/protoreflect POGOProtos.Rpc.IncidentLookupProto message.
+type IncidentLookupProto struct{ m protoreflect.Message }
+
+// AsIncidentLookupProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.IncidentLookupProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsIncidentLookupProto(m protoreflect.Message) IncidentLookupProto {
+	if m == nil || !m.IsValid() {
+		return IncidentLookupProto{}
+	}
+	return IncidentLookupProto{m}
+}
+
+func (x IncidentLookupProto) IsZero() bool { return x.m == nil }
+
+func (x IncidentLookupProto) GetIncidentId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_IncidentLookupProto_incident_id).String())
+}
+
+func (x IncidentLookupProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_IncidentLookupProto_fort_id).String())
+}
+
+func (x IncidentLookupProto) GetFortLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_IncidentLookupProto_fort_lat).Float()
+}
+
+func (x IncidentLookupProto) GetFortLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_IncidentLookupProto_fort_lng).Float()
+}
+
+func (x IncidentLookupProto) GetContext() pogo.EnumWrapper_InvasionContext {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionContext(0)
+	}
+	return pogo.EnumWrapper_InvasionContext(x.m.Get(fd_IncidentLookupProto_context).Enum())
+}
+
 // IncidentRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.IncidentRewardProto message.
 type IncidentRewardProto struct{ m protoreflect.Message }
 
@@ -1925,6 +8792,374 @@ func (x IncidentRewardProto) GetInvasionSpawnGroupTemplateId() string {
 		return ""
 	}
 	return strings.Clone(x.m.Get(fd_IncidentRewardProto_invasion_spawn_group_template_id).String())
+}
+
+// InternalFriendDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalFriendDetailsProto message.
+type InternalFriendDetailsProto struct{ m protoreflect.Message }
+
+// AsInternalFriendDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalFriendDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalFriendDetailsProto(m protoreflect.Message) InternalFriendDetailsProto {
+	if m == nil || !m.IsValid() {
+		return InternalFriendDetailsProto{}
+	}
+	return InternalFriendDetailsProto{m}
+}
+
+func (x InternalFriendDetailsProto) IsZero() bool { return x.m == nil }
+
+func (x InternalFriendDetailsProto) HasPlayer() bool {
+	return x.m != nil && x.m.Has(fd_InternalFriendDetailsProto_player)
+}
+
+func (x InternalFriendDetailsProto) GetPlayer() InternalPlayerSummaryProto {
+	if x.m == nil {
+		return InternalPlayerSummaryProto{}
+	}
+	if v := x.m.Get(fd_InternalFriendDetailsProto_player).Message(); v.IsValid() {
+		return InternalPlayerSummaryProto{v}
+	}
+	return InternalPlayerSummaryProto{}
+}
+
+func (x InternalFriendDetailsProto) HasFriendVisibleData() bool {
+	return x.m != nil && x.m.Has(fd_InternalFriendDetailsProto_friend_visible_data)
+}
+
+func (x InternalFriendDetailsProto) GetFriendVisibleData() PlayerFriendDisplayProto {
+	if x.m == nil {
+		return PlayerFriendDisplayProto{}
+	}
+	if v := x.m.Get(fd_InternalFriendDetailsProto_friend_visible_data).Message(); v.IsValid() {
+		return PlayerFriendDisplayProto{v}
+	}
+	return PlayerFriendDisplayProto{}
+}
+
+func (x InternalFriendDetailsProto) GetScore() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalFriendDetailsProto_score).Int())
+}
+
+func (x InternalFriendDetailsProto) HasDataWithMe() bool {
+	return x.m != nil && x.m.Has(fd_InternalFriendDetailsProto_data_with_me)
+}
+
+func (x InternalFriendDetailsProto) GetDataWithMe() FriendshipDataProto {
+	if x.m == nil {
+		return FriendshipDataProto{}
+	}
+	if v := x.m.Get(fd_InternalFriendDetailsProto_data_with_me).Message(); v.IsValid() {
+		return FriendshipDataProto{v}
+	}
+	return FriendshipDataProto{}
+}
+
+func (x InternalFriendDetailsProto) GetOnlineStatus() pogo.InternalFriendDetailsProto_OnlineStatus {
+	if x.m == nil {
+		return pogo.InternalFriendDetailsProto_OnlineStatus(0)
+	}
+	return pogo.InternalFriendDetailsProto_OnlineStatus(x.m.Get(fd_InternalFriendDetailsProto_online_status).Enum())
+}
+
+func (x InternalFriendDetailsProto) GetCreatedMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_InternalFriendDetailsProto_created_ms).Int()
+}
+
+func (x InternalFriendDetailsProto) GetSharedData() []byte {
+	if x.m == nil {
+		return nil
+	}
+	return bytes.Clone(x.m.Get(fd_InternalFriendDetailsProto_shared_data).Bytes())
+}
+
+func (x InternalFriendDetailsProto) HasDataFromMe() bool {
+	return x.m != nil && x.m.Has(fd_InternalFriendDetailsProto_data_from_me)
+}
+
+func (x InternalFriendDetailsProto) GetDataFromMe() OneWaySharedFriendshipDataProto {
+	if x.m == nil {
+		return OneWaySharedFriendshipDataProto{}
+	}
+	if v := x.m.Get(fd_InternalFriendDetailsProto_data_from_me).Message(); v.IsValid() {
+		return OneWaySharedFriendshipDataProto{v}
+	}
+	return OneWaySharedFriendshipDataProto{}
+}
+
+func (x InternalFriendDetailsProto) HasDataToMe() bool {
+	return x.m != nil && x.m.Has(fd_InternalFriendDetailsProto_data_to_me)
+}
+
+func (x InternalFriendDetailsProto) GetDataToMe() OneWaySharedFriendshipDataProto {
+	if x.m == nil {
+		return OneWaySharedFriendshipDataProto{}
+	}
+	if v := x.m.Get(fd_InternalFriendDetailsProto_data_to_me).Message(); v.IsValid() {
+		return OneWaySharedFriendshipDataProto{v}
+	}
+	return OneWaySharedFriendshipDataProto{}
+}
+
+// InternalGetFriendDetailsOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalGetFriendDetailsOutProto message.
+type InternalGetFriendDetailsOutProto struct{ m protoreflect.Message }
+
+// AsInternalGetFriendDetailsOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalGetFriendDetailsOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalGetFriendDetailsOutProto(m protoreflect.Message) InternalGetFriendDetailsOutProto {
+	if m == nil || !m.IsValid() {
+		return InternalGetFriendDetailsOutProto{}
+	}
+	return InternalGetFriendDetailsOutProto{m}
+}
+
+func (x InternalGetFriendDetailsOutProto) IsZero() bool { return x.m == nil }
+
+func (x InternalGetFriendDetailsOutProto) GetResult() pogo.InternalGetFriendDetailsOutProto_Result {
+	if x.m == nil {
+		return pogo.InternalGetFriendDetailsOutProto_Result(0)
+	}
+	return pogo.InternalGetFriendDetailsOutProto_Result(x.m.Get(fd_InternalGetFriendDetailsOutProto_result).Enum())
+}
+
+func (x InternalGetFriendDetailsOutProto) GetFriend() InternalFriendDetailsProtoList {
+	if x.m == nil {
+		return InternalFriendDetailsProtoList{}
+	}
+	return InternalFriendDetailsProtoList{x.m.Get(fd_InternalGetFriendDetailsOutProto_friend).List()}
+}
+
+func (x InternalGetFriendDetailsOutProto) HasFriendDetailsDebugInfo() bool {
+	return x.m != nil && x.m.Has(fd_InternalGetFriendDetailsOutProto_friend_details_debug_info)
+}
+
+func (x InternalGetFriendDetailsOutProto) GetFriendDetailsDebugInfo() InternalGetFriendDetailsOutProto_DebugProto {
+	if x.m == nil {
+		return InternalGetFriendDetailsOutProto_DebugProto{}
+	}
+	if v := x.m.Get(fd_InternalGetFriendDetailsOutProto_friend_details_debug_info).Message(); v.IsValid() {
+		return InternalGetFriendDetailsOutProto_DebugProto{v}
+	}
+	return InternalGetFriendDetailsOutProto_DebugProto{}
+}
+
+// InternalGetFriendDetailsOutProto_DebugProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalGetFriendDetailsOutProto.DebugProto message.
+type InternalGetFriendDetailsOutProto_DebugProto struct{ m protoreflect.Message }
+
+// AsInternalGetFriendDetailsOutProto_DebugProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalGetFriendDetailsOutProto_DebugProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalGetFriendDetailsOutProto_DebugProto(m protoreflect.Message) InternalGetFriendDetailsOutProto_DebugProto {
+	if m == nil || !m.IsValid() {
+		return InternalGetFriendDetailsOutProto_DebugProto{}
+	}
+	return InternalGetFriendDetailsOutProto_DebugProto{m}
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) IsZero() bool { return x.m == nil }
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFetchedFromDb() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_db).Int())
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFetchedFromFanout() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_fanout).Int())
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFetchedFromPlayerMapper() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_player_mapper).Int())
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFetchedFromStatusCache() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_status_cache).Int())
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFailedToFetch() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_failed_to_fetch).Int())
+}
+
+func (x InternalGetFriendDetailsOutProto_DebugProto) GetFetchedFromSameServerAsPlayer() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_same_server_as_player).Int())
+}
+
+// InternalPlayerSummaryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalPlayerSummaryProto message.
+type InternalPlayerSummaryProto struct{ m protoreflect.Message }
+
+// AsInternalPlayerSummaryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalPlayerSummaryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalPlayerSummaryProto(m protoreflect.Message) InternalPlayerSummaryProto {
+	if m == nil || !m.IsValid() {
+		return InternalPlayerSummaryProto{}
+	}
+	return InternalPlayerSummaryProto{m}
+}
+
+func (x InternalPlayerSummaryProto) IsZero() bool { return x.m == nil }
+
+func (x InternalPlayerSummaryProto) GetPlayerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_player_id).String())
+}
+
+func (x InternalPlayerSummaryProto) GetCodename() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_codename).String())
+}
+
+func (x InternalPlayerSummaryProto) HasPublicData() bool {
+	return x.m != nil && x.m.Has(fd_InternalPlayerSummaryProto_public_data)
+}
+
+func (x InternalPlayerSummaryProto) GetPublicData() PlayerPublicProfileProto {
+	if x.m == nil {
+		return PlayerPublicProfileProto{}
+	}
+	if v := x.m.Get(fd_InternalPlayerSummaryProto_public_data).Message(); v.IsValid() {
+		return PlayerPublicProfileProto{v}
+	}
+	return PlayerPublicProfileProto{}
+}
+
+func (x InternalPlayerSummaryProto) GetTeam() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_team).String())
+}
+
+func (x InternalPlayerSummaryProto) GetFbUserId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_fb_user_id).String())
+}
+
+func (x InternalPlayerSummaryProto) GetLevel() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_InternalPlayerSummaryProto_level).Int())
+}
+
+func (x InternalPlayerSummaryProto) GetExperience() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_InternalPlayerSummaryProto_experience).Int()
+}
+
+func (x InternalPlayerSummaryProto) GetNiaAccountId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_nia_account_id).String())
+}
+
+func (x InternalPlayerSummaryProto) GetDisplayName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalPlayerSummaryProto_display_name).String())
+}
+
+// InternalSearchPlayerOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalSearchPlayerOutProto message.
+type InternalSearchPlayerOutProto struct{ m protoreflect.Message }
+
+// AsInternalSearchPlayerOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalSearchPlayerOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalSearchPlayerOutProto(m protoreflect.Message) InternalSearchPlayerOutProto {
+	if m == nil || !m.IsValid() {
+		return InternalSearchPlayerOutProto{}
+	}
+	return InternalSearchPlayerOutProto{m}
+}
+
+func (x InternalSearchPlayerOutProto) IsZero() bool { return x.m == nil }
+
+func (x InternalSearchPlayerOutProto) GetResult() pogo.InternalSearchPlayerOutProto_Result {
+	if x.m == nil {
+		return pogo.InternalSearchPlayerOutProto_Result(0)
+	}
+	return pogo.InternalSearchPlayerOutProto_Result(x.m.Get(fd_InternalSearchPlayerOutProto_result).Enum())
+}
+
+func (x InternalSearchPlayerOutProto) HasPlayer() bool {
+	return x.m != nil && x.m.Has(fd_InternalSearchPlayerOutProto_player)
+}
+
+func (x InternalSearchPlayerOutProto) GetPlayer() InternalPlayerSummaryProto {
+	if x.m == nil {
+		return InternalPlayerSummaryProto{}
+	}
+	if v := x.m.Get(fd_InternalSearchPlayerOutProto_player).Message(); v.IsValid() {
+		return InternalPlayerSummaryProto{v}
+	}
+	return InternalPlayerSummaryProto{}
+}
+
+// InternalSearchPlayerProto wraps a hyperpb/protoreflect POGOProtos.Rpc.InternalSearchPlayerProto message.
+type InternalSearchPlayerProto struct{ m protoreflect.Message }
+
+// AsInternalSearchPlayerProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.InternalSearchPlayerProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsInternalSearchPlayerProto(m protoreflect.Message) InternalSearchPlayerProto {
+	if m == nil || !m.IsValid() {
+		return InternalSearchPlayerProto{}
+	}
+	return InternalSearchPlayerProto{m}
+}
+
+func (x InternalSearchPlayerProto) IsZero() bool { return x.m == nil }
+
+func (x InternalSearchPlayerProto) GetFriendCode() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_InternalSearchPlayerProto_friend_code).String())
 }
 
 // InvasionCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.InvasionCreateDetail message.
@@ -2151,6 +9386,180 @@ func (x LocationCardDisplayProto) GetLocationCard() pogo.LocationCard {
 	return pogo.LocationCard(x.m.Get(fd_LocationCardDisplayProto_location_card).Enum())
 }
 
+// LootItemProto wraps a hyperpb/protoreflect POGOProtos.Rpc.LootItemProto message.
+type LootItemProto struct{ m protoreflect.Message }
+
+// AsLootItemProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.LootItemProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsLootItemProto(m protoreflect.Message) LootItemProto {
+	if m == nil || !m.IsValid() {
+		return LootItemProto{}
+	}
+	return LootItemProto{m}
+}
+
+func (x LootItemProto) IsZero() bool { return x.m == nil }
+
+func (x LootItemProto) GetItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_LootItemProto_item).Enum())
+}
+
+func (x LootItemProto) GetStardust() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_LootItemProto_stardust).Bool()
+}
+
+func (x LootItemProto) GetPokecoin() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_LootItemProto_pokecoin).Bool()
+}
+
+func (x LootItemProto) GetPokemonCandy() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_LootItemProto_pokemon_candy).Enum())
+}
+
+func (x LootItemProto) GetExperience() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_LootItemProto_experience).Bool()
+}
+
+func (x LootItemProto) HasPokemonEgg() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_pokemon_egg)
+}
+
+func (x LootItemProto) GetPokemonEgg() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_LootItemProto_pokemon_egg).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x LootItemProto) GetAvatarTemplateId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_LootItemProto_avatar_template_id).String())
+}
+
+func (x LootItemProto) GetStickerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_LootItemProto_sticker_id).String())
+}
+
+func (x LootItemProto) GetMegaEnergyPokemonId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_LootItemProto_mega_energy_pokemon_id).Enum())
+}
+
+func (x LootItemProto) GetXlCandy() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_LootItemProto_xl_candy).Enum())
+}
+
+func (x LootItemProto) HasFollowerPokemon() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_follower_pokemon)
+}
+
+func (x LootItemProto) GetFollowerPokemon() FollowerPokemonProto {
+	if x.m == nil {
+		return FollowerPokemonProto{}
+	}
+	if v := x.m.Get(fd_LootItemProto_follower_pokemon).Message(); v.IsValid() {
+		return FollowerPokemonProto{v}
+	}
+	return FollowerPokemonProto{}
+}
+
+func (x LootItemProto) GetNeutralAvatarTemplateId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_LootItemProto_neutral_avatar_template_id).String())
+}
+
+func (x LootItemProto) HasNeutralAvatarItemTemplate() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_neutral_avatar_item_template)
+}
+
+func (x LootItemProto) GetNeutralAvatarItemTemplate() NeutralAvatarLootItemTemplateProto {
+	if x.m == nil {
+		return NeutralAvatarLootItemTemplateProto{}
+	}
+	if v := x.m.Get(fd_LootItemProto_neutral_avatar_item_template).Message(); v.IsValid() {
+		return NeutralAvatarLootItemTemplateProto{v}
+	}
+	return NeutralAvatarLootItemTemplateProto{}
+}
+
+func (x LootItemProto) HasNeutralAvatarItemDisplay() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_neutral_avatar_item_display)
+}
+
+func (x LootItemProto) GetNeutralAvatarItemDisplay() NeutralAvatarLootItemDisplayProto {
+	if x.m == nil {
+		return NeutralAvatarLootItemDisplayProto{}
+	}
+	if v := x.m.Get(fd_LootItemProto_neutral_avatar_item_display).Message(); v.IsValid() {
+		return NeutralAvatarLootItemDisplayProto{v}
+	}
+	return NeutralAvatarLootItemDisplayProto{}
+}
+
+func (x LootItemProto) GetCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_LootItemProto_count).Int())
+}
+
+// LootProto wraps a hyperpb/protoreflect POGOProtos.Rpc.LootProto message.
+type LootProto struct{ m protoreflect.Message }
+
+// AsLootProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.LootProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsLootProto(m protoreflect.Message) LootProto {
+	if m == nil || !m.IsValid() {
+		return LootProto{}
+	}
+	return LootProto{m}
+}
+
+func (x LootProto) IsZero() bool { return x.m == nil }
+
+func (x LootProto) GetLootItem() LootItemProtoList {
+	if x.m == nil {
+		return LootItemProtoList{}
+	}
+	return LootItemProtoList{x.m.Get(fd_LootProto_loot_item).List()}
+}
+
 // MapPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MapPokemonProto message.
 type MapPokemonProto struct{ m protoreflect.Message }
 
@@ -2222,6 +9631,44 @@ func (x MapPokemonProto) GetPokemonDisplay() PokemonDisplayProto {
 		return PokemonDisplayProto{v}
 	}
 	return PokemonDisplayProto{}
+}
+
+// MegaEvoInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MegaEvoInfoProto message.
+type MegaEvoInfoProto struct{ m protoreflect.Message }
+
+// AsMegaEvoInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MegaEvoInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMegaEvoInfoProto(m protoreflect.Message) MegaEvoInfoProto {
+	if m == nil || !m.IsValid() {
+		return MegaEvoInfoProto{}
+	}
+	return MegaEvoInfoProto{m}
+}
+
+func (x MegaEvoInfoProto) IsZero() bool { return x.m == nil }
+
+func (x MegaEvoInfoProto) GetPokedexId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_MegaEvoInfoProto_pokedex_id).Enum())
+}
+
+func (x MegaEvoInfoProto) GetTempEvoId() pogo.HoloTemporaryEvolutionId {
+	if x.m == nil {
+		return pogo.HoloTemporaryEvolutionId(0)
+	}
+	return pogo.HoloTemporaryEvolutionId(x.m.Get(fd_MegaEvoInfoProto_temp_evo_id).Enum())
+}
+
+func (x MegaEvoInfoProto) GetEvoExpirationTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MegaEvoInfoProto_evo_expiration_time_ms).Int()
 }
 
 // MiniCollectionPokemon wraps a hyperpb/protoreflect POGOProtos.Rpc.MiniCollectionPokemon message.
@@ -2314,6 +9761,211 @@ func (x MiniCollectionProto) GetCompleted() bool {
 	return x.m.Get(fd_MiniCollectionProto_completed).Bool()
 }
 
+// MotivatedPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MotivatedPokemonProto message.
+type MotivatedPokemonProto struct{ m protoreflect.Message }
+
+// AsMotivatedPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MotivatedPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMotivatedPokemonProto(m protoreflect.Message) MotivatedPokemonProto {
+	if m == nil || !m.IsValid() {
+		return MotivatedPokemonProto{}
+	}
+	return MotivatedPokemonProto{m}
+}
+
+func (x MotivatedPokemonProto) IsZero() bool { return x.m == nil }
+
+func (x MotivatedPokemonProto) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_MotivatedPokemonProto_pokemon)
+}
+
+func (x MotivatedPokemonProto) GetPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_MotivatedPokemonProto_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x MotivatedPokemonProto) GetDeployMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MotivatedPokemonProto_deploy_ms).Int()
+}
+
+func (x MotivatedPokemonProto) GetCpWhenDeployed() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_MotivatedPokemonProto_cp_when_deployed).Int())
+}
+
+func (x MotivatedPokemonProto) GetMotivationNow() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MotivatedPokemonProto_motivation_now).Float()
+}
+
+func (x MotivatedPokemonProto) GetCpNow() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_MotivatedPokemonProto_cp_now).Int())
+}
+
+func (x MotivatedPokemonProto) GetBerryValue() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_MotivatedPokemonProto_berry_value).Float())
+}
+
+func (x MotivatedPokemonProto) GetFeedCooldownDurationMillis() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MotivatedPokemonProto_feed_cooldown_duration_millis).Int()
+}
+
+func (x MotivatedPokemonProto) GetFoodValue() FoodValueList {
+	if x.m == nil {
+		return FoodValueList{}
+	}
+	return FoodValueList{x.m.Get(fd_MotivatedPokemonProto_food_value).List()}
+}
+
+// MoveModifierProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MoveModifierProto message.
+type MoveModifierProto struct{ m protoreflect.Message }
+
+// AsMoveModifierProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MoveModifierProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMoveModifierProto(m protoreflect.Message) MoveModifierProto {
+	if m == nil || !m.IsValid() {
+		return MoveModifierProto{}
+	}
+	return MoveModifierProto{m}
+}
+
+func (x MoveModifierProto) IsZero() bool { return x.m == nil }
+
+func (x MoveModifierProto) GetMode() pogo.MoveModifierProto_MoveModifierMode {
+	if x.m == nil {
+		return pogo.MoveModifierProto_MoveModifierMode(0)
+	}
+	return pogo.MoveModifierProto_MoveModifierMode(x.m.Get(fd_MoveModifierProto_mode).Enum())
+}
+
+func (x MoveModifierProto) GetType() pogo.MoveModifierProto_MoveModifierType {
+	if x.m == nil {
+		return pogo.MoveModifierProto_MoveModifierType(0)
+	}
+	return pogo.MoveModifierProto_MoveModifierType(x.m.Get(fd_MoveModifierProto_type).Enum())
+}
+
+func (x MoveModifierProto) GetValue() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_MoveModifierProto_value).Float())
+}
+
+func (x MoveModifierProto) GetCondition() MoveModifierProto_ModifierConditionList {
+	if x.m == nil {
+		return MoveModifierProto_ModifierConditionList{}
+	}
+	return MoveModifierProto_ModifierConditionList{x.m.Get(fd_MoveModifierProto_condition).List()}
+}
+
+func (x MoveModifierProto) GetRenderModifier() FormRenderModifierList {
+	if x.m == nil {
+		return FormRenderModifierList{}
+	}
+	return FormRenderModifierList{x.m.Get(fd_MoveModifierProto_render_modifier).List()}
+}
+
+func (x MoveModifierProto) GetDuration() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MoveModifierProto_duration).Int()
+}
+
+func (x MoveModifierProto) GetStringValue() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_MoveModifierProto_string_value).String())
+}
+
+func (x MoveModifierProto) GetBestEffort() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_MoveModifierProto_best_effort).Bool()
+}
+
+func (x MoveModifierProto) GetModifierTarget() pogo.MoveModifierProto_MoveModifierTarget {
+	if x.m == nil {
+		return pogo.MoveModifierProto_MoveModifierTarget(0)
+	}
+	return pogo.MoveModifierProto_MoveModifierTarget(x.m.Get(fd_MoveModifierProto_modifier_target).Enum())
+}
+
+// MoveModifierProto_ModifierCondition wraps a hyperpb/protoreflect POGOProtos.Rpc.MoveModifierProto.ModifierCondition message.
+type MoveModifierProto_ModifierCondition struct{ m protoreflect.Message }
+
+// AsMoveModifierProto_ModifierCondition wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MoveModifierProto_ModifierCondition .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMoveModifierProto_ModifierCondition(m protoreflect.Message) MoveModifierProto_ModifierCondition {
+	if m == nil || !m.IsValid() {
+		return MoveModifierProto_ModifierCondition{}
+	}
+	return MoveModifierProto_ModifierCondition{m}
+}
+
+func (x MoveModifierProto_ModifierCondition) IsZero() bool { return x.m == nil }
+
+func (x MoveModifierProto_ModifierCondition) GetConditionType() pogo.MoveModifierProto_ModifierCondition_ConditionType {
+	if x.m == nil {
+		return pogo.MoveModifierProto_ModifierCondition_ConditionType(0)
+	}
+	return pogo.MoveModifierProto_ModifierCondition_ConditionType(x.m.Get(fd_MoveModifierProto_ModifierCondition_condition_type).Enum())
+}
+
+func (x MoveModifierProto_ModifierCondition) GetValue() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_MoveModifierProto_ModifierCondition_value).Int()
+}
+
+func (x MoveModifierProto_ModifierCondition) GetDeviation() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_MoveModifierProto_ModifierCondition_deviation).Float())
+}
+
+func (x MoveModifierProto_ModifierCondition) GetStringLookup() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_MoveModifierProto_ModifierCondition_string_lookup).String())
+}
+
 // MultiPartQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MultiPartQuestProto message.
 type MultiPartQuestProto struct{ m protoreflect.Message }
 
@@ -2336,6 +9988,37 @@ func (x MultiPartQuestProto) GetSubQuests() QuestProtoList {
 		return QuestProtoList{}
 	}
 	return QuestProtoList{x.m.Get(fd_MultiPartQuestProto_sub_quests).List()}
+}
+
+// MultiSelectorProto wraps a hyperpb/protoreflect POGOProtos.Rpc.MultiSelectorProto message.
+type MultiSelectorProto struct{ m protoreflect.Message }
+
+// AsMultiSelectorProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.MultiSelectorProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsMultiSelectorProto(m protoreflect.Message) MultiSelectorProto {
+	if m == nil || !m.IsValid() {
+		return MultiSelectorProto{}
+	}
+	return MultiSelectorProto{m}
+}
+
+func (x MultiSelectorProto) IsZero() bool { return x.m == nil }
+
+func (x MultiSelectorProto) GetKeys() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_MultiSelectorProto_keys).List()}
+}
+
+func (x MultiSelectorProto) GetNextSteps() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_MultiSelectorProto_next_steps).List()}
 }
 
 // NearbyPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NearbyPokemonProto message.
@@ -2480,6 +10163,325 @@ func (x NeutralAvatarLootItemTemplateProto) GetDisplayTemplateId() string {
 	return strings.Clone(x.m.Get(fd_NeutralAvatarLootItemTemplateProto_display_template_id).String())
 }
 
+// NpcEncounterProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NpcEncounterProto message.
+type NpcEncounterProto struct{ m protoreflect.Message }
+
+// AsNpcEncounterProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NpcEncounterProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsNpcEncounterProto(m protoreflect.Message) NpcEncounterProto {
+	if m == nil || !m.IsValid() {
+		return NpcEncounterProto{}
+	}
+	return NpcEncounterProto{m}
+}
+
+func (x NpcEncounterProto) IsZero() bool { return x.m == nil }
+
+func (x NpcEncounterProto) GetEncounterId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_NpcEncounterProto_encounter_id).String())
+}
+
+func (x NpcEncounterProto) GetCharacter() pogo.EnumWrapper_InvasionCharacter {
+	if x.m == nil {
+		return pogo.EnumWrapper_InvasionCharacter(0)
+	}
+	return pogo.EnumWrapper_InvasionCharacter(x.m.Get(fd_NpcEncounterProto_character).Enum())
+}
+
+func (x NpcEncounterProto) GetSteps() NpcEncounterProto_NpcEncounterStepList {
+	if x.m == nil {
+		return NpcEncounterProto_NpcEncounterStepList{}
+	}
+	return NpcEncounterProto_NpcEncounterStepList{x.m.Get(fd_NpcEncounterProto_steps).List()}
+}
+
+func (x NpcEncounterProto) GetCurrentStep() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_NpcEncounterProto_current_step).String())
+}
+
+func (x NpcEncounterProto) GetMapCharacter() pogo.QuestDialogProto_Character {
+	if x.m == nil {
+		return pogo.QuestDialogProto_Character(0)
+	}
+	return pogo.QuestDialogProto_Character(x.m.Get(fd_NpcEncounterProto_map_character).Enum())
+}
+
+// NpcEncounterProto_NpcEncounterStep wraps a hyperpb/protoreflect POGOProtos.Rpc.NpcEncounterProto.NpcEncounterStep message.
+type NpcEncounterProto_NpcEncounterStep struct{ m protoreflect.Message }
+
+// AsNpcEncounterProto_NpcEncounterStep wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NpcEncounterProto_NpcEncounterStep .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsNpcEncounterProto_NpcEncounterStep(m protoreflect.Message) NpcEncounterProto_NpcEncounterStep {
+	if m == nil || !m.IsValid() {
+		return NpcEncounterProto_NpcEncounterStep{}
+	}
+	return NpcEncounterProto_NpcEncounterStep{m}
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) IsZero() bool { return x.m == nil }
+
+func (x NpcEncounterProto_NpcEncounterStep) GetStepId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_step_id).String())
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) GetDialog() ClientDialogueLineProtoList {
+	if x.m == nil {
+		return ClientDialogueLineProtoList{}
+	}
+	return ClientDialogueLineProtoList{x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_dialog).List()}
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) HasEvent() bool {
+	return x.m != nil && x.m.Has(fd_NpcEncounterProto_NpcEncounterStep_event)
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) GetEvent() NpcEventProto {
+	if x.m == nil {
+		return NpcEventProto{}
+	}
+	if v := x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_event).Message(); v.IsValid() {
+		return NpcEventProto{v}
+	}
+	return NpcEventProto{}
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) GetNextStep() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_next_step).List()}
+}
+
+func (x NpcEncounterProto_NpcEncounterStep) GetNpcDialog() QuestDialogProtoList {
+	if x.m == nil {
+		return QuestDialogProtoList{}
+	}
+	return QuestDialogProtoList{x.m.Get(fd_NpcEncounterProto_NpcEncounterStep_npc_dialog).List()}
+}
+
+// NpcEventProto wraps a hyperpb/protoreflect POGOProtos.Rpc.NpcEventProto message.
+type NpcEventProto struct{ m protoreflect.Message }
+
+// AsNpcEventProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.NpcEventProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsNpcEventProto(m protoreflect.Message) NpcEventProto {
+	if m == nil || !m.IsValid() {
+		return NpcEventProto{}
+	}
+	return NpcEventProto{m}
+}
+
+func (x NpcEventProto) IsZero() bool { return x.m == nil }
+
+func (x NpcEventProto) HasCachedGiftExchangeEntry() bool {
+	return x.m != nil && x.m.Has(fd_NpcEventProto_cached_gift_exchange_entry)
+}
+
+func (x NpcEventProto) GetCachedGiftExchangeEntry() GiftExchangeEntryProto {
+	if x.m == nil {
+		return GiftExchangeEntryProto{}
+	}
+	if v := x.m.Get(fd_NpcEventProto_cached_gift_exchange_entry).Message(); v.IsValid() {
+		return GiftExchangeEntryProto{v}
+	}
+	return GiftExchangeEntryProto{}
+}
+
+func (x NpcEventProto) HasCachedPokemonExchangeEntry() bool {
+	return x.m != nil && x.m.Has(fd_NpcEventProto_cached_pokemon_exchange_entry)
+}
+
+func (x NpcEventProto) GetCachedPokemonExchangeEntry() PokemonExchangeEntryProto {
+	if x.m == nil {
+		return PokemonExchangeEntryProto{}
+	}
+	if v := x.m.Get(fd_NpcEventProto_cached_pokemon_exchange_entry).Message(); v.IsValid() {
+		return PokemonExchangeEntryProto{v}
+	}
+	return PokemonExchangeEntryProto{}
+}
+
+func (x NpcEventProto) HasYesNoSelector() bool {
+	return x.m != nil && x.m.Has(fd_NpcEventProto_yes_no_selector)
+}
+
+func (x NpcEventProto) GetYesNoSelector() YesNoSelectorProto {
+	if x.m == nil {
+		return YesNoSelectorProto{}
+	}
+	if v := x.m.Get(fd_NpcEventProto_yes_no_selector).Message(); v.IsValid() {
+		return YesNoSelectorProto{v}
+	}
+	return YesNoSelectorProto{}
+}
+
+func (x NpcEventProto) HasMultiSelector() bool {
+	return x.m != nil && x.m.Has(fd_NpcEventProto_multi_selector)
+}
+
+func (x NpcEventProto) GetMultiSelector() MultiSelectorProto {
+	if x.m == nil {
+		return MultiSelectorProto{}
+	}
+	if v := x.m.Get(fd_NpcEventProto_multi_selector).Message(); v.IsValid() {
+		return MultiSelectorProto{v}
+	}
+	return MultiSelectorProto{}
+}
+
+func (x NpcEventProto) GetTutorialFlag() pogo.TutorialCompletion {
+	if x.m == nil {
+		return pogo.TutorialCompletion(0)
+	}
+	return pogo.TutorialCompletion(x.m.Get(fd_NpcEventProto_tutorial_flag).Enum())
+}
+
+func (x NpcEventProto) GetEvent() pogo.NpcEventProto_Event {
+	if x.m == nil {
+		return pogo.NpcEventProto_Event(0)
+	}
+	return pogo.NpcEventProto_Event(x.m.Get(fd_NpcEventProto_event).Enum())
+}
+
+// OneWaySharedFriendshipDataProto wraps a hyperpb/protoreflect POGOProtos.Rpc.OneWaySharedFriendshipDataProto message.
+type OneWaySharedFriendshipDataProto struct{ m protoreflect.Message }
+
+// AsOneWaySharedFriendshipDataProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.OneWaySharedFriendshipDataProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsOneWaySharedFriendshipDataProto(m protoreflect.Message) OneWaySharedFriendshipDataProto {
+	if m == nil || !m.IsValid() {
+		return OneWaySharedFriendshipDataProto{}
+	}
+	return OneWaySharedFriendshipDataProto{m}
+}
+
+func (x OneWaySharedFriendshipDataProto) IsZero() bool { return x.m == nil }
+
+func (x OneWaySharedFriendshipDataProto) GetGiftboxDetails() GiftBoxDetailsProtoList {
+	if x.m == nil {
+		return GiftBoxDetailsProtoList{}
+	}
+	return GiftBoxDetailsProtoList{x.m.Get(fd_OneWaySharedFriendshipDataProto_giftbox_details).List()}
+}
+
+func (x OneWaySharedFriendshipDataProto) GetOpenTradeExpireMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_OneWaySharedFriendshipDataProto_open_trade_expire_ms).Int()
+}
+
+// OpenInvasionCombatSessionOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.OpenInvasionCombatSessionOutProto message.
+type OpenInvasionCombatSessionOutProto struct{ m protoreflect.Message }
+
+// AsOpenInvasionCombatSessionOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.OpenInvasionCombatSessionOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsOpenInvasionCombatSessionOutProto(m protoreflect.Message) OpenInvasionCombatSessionOutProto {
+	if m == nil || !m.IsValid() {
+		return OpenInvasionCombatSessionOutProto{}
+	}
+	return OpenInvasionCombatSessionOutProto{m}
+}
+
+func (x OpenInvasionCombatSessionOutProto) IsZero() bool { return x.m == nil }
+
+func (x OpenInvasionCombatSessionOutProto) GetStatus() pogo.InvasionStatus_Status {
+	if x.m == nil {
+		return pogo.InvasionStatus_Status(0)
+	}
+	return pogo.InvasionStatus_Status(x.m.Get(fd_OpenInvasionCombatSessionOutProto_status).Enum())
+}
+
+func (x OpenInvasionCombatSessionOutProto) HasCombat() bool {
+	return x.m != nil && x.m.Has(fd_OpenInvasionCombatSessionOutProto_combat)
+}
+
+func (x OpenInvasionCombatSessionOutProto) GetCombat() CombatProto {
+	if x.m == nil {
+		return CombatProto{}
+	}
+	if v := x.m.Get(fd_OpenInvasionCombatSessionOutProto_combat).Message(); v.IsValid() {
+		return CombatProto{v}
+	}
+	return CombatProto{}
+}
+
+// OpenInvasionCombatSessionProto wraps a hyperpb/protoreflect POGOProtos.Rpc.OpenInvasionCombatSessionProto message.
+type OpenInvasionCombatSessionProto struct{ m protoreflect.Message }
+
+// AsOpenInvasionCombatSessionProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.OpenInvasionCombatSessionProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsOpenInvasionCombatSessionProto(m protoreflect.Message) OpenInvasionCombatSessionProto {
+	if m == nil || !m.IsValid() {
+		return OpenInvasionCombatSessionProto{}
+	}
+	return OpenInvasionCombatSessionProto{m}
+}
+
+func (x OpenInvasionCombatSessionProto) IsZero() bool { return x.m == nil }
+
+func (x OpenInvasionCombatSessionProto) HasIncidentLookup() bool {
+	return x.m != nil && x.m.Has(fd_OpenInvasionCombatSessionProto_incident_lookup)
+}
+
+func (x OpenInvasionCombatSessionProto) GetIncidentLookup() IncidentLookupProto {
+	if x.m == nil {
+		return IncidentLookupProto{}
+	}
+	if v := x.m.Get(fd_OpenInvasionCombatSessionProto_incident_lookup).Message(); v.IsValid() {
+		return IncidentLookupProto{v}
+	}
+	return IncidentLookupProto{}
+}
+
+func (x OpenInvasionCombatSessionProto) GetStep() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_OpenInvasionCombatSessionProto_step).Int())
+}
+
+func (x OpenInvasionCombatSessionProto) GetAttackingPokemonId() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_OpenInvasionCombatSessionProto_attacking_pokemon_id).List()}
+}
+
+func (x OpenInvasionCombatSessionProto) GetLobbyJoinTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_OpenInvasionCombatSessionProto_lobby_join_time_ms).Int()
+}
+
 // PhotobombCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.PhotobombCreateDetail message.
 type PhotobombCreateDetail struct{ m protoreflect.Message }
 
@@ -2547,6 +10549,1693 @@ func (x PlayerAttributeRewardProto) GetDurationMins() int32 {
 		return 0
 	}
 	return int32(x.m.Get(fd_PlayerAttributeRewardProto_duration_mins).Int())
+}
+
+// PlayerAvatarProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerAvatarProto message.
+type PlayerAvatarProto struct{ m protoreflect.Message }
+
+// AsPlayerAvatarProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerAvatarProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerAvatarProto(m protoreflect.Message) PlayerAvatarProto {
+	if m == nil || !m.IsValid() {
+		return PlayerAvatarProto{}
+	}
+	return PlayerAvatarProto{m}
+}
+
+func (x PlayerAvatarProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerAvatarProto) GetSkin() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_skin).Int())
+}
+
+func (x PlayerAvatarProto) GetHair() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_hair).Int())
+}
+
+func (x PlayerAvatarProto) GetShirt() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_shirt).Int())
+}
+
+func (x PlayerAvatarProto) GetPants() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_pants).Int())
+}
+
+func (x PlayerAvatarProto) GetHat() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_hat).Int())
+}
+
+func (x PlayerAvatarProto) GetShoes() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_shoes).Int())
+}
+
+func (x PlayerAvatarProto) GetAvatar() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_avatar).Int())
+}
+
+func (x PlayerAvatarProto) GetEyes() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_eyes).Int())
+}
+
+func (x PlayerAvatarProto) GetBackpack() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerAvatarProto_backpack).Int())
+}
+
+func (x PlayerAvatarProto) GetAvatarHair() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_hair).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarShirt() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_shirt).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarPants() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_pants).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarHat() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_hat).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarShoes() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_shoes).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarEyes() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_eyes).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarBackpack() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_backpack).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarGloves() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_gloves).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarSocks() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_socks).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarBelt() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_belt).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarGlasses() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_glasses).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarNecklace() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_necklace).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarSkin() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_skin).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarPose() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_pose).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarFace() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_face).String())
+}
+
+func (x PlayerAvatarProto) GetAvatarProp() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerAvatarProto_avatar_prop).String())
+}
+
+// PlayerBadgeProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerBadgeProto message.
+type PlayerBadgeProto struct{ m protoreflect.Message }
+
+// AsPlayerBadgeProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerBadgeProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerBadgeProto(m protoreflect.Message) PlayerBadgeProto {
+	if m == nil || !m.IsValid() {
+		return PlayerBadgeProto{}
+	}
+	return PlayerBadgeProto{m}
+}
+
+func (x PlayerBadgeProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerBadgeProto) GetBadgeType() pogo.HoloBadgeType {
+	if x.m == nil {
+		return pogo.HoloBadgeType(0)
+	}
+	return pogo.HoloBadgeType(x.m.Get(fd_PlayerBadgeProto_badge_type).Enum())
+}
+
+func (x PlayerBadgeProto) GetRank() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerBadgeProto_rank).Int())
+}
+
+func (x PlayerBadgeProto) GetStartValue() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerBadgeProto_start_value).Int())
+}
+
+func (x PlayerBadgeProto) GetEndValue() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerBadgeProto_end_value).Int())
+}
+
+func (x PlayerBadgeProto) GetCurrentValue() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerBadgeProto_current_value).Float()
+}
+
+func (x PlayerBadgeProto) GetTiers() PlayerBadgeTierProtoList {
+	if x.m == nil {
+		return PlayerBadgeTierProtoList{}
+	}
+	return PlayerBadgeTierProtoList{x.m.Get(fd_PlayerBadgeProto_tiers).List()}
+}
+
+// PlayerBadgeTierEncounterProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerBadgeTierEncounterProto message.
+type PlayerBadgeTierEncounterProto struct{ m protoreflect.Message }
+
+// AsPlayerBadgeTierEncounterProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerBadgeTierEncounterProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerBadgeTierEncounterProto(m protoreflect.Message) PlayerBadgeTierEncounterProto {
+	if m == nil || !m.IsValid() {
+		return PlayerBadgeTierEncounterProto{}
+	}
+	return PlayerBadgeTierEncounterProto{m}
+}
+
+func (x PlayerBadgeTierEncounterProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerBadgeTierEncounterProto) GetEncounterState() pogo.PlayerBadgeTierEncounterProto_EncounterState {
+	if x.m == nil {
+		return pogo.PlayerBadgeTierEncounterProto_EncounterState(0)
+	}
+	return pogo.PlayerBadgeTierEncounterProto_EncounterState(x.m.Get(fd_PlayerBadgeTierEncounterProto_encounter_state).Enum())
+}
+
+func (x PlayerBadgeTierEncounterProto) GetEncounterId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerBadgeTierEncounterProto_encounter_id).Uint()
+}
+
+// PlayerBadgeTierProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerBadgeTierProto message.
+type PlayerBadgeTierProto struct{ m protoreflect.Message }
+
+// AsPlayerBadgeTierProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerBadgeTierProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerBadgeTierProto(m protoreflect.Message) PlayerBadgeTierProto {
+	if m == nil || !m.IsValid() {
+		return PlayerBadgeTierProto{}
+	}
+	return PlayerBadgeTierProto{m}
+}
+
+func (x PlayerBadgeTierProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerBadgeTierProto) HasEncounter() bool {
+	return x.m != nil && x.m.Has(fd_PlayerBadgeTierProto_encounter)
+}
+
+func (x PlayerBadgeTierProto) GetEncounter() PlayerBadgeTierEncounterProto {
+	if x.m == nil {
+		return PlayerBadgeTierEncounterProto{}
+	}
+	if v := x.m.Get(fd_PlayerBadgeTierProto_encounter).Message(); v.IsValid() {
+		return PlayerBadgeTierEncounterProto{v}
+	}
+	return PlayerBadgeTierEncounterProto{}
+}
+
+// PlayerClientStationedPokemonProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerClientStationedPokemonProto message.
+type PlayerClientStationedPokemonProto struct{ m protoreflect.Message }
+
+// AsPlayerClientStationedPokemonProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerClientStationedPokemonProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerClientStationedPokemonProto(m protoreflect.Message) PlayerClientStationedPokemonProto {
+	if m == nil || !m.IsValid() {
+		return PlayerClientStationedPokemonProto{}
+	}
+	return PlayerClientStationedPokemonProto{m}
+}
+
+func (x PlayerClientStationedPokemonProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerClientStationedPokemonProto) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_PlayerClientStationedPokemonProto_pokemon)
+}
+
+func (x PlayerClientStationedPokemonProto) GetPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_PlayerClientStationedPokemonProto_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x PlayerClientStationedPokemonProto) GetTrainerName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerClientStationedPokemonProto_trainer_name).String())
+}
+
+func (x PlayerClientStationedPokemonProto) GetDeployTimestampMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerClientStationedPokemonProto_deploy_timestamp_ms).Int()
+}
+
+func (x PlayerClientStationedPokemonProto) HasPlayerAvatar() bool {
+	return x.m != nil && x.m.Has(fd_PlayerClientStationedPokemonProto_player_avatar)
+}
+
+func (x PlayerClientStationedPokemonProto) GetPlayerAvatar() PlayerAvatarProto {
+	if x.m == nil {
+		return PlayerAvatarProto{}
+	}
+	if v := x.m.Get(fd_PlayerClientStationedPokemonProto_player_avatar).Message(); v.IsValid() {
+		return PlayerAvatarProto{v}
+	}
+	return PlayerAvatarProto{}
+}
+
+func (x PlayerClientStationedPokemonProto) HasPlayerNeutralAvatar() bool {
+	return x.m != nil && x.m.Has(fd_PlayerClientStationedPokemonProto_player_neutral_avatar)
+}
+
+func (x PlayerClientStationedPokemonProto) GetPlayerNeutralAvatar() PlayerNeutralAvatarProto {
+	if x.m == nil {
+		return PlayerNeutralAvatarProto{}
+	}
+	if v := x.m.Get(fd_PlayerClientStationedPokemonProto_player_neutral_avatar).Message(); v.IsValid() {
+		return PlayerNeutralAvatarProto{v}
+	}
+	return PlayerNeutralAvatarProto{}
+}
+
+func (x PlayerClientStationedPokemonProto) GetTrainerLevel() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerClientStationedPokemonProto_trainer_level).Int())
+}
+
+// PlayerFriendDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerFriendDisplayProto message.
+type PlayerFriendDisplayProto struct{ m protoreflect.Message }
+
+// AsPlayerFriendDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerFriendDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerFriendDisplayProto(m protoreflect.Message) PlayerFriendDisplayProto {
+	if m == nil || !m.IsValid() {
+		return PlayerFriendDisplayProto{}
+	}
+	return PlayerFriendDisplayProto{m}
+}
+
+func (x PlayerFriendDisplayProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerFriendDisplayProto) HasBuddy() bool {
+	return x.m != nil && x.m.Has(fd_PlayerFriendDisplayProto_buddy)
+}
+
+func (x PlayerFriendDisplayProto) GetBuddy() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_PlayerFriendDisplayProto_buddy).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x PlayerFriendDisplayProto) GetBuddyDisplayPokemonId() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerFriendDisplayProto_buddy_display_pokemon_id).Int())
+}
+
+func (x PlayerFriendDisplayProto) GetBuddyPokemonNickname() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerFriendDisplayProto_buddy_pokemon_nickname).String())
+}
+
+func (x PlayerFriendDisplayProto) HasLastPokemonCaught() bool {
+	return x.m != nil && x.m.Has(fd_PlayerFriendDisplayProto_last_pokemon_caught)
+}
+
+func (x PlayerFriendDisplayProto) GetLastPokemonCaught() PokemonDisplayProto {
+	if x.m == nil {
+		return PokemonDisplayProto{}
+	}
+	if v := x.m.Get(fd_PlayerFriendDisplayProto_last_pokemon_caught).Message(); v.IsValid() {
+		return PokemonDisplayProto{v}
+	}
+	return PokemonDisplayProto{}
+}
+
+func (x PlayerFriendDisplayProto) GetLastPokemonCaughtDisplayId() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerFriendDisplayProto_last_pokemon_caught_display_id).Int())
+}
+
+func (x PlayerFriendDisplayProto) GetLastPokemonCaughtTimestamp() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerFriendDisplayProto_last_pokemon_caught_timestamp).Int()
+}
+
+func (x PlayerFriendDisplayProto) GetBuddyCandyAwarded() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerFriendDisplayProto_buddy_candy_awarded).Int())
+}
+
+func (x PlayerFriendDisplayProto) HasActiveMegaEvoInfo() bool {
+	return x.m != nil && x.m.Has(fd_PlayerFriendDisplayProto_active_mega_evo_info)
+}
+
+func (x PlayerFriendDisplayProto) GetActiveMegaEvoInfo() MegaEvoInfoProto {
+	if x.m == nil {
+		return MegaEvoInfoProto{}
+	}
+	if v := x.m.Get(fd_PlayerFriendDisplayProto_active_mega_evo_info).Message(); v.IsValid() {
+		return MegaEvoInfoProto{v}
+	}
+	return MegaEvoInfoProto{}
+}
+
+func (x PlayerFriendDisplayProto) GetBuddyHeightM() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerFriendDisplayProto_buddy_height_m).Float())
+}
+
+func (x PlayerFriendDisplayProto) GetBuddyWeightKg() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerFriendDisplayProto_buddy_weight_kg).Float())
+}
+
+func (x PlayerFriendDisplayProto) GetBuddySize() pogo.HoloPokemonSize {
+	if x.m == nil {
+		return pogo.HoloPokemonSize(0)
+	}
+	return pogo.HoloPokemonSize(x.m.Get(fd_PlayerFriendDisplayProto_buddy_size).Enum())
+}
+
+// PlayerNeutralAvatarArticleConfiguration wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarArticleConfiguration message.
+type PlayerNeutralAvatarArticleConfiguration struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarArticleConfiguration wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarArticleConfiguration .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarArticleConfiguration(m protoreflect.Message) PlayerNeutralAvatarArticleConfiguration {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarArticleConfiguration{}
+	}
+	return PlayerNeutralAvatarArticleConfiguration{m}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasHair() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_hair)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetHair() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_hair).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasShirt() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_shirt)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetShirt() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_shirt).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasPants() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_pants)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetPants() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_pants).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasHat() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_hat)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetHat() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_hat).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasShoes() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_shoes)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetShoes() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_shoes).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasEyes() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_eyes)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetEyes() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_eyes).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasBackpack() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_backpack)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetBackpack() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_backpack).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasGloves() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_gloves)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetGloves() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_gloves).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasSocks() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_socks)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetSocks() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_socks).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasBelt() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_belt)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetBelt() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_belt).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasGlasses() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_glasses)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetGlasses() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_glasses).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasNecklace() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_necklace)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetNecklace() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_necklace).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasSkin() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_skin)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetSkin() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_skin).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasPose() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_pose)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetPose() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_pose).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasMask() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_mask)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetMask() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_mask).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasProp() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_prop)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetProp() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_prop).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasFacialHair() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_facial_hair)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetFacialHair() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_facial_hair).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasFacePaint() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_face_paint)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetFacePaint() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_face_paint).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasOnesie() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_onesie)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetOnesie() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_onesie).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasEyeBrow() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_eye_brow)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetEyeBrow() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_eye_brow).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasEyeLash() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_eye_lash)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetEyeLash() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_eye_lash).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasFacePreset() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_face_preset)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetFacePreset() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_face_preset).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) HasBodyPreset() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarArticleConfiguration_body_preset)
+}
+
+func (x PlayerNeutralAvatarArticleConfiguration) GetBodyPreset() AvatarArticleProto {
+	if x.m == nil {
+		return AvatarArticleProto{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarArticleConfiguration_body_preset).Message(); v.IsValid() {
+		return AvatarArticleProto{v}
+	}
+	return AvatarArticleProto{}
+}
+
+// PlayerNeutralAvatarBodyBlendParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarBodyBlendParameters message.
+type PlayerNeutralAvatarBodyBlendParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarBodyBlendParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarBodyBlendParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarBodyBlendParameters(m protoreflect.Message) PlayerNeutralAvatarBodyBlendParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarBodyBlendParameters{}
+	}
+	return PlayerNeutralAvatarBodyBlendParameters{m}
+}
+
+func (x PlayerNeutralAvatarBodyBlendParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarBodyBlendParameters) GetSize() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarBodyBlendParameters_size).Float())
+}
+
+func (x PlayerNeutralAvatarBodyBlendParameters) GetMusculature() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarBodyBlendParameters_musculature).Float())
+}
+
+func (x PlayerNeutralAvatarBodyBlendParameters) GetBust() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarBodyBlendParameters_bust).Float())
+}
+
+func (x PlayerNeutralAvatarBodyBlendParameters) GetHips() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarBodyBlendParameters_hips).Float())
+}
+
+func (x PlayerNeutralAvatarBodyBlendParameters) GetShoulders() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarBodyBlendParameters_shoulders).Float())
+}
+
+// PlayerNeutralAvatarEarSelectionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarEarSelectionParameters message.
+type PlayerNeutralAvatarEarSelectionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarEarSelectionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarEarSelectionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarEarSelectionParameters(m protoreflect.Message) PlayerNeutralAvatarEarSelectionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarEarSelectionParameters{}
+	}
+	return PlayerNeutralAvatarEarSelectionParameters{m}
+}
+
+func (x PlayerNeutralAvatarEarSelectionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarEarSelectionParameters) GetSelection() pogo.PlayerNeutralAvatarEarSelectionParameters_Shape {
+	if x.m == nil {
+		return pogo.PlayerNeutralAvatarEarSelectionParameters_Shape(0)
+	}
+	return pogo.PlayerNeutralAvatarEarSelectionParameters_Shape(x.m.Get(fd_PlayerNeutralAvatarEarSelectionParameters_selection).Enum())
+}
+
+// PlayerNeutralAvatarEyeSelectionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarEyeSelectionParameters message.
+type PlayerNeutralAvatarEyeSelectionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarEyeSelectionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarEyeSelectionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarEyeSelectionParameters(m protoreflect.Message) PlayerNeutralAvatarEyeSelectionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarEyeSelectionParameters{}
+	}
+	return PlayerNeutralAvatarEyeSelectionParameters{m}
+}
+
+func (x PlayerNeutralAvatarEyeSelectionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarEyeSelectionParameters) GetSelection() pogo.PlayerNeutralAvatarEyeSelectionParameters_Shape {
+	if x.m == nil {
+		return pogo.PlayerNeutralAvatarEyeSelectionParameters_Shape(0)
+	}
+	return pogo.PlayerNeutralAvatarEyeSelectionParameters_Shape(x.m.Get(fd_PlayerNeutralAvatarEyeSelectionParameters_selection).Enum())
+}
+
+// PlayerNeutralAvatarFacePositionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarFacePositionParameters message.
+type PlayerNeutralAvatarFacePositionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarFacePositionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarFacePositionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarFacePositionParameters(m protoreflect.Message) PlayerNeutralAvatarFacePositionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarFacePositionParameters{}
+	}
+	return PlayerNeutralAvatarFacePositionParameters{m}
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetBrowDepth() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_brow_depth).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetBrowHorizontal() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_brow_horizontal).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetBrowVertical() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_brow_vertical).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetEyeDepth() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_eye_depth).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetEyeHorizontal() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_eye_horizontal).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetEyeVertical() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_eye_vertical).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetMouthDepth() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_mouth_depth).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetMouthHorizontal() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_mouth_horizontal).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetMouthVertical() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_mouth_vertical).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetNoseDepth() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_nose_depth).Float())
+}
+
+func (x PlayerNeutralAvatarFacePositionParameters) GetNoseVertical() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarFacePositionParameters_nose_vertical).Float())
+}
+
+// PlayerNeutralAvatarGradient wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarGradient message.
+type PlayerNeutralAvatarGradient struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarGradient wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarGradient .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarGradient(m protoreflect.Message) PlayerNeutralAvatarGradient {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarGradient{}
+	}
+	return PlayerNeutralAvatarGradient{m}
+}
+
+func (x PlayerNeutralAvatarGradient) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarGradient) GetColorKeys() PlayerNeutralColorKeyList {
+	if x.m == nil {
+		return PlayerNeutralColorKeyList{}
+	}
+	return PlayerNeutralColorKeyList{x.m.Get(fd_PlayerNeutralAvatarGradient_color_keys).List()}
+}
+
+// PlayerNeutralAvatarHeadBlendParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarHeadBlendParameters message.
+type PlayerNeutralAvatarHeadBlendParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarHeadBlendParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarHeadBlendParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarHeadBlendParameters(m protoreflect.Message) PlayerNeutralAvatarHeadBlendParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarHeadBlendParameters{}
+	}
+	return PlayerNeutralAvatarHeadBlendParameters{m}
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetDiamond() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_diamond).Float())
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetKite() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_kite).Float())
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetTriangle() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_triangle).Float())
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetSquare() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_square).Float())
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetCircle() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_circle).Float())
+}
+
+func (x PlayerNeutralAvatarHeadBlendParameters) GetOval() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralAvatarHeadBlendParameters_oval).Float())
+}
+
+// PlayerNeutralAvatarHeadSelectionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarHeadSelectionParameters message.
+type PlayerNeutralAvatarHeadSelectionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarHeadSelectionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarHeadSelectionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarHeadSelectionParameters(m protoreflect.Message) PlayerNeutralAvatarHeadSelectionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarHeadSelectionParameters{}
+	}
+	return PlayerNeutralAvatarHeadSelectionParameters{m}
+}
+
+func (x PlayerNeutralAvatarHeadSelectionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarHeadSelectionParameters) GetSelection() pogo.PlayerNeutralAvatarHeadSelectionParameters_Shape {
+	if x.m == nil {
+		return pogo.PlayerNeutralAvatarHeadSelectionParameters_Shape(0)
+	}
+	return pogo.PlayerNeutralAvatarHeadSelectionParameters_Shape(x.m.Get(fd_PlayerNeutralAvatarHeadSelectionParameters_selection).Enum())
+}
+
+// PlayerNeutralAvatarMouthSelectionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarMouthSelectionParameters message.
+type PlayerNeutralAvatarMouthSelectionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarMouthSelectionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarMouthSelectionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarMouthSelectionParameters(m protoreflect.Message) PlayerNeutralAvatarMouthSelectionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarMouthSelectionParameters{}
+	}
+	return PlayerNeutralAvatarMouthSelectionParameters{m}
+}
+
+func (x PlayerNeutralAvatarMouthSelectionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarMouthSelectionParameters) GetSelection() pogo.PlayerNeutralAvatarMouthSelectionParameters_Shape {
+	if x.m == nil {
+		return pogo.PlayerNeutralAvatarMouthSelectionParameters_Shape(0)
+	}
+	return pogo.PlayerNeutralAvatarMouthSelectionParameters_Shape(x.m.Get(fd_PlayerNeutralAvatarMouthSelectionParameters_selection).Enum())
+}
+
+// PlayerNeutralAvatarNoseSelectionParameters wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarNoseSelectionParameters message.
+type PlayerNeutralAvatarNoseSelectionParameters struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarNoseSelectionParameters wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarNoseSelectionParameters .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarNoseSelectionParameters(m protoreflect.Message) PlayerNeutralAvatarNoseSelectionParameters {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarNoseSelectionParameters{}
+	}
+	return PlayerNeutralAvatarNoseSelectionParameters{m}
+}
+
+func (x PlayerNeutralAvatarNoseSelectionParameters) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarNoseSelectionParameters) GetSelection() pogo.PlayerNeutralAvatarNoseSelectionParameters_Shape {
+	if x.m == nil {
+		return pogo.PlayerNeutralAvatarNoseSelectionParameters_Shape(0)
+	}
+	return pogo.PlayerNeutralAvatarNoseSelectionParameters_Shape(x.m.Get(fd_PlayerNeutralAvatarNoseSelectionParameters_selection).Enum())
+}
+
+// PlayerNeutralAvatarProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralAvatarProto message.
+type PlayerNeutralAvatarProto struct{ m protoreflect.Message }
+
+// AsPlayerNeutralAvatarProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralAvatarProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralAvatarProto(m protoreflect.Message) PlayerNeutralAvatarProto {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralAvatarProto{}
+	}
+	return PlayerNeutralAvatarProto{m}
+}
+
+func (x PlayerNeutralAvatarProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralAvatarProto) HasHeadBlend() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_head_blend)
+}
+
+func (x PlayerNeutralAvatarProto) GetHeadBlend() PlayerNeutralAvatarHeadBlendParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarHeadBlendParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_head_blend).Message(); v.IsValid() {
+		return PlayerNeutralAvatarHeadBlendParameters{v}
+	}
+	return PlayerNeutralAvatarHeadBlendParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasHeadSelection() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_head_selection)
+}
+
+func (x PlayerNeutralAvatarProto) GetHeadSelection() PlayerNeutralAvatarHeadSelectionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarHeadSelectionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_head_selection).Message(); v.IsValid() {
+		return PlayerNeutralAvatarHeadSelectionParameters{v}
+	}
+	return PlayerNeutralAvatarHeadSelectionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasArticles() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_articles)
+}
+
+func (x PlayerNeutralAvatarProto) GetArticles() PlayerNeutralAvatarArticleConfiguration {
+	if x.m == nil {
+		return PlayerNeutralAvatarArticleConfiguration{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_articles).Message(); v.IsValid() {
+		return PlayerNeutralAvatarArticleConfiguration{v}
+	}
+	return PlayerNeutralAvatarArticleConfiguration{}
+}
+
+func (x PlayerNeutralAvatarProto) HasBodyBlend() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_body_blend)
+}
+
+func (x PlayerNeutralAvatarProto) GetBodyBlend() PlayerNeutralAvatarBodyBlendParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarBodyBlendParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_body_blend).Message(); v.IsValid() {
+		return PlayerNeutralAvatarBodyBlendParameters{v}
+	}
+	return PlayerNeutralAvatarBodyBlendParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasSkinGradient() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_skin_gradient)
+}
+
+func (x PlayerNeutralAvatarProto) GetSkinGradient() PlayerNeutralAvatarGradient {
+	if x.m == nil {
+		return PlayerNeutralAvatarGradient{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_skin_gradient).Message(); v.IsValid() {
+		return PlayerNeutralAvatarGradient{v}
+	}
+	return PlayerNeutralAvatarGradient{}
+}
+
+func (x PlayerNeutralAvatarProto) HasHairGradient() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_hair_gradient)
+}
+
+func (x PlayerNeutralAvatarProto) GetHairGradient() PlayerNeutralAvatarGradient {
+	if x.m == nil {
+		return PlayerNeutralAvatarGradient{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_hair_gradient).Message(); v.IsValid() {
+		return PlayerNeutralAvatarGradient{v}
+	}
+	return PlayerNeutralAvatarGradient{}
+}
+
+func (x PlayerNeutralAvatarProto) HasNoseSelection() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_nose_selection)
+}
+
+func (x PlayerNeutralAvatarProto) GetNoseSelection() PlayerNeutralAvatarNoseSelectionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarNoseSelectionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_nose_selection).Message(); v.IsValid() {
+		return PlayerNeutralAvatarNoseSelectionParameters{v}
+	}
+	return PlayerNeutralAvatarNoseSelectionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasEarSelection() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_ear_selection)
+}
+
+func (x PlayerNeutralAvatarProto) GetEarSelection() PlayerNeutralAvatarEarSelectionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarEarSelectionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_ear_selection).Message(); v.IsValid() {
+		return PlayerNeutralAvatarEarSelectionParameters{v}
+	}
+	return PlayerNeutralAvatarEarSelectionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasMouthSelection() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_mouth_selection)
+}
+
+func (x PlayerNeutralAvatarProto) GetMouthSelection() PlayerNeutralAvatarMouthSelectionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarMouthSelectionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_mouth_selection).Message(); v.IsValid() {
+		return PlayerNeutralAvatarMouthSelectionParameters{v}
+	}
+	return PlayerNeutralAvatarMouthSelectionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasFacialHairGradient() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_facial_hair_gradient)
+}
+
+func (x PlayerNeutralAvatarProto) GetFacialHairGradient() PlayerNeutralAvatarGradient {
+	if x.m == nil {
+		return PlayerNeutralAvatarGradient{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_facial_hair_gradient).Message(); v.IsValid() {
+		return PlayerNeutralAvatarGradient{v}
+	}
+	return PlayerNeutralAvatarGradient{}
+}
+
+func (x PlayerNeutralAvatarProto) HasFacePositions() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_face_positions)
+}
+
+func (x PlayerNeutralAvatarProto) GetFacePositions() PlayerNeutralAvatarFacePositionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarFacePositionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_face_positions).Message(); v.IsValid() {
+		return PlayerNeutralAvatarFacePositionParameters{v}
+	}
+	return PlayerNeutralAvatarFacePositionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) HasEyeGradient() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_eye_gradient)
+}
+
+func (x PlayerNeutralAvatarProto) GetEyeGradient() PlayerNeutralAvatarGradient {
+	if x.m == nil {
+		return PlayerNeutralAvatarGradient{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_eye_gradient).Message(); v.IsValid() {
+		return PlayerNeutralAvatarGradient{v}
+	}
+	return PlayerNeutralAvatarGradient{}
+}
+
+func (x PlayerNeutralAvatarProto) HasEyeSelection() bool {
+	return x.m != nil && x.m.Has(fd_PlayerNeutralAvatarProto_eye_selection)
+}
+
+func (x PlayerNeutralAvatarProto) GetEyeSelection() PlayerNeutralAvatarEyeSelectionParameters {
+	if x.m == nil {
+		return PlayerNeutralAvatarEyeSelectionParameters{}
+	}
+	if v := x.m.Get(fd_PlayerNeutralAvatarProto_eye_selection).Message(); v.IsValid() {
+		return PlayerNeutralAvatarEyeSelectionParameters{v}
+	}
+	return PlayerNeutralAvatarEyeSelectionParameters{}
+}
+
+func (x PlayerNeutralAvatarProto) GetSkinGradientId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerNeutralAvatarProto_skin_gradient_id).String())
+}
+
+func (x PlayerNeutralAvatarProto) GetHairGradientId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerNeutralAvatarProto_hair_gradient_id).String())
+}
+
+func (x PlayerNeutralAvatarProto) GetEyeGradientId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerNeutralAvatarProto_eye_gradient_id).String())
+}
+
+func (x PlayerNeutralAvatarProto) GetNeutralAvatarLegacyMappingVersion() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerNeutralAvatarProto_neutral_avatar_legacy_mapping_version).Int())
+}
+
+// PlayerNeutralColorKey wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerNeutralColorKey message.
+type PlayerNeutralColorKey struct{ m protoreflect.Message }
+
+// AsPlayerNeutralColorKey wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerNeutralColorKey .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerNeutralColorKey(m protoreflect.Message) PlayerNeutralColorKey {
+	if m == nil || !m.IsValid() {
+		return PlayerNeutralColorKey{}
+	}
+	return PlayerNeutralColorKey{m}
+}
+
+func (x PlayerNeutralColorKey) IsZero() bool { return x.m == nil }
+
+func (x PlayerNeutralColorKey) GetKeyPosition() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralColorKey_key_position).Float())
+}
+
+func (x PlayerNeutralColorKey) GetRed() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralColorKey_red).Float())
+}
+
+func (x PlayerNeutralColorKey) GetGreen() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralColorKey_green).Float())
+}
+
+func (x PlayerNeutralColorKey) GetBlue() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerNeutralColorKey_blue).Float())
+}
+
+// PlayerPublicProfileProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerPublicProfileProto message.
+type PlayerPublicProfileProto struct{ m protoreflect.Message }
+
+// AsPlayerPublicProfileProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerPublicProfileProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerPublicProfileProto(m protoreflect.Message) PlayerPublicProfileProto {
+	if m == nil || !m.IsValid() {
+		return PlayerPublicProfileProto{}
+	}
+	return PlayerPublicProfileProto{m}
+}
+
+func (x PlayerPublicProfileProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerPublicProfileProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_PlayerPublicProfileProto_name).String())
+}
+
+func (x PlayerPublicProfileProto) GetLevel() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerPublicProfileProto_level).Int())
+}
+
+func (x PlayerPublicProfileProto) HasAvatar() bool {
+	return x.m != nil && x.m.Has(fd_PlayerPublicProfileProto_avatar)
+}
+
+func (x PlayerPublicProfileProto) GetAvatar() PlayerAvatarProto {
+	if x.m == nil {
+		return PlayerAvatarProto{}
+	}
+	if v := x.m.Get(fd_PlayerPublicProfileProto_avatar).Message(); v.IsValid() {
+		return PlayerAvatarProto{v}
+	}
+	return PlayerAvatarProto{}
+}
+
+func (x PlayerPublicProfileProto) GetTeam() pogo.Team {
+	if x.m == nil {
+		return pogo.Team(0)
+	}
+	return pogo.Team(x.m.Get(fd_PlayerPublicProfileProto_team).Enum())
+}
+
+func (x PlayerPublicProfileProto) GetBattlesWon() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerPublicProfileProto_battles_won).Int())
+}
+
+func (x PlayerPublicProfileProto) GetKmWalked() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerPublicProfileProto_km_walked).Float())
+}
+
+func (x PlayerPublicProfileProto) GetCaughtPokemon() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerPublicProfileProto_caught_pokemon).Int())
+}
+
+func (x PlayerPublicProfileProto) GetGymBadgeType() pogo.GymBadgeType {
+	if x.m == nil {
+		return pogo.GymBadgeType(0)
+	}
+	return pogo.GymBadgeType(x.m.Get(fd_PlayerPublicProfileProto_gym_badge_type).Enum())
+}
+
+func (x PlayerPublicProfileProto) GetBadges() PlayerBadgeProtoList {
+	if x.m == nil {
+		return PlayerBadgeProtoList{}
+	}
+	return PlayerBadgeProtoList{x.m.Get(fd_PlayerPublicProfileProto_badges).List()}
+}
+
+func (x PlayerPublicProfileProto) GetExperience() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerPublicProfileProto_experience).Int()
+}
+
+func (x PlayerPublicProfileProto) GetHasSharedExPass() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_PlayerPublicProfileProto_has_shared_ex_pass).Bool()
+}
+
+func (x PlayerPublicProfileProto) GetCombatRank() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerPublicProfileProto_combat_rank).Int())
+}
+
+func (x PlayerPublicProfileProto) GetCombatRating() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_PlayerPublicProfileProto_combat_rating).Float())
+}
+
+func (x PlayerPublicProfileProto) HasTimedGroupChallengeStats() bool {
+	return x.m != nil && x.m.Has(fd_PlayerPublicProfileProto_timed_group_challenge_stats)
+}
+
+func (x PlayerPublicProfileProto) GetTimedGroupChallengeStats() TimedGroupChallengePlayerStatsProto {
+	if x.m == nil {
+		return TimedGroupChallengePlayerStatsProto{}
+	}
+	if v := x.m.Get(fd_PlayerPublicProfileProto_timed_group_challenge_stats).Message(); v.IsValid() {
+		return TimedGroupChallengePlayerStatsProto{v}
+	}
+	return TimedGroupChallengePlayerStatsProto{}
+}
+
+func (x PlayerPublicProfileProto) HasNeutralAvatar() bool {
+	return x.m != nil && x.m.Has(fd_PlayerPublicProfileProto_neutral_avatar)
+}
+
+func (x PlayerPublicProfileProto) GetNeutralAvatar() PlayerNeutralAvatarProto {
+	if x.m == nil {
+		return PlayerNeutralAvatarProto{}
+	}
+	if v := x.m.Get(fd_PlayerPublicProfileProto_neutral_avatar).Message(); v.IsValid() {
+		return PlayerNeutralAvatarProto{v}
+	}
+	return PlayerNeutralAvatarProto{}
+}
+
+// PlayerRaidInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerRaidInfoProto message.
+type PlayerRaidInfoProto struct{ m protoreflect.Message }
+
+// AsPlayerRaidInfoProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerRaidInfoProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerRaidInfoProto(m protoreflect.Message) PlayerRaidInfoProto {
+	if m == nil || !m.IsValid() {
+		return PlayerRaidInfoProto{}
+	}
+	return PlayerRaidInfoProto{m}
+}
+
+func (x PlayerRaidInfoProto) IsZero() bool { return x.m == nil }
+
+func (x PlayerRaidInfoProto) GetTotalCompletedRaids() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerRaidInfoProto_total_completed_raids).Int())
+}
+
+func (x PlayerRaidInfoProto) GetTotalCompletedLegendaryRaids() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerRaidInfoProto_total_completed_legendary_raids).Int())
+}
+
+func (x PlayerRaidInfoProto) GetRaids() RaidProtoList {
+	if x.m == nil {
+		return RaidProtoList{}
+	}
+	return RaidProtoList{x.m.Get(fd_PlayerRaidInfoProto_raids).List()}
+}
+
+func (x PlayerRaidInfoProto) GetTotalRemoteRaids() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_PlayerRaidInfoProto_total_remote_raids).Int())
+}
+
+// PlayerRouteStats wraps a hyperpb/protoreflect POGOProtos.Rpc.PlayerRouteStats message.
+type PlayerRouteStats struct{ m protoreflect.Message }
+
+// AsPlayerRouteStats wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PlayerRouteStats .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPlayerRouteStats(m protoreflect.Message) PlayerRouteStats {
+	if m == nil || !m.IsValid() {
+		return PlayerRouteStats{}
+	}
+	return PlayerRouteStats{m}
+}
+
+func (x PlayerRouteStats) IsZero() bool { return x.m == nil }
+
+func (x PlayerRouteStats) GetNumCompletions() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerRouteStats_num_completions).Int()
+}
+
+func (x PlayerRouteStats) GetCooldownFinishMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_PlayerRouteStats_cooldown_finish_ms).Int()
 }
 
 // PokemonBonusStatLevelProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonBonusStatLevelProto message.
@@ -3361,6 +13050,23 @@ func (x PokemonEvolutionQuestProto) GetForm() pogo.PokemonDisplayProto_Form {
 	}
 	return pogo.PokemonDisplayProto_Form(x.m.Get(fd_PokemonEvolutionQuestProto_form).Enum())
 }
+
+// PokemonExchangeEntryProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonExchangeEntryProto message.
+type PokemonExchangeEntryProto struct{ m protoreflect.Message }
+
+// AsPokemonExchangeEntryProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.PokemonExchangeEntryProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsPokemonExchangeEntryProto(m protoreflect.Message) PokemonExchangeEntryProto {
+	if m == nil || !m.IsValid() {
+		return PokemonExchangeEntryProto{}
+	}
+	return PokemonExchangeEntryProto{m}
+}
+
+func (x PokemonExchangeEntryProto) IsZero() bool { return x.m == nil }
 
 // PokemonFortProto wraps a hyperpb/protoreflect POGOProtos.Rpc.PokemonFortProto message.
 type PokemonFortProto struct{ m protoreflect.Message }
@@ -4809,6 +14515,273 @@ func (x PostcardCreateDetail) GetReceivedTimeMs() int64 {
 	return x.m.Get(fd_PostcardCreateDetail_received_time_ms).Int()
 }
 
+// ProcessTappableOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ProcessTappableOutProto message.
+type ProcessTappableOutProto struct{ m protoreflect.Message }
+
+// AsProcessTappableOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ProcessTappableOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsProcessTappableOutProto(m protoreflect.Message) ProcessTappableOutProto {
+	if m == nil || !m.IsValid() {
+		return ProcessTappableOutProto{}
+	}
+	return ProcessTappableOutProto{m}
+}
+
+func (x ProcessTappableOutProto) IsZero() bool { return x.m == nil }
+
+func (x ProcessTappableOutProto) GetStatus() pogo.ProcessTappableOutProto_Status {
+	if x.m == nil {
+		return pogo.ProcessTappableOutProto_Status(0)
+	}
+	return pogo.ProcessTappableOutProto_Status(x.m.Get(fd_ProcessTappableOutProto_status).Enum())
+}
+
+func (x ProcessTappableOutProto) GetReward() LootProtoList {
+	if x.m == nil {
+		return LootProtoList{}
+	}
+	return LootProtoList{x.m.Get(fd_ProcessTappableOutProto_reward).List()}
+}
+
+func (x ProcessTappableOutProto) HasEncounter() bool {
+	return x.m != nil && x.m.Has(fd_ProcessTappableOutProto_encounter)
+}
+
+func (x ProcessTappableOutProto) GetEncounter() TappableEncounterProto {
+	if x.m == nil {
+		return TappableEncounterProto{}
+	}
+	if v := x.m.Get(fd_ProcessTappableOutProto_encounter).Message(); v.IsValid() {
+		return TappableEncounterProto{v}
+	}
+	return TappableEncounterProto{}
+}
+
+// ProcessTappableProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ProcessTappableProto message.
+type ProcessTappableProto struct{ m protoreflect.Message }
+
+// AsProcessTappableProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ProcessTappableProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsProcessTappableProto(m protoreflect.Message) ProcessTappableProto {
+	if m == nil || !m.IsValid() {
+		return ProcessTappableProto{}
+	}
+	return ProcessTappableProto{m}
+}
+
+func (x ProcessTappableProto) IsZero() bool { return x.m == nil }
+
+func (x ProcessTappableProto) GetId() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_ProcessTappableProto_id).List()}
+}
+
+func (x ProcessTappableProto) HasLocation() bool {
+	return x.m != nil && x.m.Has(fd_ProcessTappableProto_location)
+}
+
+func (x ProcessTappableProto) GetLocation() TappableLocation {
+	if x.m == nil {
+		return TappableLocation{}
+	}
+	if v := x.m.Get(fd_ProcessTappableProto_location).Message(); v.IsValid() {
+		return TappableLocation{v}
+	}
+	return TappableLocation{}
+}
+
+func (x ProcessTappableProto) GetTappableTypeId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ProcessTappableProto_tappable_type_id).String())
+}
+
+func (x ProcessTappableProto) GetEncounterId() uint64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ProcessTappableProto_encounter_id).Uint()
+}
+
+func (x ProcessTappableProto) GetLocationHintLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ProcessTappableProto_location_hint_lat).Float()
+}
+
+func (x ProcessTappableProto) GetLocationHintLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_ProcessTappableProto_location_hint_lng).Float()
+}
+
+// ProxyRequestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ProxyRequestProto message.
+type ProxyRequestProto struct{ m protoreflect.Message }
+
+// AsProxyRequestProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ProxyRequestProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsProxyRequestProto(m protoreflect.Message) ProxyRequestProto {
+	if m == nil || !m.IsValid() {
+		return ProxyRequestProto{}
+	}
+	return ProxyRequestProto{m}
+}
+
+func (x ProxyRequestProto) IsZero() bool { return x.m == nil }
+
+func (x ProxyRequestProto) GetAction() uint32 {
+	if x.m == nil {
+		return 0
+	}
+	return uint32(x.m.Get(fd_ProxyRequestProto_action).Uint())
+}
+
+func (x ProxyRequestProto) GetHost() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ProxyRequestProto_host).String())
+}
+
+func (x ProxyRequestProto) GetPayload() []byte {
+	if x.m == nil {
+		return nil
+	}
+	return bytes.Clone(x.m.Get(fd_ProxyRequestProto_payload).Bytes())
+}
+
+// ProxyResponseProto wraps a hyperpb/protoreflect POGOProtos.Rpc.ProxyResponseProto message.
+type ProxyResponseProto struct{ m protoreflect.Message }
+
+// AsProxyResponseProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.ProxyResponseProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsProxyResponseProto(m protoreflect.Message) ProxyResponseProto {
+	if m == nil || !m.IsValid() {
+		return ProxyResponseProto{}
+	}
+	return ProxyResponseProto{m}
+}
+
+func (x ProxyResponseProto) IsZero() bool { return x.m == nil }
+
+func (x ProxyResponseProto) GetStatus() pogo.ProxyResponseProto_Status {
+	if x.m == nil {
+		return pogo.ProxyResponseProto_Status(0)
+	}
+	return pogo.ProxyResponseProto_Status(x.m.Get(fd_ProxyResponseProto_status).Enum())
+}
+
+func (x ProxyResponseProto) GetAssignedHost() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_ProxyResponseProto_assigned_host).String())
+}
+
+func (x ProxyResponseProto) GetPayload() []byte {
+	if x.m == nil {
+		return nil
+	}
+	return bytes.Clone(x.m.Get(fd_ProxyResponseProto_payload).Bytes())
+}
+
+// QuestBranchDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestBranchDisplayProto message.
+type QuestBranchDisplayProto struct{ m protoreflect.Message }
+
+// AsQuestBranchDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestBranchDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestBranchDisplayProto(m protoreflect.Message) QuestBranchDisplayProto {
+	if m == nil || !m.IsValid() {
+		return QuestBranchDisplayProto{}
+	}
+	return QuestBranchDisplayProto{m}
+}
+
+func (x QuestBranchDisplayProto) IsZero() bool { return x.m == nil }
+
+func (x QuestBranchDisplayProto) GetTitleKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_title_key).String())
+}
+
+func (x QuestBranchDisplayProto) GetDescriptionKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_description_key).String())
+}
+
+func (x QuestBranchDisplayProto) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_image_url).String())
+}
+
+func (x QuestBranchDisplayProto) GetButtonBackgroundColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_button_background_color).String())
+}
+
+func (x QuestBranchDisplayProto) GetButtonTextKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_button_text_key).String())
+}
+
+func (x QuestBranchDisplayProto) GetButtonBackgroundImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_button_background_image_url).String())
+}
+
+func (x QuestBranchDisplayProto) GetButtonTextColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_button_text_color).String())
+}
+
+func (x QuestBranchDisplayProto) GetButtonTextOffset() float32 {
+	if x.m == nil {
+		return 0
+	}
+	return float32(x.m.Get(fd_QuestBranchDisplayProto_button_text_offset).Float())
+}
+
+func (x QuestBranchDisplayProto) GetArrowButtonColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestBranchDisplayProto_arrow_button_color).String())
+}
+
 // QuestBranchRewardProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestBranchRewardProto message.
 type QuestBranchRewardProto struct{ m protoreflect.Message }
 
@@ -5635,6 +15608,299 @@ func (x QuestCreateDetail) GetOrigin() pogo.EncounterType {
 		return pogo.EncounterType(0)
 	}
 	return pogo.EncounterType(x.m.Get(fd_QuestCreateDetail_origin).Enum())
+}
+
+// QuestDialogProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestDialogProto message.
+type QuestDialogProto struct{ m protoreflect.Message }
+
+// AsQuestDialogProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestDialogProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestDialogProto(m protoreflect.Message) QuestDialogProto {
+	if m == nil || !m.IsValid() {
+		return QuestDialogProto{}
+	}
+	return QuestDialogProto{m}
+}
+
+func (x QuestDialogProto) IsZero() bool { return x.m == nil }
+
+func (x QuestDialogProto) GetText() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_text).String())
+}
+
+func (x QuestDialogProto) GetExpression() pogo.QuestDialogProto_CharacterExpression {
+	if x.m == nil {
+		return pogo.QuestDialogProto_CharacterExpression(0)
+	}
+	return pogo.QuestDialogProto_CharacterExpression(x.m.Get(fd_QuestDialogProto_expression).Enum())
+}
+
+func (x QuestDialogProto) GetImageUri() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_image_uri).String())
+}
+
+func (x QuestDialogProto) GetCharacter() pogo.QuestDialogProto_Character {
+	if x.m == nil {
+		return pogo.QuestDialogProto_Character(0)
+	}
+	return pogo.QuestDialogProto_Character(x.m.Get(fd_QuestDialogProto_character).Enum())
+}
+
+func (x QuestDialogProto) GetCharacterOffset() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_QuestDialogProto_character_offset).List()}
+}
+
+func (x QuestDialogProto) GetTextBackgroundColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_text_background_color).String())
+}
+
+func (x QuestDialogProto) GetCharacterTint() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_character_tint).String())
+}
+
+func (x QuestDialogProto) GetTextTitleStringId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_text_title_string_id).String())
+}
+
+func (x QuestDialogProto) GetQuestMusicOverrideKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDialogProto_quest_music_override_key).String())
+}
+
+// QuestDisplayProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestDisplayProto message.
+type QuestDisplayProto struct{ m protoreflect.Message }
+
+// AsQuestDisplayProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.QuestDisplayProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsQuestDisplayProto(m protoreflect.Message) QuestDisplayProto {
+	if m == nil || !m.IsValid() {
+		return QuestDisplayProto{}
+	}
+	return QuestDisplayProto{m}
+}
+
+func (x QuestDisplayProto) IsZero() bool { return x.m == nil }
+
+func (x QuestDisplayProto) GetQuestId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_quest_id).String())
+}
+
+func (x QuestDisplayProto) GetDialog() QuestDialogProtoList {
+	if x.m == nil {
+		return QuestDialogProtoList{}
+	}
+	return QuestDialogProtoList{x.m.Get(fd_QuestDisplayProto_dialog).List()}
+}
+
+func (x QuestDisplayProto) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_description).String())
+}
+
+func (x QuestDisplayProto) GetTitle() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_title).String())
+}
+
+func (x QuestDisplayProto) GetSlot() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_QuestDisplayProto_slot).Int())
+}
+
+func (x QuestDisplayProto) GetSubquestDisplays() QuestDisplayProtoList {
+	if x.m == nil {
+		return QuestDisplayProtoList{}
+	}
+	return QuestDisplayProtoList{x.m.Get(fd_QuestDisplayProto_subquest_displays).List()}
+}
+
+func (x QuestDisplayProto) GetStoryEndingQuest() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_QuestDisplayProto_story_ending_quest).Bool()
+}
+
+func (x QuestDisplayProto) GetStoryEndingDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_story_ending_description).String())
+}
+
+func (x QuestDisplayProto) GetTagColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_tag_color).String())
+}
+
+func (x QuestDisplayProto) GetTagString() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_tag_string).String())
+}
+
+func (x QuestDisplayProto) GetSponsorString() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_sponsor_string).String())
+}
+
+func (x QuestDisplayProto) GetPartnerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_partner_id).String())
+}
+
+func (x QuestDisplayProto) GetIconName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_icon_name).String())
+}
+
+func (x QuestDisplayProto) GetBackgroundName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_background_name).String())
+}
+
+func (x QuestDisplayProto) GetForegroundName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_foreground_name).String())
+}
+
+func (x QuestDisplayProto) GetProgressInterval() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_QuestDisplayProto_progress_interval).Int())
+}
+
+func (x QuestDisplayProto) GetBranches() QuestBranchDisplayProtoList {
+	if x.m == nil {
+		return QuestBranchDisplayProtoList{}
+	}
+	return QuestBranchDisplayProtoList{x.m.Get(fd_QuestDisplayProto_branches).List()}
+}
+
+func (x QuestDisplayProto) GetForceReshowBranchingQuestDialogCooldownMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_QuestDisplayProto_force_reshow_branching_quest_dialog_cooldown_ms).Int()
+}
+
+func (x QuestDisplayProto) GetBranchingQuestStoryViewButtonKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_branching_quest_story_view_button_key).String())
+}
+
+func (x QuestDisplayProto) GetBranchingQuestStoryViewImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_branching_quest_story_view_image_url).String())
+}
+
+func (x QuestDisplayProto) GetQuestBranchChoiceViewBackgroundImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_quest_branch_choice_view_background_image_url).String())
+}
+
+func (x QuestDisplayProto) GetQuestBranchChoiceViewBackgroundColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_quest_branch_choice_view_background_color).String())
+}
+
+func (x QuestDisplayProto) GetPropName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_prop_name).String())
+}
+
+func (x QuestDisplayProto) GetQuestBranchChoiceViewHeaderBackgroundColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_quest_branch_choice_view_header_background_color).String())
+}
+
+func (x QuestDisplayProto) GetQuestBranchChoiceViewBottomGradientColor() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_quest_branch_choice_view_bottom_gradient_color).String())
+}
+
+func (x QuestDisplayProto) GetSortOrder() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_QuestDisplayProto_sort_order).Int())
+}
+
+func (x QuestDisplayProto) GetStoryQuestlineTitle() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_QuestDisplayProto_story_questline_title).String())
+}
+
+func (x QuestDisplayProto) GetEmptyNarrativeAnimationEnabled() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_QuestDisplayProto_empty_narrative_animation_enabled).Bool()
 }
 
 // QuestGoalProto wraps a hyperpb/protoreflect POGOProtos.Rpc.QuestGoalProto message.
@@ -6565,6 +16831,79 @@ func (x RaidCreateDetail) GetTempEvoId() pogo.HoloTemporaryEvolutionId {
 	return pogo.HoloTemporaryEvolutionId(x.m.Get(fd_RaidCreateDetail_temp_evo_id).Enum())
 }
 
+// RaidDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidDetails message.
+type RaidDetails struct{ m protoreflect.Message }
+
+// AsRaidDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RaidDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRaidDetails(m protoreflect.Message) RaidDetails {
+	if m == nil || !m.IsValid() {
+		return RaidDetails{}
+	}
+	return RaidDetails{m}
+}
+
+func (x RaidDetails) IsZero() bool { return x.m == nil }
+
+func (x RaidDetails) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RaidDetails_fort_id).String())
+}
+
+func (x RaidDetails) GetRaidSeed() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidDetails_raid_seed).Int()
+}
+
+func (x RaidDetails) GetLat() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidDetails_lat).Float()
+}
+
+func (x RaidDetails) GetLng() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidDetails_lng).Float()
+}
+
+func (x RaidDetails) GetFortName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RaidDetails_fort_name).String())
+}
+
+func (x RaidDetails) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RaidDetails_image_url).String())
+}
+
+func (x RaidDetails) HasRaidInfo() bool {
+	return x.m != nil && x.m.Has(fd_RaidDetails_raid_info)
+}
+
+func (x RaidDetails) GetRaidInfo() RaidInfoProto {
+	if x.m == nil {
+		return RaidInfoProto{}
+	}
+	if v := x.m.Get(fd_RaidDetails_raid_info).Message(); v.IsValid() {
+		return RaidInfoProto{v}
+	}
+	return RaidInfoProto{}
+}
+
 // RaidInfoProto wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidInfoProto message.
 type RaidInfoProto struct{ m protoreflect.Message }
 
@@ -6736,6 +17075,114 @@ func (x RaidInfoProto) GetDefaultRaidBall() pogo.Item {
 	return pogo.Item(x.m.Get(fd_RaidInfoProto_default_raid_ball).Enum())
 }
 
+// RaidProto wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidProto message.
+type RaidProto struct{ m protoreflect.Message }
+
+// AsRaidProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RaidProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRaidProto(m protoreflect.Message) RaidProto {
+	if m == nil || !m.IsValid() {
+		return RaidProto{}
+	}
+	return RaidProto{m}
+}
+
+func (x RaidProto) IsZero() bool { return x.m == nil }
+
+func (x RaidProto) GetRaidSeed() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidProto_raid_seed).Int()
+}
+
+func (x RaidProto) GetStartedMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidProto_started_ms).Int()
+}
+
+func (x RaidProto) GetCompletedMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidProto_completed_ms).Int()
+}
+
+func (x RaidProto) GetEncounterPokemonId() pogo.HoloPokemonId {
+	if x.m == nil {
+		return pogo.HoloPokemonId(0)
+	}
+	return pogo.HoloPokemonId(x.m.Get(fd_RaidProto_encounter_pokemon_id).Enum())
+}
+
+func (x RaidProto) GetCompletedBattle() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_completed_battle).Bool()
+}
+
+func (x RaidProto) GetReceivedRewards() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_received_rewards).Bool()
+}
+
+func (x RaidProto) GetFinishedEncounter() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_finished_encounter).Bool()
+}
+
+func (x RaidProto) GetReceivedDefaultRewards() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_received_default_rewards).Bool()
+}
+
+func (x RaidProto) GetIncrementedRaidFriends() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_incremented_raid_friends).Bool()
+}
+
+func (x RaidProto) GetCompletedBattleMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RaidProto_completed_battle_ms).Int()
+}
+
+func (x RaidProto) GetIsRemote() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RaidProto_is_remote).Bool()
+}
+
+func (x RaidProto) HasRewardPokemon() bool {
+	return x.m != nil && x.m.Has(fd_RaidProto_reward_pokemon)
+}
+
+func (x RaidProto) GetRewardPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_RaidProto_reward_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
 // RaidVisualEffect wraps a hyperpb/protoreflect POGOProtos.Rpc.RaidVisualEffect message.
 type RaidVisualEffect struct{ m protoreflect.Message }
 
@@ -6774,6 +17221,740 @@ func (x RaidVisualEffect) GetStopMillis() int64 {
 	return x.m.Get(fd_RaidVisualEffect_stop_millis).Int()
 }
 
+// RouteImageProto wraps a hyperpb/protoreflect POGOProtos.Rpc.RouteImageProto message.
+type RouteImageProto struct{ m protoreflect.Message }
+
+// AsRouteImageProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RouteImageProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRouteImageProto(m protoreflect.Message) RouteImageProto {
+	if m == nil || !m.IsValid() {
+		return RouteImageProto{}
+	}
+	return RouteImageProto{m}
+}
+
+func (x RouteImageProto) IsZero() bool { return x.m == nil }
+
+func (x RouteImageProto) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RouteImageProto_image_url).String())
+}
+
+func (x RouteImageProto) GetBorderColorHex() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RouteImageProto_border_color_hex).String())
+}
+
+// RoutePin wraps a hyperpb/protoreflect POGOProtos.Rpc.RoutePin message.
+type RoutePin struct{ m protoreflect.Message }
+
+// AsRoutePin wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RoutePin .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRoutePin(m protoreflect.Message) RoutePin {
+	if m == nil || !m.IsValid() {
+		return RoutePin{}
+	}
+	return RoutePin{m}
+}
+
+func (x RoutePin) IsZero() bool { return x.m == nil }
+
+func (x RoutePin) GetPinId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RoutePin_pin_id).String())
+}
+
+func (x RoutePin) GetLatDegrees() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_lat_degrees).Float()
+}
+
+func (x RoutePin) GetLngDegrees() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_lng_degrees).Float()
+}
+
+func (x RoutePin) HasCreatorInfo() bool {
+	return x.m != nil && x.m.Has(fd_RoutePin_creator_info)
+}
+
+func (x RoutePin) GetCreatorInfo() CreatorInfo {
+	if x.m == nil {
+		return CreatorInfo{}
+	}
+	if v := x.m.Get(fd_RoutePin_creator_info).Message(); v.IsValid() {
+		return CreatorInfo{v}
+	}
+	return CreatorInfo{}
+}
+
+func (x RoutePin) GetLastUpdatedTimestampMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_last_updated_timestamp_ms).Int()
+}
+
+func (x RoutePin) GetLikeVoteTotal() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_like_vote_total).Int()
+}
+
+func (x RoutePin) GetMessage() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RoutePin_message).String())
+}
+
+func (x RoutePin) GetStickerIds() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_RoutePin_sticker_ids).List()}
+}
+
+func (x RoutePin) GetStickerTotal() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_RoutePin_sticker_total).Int())
+}
+
+func (x RoutePin) GetCreatedTimestampMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_created_timestamp_ms).Int()
+}
+
+func (x RoutePin) GetRouteCreator() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_RoutePin_route_creator).Bool()
+}
+
+func (x RoutePin) GetScore() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RoutePin_score).Int()
+}
+
+// RoutePoiAnchor wraps a hyperpb/protoreflect POGOProtos.Rpc.RoutePoiAnchor message.
+type RoutePoiAnchor struct{ m protoreflect.Message }
+
+// AsRoutePoiAnchor wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RoutePoiAnchor .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRoutePoiAnchor(m protoreflect.Message) RoutePoiAnchor {
+	if m == nil || !m.IsValid() {
+		return RoutePoiAnchor{}
+	}
+	return RoutePoiAnchor{m}
+}
+
+func (x RoutePoiAnchor) IsZero() bool { return x.m == nil }
+
+func (x RoutePoiAnchor) HasAnchor() bool {
+	return x.m != nil && x.m.Has(fd_RoutePoiAnchor_anchor)
+}
+
+func (x RoutePoiAnchor) GetAnchor() RouteWaypointProto {
+	if x.m == nil {
+		return RouteWaypointProto{}
+	}
+	if v := x.m.Get(fd_RoutePoiAnchor_anchor).Message(); v.IsValid() {
+		return RouteWaypointProto{v}
+	}
+	return RouteWaypointProto{}
+}
+
+func (x RoutePoiAnchor) GetImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RoutePoiAnchor_image_url).String())
+}
+
+// RouteStats wraps a hyperpb/protoreflect POGOProtos.Rpc.RouteStats message.
+type RouteStats struct{ m protoreflect.Message }
+
+// AsRouteStats wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RouteStats .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRouteStats(m protoreflect.Message) RouteStats {
+	if m == nil || !m.IsValid() {
+		return RouteStats{}
+	}
+	return RouteStats{m}
+}
+
+func (x RouteStats) IsZero() bool { return x.m == nil }
+
+func (x RouteStats) GetNumCompletions() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_completions).Int()
+}
+
+func (x RouteStats) GetRouteLevel() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_route_level).Int()
+}
+
+func (x RouteStats) GetNumFiveStars() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_five_stars).Int()
+}
+
+func (x RouteStats) GetNumFourStars() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_four_stars).Int()
+}
+
+func (x RouteStats) GetNumThreeStars() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_three_stars).Int()
+}
+
+func (x RouteStats) GetNumTwoStars() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_two_stars).Int()
+}
+
+func (x RouteStats) GetNumOneStars() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_one_stars).Int()
+}
+
+func (x RouteStats) GetNumRatings() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_ratings).Int()
+}
+
+func (x RouteStats) GetFirstPlayedTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_first_played_time_ms).Int()
+}
+
+func (x RouteStats) GetLastPlayedTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_last_played_time_ms).Int()
+}
+
+func (x RouteStats) GetWeeklyNumCompletions() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_weekly_num_completions).Int()
+}
+
+func (x RouteStats) GetTotalDistanceTravelledMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_total_distance_travelled_meters).Float()
+}
+
+func (x RouteStats) GetWeeklyDistanceTravelledMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_weekly_distance_travelled_meters).Float()
+}
+
+func (x RouteStats) GetLastSyncedTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_last_synced_time_ms).Int()
+}
+
+func (x RouteStats) GetNumNameOrDescriptionIssues() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_name_or_description_issues).Int()
+}
+
+func (x RouteStats) GetNumShapeIssues() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_shape_issues).Int()
+}
+
+func (x RouteStats) GetNumConnectivityIssues() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_num_connectivity_issues).Int()
+}
+
+func (x RouteStats) GetScore() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteStats_score).Int()
+}
+
+// RouteSubmissionStatus wraps a hyperpb/protoreflect POGOProtos.Rpc.RouteSubmissionStatus message.
+type RouteSubmissionStatus struct{ m protoreflect.Message }
+
+// AsRouteSubmissionStatus wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RouteSubmissionStatus .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRouteSubmissionStatus(m protoreflect.Message) RouteSubmissionStatus {
+	if m == nil || !m.IsValid() {
+		return RouteSubmissionStatus{}
+	}
+	return RouteSubmissionStatus{m}
+}
+
+func (x RouteSubmissionStatus) IsZero() bool { return x.m == nil }
+
+func (x RouteSubmissionStatus) GetStatus() pogo.RouteSubmissionStatus_Status {
+	if x.m == nil {
+		return pogo.RouteSubmissionStatus_Status(0)
+	}
+	return pogo.RouteSubmissionStatus_Status(x.m.Get(fd_RouteSubmissionStatus_status).Enum())
+}
+
+func (x RouteSubmissionStatus) GetSubmissionStatusUpdateTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteSubmissionStatus_submission_status_update_time_ms).Int()
+}
+
+func (x RouteSubmissionStatus) GetRejectionReason() RouteSubmissionStatus_RejectionReasonList {
+	if x.m == nil {
+		return RouteSubmissionStatus_RejectionReasonList{}
+	}
+	return RouteSubmissionStatus_RejectionReasonList{x.m.Get(fd_RouteSubmissionStatus_rejection_reason).List()}
+}
+
+// RouteSubmissionStatus_RejectionReason wraps a hyperpb/protoreflect POGOProtos.Rpc.RouteSubmissionStatus.RejectionReason message.
+type RouteSubmissionStatus_RejectionReason struct{ m protoreflect.Message }
+
+// AsRouteSubmissionStatus_RejectionReason wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RouteSubmissionStatus_RejectionReason .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRouteSubmissionStatus_RejectionReason(m protoreflect.Message) RouteSubmissionStatus_RejectionReason {
+	if m == nil || !m.IsValid() {
+		return RouteSubmissionStatus_RejectionReason{}
+	}
+	return RouteSubmissionStatus_RejectionReason{m}
+}
+
+func (x RouteSubmissionStatus_RejectionReason) IsZero() bool { return x.m == nil }
+
+func (x RouteSubmissionStatus_RejectionReason) GetReasonCode() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RouteSubmissionStatus_RejectionReason_reason_code).String())
+}
+
+// RouteWaypointProto wraps a hyperpb/protoreflect POGOProtos.Rpc.RouteWaypointProto message.
+type RouteWaypointProto struct{ m protoreflect.Message }
+
+// AsRouteWaypointProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RouteWaypointProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRouteWaypointProto(m protoreflect.Message) RouteWaypointProto {
+	if m == nil || !m.IsValid() {
+		return RouteWaypointProto{}
+	}
+	return RouteWaypointProto{m}
+}
+
+func (x RouteWaypointProto) IsZero() bool { return x.m == nil }
+
+func (x RouteWaypointProto) GetFortId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RouteWaypointProto_fort_id).String())
+}
+
+func (x RouteWaypointProto) GetLatDegrees() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteWaypointProto_lat_degrees).Float()
+}
+
+func (x RouteWaypointProto) GetLngDegrees() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteWaypointProto_lng_degrees).Float()
+}
+
+func (x RouteWaypointProto) GetElevationInMeters() float64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteWaypointProto_elevation_in_meters).Float()
+}
+
+func (x RouteWaypointProto) GetTimestampMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_RouteWaypointProto_timestamp_ms).Int()
+}
+
+// RsvpCountDetails wraps a hyperpb/protoreflect POGOProtos.Rpc.RsvpCountDetails message.
+type RsvpCountDetails struct{ m protoreflect.Message }
+
+// AsRsvpCountDetails wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.RsvpCountDetails .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsRsvpCountDetails(m protoreflect.Message) RsvpCountDetails {
+	if m == nil || !m.IsValid() {
+		return RsvpCountDetails{}
+	}
+	return RsvpCountDetails{m}
+}
+
+func (x RsvpCountDetails) IsZero() bool { return x.m == nil }
+
+func (x RsvpCountDetails) GetLocationId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_RsvpCountDetails_location_id).String())
+}
+
+func (x RsvpCountDetails) GetGoingCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_RsvpCountDetails_going_count).Int())
+}
+
+func (x RsvpCountDetails) GetMaybeCount() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_RsvpCountDetails_maybe_count).Int())
+}
+
+// SharedRouteProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SharedRouteProto message.
+type SharedRouteProto struct{ m protoreflect.Message }
+
+// AsSharedRouteProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.SharedRouteProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsSharedRouteProto(m protoreflect.Message) SharedRouteProto {
+	if m == nil || !m.IsValid() {
+		return SharedRouteProto{}
+	}
+	return SharedRouteProto{m}
+}
+
+func (x SharedRouteProto) IsZero() bool { return x.m == nil }
+
+func (x SharedRouteProto) GetId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SharedRouteProto_id).String())
+}
+
+func (x SharedRouteProto) GetWaypoints() RouteWaypointProtoList {
+	if x.m == nil {
+		return RouteWaypointProtoList{}
+	}
+	return RouteWaypointProtoList{x.m.Get(fd_SharedRouteProto_waypoints).List()}
+}
+
+func (x SharedRouteProto) GetType() pogo.RouteType {
+	if x.m == nil {
+		return pogo.RouteType(0)
+	}
+	return pogo.RouteType(x.m.Get(fd_SharedRouteProto_type).Enum())
+}
+
+func (x SharedRouteProto) GetPathType() pogo.PathType {
+	if x.m == nil {
+		return pogo.PathType(0)
+	}
+	return pogo.PathType(x.m.Get(fd_SharedRouteProto_path_type).Enum())
+}
+
+func (x SharedRouteProto) GetName() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SharedRouteProto_name).String())
+}
+
+func (x SharedRouteProto) GetVersion() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_version).Int()
+}
+
+func (x SharedRouteProto) GetDescription() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SharedRouteProto_description).String())
+}
+
+func (x SharedRouteProto) HasCreatorInfo() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_creator_info)
+}
+
+func (x SharedRouteProto) GetCreatorInfo() CreatorInfo {
+	if x.m == nil {
+		return CreatorInfo{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_creator_info).Message(); v.IsValid() {
+		return CreatorInfo{v}
+	}
+	return CreatorInfo{}
+}
+
+func (x SharedRouteProto) GetReversible() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_SharedRouteProto_reversible).Bool()
+}
+
+func (x SharedRouteProto) GetSubmissionTime() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_submission_time).Int()
+}
+
+func (x SharedRouteProto) GetRouteDistanceMeters() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_route_distance_meters).Int()
+}
+
+func (x SharedRouteProto) GetRouteDurationSeconds() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_route_duration_seconds).Int()
+}
+
+func (x SharedRouteProto) GetPins() RoutePinList {
+	if x.m == nil {
+		return RoutePinList{}
+	}
+	return RoutePinList{x.m.Get(fd_SharedRouteProto_pins).List()}
+}
+
+func (x SharedRouteProto) GetTags() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_SharedRouteProto_tags).List()}
+}
+
+func (x SharedRouteProto) HasSponsorMetadata() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_sponsor_metadata)
+}
+
+func (x SharedRouteProto) GetSponsorMetadata() SponsoredDetailsProto {
+	if x.m == nil {
+		return SponsoredDetailsProto{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_sponsor_metadata).Message(); v.IsValid() {
+		return SponsoredDetailsProto{v}
+	}
+	return SponsoredDetailsProto{}
+}
+
+func (x SharedRouteProto) GetInclineType() pogo.RouteInclineType {
+	if x.m == nil {
+		return pogo.RouteInclineType(0)
+	}
+	return pogo.RouteInclineType(x.m.Get(fd_SharedRouteProto_incline_type).Enum())
+}
+
+func (x SharedRouteProto) HasAggregatedStats() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_aggregated_stats)
+}
+
+func (x SharedRouteProto) GetAggregatedStats() RouteStats {
+	if x.m == nil {
+		return RouteStats{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_aggregated_stats).Message(); v.IsValid() {
+		return RouteStats{v}
+	}
+	return RouteStats{}
+}
+
+func (x SharedRouteProto) HasPlayerStats() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_player_stats)
+}
+
+func (x SharedRouteProto) GetPlayerStats() PlayerRouteStats {
+	if x.m == nil {
+		return PlayerRouteStats{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_player_stats).Message(); v.IsValid() {
+		return PlayerRouteStats{v}
+	}
+	return PlayerRouteStats{}
+}
+
+func (x SharedRouteProto) HasImage() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_image)
+}
+
+func (x SharedRouteProto) GetImage() RouteImageProto {
+	if x.m == nil {
+		return RouteImageProto{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_image).Message(); v.IsValid() {
+		return RouteImageProto{v}
+	}
+	return RouteImageProto{}
+}
+
+func (x SharedRouteProto) GetRouteSubmissionStatus() RouteSubmissionStatusList {
+	if x.m == nil {
+		return RouteSubmissionStatusList{}
+	}
+	return RouteSubmissionStatusList{x.m.Get(fd_SharedRouteProto_route_submission_status).List()}
+}
+
+func (x SharedRouteProto) HasStartPoi() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_start_poi)
+}
+
+func (x SharedRouteProto) GetStartPoi() RoutePoiAnchor {
+	if x.m == nil {
+		return RoutePoiAnchor{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_start_poi).Message(); v.IsValid() {
+		return RoutePoiAnchor{v}
+	}
+	return RoutePoiAnchor{}
+}
+
+func (x SharedRouteProto) HasEndPoi() bool {
+	return x.m != nil && x.m.Has(fd_SharedRouteProto_end_poi)
+}
+
+func (x SharedRouteProto) GetEndPoi() RoutePoiAnchor {
+	if x.m == nil {
+		return RoutePoiAnchor{}
+	}
+	if v := x.m.Get(fd_SharedRouteProto_end_poi).Message(); v.IsValid() {
+		return RoutePoiAnchor{v}
+	}
+	return RoutePoiAnchor{}
+}
+
+func (x SharedRouteProto) GetS2GroundCells() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_SharedRouteProto_s2_ground_cells).List()}
+}
+
+func (x SharedRouteProto) GetEditCount() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_edit_count).Int()
+}
+
+func (x SharedRouteProto) GetEditablePostRejection() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_SharedRouteProto_editable_post_rejection).Bool()
+}
+
+func (x SharedRouteProto) GetLastEditTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_last_edit_time_ms).Int()
+}
+
+func (x SharedRouteProto) GetSubmissionCount() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_SharedRouteProto_submission_count).Int()
+}
+
+func (x SharedRouteProto) GetShortCode() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SharedRouteProto_short_code).String())
+}
+
 // SpinPokestopQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SpinPokestopQuestProto message.
 type SpinPokestopQuestProto struct{ m protoreflect.Message }
 
@@ -6796,6 +17977,176 @@ func (x SpinPokestopQuestProto) GetFortIds() ScalarList {
 		return ScalarList{}
 	}
 	return ScalarList{x.m.Get(fd_SpinPokestopQuestProto_fort_ids).List()}
+}
+
+// SponsoredDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SponsoredDetailsProto message.
+type SponsoredDetailsProto struct{ m protoreflect.Message }
+
+// AsSponsoredDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.SponsoredDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsSponsoredDetailsProto(m protoreflect.Message) SponsoredDetailsProto {
+	if m == nil || !m.IsValid() {
+		return SponsoredDetailsProto{}
+	}
+	return SponsoredDetailsProto{m}
+}
+
+func (x SponsoredDetailsProto) IsZero() bool { return x.m == nil }
+
+func (x SponsoredDetailsProto) GetPromoImageUrl() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_SponsoredDetailsProto_promo_image_url).List()}
+}
+
+func (x SponsoredDetailsProto) GetPromoDescription() ScalarList {
+	if x.m == nil {
+		return ScalarList{}
+	}
+	return ScalarList{x.m.Get(fd_SponsoredDetailsProto_promo_description).List()}
+}
+
+func (x SponsoredDetailsProto) GetCallToActionLink() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SponsoredDetailsProto_call_to_action_link).String())
+}
+
+func (x SponsoredDetailsProto) GetPromoButtonMessageType() pogo.SponsoredDetailsProto_PromoButtonMessageType {
+	if x.m == nil {
+		return pogo.SponsoredDetailsProto_PromoButtonMessageType(0)
+	}
+	return pogo.SponsoredDetailsProto_PromoButtonMessageType(x.m.Get(fd_SponsoredDetailsProto_promo_button_message_type).Enum())
+}
+
+func (x SponsoredDetailsProto) GetCampaignId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_SponsoredDetailsProto_campaign_id).String())
+}
+
+func (x SponsoredDetailsProto) HasPromoImageCreative() bool {
+	return x.m != nil && x.m.Has(fd_SponsoredDetailsProto_promo_image_creative)
+}
+
+func (x SponsoredDetailsProto) GetPromoImageCreative() ImageTextCreativeProto {
+	if x.m == nil {
+		return ImageTextCreativeProto{}
+	}
+	if v := x.m.Get(fd_SponsoredDetailsProto_promo_image_creative).Message(); v.IsValid() {
+		return ImageTextCreativeProto{v}
+	}
+	return ImageTextCreativeProto{}
+}
+
+func (x SponsoredDetailsProto) GetImpressionTrackingTag() ImpressionTrackingTagList {
+	if x.m == nil {
+		return ImpressionTrackingTagList{}
+	}
+	return ImpressionTrackingTagList{x.m.Get(fd_SponsoredDetailsProto_impression_tracking_tag).List()}
+}
+
+// StampCollectionGiftboxDetailsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.StampCollectionGiftboxDetailsProto message.
+type StampCollectionGiftboxDetailsProto struct{ m protoreflect.Message }
+
+// AsStampCollectionGiftboxDetailsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StampCollectionGiftboxDetailsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStampCollectionGiftboxDetailsProto(m protoreflect.Message) StampCollectionGiftboxDetailsProto {
+	if m == nil || !m.IsValid() {
+		return StampCollectionGiftboxDetailsProto{}
+	}
+	return StampCollectionGiftboxDetailsProto{m}
+}
+
+func (x StampCollectionGiftboxDetailsProto) IsZero() bool { return x.m == nil }
+
+func (x StampCollectionGiftboxDetailsProto) GetStampCollectionId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StampCollectionGiftboxDetailsProto_stamp_collection_id).String())
+}
+
+func (x StampCollectionGiftboxDetailsProto) GetStampImage() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StampCollectionGiftboxDetailsProto_stamp_image).String())
+}
+
+func (x StampCollectionGiftboxDetailsProto) GetListTitleKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StampCollectionGiftboxDetailsProto_list_title_key).String())
+}
+
+func (x StampCollectionGiftboxDetailsProto) GetListImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StampCollectionGiftboxDetailsProto_list_image_url).String())
+}
+
+func (x StampCollectionGiftboxDetailsProto) GetHeaderImageUrl() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StampCollectionGiftboxDetailsProto_header_image_url).String())
+}
+
+func (x StampCollectionGiftboxDetailsProto) GetUsesHeaderImages() bool {
+	if x.m == nil {
+		return false
+	}
+	return x.m.Get(fd_StampCollectionGiftboxDetailsProto_uses_header_images).Bool()
+}
+
+// StartIncidentOutProto wraps a hyperpb/protoreflect POGOProtos.Rpc.StartIncidentOutProto message.
+type StartIncidentOutProto struct{ m protoreflect.Message }
+
+// AsStartIncidentOutProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StartIncidentOutProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStartIncidentOutProto(m protoreflect.Message) StartIncidentOutProto {
+	if m == nil || !m.IsValid() {
+		return StartIncidentOutProto{}
+	}
+	return StartIncidentOutProto{m}
+}
+
+func (x StartIncidentOutProto) IsZero() bool { return x.m == nil }
+
+func (x StartIncidentOutProto) GetStatus() pogo.StartIncidentOutProto_Status {
+	if x.m == nil {
+		return pogo.StartIncidentOutProto_Status(0)
+	}
+	return pogo.StartIncidentOutProto_Status(x.m.Get(fd_StartIncidentOutProto_status).Enum())
+}
+
+func (x StartIncidentOutProto) HasIncident() bool {
+	return x.m != nil && x.m.Has(fd_StartIncidentOutProto_incident)
+}
+
+func (x StartIncidentOutProto) GetIncident() ClientIncidentProto {
+	if x.m == nil {
+		return ClientIncidentProto{}
+	}
+	if v := x.m.Get(fd_StartIncidentOutProto_incident).Message(); v.IsValid() {
+		return ClientIncidentProto{v}
+	}
+	return ClientIncidentProto{}
 }
 
 // StationCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.StationCreateDetail message.
@@ -6954,6 +18305,30 @@ func (x StickerRewardProto) GetAmount() int32 {
 	return int32(x.m.Get(fd_StickerRewardProto_amount).Int())
 }
 
+// StickerSentProto wraps a hyperpb/protoreflect POGOProtos.Rpc.StickerSentProto message.
+type StickerSentProto struct{ m protoreflect.Message }
+
+// AsStickerSentProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.StickerSentProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsStickerSentProto(m protoreflect.Message) StickerSentProto {
+	if m == nil || !m.IsValid() {
+		return StickerSentProto{}
+	}
+	return StickerSentProto{m}
+}
+
+func (x StickerSentProto) IsZero() bool { return x.m == nil }
+
+func (x StickerSentProto) GetStickerId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_StickerSentProto_sticker_id).String())
+}
+
 // SubmitSleepRecordsQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.SubmitSleepRecordsQuestProto message.
 type SubmitSleepRecordsQuestProto struct{ m protoreflect.Message }
 
@@ -7089,6 +18464,79 @@ func (x Tappable) GetExpirationTimeMs() int64 {
 	return x.m.Get(fd_Tappable_expiration_time_ms).Int()
 }
 
+// TappableEncounterProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TappableEncounterProto message.
+type TappableEncounterProto struct{ m protoreflect.Message }
+
+// AsTappableEncounterProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TappableEncounterProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsTappableEncounterProto(m protoreflect.Message) TappableEncounterProto {
+	if m == nil || !m.IsValid() {
+		return TappableEncounterProto{}
+	}
+	return TappableEncounterProto{m}
+}
+
+func (x TappableEncounterProto) IsZero() bool { return x.m == nil }
+
+func (x TappableEncounterProto) GetResult() pogo.TappableEncounterProto_Result {
+	if x.m == nil {
+		return pogo.TappableEncounterProto_Result(0)
+	}
+	return pogo.TappableEncounterProto_Result(x.m.Get(fd_TappableEncounterProto_result).Enum())
+}
+
+func (x TappableEncounterProto) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_TappableEncounterProto_pokemon)
+}
+
+func (x TappableEncounterProto) GetPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_TappableEncounterProto_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x TappableEncounterProto) HasCaptureProbability() bool {
+	return x.m != nil && x.m.Has(fd_TappableEncounterProto_capture_probability)
+}
+
+func (x TappableEncounterProto) GetCaptureProbability() CaptureProbabilityProto {
+	if x.m == nil {
+		return CaptureProbabilityProto{}
+	}
+	if v := x.m.Get(fd_TappableEncounterProto_capture_probability).Message(); v.IsValid() {
+		return CaptureProbabilityProto{v}
+	}
+	return CaptureProbabilityProto{}
+}
+
+func (x TappableEncounterProto) GetActiveItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_TappableEncounterProto_active_item).Enum())
+}
+
+func (x TappableEncounterProto) HasNpcEncounter() bool {
+	return x.m != nil && x.m.Has(fd_TappableEncounterProto_npc_encounter)
+}
+
+func (x TappableEncounterProto) GetNpcEncounter() NpcEncounterProto {
+	if x.m == nil {
+		return NpcEncounterProto{}
+	}
+	if v := x.m.Get(fd_TappableEncounterProto_npc_encounter).Message(); v.IsValid() {
+		return NpcEncounterProto{v}
+	}
+	return NpcEncounterProto{}
+}
+
 // TappableLocation wraps a hyperpb/protoreflect POGOProtos.Rpc.TappableLocation message.
 type TappableLocation struct{ m protoreflect.Message }
 
@@ -7118,6 +18566,63 @@ func (x TappableLocation) GetFortId() string {
 		return ""
 	}
 	return strings.Clone(x.m.Get(fd_TappableLocation_fort_id).String())
+}
+
+// TimedGroupChallengePlayerStatsProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TimedGroupChallengePlayerStatsProto message.
+type TimedGroupChallengePlayerStatsProto struct{ m protoreflect.Message }
+
+// AsTimedGroupChallengePlayerStatsProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TimedGroupChallengePlayerStatsProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsTimedGroupChallengePlayerStatsProto(m protoreflect.Message) TimedGroupChallengePlayerStatsProto {
+	if m == nil || !m.IsValid() {
+		return TimedGroupChallengePlayerStatsProto{}
+	}
+	return TimedGroupChallengePlayerStatsProto{m}
+}
+
+func (x TimedGroupChallengePlayerStatsProto) IsZero() bool { return x.m == nil }
+
+func (x TimedGroupChallengePlayerStatsProto) GetChallenges() TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList {
+	if x.m == nil {
+		return TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList{}
+	}
+	return TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList{x.m.Get(fd_TimedGroupChallengePlayerStatsProto_challenges).List()}
+}
+
+// TimedGroupChallengePlayerStatsProto_IndividualChallengeStats wraps a hyperpb/protoreflect POGOProtos.Rpc.TimedGroupChallengePlayerStatsProto.IndividualChallengeStats message.
+type TimedGroupChallengePlayerStatsProto_IndividualChallengeStats struct{ m protoreflect.Message }
+
+// AsTimedGroupChallengePlayerStatsProto_IndividualChallengeStats wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.TimedGroupChallengePlayerStatsProto_IndividualChallengeStats .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsTimedGroupChallengePlayerStatsProto_IndividualChallengeStats(m protoreflect.Message) TimedGroupChallengePlayerStatsProto_IndividualChallengeStats {
+	if m == nil || !m.IsValid() {
+		return TimedGroupChallengePlayerStatsProto_IndividualChallengeStats{}
+	}
+	return TimedGroupChallengePlayerStatsProto_IndividualChallengeStats{m}
+}
+
+func (x TimedGroupChallengePlayerStatsProto_IndividualChallengeStats) IsZero() bool {
+	return x.m == nil
+}
+
+func (x TimedGroupChallengePlayerStatsProto_IndividualChallengeStats) GetChallengeId() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_TimedGroupChallengePlayerStatsProto_IndividualChallengeStats_challenge_id).String())
+}
+
+func (x TimedGroupChallengePlayerStatsProto_IndividualChallengeStats) GetPlayerScore() int32 {
+	if x.m == nil {
+		return 0
+	}
+	return int32(x.m.Get(fd_TimedGroupChallengePlayerStatsProto_IndividualChallengeStats_player_score).Int())
 }
 
 // TradePokemonQuestProto wraps a hyperpb/protoreflect POGOProtos.Rpc.TradePokemonQuestProto message.
@@ -7190,6 +18695,72 @@ func (x TutorialCreateDetail) GetCaughtInWild() bool {
 		return false
 	}
 	return x.m.Get(fd_TutorialCreateDetail_caught_in_wild).Bool()
+}
+
+// VsActionHistory wraps a hyperpb/protoreflect POGOProtos.Rpc.VsActionHistory message.
+type VsActionHistory struct{ m protoreflect.Message }
+
+// AsVsActionHistory wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.VsActionHistory .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsVsActionHistory(m protoreflect.Message) VsActionHistory {
+	if m == nil || !m.IsValid() {
+		return VsActionHistory{}
+	}
+	return VsActionHistory{m}
+}
+
+func (x VsActionHistory) IsZero() bool { return x.m == nil }
+
+func (x VsActionHistory) GetInvokeTimeMs() int64 {
+	if x.m == nil {
+		return 0
+	}
+	return x.m.Get(fd_VsActionHistory_invoke_time_ms).Int()
+}
+
+func (x VsActionHistory) HasPokemon() bool {
+	return x.m != nil && x.m.Has(fd_VsActionHistory_pokemon)
+}
+
+func (x VsActionHistory) GetPokemon() PokemonProto {
+	if x.m == nil {
+		return PokemonProto{}
+	}
+	if v := x.m.Get(fd_VsActionHistory_pokemon).Message(); v.IsValid() {
+		return PokemonProto{v}
+	}
+	return PokemonProto{}
+}
+
+func (x VsActionHistory) HasMoveModifier() bool {
+	return x.m != nil && x.m.Has(fd_VsActionHistory_move_modifier)
+}
+
+func (x VsActionHistory) GetMoveModifier() MoveModifierProto {
+	if x.m == nil {
+		return MoveModifierProto{}
+	}
+	if v := x.m.Get(fd_VsActionHistory_move_modifier).Message(); v.IsValid() {
+		return MoveModifierProto{v}
+	}
+	return MoveModifierProto{}
+}
+
+func (x VsActionHistory) GetItem() pogo.Item {
+	if x.m == nil {
+		return pogo.Item(0)
+	}
+	return pogo.Item(x.m.Get(fd_VsActionHistory_item).Enum())
+}
+
+func (x VsActionHistory) GetMove() pogo.HoloPokemonMove {
+	if x.m == nil {
+		return pogo.HoloPokemonMove(0)
+	}
+	return pogo.HoloPokemonMove(x.m.Get(fd_VsActionHistory_move).Enum())
 }
 
 // VsSeekerCreateDetail wraps a hyperpb/protoreflect POGOProtos.Rpc.VsSeekerCreateDetail message.
@@ -8716,6 +20287,257 @@ func AsWithWinRaidStatusProto(m protoreflect.Message) WithWinRaidStatusProto {
 
 func (x WithWinRaidStatusProto) IsZero() bool { return x.m == nil }
 
+// YesNoSelectorProto wraps a hyperpb/protoreflect POGOProtos.Rpc.YesNoSelectorProto message.
+type YesNoSelectorProto struct{ m protoreflect.Message }
+
+// AsYesNoSelectorProto wraps a parsed message (e.g. from hyperpb). A nil or invalid
+// message (protoreflect.Message.IsValid() == false, which is what a
+// nil *pogo.YesNoSelectorProto .ProtoReflect() produces) yields the zero shim, so
+// wrapping a typed-nil pointer is indistinguishable from wrapping nothing
+// at all: IsZero() is true and every getter chains to its zero value.
+func AsYesNoSelectorProto(m protoreflect.Message) YesNoSelectorProto {
+	if m == nil || !m.IsValid() {
+		return YesNoSelectorProto{}
+	}
+	return YesNoSelectorProto{m}
+}
+
+func (x YesNoSelectorProto) IsZero() bool { return x.m == nil }
+
+func (x YesNoSelectorProto) GetYesKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_YesNoSelectorProto_yes_key).String())
+}
+
+func (x YesNoSelectorProto) GetNoKey() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_YesNoSelectorProto_no_key).String())
+}
+
+func (x YesNoSelectorProto) GetYesNextStep() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_YesNoSelectorProto_yes_next_step).String())
+}
+
+func (x YesNoSelectorProto) GetNoNextStep() string {
+	if x.m == nil {
+		return ""
+	}
+	return strings.Clone(x.m.Get(fd_YesNoSelectorProto_no_next_step).String())
+}
+
+type AppliedBonusProtoList struct{ l protoreflect.List }
+
+func (l AppliedBonusProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l AppliedBonusProtoList) At(i int) AppliedBonusProto {
+	return AppliedBonusProto{l.l.Get(i).Message()}
+}
+
+func (l AppliedBonusProtoList) All() iter.Seq[AppliedBonusProto] {
+	return func(yield func(AppliedBonusProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(AppliedBonusProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type AttackDefenseBonusAttributeSettingsProtoList struct{ l protoreflect.List }
+
+func (l AttackDefenseBonusAttributeSettingsProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l AttackDefenseBonusAttributeSettingsProtoList) At(i int) AttackDefenseBonusAttributeSettingsProto {
+	return AttackDefenseBonusAttributeSettingsProto{l.l.Get(i).Message()}
+}
+
+func (l AttackDefenseBonusAttributeSettingsProtoList) All() iter.Seq[AttackDefenseBonusAttributeSettingsProto] {
+	return func(yield func(AttackDefenseBonusAttributeSettingsProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(AttackDefenseBonusAttributeSettingsProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type AwardItemProtoList struct{ l protoreflect.List }
+
+func (l AwardItemProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l AwardItemProtoList) At(i int) AwardItemProto { return AwardItemProto{l.l.Get(i).Message()} }
+
+func (l AwardItemProtoList) All() iter.Seq[AwardItemProto] {
+	return func(yield func(AwardItemProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(AwardItemProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type BattleEventProtoList struct{ l protoreflect.List }
+
+func (l BattleEventProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l BattleEventProtoList) At(i int) BattleEventProto {
+	return BattleEventProto{l.l.Get(i).Message()}
+}
+
+func (l BattleEventProtoList) All() iter.Seq[BattleEventProto] {
+	return func(yield func(BattleEventProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(BattleEventProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type BattleEventProto_PositionalRosterEntryList struct{ l protoreflect.List }
+
+func (l BattleEventProto_PositionalRosterEntryList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l BattleEventProto_PositionalRosterEntryList) At(i int) BattleEventProto_PositionalRosterEntry {
+	return BattleEventProto_PositionalRosterEntry{l.l.Get(i).Message()}
+}
+
+func (l BattleEventProto_PositionalRosterEntryList) All() iter.Seq[BattleEventProto_PositionalRosterEntry] {
+	return func(yield func(BattleEventProto_PositionalRosterEntry) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(BattleEventProto_PositionalRosterEntry{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type BattleEventProto_PositionalRosterEntry_MaxMovesList struct{ l protoreflect.List }
+
+func (l BattleEventProto_PositionalRosterEntry_MaxMovesList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l BattleEventProto_PositionalRosterEntry_MaxMovesList) At(i int) BattleEventProto_PositionalRosterEntry_MaxMoves {
+	return BattleEventProto_PositionalRosterEntry_MaxMoves{l.l.Get(i).Message()}
+}
+
+func (l BattleEventProto_PositionalRosterEntry_MaxMovesList) All() iter.Seq[BattleEventProto_PositionalRosterEntry_MaxMoves] {
+	return func(yield func(BattleEventProto_PositionalRosterEntry_MaxMoves) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(BattleEventProto_PositionalRosterEntry_MaxMoves{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type BattleEventProto_StatChange_StatStageList struct{ l protoreflect.List }
+
+func (l BattleEventProto_StatChange_StatStageList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l BattleEventProto_StatChange_StatStageList) At(i int) BattleEventProto_StatChange_StatStage {
+	return BattleEventProto_StatChange_StatStage{l.l.Get(i).Message()}
+}
+
+func (l BattleEventProto_StatChange_StatStageList) All() iter.Seq[BattleEventProto_StatChange_StatStage] {
+	return func(yield func(BattleEventProto_StatChange_StatStage) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(BattleEventProto_StatChange_StatStage{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type BattleResourceProtoList struct{ l protoreflect.List }
+
+func (l BattleResourceProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l BattleResourceProtoList) At(i int) BattleResourceProto {
+	return BattleResourceProto{l.l.Get(i).Message()}
+}
+
+func (l BattleResourceProtoList) All() iter.Seq[BattleResourceProto] {
+	return func(yield func(BattleResourceProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(BattleResourceProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type BreadMoveSlotProtoList struct{ l protoreflect.List }
 
 func (l BreadMoveSlotProtoList) Len() int {
@@ -8742,6 +20564,84 @@ func (l BreadMoveSlotProtoList) All() iter.Seq[BreadMoveSlotProto] {
 	}
 }
 
+type ClientDialogueLineProtoList struct{ l protoreflect.List }
+
+func (l ClientDialogueLineProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ClientDialogueLineProtoList) At(i int) ClientDialogueLineProto {
+	return ClientDialogueLineProto{l.l.Get(i).Message()}
+}
+
+func (l ClientDialogueLineProtoList) All() iter.Seq[ClientDialogueLineProto] {
+	return func(yield func(ClientDialogueLineProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ClientDialogueLineProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ClientFortModifierProtoList struct{ l protoreflect.List }
+
+func (l ClientFortModifierProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ClientFortModifierProtoList) At(i int) ClientFortModifierProto {
+	return ClientFortModifierProto{l.l.Get(i).Message()}
+}
+
+func (l ClientFortModifierProtoList) All() iter.Seq[ClientFortModifierProto] {
+	return func(yield func(ClientFortModifierProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ClientFortModifierProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ClientIncidentStepProtoList struct{ l protoreflect.List }
+
+func (l ClientIncidentStepProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ClientIncidentStepProtoList) At(i int) ClientIncidentStepProto {
+	return ClientIncidentStepProto{l.l.Get(i).Message()}
+}
+
+func (l ClientIncidentStepProtoList) All() iter.Seq[ClientIncidentStepProto] {
+	return func(yield func(ClientIncidentStepProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ClientIncidentStepProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type ClientMapCellProtoList struct{ l protoreflect.List }
 
 func (l ClientMapCellProtoList) Len() int {
@@ -8762,6 +20662,58 @@ func (l ClientMapCellProtoList) All() iter.Seq[ClientMapCellProto] {
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(ClientMapCellProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ClientRouteGetProtoList struct{ l protoreflect.List }
+
+func (l ClientRouteGetProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ClientRouteGetProtoList) At(i int) ClientRouteGetProto {
+	return ClientRouteGetProto{l.l.Get(i).Message()}
+}
+
+func (l ClientRouteGetProtoList) All() iter.Seq[ClientRouteGetProto] {
+	return func(yield func(ClientRouteGetProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ClientRouteGetProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ClientRouteMapCellProtoList struct{ l protoreflect.List }
+
+func (l ClientRouteMapCellProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ClientRouteMapCellProtoList) At(i int) ClientRouteMapCellProto {
+	return ClientRouteMapCellProto{l.l.Get(i).Message()}
+}
+
+func (l ClientRouteMapCellProtoList) All() iter.Seq[ClientRouteMapCellProto] {
+	return func(yield func(ClientRouteMapCellProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ClientRouteMapCellProto{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -8820,6 +20772,108 @@ func (l ClientWeatherProtoList) All() iter.Seq[ClientWeatherProto] {
 	}
 }
 
+type CombatProto_CombatPokemonProtoList struct{ l protoreflect.List }
+
+func (l CombatProto_CombatPokemonProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l CombatProto_CombatPokemonProtoList) At(i int) CombatProto_CombatPokemonProto {
+	return CombatProto_CombatPokemonProto{l.l.Get(i).Message()}
+}
+
+func (l CombatProto_CombatPokemonProtoList) All() iter.Seq[CombatProto_CombatPokemonProto] {
+	return func(yield func(CombatProto_CombatPokemonProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(CombatProto_CombatPokemonProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ContestEntryProtoList struct{ l protoreflect.List }
+
+func (l ContestEntryProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ContestEntryProtoList) At(i int) ContestEntryProto {
+	return ContestEntryProto{l.l.Get(i).Message()}
+}
+
+func (l ContestEntryProtoList) All() iter.Seq[ContestEntryProto] {
+	return func(yield func(ContestEntryProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ContestEntryProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ContestFocusProtoList struct{ l protoreflect.List }
+
+func (l ContestFocusProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ContestFocusProtoList) At(i int) ContestFocusProto {
+	return ContestFocusProto{l.l.Get(i).Message()}
+}
+
+func (l ContestFocusProtoList) All() iter.Seq[ContestFocusProto] {
+	return func(yield func(ContestFocusProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ContestFocusProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type ContestProtoList struct{ l protoreflect.List }
+
+func (l ContestProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ContestProtoList) At(i int) ContestProto { return ContestProto{l.l.Get(i).Message()} }
+
+func (l ContestProtoList) All() iter.Seq[ContestProto] {
+	return func(yield func(ContestProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ContestProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type EggDistributionProto_EggDistributionEntryProtoList struct{ l protoreflect.List }
 
 func (l EggDistributionProto_EggDistributionEntryProtoList) Len() int {
@@ -8846,6 +20900,108 @@ func (l EggDistributionProto_EggDistributionEntryProtoList) All() iter.Seq[EggDi
 	}
 }
 
+type EventRsvpTimeslotProtoList struct{ l protoreflect.List }
+
+func (l EventRsvpTimeslotProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l EventRsvpTimeslotProtoList) At(i int) EventRsvpTimeslotProto {
+	return EventRsvpTimeslotProto{l.l.Get(i).Message()}
+}
+
+func (l EventRsvpTimeslotProtoList) All() iter.Seq[EventRsvpTimeslotProto] {
+	return func(yield func(EventRsvpTimeslotProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(EventRsvpTimeslotProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type EventRsvpTimeslotProto_RsvpPlayerList struct{ l protoreflect.List }
+
+func (l EventRsvpTimeslotProto_RsvpPlayerList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l EventRsvpTimeslotProto_RsvpPlayerList) At(i int) EventRsvpTimeslotProto_RsvpPlayer {
+	return EventRsvpTimeslotProto_RsvpPlayer{l.l.Get(i).Message()}
+}
+
+func (l EventRsvpTimeslotProto_RsvpPlayerList) All() iter.Seq[EventRsvpTimeslotProto_RsvpPlayer] {
+	return func(yield func(EventRsvpTimeslotProto_RsvpPlayer) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(EventRsvpTimeslotProto_RsvpPlayer{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type FoodValueList struct{ l protoreflect.List }
+
+func (l FoodValueList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l FoodValueList) At(i int) FoodValue { return FoodValue{l.l.Get(i).Message()} }
+
+func (l FoodValueList) All() iter.Seq[FoodValue] {
+	return func(yield func(FoodValue) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(FoodValue{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type FormRenderModifierList struct{ l protoreflect.List }
+
+func (l FormRenderModifierList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l FormRenderModifierList) At(i int) FormRenderModifier {
+	return FormRenderModifier{l.l.Get(i).Message()}
+}
+
+func (l FormRenderModifierList) All() iter.Seq[FormRenderModifier] {
+	return func(yield func(FormRenderModifier) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(FormRenderModifier{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type FortPokemonProtoList struct{ l protoreflect.List }
 
 func (l FortPokemonProtoList) Len() int {
@@ -8866,6 +21022,160 @@ func (l FortPokemonProtoList) All() iter.Seq[FortPokemonProto] {
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(FortPokemonProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GetMapFortsOutProto_FortProtoList struct{ l protoreflect.List }
+
+func (l GetMapFortsOutProto_FortProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GetMapFortsOutProto_FortProtoList) At(i int) GetMapFortsOutProto_FortProto {
+	return GetMapFortsOutProto_FortProto{l.l.Get(i).Message()}
+}
+
+func (l GetMapFortsOutProto_FortProtoList) All() iter.Seq[GetMapFortsOutProto_FortProto] {
+	return func(yield func(GetMapFortsOutProto_FortProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GetMapFortsOutProto_FortProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GetMapFortsOutProto_ImageList struct{ l protoreflect.List }
+
+func (l GetMapFortsOutProto_ImageList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GetMapFortsOutProto_ImageList) At(i int) GetMapFortsOutProto_Image {
+	return GetMapFortsOutProto_Image{l.l.Get(i).Message()}
+}
+
+func (l GetMapFortsOutProto_ImageList) All() iter.Seq[GetMapFortsOutProto_Image] {
+	return func(yield func(GetMapFortsOutProto_Image) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GetMapFortsOutProto_Image{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GetRoutesOutProto_RouteTabList struct{ l protoreflect.List }
+
+func (l GetRoutesOutProto_RouteTabList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GetRoutesOutProto_RouteTabList) At(i int) GetRoutesOutProto_RouteTab {
+	return GetRoutesOutProto_RouteTab{l.l.Get(i).Message()}
+}
+
+func (l GetRoutesOutProto_RouteTabList) All() iter.Seq[GetRoutesOutProto_RouteTab] {
+	return func(yield func(GetRoutesOutProto_RouteTab) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GetRoutesOutProto_RouteTab{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GiftBoxDetailsProtoList struct{ l protoreflect.List }
+
+func (l GiftBoxDetailsProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GiftBoxDetailsProtoList) At(i int) GiftBoxDetailsProto {
+	return GiftBoxDetailsProto{l.l.Get(i).Message()}
+}
+
+func (l GiftBoxDetailsProtoList) All() iter.Seq[GiftBoxDetailsProto] {
+	return func(yield func(GiftBoxDetailsProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GiftBoxDetailsProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GymBattleProtoList struct{ l protoreflect.List }
+
+func (l GymBattleProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GymBattleProtoList) At(i int) GymBattleProto { return GymBattleProto{l.l.Get(i).Message()} }
+
+func (l GymBattleProtoList) All() iter.Seq[GymBattleProto] {
+	return func(yield func(GymBattleProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GymBattleProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type GymDefenderProtoList struct{ l protoreflect.List }
+
+func (l GymDefenderProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l GymDefenderProtoList) At(i int) GymDefenderProto {
+	return GymDefenderProto{l.l.Get(i).Message()}
+}
+
+func (l GymDefenderProtoList) All() iter.Seq[GymDefenderProto] {
+	return func(yield func(GymDefenderProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(GymDefenderProto{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -8974,6 +21284,106 @@ func (l HyperlocalExperimentClientProtoList) All() iter.Seq[HyperlocalExperiment
 	}
 }
 
+type ImpressionTrackingTagList struct{ l protoreflect.List }
+
+func (l ImpressionTrackingTagList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l ImpressionTrackingTagList) At(i int) ImpressionTrackingTag {
+	return ImpressionTrackingTag{l.l.Get(i).Message()}
+}
+
+func (l ImpressionTrackingTagList) All() iter.Seq[ImpressionTrackingTag] {
+	return func(yield func(ImpressionTrackingTag) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(ImpressionTrackingTag{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type InternalFriendDetailsProtoList struct{ l protoreflect.List }
+
+func (l InternalFriendDetailsProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l InternalFriendDetailsProtoList) At(i int) InternalFriendDetailsProto {
+	return InternalFriendDetailsProto{l.l.Get(i).Message()}
+}
+
+func (l InternalFriendDetailsProtoList) All() iter.Seq[InternalFriendDetailsProto] {
+	return func(yield func(InternalFriendDetailsProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(InternalFriendDetailsProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type LootItemProtoList struct{ l protoreflect.List }
+
+func (l LootItemProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l LootItemProtoList) At(i int) LootItemProto { return LootItemProto{l.l.Get(i).Message()} }
+
+func (l LootItemProtoList) All() iter.Seq[LootItemProto] {
+	return func(yield func(LootItemProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(LootItemProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type LootProtoList struct{ l protoreflect.List }
+
+func (l LootProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l LootProtoList) At(i int) LootProto { return LootProto{l.l.Get(i).Message()} }
+
+func (l LootProtoList) All() iter.Seq[LootProto] {
+	return func(yield func(LootProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(LootProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type MapPokemonProtoList struct{ l protoreflect.List }
 
 func (l MapPokemonProtoList) Len() int {
@@ -9024,6 +21434,32 @@ func (l MiniCollectionPokemonList) All() iter.Seq[MiniCollectionPokemon] {
 	}
 }
 
+type MoveModifierProto_ModifierConditionList struct{ l protoreflect.List }
+
+func (l MoveModifierProto_ModifierConditionList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l MoveModifierProto_ModifierConditionList) At(i int) MoveModifierProto_ModifierCondition {
+	return MoveModifierProto_ModifierCondition{l.l.Get(i).Message()}
+}
+
+func (l MoveModifierProto_ModifierConditionList) All() iter.Seq[MoveModifierProto_ModifierCondition] {
+	return func(yield func(MoveModifierProto_ModifierCondition) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(MoveModifierProto_ModifierCondition{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type NearbyPokemonProtoList struct{ l protoreflect.List }
 
 func (l NearbyPokemonProtoList) Len() int {
@@ -9044,6 +21480,136 @@ func (l NearbyPokemonProtoList) All() iter.Seq[NearbyPokemonProto] {
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(NearbyPokemonProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type NpcEncounterProto_NpcEncounterStepList struct{ l protoreflect.List }
+
+func (l NpcEncounterProto_NpcEncounterStepList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l NpcEncounterProto_NpcEncounterStepList) At(i int) NpcEncounterProto_NpcEncounterStep {
+	return NpcEncounterProto_NpcEncounterStep{l.l.Get(i).Message()}
+}
+
+func (l NpcEncounterProto_NpcEncounterStepList) All() iter.Seq[NpcEncounterProto_NpcEncounterStep] {
+	return func(yield func(NpcEncounterProto_NpcEncounterStep) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(NpcEncounterProto_NpcEncounterStep{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type PlayerBadgeProtoList struct{ l protoreflect.List }
+
+func (l PlayerBadgeProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l PlayerBadgeProtoList) At(i int) PlayerBadgeProto {
+	return PlayerBadgeProto{l.l.Get(i).Message()}
+}
+
+func (l PlayerBadgeProtoList) All() iter.Seq[PlayerBadgeProto] {
+	return func(yield func(PlayerBadgeProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(PlayerBadgeProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type PlayerBadgeTierProtoList struct{ l protoreflect.List }
+
+func (l PlayerBadgeTierProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l PlayerBadgeTierProtoList) At(i int) PlayerBadgeTierProto {
+	return PlayerBadgeTierProto{l.l.Get(i).Message()}
+}
+
+func (l PlayerBadgeTierProtoList) All() iter.Seq[PlayerBadgeTierProto] {
+	return func(yield func(PlayerBadgeTierProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(PlayerBadgeTierProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type PlayerClientStationedPokemonProtoList struct{ l protoreflect.List }
+
+func (l PlayerClientStationedPokemonProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l PlayerClientStationedPokemonProtoList) At(i int) PlayerClientStationedPokemonProto {
+	return PlayerClientStationedPokemonProto{l.l.Get(i).Message()}
+}
+
+func (l PlayerClientStationedPokemonProtoList) All() iter.Seq[PlayerClientStationedPokemonProto] {
+	return func(yield func(PlayerClientStationedPokemonProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(PlayerClientStationedPokemonProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type PlayerNeutralColorKeyList struct{ l protoreflect.List }
+
+func (l PlayerNeutralColorKeyList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l PlayerNeutralColorKeyList) At(i int) PlayerNeutralColorKey {
+	return PlayerNeutralColorKey{l.l.Get(i).Message()}
+}
+
+func (l PlayerNeutralColorKeyList) All() iter.Seq[PlayerNeutralColorKey] {
+	return func(yield func(PlayerNeutralColorKey) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(PlayerNeutralColorKey{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -9128,6 +21694,30 @@ func (l PokemonFortProtoList) All() iter.Seq[PokemonFortProto] {
 	}
 }
 
+type PokemonProtoList struct{ l protoreflect.List }
+
+func (l PokemonProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l PokemonProtoList) At(i int) PokemonProto { return PokemonProto{l.l.Get(i).Message()} }
+
+func (l PokemonProtoList) All() iter.Seq[PokemonProto] {
+	return func(yield func(PokemonProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(PokemonProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type PokemonSummaryFortProtoList struct{ l protoreflect.List }
 
 func (l PokemonSummaryFortProtoList) Len() int {
@@ -9174,6 +21764,32 @@ func (l PokestopIncidentDisplayProtoList) All() iter.Seq[PokestopIncidentDisplay
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(PokestopIncidentDisplayProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type QuestBranchDisplayProtoList struct{ l protoreflect.List }
+
+func (l QuestBranchDisplayProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l QuestBranchDisplayProtoList) At(i int) QuestBranchDisplayProto {
+	return QuestBranchDisplayProto{l.l.Get(i).Message()}
+}
+
+func (l QuestBranchDisplayProtoList) All() iter.Seq[QuestBranchDisplayProto] {
+	return func(yield func(QuestBranchDisplayProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(QuestBranchDisplayProto{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -9232,6 +21848,58 @@ func (l QuestConditionProtoList) All() iter.Seq[QuestConditionProto] {
 	}
 }
 
+type QuestDialogProtoList struct{ l protoreflect.List }
+
+func (l QuestDialogProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l QuestDialogProtoList) At(i int) QuestDialogProto {
+	return QuestDialogProto{l.l.Get(i).Message()}
+}
+
+func (l QuestDialogProtoList) All() iter.Seq[QuestDialogProto] {
+	return func(yield func(QuestDialogProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(QuestDialogProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type QuestDisplayProtoList struct{ l protoreflect.List }
+
+func (l QuestDisplayProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l QuestDisplayProtoList) At(i int) QuestDisplayProto {
+	return QuestDisplayProto{l.l.Get(i).Message()}
+}
+
+func (l QuestDisplayProtoList) All() iter.Seq[QuestDisplayProto] {
+	return func(yield func(QuestDisplayProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(QuestDisplayProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type QuestProtoList struct{ l protoreflect.List }
 
 func (l QuestProtoList) Len() int {
@@ -9282,6 +21950,30 @@ func (l QuestRewardProtoList) All() iter.Seq[QuestRewardProto] {
 	}
 }
 
+type RaidProtoList struct{ l protoreflect.List }
+
+func (l RaidProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RaidProtoList) At(i int) RaidProto { return RaidProto{l.l.Get(i).Message()} }
+
+func (l RaidProtoList) All() iter.Seq[RaidProto] {
+	return func(yield func(RaidProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RaidProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type RaidVisualEffectList struct{ l protoreflect.List }
 
 func (l RaidVisualEffectList) Len() int {
@@ -9302,6 +21994,160 @@ func (l RaidVisualEffectList) All() iter.Seq[RaidVisualEffect] {
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(RaidVisualEffect{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type RoutePinList struct{ l protoreflect.List }
+
+func (l RoutePinList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RoutePinList) At(i int) RoutePin { return RoutePin{l.l.Get(i).Message()} }
+
+func (l RoutePinList) All() iter.Seq[RoutePin] {
+	return func(yield func(RoutePin) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RoutePin{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type RouteSubmissionStatusList struct{ l protoreflect.List }
+
+func (l RouteSubmissionStatusList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RouteSubmissionStatusList) At(i int) RouteSubmissionStatus {
+	return RouteSubmissionStatus{l.l.Get(i).Message()}
+}
+
+func (l RouteSubmissionStatusList) All() iter.Seq[RouteSubmissionStatus] {
+	return func(yield func(RouteSubmissionStatus) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RouteSubmissionStatus{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type RouteSubmissionStatus_RejectionReasonList struct{ l protoreflect.List }
+
+func (l RouteSubmissionStatus_RejectionReasonList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RouteSubmissionStatus_RejectionReasonList) At(i int) RouteSubmissionStatus_RejectionReason {
+	return RouteSubmissionStatus_RejectionReason{l.l.Get(i).Message()}
+}
+
+func (l RouteSubmissionStatus_RejectionReasonList) All() iter.Seq[RouteSubmissionStatus_RejectionReason] {
+	return func(yield func(RouteSubmissionStatus_RejectionReason) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RouteSubmissionStatus_RejectionReason{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type RouteWaypointProtoList struct{ l protoreflect.List }
+
+func (l RouteWaypointProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RouteWaypointProtoList) At(i int) RouteWaypointProto {
+	return RouteWaypointProto{l.l.Get(i).Message()}
+}
+
+func (l RouteWaypointProtoList) All() iter.Seq[RouteWaypointProto] {
+	return func(yield func(RouteWaypointProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RouteWaypointProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type RsvpCountDetailsList struct{ l protoreflect.List }
+
+func (l RsvpCountDetailsList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l RsvpCountDetailsList) At(i int) RsvpCountDetails {
+	return RsvpCountDetails{l.l.Get(i).Message()}
+}
+
+func (l RsvpCountDetailsList) All() iter.Seq[RsvpCountDetails] {
+	return func(yield func(RsvpCountDetails) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(RsvpCountDetails{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type SharedRouteProtoList struct{ l protoreflect.List }
+
+func (l SharedRouteProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l SharedRouteProtoList) At(i int) SharedRouteProto {
+	return SharedRouteProto{l.l.Get(i).Message()}
+}
+
+func (l SharedRouteProtoList) All() iter.Seq[SharedRouteProto] {
+	return func(yield func(SharedRouteProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(SharedRouteProto{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -9332,6 +22178,32 @@ func (l StationProtoList) All() iter.Seq[StationProto] {
 	}
 }
 
+type StickerSentProtoList struct{ l protoreflect.List }
+
+func (l StickerSentProtoList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l StickerSentProtoList) At(i int) StickerSentProto {
+	return StickerSentProto{l.l.Get(i).Message()}
+}
+
+func (l StickerSentProtoList) All() iter.Seq[StickerSentProto] {
+	return func(yield func(StickerSentProto) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(StickerSentProto{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
 type TappableList struct{ l protoreflect.List }
 
 func (l TappableList) Len() int {
@@ -9350,6 +22222,56 @@ func (l TappableList) All() iter.Seq[Tappable] {
 		}
 		for i, n := 0, l.l.Len(); i < n; i++ {
 			if !yield(Tappable{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList struct{ l protoreflect.List }
+
+func (l TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList) At(i int) TimedGroupChallengePlayerStatsProto_IndividualChallengeStats {
+	return TimedGroupChallengePlayerStatsProto_IndividualChallengeStats{l.l.Get(i).Message()}
+}
+
+func (l TimedGroupChallengePlayerStatsProto_IndividualChallengeStatsList) All() iter.Seq[TimedGroupChallengePlayerStatsProto_IndividualChallengeStats] {
+	return func(yield func(TimedGroupChallengePlayerStatsProto_IndividualChallengeStats) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(TimedGroupChallengePlayerStatsProto_IndividualChallengeStats{l.l.Get(i).Message()}) {
+				return
+			}
+		}
+	}
+}
+
+type VsActionHistoryList struct{ l protoreflect.List }
+
+func (l VsActionHistoryList) Len() int {
+	if l.l == nil {
+		return 0
+	}
+	return l.l.Len()
+}
+
+func (l VsActionHistoryList) At(i int) VsActionHistory { return VsActionHistory{l.l.Get(i).Message()} }
+
+func (l VsActionHistoryList) All() iter.Seq[VsActionHistory] {
+	return func(yield func(VsActionHistory) bool) {
+		if l.l == nil {
+			return
+		}
+		for i, n := 0, l.l.Len(); i < n; i++ {
+			if !yield(VsActionHistory{l.l.Get(i).Message()}) {
 				return
 			}
 		}
@@ -9409,685 +22331,1682 @@ func (l WildPokemonProtoList) All() iter.Seq[WildPokemonProto] {
 }
 
 var (
-	fd_AddFriendQuestProto_added_friend_ids                                  = mustFD((*pogo.AddFriendQuestProto)(nil).ProtoReflect().Descriptor(), "added_friend_ids")
-	fd_AvatarItemDisplayProto_icon_address                                   = mustFD((*pogo.AvatarItemDisplayProto)(nil).ProtoReflect().Descriptor(), "icon_address")
-	fd_AvatarItemDisplayProto_display_string_id                              = mustFD((*pogo.AvatarItemDisplayProto)(nil).ProtoReflect().Descriptor(), "display_string_id")
-	fd_AvatarStoreLinkProto_article_id                                       = mustFD((*pogo.AvatarStoreLinkProto)(nil).ProtoReflect().Descriptor(), "article_id")
-	fd_AvatarStoreLinkProto_group_name                                       = mustFD((*pogo.AvatarStoreLinkProto)(nil).ProtoReflect().Descriptor(), "group_name")
-	fd_BattleQuestProto_battle_id                                            = mustFD((*pogo.BattleQuestProto)(nil).ProtoReflect().Descriptor(), "battle_id")
-	fd_BreadBattleCreateDetail_bread_battle_level                            = mustFD((*pogo.BreadBattleCreateDetail)(nil).ProtoReflect().Descriptor(), "bread_battle_level")
-	fd_BreadBattleDetailProto_bread_battle_seed                              = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "bread_battle_seed")
-	fd_BreadBattleDetailProto_battle_spawn_ms                                = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_spawn_ms")
-	fd_BreadBattleDetailProto_battle_window_start_ms                         = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_window_start_ms")
-	fd_BreadBattleDetailProto_battle_window_end_ms                           = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_window_end_ms")
-	fd_BreadBattleDetailProto_battle_pokemon                                 = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_pokemon")
-	fd_BreadBattleDetailProto_reward_pokemon                                 = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon")
-	fd_BreadBattleDetailProto_complete                                       = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "complete")
-	fd_BreadBattleDetailProto_saved_for_later                                = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "saved_for_later")
-	fd_BreadBattleDetailProto_battle_level                                   = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_level")
-	fd_BreadBattleDetailProto_min_recommended_player_count                   = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "min_recommended_player_count")
-	fd_BreadBattleDetailProto_max_recommended_player_count                   = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "max_recommended_player_count")
-	fd_BreadMoveSlotProto_move_type                                          = mustFD((*pogo.BreadMoveSlotProto)(nil).ProtoReflect().Descriptor(), "move_type")
-	fd_BreadMoveSlotProto_move_level                                         = mustFD((*pogo.BreadMoveSlotProto)(nil).ProtoReflect().Descriptor(), "move_level")
-	fd_BuddyEvolutionWalkQuestProto_last_km_recorded                         = mustFD((*pogo.BuddyEvolutionWalkQuestProto)(nil).ProtoReflect().Descriptor(), "last_km_recorded")
-	fd_CaptureProbabilityProto_pokeball_type                                 = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "pokeball_type")
-	fd_CaptureProbabilityProto_capture_probability                           = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
-	fd_CaptureProbabilityProto_reticle_difficulty_scale                      = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "reticle_difficulty_scale")
-	fd_CatchPokemonQuestProto_unique_pokemon_id                              = mustFD((*pogo.CatchPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
-	fd_CatchPokemonQuestProto_active_encounter_id                            = mustFD((*pogo.CatchPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "active_encounter_id")
-	fd_CharacterDisplayProto_style                                           = mustFD((*pogo.CharacterDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
-	fd_CharacterDisplayProto_character                                       = mustFD((*pogo.CharacterDisplayProto)(nil).ProtoReflect().Descriptor(), "character")
-	fd_ClientMapCellProto_s2_cell_id                                         = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
-	fd_ClientMapCellProto_as_of_time_ms                                      = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "as_of_time_ms")
-	fd_ClientMapCellProto_fort                                               = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "fort")
-	fd_ClientMapCellProto_spawn_point                                        = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "spawn_point")
-	fd_ClientMapCellProto_wild_pokemon                                       = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "wild_pokemon")
-	fd_ClientMapCellProto_deleted_object                                     = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "deleted_object")
-	fd_ClientMapCellProto_is_truncated_list                                  = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "is_truncated_list")
-	fd_ClientMapCellProto_fort_summary                                       = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "fort_summary")
-	fd_ClientMapCellProto_decimated_spawn_point                              = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "decimated_spawn_point")
-	fd_ClientMapCellProto_catchable_pokemon                                  = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "catchable_pokemon")
-	fd_ClientMapCellProto_nearby_pokemon                                     = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "nearby_pokemon")
-	fd_ClientMapCellProto_route_list_hash                                    = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "route_list_hash")
-	fd_ClientMapCellProto_hyperlocal_experiment                              = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "hyperlocal_experiment")
-	fd_ClientMapCellProto_stations                                           = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "stations")
-	fd_ClientMapCellProto_num_vps_activated_locations                        = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "num_vps_activated_locations")
-	fd_ClientMapCellProto_tappables                                          = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "tappables")
-	fd_ClientSpawnPointProto_latitude                                        = mustFD((*pogo.ClientSpawnPointProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_ClientSpawnPointProto_longitude                                       = mustFD((*pogo.ClientSpawnPointProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_ClientWeatherProto_s2_cell_id                                         = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
-	fd_ClientWeatherProto_display_weather                                    = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "display_weather")
-	fd_ClientWeatherProto_gameplay_weather                                   = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "gameplay_weather")
-	fd_ClientWeatherProto_alerts                                             = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "alerts")
-	fd_ContestDisplayProto_style                                             = mustFD((*pogo.ContestDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
-	fd_DailyBuddyAffectionQuestProto_daily_affection_counter                 = mustFD((*pogo.DailyBuddyAffectionQuestProto)(nil).ProtoReflect().Descriptor(), "daily_affection_counter")
-	fd_DailyCounterProto_window                                              = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "window")
-	fd_DailyCounterProto_count                                               = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "count")
-	fd_DailyCounterProto_buckets_per_day                                     = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "buckets_per_day")
-	fd_DailyQuestProto_current_period_bucket                                 = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "current_period_bucket")
-	fd_DailyQuestProto_current_streak_count                                  = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "current_streak_count")
-	fd_DailyQuestProto_prev_streak_notification_timestamp_ms                 = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "prev_streak_notification_timestamp_ms")
-	fd_DaysWithARowQuestProto_last_window                                    = mustFD((*pogo.DaysWithARowQuestProto)(nil).ProtoReflect().Descriptor(), "last_window")
-	fd_DiskCreateDetail_disk_type                                            = mustFD((*pogo.DiskCreateDetail)(nil).ProtoReflect().Descriptor(), "disk_type")
-	fd_DiskCreateDetail_fort_id                                              = mustFD((*pogo.DiskCreateDetail)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_DiskEncounterOutProto_result                                          = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "result")
-	fd_DiskEncounterOutProto_pokemon                                         = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "pokemon")
-	fd_DiskEncounterOutProto_capture_probability                             = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
-	fd_DiskEncounterOutProto_active_item                                     = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "active_item")
-	fd_DiskEncounterOutProto_arplus_attempts_until_flee                      = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "arplus_attempts_until_flee")
-	fd_DisplayWeatherProto_cloud_level                                       = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "cloud_level")
-	fd_DisplayWeatherProto_rain_level                                        = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "rain_level")
-	fd_DisplayWeatherProto_wind_level                                        = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "wind_level")
-	fd_DisplayWeatherProto_snow_level                                        = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "snow_level")
-	fd_DisplayWeatherProto_fog_level                                         = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "fog_level")
-	fd_DisplayWeatherProto_wind_direction                                    = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "wind_direction")
-	fd_DisplayWeatherProto_special_effect_level                              = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "special_effect_level")
-	fd_EggCreateDetail_hatched_time_ms                                       = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "hatched_time_ms")
-	fd_EggCreateDetail_player_hatched_s2_cell_id                             = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "player_hatched_s2_cell_id")
-	fd_EggCreateDetail_received_time_ms                                      = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "received_time_ms")
-	fd_EggDistributionProto_egg_distribution                                 = mustFD((*pogo.EggDistributionProto)(nil).ProtoReflect().Descriptor(), "egg_distribution")
-	fd_EggDistributionProto_EggDistributionEntryProto_rarity                 = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "rarity")
-	fd_EggDistributionProto_EggDistributionEntryProto_pokemon_id             = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_EggDistributionProto_EggDistributionEntryProto_pokemon_display        = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
-	fd_EggTelemetryProto_egg_loot_table_id                                   = mustFD((*pogo.EggTelemetryProto)(nil).ProtoReflect().Descriptor(), "egg_loot_table_id")
-	fd_EggTelemetryProto_original_egg_slot_type                              = mustFD((*pogo.EggTelemetryProto)(nil).ProtoReflect().Descriptor(), "original_egg_slot_type")
-	fd_EncounterOutProto_pokemon                                             = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "pokemon")
-	fd_EncounterOutProto_background                                          = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "background")
-	fd_EncounterOutProto_status                                              = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "status")
-	fd_EncounterOutProto_capture_probability                                 = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
-	fd_EncounterOutProto_active_item                                         = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "active_item")
-	fd_EncounterOutProto_arplus_attempts_until_flee                          = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "arplus_attempts_until_flee")
-	fd_EvolutionQuestInfoProto_quest_requirement_template_id                 = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "quest_requirement_template_id")
-	fd_EvolutionQuestInfoProto_description                                   = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "description")
-	fd_EvolutionQuestInfoProto_target                                        = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "target")
-	fd_EvolveIntoPokemonQuestProto_unique_pokemon_id                         = mustFD((*pogo.EvolveIntoPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
-	fd_FortPokemonProto_pokemon_proto                                        = mustFD((*pogo.FortPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_proto")
-	fd_FortPokemonProto_spawn_type                                           = mustFD((*pogo.FortPokemonProto)(nil).ProtoReflect().Descriptor(), "spawn_type")
-	fd_FortVpsInfoProto_vps_enabled_v2                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_enabled_v2")
-	fd_FortVpsInfoProto_anchor_id                                            = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "anchor_id")
-	fd_FortVpsInfoProto_anchor_payload                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "anchor_payload")
-	fd_FortVpsInfoProto_hint_image_url                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_url")
-	fd_FortVpsInfoProto_is_hint_image_poi_image                              = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "is_hint_image_poi_image")
-	fd_FortVpsInfoProto_vps_enabled_status                                   = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_enabled_status")
-	fd_FortVpsInfoProto_mesh_metadata                                        = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "mesh_metadata")
-	fd_FortVpsInfoProto_hint_image_lat                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_lat")
-	fd_FortVpsInfoProto_hint_image_lng                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_lng")
-	fd_FortVpsInfoProto_hint_image_position                                  = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_position")
-	fd_FortVpsInfoProto_hint_image_rotation                                  = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_rotation")
-	fd_FortVpsInfoProto_vps_temporarily_not_allowed_until_ms                 = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_temporarily_not_allowed_until_ms")
-	fd_FortVpsInfoProto_localization_tier_level                              = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "localization_tier_level")
-	fd_FortVpsInfoProto_vps_disallowed_details                               = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_disallowed_details")
-	fd_FortVpsInfoProto_VpsDisallowedDetailsProto_source                     = mustFD((*pogo.FortVpsInfoProto_VpsDisallowedDetailsProto)(nil).ProtoReflect().Descriptor(), "source")
-	fd_FortVpsInfoProto_VpsDisallowedDetailsProto_previous_state             = mustFD((*pogo.FortVpsInfoProto_VpsDisallowedDetailsProto)(nil).ProtoReflect().Descriptor(), "previous_state")
-	fd_GameplayWeatherProto_gameplay_condition                               = mustFD((*pogo.GameplayWeatherProto)(nil).ProtoReflect().Descriptor(), "gameplay_condition")
-	fd_GeotargetedQuestProto_name                                            = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "name")
-	fd_GeotargetedQuestProto_call_to_action_link                             = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "call_to_action_link")
-	fd_GeotargetedQuestProto_image_url                                       = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "image_url")
-	fd_GeotargetedQuestProto_latitude                                        = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_GeotargetedQuestProto_longitude                                       = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_GeotargetedQuestProto_fort_id                                         = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_GetMapObjectsOutProto_map_cell                                        = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "map_cell")
-	fd_GetMapObjectsOutProto_status                                          = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "status")
-	fd_GetMapObjectsOutProto_time_of_day                                     = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "time_of_day")
-	fd_GetMapObjectsOutProto_client_weather                                  = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "client_weather")
-	fd_GetMapObjectsOutProto_moon_phase                                      = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "moon_phase")
-	fd_GetMapObjectsOutProto_twilight_period                                 = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "twilight_period")
-	fd_GetStardustQuestProto_stardust                                        = mustFD((*pogo.GetStardustQuestProto)(nil).ProtoReflect().Descriptor(), "stardust")
-	fd_GymDisplayProto_gym_event                                             = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "gym_event")
-	fd_GymDisplayProto_total_gym_cp                                          = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "total_gym_cp")
-	fd_GymDisplayProto_lowest_pokemon_motivation                             = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "lowest_pokemon_motivation")
-	fd_GymDisplayProto_slots_available                                       = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "slots_available")
-	fd_GymDisplayProto_occupied_millis                                       = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "occupied_millis")
-	fd_GymEventProto_trainer                                                 = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "trainer")
-	fd_GymEventProto_timestamp_ms                                            = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "timestamp_ms")
-	fd_GymEventProto_event                                                   = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "event")
-	fd_GymEventProto_pokedex_id                                              = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
-	fd_GymEventProto_pokemon_id                                              = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_HoloholoARBoundaryProto_vertices_with_relative_position               = mustFD((*pogo.HoloholoARBoundaryProto)(nil).ProtoReflect().Descriptor(), "vertices_with_relative_position")
-	fd_HoloholoARBoundaryProto_boundary_area_in_square_meters                = mustFD((*pogo.HoloholoARBoundaryProto)(nil).ProtoReflect().Descriptor(), "boundary_area_in_square_meters")
-	fd_HoloholoARBoundaryVertexProto_x                                       = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "x")
-	fd_HoloholoARBoundaryVertexProto_y                                       = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "y")
-	fd_HoloholoARBoundaryVertexProto_z                                       = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "z")
-	fd_HoloholoMeshMetadata_ar_boundaries                                    = mustFD((*pogo.HoloholoMeshMetadata)(nil).ProtoReflect().Descriptor(), "ar_boundaries")
-	fd_HyperlocalExperimentClientProto_experiment_id                         = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "experiment_id")
-	fd_HyperlocalExperimentClientProto_start_ms                              = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "start_ms")
-	fd_HyperlocalExperimentClientProto_end_ms                                = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "end_ms")
-	fd_HyperlocalExperimentClientProto_lat_degrees                           = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "lat_degrees")
-	fd_HyperlocalExperimentClientProto_lng_degrees                           = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "lng_degrees")
-	fd_HyperlocalExperimentClientProto_event_radius_m                        = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "event_radius_m")
-	fd_HyperlocalExperimentClientProto_challenge_bonus_key                   = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "challenge_bonus_key")
-	fd_IncenseCreateDetail_incense_type                                      = mustFD((*pogo.IncenseCreateDetail)(nil).ProtoReflect().Descriptor(), "incense_type")
-	fd_IncidentRewardProto_invasion_spawn_group_template_id                  = mustFD((*pogo.IncidentRewardProto)(nil).ProtoReflect().Descriptor(), "invasion_spawn_group_template_id")
-	fd_InvasionCreateDetail_origin                                           = mustFD((*pogo.InvasionCreateDetail)(nil).ProtoReflect().Descriptor(), "origin")
-	fd_InvasionFinishedDisplayProto_style                                    = mustFD((*pogo.InvasionFinishedDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
-	fd_IrisSocialDeploymentProto_deployed_fort_id                            = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "deployed_fort_id")
-	fd_IrisSocialDeploymentProto_pokemon_deployed_since_ms                   = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "pokemon_deployed_since_ms")
-	fd_IrisSocialDeploymentProto_pokemon_returned_at_ms                      = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "pokemon_returned_at_ms")
-	fd_IrisSocialEventTelemetry_Position_x                                   = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "x")
-	fd_IrisSocialEventTelemetry_Position_y                                   = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "y")
-	fd_IrisSocialEventTelemetry_Position_z                                   = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "z")
-	fd_IrisSocialEventTelemetry_Rotation_x                                   = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "x")
-	fd_IrisSocialEventTelemetry_Rotation_y                                   = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "y")
-	fd_IrisSocialEventTelemetry_Rotation_z                                   = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "z")
-	fd_IrisSocialEventTelemetry_Rotation_w                                   = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "w")
-	fd_ItemRewardProto_item                                                  = mustFD((*pogo.ItemRewardProto)(nil).ProtoReflect().Descriptor(), "item")
-	fd_ItemRewardProto_amount                                                = mustFD((*pogo.ItemRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
-	fd_LocationCardDisplayProto_location_card                                = mustFD((*pogo.LocationCardDisplayProto)(nil).ProtoReflect().Descriptor(), "location_card")
-	fd_MapPokemonProto_spawnpoint_id                                         = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "spawnpoint_id")
-	fd_MapPokemonProto_encounter_id                                          = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
-	fd_MapPokemonProto_pokedex_type_id                                       = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "pokedex_type_id")
-	fd_MapPokemonProto_expiration_time_ms                                    = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
-	fd_MapPokemonProto_latitude                                              = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_MapPokemonProto_longitude                                             = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_MapPokemonProto_pokemon_display                                       = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
-	fd_MiniCollectionPokemon_pokedex_id                                      = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "pokedex_id")
-	fd_MiniCollectionPokemon_display                                         = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "display")
-	fd_MiniCollectionPokemon_caught                                          = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "caught")
-	fd_MiniCollectionPokemon_collection_type                                 = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "collection_type")
-	fd_MiniCollectionPokemon_require_alignment_to_match                      = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "require_alignment_to_match")
-	fd_MiniCollectionProto_pokemon                                           = mustFD((*pogo.MiniCollectionProto)(nil).ProtoReflect().Descriptor(), "pokemon")
-	fd_MiniCollectionProto_completed                                         = mustFD((*pogo.MiniCollectionProto)(nil).ProtoReflect().Descriptor(), "completed")
-	fd_MultiPartQuestProto_sub_quests                                        = mustFD((*pogo.MultiPartQuestProto)(nil).ProtoReflect().Descriptor(), "sub_quests")
-	fd_NearbyPokemonProto_pokedex_number                                     = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "pokedex_number")
-	fd_NearbyPokemonProto_distance_meters                                    = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "distance_meters")
-	fd_NearbyPokemonProto_encounter_id                                       = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
-	fd_NearbyPokemonProto_fort_id                                            = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_NearbyPokemonProto_fort_image_url                                     = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "fort_image_url")
-	fd_NearbyPokemonProto_pokemon_display                                    = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
-	fd_NeutralAvatarLootItemDisplayProto_display                             = mustFD((*pogo.NeutralAvatarLootItemDisplayProto)(nil).ProtoReflect().Descriptor(), "display")
-	fd_NeutralAvatarLootItemDisplayProto_link                                = mustFD((*pogo.NeutralAvatarLootItemDisplayProto)(nil).ProtoReflect().Descriptor(), "link")
-	fd_NeutralAvatarLootItemTemplateProto_item_template_id                   = mustFD((*pogo.NeutralAvatarLootItemTemplateProto)(nil).ProtoReflect().Descriptor(), "item_template_id")
-	fd_NeutralAvatarLootItemTemplateProto_display_template_id                = mustFD((*pogo.NeutralAvatarLootItemTemplateProto)(nil).ProtoReflect().Descriptor(), "display_template_id")
-	fd_PhotobombCreateDetail_caught_in_photobomb                             = mustFD((*pogo.PhotobombCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_photobomb")
-	fd_PlayerAttributeRewardProto_key                                        = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "key")
-	fd_PlayerAttributeRewardProto_value                                      = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "value")
-	fd_PlayerAttributeRewardProto_overwrite_existing_attribute               = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "overwrite_existing_attribute")
-	fd_PlayerAttributeRewardProto_duration_mins                              = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "duration_mins")
-	fd_PokemonBonusStatLevelProto_bonus_individual_attack                    = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_attack")
-	fd_PokemonBonusStatLevelProto_bonus_individual_defense                   = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_defense")
-	fd_PokemonBonusStatLevelProto_bonus_individual_stamina                   = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_stamina")
-	fd_PokemonCandyRewardProto_pokemon_id                                    = mustFD((*pogo.PokemonCandyRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_PokemonCandyRewardProto_amount                                        = mustFD((*pogo.PokemonCandyRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
-	fd_PokemonCombatStatsProto_num_won                                       = mustFD((*pogo.PokemonCombatStatsProto)(nil).ProtoReflect().Descriptor(), "num_won")
-	fd_PokemonCombatStatsProto_num_total                                     = mustFD((*pogo.PokemonCombatStatsProto)(nil).ProtoReflect().Descriptor(), "num_total")
-	fd_PokemonContestInfoProto_contest_id                                    = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "contest_id")
-	fd_PokemonContestInfoProto_contest_end_time_ms                           = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "contest_end_time_ms")
-	fd_PokemonContestInfoProto_free_up_time_ms                               = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "free_up_time_ms")
-	fd_PokemonCreateDetail_wild_detail                                       = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "wild_detail")
-	fd_PokemonCreateDetail_egg_detail                                        = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "egg_detail")
-	fd_PokemonCreateDetail_raid_detail                                       = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "raid_detail")
-	fd_PokemonCreateDetail_quest_detail                                      = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "quest_detail")
-	fd_PokemonCreateDetail_vs_seeker_detail                                  = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "vs_seeker_detail")
-	fd_PokemonCreateDetail_invasion_detail                                   = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "invasion_detail")
-	fd_PokemonCreateDetail_photobomb_detail                                  = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "photobomb_detail")
-	fd_PokemonCreateDetail_tutorial_detail                                   = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "tutorial_detail")
-	fd_PokemonCreateDetail_postcard_detail                                   = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "postcard_detail")
-	fd_PokemonCreateDetail_station_detail                                    = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "station_detail")
-	fd_PokemonCreateDetail_incense_detail                                    = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "incense_detail")
-	fd_PokemonCreateDetail_disk_detail                                       = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "disk_detail")
-	fd_PokemonCreateDetail_bread_battle_detail                               = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "bread_battle_detail")
-	fd_PokemonDisplayProto_costume                                           = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "costume")
-	fd_PokemonDisplayProto_gender                                            = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "gender")
-	fd_PokemonDisplayProto_shiny                                             = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "shiny")
-	fd_PokemonDisplayProto_form                                              = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "form")
-	fd_PokemonDisplayProto_weather_boosted_condition                         = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "weather_boosted_condition")
-	fd_PokemonDisplayProto_alignment                                         = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "alignment")
-	fd_PokemonDisplayProto_pokemon_badge                                     = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "pokemon_badge")
-	fd_PokemonDisplayProto_current_temp_evolution                            = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "current_temp_evolution")
-	fd_PokemonDisplayProto_temporary_evolution_finish_ms                     = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "temporary_evolution_finish_ms")
-	fd_PokemonDisplayProto_temp_evolution_is_locked                          = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "temp_evolution_is_locked")
-	fd_PokemonDisplayProto_locked_temp_evolution                             = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "locked_temp_evolution")
-	fd_PokemonDisplayProto_original_costume                                  = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "original_costume")
-	fd_PokemonDisplayProto_display_id                                        = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "display_id")
-	fd_PokemonDisplayProto_mega_evolution_level                              = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "mega_evolution_level")
-	fd_PokemonDisplayProto_location_card                                     = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "location_card")
-	fd_PokemonDisplayProto_bread_mode_enum                                   = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "bread_mode_enum")
-	fd_PokemonDisplayProto_is_strong_pokemon                                 = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "is_strong_pokemon")
-	fd_PokemonEggRewardDistributionEntryProto_pokemon                        = mustFD((*pogo.PokemonEggRewardDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon")
-	fd_PokemonEggRewardDistributionEntryProto_weight                         = mustFD((*pogo.PokemonEggRewardDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "weight")
-	fd_PokemonEggRewardDistributionProto_entries                             = mustFD((*pogo.PokemonEggRewardDistributionProto)(nil).ProtoReflect().Descriptor(), "entries")
-	fd_PokemonEggRewardEntryProto_pokedex_id                                 = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
-	fd_PokemonEggRewardEntryProto_form                                       = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "form")
-	fd_PokemonEggRewardEntryProto_aligmnent                                  = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "aligmnent")
-	fd_PokemonEggRewardEntryProto_hatch_dist_km                              = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "hatch_dist_km")
-	fd_PokemonEggRewardProto_distribution                                    = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "distribution")
-	fd_PokemonEggRewardProto_egg_slot_type                                   = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "egg_slot_type")
-	fd_PokemonEggRewardProto_hatch_dist_km                                   = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "hatch_dist_km")
-	fd_PokemonEncounterRewardProto_pokemon_id                                = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_PokemonEncounterRewardProto_use_quest_pokemon_encounter_distribuition = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "use_quest_pokemon_encounter_distribuition")
-	fd_PokemonEncounterRewardProto_pokemon_display                           = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
-	fd_PokemonEncounterRewardProto_is_hidden_ditto                           = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "is_hidden_ditto")
-	fd_PokemonEncounterRewardProto_ditto_display                             = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "ditto_display")
-	fd_PokemonEncounterRewardProto_poke_ball_override                        = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "poke_ball_override")
-	fd_PokemonEncounterRewardProto_shiny_probability                         = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "shiny_probability")
-	fd_PokemonEncounterRewardProto_size_override                             = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "size_override")
-	fd_PokemonEncounterRewardProto_stats_limits_override                     = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "stats_limits_override")
-	fd_PokemonEncounterRewardProto_quest_encounter_type                      = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "quest_encounter_type")
-	fd_PokemonEncounterRewardProto_is_featured_pokemon                       = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "is_featured_pokemon")
-	fd_PokemonEvolutionQuestProto_quest_requirement                          = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "quest_requirement")
-	fd_PokemonEvolutionQuestProto_quest_info                                 = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "quest_info")
-	fd_PokemonEvolutionQuestProto_evolution                                  = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "evolution")
-	fd_PokemonEvolutionQuestProto_form                                       = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "form")
-	fd_PokemonFortProto_fort_id                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_PokemonFortProto_last_modified_ms                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
-	fd_PokemonFortProto_latitude                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_PokemonFortProto_longitude                                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_PokemonFortProto_team                                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "team")
-	fd_PokemonFortProto_guard_pokemon_id                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_id")
-	fd_PokemonFortProto_guard_pokemon_level                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_level")
-	fd_PokemonFortProto_enabled                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "enabled")
-	fd_PokemonFortProto_fort_type                                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_type")
-	fd_PokemonFortProto_gym_points                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "gym_points")
-	fd_PokemonFortProto_is_in_battle                                         = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_in_battle")
-	fd_PokemonFortProto_active_fort_modifier                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_fort_modifier")
-	fd_PokemonFortProto_active_pokemon                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_pokemon")
-	fd_PokemonFortProto_cooldown_complete_ms                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "cooldown_complete_ms")
-	fd_PokemonFortProto_sponsor                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "sponsor")
-	fd_PokemonFortProto_rendering_type                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "rendering_type")
-	fd_PokemonFortProto_deploy_lockout_end_ms                                = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "deploy_lockout_end_ms")
-	fd_PokemonFortProto_guard_pokemon_display                                = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_display")
-	fd_PokemonFortProto_closed                                               = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "closed")
-	fd_PokemonFortProto_raid_info                                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "raid_info")
-	fd_PokemonFortProto_gym_display                                          = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "gym_display")
-	fd_PokemonFortProto_visited                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "visited")
-	fd_PokemonFortProto_same_team_deploy_lockout_end_ms                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "same_team_deploy_lockout_end_ms")
-	fd_PokemonFortProto_allow_checkin                                        = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "allow_checkin")
-	fd_PokemonFortProto_image_url                                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "image_url")
-	fd_PokemonFortProto_in_event                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "in_event")
-	fd_PokemonFortProto_banner_url                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "banner_url")
-	fd_PokemonFortProto_partner_id                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "partner_id")
-	fd_PokemonFortProto_challenge_quest_completed                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "challenge_quest_completed")
-	fd_PokemonFortProto_is_ex_raid_eligible                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_ex_raid_eligible")
-	fd_PokemonFortProto_pokestop_display                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "pokestop_display")
-	fd_PokemonFortProto_pokestop_displays                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "pokestop_displays")
-	fd_PokemonFortProto_is_ar_scan_eligible                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_ar_scan_eligible")
-	fd_PokemonFortProto_geostore_tombstone_message_key                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "geostore_tombstone_message_key")
-	fd_PokemonFortProto_geostore_suspension_message_key                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "geostore_suspension_message_key")
-	fd_PokemonFortProto_power_up_progress_points                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "power_up_progress_points")
-	fd_PokemonFortProto_power_up_level_expiration_ms                         = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "power_up_level_expiration_ms")
-	fd_PokemonFortProto_next_fort_open_ms                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "next_fort_open_ms")
-	fd_PokemonFortProto_next_fort_close_ms                                   = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "next_fort_close_ms")
-	fd_PokemonFortProto_active_fort_pokemon                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_fort_pokemon")
-	fd_PokemonFortProto_is_route_eligible                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_route_eligible")
-	fd_PokemonFortProto_fort_vps_info                                        = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_vps_info")
-	fd_PokemonFortProto_ar_experiences_allowed                               = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "ar_experiences_allowed")
-	fd_PokemonFortProto_stamp_collection_ids                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_ids")
-	fd_PokemonFortProto_tappable                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "tappable")
-	fd_PokemonIndividualStatRewardProto_pokemon_id                           = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_PokemonIndividualStatRewardProto_stat_type                            = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "stat_type")
-	fd_PokemonIndividualStatRewardProto_stat_increase_amount                 = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "stat_increase_amount")
-	fd_PokemonMegaEvolutionLevelProto_points                                 = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "points")
-	fd_PokemonMegaEvolutionLevelProto_level                                  = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "level")
-	fd_PokemonMegaEvolutionLevelProto_mega_point_daily_counters              = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "mega_point_daily_counters")
-	fd_PokemonMegaEvolutionPointDailyCountersProto_mega_evo                  = mustFD((*pogo.PokemonMegaEvolutionPointDailyCountersProto)(nil).ProtoReflect().Descriptor(), "mega_evo")
-	fd_PokemonProto_id                                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "id")
-	fd_PokemonProto_pokemon_id                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
-	fd_PokemonProto_cp                                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp")
-	fd_PokemonProto_stamina                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "stamina")
-	fd_PokemonProto_max_stamina                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "max_stamina")
-	fd_PokemonProto_move1                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move1")
-	fd_PokemonProto_move2                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move2")
-	fd_PokemonProto_deployed_fort_id                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_fort_id")
-	fd_PokemonProto_owner_name                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "owner_name")
-	fd_PokemonProto_is_egg                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_egg")
-	fd_PokemonProto_egg_km_walked_target                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_km_walked_target")
-	fd_PokemonProto_egg_km_walked_start                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_km_walked_start")
-	fd_PokemonProto_height_m                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "height_m")
-	fd_PokemonProto_weight_kg                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "weight_kg")
-	fd_PokemonProto_individual_attack                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_attack")
-	fd_PokemonProto_individual_defense                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_defense")
-	fd_PokemonProto_individual_stamina                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_stamina")
-	fd_PokemonProto_cp_multiplier                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp_multiplier")
-	fd_PokemonProto_pokeball                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokeball")
-	fd_PokemonProto_captured_s2_cell_id                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "captured_s2_cell_id")
-	fd_PokemonProto_battles_attacked                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "battles_attacked")
-	fd_PokemonProto_battles_defended                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "battles_defended")
-	fd_PokemonProto_egg_incubator_id                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_incubator_id")
-	fd_PokemonProto_creation_time_ms                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "creation_time_ms")
-	fd_PokemonProto_num_upgrades                                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "num_upgrades")
-	fd_PokemonProto_additional_cp_multiplier                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "additional_cp_multiplier")
-	fd_PokemonProto_favorite                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "favorite")
-	fd_PokemonProto_nickname                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "nickname")
-	fd_PokemonProto_from_fort                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "from_fort")
-	fd_PokemonProto_buddy_candy_awarded                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "buddy_candy_awarded")
-	fd_PokemonProto_buddy_km_walked                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "buddy_km_walked")
-	fd_PokemonProto_display_pokemon_id                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "display_pokemon_id")
-	fd_PokemonProto_display_cp                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "display_cp")
-	fd_PokemonProto_pokemon_display                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
-	fd_PokemonProto_is_bad                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_bad")
-	fd_PokemonProto_hatched_from_egg                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "hatched_from_egg")
-	fd_PokemonProto_coins_returned                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "coins_returned")
-	fd_PokemonProto_deployed_duration_ms                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_duration_ms")
-	fd_PokemonProto_deployed_returned_timestamp_ms                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_returned_timestamp_ms")
-	fd_PokemonProto_cp_multiplier_before_trading                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp_multiplier_before_trading")
-	fd_PokemonProto_trading_original_owner_hash                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "trading_original_owner_hash")
-	fd_PokemonProto_original_owner_nickname                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "original_owner_nickname")
-	fd_PokemonProto_traded_time_ms                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "traded_time_ms")
-	fd_PokemonProto_is_lucky                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_lucky")
-	fd_PokemonProto_move3                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move3")
-	fd_PokemonProto_pvp_combat_stats                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pvp_combat_stats")
-	fd_PokemonProto_npc_combat_stats                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "npc_combat_stats")
-	fd_PokemonProto_move2_is_purified_exclusive                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move2_is_purified_exclusive")
-	fd_PokemonProto_limited_pokemon_identifier                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "limited_pokemon_identifier")
-	fd_PokemonProto_pre_boosted_cp                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pre_boosted_cp")
-	fd_PokemonProto_pre_boosted_additional_cp_multiplier                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pre_boosted_additional_cp_multiplier")
-	fd_PokemonProto_deployed_gym_lat_degree                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_gym_lat_degree")
-	fd_PokemonProto_deployed_gym_lng_degree                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_gym_lng_degree")
-	fd_PokemonProto_has_mega_evolved                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "has_mega_evolved")
-	fd_PokemonProto_egg_type                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_type")
-	fd_PokemonProto_temp_evo_cp                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_cp")
-	fd_PokemonProto_temp_evo_stamina_modifier                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_stamina_modifier")
-	fd_PokemonProto_temp_evo_cp_multiplier                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_cp_multiplier")
-	fd_PokemonProto_mega_evolved_forms                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "mega_evolved_forms")
-	fd_PokemonProto_evolution_quest_info                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "evolution_quest_info")
-	fd_PokemonProto_origin_detail                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "origin_detail")
-	fd_PokemonProto_pokemon_tag_ids                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_tag_ids")
-	fd_PokemonProto_origin_events                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "origin_events")
-	fd_PokemonProto_egg_slot_type                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_slot_type")
-	fd_PokemonProto_egg_telemetry                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_telemetry")
-	fd_PokemonProto_egg_distribution                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_distribution")
-	fd_PokemonProto_size                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "size")
-	fd_PokemonProto_pokemon_contest_info                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_contest_info")
-	fd_PokemonProto_caught_in_party                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "caught_in_party")
-	fd_PokemonProto_is_component                                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_component")
-	fd_PokemonProto_is_fusion                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_fusion")
-	fd_PokemonProto_iris_social_deployment                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "iris_social_deployment")
-	fd_PokemonProto_bread_moves                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "bread_moves")
-	fd_PokemonProto_deployed_station_id                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_station_id")
-	fd_PokemonProto_deployed_station_expiration_time_ms                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_station_expiration_time_ms")
-	fd_PokemonProto_is_stamp_collection_reward                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_stamp_collection_reward")
-	fd_PokemonProto_is_actively_training                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_actively_training")
-	fd_PokemonProto_bonus_stat_level                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "bonus_stat_level")
-	fd_PokemonStatsLimitsProto_min_pokemon_level                             = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_pokemon_level")
-	fd_PokemonStatsLimitsProto_max_pokemon_level                             = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_pokemon_level")
-	fd_PokemonStatsLimitsProto_min_attack                                    = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_attack")
-	fd_PokemonStatsLimitsProto_max_attack                                    = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_attack")
-	fd_PokemonStatsLimitsProto_min_defense                                   = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_defense")
-	fd_PokemonStatsLimitsProto_max_defense                                   = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_defense")
-	fd_PokemonStatsLimitsProto_min_hp                                        = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_hp")
-	fd_PokemonStatsLimitsProto_max_hp                                        = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_hp")
-	fd_PokemonSummaryFortProto_fort_summary_id                               = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "fort_summary_id")
-	fd_PokemonSummaryFortProto_last_modified_ms                              = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
-	fd_PokemonSummaryFortProto_latitude                                      = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_PokemonSummaryFortProto_longitude                                     = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_PokestopDisplayProto_style_config_address                             = mustFD((*pogo.PokestopDisplayProto)(nil).ProtoReflect().Descriptor(), "style_config_address")
-	fd_PokestopIncidentDisplayProto_character_display                        = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "character_display")
-	fd_PokestopIncidentDisplayProto_invasion_finished                        = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "invasion_finished")
-	fd_PokestopIncidentDisplayProto_contest_display                          = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "contest_display")
-	fd_PokestopIncidentDisplayProto_incident_id                              = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_id")
-	fd_PokestopIncidentDisplayProto_incident_start_ms                        = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_start_ms")
-	fd_PokestopIncidentDisplayProto_incident_expiration_ms                   = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_expiration_ms")
-	fd_PokestopIncidentDisplayProto_hide_incident                            = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "hide_incident")
-	fd_PokestopIncidentDisplayProto_incident_completed                       = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_completed")
-	fd_PokestopIncidentDisplayProto_incident_display_type                    = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_display_type")
-	fd_PokestopIncidentDisplayProto_incident_display_order_priority          = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_display_order_priority")
-	fd_PokestopIncidentDisplayProto_continue_displaying_incident             = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "continue_displaying_incident")
-	fd_PokestopIncidentDisplayProto_custom_display                           = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "custom_display")
-	fd_PokestopIncidentDisplayProto_is_cross_stop_incident                   = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "is_cross_stop_incident")
-	fd_PostcardCreateDetail_postcard_origin                                  = mustFD((*pogo.PostcardCreateDetail)(nil).ProtoReflect().Descriptor(), "postcard_origin")
-	fd_PostcardCreateDetail_received_time_ms                                 = mustFD((*pogo.PostcardCreateDetail)(nil).ProtoReflect().Descriptor(), "received_time_ms")
-	fd_QuestBranchRewardProto_rewards                                        = mustFD((*pogo.QuestBranchRewardProto)(nil).ProtoReflect().Descriptor(), "rewards")
-	fd_QuestConditionProto_with_pokemon_type                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_type")
-	fd_QuestConditionProto_with_pokemon_category                             = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_category")
-	fd_QuestConditionProto_with_weather_boost                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_weather_boost")
-	fd_QuestConditionProto_with_daily_capture_bonus                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_capture_bonus")
-	fd_QuestConditionProto_with_daily_spin_bonus                             = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_spin_bonus")
-	fd_QuestConditionProto_with_win_raid_status                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_raid_status")
-	fd_QuestConditionProto_with_raid_level                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_raid_level")
-	fd_QuestConditionProto_with_throw_type                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_throw_type")
-	fd_QuestConditionProto_with_win_gym_battle_status                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_gym_battle_status")
-	fd_QuestConditionProto_with_super_effective_charge_move                  = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_super_effective_charge_move")
-	fd_QuestConditionProto_with_item                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_item")
-	fd_QuestConditionProto_with_unique_pokestop                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_pokestop")
-	fd_QuestConditionProto_with_quest_context                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_quest_context")
-	fd_QuestConditionProto_with_badge_type                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_badge_type")
-	fd_QuestConditionProto_with_player_level                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_player_level")
-	fd_QuestConditionProto_with_win_battle_status                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_battle_status")
-	fd_QuestConditionProto_with_unique_pokemon                               = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_pokemon")
-	fd_QuestConditionProto_with_npc_combat                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_npc_combat")
-	fd_QuestConditionProto_with_pvp_combat                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pvp_combat")
-	fd_QuestConditionProto_with_location                                     = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_location")
-	fd_QuestConditionProto_with_distance                                     = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_distance")
-	fd_QuestConditionProto_with_invasion_character                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_invasion_character")
-	fd_QuestConditionProto_with_pokemon_alignment                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_alignment")
-	fd_QuestConditionProto_with_buddy                                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_buddy")
-	fd_QuestConditionProto_with_daily_buddy_affection                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_buddy_affection")
-	fd_QuestConditionProto_with_pokemon_level                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_level")
-	fd_QuestConditionProto_with_max_cp                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_max_cp")
-	fd_QuestConditionProto_with_temp_evo_id                                  = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_temp_evo_id")
-	fd_QuestConditionProto_with_gbl_rank                                     = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_gbl_rank")
-	fd_QuestConditionProto_with_encounter_type                               = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_encounter_type")
-	fd_QuestConditionProto_with_combat_type                                  = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_combat_type")
-	fd_QuestConditionProto_with_item_type                                    = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_item_type")
-	fd_QuestConditionProto_with_elapsed_time                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_elapsed_time")
-	fd_QuestConditionProto_with_friend_level                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_friend_level")
-	fd_QuestConditionProto_with_pokemon_cp                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_cp")
-	fd_QuestConditionProto_with_raid_location                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_raid_location")
-	fd_QuestConditionProto_with_friends_raid                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_friends_raid")
-	fd_QuestConditionProto_with_pokemon_costume                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_costume")
-	fd_QuestConditionProto_with_pokemon_size                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_size")
-	fd_QuestConditionProto_with_device_type                                  = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_device_type")
-	fd_QuestConditionProto_with_route_travel                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_route_travel")
-	fd_QuestConditionProto_with_unique_route                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_route")
-	fd_QuestConditionProto_with_tappable_type                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_tappable_type")
-	fd_QuestConditionProto_with_auth_provider_type                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_auth_provider_type")
-	fd_QuestConditionProto_with_opponent_pokemon_battle_status               = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_opponent_pokemon_battle_status")
-	fd_QuestConditionProto_with_fort_id                                      = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_fort_id")
-	fd_QuestConditionProto_with_pokemon_move                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_move")
-	fd_QuestConditionProto_with_pokemon_form                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_form")
-	fd_QuestConditionProto_with_bread_pokemon                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_pokemon")
-	fd_QuestConditionProto_with_bread_dough_pokemon                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_dough_pokemon")
-	fd_QuestConditionProto_with_bread_move_type                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_move_type")
-	fd_QuestConditionProto_with_poi_sponsor_id                               = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_poi_sponsor_id")
-	fd_QuestConditionProto_with_page_type                                    = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_page_type")
-	fd_QuestConditionProto_with_trainee_pokemon_attributes                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_trainee_pokemon_attributes")
-	fd_QuestConditionProto_type                                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "type")
-	fd_QuestCreateDetail_origin                                              = mustFD((*pogo.QuestCreateDetail)(nil).ProtoReflect().Descriptor(), "origin")
-	fd_QuestGoalProto_condition                                              = mustFD((*pogo.QuestGoalProto)(nil).ProtoReflect().Descriptor(), "condition")
-	fd_QuestGoalProto_target                                                 = mustFD((*pogo.QuestGoalProto)(nil).ProtoReflect().Descriptor(), "target")
-	fd_QuestProto_daily_quest                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_quest")
-	fd_QuestProto_multi_part                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "multi_part")
-	fd_QuestProto_catch_pokemon                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "catch_pokemon")
-	fd_QuestProto_add_friend                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "add_friend")
-	fd_QuestProto_trade_pokemon                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "trade_pokemon")
-	fd_QuestProto_daily_buddy_affection                                      = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_buddy_affection")
-	fd_QuestProto_quest_walk                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_walk")
-	fd_QuestProto_evolve_into_pokemon                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "evolve_into_pokemon")
-	fd_QuestProto_get_stardust                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "get_stardust")
-	fd_QuestProto_mini_collection                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "mini_collection")
-	fd_QuestProto_geotargeted_quest                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "geotargeted_quest")
-	fd_QuestProto_buddy_evolution_walk                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "buddy_evolution_walk")
-	fd_QuestProto_battle                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "battle")
-	fd_QuestProto_take_snapshot                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "take_snapshot")
-	fd_QuestProto_submit_sleep_records                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "submit_sleep_records")
-	fd_QuestProto_travel_route                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "travel_route")
-	fd_QuestProto_spin_pokestop                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "spin_pokestop")
-	fd_QuestProto_pokemon_reach_cp                                           = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "pokemon_reach_cp")
-	fd_QuestProto_quest_type                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_type")
-	fd_QuestProto_with_single_day                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "with_single_day")
-	fd_QuestProto_days_in_arow                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "days_in_arow")
-	fd_QuestProto_quest_id                                                   = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_id")
-	fd_QuestProto_quest_seed                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_seed")
-	fd_QuestProto_quest_context                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_context")
-	fd_QuestProto_template_id                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "template_id")
-	fd_QuestProto_progress                                                   = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "progress")
-	fd_QuestProto_goal                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "goal")
-	fd_QuestProto_status                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "status")
-	fd_QuestProto_quest_rewards                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_rewards")
-	fd_QuestProto_creation_timestamp_ms                                      = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "creation_timestamp_ms")
-	fd_QuestProto_last_update_timestamp_ms                                   = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "last_update_timestamp_ms")
-	fd_QuestProto_completion_timestamp_ms                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "completion_timestamp_ms")
-	fd_QuestProto_fort_id                                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_QuestProto_admin_generated                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "admin_generated")
-	fd_QuestProto_stamp_count_override_enabled                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "stamp_count_override_enabled")
-	fd_QuestProto_stamp_count_override                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "stamp_count_override")
-	fd_QuestProto_s2_cell_id                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
-	fd_QuestProto_story_quest_template_version                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "story_quest_template_version")
-	fd_QuestProto_daily_counter                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_counter")
-	fd_QuestProto_reward_pokemon_icon_url                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon_icon_url")
-	fd_QuestProto_end_timestamp_ms                                           = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "end_timestamp_ms")
-	fd_QuestProto_is_bonus_challenge                                         = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "is_bonus_challenge")
-	fd_QuestProto_referral_info                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "referral_info")
-	fd_QuestProto_branch_rewards                                             = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "branch_rewards")
-	fd_QuestProto_dialog_read                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "dialog_read")
-	fd_QuestProto_start_timestamp_ms                                         = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "start_timestamp_ms")
-	fd_QuestProto_with_total_days                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "with_total_days")
-	fd_QuestProto_phase_number                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "phase_number")
-	fd_QuestProto_difficulty                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "difficulty")
-	fd_QuestProto_min_complete_timestamp_ms                                  = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "min_complete_timestamp_ms")
-	fd_QuestProto_min_player_level                                           = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "min_player_level")
-	fd_QuestProto_time_zone_id                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "time_zone_id")
-	fd_QuestProto_ReferralInfoProto_referrer_id                              = mustFD((*pogo.QuestProto_ReferralInfoProto)(nil).ProtoReflect().Descriptor(), "referrer_id")
-	fd_QuestProto_ReferralInfoProto_completion_message_sent                  = mustFD((*pogo.QuestProto_ReferralInfoProto)(nil).ProtoReflect().Descriptor(), "completion_message_sent")
-	fd_QuestRewardProto_exp                                                  = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "exp")
-	fd_QuestRewardProto_item                                                 = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "item")
-	fd_QuestRewardProto_stardust                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "stardust")
-	fd_QuestRewardProto_candy                                                = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "candy")
-	fd_QuestRewardProto_avatar_template_id                                   = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "avatar_template_id")
-	fd_QuestRewardProto_quest_template_id                                    = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "quest_template_id")
-	fd_QuestRewardProto_pokemon_encounter                                    = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_encounter")
-	fd_QuestRewardProto_pokecoin                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokecoin")
-	fd_QuestRewardProto_xl_candy                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "xl_candy")
-	fd_QuestRewardProto_level_cap                                            = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "level_cap")
-	fd_QuestRewardProto_sticker                                              = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "sticker")
-	fd_QuestRewardProto_mega_resource                                        = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "mega_resource")
-	fd_QuestRewardProto_incident                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "incident")
-	fd_QuestRewardProto_player_attribute                                     = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "player_attribute")
-	fd_QuestRewardProto_event_badge_id                                       = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "event_badge_id")
-	fd_QuestRewardProto_neutral_avatar_template_id                           = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_template_id")
-	fd_QuestRewardProto_neutral_avatar_item_template                         = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_template")
-	fd_QuestRewardProto_neutral_avatar_item_display                          = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_display")
-	fd_QuestRewardProto_pokemon_egg                                          = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_egg")
-	fd_QuestRewardProto_pokemon_individual_stat                              = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_individual_stat")
-	fd_QuestRewardProto_type                                                 = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "type")
-	fd_QuestWalkProto_quest_start_km_walked                                  = mustFD((*pogo.QuestWalkProto)(nil).ProtoReflect().Descriptor(), "quest_start_km_walked")
-	fd_RaidCreateDetail_is_exclusive                                         = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "is_exclusive")
-	fd_RaidCreateDetail_is_mega                                              = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "is_mega")
-	fd_RaidCreateDetail_player_captured_s2_cell_id                           = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "player_captured_s2_cell_id")
-	fd_RaidCreateDetail_temp_evo_id                                          = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "temp_evo_id")
-	fd_RaidInfoProto_raid_seed                                               = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_seed")
-	fd_RaidInfoProto_raid_spawn_ms                                           = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_spawn_ms")
-	fd_RaidInfoProto_raid_battle_ms                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_battle_ms")
-	fd_RaidInfoProto_raid_end_ms                                             = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_end_ms")
-	fd_RaidInfoProto_raid_pokemon                                            = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_pokemon")
-	fd_RaidInfoProto_raid_level                                              = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_level")
-	fd_RaidInfoProto_complete                                                = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "complete")
-	fd_RaidInfoProto_is_raid_hidden                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_raid_hidden")
-	fd_RaidInfoProto_is_scheduled_raid                                       = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_scheduled_raid")
-	fd_RaidInfoProto_is_free                                                 = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_free")
-	fd_RaidInfoProto_campaign_id                                             = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "campaign_id")
-	fd_RaidInfoProto_raid_ball                                               = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_ball")
-	fd_RaidInfoProto_visual_effects                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "visual_effects")
-	fd_RaidInfoProto_raid_visual_level                                       = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_visual_level")
-	fd_RaidInfoProto_raid_visual_plaque_type                                 = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_visual_plaque_type")
-	fd_RaidInfoProto_raid_plaque_pip_style                                   = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_plaque_pip_style")
-	fd_RaidInfoProto_mascot_character                                        = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "mascot_character")
-	fd_RaidInfoProto_boot_raid_enabled                                       = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "boot_raid_enabled")
-	fd_RaidInfoProto_reward_pokemon                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon")
-	fd_RaidInfoProto_default_raid_ball                                       = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "default_raid_ball")
-	fd_RaidVisualEffect_effect_asset_key                                     = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "effect_asset_key")
-	fd_RaidVisualEffect_start_millis                                         = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "start_millis")
-	fd_RaidVisualEffect_stop_millis                                          = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "stop_millis")
-	fd_SpinPokestopQuestProto_fort_ids                                       = mustFD((*pogo.SpinPokestopQuestProto)(nil).ProtoReflect().Descriptor(), "fort_ids")
-	fd_StationCreateDetail_caught_in_wild                                    = mustFD((*pogo.StationCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
-	fd_StationProto_id                                                       = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "id")
-	fd_StationProto_lat                                                      = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "lat")
-	fd_StationProto_lng                                                      = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "lng")
-	fd_StationProto_name                                                     = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "name")
-	fd_StationProto_battle_details                                           = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "battle_details")
-	fd_StationProto_player_battle_status                                     = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "player_battle_status")
-	fd_StationProto_start_time_ms                                            = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "start_time_ms")
-	fd_StationProto_end_time_ms                                              = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "end_time_ms")
-	fd_StationProto_cooldown_complete_ms                                     = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "cooldown_complete_ms")
-	fd_StationProto_is_bread_battle_available                                = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "is_bread_battle_available")
-	fd_StationProto_is_inactive                                              = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "is_inactive")
-	fd_StickerRewardProto_sticker_id                                         = mustFD((*pogo.StickerRewardProto)(nil).ProtoReflect().Descriptor(), "sticker_id")
-	fd_StickerRewardProto_amount                                             = mustFD((*pogo.StickerRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
-	fd_SubmitSleepRecordsQuestProto_num_days                                 = mustFD((*pogo.SubmitSleepRecordsQuestProto)(nil).ProtoReflect().Descriptor(), "num_days")
-	fd_TakeSnapshotQuestProto_unique_pokemon_id                              = mustFD((*pogo.TakeSnapshotQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
-	fd_Tappable_type                                                         = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "type")
-	fd_Tappable_id                                                           = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "id")
-	fd_Tappable_count                                                        = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "count")
-	fd_Tappable_location_hint_lat                                            = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location_hint_lat")
-	fd_Tappable_location_hint_lng                                            = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location_hint_lng")
-	fd_Tappable_encounter_id                                                 = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "encounter_id")
-	fd_Tappable_location                                                     = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location")
-	fd_Tappable_tappable_type_id                                             = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "tappable_type_id")
-	fd_Tappable_expiration_time_ms                                           = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
-	fd_TappableLocation_spawnpoint_id                                        = mustFD((*pogo.TappableLocation)(nil).ProtoReflect().Descriptor(), "spawnpoint_id")
-	fd_TappableLocation_fort_id                                              = mustFD((*pogo.TappableLocation)(nil).ProtoReflect().Descriptor(), "fort_id")
-	fd_TradePokemonQuestProto_friend_id                                      = mustFD((*pogo.TradePokemonQuestProto)(nil).ProtoReflect().Descriptor(), "friend_id")
-	fd_TravelRouteQuestProto_route_id                                        = mustFD((*pogo.TravelRouteQuestProto)(nil).ProtoReflect().Descriptor(), "route_id")
-	fd_TutorialCreateDetail_caught_in_wild                                   = mustFD((*pogo.TutorialCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
-	fd_VsSeekerCreateDetail_season                                           = mustFD((*pogo.VsSeekerCreateDetail)(nil).ProtoReflect().Descriptor(), "season")
-	fd_VsSeekerCreateDetail_league                                           = mustFD((*pogo.VsSeekerCreateDetail)(nil).ProtoReflect().Descriptor(), "league")
-	fd_WeatherAlertProto_severity                                            = mustFD((*pogo.WeatherAlertProto)(nil).ProtoReflect().Descriptor(), "severity")
-	fd_WeatherAlertProto_warn_weather                                        = mustFD((*pogo.WeatherAlertProto)(nil).ProtoReflect().Descriptor(), "warn_weather")
-	fd_WildCreateDetail_caught_in_wild                                       = mustFD((*pogo.WildCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
-	fd_WildPokemonProto_encounter_id                                         = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
-	fd_WildPokemonProto_last_modified_ms                                     = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
-	fd_WildPokemonProto_latitude                                             = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "latitude")
-	fd_WildPokemonProto_longitude                                            = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "longitude")
-	fd_WildPokemonProto_spawn_point_id                                       = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "spawn_point_id")
-	fd_WildPokemonProto_pokemon                                              = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon")
-	fd_WildPokemonProto_time_till_hidden_ms                                  = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "time_till_hidden_ms")
-	fd_WithAuthProviderTypeProto_auth_provider_type                          = mustFD((*pogo.WithAuthProviderTypeProto)(nil).ProtoReflect().Descriptor(), "auth_provider_type")
-	fd_WithBadgeTypeProto_badge_type                                         = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_type")
-	fd_WithBadgeTypeProto_badge_rank                                         = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_rank")
-	fd_WithBadgeTypeProto_amount                                             = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "amount")
-	fd_WithBadgeTypeProto_badge_types_to_exclude                             = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_types_to_exclude")
-	fd_WithBreadMoveTypeProto_bread_move                                     = mustFD((*pogo.WithBreadMoveTypeProto)(nil).ProtoReflect().Descriptor(), "bread_move")
-	fd_WithBuddyProto_min_buddy_level                                        = mustFD((*pogo.WithBuddyProto)(nil).ProtoReflect().Descriptor(), "min_buddy_level")
-	fd_WithBuddyProto_must_be_on_map                                         = mustFD((*pogo.WithBuddyProto)(nil).ProtoReflect().Descriptor(), "must_be_on_map")
-	fd_WithCombatTypeProto_combat_type                                       = mustFD((*pogo.WithCombatTypeProto)(nil).ProtoReflect().Descriptor(), "combat_type")
-	fd_WithDailyBuddyAffectionProto_min_buddy_affection_earned_today         = mustFD((*pogo.WithDailyBuddyAffectionProto)(nil).ProtoReflect().Descriptor(), "min_buddy_affection_earned_today")
-	fd_WithDeviceTypeProto_device_type                                       = mustFD((*pogo.WithDeviceTypeProto)(nil).ProtoReflect().Descriptor(), "device_type")
-	fd_WithDistanceProto_distance_km                                         = mustFD((*pogo.WithDistanceProto)(nil).ProtoReflect().Descriptor(), "distance_km")
-	fd_WithElapsedTimeProto_elapsed_time_ms                                  = mustFD((*pogo.WithElapsedTimeProto)(nil).ProtoReflect().Descriptor(), "elapsed_time_ms")
-	fd_WithEncounterTypeProto_encounter_type                                 = mustFD((*pogo.WithEncounterTypeProto)(nil).ProtoReflect().Descriptor(), "encounter_type")
-	fd_WithFortIdProto_fort_ids                                              = mustFD((*pogo.WithFortIdProto)(nil).ProtoReflect().Descriptor(), "fort_ids")
-	fd_WithFriendLevelProto_friendship_level_milestone                       = mustFD((*pogo.WithFriendLevelProto)(nil).ProtoReflect().Descriptor(), "friendship_level_milestone")
-	fd_WithFriendsRaidProto_friend_location                                  = mustFD((*pogo.WithFriendsRaidProto)(nil).ProtoReflect().Descriptor(), "friend_location")
-	fd_WithFriendsRaidProto_min_friends_in_raid                              = mustFD((*pogo.WithFriendsRaidProto)(nil).ProtoReflect().Descriptor(), "min_friends_in_raid")
-	fd_WithGblRankProto_rank                                                 = mustFD((*pogo.WithGblRankProto)(nil).ProtoReflect().Descriptor(), "rank")
-	fd_WithInvasionCharacterProto_category                                   = mustFD((*pogo.WithInvasionCharacterProto)(nil).ProtoReflect().Descriptor(), "category")
-	fd_WithInvasionCharacterProto_invasion_character                         = mustFD((*pogo.WithInvasionCharacterProto)(nil).ProtoReflect().Descriptor(), "invasion_character")
-	fd_WithItemProto_item                                                    = mustFD((*pogo.WithItemProto)(nil).ProtoReflect().Descriptor(), "item")
-	fd_WithItemProto_items                                                   = mustFD((*pogo.WithItemProto)(nil).ProtoReflect().Descriptor(), "items")
-	fd_WithItemTypeProto_item_type                                           = mustFD((*pogo.WithItemTypeProto)(nil).ProtoReflect().Descriptor(), "item_type")
-	fd_WithLocationProto_s2_cell_id                                          = mustFD((*pogo.WithLocationProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
-	fd_WithMaxCpProto_max_cp                                                 = mustFD((*pogo.WithMaxCpProto)(nil).ProtoReflect().Descriptor(), "max_cp")
-	fd_WithNpcCombatProto_requires_win                                       = mustFD((*pogo.WithNpcCombatProto)(nil).ProtoReflect().Descriptor(), "requires_win")
-	fd_WithNpcCombatProto_combat_npc_trainer_id                              = mustFD((*pogo.WithNpcCombatProto)(nil).ProtoReflect().Descriptor(), "combat_npc_trainer_id")
-	fd_WithOpponentPokemonBattleStatusProto_require_defeat                   = mustFD((*pogo.WithOpponentPokemonBattleStatusProto)(nil).ProtoReflect().Descriptor(), "require_defeat")
-	fd_WithOpponentPokemonBattleStatusProto_opponent_pokemon_type            = mustFD((*pogo.WithOpponentPokemonBattleStatusProto)(nil).ProtoReflect().Descriptor(), "opponent_pokemon_type")
-	fd_WithPageTypeProto_page_type                                           = mustFD((*pogo.WithPageTypeProto)(nil).ProtoReflect().Descriptor(), "page_type")
-	fd_WithPlayerLevelProto_level                                            = mustFD((*pogo.WithPlayerLevelProto)(nil).ProtoReflect().Descriptor(), "level")
-	fd_WithPoiSponsorIdProto_sponsor_id                                      = mustFD((*pogo.WithPoiSponsorIdProto)(nil).ProtoReflect().Descriptor(), "sponsor_id")
-	fd_WithPokemonAlignmentProto_alignment                                   = mustFD((*pogo.WithPokemonAlignmentProto)(nil).ProtoReflect().Descriptor(), "alignment")
-	fd_WithPokemonCategoryProto_category_name                                = mustFD((*pogo.WithPokemonCategoryProto)(nil).ProtoReflect().Descriptor(), "category_name")
-	fd_WithPokemonCategoryProto_pokemon_ids                                  = mustFD((*pogo.WithPokemonCategoryProto)(nil).ProtoReflect().Descriptor(), "pokemon_ids")
-	fd_WithPokemonCostumeProto_require_no_costume                            = mustFD((*pogo.WithPokemonCostumeProto)(nil).ProtoReflect().Descriptor(), "require_no_costume")
-	fd_WithPokemonCpProto_max_cp                                             = mustFD((*pogo.WithPokemonCpProto)(nil).ProtoReflect().Descriptor(), "max_cp")
-	fd_WithPokemonCpProto_min_cp                                             = mustFD((*pogo.WithPokemonCpProto)(nil).ProtoReflect().Descriptor(), "min_cp")
-	fd_WithPokemonFormProto_forms                                            = mustFD((*pogo.WithPokemonFormProto)(nil).ProtoReflect().Descriptor(), "forms")
-	fd_WithPokemonLevelProto_max_level                                       = mustFD((*pogo.WithPokemonLevelProto)(nil).ProtoReflect().Descriptor(), "max_level")
-	fd_WithPokemonMoveProto_move_ids                                         = mustFD((*pogo.WithPokemonMoveProto)(nil).ProtoReflect().Descriptor(), "move_ids")
-	fd_WithPokemonSizeProto_pokemon_size                                     = mustFD((*pogo.WithPokemonSizeProto)(nil).ProtoReflect().Descriptor(), "pokemon_size")
-	fd_WithPokemonTypeProto_pokemon_type                                     = mustFD((*pogo.WithPokemonTypeProto)(nil).ProtoReflect().Descriptor(), "pokemon_type")
-	fd_WithPvpCombatProto_requires_win                                       = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "requires_win")
-	fd_WithPvpCombatProto_combat_league_template_id                          = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "combat_league_template_id")
-	fd_WithPvpCombatProto_combat_league_badge                                = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "combat_league_badge")
-	fd_WithQuestContextProto_context                                         = mustFD((*pogo.WithQuestContextProto)(nil).ProtoReflect().Descriptor(), "context")
-	fd_WithRaidLevelProto_raid_level                                         = mustFD((*pogo.WithRaidLevelProto)(nil).ProtoReflect().Descriptor(), "raid_level")
-	fd_WithRaidLocationProto_location                                        = mustFD((*pogo.WithRaidLocationProto)(nil).ProtoReflect().Descriptor(), "location")
-	fd_WithSingleDayProto_last_window                                        = mustFD((*pogo.WithSingleDayProto)(nil).ProtoReflect().Descriptor(), "last_window")
-	fd_WithTappableTypeProto_tappable_type                                   = mustFD((*pogo.WithTappableTypeProto)(nil).ProtoReflect().Descriptor(), "tappable_type")
-	fd_WithTappableTypeProto_tappable_type_id                                = mustFD((*pogo.WithTappableTypeProto)(nil).ProtoReflect().Descriptor(), "tappable_type_id")
-	fd_WithTempEvoIdProto_mega_form                                          = mustFD((*pogo.WithTempEvoIdProto)(nil).ProtoReflect().Descriptor(), "mega_form")
-	fd_WithThrowTypeProto_throw_type                                         = mustFD((*pogo.WithThrowTypeProto)(nil).ProtoReflect().Descriptor(), "throw_type")
-	fd_WithThrowTypeProto_hit                                                = mustFD((*pogo.WithThrowTypeProto)(nil).ProtoReflect().Descriptor(), "hit")
-	fd_WithTotalDaysProto_last_window                                        = mustFD((*pogo.WithTotalDaysProto)(nil).ProtoReflect().Descriptor(), "last_window")
-	fd_WithTraineePokemonAttributesProto_trainee_attribute                   = mustFD((*pogo.WithTraineePokemonAttributesProto)(nil).ProtoReflect().Descriptor(), "trainee_attribute")
-	fd_WithUniquePokestopProto_context                                       = mustFD((*pogo.WithUniquePokestopProto)(nil).ProtoReflect().Descriptor(), "context")
+	fd_AdDetails_image_text_creative                                                  = mustFD((*pogo.AdDetails)(nil).ProtoReflect().Descriptor(), "image_text_creative")
+	fd_AdDetails_encrypted_ad_token                                                   = mustFD((*pogo.AdDetails)(nil).ProtoReflect().Descriptor(), "encrypted_ad_token")
+	fd_AdDetails_impression_tracking_tag                                              = mustFD((*pogo.AdDetails)(nil).ProtoReflect().Descriptor(), "impression_tracking_tag")
+	fd_AdDetails_gam_details                                                          = mustFD((*pogo.AdDetails)(nil).ProtoReflect().Descriptor(), "gam_details")
+	fd_AdProto_ad_details                                                             = mustFD((*pogo.AdProto)(nil).ProtoReflect().Descriptor(), "ad_details")
+	fd_AdProto_ad_response_status                                                     = mustFD((*pogo.AdProto)(nil).ProtoReflect().Descriptor(), "ad_response_status")
+	fd_AddFriendQuestProto_added_friend_ids                                           = mustFD((*pogo.AddFriendQuestProto)(nil).ProtoReflect().Descriptor(), "added_friend_ids")
+	fd_AppliedAttackDefenseBonusProto_attributes                                      = mustFD((*pogo.AppliedAttackDefenseBonusProto)(nil).ProtoReflect().Descriptor(), "attributes")
+	fd_AppliedBonusEffectProto_time_bonus                                             = mustFD((*pogo.AppliedBonusEffectProto)(nil).ProtoReflect().Descriptor(), "time_bonus")
+	fd_AppliedBonusEffectProto_space_bonus                                            = mustFD((*pogo.AppliedBonusEffectProto)(nil).ProtoReflect().Descriptor(), "space_bonus")
+	fd_AppliedBonusEffectProto_day_night_bonus                                        = mustFD((*pogo.AppliedBonusEffectProto)(nil).ProtoReflect().Descriptor(), "day_night_bonus")
+	fd_AppliedBonusEffectProto_slow_freeze_bonus                                      = mustFD((*pogo.AppliedBonusEffectProto)(nil).ProtoReflect().Descriptor(), "slow_freeze_bonus")
+	fd_AppliedBonusEffectProto_attack_defense_bonus                                   = mustFD((*pogo.AppliedBonusEffectProto)(nil).ProtoReflect().Descriptor(), "attack_defense_bonus")
+	fd_AppliedBonusProto_bonus_type                                                   = mustFD((*pogo.AppliedBonusProto)(nil).ProtoReflect().Descriptor(), "bonus_type")
+	fd_AppliedBonusProto_expiration_time_ms                                           = mustFD((*pogo.AppliedBonusProto)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
+	fd_AppliedBonusProto_applied_time_ms                                              = mustFD((*pogo.AppliedBonusProto)(nil).ProtoReflect().Descriptor(), "applied_time_ms")
+	fd_AppliedBonusProto_effect                                                       = mustFD((*pogo.AppliedBonusProto)(nil).ProtoReflect().Descriptor(), "effect")
+	fd_AppliedBonusesProto_item                                                       = mustFD((*pogo.AppliedBonusesProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_AppliedDayNightBonusProto_incense_item                                         = mustFD((*pogo.AppliedDayNightBonusProto)(nil).ProtoReflect().Descriptor(), "incense_item")
+	fd_AppliedDayNightBonusProto_incense_spawn_distribution                           = mustFD((*pogo.AppliedDayNightBonusProto)(nil).ProtoReflect().Descriptor(), "incense_spawn_distribution")
+	fd_AppliedSlowFreezeBonusProto_catch_circle_speed_override                        = mustFD((*pogo.AppliedSlowFreezeBonusProto)(nil).ProtoReflect().Descriptor(), "catch_circle_speed_override")
+	fd_AppliedSlowFreezeBonusProto_catch_rate_increase_multiplier                     = mustFD((*pogo.AppliedSlowFreezeBonusProto)(nil).ProtoReflect().Descriptor(), "catch_rate_increase_multiplier")
+	fd_AppliedSlowFreezeBonusProto_catch_circle_speed_change_threshold                = mustFD((*pogo.AppliedSlowFreezeBonusProto)(nil).ProtoReflect().Descriptor(), "catch_circle_speed_change_threshold")
+	fd_AppliedSlowFreezeBonusProto_catch_circle_outer_time_scale_override             = mustFD((*pogo.AppliedSlowFreezeBonusProto)(nil).ProtoReflect().Descriptor(), "catch_circle_outer_time_scale_override")
+	fd_AppliedSpaceBonusProto_pokemon_visible_range_meters                            = mustFD((*pogo.AppliedSpaceBonusProto)(nil).ProtoReflect().Descriptor(), "pokemon_visible_range_meters")
+	fd_AppliedSpaceBonusProto_encounter_range_meters                                  = mustFD((*pogo.AppliedSpaceBonusProto)(nil).ProtoReflect().Descriptor(), "encounter_range_meters")
+	fd_AppliedSpaceBonusProto_server_allowable_encounter_range_meters                 = mustFD((*pogo.AppliedSpaceBonusProto)(nil).ProtoReflect().Descriptor(), "server_allowable_encounter_range_meters")
+	fd_AppliedTimeBonusProto_affected_items                                           = mustFD((*pogo.AppliedTimeBonusProto)(nil).ProtoReflect().Descriptor(), "affected_items")
+	fd_AttackDefenseBonusAttributeSettingsProto_combat_types                          = mustFD((*pogo.AttackDefenseBonusAttributeSettingsProto)(nil).ProtoReflect().Descriptor(), "combat_types")
+	fd_AttackDefenseBonusAttributeSettingsProto_attack_multiplier                     = mustFD((*pogo.AttackDefenseBonusAttributeSettingsProto)(nil).ProtoReflect().Descriptor(), "attack_multiplier")
+	fd_AttackDefenseBonusAttributeSettingsProto_defense_multiplier                    = mustFD((*pogo.AttackDefenseBonusAttributeSettingsProto)(nil).ProtoReflect().Descriptor(), "defense_multiplier")
+	fd_AvatarArticleProto_article_id                                                  = mustFD((*pogo.AvatarArticleProto)(nil).ProtoReflect().Descriptor(), "article_id")
+	fd_AvatarArticleProto_color                                                       = mustFD((*pogo.AvatarArticleProto)(nil).ProtoReflect().Descriptor(), "color")
+	fd_AvatarArticleProto_slot_id                                                     = mustFD((*pogo.AvatarArticleProto)(nil).ProtoReflect().Descriptor(), "slot_id")
+	fd_AvatarItemDisplayProto_icon_address                                            = mustFD((*pogo.AvatarItemDisplayProto)(nil).ProtoReflect().Descriptor(), "icon_address")
+	fd_AvatarItemDisplayProto_display_string_id                                       = mustFD((*pogo.AvatarItemDisplayProto)(nil).ProtoReflect().Descriptor(), "display_string_id")
+	fd_AvatarStoreLinkProto_article_id                                                = mustFD((*pogo.AvatarStoreLinkProto)(nil).ProtoReflect().Descriptor(), "article_id")
+	fd_AvatarStoreLinkProto_group_name                                                = mustFD((*pogo.AvatarStoreLinkProto)(nil).ProtoReflect().Descriptor(), "group_name")
+	fd_AwardItemProto_item                                                            = mustFD((*pogo.AwardItemProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_AwardItemProto_item_count                                                      = mustFD((*pogo.AwardItemProto)(nil).ProtoReflect().Descriptor(), "item_count")
+	fd_AwardItemProto_bonus_count                                                     = mustFD((*pogo.AwardItemProto)(nil).ProtoReflect().Descriptor(), "bonus_count")
+	fd_AwardedGymBadge_fort_id                                                        = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_AwardedGymBadge_gym_badge_type                                                 = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "gym_badge_type")
+	fd_AwardedGymBadge_score                                                          = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "score")
+	fd_AwardedGymBadge_gym_badge_stats                                                = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "gym_badge_stats")
+	fd_AwardedGymBadge_last_update_timestamp_ms                                       = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "last_update_timestamp_ms")
+	fd_AwardedGymBadge_name                                                           = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "name")
+	fd_AwardedGymBadge_image_url                                                      = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_AwardedGymBadge_description                                                    = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "description")
+	fd_AwardedGymBadge_latitude                                                       = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_AwardedGymBadge_longitude                                                      = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_AwardedGymBadge_last_check_timestamp_ms                                        = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "last_check_timestamp_ms")
+	fd_AwardedGymBadge_earned_points                                                  = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "earned_points")
+	fd_AwardedGymBadge_progress                                                       = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "progress")
+	fd_AwardedGymBadge_level_up                                                       = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "level_up")
+	fd_AwardedGymBadge_raids                                                          = mustFD((*pogo.AwardedGymBadge)(nil).ProtoReflect().Descriptor(), "raids")
+	fd_BattleEventProto_battle_join                                                   = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "battle_join")
+	fd_BattleEventProto_battle_quit                                                   = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "battle_quit")
+	fd_BattleEventProto_attack                                                        = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "attack")
+	fd_BattleEventProto_dodge                                                         = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "dodge")
+	fd_BattleEventProto_shield                                                        = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "shield")
+	fd_BattleEventProto_swap_pokemon                                                  = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "swap_pokemon")
+	fd_BattleEventProto_item                                                          = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_BattleEventProto_trainer_ability                                               = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "trainer_ability")
+	fd_BattleEventProto_stat_change                                                   = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "stat_change")
+	fd_BattleEventProto_start_battle                                                  = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "start_battle")
+	fd_BattleEventProto_transform                                                     = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "transform")
+	fd_BattleEventProto_ability_trigger                                               = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "ability_trigger")
+	fd_BattleEventProto_battle_end                                                    = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "battle_end")
+	fd_BattleEventProto_countdown                                                     = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "countdown")
+	fd_BattleEventProto_dodge_success                                                 = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "dodge_success")
+	fd_BattleEventProto_flinch                                                        = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "flinch")
+	fd_BattleEventProto_bread_move                                                    = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "bread_move")
+	fd_BattleEventProto_sideline_action                                               = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "sideline_action")
+	fd_BattleEventProto_attack_telegraph                                              = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "attack_telegraph")
+	fd_BattleEventProto_cinematic                                                     = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "cinematic")
+	fd_BattleEventProto_consensus                                                     = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "consensus")
+	fd_BattleEventProto_attack_boost                                                  = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "attack_boost")
+	fd_BattleEventProto_window                                                        = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "window")
+	fd_BattleEventProto_type                                                          = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_actor_id                                                      = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "actor_id")
+	fd_BattleEventProto_turn                                                          = mustFD((*pogo.BattleEventProto)(nil).ProtoReflect().Descriptor(), "turn")
+	fd_BattleEventProto_AbilityTrigger_vfx_key                                        = mustFD((*pogo.BattleEventProto_AbilityTrigger)(nil).ProtoReflect().Descriptor(), "vfx_key")
+	fd_BattleEventProto_AbilityTrigger_stop_vfx                                       = mustFD((*pogo.BattleEventProto_AbilityTrigger)(nil).ProtoReflect().Descriptor(), "stop_vfx")
+	fd_BattleEventProto_Attack_attack_type                                            = mustFD((*pogo.BattleEventProto_Attack)(nil).ProtoReflect().Descriptor(), "attack_type")
+	fd_BattleEventProto_Attack_score                                                  = mustFD((*pogo.BattleEventProto_Attack)(nil).ProtoReflect().Descriptor(), "score")
+	fd_BattleEventProto_Attack_move                                                   = mustFD((*pogo.BattleEventProto_Attack)(nil).ProtoReflect().Descriptor(), "move")
+	fd_BattleEventProto_Attack_type                                                   = mustFD((*pogo.BattleEventProto_Attack)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_Attack_target_id                                              = mustFD((*pogo.BattleEventProto_Attack)(nil).ProtoReflect().Descriptor(), "target_id")
+	fd_BattleEventProto_AttackBoost_magnitude                                         = mustFD((*pogo.BattleEventProto_AttackBoost)(nil).ProtoReflect().Descriptor(), "magnitude")
+	fd_BattleEventProto_AttackTelegraph_type                                          = mustFD((*pogo.BattleEventProto_AttackTelegraph)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_BattleEnd_reason                                              = mustFD((*pogo.BattleEventProto_BattleEnd)(nil).ProtoReflect().Descriptor(), "reason")
+	fd_BattleEventProto_BattleItem_item                                               = mustFD((*pogo.BattleEventProto_BattleItem)(nil).ProtoReflect().Descriptor(), "item")
+	fd_BattleEventProto_BattleJoin_roster                                             = mustFD((*pogo.BattleEventProto_BattleJoin)(nil).ProtoReflect().Descriptor(), "roster")
+	fd_BattleEventProto_BattleJoin_extra_resources                                    = mustFD((*pogo.BattleEventProto_BattleJoin)(nil).ProtoReflect().Descriptor(), "extra_resources")
+	fd_BattleEventProto_BattleJoin_player_metadata                                    = mustFD((*pogo.BattleEventProto_BattleJoin)(nil).ProtoReflect().Descriptor(), "player_metadata")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_trainer_name                        = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "trainer_name")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_trainer_party_id                    = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "trainer_party_id")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_max_friendship_level                = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "max_friendship_level")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_remote                              = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "remote")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_num_local_friends                   = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "num_local_friends")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_num_remote_friends                  = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "num_remote_friends")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_origin_id                           = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "origin_id")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_player_public_profile               = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "player_public_profile")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_mvt_avatar_customization_score      = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "mvt_avatar_customization_score")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_distance_from_raid_meters           = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "distance_from_raid_meters")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_pokemon_id                    = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "buddy_pokemon_id")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_recent_distance_walked_km           = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "recent_distance_walked_km")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_on_map                        = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "buddy_on_map")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_buddy_level                         = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "buddy_level")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_player_number                       = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "player_number")
+	fd_BattleEventProto_BattleJoin_PlayerMetadata_battle_bonuses                      = mustFD((*pogo.BattleEventProto_BattleJoin_PlayerMetadata)(nil).ProtoReflect().Descriptor(), "battle_bonuses")
+	fd_BattleEventProto_BattleQuit_type                                               = mustFD((*pogo.BattleEventProto_BattleQuit)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_BattleQuit_window                                             = mustFD((*pogo.BattleEventProto_BattleQuit)(nil).ProtoReflect().Descriptor(), "window")
+	fd_BattleEventProto_BreadMove_type                                                = mustFD((*pogo.BattleEventProto_BreadMove)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_Cinematic_bread_move_metadata                                 = mustFD((*pogo.BattleEventProto_Cinematic)(nil).ProtoReflect().Descriptor(), "bread_move_metadata")
+	fd_BattleEventProto_Cinematic_event_type                                          = mustFD((*pogo.BattleEventProto_Cinematic)(nil).ProtoReflect().Descriptor(), "event_type")
+	fd_BattleEventProto_Cinematic_begin_turn                                          = mustFD((*pogo.BattleEventProto_Cinematic)(nil).ProtoReflect().Descriptor(), "begin_turn")
+	fd_BattleEventProto_Cinematic_end_turn                                            = mustFD((*pogo.BattleEventProto_Cinematic)(nil).ProtoReflect().Descriptor(), "end_turn")
+	fd_BattleEventProto_Cinematic_BreadMoveMetadata_move_type                         = mustFD((*pogo.BattleEventProto_Cinematic_BreadMoveMetadata)(nil).ProtoReflect().Descriptor(), "move_type")
+	fd_BattleEventProto_Consensus_begin_turn                                          = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "begin_turn")
+	fd_BattleEventProto_Consensus_end_turn                                            = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "end_turn")
+	fd_BattleEventProto_Consensus_unblocked_event_type                                = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "unblocked_event_type")
+	fd_BattleEventProto_Consensus_consensus_event_subtype                             = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "consensus_event_subtype")
+	fd_BattleEventProto_Consensus_vote_end_turn                                       = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "vote_end_turn")
+	fd_BattleEventProto_Consensus_unblocked_event_types                               = mustFD((*pogo.BattleEventProto_Consensus)(nil).ProtoReflect().Descriptor(), "unblocked_event_types")
+	fd_BattleEventProto_Countdown_countdown                                           = mustFD((*pogo.BattleEventProto_Countdown)(nil).ProtoReflect().Descriptor(), "countdown")
+	fd_BattleEventProto_Dodge_direction                                               = mustFD((*pogo.BattleEventProto_Dodge)(nil).ProtoReflect().Descriptor(), "direction")
+	fd_BattleEventProto_Flinch_effectiveness                                          = mustFD((*pogo.BattleEventProto_Flinch)(nil).ProtoReflect().Descriptor(), "effectiveness")
+	fd_BattleEventProto_PositionalRosterEntry_pokemon                                 = mustFD((*pogo.BattleEventProto_PositionalRosterEntry)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_BattleEventProto_PositionalRosterEntry_position_x                              = mustFD((*pogo.BattleEventProto_PositionalRosterEntry)(nil).ProtoReflect().Descriptor(), "position_x")
+	fd_BattleEventProto_PositionalRosterEntry_position_y                              = mustFD((*pogo.BattleEventProto_PositionalRosterEntry)(nil).ProtoReflect().Descriptor(), "position_y")
+	fd_BattleEventProto_PositionalRosterEntry_start_energy                            = mustFD((*pogo.BattleEventProto_PositionalRosterEntry)(nil).ProtoReflect().Descriptor(), "start_energy")
+	fd_BattleEventProto_PositionalRosterEntry_max_moves                               = mustFD((*pogo.BattleEventProto_PositionalRosterEntry)(nil).ProtoReflect().Descriptor(), "max_moves")
+	fd_BattleEventProto_PositionalRosterEntry_MaxMoves_move_type                      = mustFD((*pogo.BattleEventProto_PositionalRosterEntry_MaxMoves)(nil).ProtoReflect().Descriptor(), "move_type")
+	fd_BattleEventProto_PositionalRosterEntry_MaxMoves_max_move                       = mustFD((*pogo.BattleEventProto_PositionalRosterEntry_MaxMoves)(nil).ProtoReflect().Descriptor(), "max_move")
+	fd_BattleEventProto_SidelineAction_type                                           = mustFD((*pogo.BattleEventProto_SidelineAction)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_StatChange_stat_stage                                         = mustFD((*pogo.BattleEventProto_StatChange)(nil).ProtoReflect().Descriptor(), "stat_stage")
+	fd_BattleEventProto_StatChange_StatStage_type                                     = mustFD((*pogo.BattleEventProto_StatChange_StatStage)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleEventProto_StatChange_StatStage_delta                                    = mustFD((*pogo.BattleEventProto_StatChange_StatStage)(nil).ProtoReflect().Descriptor(), "delta")
+	fd_BattleEventProto_SwapPokemon_outgoing_pokemon_id                               = mustFD((*pogo.BattleEventProto_SwapPokemon)(nil).ProtoReflect().Descriptor(), "outgoing_pokemon_id")
+	fd_BattleEventProto_SwapPokemon_incoming_pokemon_id                               = mustFD((*pogo.BattleEventProto_SwapPokemon)(nil).ProtoReflect().Descriptor(), "incoming_pokemon_id")
+	fd_BattleEventProto_TrainerAbility_ability                                        = mustFD((*pogo.BattleEventProto_TrainerAbility)(nil).ProtoReflect().Descriptor(), "ability")
+	fd_BattleEventProto_Transform_vfx_key                                             = mustFD((*pogo.BattleEventProto_Transform)(nil).ProtoReflect().Descriptor(), "vfx_key")
+	fd_BattleEventProto_Window_one                                                    = mustFD((*pogo.BattleEventProto_Window)(nil).ProtoReflect().Descriptor(), "one")
+	fd_BattleEventProto_Window_two                                                    = mustFD((*pogo.BattleEventProto_Window)(nil).ProtoReflect().Descriptor(), "two")
+	fd_BattleQuestProto_battle_id                                                     = mustFD((*pogo.BattleQuestProto)(nil).ProtoReflect().Descriptor(), "battle_id")
+	fd_BattleResourceProto_item                                                       = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_BattleResourceProto_pokemon_id                                                 = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_BattleResourceProto_type                                                       = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_BattleResourceProto_quantity                                                   = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "quantity")
+	fd_BattleResourceProto_max_quantity                                               = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "max_quantity")
+	fd_BattleResourceProto_disabled                                                   = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "disabled")
+	fd_BattleResourceProto_cooldown_metadata                                          = mustFD((*pogo.BattleResourceProto)(nil).ProtoReflect().Descriptor(), "cooldown_metadata")
+	fd_BattleResourceProto_CooldownMetadata_last_used_turn                            = mustFD((*pogo.BattleResourceProto_CooldownMetadata)(nil).ProtoReflect().Descriptor(), "last_used_turn")
+	fd_BattleResourceProto_CooldownMetadata_next_available_turn                       = mustFD((*pogo.BattleResourceProto_CooldownMetadata)(nil).ProtoReflect().Descriptor(), "next_available_turn")
+	fd_BattleStateOutProto_battle_state                                               = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "battle_state")
+	fd_BattleStateOutProto_turn                                                       = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "turn")
+	fd_BattleStateOutProto_time_ms                                                    = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "time_ms")
+	fd_BattleStateOutProto_full_state                                                 = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "full_state")
+	fd_BattleStateOutProto_serial                                                     = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "serial")
+	fd_BattleStateOutProto_error                                                      = mustFD((*pogo.BattleStateOutProto)(nil).ProtoReflect().Descriptor(), "error")
+	fd_BattleStateProto_turn_start_ms                                                 = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "turn_start_ms")
+	fd_BattleStateProto_turn                                                          = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "turn")
+	fd_BattleStateProto_ms_per_turn                                                   = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "ms_per_turn")
+	fd_BattleStateProto_current_actor_id                                              = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "current_actor_id")
+	fd_BattleStateProto_state                                                         = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "state")
+	fd_BattleStateProto_active_actor_count                                            = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "active_actor_count")
+	fd_BattleStateProto_events                                                        = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "events")
+	fd_BattleStateProto_battle_end_turn                                               = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "battle_end_turn")
+	fd_BattleStateProto_battle_start_turn                                             = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "battle_start_turn")
+	fd_BattleStateProto_ui_mode                                                       = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "ui_mode")
+	fd_BattleStateProto_allied_pokemon_remaining                                      = mustFD((*pogo.BattleStateProto)(nil).ProtoReflect().Descriptor(), "allied_pokemon_remaining")
+	fd_BreadBattleCreateDetail_bread_battle_level                                     = mustFD((*pogo.BreadBattleCreateDetail)(nil).ProtoReflect().Descriptor(), "bread_battle_level")
+	fd_BreadBattleDetailProto_bread_battle_seed                                       = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "bread_battle_seed")
+	fd_BreadBattleDetailProto_battle_spawn_ms                                         = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_spawn_ms")
+	fd_BreadBattleDetailProto_battle_window_start_ms                                  = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_window_start_ms")
+	fd_BreadBattleDetailProto_battle_window_end_ms                                    = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_window_end_ms")
+	fd_BreadBattleDetailProto_battle_pokemon                                          = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_pokemon")
+	fd_BreadBattleDetailProto_reward_pokemon                                          = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon")
+	fd_BreadBattleDetailProto_complete                                                = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "complete")
+	fd_BreadBattleDetailProto_saved_for_later                                         = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "saved_for_later")
+	fd_BreadBattleDetailProto_battle_level                                            = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "battle_level")
+	fd_BreadBattleDetailProto_min_recommended_player_count                            = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "min_recommended_player_count")
+	fd_BreadBattleDetailProto_max_recommended_player_count                            = mustFD((*pogo.BreadBattleDetailProto)(nil).ProtoReflect().Descriptor(), "max_recommended_player_count")
+	fd_BreadMoveSlotProto_move_type                                                   = mustFD((*pogo.BreadMoveSlotProto)(nil).ProtoReflect().Descriptor(), "move_type")
+	fd_BreadMoveSlotProto_move_level                                                  = mustFD((*pogo.BreadMoveSlotProto)(nil).ProtoReflect().Descriptor(), "move_level")
+	fd_BuddyEvolutionWalkQuestProto_last_km_recorded                                  = mustFD((*pogo.BuddyEvolutionWalkQuestProto)(nil).ProtoReflect().Descriptor(), "last_km_recorded")
+	fd_CaptureProbabilityProto_pokeball_type                                          = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "pokeball_type")
+	fd_CaptureProbabilityProto_capture_probability                                    = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
+	fd_CaptureProbabilityProto_reticle_difficulty_scale                               = mustFD((*pogo.CaptureProbabilityProto)(nil).ProtoReflect().Descriptor(), "reticle_difficulty_scale")
+	fd_CatchPokemonQuestProto_unique_pokemon_id                                       = mustFD((*pogo.CatchPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
+	fd_CatchPokemonQuestProto_active_encounter_id                                     = mustFD((*pogo.CatchPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "active_encounter_id")
+	fd_CharacterDisplayProto_style                                                    = mustFD((*pogo.CharacterDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
+	fd_CharacterDisplayProto_character                                                = mustFD((*pogo.CharacterDisplayProto)(nil).ProtoReflect().Descriptor(), "character")
+	fd_ClientContestIncidentProto_contests                                            = mustFD((*pogo.ClientContestIncidentProto)(nil).ProtoReflect().Descriptor(), "contests")
+	fd_ClientDialogueLineProto_text                                                   = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "text")
+	fd_ClientDialogueLineProto_character                                              = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "character")
+	fd_ClientDialogueLineProto_expression                                             = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "expression")
+	fd_ClientDialogueLineProto_left_asset_address                                     = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "left_asset_address")
+	fd_ClientDialogueLineProto_side                                                   = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "side")
+	fd_ClientDialogueLineProto_display_only_loot                                      = mustFD((*pogo.ClientDialogueLineProto)(nil).ProtoReflect().Descriptor(), "display_only_loot")
+	fd_ClientFortModifierProto_modifier_type                                          = mustFD((*pogo.ClientFortModifierProto)(nil).ProtoReflect().Descriptor(), "modifier_type")
+	fd_ClientFortModifierProto_expiration_time_ms                                     = mustFD((*pogo.ClientFortModifierProto)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
+	fd_ClientFortModifierProto_deploying_player_codename                              = mustFD((*pogo.ClientFortModifierProto)(nil).ProtoReflect().Descriptor(), "deploying_player_codename")
+	fd_ClientIncidentProto_incident_id                                                = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "incident_id")
+	fd_ClientIncidentProto_fort_id                                                    = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_ClientIncidentProto_fort_name                                                  = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "fort_name")
+	fd_ClientIncidentProto_pokestop_image_uri                                         = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "pokestop_image_uri")
+	fd_ClientIncidentProto_current_step                                               = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "current_step")
+	fd_ClientIncidentProto_step                                                       = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "step")
+	fd_ClientIncidentProto_completion_display                                         = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "completion_display")
+	fd_ClientIncidentProto_context                                                    = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "context")
+	fd_ClientIncidentProto_start_phase                                                = mustFD((*pogo.ClientIncidentProto)(nil).ProtoReflect().Descriptor(), "start_phase")
+	fd_ClientIncidentStepProto_invasion_battle                                        = mustFD((*pogo.ClientIncidentStepProto)(nil).ProtoReflect().Descriptor(), "invasion_battle")
+	fd_ClientIncidentStepProto_invasion_encounter                                     = mustFD((*pogo.ClientIncidentStepProto)(nil).ProtoReflect().Descriptor(), "invasion_encounter")
+	fd_ClientIncidentStepProto_pokestop_dialogue                                      = mustFD((*pogo.ClientIncidentStepProto)(nil).ProtoReflect().Descriptor(), "pokestop_dialogue")
+	fd_ClientIncidentStepProto_pokestop_spin                                          = mustFD((*pogo.ClientIncidentStepProto)(nil).ProtoReflect().Descriptor(), "pokestop_spin")
+	fd_ClientInvasionBattleStepProto_character                                        = mustFD((*pogo.ClientInvasionBattleStepProto)(nil).ProtoReflect().Descriptor(), "character")
+	fd_ClientMapCellProto_s2_cell_id                                                  = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_ClientMapCellProto_as_of_time_ms                                               = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "as_of_time_ms")
+	fd_ClientMapCellProto_fort                                                        = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "fort")
+	fd_ClientMapCellProto_spawn_point                                                 = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "spawn_point")
+	fd_ClientMapCellProto_wild_pokemon                                                = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "wild_pokemon")
+	fd_ClientMapCellProto_deleted_object                                              = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "deleted_object")
+	fd_ClientMapCellProto_is_truncated_list                                           = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "is_truncated_list")
+	fd_ClientMapCellProto_fort_summary                                                = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "fort_summary")
+	fd_ClientMapCellProto_decimated_spawn_point                                       = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "decimated_spawn_point")
+	fd_ClientMapCellProto_catchable_pokemon                                           = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "catchable_pokemon")
+	fd_ClientMapCellProto_nearby_pokemon                                              = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "nearby_pokemon")
+	fd_ClientMapCellProto_route_list_hash                                             = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "route_list_hash")
+	fd_ClientMapCellProto_hyperlocal_experiment                                       = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "hyperlocal_experiment")
+	fd_ClientMapCellProto_stations                                                    = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "stations")
+	fd_ClientMapCellProto_num_vps_activated_locations                                 = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "num_vps_activated_locations")
+	fd_ClientMapCellProto_tappables                                                   = mustFD((*pogo.ClientMapCellProto)(nil).ProtoReflect().Descriptor(), "tappables")
+	fd_ClientPokestopNpcDialogueStepProto_dialogue_line                               = mustFD((*pogo.ClientPokestopNpcDialogueStepProto)(nil).ProtoReflect().Descriptor(), "dialogue_line")
+	fd_ClientQuestProto_quest                                                         = mustFD((*pogo.ClientQuestProto)(nil).ProtoReflect().Descriptor(), "quest")
+	fd_ClientQuestProto_quest_display                                                 = mustFD((*pogo.ClientQuestProto)(nil).ProtoReflect().Descriptor(), "quest_display")
+	fd_ClientRouteGetProto_route                                                      = mustFD((*pogo.ClientRouteGetProto)(nil).ProtoReflect().Descriptor(), "route")
+	fd_ClientRouteGetProto_s2_cell_id                                                 = mustFD((*pogo.ClientRouteGetProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_ClientRouteMapCellProto_s2_cell_id                                             = mustFD((*pogo.ClientRouteMapCellProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_ClientRouteMapCellProto_route_list_hash                                        = mustFD((*pogo.ClientRouteMapCellProto)(nil).ProtoReflect().Descriptor(), "route_list_hash")
+	fd_ClientRouteMapCellProto_route                                                  = mustFD((*pogo.ClientRouteMapCellProto)(nil).ProtoReflect().Descriptor(), "route")
+	fd_ClientSpawnPointProto_latitude                                                 = mustFD((*pogo.ClientSpawnPointProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_ClientSpawnPointProto_longitude                                                = mustFD((*pogo.ClientSpawnPointProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_ClientWeatherProto_s2_cell_id                                                  = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_ClientWeatherProto_display_weather                                             = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "display_weather")
+	fd_ClientWeatherProto_gameplay_weather                                            = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "gameplay_weather")
+	fd_ClientWeatherProto_alerts                                                      = mustFD((*pogo.ClientWeatherProto)(nil).ProtoReflect().Descriptor(), "alerts")
+	fd_CombatActionProto_type                                                         = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_CombatActionProto_action_start_turn                                            = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "action_start_turn")
+	fd_CombatActionProto_duration_turns                                               = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "duration_turns")
+	fd_CombatActionProto_attacker_index                                               = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "attacker_index")
+	fd_CombatActionProto_target_index                                                 = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "target_index")
+	fd_CombatActionProto_active_pokemon_id                                            = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "active_pokemon_id")
+	fd_CombatActionProto_target_pokemon_id                                            = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "target_pokemon_id")
+	fd_CombatActionProto_minigame_score                                               = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "minigame_score")
+	fd_CombatActionProto_move                                                         = mustFD((*pogo.CombatActionProto)(nil).ProtoReflect().Descriptor(), "move")
+	fd_CombatProto_combat_state                                                       = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "combat_state")
+	fd_CombatProto_combat_id                                                          = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "combat_id")
+	fd_CombatProto_player                                                             = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "player")
+	fd_CombatProto_opponent                                                           = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "opponent")
+	fd_CombatProto_combat_start_ms                                                    = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "combat_start_ms")
+	fd_CombatProto_combat_end_ms                                                      = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "combat_end_ms")
+	fd_CombatProto_server_ms                                                          = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "server_ms")
+	fd_CombatProto_current_turn                                                       = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "current_turn")
+	fd_CombatProto_turn_start_ms                                                      = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "turn_start_ms")
+	fd_CombatProto_minigame_end_ms                                                    = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "minigame_end_ms")
+	fd_CombatProto_minigame_submit_score_end_ms                                       = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "minigame_submit_score_end_ms")
+	fd_CombatProto_change_pokemon_end_ms                                              = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "change_pokemon_end_ms")
+	fd_CombatProto_quick_swap_cooldown_duration_ms                                    = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "quick_swap_cooldown_duration_ms")
+	fd_CombatProto_state_change_delay_until_turn                                      = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "state_change_delay_until_turn")
+	fd_CombatProto_minigame_data                                                      = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "minigame_data")
+	fd_CombatProto_combat_request_counter                                             = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "combat_request_counter")
+	fd_CombatProto_opponent_triggered                                                 = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "opponent_triggered")
+	fd_CombatProto_opponent_request_counter                                           = mustFD((*pogo.CombatProto)(nil).ProtoReflect().Descriptor(), "opponent_request_counter")
+	fd_CombatProto_CombatPlayerProto_public_profile                                   = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "public_profile")
+	fd_CombatProto_CombatPlayerProto_active_pokemon                                   = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "active_pokemon")
+	fd_CombatProto_CombatPlayerProto_reserve_pokemon                                  = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "reserve_pokemon")
+	fd_CombatProto_CombatPlayerProto_fainted_pokemon                                  = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "fainted_pokemon")
+	fd_CombatProto_CombatPlayerProto_current_action                                   = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "current_action")
+	fd_CombatProto_CombatPlayerProto_lockstep_ack                                     = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "lockstep_ack")
+	fd_CombatProto_CombatPlayerProto_last_updated_turn                                = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "last_updated_turn")
+	fd_CombatProto_CombatPlayerProto_minigame_action                                  = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "minigame_action")
+	fd_CombatProto_CombatPlayerProto_quick_swap_available_ms                          = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "quick_swap_available_ms")
+	fd_CombatProto_CombatPlayerProto_minigame_defense_chances_left                    = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "minigame_defense_chances_left")
+	fd_CombatProto_CombatPlayerProto_combat_npc_personality_id                        = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "combat_npc_personality_id")
+	fd_CombatProto_CombatPlayerProto_times_combat_actions_called                      = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "times_combat_actions_called")
+	fd_CombatProto_CombatPlayerProto_lobby_join_time_ms                               = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "lobby_join_time_ms")
+	fd_CombatProto_CombatPlayerProto_super_effective_charge_attacks_used              = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "super_effective_charge_attacks_used")
+	fd_CombatProto_CombatPlayerProto_last_snapshot_action_type                        = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "last_snapshot_action_type")
+	fd_CombatProto_CombatPlayerProto_last_active_pokemon                              = mustFD((*pogo.CombatProto_CombatPlayerProto)(nil).ProtoReflect().Descriptor(), "last_active_pokemon")
+	fd_CombatProto_CombatPokemonIbfcProto_animation_play_turn                         = mustFD((*pogo.CombatProto_CombatPokemonIbfcProto)(nil).ProtoReflect().Descriptor(), "animation_play_turn")
+	fd_CombatProto_CombatPokemonIbfcProto_vfx_key                                     = mustFD((*pogo.CombatProto_CombatPokemonIbfcProto)(nil).ProtoReflect().Descriptor(), "vfx_key")
+	fd_CombatProto_CombatPokemonIbfcProto_player                                      = mustFD((*pogo.CombatProto_CombatPokemonIbfcProto)(nil).ProtoReflect().Descriptor(), "player")
+	fd_CombatProto_CombatPokemonIbfcProto_updated_flyout_duration_turns               = mustFD((*pogo.CombatProto_CombatPokemonIbfcProto)(nil).ProtoReflect().Descriptor(), "updated_flyout_duration_turns")
+	fd_CombatProto_CombatPokemonIbfcProto_ibfc_trigger_move                           = mustFD((*pogo.CombatProto_CombatPokemonIbfcProto)(nil).ProtoReflect().Descriptor(), "ibfc_trigger_move")
+	fd_CombatProto_CombatPokemonProto_pokemon_id                                      = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_CombatProto_CombatPokemonProto_pokedex_id                                      = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_CombatProto_CombatPokemonProto_cp                                              = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "cp")
+	fd_CombatProto_CombatPokemonProto_cp_multiplier                                   = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "cp_multiplier")
+	fd_CombatProto_CombatPokemonProto_stamina                                         = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "stamina")
+	fd_CombatProto_CombatPokemonProto_max_stamina                                     = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "max_stamina")
+	fd_CombatProto_CombatPokemonProto_move1                                           = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "move1")
+	fd_CombatProto_CombatPokemonProto_move2                                           = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "move2")
+	fd_CombatProto_CombatPokemonProto_move3                                           = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "move3")
+	fd_CombatProto_CombatPokemonProto_energy                                          = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "energy")
+	fd_CombatProto_CombatPokemonProto_pokemon_display                                 = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_CombatProto_CombatPokemonProto_individual_attack                               = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "individual_attack")
+	fd_CombatProto_CombatPokemonProto_individual_defense                              = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "individual_defense")
+	fd_CombatProto_CombatPokemonProto_individual_stamina                              = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "individual_stamina")
+	fd_CombatProto_CombatPokemonProto_attack_stat_stage                               = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "attack_stat_stage")
+	fd_CombatProto_CombatPokemonProto_defense_stat_stage                              = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "defense_stat_stage")
+	fd_CombatProto_CombatPokemonProto_battles_won                                     = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "battles_won")
+	fd_CombatProto_CombatPokemonProto_battles_lost                                    = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "battles_lost")
+	fd_CombatProto_CombatPokemonProto_nickname                                        = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "nickname")
+	fd_CombatProto_CombatPokemonProto_pokeball                                        = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "pokeball")
+	fd_CombatProto_CombatPokemonProto_height_m                                        = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "height_m")
+	fd_CombatProto_CombatPokemonProto_weight_kg                                       = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "weight_kg")
+	fd_CombatProto_CombatPokemonProto_pokemon_size                                    = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_size")
+	fd_CombatProto_CombatPokemonProto_notable_action_history                          = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "notable_action_history")
+	fd_CombatProto_CombatPokemonProto_vs_effect_tag                                   = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "vs_effect_tag")
+	fd_CombatProto_CombatPokemonProto_combat_pokemon_ibfc                             = mustFD((*pogo.CombatProto_CombatPokemonProto)(nil).ProtoReflect().Descriptor(), "combat_pokemon_ibfc")
+	fd_CombatProto_MinigameProto_minigame_end_ms                                      = mustFD((*pogo.CombatProto_MinigameProto)(nil).ProtoReflect().Descriptor(), "minigame_end_ms")
+	fd_CombatProto_MinigameProto_minigame_submit_score_end_ms                         = mustFD((*pogo.CombatProto_MinigameProto)(nil).ProtoReflect().Descriptor(), "minigame_submit_score_end_ms")
+	fd_CombatProto_MinigameProto_fly_in_completion_turn                               = mustFD((*pogo.CombatProto_MinigameProto)(nil).ProtoReflect().Descriptor(), "fly_in_completion_turn")
+	fd_CombatProto_MinigameProto_fly_out_completion_turn                              = mustFD((*pogo.CombatProto_MinigameProto)(nil).ProtoReflect().Descriptor(), "fly_out_completion_turn")
+	fd_CombatProto_MinigameProto_render_modifiers                                     = mustFD((*pogo.CombatProto_MinigameProto)(nil).ProtoReflect().Descriptor(), "render_modifiers")
+	fd_ContestBuddyFocusProto_min_buddy_level                                         = mustFD((*pogo.ContestBuddyFocusProto)(nil).ProtoReflect().Descriptor(), "min_buddy_level")
+	fd_ContestCycleProto_start_time_ms                                                = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "start_time_ms")
+	fd_ContestCycleProto_end_time_ms                                                  = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "end_time_ms")
+	fd_ContestCycleProto_contest_occurrence                                           = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "contest_occurrence")
+	fd_ContestCycleProto_custom_cycle_warmup_duration_ms                              = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "custom_cycle_warmup_duration_ms")
+	fd_ContestCycleProto_custom_cycle_cooldown_duration_ms                            = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "custom_cycle_cooldown_duration_ms")
+	fd_ContestCycleProto_activate_early_termination                                   = mustFD((*pogo.ContestCycleProto)(nil).ProtoReflect().Descriptor(), "activate_early_termination")
+	fd_ContestDisplayProto_style                                                      = mustFD((*pogo.ContestDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
+	fd_ContestEntryProto_pokedex_id                                                   = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_ContestEntryProto_pokemon_display                                              = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_ContestEntryProto_score                                                        = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "score")
+	fd_ContestEntryProto_rank                                                         = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "rank")
+	fd_ContestEntryProto_player_avatar                                                = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "player_avatar")
+	fd_ContestEntryProto_trainer_name                                                 = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "trainer_name")
+	fd_ContestEntryProto_team                                                         = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "team")
+	fd_ContestEntryProto_pokemon_id                                                   = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_ContestEntryProto_player_id                                                    = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "player_id")
+	fd_ContestEntryProto_pokemon_nickname                                             = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_nickname")
+	fd_ContestEntryProto_player_neutral_avatar                                        = mustFD((*pogo.ContestEntryProto)(nil).ProtoReflect().Descriptor(), "player_neutral_avatar")
+	fd_ContestFocusProto_pokemon                                                      = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_ContestFocusProto_generation                                                   = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "generation")
+	fd_ContestFocusProto_hatched                                                      = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "hatched")
+	fd_ContestFocusProto_mega                                                         = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "mega")
+	fd_ContestFocusProto_shiny                                                        = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "shiny")
+	fd_ContestFocusProto_type                                                         = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_ContestFocusProto_buddy                                                        = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "buddy")
+	fd_ContestFocusProto_pokemon_class                                                = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_class")
+	fd_ContestFocusProto_pokemon_family                                               = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_family")
+	fd_ContestFocusProto_alignment                                                    = mustFD((*pogo.ContestFocusProto)(nil).ProtoReflect().Descriptor(), "alignment")
+	fd_ContestGenerationFocusProto_pokemon_generation                                 = mustFD((*pogo.ContestGenerationFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_generation")
+	fd_ContestHatchedFocusProto_require_to_be_hatched                                 = mustFD((*pogo.ContestHatchedFocusProto)(nil).ProtoReflect().Descriptor(), "require_to_be_hatched")
+	fd_ContestMetricProto_pokemon_metric                                              = mustFD((*pogo.ContestMetricProto)(nil).ProtoReflect().Descriptor(), "pokemon_metric")
+	fd_ContestMetricProto_ranking_standard                                            = mustFD((*pogo.ContestMetricProto)(nil).ProtoReflect().Descriptor(), "ranking_standard")
+	fd_ContestPokemonAlignmentFocusProto_required_alignment                           = mustFD((*pogo.ContestPokemonAlignmentFocusProto)(nil).ProtoReflect().Descriptor(), "required_alignment")
+	fd_ContestPokemonClassFocusProto_required_class                                   = mustFD((*pogo.ContestPokemonClassFocusProto)(nil).ProtoReflect().Descriptor(), "required_class")
+	fd_ContestPokemonFamilyFocusProto_required_family                                 = mustFD((*pogo.ContestPokemonFamilyFocusProto)(nil).ProtoReflect().Descriptor(), "required_family")
+	fd_ContestPokemonFocusProto_pokedex_id                                            = mustFD((*pogo.ContestPokemonFocusProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_ContestPokemonFocusProto_pokemon_display                                       = mustFD((*pogo.ContestPokemonFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_ContestPokemonFocusProto_require_form_to_match                                 = mustFD((*pogo.ContestPokemonFocusProto)(nil).ProtoReflect().Descriptor(), "require_form_to_match")
+	fd_ContestPokemonTypeFocusProto_pokemon_type1                                     = mustFD((*pogo.ContestPokemonTypeFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_type1")
+	fd_ContestPokemonTypeFocusProto_pokemon_type2                                     = mustFD((*pogo.ContestPokemonTypeFocusProto)(nil).ProtoReflect().Descriptor(), "pokemon_type2")
+	fd_ContestProto_contest_id                                                        = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "contest_id")
+	fd_ContestProto_focus                                                             = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "focus")
+	fd_ContestProto_metric                                                            = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "metric")
+	fd_ContestProto_schedule                                                          = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "schedule")
+	fd_ContestProto_rewards_template_id                                               = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "rewards_template_id")
+	fd_ContestProto_focuses                                                           = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "focuses")
+	fd_ContestProto_focus_string_key                                                  = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "focus_string_key")
+	fd_ContestProto_scalar_score_reference_pokemon                                    = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "scalar_score_reference_pokemon")
+	fd_ContestProto_scalar_score_reference_pokemon_form                               = mustFD((*pogo.ContestProto)(nil).ProtoReflect().Descriptor(), "scalar_score_reference_pokemon_form")
+	fd_ContestScheduleProto_contest_cycle                                             = mustFD((*pogo.ContestScheduleProto)(nil).ProtoReflect().Descriptor(), "contest_cycle")
+	fd_ContestShinyFocusProto_require_to_be_shiny                                     = mustFD((*pogo.ContestShinyFocusProto)(nil).ProtoReflect().Descriptor(), "require_to_be_shiny")
+	fd_ContestTemporaryEvolutionFocusProto_temporary_evolution_required               = mustFD((*pogo.ContestTemporaryEvolutionFocusProto)(nil).ProtoReflect().Descriptor(), "temporary_evolution_required")
+	fd_ContestTemporaryEvolutionFocusProto_restriction                                = mustFD((*pogo.ContestTemporaryEvolutionFocusProto)(nil).ProtoReflect().Descriptor(), "restriction")
+	fd_CreatorInfo_creator_player_id                                                  = mustFD((*pogo.CreatorInfo)(nil).ProtoReflect().Descriptor(), "creator_player_id")
+	fd_CreatorInfo_creator_codename                                                   = mustFD((*pogo.CreatorInfo)(nil).ProtoReflect().Descriptor(), "creator_codename")
+	fd_CreatorInfo_show_creator_name                                                  = mustFD((*pogo.CreatorInfo)(nil).ProtoReflect().Descriptor(), "show_creator_name")
+	fd_CreatorInfo_public_profile                                                     = mustFD((*pogo.CreatorInfo)(nil).ProtoReflect().Descriptor(), "public_profile")
+	fd_DailyBuddyAffectionQuestProto_daily_affection_counter                          = mustFD((*pogo.DailyBuddyAffectionQuestProto)(nil).ProtoReflect().Descriptor(), "daily_affection_counter")
+	fd_DailyCounterProto_window                                                       = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "window")
+	fd_DailyCounterProto_count                                                        = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "count")
+	fd_DailyCounterProto_buckets_per_day                                              = mustFD((*pogo.DailyCounterProto)(nil).ProtoReflect().Descriptor(), "buckets_per_day")
+	fd_DailyQuestProto_current_period_bucket                                          = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "current_period_bucket")
+	fd_DailyQuestProto_current_streak_count                                           = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "current_streak_count")
+	fd_DailyQuestProto_prev_streak_notification_timestamp_ms                          = mustFD((*pogo.DailyQuestProto)(nil).ProtoReflect().Descriptor(), "prev_streak_notification_timestamp_ms")
+	fd_DaysWithARowQuestProto_last_window                                             = mustFD((*pogo.DaysWithARowQuestProto)(nil).ProtoReflect().Descriptor(), "last_window")
+	fd_DeploymentTotalsProto_times_fed                                                = mustFD((*pogo.DeploymentTotalsProto)(nil).ProtoReflect().Descriptor(), "times_fed")
+	fd_DeploymentTotalsProto_battles_won                                              = mustFD((*pogo.DeploymentTotalsProto)(nil).ProtoReflect().Descriptor(), "battles_won")
+	fd_DeploymentTotalsProto_battles_lost                                             = mustFD((*pogo.DeploymentTotalsProto)(nil).ProtoReflect().Descriptor(), "battles_lost")
+	fd_DeploymentTotalsProto_deployment_duration_ms                                   = mustFD((*pogo.DeploymentTotalsProto)(nil).ProtoReflect().Descriptor(), "deployment_duration_ms")
+	fd_DiskCreateDetail_disk_type                                                     = mustFD((*pogo.DiskCreateDetail)(nil).ProtoReflect().Descriptor(), "disk_type")
+	fd_DiskCreateDetail_fort_id                                                       = mustFD((*pogo.DiskCreateDetail)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_DiskEncounterOutProto_result                                                   = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_DiskEncounterOutProto_pokemon                                                  = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_DiskEncounterOutProto_capture_probability                                      = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
+	fd_DiskEncounterOutProto_active_item                                              = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "active_item")
+	fd_DiskEncounterOutProto_arplus_attempts_until_flee                               = mustFD((*pogo.DiskEncounterOutProto)(nil).ProtoReflect().Descriptor(), "arplus_attempts_until_flee")
+	fd_DisplayWeatherProto_cloud_level                                                = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "cloud_level")
+	fd_DisplayWeatherProto_rain_level                                                 = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "rain_level")
+	fd_DisplayWeatherProto_wind_level                                                 = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "wind_level")
+	fd_DisplayWeatherProto_snow_level                                                 = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "snow_level")
+	fd_DisplayWeatherProto_fog_level                                                  = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "fog_level")
+	fd_DisplayWeatherProto_wind_direction                                             = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "wind_direction")
+	fd_DisplayWeatherProto_special_effect_level                                       = mustFD((*pogo.DisplayWeatherProto)(nil).ProtoReflect().Descriptor(), "special_effect_level")
+	fd_EggCreateDetail_hatched_time_ms                                                = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "hatched_time_ms")
+	fd_EggCreateDetail_player_hatched_s2_cell_id                                      = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "player_hatched_s2_cell_id")
+	fd_EggCreateDetail_received_time_ms                                               = mustFD((*pogo.EggCreateDetail)(nil).ProtoReflect().Descriptor(), "received_time_ms")
+	fd_EggDistributionProto_egg_distribution                                          = mustFD((*pogo.EggDistributionProto)(nil).ProtoReflect().Descriptor(), "egg_distribution")
+	fd_EggDistributionProto_EggDistributionEntryProto_rarity                          = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "rarity")
+	fd_EggDistributionProto_EggDistributionEntryProto_pokemon_id                      = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_EggDistributionProto_EggDistributionEntryProto_pokemon_display                 = mustFD((*pogo.EggDistributionProto_EggDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_EggTelemetryProto_egg_loot_table_id                                            = mustFD((*pogo.EggTelemetryProto)(nil).ProtoReflect().Descriptor(), "egg_loot_table_id")
+	fd_EggTelemetryProto_original_egg_slot_type                                       = mustFD((*pogo.EggTelemetryProto)(nil).ProtoReflect().Descriptor(), "original_egg_slot_type")
+	fd_EncounterOutProto_pokemon                                                      = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_EncounterOutProto_background                                                   = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "background")
+	fd_EncounterOutProto_status                                                       = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_EncounterOutProto_capture_probability                                          = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
+	fd_EncounterOutProto_active_item                                                  = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "active_item")
+	fd_EncounterOutProto_arplus_attempts_until_flee                                   = mustFD((*pogo.EncounterOutProto)(nil).ProtoReflect().Descriptor(), "arplus_attempts_until_flee")
+	fd_EventInfoProto_image_url                                                       = mustFD((*pogo.EventInfoProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_EventInfoProto_icon_url                                                        = mustFD((*pogo.EventInfoProto)(nil).ProtoReflect().Descriptor(), "icon_url")
+	fd_EventInfoProto_name_key                                                        = mustFD((*pogo.EventInfoProto)(nil).ProtoReflect().Descriptor(), "name_key")
+	fd_EventRsvpTimeslotProto_time_slot                                               = mustFD((*pogo.EventRsvpTimeslotProto)(nil).ProtoReflect().Descriptor(), "time_slot")
+	fd_EventRsvpTimeslotProto_going_count                                             = mustFD((*pogo.EventRsvpTimeslotProto)(nil).ProtoReflect().Descriptor(), "going_count")
+	fd_EventRsvpTimeslotProto_maybe_count                                             = mustFD((*pogo.EventRsvpTimeslotProto)(nil).ProtoReflect().Descriptor(), "maybe_count")
+	fd_EventRsvpTimeslotProto_rsvp_players                                            = mustFD((*pogo.EventRsvpTimeslotProto)(nil).ProtoReflect().Descriptor(), "rsvp_players")
+	fd_EventRsvpTimeslotProto_PlayerDetails_nickname                                  = mustFD((*pogo.EventRsvpTimeslotProto_PlayerDetails)(nil).ProtoReflect().Descriptor(), "nickname")
+	fd_EventRsvpTimeslotProto_PlayerDetails_inviter_neutral_avatar                    = mustFD((*pogo.EventRsvpTimeslotProto_PlayerDetails)(nil).ProtoReflect().Descriptor(), "inviter_neutral_avatar")
+	fd_EventRsvpTimeslotProto_PlayerDetails_player_id                                 = mustFD((*pogo.EventRsvpTimeslotProto_PlayerDetails)(nil).ProtoReflect().Descriptor(), "player_id")
+	fd_EventRsvpTimeslotProto_RsvpPlayer_anonymous_count                              = mustFD((*pogo.EventRsvpTimeslotProto_RsvpPlayer)(nil).ProtoReflect().Descriptor(), "anonymous_count")
+	fd_EventRsvpTimeslotProto_RsvpPlayer_trainer_details                              = mustFD((*pogo.EventRsvpTimeslotProto_RsvpPlayer)(nil).ProtoReflect().Descriptor(), "trainer_details")
+	fd_EventRsvpTimeslotProto_RsvpPlayer_rsvp_selection                               = mustFD((*pogo.EventRsvpTimeslotProto_RsvpPlayer)(nil).ProtoReflect().Descriptor(), "rsvp_selection")
+	fd_EventRsvpTimeslotProto_RsvpPlayer_share_preference                             = mustFD((*pogo.EventRsvpTimeslotProto_RsvpPlayer)(nil).ProtoReflect().Descriptor(), "share_preference")
+	fd_EventRsvpTimeslotProto_RsvpPlayer_isFriend                                     = mustFD((*pogo.EventRsvpTimeslotProto_RsvpPlayer)(nil).ProtoReflect().Descriptor(), "isFriend")
+	fd_EvolutionQuestInfoProto_quest_requirement_template_id                          = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "quest_requirement_template_id")
+	fd_EvolutionQuestInfoProto_description                                            = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_EvolutionQuestInfoProto_target                                                 = mustFD((*pogo.EvolutionQuestInfoProto)(nil).ProtoReflect().Descriptor(), "target")
+	fd_EvolveIntoPokemonQuestProto_unique_pokemon_id                                  = mustFD((*pogo.EvolveIntoPokemonQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
+	fd_FollowerPokemonProto_pokemon_id                                                = mustFD((*pogo.FollowerPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_FollowerPokemonProto_address                                                   = mustFD((*pogo.FollowerPokemonProto)(nil).ProtoReflect().Descriptor(), "address")
+	fd_FollowerPokemonProto_display                                                   = mustFD((*pogo.FollowerPokemonProto)(nil).ProtoReflect().Descriptor(), "display")
+	fd_FollowerPokemonProto_end_ms                                                    = mustFD((*pogo.FollowerPokemonProto)(nil).ProtoReflect().Descriptor(), "end_ms")
+	fd_FollowerPokemonProto_id                                                        = mustFD((*pogo.FollowerPokemonProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_FoodValue_motivation_increase                                                  = mustFD((*pogo.FoodValue)(nil).ProtoReflect().Descriptor(), "motivation_increase")
+	fd_FoodValue_cp_increase                                                          = mustFD((*pogo.FoodValue)(nil).ProtoReflect().Descriptor(), "cp_increase")
+	fd_FoodValue_food_item                                                            = mustFD((*pogo.FoodValue)(nil).ProtoReflect().Descriptor(), "food_item")
+	fd_FormRenderModifier_type                                                        = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "type")
+	fd_FormRenderModifier_effect_target                                               = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "effect_target")
+	fd_FormRenderModifier_pokemon_id                                                  = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_FormRenderModifier_pokedex_id                                                  = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_FormRenderModifier_pokemon_form                                                = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "pokemon_form")
+	fd_FormRenderModifier_alignment                                                   = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "alignment")
+	fd_FormRenderModifier_transition_vfx_key                                          = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "transition_vfx_key")
+	fd_FormRenderModifier_event_trigger_time                                          = mustFD((*pogo.FormRenderModifier)(nil).ProtoReflect().Descriptor(), "event_trigger_time")
+	fd_FortDetailsOutProto_id                                                         = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_FortDetailsOutProto_team                                                       = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "team")
+	fd_FortDetailsOutProto_pokemon                                                    = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_FortDetailsOutProto_name                                                       = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_FortDetailsOutProto_image_url                                                  = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_FortDetailsOutProto_fp                                                         = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "fp")
+	fd_FortDetailsOutProto_stamina                                                    = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "stamina")
+	fd_FortDetailsOutProto_max_stamina                                                = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "max_stamina")
+	fd_FortDetailsOutProto_fort_type                                                  = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "fort_type")
+	fd_FortDetailsOutProto_latitude                                                   = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_FortDetailsOutProto_longitude                                                  = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_FortDetailsOutProto_description                                                = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_FortDetailsOutProto_modifier                                                   = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "modifier")
+	fd_FortDetailsOutProto_close_soon                                                 = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "close_soon")
+	fd_FortDetailsOutProto_checkin_image_url                                          = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "checkin_image_url")
+	fd_FortDetailsOutProto_event_info                                                 = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "event_info")
+	fd_FortDetailsOutProto_promo_description                                          = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "promo_description")
+	fd_FortDetailsOutProto_call_to_action_link                                        = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "call_to_action_link")
+	fd_FortDetailsOutProto_sponsored_details                                          = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "sponsored_details")
+	fd_FortDetailsOutProto_geostore_tombstone_message_key                             = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "geostore_tombstone_message_key")
+	fd_FortDetailsOutProto_geostore_suspension_message_key                            = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "geostore_suspension_message_key")
+	fd_FortDetailsOutProto_poi_images_count                                           = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "poi_images_count")
+	fd_FortDetailsOutProto_power_up_progress_points                                   = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "power_up_progress_points")
+	fd_FortDetailsOutProto_power_up_level_expiration_ms                               = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "power_up_level_expiration_ms")
+	fd_FortDetailsOutProto_next_fort_close_ms                                         = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "next_fort_close_ms")
+	fd_FortDetailsOutProto_is_vps_eligible                                            = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "is_vps_eligible")
+	fd_FortDetailsOutProto_vps_enabled_status                                         = mustFD((*pogo.FortDetailsOutProto)(nil).ProtoReflect().Descriptor(), "vps_enabled_status")
+	fd_FortPokemonProto_pokemon_proto                                                 = mustFD((*pogo.FortPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_proto")
+	fd_FortPokemonProto_spawn_type                                                    = mustFD((*pogo.FortPokemonProto)(nil).ProtoReflect().Descriptor(), "spawn_type")
+	fd_FortSearchOutProto_result                                                      = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_FortSearchOutProto_items                                                       = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "items")
+	fd_FortSearchOutProto_gems_awarded                                                = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "gems_awarded")
+	fd_FortSearchOutProto_egg_pokemon                                                 = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "egg_pokemon")
+	fd_FortSearchOutProto_xp_awarded                                                  = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "xp_awarded")
+	fd_FortSearchOutProto_cooldown_complete                                           = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "cooldown_complete")
+	fd_FortSearchOutProto_chain_hack_sequence_number                                  = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "chain_hack_sequence_number")
+	fd_FortSearchOutProto_awarded_gym_badge                                           = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "awarded_gym_badge")
+	fd_FortSearchOutProto_loot                                                        = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "loot")
+	fd_FortSearchOutProto_bonus_loot                                                  = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "bonus_loot")
+	fd_FortSearchOutProto_raid_tickets                                                = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "raid_tickets")
+	fd_FortSearchOutProto_team_bonus_loot                                             = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "team_bonus_loot")
+	fd_FortSearchOutProto_fort_id                                                     = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_FortSearchOutProto_challenge_quest                                             = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "challenge_quest")
+	fd_FortSearchOutProto_gift_box                                                    = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "gift_box")
+	fd_FortSearchOutProto_sponsored_gift                                              = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "sponsored_gift")
+	fd_FortSearchOutProto_power_up_stop_bonus_loot                                    = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "power_up_stop_bonus_loot")
+	fd_FortSearchOutProto_ad                                                          = mustFD((*pogo.FortSearchOutProto)(nil).ProtoReflect().Descriptor(), "ad")
+	fd_FortVpsInfoProto_vps_enabled_v2                                                = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_enabled_v2")
+	fd_FortVpsInfoProto_anchor_id                                                     = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "anchor_id")
+	fd_FortVpsInfoProto_anchor_payload                                                = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "anchor_payload")
+	fd_FortVpsInfoProto_hint_image_url                                                = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_url")
+	fd_FortVpsInfoProto_is_hint_image_poi_image                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "is_hint_image_poi_image")
+	fd_FortVpsInfoProto_vps_enabled_status                                            = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_enabled_status")
+	fd_FortVpsInfoProto_mesh_metadata                                                 = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "mesh_metadata")
+	fd_FortVpsInfoProto_hint_image_lat                                                = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_lat")
+	fd_FortVpsInfoProto_hint_image_lng                                                = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_lng")
+	fd_FortVpsInfoProto_hint_image_position                                           = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_position")
+	fd_FortVpsInfoProto_hint_image_rotation                                           = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "hint_image_rotation")
+	fd_FortVpsInfoProto_vps_temporarily_not_allowed_until_ms                          = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_temporarily_not_allowed_until_ms")
+	fd_FortVpsInfoProto_localization_tier_level                                       = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "localization_tier_level")
+	fd_FortVpsInfoProto_vps_disallowed_details                                        = mustFD((*pogo.FortVpsInfoProto)(nil).ProtoReflect().Descriptor(), "vps_disallowed_details")
+	fd_FortVpsInfoProto_VpsDisallowedDetailsProto_source                              = mustFD((*pogo.FortVpsInfoProto_VpsDisallowedDetailsProto)(nil).ProtoReflect().Descriptor(), "source")
+	fd_FortVpsInfoProto_VpsDisallowedDetailsProto_previous_state                      = mustFD((*pogo.FortVpsInfoProto_VpsDisallowedDetailsProto)(nil).ProtoReflect().Descriptor(), "previous_state")
+	fd_FriendshipDataProto_friendship_level_data                                      = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "friendship_level_data")
+	fd_FriendshipDataProto_giftbox_details                                            = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "giftbox_details")
+	fd_FriendshipDataProto_codename                                                   = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "codename")
+	fd_FriendshipDataProto_nickname                                                   = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "nickname")
+	fd_FriendshipDataProto_open_trade_expire_ms                                       = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "open_trade_expire_ms")
+	fd_FriendshipDataProto_is_lucky                                                   = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "is_lucky")
+	fd_FriendshipDataProto_lucky_count                                                = mustFD((*pogo.FriendshipDataProto)(nil).ProtoReflect().Descriptor(), "lucky_count")
+	fd_FriendshipLevelDataProto_bucket                                                = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "bucket")
+	fd_FriendshipLevelDataProto_points_earned_today                                   = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "points_earned_today")
+	fd_FriendshipLevelDataProto_awarded_friendship_milestone                          = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "awarded_friendship_milestone")
+	fd_FriendshipLevelDataProto_current_friendship_milestone                          = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "current_friendship_milestone")
+	fd_FriendshipLevelDataProto_next_friendship_milestone_progress_percentage         = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "next_friendship_milestone_progress_percentage")
+	fd_FriendshipLevelDataProto_points_toward_next_milestone                          = mustFD((*pogo.FriendshipLevelDataProto)(nil).ProtoReflect().Descriptor(), "points_toward_next_milestone")
+	fd_GMaxDetails_powerspot_id                                                       = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "powerspot_id")
+	fd_GMaxDetails_bread_battle_seed                                                  = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "bread_battle_seed")
+	fd_GMaxDetails_lat                                                                = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "lat")
+	fd_GMaxDetails_lng                                                                = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "lng")
+	fd_GMaxDetails_powerspot_title                                                    = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "powerspot_title")
+	fd_GMaxDetails_battle_level                                                       = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "battle_level")
+	fd_GMaxDetails_battle_pokemon                                                     = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "battle_pokemon")
+	fd_GMaxDetails_battle_window_start_ms                                             = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "battle_window_start_ms")
+	fd_GMaxDetails_battle_window_end_ms                                               = mustFD((*pogo.GMaxDetails)(nil).ProtoReflect().Descriptor(), "battle_window_end_ms")
+	fd_GamDetails_gam_request_keywords                                                = mustFD((*pogo.GamDetails)(nil).ProtoReflect().Descriptor(), "gam_request_keywords")
+	fd_GameplayWeatherProto_gameplay_condition                                        = mustFD((*pogo.GameplayWeatherProto)(nil).ProtoReflect().Descriptor(), "gameplay_condition")
+	fd_GeotargetedQuestProto_name                                                     = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_GeotargetedQuestProto_call_to_action_link                                      = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "call_to_action_link")
+	fd_GeotargetedQuestProto_image_url                                                = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_GeotargetedQuestProto_latitude                                                 = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_GeotargetedQuestProto_longitude                                                = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_GeotargetedQuestProto_fort_id                                                  = mustFD((*pogo.GeotargetedQuestProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_GetContestDataOutProto_status                                                  = mustFD((*pogo.GetContestDataOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetContestDataOutProto_contest_incident                                        = mustFD((*pogo.GetContestDataOutProto)(nil).ProtoReflect().Descriptor(), "contest_incident")
+	fd_GetContestDataProto_fort_id                                                    = mustFD((*pogo.GetContestDataProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_GetEventRsvpCountOutProto_status                                               = mustFD((*pogo.GetEventRsvpCountOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetEventRsvpCountOutProto_rsvp_details                                         = mustFD((*pogo.GetEventRsvpCountOutProto)(nil).ProtoReflect().Descriptor(), "rsvp_details")
+	fd_GetEventRsvpsOutProto_status                                                   = mustFD((*pogo.GetEventRsvpsOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetEventRsvpsOutProto_rsvp_timeslots                                           = mustFD((*pogo.GetEventRsvpsOutProto)(nil).ProtoReflect().Descriptor(), "rsvp_timeslots")
+	fd_GetEventRsvpsProto_raid                                                        = mustFD((*pogo.GetEventRsvpsProto)(nil).ProtoReflect().Descriptor(), "raid")
+	fd_GetEventRsvpsProto_gmax_battle                                                 = mustFD((*pogo.GetEventRsvpsProto)(nil).ProtoReflect().Descriptor(), "gmax_battle")
+	fd_GetEventRsvpsProto_time_slots                                                  = mustFD((*pogo.GetEventRsvpsProto)(nil).ProtoReflect().Descriptor(), "time_slots")
+	fd_GetMapFortsOutProto_fort                                                       = mustFD((*pogo.GetMapFortsOutProto)(nil).ProtoReflect().Descriptor(), "fort")
+	fd_GetMapFortsOutProto_status                                                     = mustFD((*pogo.GetMapFortsOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetMapFortsOutProto_FortProto_id                                               = mustFD((*pogo.GetMapFortsOutProto_FortProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_GetMapFortsOutProto_FortProto_name                                             = mustFD((*pogo.GetMapFortsOutProto_FortProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_GetMapFortsOutProto_FortProto_latitude                                         = mustFD((*pogo.GetMapFortsOutProto_FortProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_GetMapFortsOutProto_FortProto_longitude                                        = mustFD((*pogo.GetMapFortsOutProto_FortProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_GetMapFortsOutProto_FortProto_image                                            = mustFD((*pogo.GetMapFortsOutProto_FortProto)(nil).ProtoReflect().Descriptor(), "image")
+	fd_GetMapFortsOutProto_Image_url                                                  = mustFD((*pogo.GetMapFortsOutProto_Image)(nil).ProtoReflect().Descriptor(), "url")
+	fd_GetMapFortsOutProto_Image_id                                                   = mustFD((*pogo.GetMapFortsOutProto_Image)(nil).ProtoReflect().Descriptor(), "id")
+	fd_GetMapObjectsOutProto_map_cell                                                 = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "map_cell")
+	fd_GetMapObjectsOutProto_status                                                   = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetMapObjectsOutProto_time_of_day                                              = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "time_of_day")
+	fd_GetMapObjectsOutProto_client_weather                                           = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "client_weather")
+	fd_GetMapObjectsOutProto_moon_phase                                               = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "moon_phase")
+	fd_GetMapObjectsOutProto_twilight_period                                          = mustFD((*pogo.GetMapObjectsOutProto)(nil).ProtoReflect().Descriptor(), "twilight_period")
+	fd_GetPokemonSizeLeaderboardEntryOutProto_status                                  = mustFD((*pogo.GetPokemonSizeLeaderboardEntryOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetPokemonSizeLeaderboardEntryOutProto_total_entries                           = mustFD((*pogo.GetPokemonSizeLeaderboardEntryOutProto)(nil).ProtoReflect().Descriptor(), "total_entries")
+	fd_GetPokemonSizeLeaderboardEntryOutProto_contest_entries                         = mustFD((*pogo.GetPokemonSizeLeaderboardEntryOutProto)(nil).ProtoReflect().Descriptor(), "contest_entries")
+	fd_GetPokemonSizeLeaderboardEntryProto_contest_id                                 = mustFD((*pogo.GetPokemonSizeLeaderboardEntryProto)(nil).ProtoReflect().Descriptor(), "contest_id")
+	fd_GetPokemonSizeLeaderboardEntryProto_start_index                                = mustFD((*pogo.GetPokemonSizeLeaderboardEntryProto)(nil).ProtoReflect().Descriptor(), "start_index")
+	fd_GetPokemonSizeLeaderboardEntryProto_end_index                                  = mustFD((*pogo.GetPokemonSizeLeaderboardEntryProto)(nil).ProtoReflect().Descriptor(), "end_index")
+	fd_GetPokemonSizeLeaderboardEntryProto_contest_metric                             = mustFD((*pogo.GetPokemonSizeLeaderboardEntryProto)(nil).ProtoReflect().Descriptor(), "contest_metric")
+	fd_GetPokemonSizeLeaderboardEntryProto_is_relative_to_player                      = mustFD((*pogo.GetPokemonSizeLeaderboardEntryProto)(nil).ProtoReflect().Descriptor(), "is_relative_to_player")
+	fd_GetRoutesOutProto_route_map_cell                                               = mustFD((*pogo.GetRoutesOutProto)(nil).ProtoReflect().Descriptor(), "route_map_cell")
+	fd_GetRoutesOutProto_status                                                       = mustFD((*pogo.GetRoutesOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_GetRoutesOutProto_route_tabs                                                   = mustFD((*pogo.GetRoutesOutProto)(nil).ProtoReflect().Descriptor(), "route_tabs")
+	fd_GetRoutesOutProto_route_list                                                   = mustFD((*pogo.GetRoutesOutProto)(nil).ProtoReflect().Descriptor(), "route_list")
+	fd_GetRoutesOutProto_RouteTab_title_string_id                                     = mustFD((*pogo.GetRoutesOutProto_RouteTab)(nil).ProtoReflect().Descriptor(), "title_string_id")
+	fd_GetRoutesOutProto_RouteTab_route_ids                                           = mustFD((*pogo.GetRoutesOutProto_RouteTab)(nil).ProtoReflect().Descriptor(), "route_ids")
+	fd_GetStardustQuestProto_stardust                                                 = mustFD((*pogo.GetStardustQuestProto)(nil).ProtoReflect().Descriptor(), "stardust")
+	fd_GetStationedPokemonDetailsOutProto_result                                      = mustFD((*pogo.GetStationedPokemonDetailsOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_GetStationedPokemonDetailsOutProto_stationed_pokemons                          = mustFD((*pogo.GetStationedPokemonDetailsOutProto)(nil).ProtoReflect().Descriptor(), "stationed_pokemons")
+	fd_GetStationedPokemonDetailsOutProto_total_num_stationed_pokemon                 = mustFD((*pogo.GetStationedPokemonDetailsOutProto)(nil).ProtoReflect().Descriptor(), "total_num_stationed_pokemon")
+	fd_GetStationedPokemonDetailsProto_station_id                                     = mustFD((*pogo.GetStationedPokemonDetailsProto)(nil).ProtoReflect().Descriptor(), "station_id")
+	fd_GetStationedPokemonDetailsProto_get_full_details                               = mustFD((*pogo.GetStationedPokemonDetailsProto)(nil).ProtoReflect().Descriptor(), "get_full_details")
+	fd_GiftBoxDetailsProto_giftbox_id                                                 = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "giftbox_id")
+	fd_GiftBoxDetailsProto_sender_id                                                  = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "sender_id")
+	fd_GiftBoxDetailsProto_sender_codename                                            = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "sender_codename")
+	fd_GiftBoxDetailsProto_receiver_id                                                = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "receiver_id")
+	fd_GiftBoxDetailsProto_receiver_codename                                          = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "receiver_codename")
+	fd_GiftBoxDetailsProto_fort_id                                                    = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_GiftBoxDetailsProto_fort_name                                                  = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "fort_name")
+	fd_GiftBoxDetailsProto_fort_lat                                                   = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "fort_lat")
+	fd_GiftBoxDetailsProto_fort_lng                                                   = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "fort_lng")
+	fd_GiftBoxDetailsProto_fort_image_url                                             = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "fort_image_url")
+	fd_GiftBoxDetailsProto_creation_timestamp                                         = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "creation_timestamp")
+	fd_GiftBoxDetailsProto_sent_timestamp                                             = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "sent_timestamp")
+	fd_GiftBoxDetailsProto_delivery_pokemon_id                                        = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "delivery_pokemon_id")
+	fd_GiftBoxDetailsProto_is_sponsored                                               = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "is_sponsored")
+	fd_GiftBoxDetailsProto_stickers_sent                                              = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "stickers_sent")
+	fd_GiftBoxDetailsProto_share_trainer_info_with_postcard                           = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "share_trainer_info_with_postcard")
+	fd_GiftBoxDetailsProto_pinned_postcard_id                                         = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "pinned_postcard_id")
+	fd_GiftBoxDetailsProto_pin_update_timestamp_ms                                    = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "pin_update_timestamp_ms")
+	fd_GiftBoxDetailsProto_saturday_claimed                                           = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "saturday_claimed")
+	fd_GiftBoxDetailsProto_sender_nia_account_id                                      = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "sender_nia_account_id")
+	fd_GiftBoxDetailsProto_stamp_collection_id                                        = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_id")
+	fd_GiftBoxDetailsProto_stamp_collection_details                                   = mustFD((*pogo.GiftBoxDetailsProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_details")
+	fd_GiftBoxProto_giftbox_id                                                        = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "giftbox_id")
+	fd_GiftBoxProto_sender_id                                                         = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "sender_id")
+	fd_GiftBoxProto_receiver_id                                                       = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "receiver_id")
+	fd_GiftBoxProto_fort_id                                                           = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_GiftBoxProto_fort_lat                                                          = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "fort_lat")
+	fd_GiftBoxProto_fort_lng                                                          = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "fort_lng")
+	fd_GiftBoxProto_creation_timestamp                                                = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "creation_timestamp")
+	fd_GiftBoxProto_sent_timestamp                                                    = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "sent_timestamp")
+	fd_GiftBoxProto_sent_bucket                                                       = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "sent_bucket")
+	fd_GiftBoxProto_saturday_claimed                                                  = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "saturday_claimed")
+	fd_GiftBoxProto_sender_nia_id                                                     = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "sender_nia_id")
+	fd_GiftBoxProto_sender_codename                                                   = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "sender_codename")
+	fd_GiftBoxProto_receiver_codename                                                 = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "receiver_codename")
+	fd_GiftBoxProto_fort_name                                                         = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "fort_name")
+	fd_GiftBoxProto_fort_image_url                                                    = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "fort_image_url")
+	fd_GiftBoxProto_stickers_sent                                                     = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "stickers_sent")
+	fd_GiftBoxProto_share_trainer_info_with_postcard                                  = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "share_trainer_info_with_postcard")
+	fd_GiftBoxProto_pinned_postcard_id                                                = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "pinned_postcard_id")
+	fd_GiftBoxProto_stamp_collection_id                                               = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_id")
+	fd_GiftBoxProto_stamp_collection_details                                          = mustFD((*pogo.GiftBoxProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_details")
+	fd_GiftExchangeEntryProto_gift_box                                                = mustFD((*pogo.GiftExchangeEntryProto)(nil).ProtoReflect().Descriptor(), "gift_box")
+	fd_GiftExchangeEntryProto_sender_profile                                          = mustFD((*pogo.GiftExchangeEntryProto)(nil).ProtoReflect().Descriptor(), "sender_profile")
+	fd_GiftExchangeEntryProto_source_route_id                                         = mustFD((*pogo.GiftExchangeEntryProto)(nil).ProtoReflect().Descriptor(), "source_route_id")
+	fd_GiftExchangeEntryProto_route_name                                              = mustFD((*pogo.GiftExchangeEntryProto)(nil).ProtoReflect().Descriptor(), "route_name")
+	fd_GymBadgeStats_total_time_defended_ms                                           = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "total_time_defended_ms")
+	fd_GymBadgeStats_num_battles_won                                                  = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "num_battles_won")
+	fd_GymBadgeStats_num_berries_fed                                                  = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "num_berries_fed")
+	fd_GymBadgeStats_num_deploys                                                      = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "num_deploys")
+	fd_GymBadgeStats_num_battles_lost                                                 = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "num_battles_lost")
+	fd_GymBadgeStats_gym_battles                                                      = mustFD((*pogo.GymBadgeStats)(nil).ProtoReflect().Descriptor(), "gym_battles")
+	fd_GymBattleProto_battle_id                                                       = mustFD((*pogo.GymBattleProto)(nil).ProtoReflect().Descriptor(), "battle_id")
+	fd_GymBattleProto_completed_ms                                                    = mustFD((*pogo.GymBattleProto)(nil).ProtoReflect().Descriptor(), "completed_ms")
+	fd_GymBattleProto_incremented_gym_battle_friends                                  = mustFD((*pogo.GymBattleProto)(nil).ProtoReflect().Descriptor(), "incremented_gym_battle_friends")
+	fd_GymDefenderProto_motivated_pokemon                                             = mustFD((*pogo.GymDefenderProto)(nil).ProtoReflect().Descriptor(), "motivated_pokemon")
+	fd_GymDefenderProto_deployment_totals                                             = mustFD((*pogo.GymDefenderProto)(nil).ProtoReflect().Descriptor(), "deployment_totals")
+	fd_GymDefenderProto_trainer_public_profile                                        = mustFD((*pogo.GymDefenderProto)(nil).ProtoReflect().Descriptor(), "trainer_public_profile")
+	fd_GymDisplayProto_gym_event                                                      = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "gym_event")
+	fd_GymDisplayProto_total_gym_cp                                                   = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "total_gym_cp")
+	fd_GymDisplayProto_lowest_pokemon_motivation                                      = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "lowest_pokemon_motivation")
+	fd_GymDisplayProto_slots_available                                                = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "slots_available")
+	fd_GymDisplayProto_occupied_millis                                                = mustFD((*pogo.GymDisplayProto)(nil).ProtoReflect().Descriptor(), "occupied_millis")
+	fd_GymEventProto_trainer                                                          = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "trainer")
+	fd_GymEventProto_timestamp_ms                                                     = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "timestamp_ms")
+	fd_GymEventProto_event                                                            = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "event")
+	fd_GymEventProto_pokedex_id                                                       = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_GymEventProto_pokemon_id                                                       = mustFD((*pogo.GymEventProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_GymGetInfoOutProto_gym_status_and_defenders                                    = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "gym_status_and_defenders")
+	fd_GymGetInfoOutProto_name                                                        = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_GymGetInfoOutProto_url                                                         = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "url")
+	fd_GymGetInfoOutProto_result                                                      = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_GymGetInfoOutProto_description                                                 = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_GymGetInfoOutProto_secondary_url                                               = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "secondary_url")
+	fd_GymGetInfoOutProto_awarded_gym_badge                                           = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "awarded_gym_badge")
+	fd_GymGetInfoOutProto_checkin_image_url                                           = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "checkin_image_url")
+	fd_GymGetInfoOutProto_event_info                                                  = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "event_info")
+	fd_GymGetInfoOutProto_display_weather                                             = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "display_weather")
+	fd_GymGetInfoOutProto_promo_image                                                 = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "promo_image")
+	fd_GymGetInfoOutProto_promo_description                                           = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "promo_description")
+	fd_GymGetInfoOutProto_call_to_action_link                                         = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "call_to_action_link")
+	fd_GymGetInfoOutProto_server_ms                                                   = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "server_ms")
+	fd_GymGetInfoOutProto_sponsored_details                                           = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "sponsored_details")
+	fd_GymGetInfoOutProto_poi_images_count                                            = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "poi_images_count")
+	fd_GymGetInfoOutProto_geostore_tombstone_message_key                              = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "geostore_tombstone_message_key")
+	fd_GymGetInfoOutProto_geostore_suspension_message_key                             = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "geostore_suspension_message_key")
+	fd_GymGetInfoOutProto_vps_info                                                    = mustFD((*pogo.GymGetInfoOutProto)(nil).ProtoReflect().Descriptor(), "vps_info")
+	fd_GymStatusAndDefendersProto_pokemon_fort_proto                                  = mustFD((*pogo.GymStatusAndDefendersProto)(nil).ProtoReflect().Descriptor(), "pokemon_fort_proto")
+	fd_GymStatusAndDefendersProto_gym_defender                                        = mustFD((*pogo.GymStatusAndDefendersProto)(nil).ProtoReflect().Descriptor(), "gym_defender")
+	fd_HoloholoARBoundaryProto_vertices_with_relative_position                        = mustFD((*pogo.HoloholoARBoundaryProto)(nil).ProtoReflect().Descriptor(), "vertices_with_relative_position")
+	fd_HoloholoARBoundaryProto_boundary_area_in_square_meters                         = mustFD((*pogo.HoloholoARBoundaryProto)(nil).ProtoReflect().Descriptor(), "boundary_area_in_square_meters")
+	fd_HoloholoARBoundaryVertexProto_x                                                = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "x")
+	fd_HoloholoARBoundaryVertexProto_y                                                = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "y")
+	fd_HoloholoARBoundaryVertexProto_z                                                = mustFD((*pogo.HoloholoARBoundaryVertexProto)(nil).ProtoReflect().Descriptor(), "z")
+	fd_HoloholoMeshMetadata_ar_boundaries                                             = mustFD((*pogo.HoloholoMeshMetadata)(nil).ProtoReflect().Descriptor(), "ar_boundaries")
+	fd_HyperlocalExperimentClientProto_experiment_id                                  = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "experiment_id")
+	fd_HyperlocalExperimentClientProto_start_ms                                       = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "start_ms")
+	fd_HyperlocalExperimentClientProto_end_ms                                         = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "end_ms")
+	fd_HyperlocalExperimentClientProto_lat_degrees                                    = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "lat_degrees")
+	fd_HyperlocalExperimentClientProto_lng_degrees                                    = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "lng_degrees")
+	fd_HyperlocalExperimentClientProto_event_radius_m                                 = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "event_radius_m")
+	fd_HyperlocalExperimentClientProto_challenge_bonus_key                            = mustFD((*pogo.HyperlocalExperimentClientProto)(nil).ProtoReflect().Descriptor(), "challenge_bonus_key")
+	fd_ImageTextCreativeProto_name                                                    = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_ImageTextCreativeProto_title                                                   = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "title")
+	fd_ImageTextCreativeProto_description                                             = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_ImageTextCreativeProto_preview_image_url                                       = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "preview_image_url")
+	fd_ImageTextCreativeProto_fullscreen_image_url                                    = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "fullscreen_image_url")
+	fd_ImageTextCreativeProto_cta_link                                                = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "cta_link")
+	fd_ImageTextCreativeProto_web_ar_url                                              = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "web_ar_url")
+	fd_ImageTextCreativeProto_cta_text                                                = mustFD((*pogo.ImageTextCreativeProto)(nil).ProtoReflect().Descriptor(), "cta_text")
+	fd_ImpressionTrackingTag_tag_id                                                   = mustFD((*pogo.ImpressionTrackingTag)(nil).ProtoReflect().Descriptor(), "tag_id")
+	fd_ImpressionTrackingTag_base_url                                                 = mustFD((*pogo.ImpressionTrackingTag)(nil).ProtoReflect().Descriptor(), "base_url")
+	fd_IncenseCreateDetail_incense_type                                               = mustFD((*pogo.IncenseCreateDetail)(nil).ProtoReflect().Descriptor(), "incense_type")
+	fd_IncidentLookupProto_incident_id                                                = mustFD((*pogo.IncidentLookupProto)(nil).ProtoReflect().Descriptor(), "incident_id")
+	fd_IncidentLookupProto_fort_id                                                    = mustFD((*pogo.IncidentLookupProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_IncidentLookupProto_fort_lat                                                   = mustFD((*pogo.IncidentLookupProto)(nil).ProtoReflect().Descriptor(), "fort_lat")
+	fd_IncidentLookupProto_fort_lng                                                   = mustFD((*pogo.IncidentLookupProto)(nil).ProtoReflect().Descriptor(), "fort_lng")
+	fd_IncidentLookupProto_context                                                    = mustFD((*pogo.IncidentLookupProto)(nil).ProtoReflect().Descriptor(), "context")
+	fd_IncidentRewardProto_invasion_spawn_group_template_id                           = mustFD((*pogo.IncidentRewardProto)(nil).ProtoReflect().Descriptor(), "invasion_spawn_group_template_id")
+	fd_InternalFriendDetailsProto_player                                              = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "player")
+	fd_InternalFriendDetailsProto_friend_visible_data                                 = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "friend_visible_data")
+	fd_InternalFriendDetailsProto_score                                               = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "score")
+	fd_InternalFriendDetailsProto_data_with_me                                        = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "data_with_me")
+	fd_InternalFriendDetailsProto_online_status                                       = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "online_status")
+	fd_InternalFriendDetailsProto_created_ms                                          = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "created_ms")
+	fd_InternalFriendDetailsProto_shared_data                                         = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "shared_data")
+	fd_InternalFriendDetailsProto_data_from_me                                        = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "data_from_me")
+	fd_InternalFriendDetailsProto_data_to_me                                          = mustFD((*pogo.InternalFriendDetailsProto)(nil).ProtoReflect().Descriptor(), "data_to_me")
+	fd_InternalGetFriendDetailsOutProto_result                                        = mustFD((*pogo.InternalGetFriendDetailsOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_InternalGetFriendDetailsOutProto_friend                                        = mustFD((*pogo.InternalGetFriendDetailsOutProto)(nil).ProtoReflect().Descriptor(), "friend")
+	fd_InternalGetFriendDetailsOutProto_friend_details_debug_info                     = mustFD((*pogo.InternalGetFriendDetailsOutProto)(nil).ProtoReflect().Descriptor(), "friend_details_debug_info")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_db                    = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "fetched_from_db")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_fanout                = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "fetched_from_fanout")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_player_mapper         = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "fetched_from_player_mapper")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_status_cache          = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "fetched_from_status_cache")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_failed_to_fetch                    = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "failed_to_fetch")
+	fd_InternalGetFriendDetailsOutProto_DebugProto_fetched_from_same_server_as_player = mustFD((*pogo.InternalGetFriendDetailsOutProto_DebugProto)(nil).ProtoReflect().Descriptor(), "fetched_from_same_server_as_player")
+	fd_InternalPlayerSummaryProto_player_id                                           = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "player_id")
+	fd_InternalPlayerSummaryProto_codename                                            = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "codename")
+	fd_InternalPlayerSummaryProto_public_data                                         = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "public_data")
+	fd_InternalPlayerSummaryProto_team                                                = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "team")
+	fd_InternalPlayerSummaryProto_fb_user_id                                          = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "fb_user_id")
+	fd_InternalPlayerSummaryProto_level                                               = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "level")
+	fd_InternalPlayerSummaryProto_experience                                          = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "experience")
+	fd_InternalPlayerSummaryProto_nia_account_id                                      = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "nia_account_id")
+	fd_InternalPlayerSummaryProto_display_name                                        = mustFD((*pogo.InternalPlayerSummaryProto)(nil).ProtoReflect().Descriptor(), "display_name")
+	fd_InternalSearchPlayerOutProto_result                                            = mustFD((*pogo.InternalSearchPlayerOutProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_InternalSearchPlayerOutProto_player                                            = mustFD((*pogo.InternalSearchPlayerOutProto)(nil).ProtoReflect().Descriptor(), "player")
+	fd_InternalSearchPlayerProto_friend_code                                          = mustFD((*pogo.InternalSearchPlayerProto)(nil).ProtoReflect().Descriptor(), "friend_code")
+	fd_InvasionCreateDetail_origin                                                    = mustFD((*pogo.InvasionCreateDetail)(nil).ProtoReflect().Descriptor(), "origin")
+	fd_InvasionFinishedDisplayProto_style                                             = mustFD((*pogo.InvasionFinishedDisplayProto)(nil).ProtoReflect().Descriptor(), "style")
+	fd_IrisSocialDeploymentProto_deployed_fort_id                                     = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "deployed_fort_id")
+	fd_IrisSocialDeploymentProto_pokemon_deployed_since_ms                            = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "pokemon_deployed_since_ms")
+	fd_IrisSocialDeploymentProto_pokemon_returned_at_ms                               = mustFD((*pogo.IrisSocialDeploymentProto)(nil).ProtoReflect().Descriptor(), "pokemon_returned_at_ms")
+	fd_IrisSocialEventTelemetry_Position_x                                            = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "x")
+	fd_IrisSocialEventTelemetry_Position_y                                            = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "y")
+	fd_IrisSocialEventTelemetry_Position_z                                            = mustFD((*pogo.IrisSocialEventTelemetry_Position)(nil).ProtoReflect().Descriptor(), "z")
+	fd_IrisSocialEventTelemetry_Rotation_x                                            = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "x")
+	fd_IrisSocialEventTelemetry_Rotation_y                                            = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "y")
+	fd_IrisSocialEventTelemetry_Rotation_z                                            = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "z")
+	fd_IrisSocialEventTelemetry_Rotation_w                                            = mustFD((*pogo.IrisSocialEventTelemetry_Rotation)(nil).ProtoReflect().Descriptor(), "w")
+	fd_ItemRewardProto_item                                                           = mustFD((*pogo.ItemRewardProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_ItemRewardProto_amount                                                         = mustFD((*pogo.ItemRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
+	fd_LocationCardDisplayProto_location_card                                         = mustFD((*pogo.LocationCardDisplayProto)(nil).ProtoReflect().Descriptor(), "location_card")
+	fd_LootItemProto_item                                                             = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_LootItemProto_stardust                                                         = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "stardust")
+	fd_LootItemProto_pokecoin                                                         = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "pokecoin")
+	fd_LootItemProto_pokemon_candy                                                    = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "pokemon_candy")
+	fd_LootItemProto_experience                                                       = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "experience")
+	fd_LootItemProto_pokemon_egg                                                      = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "pokemon_egg")
+	fd_LootItemProto_avatar_template_id                                               = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "avatar_template_id")
+	fd_LootItemProto_sticker_id                                                       = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "sticker_id")
+	fd_LootItemProto_mega_energy_pokemon_id                                           = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "mega_energy_pokemon_id")
+	fd_LootItemProto_xl_candy                                                         = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "xl_candy")
+	fd_LootItemProto_follower_pokemon                                                 = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "follower_pokemon")
+	fd_LootItemProto_neutral_avatar_template_id                                       = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_template_id")
+	fd_LootItemProto_neutral_avatar_item_template                                     = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_template")
+	fd_LootItemProto_neutral_avatar_item_display                                      = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_display")
+	fd_LootItemProto_count                                                            = mustFD((*pogo.LootItemProto)(nil).ProtoReflect().Descriptor(), "count")
+	fd_LootProto_loot_item                                                            = mustFD((*pogo.LootProto)(nil).ProtoReflect().Descriptor(), "loot_item")
+	fd_MapPokemonProto_spawnpoint_id                                                  = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "spawnpoint_id")
+	fd_MapPokemonProto_encounter_id                                                   = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_MapPokemonProto_pokedex_type_id                                                = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "pokedex_type_id")
+	fd_MapPokemonProto_expiration_time_ms                                             = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
+	fd_MapPokemonProto_latitude                                                       = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_MapPokemonProto_longitude                                                      = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_MapPokemonProto_pokemon_display                                                = mustFD((*pogo.MapPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_MegaEvoInfoProto_pokedex_id                                                    = mustFD((*pogo.MegaEvoInfoProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_MegaEvoInfoProto_temp_evo_id                                                   = mustFD((*pogo.MegaEvoInfoProto)(nil).ProtoReflect().Descriptor(), "temp_evo_id")
+	fd_MegaEvoInfoProto_evo_expiration_time_ms                                        = mustFD((*pogo.MegaEvoInfoProto)(nil).ProtoReflect().Descriptor(), "evo_expiration_time_ms")
+	fd_MiniCollectionPokemon_pokedex_id                                               = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_MiniCollectionPokemon_display                                                  = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "display")
+	fd_MiniCollectionPokemon_caught                                                   = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "caught")
+	fd_MiniCollectionPokemon_collection_type                                          = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "collection_type")
+	fd_MiniCollectionPokemon_require_alignment_to_match                               = mustFD((*pogo.MiniCollectionPokemon)(nil).ProtoReflect().Descriptor(), "require_alignment_to_match")
+	fd_MiniCollectionProto_pokemon                                                    = mustFD((*pogo.MiniCollectionProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_MiniCollectionProto_completed                                                  = mustFD((*pogo.MiniCollectionProto)(nil).ProtoReflect().Descriptor(), "completed")
+	fd_MotivatedPokemonProto_pokemon                                                  = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_MotivatedPokemonProto_deploy_ms                                                = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "deploy_ms")
+	fd_MotivatedPokemonProto_cp_when_deployed                                         = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "cp_when_deployed")
+	fd_MotivatedPokemonProto_motivation_now                                           = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "motivation_now")
+	fd_MotivatedPokemonProto_cp_now                                                   = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "cp_now")
+	fd_MotivatedPokemonProto_berry_value                                              = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "berry_value")
+	fd_MotivatedPokemonProto_feed_cooldown_duration_millis                            = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "feed_cooldown_duration_millis")
+	fd_MotivatedPokemonProto_food_value                                               = mustFD((*pogo.MotivatedPokemonProto)(nil).ProtoReflect().Descriptor(), "food_value")
+	fd_MoveModifierProto_mode                                                         = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "mode")
+	fd_MoveModifierProto_type                                                         = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_MoveModifierProto_value                                                        = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "value")
+	fd_MoveModifierProto_condition                                                    = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "condition")
+	fd_MoveModifierProto_render_modifier                                              = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "render_modifier")
+	fd_MoveModifierProto_duration                                                     = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "duration")
+	fd_MoveModifierProto_string_value                                                 = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "string_value")
+	fd_MoveModifierProto_best_effort                                                  = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "best_effort")
+	fd_MoveModifierProto_modifier_target                                              = mustFD((*pogo.MoveModifierProto)(nil).ProtoReflect().Descriptor(), "modifier_target")
+	fd_MoveModifierProto_ModifierCondition_condition_type                             = mustFD((*pogo.MoveModifierProto_ModifierCondition)(nil).ProtoReflect().Descriptor(), "condition_type")
+	fd_MoveModifierProto_ModifierCondition_value                                      = mustFD((*pogo.MoveModifierProto_ModifierCondition)(nil).ProtoReflect().Descriptor(), "value")
+	fd_MoveModifierProto_ModifierCondition_deviation                                  = mustFD((*pogo.MoveModifierProto_ModifierCondition)(nil).ProtoReflect().Descriptor(), "deviation")
+	fd_MoveModifierProto_ModifierCondition_string_lookup                              = mustFD((*pogo.MoveModifierProto_ModifierCondition)(nil).ProtoReflect().Descriptor(), "string_lookup")
+	fd_MultiPartQuestProto_sub_quests                                                 = mustFD((*pogo.MultiPartQuestProto)(nil).ProtoReflect().Descriptor(), "sub_quests")
+	fd_MultiSelectorProto_keys                                                        = mustFD((*pogo.MultiSelectorProto)(nil).ProtoReflect().Descriptor(), "keys")
+	fd_MultiSelectorProto_next_steps                                                  = mustFD((*pogo.MultiSelectorProto)(nil).ProtoReflect().Descriptor(), "next_steps")
+	fd_NearbyPokemonProto_pokedex_number                                              = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "pokedex_number")
+	fd_NearbyPokemonProto_distance_meters                                             = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "distance_meters")
+	fd_NearbyPokemonProto_encounter_id                                                = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_NearbyPokemonProto_fort_id                                                     = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_NearbyPokemonProto_fort_image_url                                              = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "fort_image_url")
+	fd_NearbyPokemonProto_pokemon_display                                             = mustFD((*pogo.NearbyPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_NeutralAvatarLootItemDisplayProto_display                                      = mustFD((*pogo.NeutralAvatarLootItemDisplayProto)(nil).ProtoReflect().Descriptor(), "display")
+	fd_NeutralAvatarLootItemDisplayProto_link                                         = mustFD((*pogo.NeutralAvatarLootItemDisplayProto)(nil).ProtoReflect().Descriptor(), "link")
+	fd_NeutralAvatarLootItemTemplateProto_item_template_id                            = mustFD((*pogo.NeutralAvatarLootItemTemplateProto)(nil).ProtoReflect().Descriptor(), "item_template_id")
+	fd_NeutralAvatarLootItemTemplateProto_display_template_id                         = mustFD((*pogo.NeutralAvatarLootItemTemplateProto)(nil).ProtoReflect().Descriptor(), "display_template_id")
+	fd_NpcEncounterProto_encounter_id                                                 = mustFD((*pogo.NpcEncounterProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_NpcEncounterProto_character                                                    = mustFD((*pogo.NpcEncounterProto)(nil).ProtoReflect().Descriptor(), "character")
+	fd_NpcEncounterProto_steps                                                        = mustFD((*pogo.NpcEncounterProto)(nil).ProtoReflect().Descriptor(), "steps")
+	fd_NpcEncounterProto_current_step                                                 = mustFD((*pogo.NpcEncounterProto)(nil).ProtoReflect().Descriptor(), "current_step")
+	fd_NpcEncounterProto_map_character                                                = mustFD((*pogo.NpcEncounterProto)(nil).ProtoReflect().Descriptor(), "map_character")
+	fd_NpcEncounterProto_NpcEncounterStep_step_id                                     = mustFD((*pogo.NpcEncounterProto_NpcEncounterStep)(nil).ProtoReflect().Descriptor(), "step_id")
+	fd_NpcEncounterProto_NpcEncounterStep_dialog                                      = mustFD((*pogo.NpcEncounterProto_NpcEncounterStep)(nil).ProtoReflect().Descriptor(), "dialog")
+	fd_NpcEncounterProto_NpcEncounterStep_event                                       = mustFD((*pogo.NpcEncounterProto_NpcEncounterStep)(nil).ProtoReflect().Descriptor(), "event")
+	fd_NpcEncounterProto_NpcEncounterStep_next_step                                   = mustFD((*pogo.NpcEncounterProto_NpcEncounterStep)(nil).ProtoReflect().Descriptor(), "next_step")
+	fd_NpcEncounterProto_NpcEncounterStep_npc_dialog                                  = mustFD((*pogo.NpcEncounterProto_NpcEncounterStep)(nil).ProtoReflect().Descriptor(), "npc_dialog")
+	fd_NpcEventProto_cached_gift_exchange_entry                                       = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "cached_gift_exchange_entry")
+	fd_NpcEventProto_cached_pokemon_exchange_entry                                    = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "cached_pokemon_exchange_entry")
+	fd_NpcEventProto_yes_no_selector                                                  = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "yes_no_selector")
+	fd_NpcEventProto_multi_selector                                                   = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "multi_selector")
+	fd_NpcEventProto_tutorial_flag                                                    = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "tutorial_flag")
+	fd_NpcEventProto_event                                                            = mustFD((*pogo.NpcEventProto)(nil).ProtoReflect().Descriptor(), "event")
+	fd_OneWaySharedFriendshipDataProto_giftbox_details                                = mustFD((*pogo.OneWaySharedFriendshipDataProto)(nil).ProtoReflect().Descriptor(), "giftbox_details")
+	fd_OneWaySharedFriendshipDataProto_open_trade_expire_ms                           = mustFD((*pogo.OneWaySharedFriendshipDataProto)(nil).ProtoReflect().Descriptor(), "open_trade_expire_ms")
+	fd_OpenInvasionCombatSessionOutProto_status                                       = mustFD((*pogo.OpenInvasionCombatSessionOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_OpenInvasionCombatSessionOutProto_combat                                       = mustFD((*pogo.OpenInvasionCombatSessionOutProto)(nil).ProtoReflect().Descriptor(), "combat")
+	fd_OpenInvasionCombatSessionProto_incident_lookup                                 = mustFD((*pogo.OpenInvasionCombatSessionProto)(nil).ProtoReflect().Descriptor(), "incident_lookup")
+	fd_OpenInvasionCombatSessionProto_step                                            = mustFD((*pogo.OpenInvasionCombatSessionProto)(nil).ProtoReflect().Descriptor(), "step")
+	fd_OpenInvasionCombatSessionProto_attacking_pokemon_id                            = mustFD((*pogo.OpenInvasionCombatSessionProto)(nil).ProtoReflect().Descriptor(), "attacking_pokemon_id")
+	fd_OpenInvasionCombatSessionProto_lobby_join_time_ms                              = mustFD((*pogo.OpenInvasionCombatSessionProto)(nil).ProtoReflect().Descriptor(), "lobby_join_time_ms")
+	fd_PhotobombCreateDetail_caught_in_photobomb                                      = mustFD((*pogo.PhotobombCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_photobomb")
+	fd_PlayerAttributeRewardProto_key                                                 = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "key")
+	fd_PlayerAttributeRewardProto_value                                               = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "value")
+	fd_PlayerAttributeRewardProto_overwrite_existing_attribute                        = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "overwrite_existing_attribute")
+	fd_PlayerAttributeRewardProto_duration_mins                                       = mustFD((*pogo.PlayerAttributeRewardProto)(nil).ProtoReflect().Descriptor(), "duration_mins")
+	fd_PlayerAvatarProto_skin                                                         = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "skin")
+	fd_PlayerAvatarProto_hair                                                         = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "hair")
+	fd_PlayerAvatarProto_shirt                                                        = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "shirt")
+	fd_PlayerAvatarProto_pants                                                        = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "pants")
+	fd_PlayerAvatarProto_hat                                                          = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "hat")
+	fd_PlayerAvatarProto_shoes                                                        = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "shoes")
+	fd_PlayerAvatarProto_avatar                                                       = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar")
+	fd_PlayerAvatarProto_eyes                                                         = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "eyes")
+	fd_PlayerAvatarProto_backpack                                                     = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "backpack")
+	fd_PlayerAvatarProto_avatar_hair                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_hair")
+	fd_PlayerAvatarProto_avatar_shirt                                                 = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_shirt")
+	fd_PlayerAvatarProto_avatar_pants                                                 = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_pants")
+	fd_PlayerAvatarProto_avatar_hat                                                   = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_hat")
+	fd_PlayerAvatarProto_avatar_shoes                                                 = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_shoes")
+	fd_PlayerAvatarProto_avatar_eyes                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_eyes")
+	fd_PlayerAvatarProto_avatar_backpack                                              = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_backpack")
+	fd_PlayerAvatarProto_avatar_gloves                                                = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_gloves")
+	fd_PlayerAvatarProto_avatar_socks                                                 = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_socks")
+	fd_PlayerAvatarProto_avatar_belt                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_belt")
+	fd_PlayerAvatarProto_avatar_glasses                                               = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_glasses")
+	fd_PlayerAvatarProto_avatar_necklace                                              = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_necklace")
+	fd_PlayerAvatarProto_avatar_skin                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_skin")
+	fd_PlayerAvatarProto_avatar_pose                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_pose")
+	fd_PlayerAvatarProto_avatar_face                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_face")
+	fd_PlayerAvatarProto_avatar_prop                                                  = mustFD((*pogo.PlayerAvatarProto)(nil).ProtoReflect().Descriptor(), "avatar_prop")
+	fd_PlayerBadgeProto_badge_type                                                    = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "badge_type")
+	fd_PlayerBadgeProto_rank                                                          = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "rank")
+	fd_PlayerBadgeProto_start_value                                                   = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "start_value")
+	fd_PlayerBadgeProto_end_value                                                     = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "end_value")
+	fd_PlayerBadgeProto_current_value                                                 = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "current_value")
+	fd_PlayerBadgeProto_tiers                                                         = mustFD((*pogo.PlayerBadgeProto)(nil).ProtoReflect().Descriptor(), "tiers")
+	fd_PlayerBadgeTierEncounterProto_encounter_state                                  = mustFD((*pogo.PlayerBadgeTierEncounterProto)(nil).ProtoReflect().Descriptor(), "encounter_state")
+	fd_PlayerBadgeTierEncounterProto_encounter_id                                     = mustFD((*pogo.PlayerBadgeTierEncounterProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_PlayerBadgeTierProto_encounter                                                 = mustFD((*pogo.PlayerBadgeTierProto)(nil).ProtoReflect().Descriptor(), "encounter")
+	fd_PlayerClientStationedPokemonProto_pokemon                                      = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_PlayerClientStationedPokemonProto_trainer_name                                 = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "trainer_name")
+	fd_PlayerClientStationedPokemonProto_deploy_timestamp_ms                          = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "deploy_timestamp_ms")
+	fd_PlayerClientStationedPokemonProto_player_avatar                                = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "player_avatar")
+	fd_PlayerClientStationedPokemonProto_player_neutral_avatar                        = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "player_neutral_avatar")
+	fd_PlayerClientStationedPokemonProto_trainer_level                                = mustFD((*pogo.PlayerClientStationedPokemonProto)(nil).ProtoReflect().Descriptor(), "trainer_level")
+	fd_PlayerFriendDisplayProto_buddy                                                 = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy")
+	fd_PlayerFriendDisplayProto_buddy_display_pokemon_id                              = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_display_pokemon_id")
+	fd_PlayerFriendDisplayProto_buddy_pokemon_nickname                                = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_pokemon_nickname")
+	fd_PlayerFriendDisplayProto_last_pokemon_caught                                   = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "last_pokemon_caught")
+	fd_PlayerFriendDisplayProto_last_pokemon_caught_display_id                        = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "last_pokemon_caught_display_id")
+	fd_PlayerFriendDisplayProto_last_pokemon_caught_timestamp                         = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "last_pokemon_caught_timestamp")
+	fd_PlayerFriendDisplayProto_buddy_candy_awarded                                   = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_candy_awarded")
+	fd_PlayerFriendDisplayProto_active_mega_evo_info                                  = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "active_mega_evo_info")
+	fd_PlayerFriendDisplayProto_buddy_height_m                                        = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_height_m")
+	fd_PlayerFriendDisplayProto_buddy_weight_kg                                       = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_weight_kg")
+	fd_PlayerFriendDisplayProto_buddy_size                                            = mustFD((*pogo.PlayerFriendDisplayProto)(nil).ProtoReflect().Descriptor(), "buddy_size")
+	fd_PlayerNeutralAvatarArticleConfiguration_hair                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "hair")
+	fd_PlayerNeutralAvatarArticleConfiguration_shirt                                  = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "shirt")
+	fd_PlayerNeutralAvatarArticleConfiguration_pants                                  = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "pants")
+	fd_PlayerNeutralAvatarArticleConfiguration_hat                                    = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "hat")
+	fd_PlayerNeutralAvatarArticleConfiguration_shoes                                  = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "shoes")
+	fd_PlayerNeutralAvatarArticleConfiguration_eyes                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "eyes")
+	fd_PlayerNeutralAvatarArticleConfiguration_backpack                               = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "backpack")
+	fd_PlayerNeutralAvatarArticleConfiguration_gloves                                 = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "gloves")
+	fd_PlayerNeutralAvatarArticleConfiguration_socks                                  = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "socks")
+	fd_PlayerNeutralAvatarArticleConfiguration_belt                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "belt")
+	fd_PlayerNeutralAvatarArticleConfiguration_glasses                                = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "glasses")
+	fd_PlayerNeutralAvatarArticleConfiguration_necklace                               = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "necklace")
+	fd_PlayerNeutralAvatarArticleConfiguration_skin                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "skin")
+	fd_PlayerNeutralAvatarArticleConfiguration_pose                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "pose")
+	fd_PlayerNeutralAvatarArticleConfiguration_mask                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "mask")
+	fd_PlayerNeutralAvatarArticleConfiguration_prop                                   = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "prop")
+	fd_PlayerNeutralAvatarArticleConfiguration_facial_hair                            = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "facial_hair")
+	fd_PlayerNeutralAvatarArticleConfiguration_face_paint                             = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "face_paint")
+	fd_PlayerNeutralAvatarArticleConfiguration_onesie                                 = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "onesie")
+	fd_PlayerNeutralAvatarArticleConfiguration_eye_brow                               = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "eye_brow")
+	fd_PlayerNeutralAvatarArticleConfiguration_eye_lash                               = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "eye_lash")
+	fd_PlayerNeutralAvatarArticleConfiguration_face_preset                            = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "face_preset")
+	fd_PlayerNeutralAvatarArticleConfiguration_body_preset                            = mustFD((*pogo.PlayerNeutralAvatarArticleConfiguration)(nil).ProtoReflect().Descriptor(), "body_preset")
+	fd_PlayerNeutralAvatarBodyBlendParameters_size                                    = mustFD((*pogo.PlayerNeutralAvatarBodyBlendParameters)(nil).ProtoReflect().Descriptor(), "size")
+	fd_PlayerNeutralAvatarBodyBlendParameters_musculature                             = mustFD((*pogo.PlayerNeutralAvatarBodyBlendParameters)(nil).ProtoReflect().Descriptor(), "musculature")
+	fd_PlayerNeutralAvatarBodyBlendParameters_bust                                    = mustFD((*pogo.PlayerNeutralAvatarBodyBlendParameters)(nil).ProtoReflect().Descriptor(), "bust")
+	fd_PlayerNeutralAvatarBodyBlendParameters_hips                                    = mustFD((*pogo.PlayerNeutralAvatarBodyBlendParameters)(nil).ProtoReflect().Descriptor(), "hips")
+	fd_PlayerNeutralAvatarBodyBlendParameters_shoulders                               = mustFD((*pogo.PlayerNeutralAvatarBodyBlendParameters)(nil).ProtoReflect().Descriptor(), "shoulders")
+	fd_PlayerNeutralAvatarEarSelectionParameters_selection                            = mustFD((*pogo.PlayerNeutralAvatarEarSelectionParameters)(nil).ProtoReflect().Descriptor(), "selection")
+	fd_PlayerNeutralAvatarEyeSelectionParameters_selection                            = mustFD((*pogo.PlayerNeutralAvatarEyeSelectionParameters)(nil).ProtoReflect().Descriptor(), "selection")
+	fd_PlayerNeutralAvatarFacePositionParameters_brow_depth                           = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "brow_depth")
+	fd_PlayerNeutralAvatarFacePositionParameters_brow_horizontal                      = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "brow_horizontal")
+	fd_PlayerNeutralAvatarFacePositionParameters_brow_vertical                        = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "brow_vertical")
+	fd_PlayerNeutralAvatarFacePositionParameters_eye_depth                            = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "eye_depth")
+	fd_PlayerNeutralAvatarFacePositionParameters_eye_horizontal                       = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "eye_horizontal")
+	fd_PlayerNeutralAvatarFacePositionParameters_eye_vertical                         = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "eye_vertical")
+	fd_PlayerNeutralAvatarFacePositionParameters_mouth_depth                          = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "mouth_depth")
+	fd_PlayerNeutralAvatarFacePositionParameters_mouth_horizontal                     = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "mouth_horizontal")
+	fd_PlayerNeutralAvatarFacePositionParameters_mouth_vertical                       = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "mouth_vertical")
+	fd_PlayerNeutralAvatarFacePositionParameters_nose_depth                           = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "nose_depth")
+	fd_PlayerNeutralAvatarFacePositionParameters_nose_vertical                        = mustFD((*pogo.PlayerNeutralAvatarFacePositionParameters)(nil).ProtoReflect().Descriptor(), "nose_vertical")
+	fd_PlayerNeutralAvatarGradient_color_keys                                         = mustFD((*pogo.PlayerNeutralAvatarGradient)(nil).ProtoReflect().Descriptor(), "color_keys")
+	fd_PlayerNeutralAvatarHeadBlendParameters_diamond                                 = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "diamond")
+	fd_PlayerNeutralAvatarHeadBlendParameters_kite                                    = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "kite")
+	fd_PlayerNeutralAvatarHeadBlendParameters_triangle                                = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "triangle")
+	fd_PlayerNeutralAvatarHeadBlendParameters_square                                  = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "square")
+	fd_PlayerNeutralAvatarHeadBlendParameters_circle                                  = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "circle")
+	fd_PlayerNeutralAvatarHeadBlendParameters_oval                                    = mustFD((*pogo.PlayerNeutralAvatarHeadBlendParameters)(nil).ProtoReflect().Descriptor(), "oval")
+	fd_PlayerNeutralAvatarHeadSelectionParameters_selection                           = mustFD((*pogo.PlayerNeutralAvatarHeadSelectionParameters)(nil).ProtoReflect().Descriptor(), "selection")
+	fd_PlayerNeutralAvatarMouthSelectionParameters_selection                          = mustFD((*pogo.PlayerNeutralAvatarMouthSelectionParameters)(nil).ProtoReflect().Descriptor(), "selection")
+	fd_PlayerNeutralAvatarNoseSelectionParameters_selection                           = mustFD((*pogo.PlayerNeutralAvatarNoseSelectionParameters)(nil).ProtoReflect().Descriptor(), "selection")
+	fd_PlayerNeutralAvatarProto_head_blend                                            = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "head_blend")
+	fd_PlayerNeutralAvatarProto_head_selection                                        = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "head_selection")
+	fd_PlayerNeutralAvatarProto_articles                                              = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "articles")
+	fd_PlayerNeutralAvatarProto_body_blend                                            = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "body_blend")
+	fd_PlayerNeutralAvatarProto_skin_gradient                                         = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "skin_gradient")
+	fd_PlayerNeutralAvatarProto_hair_gradient                                         = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "hair_gradient")
+	fd_PlayerNeutralAvatarProto_nose_selection                                        = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "nose_selection")
+	fd_PlayerNeutralAvatarProto_ear_selection                                         = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "ear_selection")
+	fd_PlayerNeutralAvatarProto_mouth_selection                                       = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "mouth_selection")
+	fd_PlayerNeutralAvatarProto_facial_hair_gradient                                  = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "facial_hair_gradient")
+	fd_PlayerNeutralAvatarProto_face_positions                                        = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "face_positions")
+	fd_PlayerNeutralAvatarProto_eye_gradient                                          = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "eye_gradient")
+	fd_PlayerNeutralAvatarProto_eye_selection                                         = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "eye_selection")
+	fd_PlayerNeutralAvatarProto_skin_gradient_id                                      = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "skin_gradient_id")
+	fd_PlayerNeutralAvatarProto_hair_gradient_id                                      = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "hair_gradient_id")
+	fd_PlayerNeutralAvatarProto_eye_gradient_id                                       = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "eye_gradient_id")
+	fd_PlayerNeutralAvatarProto_neutral_avatar_legacy_mapping_version                 = mustFD((*pogo.PlayerNeutralAvatarProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_legacy_mapping_version")
+	fd_PlayerNeutralColorKey_key_position                                             = mustFD((*pogo.PlayerNeutralColorKey)(nil).ProtoReflect().Descriptor(), "key_position")
+	fd_PlayerNeutralColorKey_red                                                      = mustFD((*pogo.PlayerNeutralColorKey)(nil).ProtoReflect().Descriptor(), "red")
+	fd_PlayerNeutralColorKey_green                                                    = mustFD((*pogo.PlayerNeutralColorKey)(nil).ProtoReflect().Descriptor(), "green")
+	fd_PlayerNeutralColorKey_blue                                                     = mustFD((*pogo.PlayerNeutralColorKey)(nil).ProtoReflect().Descriptor(), "blue")
+	fd_PlayerPublicProfileProto_name                                                  = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_PlayerPublicProfileProto_level                                                 = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "level")
+	fd_PlayerPublicProfileProto_avatar                                                = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "avatar")
+	fd_PlayerPublicProfileProto_team                                                  = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "team")
+	fd_PlayerPublicProfileProto_battles_won                                           = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "battles_won")
+	fd_PlayerPublicProfileProto_km_walked                                             = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "km_walked")
+	fd_PlayerPublicProfileProto_caught_pokemon                                        = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "caught_pokemon")
+	fd_PlayerPublicProfileProto_gym_badge_type                                        = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "gym_badge_type")
+	fd_PlayerPublicProfileProto_badges                                                = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "badges")
+	fd_PlayerPublicProfileProto_experience                                            = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "experience")
+	fd_PlayerPublicProfileProto_has_shared_ex_pass                                    = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "has_shared_ex_pass")
+	fd_PlayerPublicProfileProto_combat_rank                                           = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "combat_rank")
+	fd_PlayerPublicProfileProto_combat_rating                                         = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "combat_rating")
+	fd_PlayerPublicProfileProto_timed_group_challenge_stats                           = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "timed_group_challenge_stats")
+	fd_PlayerPublicProfileProto_neutral_avatar                                        = mustFD((*pogo.PlayerPublicProfileProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar")
+	fd_PlayerRaidInfoProto_total_completed_raids                                      = mustFD((*pogo.PlayerRaidInfoProto)(nil).ProtoReflect().Descriptor(), "total_completed_raids")
+	fd_PlayerRaidInfoProto_total_completed_legendary_raids                            = mustFD((*pogo.PlayerRaidInfoProto)(nil).ProtoReflect().Descriptor(), "total_completed_legendary_raids")
+	fd_PlayerRaidInfoProto_raids                                                      = mustFD((*pogo.PlayerRaidInfoProto)(nil).ProtoReflect().Descriptor(), "raids")
+	fd_PlayerRaidInfoProto_total_remote_raids                                         = mustFD((*pogo.PlayerRaidInfoProto)(nil).ProtoReflect().Descriptor(), "total_remote_raids")
+	fd_PlayerRouteStats_num_completions                                               = mustFD((*pogo.PlayerRouteStats)(nil).ProtoReflect().Descriptor(), "num_completions")
+	fd_PlayerRouteStats_cooldown_finish_ms                                            = mustFD((*pogo.PlayerRouteStats)(nil).ProtoReflect().Descriptor(), "cooldown_finish_ms")
+	fd_PokemonBonusStatLevelProto_bonus_individual_attack                             = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_attack")
+	fd_PokemonBonusStatLevelProto_bonus_individual_defense                            = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_defense")
+	fd_PokemonBonusStatLevelProto_bonus_individual_stamina                            = mustFD((*pogo.PokemonBonusStatLevelProto)(nil).ProtoReflect().Descriptor(), "bonus_individual_stamina")
+	fd_PokemonCandyRewardProto_pokemon_id                                             = mustFD((*pogo.PokemonCandyRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_PokemonCandyRewardProto_amount                                                 = mustFD((*pogo.PokemonCandyRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
+	fd_PokemonCombatStatsProto_num_won                                                = mustFD((*pogo.PokemonCombatStatsProto)(nil).ProtoReflect().Descriptor(), "num_won")
+	fd_PokemonCombatStatsProto_num_total                                              = mustFD((*pogo.PokemonCombatStatsProto)(nil).ProtoReflect().Descriptor(), "num_total")
+	fd_PokemonContestInfoProto_contest_id                                             = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "contest_id")
+	fd_PokemonContestInfoProto_contest_end_time_ms                                    = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "contest_end_time_ms")
+	fd_PokemonContestInfoProto_free_up_time_ms                                        = mustFD((*pogo.PokemonContestInfoProto)(nil).ProtoReflect().Descriptor(), "free_up_time_ms")
+	fd_PokemonCreateDetail_wild_detail                                                = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "wild_detail")
+	fd_PokemonCreateDetail_egg_detail                                                 = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "egg_detail")
+	fd_PokemonCreateDetail_raid_detail                                                = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "raid_detail")
+	fd_PokemonCreateDetail_quest_detail                                               = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "quest_detail")
+	fd_PokemonCreateDetail_vs_seeker_detail                                           = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "vs_seeker_detail")
+	fd_PokemonCreateDetail_invasion_detail                                            = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "invasion_detail")
+	fd_PokemonCreateDetail_photobomb_detail                                           = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "photobomb_detail")
+	fd_PokemonCreateDetail_tutorial_detail                                            = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "tutorial_detail")
+	fd_PokemonCreateDetail_postcard_detail                                            = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "postcard_detail")
+	fd_PokemonCreateDetail_station_detail                                             = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "station_detail")
+	fd_PokemonCreateDetail_incense_detail                                             = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "incense_detail")
+	fd_PokemonCreateDetail_disk_detail                                                = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "disk_detail")
+	fd_PokemonCreateDetail_bread_battle_detail                                        = mustFD((*pogo.PokemonCreateDetail)(nil).ProtoReflect().Descriptor(), "bread_battle_detail")
+	fd_PokemonDisplayProto_costume                                                    = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "costume")
+	fd_PokemonDisplayProto_gender                                                     = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "gender")
+	fd_PokemonDisplayProto_shiny                                                      = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "shiny")
+	fd_PokemonDisplayProto_form                                                       = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "form")
+	fd_PokemonDisplayProto_weather_boosted_condition                                  = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "weather_boosted_condition")
+	fd_PokemonDisplayProto_alignment                                                  = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "alignment")
+	fd_PokemonDisplayProto_pokemon_badge                                              = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "pokemon_badge")
+	fd_PokemonDisplayProto_current_temp_evolution                                     = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "current_temp_evolution")
+	fd_PokemonDisplayProto_temporary_evolution_finish_ms                              = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "temporary_evolution_finish_ms")
+	fd_PokemonDisplayProto_temp_evolution_is_locked                                   = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "temp_evolution_is_locked")
+	fd_PokemonDisplayProto_locked_temp_evolution                                      = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "locked_temp_evolution")
+	fd_PokemonDisplayProto_original_costume                                           = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "original_costume")
+	fd_PokemonDisplayProto_display_id                                                 = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "display_id")
+	fd_PokemonDisplayProto_mega_evolution_level                                       = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "mega_evolution_level")
+	fd_PokemonDisplayProto_location_card                                              = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "location_card")
+	fd_PokemonDisplayProto_bread_mode_enum                                            = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "bread_mode_enum")
+	fd_PokemonDisplayProto_is_strong_pokemon                                          = mustFD((*pogo.PokemonDisplayProto)(nil).ProtoReflect().Descriptor(), "is_strong_pokemon")
+	fd_PokemonEggRewardDistributionEntryProto_pokemon                                 = mustFD((*pogo.PokemonEggRewardDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_PokemonEggRewardDistributionEntryProto_weight                                  = mustFD((*pogo.PokemonEggRewardDistributionEntryProto)(nil).ProtoReflect().Descriptor(), "weight")
+	fd_PokemonEggRewardDistributionProto_entries                                      = mustFD((*pogo.PokemonEggRewardDistributionProto)(nil).ProtoReflect().Descriptor(), "entries")
+	fd_PokemonEggRewardEntryProto_pokedex_id                                          = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "pokedex_id")
+	fd_PokemonEggRewardEntryProto_form                                                = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "form")
+	fd_PokemonEggRewardEntryProto_aligmnent                                           = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "aligmnent")
+	fd_PokemonEggRewardEntryProto_hatch_dist_km                                       = mustFD((*pogo.PokemonEggRewardEntryProto)(nil).ProtoReflect().Descriptor(), "hatch_dist_km")
+	fd_PokemonEggRewardProto_distribution                                             = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "distribution")
+	fd_PokemonEggRewardProto_egg_slot_type                                            = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "egg_slot_type")
+	fd_PokemonEggRewardProto_hatch_dist_km                                            = mustFD((*pogo.PokemonEggRewardProto)(nil).ProtoReflect().Descriptor(), "hatch_dist_km")
+	fd_PokemonEncounterRewardProto_pokemon_id                                         = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_PokemonEncounterRewardProto_use_quest_pokemon_encounter_distribuition          = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "use_quest_pokemon_encounter_distribuition")
+	fd_PokemonEncounterRewardProto_pokemon_display                                    = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_PokemonEncounterRewardProto_is_hidden_ditto                                    = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "is_hidden_ditto")
+	fd_PokemonEncounterRewardProto_ditto_display                                      = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "ditto_display")
+	fd_PokemonEncounterRewardProto_poke_ball_override                                 = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "poke_ball_override")
+	fd_PokemonEncounterRewardProto_shiny_probability                                  = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "shiny_probability")
+	fd_PokemonEncounterRewardProto_size_override                                      = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "size_override")
+	fd_PokemonEncounterRewardProto_stats_limits_override                              = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "stats_limits_override")
+	fd_PokemonEncounterRewardProto_quest_encounter_type                               = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "quest_encounter_type")
+	fd_PokemonEncounterRewardProto_is_featured_pokemon                                = mustFD((*pogo.PokemonEncounterRewardProto)(nil).ProtoReflect().Descriptor(), "is_featured_pokemon")
+	fd_PokemonEvolutionQuestProto_quest_requirement                                   = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "quest_requirement")
+	fd_PokemonEvolutionQuestProto_quest_info                                          = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "quest_info")
+	fd_PokemonEvolutionQuestProto_evolution                                           = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "evolution")
+	fd_PokemonEvolutionQuestProto_form                                                = mustFD((*pogo.PokemonEvolutionQuestProto)(nil).ProtoReflect().Descriptor(), "form")
+	fd_PokemonFortProto_fort_id                                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_PokemonFortProto_last_modified_ms                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
+	fd_PokemonFortProto_latitude                                                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_PokemonFortProto_longitude                                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_PokemonFortProto_team                                                          = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "team")
+	fd_PokemonFortProto_guard_pokemon_id                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_id")
+	fd_PokemonFortProto_guard_pokemon_level                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_level")
+	fd_PokemonFortProto_enabled                                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "enabled")
+	fd_PokemonFortProto_fort_type                                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_type")
+	fd_PokemonFortProto_gym_points                                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "gym_points")
+	fd_PokemonFortProto_is_in_battle                                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_in_battle")
+	fd_PokemonFortProto_active_fort_modifier                                          = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_fort_modifier")
+	fd_PokemonFortProto_active_pokemon                                                = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_pokemon")
+	fd_PokemonFortProto_cooldown_complete_ms                                          = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "cooldown_complete_ms")
+	fd_PokemonFortProto_sponsor                                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "sponsor")
+	fd_PokemonFortProto_rendering_type                                                = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "rendering_type")
+	fd_PokemonFortProto_deploy_lockout_end_ms                                         = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "deploy_lockout_end_ms")
+	fd_PokemonFortProto_guard_pokemon_display                                         = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "guard_pokemon_display")
+	fd_PokemonFortProto_closed                                                        = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "closed")
+	fd_PokemonFortProto_raid_info                                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "raid_info")
+	fd_PokemonFortProto_gym_display                                                   = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "gym_display")
+	fd_PokemonFortProto_visited                                                       = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "visited")
+	fd_PokemonFortProto_same_team_deploy_lockout_end_ms                               = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "same_team_deploy_lockout_end_ms")
+	fd_PokemonFortProto_allow_checkin                                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "allow_checkin")
+	fd_PokemonFortProto_image_url                                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_PokemonFortProto_in_event                                                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "in_event")
+	fd_PokemonFortProto_banner_url                                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "banner_url")
+	fd_PokemonFortProto_partner_id                                                    = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "partner_id")
+	fd_PokemonFortProto_challenge_quest_completed                                     = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "challenge_quest_completed")
+	fd_PokemonFortProto_is_ex_raid_eligible                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_ex_raid_eligible")
+	fd_PokemonFortProto_pokestop_display                                              = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "pokestop_display")
+	fd_PokemonFortProto_pokestop_displays                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "pokestop_displays")
+	fd_PokemonFortProto_is_ar_scan_eligible                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_ar_scan_eligible")
+	fd_PokemonFortProto_geostore_tombstone_message_key                                = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "geostore_tombstone_message_key")
+	fd_PokemonFortProto_geostore_suspension_message_key                               = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "geostore_suspension_message_key")
+	fd_PokemonFortProto_power_up_progress_points                                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "power_up_progress_points")
+	fd_PokemonFortProto_power_up_level_expiration_ms                                  = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "power_up_level_expiration_ms")
+	fd_PokemonFortProto_next_fort_open_ms                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "next_fort_open_ms")
+	fd_PokemonFortProto_next_fort_close_ms                                            = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "next_fort_close_ms")
+	fd_PokemonFortProto_active_fort_pokemon                                           = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "active_fort_pokemon")
+	fd_PokemonFortProto_is_route_eligible                                             = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "is_route_eligible")
+	fd_PokemonFortProto_fort_vps_info                                                 = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "fort_vps_info")
+	fd_PokemonFortProto_ar_experiences_allowed                                        = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "ar_experiences_allowed")
+	fd_PokemonFortProto_stamp_collection_ids                                          = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_ids")
+	fd_PokemonFortProto_tappable                                                      = mustFD((*pogo.PokemonFortProto)(nil).ProtoReflect().Descriptor(), "tappable")
+	fd_PokemonIndividualStatRewardProto_pokemon_id                                    = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_PokemonIndividualStatRewardProto_stat_type                                     = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "stat_type")
+	fd_PokemonIndividualStatRewardProto_stat_increase_amount                          = mustFD((*pogo.PokemonIndividualStatRewardProto)(nil).ProtoReflect().Descriptor(), "stat_increase_amount")
+	fd_PokemonMegaEvolutionLevelProto_points                                          = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "points")
+	fd_PokemonMegaEvolutionLevelProto_level                                           = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "level")
+	fd_PokemonMegaEvolutionLevelProto_mega_point_daily_counters                       = mustFD((*pogo.PokemonMegaEvolutionLevelProto)(nil).ProtoReflect().Descriptor(), "mega_point_daily_counters")
+	fd_PokemonMegaEvolutionPointDailyCountersProto_mega_evo                           = mustFD((*pogo.PokemonMegaEvolutionPointDailyCountersProto)(nil).ProtoReflect().Descriptor(), "mega_evo")
+	fd_PokemonProto_id                                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_PokemonProto_pokemon_id                                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_id")
+	fd_PokemonProto_cp                                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp")
+	fd_PokemonProto_stamina                                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "stamina")
+	fd_PokemonProto_max_stamina                                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "max_stamina")
+	fd_PokemonProto_move1                                                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move1")
+	fd_PokemonProto_move2                                                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move2")
+	fd_PokemonProto_deployed_fort_id                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_fort_id")
+	fd_PokemonProto_owner_name                                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "owner_name")
+	fd_PokemonProto_is_egg                                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_egg")
+	fd_PokemonProto_egg_km_walked_target                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_km_walked_target")
+	fd_PokemonProto_egg_km_walked_start                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_km_walked_start")
+	fd_PokemonProto_height_m                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "height_m")
+	fd_PokemonProto_weight_kg                                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "weight_kg")
+	fd_PokemonProto_individual_attack                                                 = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_attack")
+	fd_PokemonProto_individual_defense                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_defense")
+	fd_PokemonProto_individual_stamina                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "individual_stamina")
+	fd_PokemonProto_cp_multiplier                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp_multiplier")
+	fd_PokemonProto_pokeball                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokeball")
+	fd_PokemonProto_captured_s2_cell_id                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "captured_s2_cell_id")
+	fd_PokemonProto_battles_attacked                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "battles_attacked")
+	fd_PokemonProto_battles_defended                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "battles_defended")
+	fd_PokemonProto_egg_incubator_id                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_incubator_id")
+	fd_PokemonProto_creation_time_ms                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "creation_time_ms")
+	fd_PokemonProto_num_upgrades                                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "num_upgrades")
+	fd_PokemonProto_additional_cp_multiplier                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "additional_cp_multiplier")
+	fd_PokemonProto_favorite                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "favorite")
+	fd_PokemonProto_nickname                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "nickname")
+	fd_PokemonProto_from_fort                                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "from_fort")
+	fd_PokemonProto_buddy_candy_awarded                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "buddy_candy_awarded")
+	fd_PokemonProto_buddy_km_walked                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "buddy_km_walked")
+	fd_PokemonProto_display_pokemon_id                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "display_pokemon_id")
+	fd_PokemonProto_display_cp                                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "display_cp")
+	fd_PokemonProto_pokemon_display                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_display")
+	fd_PokemonProto_is_bad                                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_bad")
+	fd_PokemonProto_hatched_from_egg                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "hatched_from_egg")
+	fd_PokemonProto_coins_returned                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "coins_returned")
+	fd_PokemonProto_deployed_duration_ms                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_duration_ms")
+	fd_PokemonProto_deployed_returned_timestamp_ms                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_returned_timestamp_ms")
+	fd_PokemonProto_cp_multiplier_before_trading                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "cp_multiplier_before_trading")
+	fd_PokemonProto_trading_original_owner_hash                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "trading_original_owner_hash")
+	fd_PokemonProto_original_owner_nickname                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "original_owner_nickname")
+	fd_PokemonProto_traded_time_ms                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "traded_time_ms")
+	fd_PokemonProto_is_lucky                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_lucky")
+	fd_PokemonProto_move3                                                             = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move3")
+	fd_PokemonProto_pvp_combat_stats                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pvp_combat_stats")
+	fd_PokemonProto_npc_combat_stats                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "npc_combat_stats")
+	fd_PokemonProto_move2_is_purified_exclusive                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "move2_is_purified_exclusive")
+	fd_PokemonProto_limited_pokemon_identifier                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "limited_pokemon_identifier")
+	fd_PokemonProto_pre_boosted_cp                                                    = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pre_boosted_cp")
+	fd_PokemonProto_pre_boosted_additional_cp_multiplier                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pre_boosted_additional_cp_multiplier")
+	fd_PokemonProto_deployed_gym_lat_degree                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_gym_lat_degree")
+	fd_PokemonProto_deployed_gym_lng_degree                                           = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_gym_lng_degree")
+	fd_PokemonProto_has_mega_evolved                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "has_mega_evolved")
+	fd_PokemonProto_egg_type                                                          = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_type")
+	fd_PokemonProto_temp_evo_cp                                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_cp")
+	fd_PokemonProto_temp_evo_stamina_modifier                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_stamina_modifier")
+	fd_PokemonProto_temp_evo_cp_multiplier                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "temp_evo_cp_multiplier")
+	fd_PokemonProto_mega_evolved_forms                                                = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "mega_evolved_forms")
+	fd_PokemonProto_evolution_quest_info                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "evolution_quest_info")
+	fd_PokemonProto_origin_detail                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "origin_detail")
+	fd_PokemonProto_pokemon_tag_ids                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_tag_ids")
+	fd_PokemonProto_origin_events                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "origin_events")
+	fd_PokemonProto_egg_slot_type                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_slot_type")
+	fd_PokemonProto_egg_telemetry                                                     = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_telemetry")
+	fd_PokemonProto_egg_distribution                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "egg_distribution")
+	fd_PokemonProto_size                                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "size")
+	fd_PokemonProto_pokemon_contest_info                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon_contest_info")
+	fd_PokemonProto_caught_in_party                                                   = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "caught_in_party")
+	fd_PokemonProto_is_component                                                      = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_component")
+	fd_PokemonProto_is_fusion                                                         = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_fusion")
+	fd_PokemonProto_iris_social_deployment                                            = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "iris_social_deployment")
+	fd_PokemonProto_bread_moves                                                       = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "bread_moves")
+	fd_PokemonProto_deployed_station_id                                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_station_id")
+	fd_PokemonProto_deployed_station_expiration_time_ms                               = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "deployed_station_expiration_time_ms")
+	fd_PokemonProto_is_stamp_collection_reward                                        = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_stamp_collection_reward")
+	fd_PokemonProto_is_actively_training                                              = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "is_actively_training")
+	fd_PokemonProto_bonus_stat_level                                                  = mustFD((*pogo.PokemonProto)(nil).ProtoReflect().Descriptor(), "bonus_stat_level")
+	fd_PokemonStatsLimitsProto_min_pokemon_level                                      = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_pokemon_level")
+	fd_PokemonStatsLimitsProto_max_pokemon_level                                      = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_pokemon_level")
+	fd_PokemonStatsLimitsProto_min_attack                                             = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_attack")
+	fd_PokemonStatsLimitsProto_max_attack                                             = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_attack")
+	fd_PokemonStatsLimitsProto_min_defense                                            = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_defense")
+	fd_PokemonStatsLimitsProto_max_defense                                            = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_defense")
+	fd_PokemonStatsLimitsProto_min_hp                                                 = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "min_hp")
+	fd_PokemonStatsLimitsProto_max_hp                                                 = mustFD((*pogo.PokemonStatsLimitsProto)(nil).ProtoReflect().Descriptor(), "max_hp")
+	fd_PokemonSummaryFortProto_fort_summary_id                                        = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "fort_summary_id")
+	fd_PokemonSummaryFortProto_last_modified_ms                                       = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
+	fd_PokemonSummaryFortProto_latitude                                               = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_PokemonSummaryFortProto_longitude                                              = mustFD((*pogo.PokemonSummaryFortProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_PokestopDisplayProto_style_config_address                                      = mustFD((*pogo.PokestopDisplayProto)(nil).ProtoReflect().Descriptor(), "style_config_address")
+	fd_PokestopIncidentDisplayProto_character_display                                 = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "character_display")
+	fd_PokestopIncidentDisplayProto_invasion_finished                                 = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "invasion_finished")
+	fd_PokestopIncidentDisplayProto_contest_display                                   = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "contest_display")
+	fd_PokestopIncidentDisplayProto_incident_id                                       = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_id")
+	fd_PokestopIncidentDisplayProto_incident_start_ms                                 = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_start_ms")
+	fd_PokestopIncidentDisplayProto_incident_expiration_ms                            = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_expiration_ms")
+	fd_PokestopIncidentDisplayProto_hide_incident                                     = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "hide_incident")
+	fd_PokestopIncidentDisplayProto_incident_completed                                = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_completed")
+	fd_PokestopIncidentDisplayProto_incident_display_type                             = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_display_type")
+	fd_PokestopIncidentDisplayProto_incident_display_order_priority                   = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "incident_display_order_priority")
+	fd_PokestopIncidentDisplayProto_continue_displaying_incident                      = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "continue_displaying_incident")
+	fd_PokestopIncidentDisplayProto_custom_display                                    = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "custom_display")
+	fd_PokestopIncidentDisplayProto_is_cross_stop_incident                            = mustFD((*pogo.PokestopIncidentDisplayProto)(nil).ProtoReflect().Descriptor(), "is_cross_stop_incident")
+	fd_PostcardCreateDetail_postcard_origin                                           = mustFD((*pogo.PostcardCreateDetail)(nil).ProtoReflect().Descriptor(), "postcard_origin")
+	fd_PostcardCreateDetail_received_time_ms                                          = mustFD((*pogo.PostcardCreateDetail)(nil).ProtoReflect().Descriptor(), "received_time_ms")
+	fd_ProcessTappableOutProto_status                                                 = mustFD((*pogo.ProcessTappableOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_ProcessTappableOutProto_reward                                                 = mustFD((*pogo.ProcessTappableOutProto)(nil).ProtoReflect().Descriptor(), "reward")
+	fd_ProcessTappableOutProto_encounter                                              = mustFD((*pogo.ProcessTappableOutProto)(nil).ProtoReflect().Descriptor(), "encounter")
+	fd_ProcessTappableProto_id                                                        = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_ProcessTappableProto_location                                                  = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "location")
+	fd_ProcessTappableProto_tappable_type_id                                          = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "tappable_type_id")
+	fd_ProcessTappableProto_encounter_id                                              = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_ProcessTappableProto_location_hint_lat                                         = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "location_hint_lat")
+	fd_ProcessTappableProto_location_hint_lng                                         = mustFD((*pogo.ProcessTappableProto)(nil).ProtoReflect().Descriptor(), "location_hint_lng")
+	fd_ProxyRequestProto_action                                                       = mustFD((*pogo.ProxyRequestProto)(nil).ProtoReflect().Descriptor(), "action")
+	fd_ProxyRequestProto_host                                                         = mustFD((*pogo.ProxyRequestProto)(nil).ProtoReflect().Descriptor(), "host")
+	fd_ProxyRequestProto_payload                                                      = mustFD((*pogo.ProxyRequestProto)(nil).ProtoReflect().Descriptor(), "payload")
+	fd_ProxyResponseProto_status                                                      = mustFD((*pogo.ProxyResponseProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_ProxyResponseProto_assigned_host                                               = mustFD((*pogo.ProxyResponseProto)(nil).ProtoReflect().Descriptor(), "assigned_host")
+	fd_ProxyResponseProto_payload                                                     = mustFD((*pogo.ProxyResponseProto)(nil).ProtoReflect().Descriptor(), "payload")
+	fd_QuestBranchDisplayProto_title_key                                              = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "title_key")
+	fd_QuestBranchDisplayProto_description_key                                        = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "description_key")
+	fd_QuestBranchDisplayProto_image_url                                              = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_QuestBranchDisplayProto_button_background_color                                = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "button_background_color")
+	fd_QuestBranchDisplayProto_button_text_key                                        = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "button_text_key")
+	fd_QuestBranchDisplayProto_button_background_image_url                            = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "button_background_image_url")
+	fd_QuestBranchDisplayProto_button_text_color                                      = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "button_text_color")
+	fd_QuestBranchDisplayProto_button_text_offset                                     = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "button_text_offset")
+	fd_QuestBranchDisplayProto_arrow_button_color                                     = mustFD((*pogo.QuestBranchDisplayProto)(nil).ProtoReflect().Descriptor(), "arrow_button_color")
+	fd_QuestBranchRewardProto_rewards                                                 = mustFD((*pogo.QuestBranchRewardProto)(nil).ProtoReflect().Descriptor(), "rewards")
+	fd_QuestConditionProto_with_pokemon_type                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_type")
+	fd_QuestConditionProto_with_pokemon_category                                      = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_category")
+	fd_QuestConditionProto_with_weather_boost                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_weather_boost")
+	fd_QuestConditionProto_with_daily_capture_bonus                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_capture_bonus")
+	fd_QuestConditionProto_with_daily_spin_bonus                                      = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_spin_bonus")
+	fd_QuestConditionProto_with_win_raid_status                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_raid_status")
+	fd_QuestConditionProto_with_raid_level                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_raid_level")
+	fd_QuestConditionProto_with_throw_type                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_throw_type")
+	fd_QuestConditionProto_with_win_gym_battle_status                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_gym_battle_status")
+	fd_QuestConditionProto_with_super_effective_charge_move                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_super_effective_charge_move")
+	fd_QuestConditionProto_with_item                                                  = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_item")
+	fd_QuestConditionProto_with_unique_pokestop                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_pokestop")
+	fd_QuestConditionProto_with_quest_context                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_quest_context")
+	fd_QuestConditionProto_with_badge_type                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_badge_type")
+	fd_QuestConditionProto_with_player_level                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_player_level")
+	fd_QuestConditionProto_with_win_battle_status                                     = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_win_battle_status")
+	fd_QuestConditionProto_with_unique_pokemon                                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_pokemon")
+	fd_QuestConditionProto_with_npc_combat                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_npc_combat")
+	fd_QuestConditionProto_with_pvp_combat                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pvp_combat")
+	fd_QuestConditionProto_with_location                                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_location")
+	fd_QuestConditionProto_with_distance                                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_distance")
+	fd_QuestConditionProto_with_invasion_character                                    = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_invasion_character")
+	fd_QuestConditionProto_with_pokemon_alignment                                     = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_alignment")
+	fd_QuestConditionProto_with_buddy                                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_buddy")
+	fd_QuestConditionProto_with_daily_buddy_affection                                 = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_daily_buddy_affection")
+	fd_QuestConditionProto_with_pokemon_level                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_level")
+	fd_QuestConditionProto_with_max_cp                                                = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_max_cp")
+	fd_QuestConditionProto_with_temp_evo_id                                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_temp_evo_id")
+	fd_QuestConditionProto_with_gbl_rank                                              = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_gbl_rank")
+	fd_QuestConditionProto_with_encounter_type                                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_encounter_type")
+	fd_QuestConditionProto_with_combat_type                                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_combat_type")
+	fd_QuestConditionProto_with_item_type                                             = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_item_type")
+	fd_QuestConditionProto_with_elapsed_time                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_elapsed_time")
+	fd_QuestConditionProto_with_friend_level                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_friend_level")
+	fd_QuestConditionProto_with_pokemon_cp                                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_cp")
+	fd_QuestConditionProto_with_raid_location                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_raid_location")
+	fd_QuestConditionProto_with_friends_raid                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_friends_raid")
+	fd_QuestConditionProto_with_pokemon_costume                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_costume")
+	fd_QuestConditionProto_with_pokemon_size                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_size")
+	fd_QuestConditionProto_with_device_type                                           = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_device_type")
+	fd_QuestConditionProto_with_route_travel                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_route_travel")
+	fd_QuestConditionProto_with_unique_route                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_unique_route")
+	fd_QuestConditionProto_with_tappable_type                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_tappable_type")
+	fd_QuestConditionProto_with_auth_provider_type                                    = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_auth_provider_type")
+	fd_QuestConditionProto_with_opponent_pokemon_battle_status                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_opponent_pokemon_battle_status")
+	fd_QuestConditionProto_with_fort_id                                               = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_fort_id")
+	fd_QuestConditionProto_with_pokemon_move                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_move")
+	fd_QuestConditionProto_with_pokemon_form                                          = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_pokemon_form")
+	fd_QuestConditionProto_with_bread_pokemon                                         = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_pokemon")
+	fd_QuestConditionProto_with_bread_dough_pokemon                                   = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_dough_pokemon")
+	fd_QuestConditionProto_with_bread_move_type                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_bread_move_type")
+	fd_QuestConditionProto_with_poi_sponsor_id                                        = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_poi_sponsor_id")
+	fd_QuestConditionProto_with_page_type                                             = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_page_type")
+	fd_QuestConditionProto_with_trainee_pokemon_attributes                            = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "with_trainee_pokemon_attributes")
+	fd_QuestConditionProto_type                                                       = mustFD((*pogo.QuestConditionProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_QuestCreateDetail_origin                                                       = mustFD((*pogo.QuestCreateDetail)(nil).ProtoReflect().Descriptor(), "origin")
+	fd_QuestDialogProto_text                                                          = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "text")
+	fd_QuestDialogProto_expression                                                    = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "expression")
+	fd_QuestDialogProto_image_uri                                                     = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "image_uri")
+	fd_QuestDialogProto_character                                                     = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "character")
+	fd_QuestDialogProto_character_offset                                              = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "character_offset")
+	fd_QuestDialogProto_text_background_color                                         = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "text_background_color")
+	fd_QuestDialogProto_character_tint                                                = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "character_tint")
+	fd_QuestDialogProto_text_title_string_id                                          = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "text_title_string_id")
+	fd_QuestDialogProto_quest_music_override_key                                      = mustFD((*pogo.QuestDialogProto)(nil).ProtoReflect().Descriptor(), "quest_music_override_key")
+	fd_QuestDisplayProto_quest_id                                                     = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "quest_id")
+	fd_QuestDisplayProto_dialog                                                       = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "dialog")
+	fd_QuestDisplayProto_description                                                  = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_QuestDisplayProto_title                                                        = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "title")
+	fd_QuestDisplayProto_slot                                                         = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "slot")
+	fd_QuestDisplayProto_subquest_displays                                            = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "subquest_displays")
+	fd_QuestDisplayProto_story_ending_quest                                           = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "story_ending_quest")
+	fd_QuestDisplayProto_story_ending_description                                     = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "story_ending_description")
+	fd_QuestDisplayProto_tag_color                                                    = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "tag_color")
+	fd_QuestDisplayProto_tag_string                                                   = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "tag_string")
+	fd_QuestDisplayProto_sponsor_string                                               = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "sponsor_string")
+	fd_QuestDisplayProto_partner_id                                                   = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "partner_id")
+	fd_QuestDisplayProto_icon_name                                                    = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "icon_name")
+	fd_QuestDisplayProto_background_name                                              = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "background_name")
+	fd_QuestDisplayProto_foreground_name                                              = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "foreground_name")
+	fd_QuestDisplayProto_progress_interval                                            = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "progress_interval")
+	fd_QuestDisplayProto_branches                                                     = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "branches")
+	fd_QuestDisplayProto_force_reshow_branching_quest_dialog_cooldown_ms              = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "force_reshow_branching_quest_dialog_cooldown_ms")
+	fd_QuestDisplayProto_branching_quest_story_view_button_key                        = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "branching_quest_story_view_button_key")
+	fd_QuestDisplayProto_branching_quest_story_view_image_url                         = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "branching_quest_story_view_image_url")
+	fd_QuestDisplayProto_quest_branch_choice_view_background_image_url                = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "quest_branch_choice_view_background_image_url")
+	fd_QuestDisplayProto_quest_branch_choice_view_background_color                    = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "quest_branch_choice_view_background_color")
+	fd_QuestDisplayProto_prop_name                                                    = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "prop_name")
+	fd_QuestDisplayProto_quest_branch_choice_view_header_background_color             = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "quest_branch_choice_view_header_background_color")
+	fd_QuestDisplayProto_quest_branch_choice_view_bottom_gradient_color               = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "quest_branch_choice_view_bottom_gradient_color")
+	fd_QuestDisplayProto_sort_order                                                   = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "sort_order")
+	fd_QuestDisplayProto_story_questline_title                                        = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "story_questline_title")
+	fd_QuestDisplayProto_empty_narrative_animation_enabled                            = mustFD((*pogo.QuestDisplayProto)(nil).ProtoReflect().Descriptor(), "empty_narrative_animation_enabled")
+	fd_QuestGoalProto_condition                                                       = mustFD((*pogo.QuestGoalProto)(nil).ProtoReflect().Descriptor(), "condition")
+	fd_QuestGoalProto_target                                                          = mustFD((*pogo.QuestGoalProto)(nil).ProtoReflect().Descriptor(), "target")
+	fd_QuestProto_daily_quest                                                         = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_quest")
+	fd_QuestProto_multi_part                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "multi_part")
+	fd_QuestProto_catch_pokemon                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "catch_pokemon")
+	fd_QuestProto_add_friend                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "add_friend")
+	fd_QuestProto_trade_pokemon                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "trade_pokemon")
+	fd_QuestProto_daily_buddy_affection                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_buddy_affection")
+	fd_QuestProto_quest_walk                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_walk")
+	fd_QuestProto_evolve_into_pokemon                                                 = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "evolve_into_pokemon")
+	fd_QuestProto_get_stardust                                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "get_stardust")
+	fd_QuestProto_mini_collection                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "mini_collection")
+	fd_QuestProto_geotargeted_quest                                                   = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "geotargeted_quest")
+	fd_QuestProto_buddy_evolution_walk                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "buddy_evolution_walk")
+	fd_QuestProto_battle                                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "battle")
+	fd_QuestProto_take_snapshot                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "take_snapshot")
+	fd_QuestProto_submit_sleep_records                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "submit_sleep_records")
+	fd_QuestProto_travel_route                                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "travel_route")
+	fd_QuestProto_spin_pokestop                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "spin_pokestop")
+	fd_QuestProto_pokemon_reach_cp                                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "pokemon_reach_cp")
+	fd_QuestProto_quest_type                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_type")
+	fd_QuestProto_with_single_day                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "with_single_day")
+	fd_QuestProto_days_in_arow                                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "days_in_arow")
+	fd_QuestProto_quest_id                                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_id")
+	fd_QuestProto_quest_seed                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_seed")
+	fd_QuestProto_quest_context                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_context")
+	fd_QuestProto_template_id                                                         = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "template_id")
+	fd_QuestProto_progress                                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "progress")
+	fd_QuestProto_goal                                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "goal")
+	fd_QuestProto_status                                                              = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_QuestProto_quest_rewards                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "quest_rewards")
+	fd_QuestProto_creation_timestamp_ms                                               = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "creation_timestamp_ms")
+	fd_QuestProto_last_update_timestamp_ms                                            = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "last_update_timestamp_ms")
+	fd_QuestProto_completion_timestamp_ms                                             = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "completion_timestamp_ms")
+	fd_QuestProto_fort_id                                                             = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_QuestProto_admin_generated                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "admin_generated")
+	fd_QuestProto_stamp_count_override_enabled                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "stamp_count_override_enabled")
+	fd_QuestProto_stamp_count_override                                                = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "stamp_count_override")
+	fd_QuestProto_s2_cell_id                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_QuestProto_story_quest_template_version                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "story_quest_template_version")
+	fd_QuestProto_daily_counter                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "daily_counter")
+	fd_QuestProto_reward_pokemon_icon_url                                             = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon_icon_url")
+	fd_QuestProto_end_timestamp_ms                                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "end_timestamp_ms")
+	fd_QuestProto_is_bonus_challenge                                                  = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "is_bonus_challenge")
+	fd_QuestProto_referral_info                                                       = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "referral_info")
+	fd_QuestProto_branch_rewards                                                      = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "branch_rewards")
+	fd_QuestProto_dialog_read                                                         = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "dialog_read")
+	fd_QuestProto_start_timestamp_ms                                                  = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "start_timestamp_ms")
+	fd_QuestProto_with_total_days                                                     = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "with_total_days")
+	fd_QuestProto_phase_number                                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "phase_number")
+	fd_QuestProto_difficulty                                                          = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "difficulty")
+	fd_QuestProto_min_complete_timestamp_ms                                           = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "min_complete_timestamp_ms")
+	fd_QuestProto_min_player_level                                                    = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "min_player_level")
+	fd_QuestProto_time_zone_id                                                        = mustFD((*pogo.QuestProto)(nil).ProtoReflect().Descriptor(), "time_zone_id")
+	fd_QuestProto_ReferralInfoProto_referrer_id                                       = mustFD((*pogo.QuestProto_ReferralInfoProto)(nil).ProtoReflect().Descriptor(), "referrer_id")
+	fd_QuestProto_ReferralInfoProto_completion_message_sent                           = mustFD((*pogo.QuestProto_ReferralInfoProto)(nil).ProtoReflect().Descriptor(), "completion_message_sent")
+	fd_QuestRewardProto_exp                                                           = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "exp")
+	fd_QuestRewardProto_item                                                          = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_QuestRewardProto_stardust                                                      = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "stardust")
+	fd_QuestRewardProto_candy                                                         = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "candy")
+	fd_QuestRewardProto_avatar_template_id                                            = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "avatar_template_id")
+	fd_QuestRewardProto_quest_template_id                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "quest_template_id")
+	fd_QuestRewardProto_pokemon_encounter                                             = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_encounter")
+	fd_QuestRewardProto_pokecoin                                                      = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokecoin")
+	fd_QuestRewardProto_xl_candy                                                      = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "xl_candy")
+	fd_QuestRewardProto_level_cap                                                     = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "level_cap")
+	fd_QuestRewardProto_sticker                                                       = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "sticker")
+	fd_QuestRewardProto_mega_resource                                                 = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "mega_resource")
+	fd_QuestRewardProto_incident                                                      = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "incident")
+	fd_QuestRewardProto_player_attribute                                              = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "player_attribute")
+	fd_QuestRewardProto_event_badge_id                                                = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "event_badge_id")
+	fd_QuestRewardProto_neutral_avatar_template_id                                    = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_template_id")
+	fd_QuestRewardProto_neutral_avatar_item_template                                  = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_template")
+	fd_QuestRewardProto_neutral_avatar_item_display                                   = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "neutral_avatar_item_display")
+	fd_QuestRewardProto_pokemon_egg                                                   = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_egg")
+	fd_QuestRewardProto_pokemon_individual_stat                                       = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "pokemon_individual_stat")
+	fd_QuestRewardProto_type                                                          = mustFD((*pogo.QuestRewardProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_QuestWalkProto_quest_start_km_walked                                           = mustFD((*pogo.QuestWalkProto)(nil).ProtoReflect().Descriptor(), "quest_start_km_walked")
+	fd_RaidCreateDetail_is_exclusive                                                  = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "is_exclusive")
+	fd_RaidCreateDetail_is_mega                                                       = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "is_mega")
+	fd_RaidCreateDetail_player_captured_s2_cell_id                                    = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "player_captured_s2_cell_id")
+	fd_RaidCreateDetail_temp_evo_id                                                   = mustFD((*pogo.RaidCreateDetail)(nil).ProtoReflect().Descriptor(), "temp_evo_id")
+	fd_RaidDetails_fort_id                                                            = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_RaidDetails_raid_seed                                                          = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "raid_seed")
+	fd_RaidDetails_lat                                                                = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "lat")
+	fd_RaidDetails_lng                                                                = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "lng")
+	fd_RaidDetails_fort_name                                                          = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "fort_name")
+	fd_RaidDetails_image_url                                                          = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_RaidDetails_raid_info                                                          = mustFD((*pogo.RaidDetails)(nil).ProtoReflect().Descriptor(), "raid_info")
+	fd_RaidInfoProto_raid_seed                                                        = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_seed")
+	fd_RaidInfoProto_raid_spawn_ms                                                    = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_spawn_ms")
+	fd_RaidInfoProto_raid_battle_ms                                                   = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_battle_ms")
+	fd_RaidInfoProto_raid_end_ms                                                      = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_end_ms")
+	fd_RaidInfoProto_raid_pokemon                                                     = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_pokemon")
+	fd_RaidInfoProto_raid_level                                                       = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_level")
+	fd_RaidInfoProto_complete                                                         = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "complete")
+	fd_RaidInfoProto_is_raid_hidden                                                   = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_raid_hidden")
+	fd_RaidInfoProto_is_scheduled_raid                                                = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_scheduled_raid")
+	fd_RaidInfoProto_is_free                                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "is_free")
+	fd_RaidInfoProto_campaign_id                                                      = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "campaign_id")
+	fd_RaidInfoProto_raid_ball                                                        = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_ball")
+	fd_RaidInfoProto_visual_effects                                                   = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "visual_effects")
+	fd_RaidInfoProto_raid_visual_level                                                = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_visual_level")
+	fd_RaidInfoProto_raid_visual_plaque_type                                          = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_visual_plaque_type")
+	fd_RaidInfoProto_raid_plaque_pip_style                                            = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "raid_plaque_pip_style")
+	fd_RaidInfoProto_mascot_character                                                 = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "mascot_character")
+	fd_RaidInfoProto_boot_raid_enabled                                                = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "boot_raid_enabled")
+	fd_RaidInfoProto_reward_pokemon                                                   = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon")
+	fd_RaidInfoProto_default_raid_ball                                                = mustFD((*pogo.RaidInfoProto)(nil).ProtoReflect().Descriptor(), "default_raid_ball")
+	fd_RaidProto_raid_seed                                                            = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "raid_seed")
+	fd_RaidProto_started_ms                                                           = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "started_ms")
+	fd_RaidProto_completed_ms                                                         = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "completed_ms")
+	fd_RaidProto_encounter_pokemon_id                                                 = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "encounter_pokemon_id")
+	fd_RaidProto_completed_battle                                                     = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "completed_battle")
+	fd_RaidProto_received_rewards                                                     = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "received_rewards")
+	fd_RaidProto_finished_encounter                                                   = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "finished_encounter")
+	fd_RaidProto_received_default_rewards                                             = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "received_default_rewards")
+	fd_RaidProto_incremented_raid_friends                                             = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "incremented_raid_friends")
+	fd_RaidProto_completed_battle_ms                                                  = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "completed_battle_ms")
+	fd_RaidProto_is_remote                                                            = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "is_remote")
+	fd_RaidProto_reward_pokemon                                                       = mustFD((*pogo.RaidProto)(nil).ProtoReflect().Descriptor(), "reward_pokemon")
+	fd_RaidVisualEffect_effect_asset_key                                              = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "effect_asset_key")
+	fd_RaidVisualEffect_start_millis                                                  = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "start_millis")
+	fd_RaidVisualEffect_stop_millis                                                   = mustFD((*pogo.RaidVisualEffect)(nil).ProtoReflect().Descriptor(), "stop_millis")
+	fd_RouteImageProto_image_url                                                      = mustFD((*pogo.RouteImageProto)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_RouteImageProto_border_color_hex                                               = mustFD((*pogo.RouteImageProto)(nil).ProtoReflect().Descriptor(), "border_color_hex")
+	fd_RoutePin_pin_id                                                                = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "pin_id")
+	fd_RoutePin_lat_degrees                                                           = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "lat_degrees")
+	fd_RoutePin_lng_degrees                                                           = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "lng_degrees")
+	fd_RoutePin_creator_info                                                          = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "creator_info")
+	fd_RoutePin_last_updated_timestamp_ms                                             = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "last_updated_timestamp_ms")
+	fd_RoutePin_like_vote_total                                                       = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "like_vote_total")
+	fd_RoutePin_message                                                               = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "message")
+	fd_RoutePin_sticker_ids                                                           = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "sticker_ids")
+	fd_RoutePin_sticker_total                                                         = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "sticker_total")
+	fd_RoutePin_created_timestamp_ms                                                  = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "created_timestamp_ms")
+	fd_RoutePin_route_creator                                                         = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "route_creator")
+	fd_RoutePin_score                                                                 = mustFD((*pogo.RoutePin)(nil).ProtoReflect().Descriptor(), "score")
+	fd_RoutePoiAnchor_anchor                                                          = mustFD((*pogo.RoutePoiAnchor)(nil).ProtoReflect().Descriptor(), "anchor")
+	fd_RoutePoiAnchor_image_url                                                       = mustFD((*pogo.RoutePoiAnchor)(nil).ProtoReflect().Descriptor(), "image_url")
+	fd_RouteStats_num_completions                                                     = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_completions")
+	fd_RouteStats_route_level                                                         = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "route_level")
+	fd_RouteStats_num_five_stars                                                      = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_five_stars")
+	fd_RouteStats_num_four_stars                                                      = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_four_stars")
+	fd_RouteStats_num_three_stars                                                     = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_three_stars")
+	fd_RouteStats_num_two_stars                                                       = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_two_stars")
+	fd_RouteStats_num_one_stars                                                       = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_one_stars")
+	fd_RouteStats_num_ratings                                                         = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_ratings")
+	fd_RouteStats_first_played_time_ms                                                = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "first_played_time_ms")
+	fd_RouteStats_last_played_time_ms                                                 = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "last_played_time_ms")
+	fd_RouteStats_weekly_num_completions                                              = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "weekly_num_completions")
+	fd_RouteStats_total_distance_travelled_meters                                     = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "total_distance_travelled_meters")
+	fd_RouteStats_weekly_distance_travelled_meters                                    = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "weekly_distance_travelled_meters")
+	fd_RouteStats_last_synced_time_ms                                                 = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "last_synced_time_ms")
+	fd_RouteStats_num_name_or_description_issues                                      = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_name_or_description_issues")
+	fd_RouteStats_num_shape_issues                                                    = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_shape_issues")
+	fd_RouteStats_num_connectivity_issues                                             = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "num_connectivity_issues")
+	fd_RouteStats_score                                                               = mustFD((*pogo.RouteStats)(nil).ProtoReflect().Descriptor(), "score")
+	fd_RouteSubmissionStatus_status                                                   = mustFD((*pogo.RouteSubmissionStatus)(nil).ProtoReflect().Descriptor(), "status")
+	fd_RouteSubmissionStatus_submission_status_update_time_ms                         = mustFD((*pogo.RouteSubmissionStatus)(nil).ProtoReflect().Descriptor(), "submission_status_update_time_ms")
+	fd_RouteSubmissionStatus_rejection_reason                                         = mustFD((*pogo.RouteSubmissionStatus)(nil).ProtoReflect().Descriptor(), "rejection_reason")
+	fd_RouteSubmissionStatus_RejectionReason_reason_code                              = mustFD((*pogo.RouteSubmissionStatus_RejectionReason)(nil).ProtoReflect().Descriptor(), "reason_code")
+	fd_RouteWaypointProto_fort_id                                                     = mustFD((*pogo.RouteWaypointProto)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_RouteWaypointProto_lat_degrees                                                 = mustFD((*pogo.RouteWaypointProto)(nil).ProtoReflect().Descriptor(), "lat_degrees")
+	fd_RouteWaypointProto_lng_degrees                                                 = mustFD((*pogo.RouteWaypointProto)(nil).ProtoReflect().Descriptor(), "lng_degrees")
+	fd_RouteWaypointProto_elevation_in_meters                                         = mustFD((*pogo.RouteWaypointProto)(nil).ProtoReflect().Descriptor(), "elevation_in_meters")
+	fd_RouteWaypointProto_timestamp_ms                                                = mustFD((*pogo.RouteWaypointProto)(nil).ProtoReflect().Descriptor(), "timestamp_ms")
+	fd_RsvpCountDetails_location_id                                                   = mustFD((*pogo.RsvpCountDetails)(nil).ProtoReflect().Descriptor(), "location_id")
+	fd_RsvpCountDetails_going_count                                                   = mustFD((*pogo.RsvpCountDetails)(nil).ProtoReflect().Descriptor(), "going_count")
+	fd_RsvpCountDetails_maybe_count                                                   = mustFD((*pogo.RsvpCountDetails)(nil).ProtoReflect().Descriptor(), "maybe_count")
+	fd_SharedRouteProto_id                                                            = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_SharedRouteProto_waypoints                                                     = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "waypoints")
+	fd_SharedRouteProto_type                                                          = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "type")
+	fd_SharedRouteProto_path_type                                                     = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "path_type")
+	fd_SharedRouteProto_name                                                          = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_SharedRouteProto_version                                                       = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "version")
+	fd_SharedRouteProto_description                                                   = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "description")
+	fd_SharedRouteProto_creator_info                                                  = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "creator_info")
+	fd_SharedRouteProto_reversible                                                    = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "reversible")
+	fd_SharedRouteProto_submission_time                                               = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "submission_time")
+	fd_SharedRouteProto_route_distance_meters                                         = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "route_distance_meters")
+	fd_SharedRouteProto_route_duration_seconds                                        = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "route_duration_seconds")
+	fd_SharedRouteProto_pins                                                          = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "pins")
+	fd_SharedRouteProto_tags                                                          = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "tags")
+	fd_SharedRouteProto_sponsor_metadata                                              = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "sponsor_metadata")
+	fd_SharedRouteProto_incline_type                                                  = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "incline_type")
+	fd_SharedRouteProto_aggregated_stats                                              = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "aggregated_stats")
+	fd_SharedRouteProto_player_stats                                                  = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "player_stats")
+	fd_SharedRouteProto_image                                                         = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "image")
+	fd_SharedRouteProto_route_submission_status                                       = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "route_submission_status")
+	fd_SharedRouteProto_start_poi                                                     = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "start_poi")
+	fd_SharedRouteProto_end_poi                                                       = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "end_poi")
+	fd_SharedRouteProto_s2_ground_cells                                               = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "s2_ground_cells")
+	fd_SharedRouteProto_edit_count                                                    = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "edit_count")
+	fd_SharedRouteProto_editable_post_rejection                                       = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "editable_post_rejection")
+	fd_SharedRouteProto_last_edit_time_ms                                             = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "last_edit_time_ms")
+	fd_SharedRouteProto_submission_count                                              = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "submission_count")
+	fd_SharedRouteProto_short_code                                                    = mustFD((*pogo.SharedRouteProto)(nil).ProtoReflect().Descriptor(), "short_code")
+	fd_SpinPokestopQuestProto_fort_ids                                                = mustFD((*pogo.SpinPokestopQuestProto)(nil).ProtoReflect().Descriptor(), "fort_ids")
+	fd_SponsoredDetailsProto_promo_image_url                                          = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "promo_image_url")
+	fd_SponsoredDetailsProto_promo_description                                        = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "promo_description")
+	fd_SponsoredDetailsProto_call_to_action_link                                      = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "call_to_action_link")
+	fd_SponsoredDetailsProto_promo_button_message_type                                = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "promo_button_message_type")
+	fd_SponsoredDetailsProto_campaign_id                                              = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "campaign_id")
+	fd_SponsoredDetailsProto_promo_image_creative                                     = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "promo_image_creative")
+	fd_SponsoredDetailsProto_impression_tracking_tag                                  = mustFD((*pogo.SponsoredDetailsProto)(nil).ProtoReflect().Descriptor(), "impression_tracking_tag")
+	fd_StampCollectionGiftboxDetailsProto_stamp_collection_id                         = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "stamp_collection_id")
+	fd_StampCollectionGiftboxDetailsProto_stamp_image                                 = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "stamp_image")
+	fd_StampCollectionGiftboxDetailsProto_list_title_key                              = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "list_title_key")
+	fd_StampCollectionGiftboxDetailsProto_list_image_url                              = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "list_image_url")
+	fd_StampCollectionGiftboxDetailsProto_header_image_url                            = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "header_image_url")
+	fd_StampCollectionGiftboxDetailsProto_uses_header_images                          = mustFD((*pogo.StampCollectionGiftboxDetailsProto)(nil).ProtoReflect().Descriptor(), "uses_header_images")
+	fd_StartIncidentOutProto_status                                                   = mustFD((*pogo.StartIncidentOutProto)(nil).ProtoReflect().Descriptor(), "status")
+	fd_StartIncidentOutProto_incident                                                 = mustFD((*pogo.StartIncidentOutProto)(nil).ProtoReflect().Descriptor(), "incident")
+	fd_StationCreateDetail_caught_in_wild                                             = mustFD((*pogo.StationCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
+	fd_StationProto_id                                                                = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "id")
+	fd_StationProto_lat                                                               = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "lat")
+	fd_StationProto_lng                                                               = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "lng")
+	fd_StationProto_name                                                              = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "name")
+	fd_StationProto_battle_details                                                    = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "battle_details")
+	fd_StationProto_player_battle_status                                              = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "player_battle_status")
+	fd_StationProto_start_time_ms                                                     = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "start_time_ms")
+	fd_StationProto_end_time_ms                                                       = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "end_time_ms")
+	fd_StationProto_cooldown_complete_ms                                              = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "cooldown_complete_ms")
+	fd_StationProto_is_bread_battle_available                                         = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "is_bread_battle_available")
+	fd_StationProto_is_inactive                                                       = mustFD((*pogo.StationProto)(nil).ProtoReflect().Descriptor(), "is_inactive")
+	fd_StickerRewardProto_sticker_id                                                  = mustFD((*pogo.StickerRewardProto)(nil).ProtoReflect().Descriptor(), "sticker_id")
+	fd_StickerRewardProto_amount                                                      = mustFD((*pogo.StickerRewardProto)(nil).ProtoReflect().Descriptor(), "amount")
+	fd_StickerSentProto_sticker_id                                                    = mustFD((*pogo.StickerSentProto)(nil).ProtoReflect().Descriptor(), "sticker_id")
+	fd_SubmitSleepRecordsQuestProto_num_days                                          = mustFD((*pogo.SubmitSleepRecordsQuestProto)(nil).ProtoReflect().Descriptor(), "num_days")
+	fd_TakeSnapshotQuestProto_unique_pokemon_id                                       = mustFD((*pogo.TakeSnapshotQuestProto)(nil).ProtoReflect().Descriptor(), "unique_pokemon_id")
+	fd_Tappable_type                                                                  = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "type")
+	fd_Tappable_id                                                                    = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "id")
+	fd_Tappable_count                                                                 = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "count")
+	fd_Tappable_location_hint_lat                                                     = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location_hint_lat")
+	fd_Tappable_location_hint_lng                                                     = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location_hint_lng")
+	fd_Tappable_encounter_id                                                          = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_Tappable_location                                                              = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "location")
+	fd_Tappable_tappable_type_id                                                      = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "tappable_type_id")
+	fd_Tappable_expiration_time_ms                                                    = mustFD((*pogo.Tappable)(nil).ProtoReflect().Descriptor(), "expiration_time_ms")
+	fd_TappableEncounterProto_result                                                  = mustFD((*pogo.TappableEncounterProto)(nil).ProtoReflect().Descriptor(), "result")
+	fd_TappableEncounterProto_pokemon                                                 = mustFD((*pogo.TappableEncounterProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_TappableEncounterProto_capture_probability                                     = mustFD((*pogo.TappableEncounterProto)(nil).ProtoReflect().Descriptor(), "capture_probability")
+	fd_TappableEncounterProto_active_item                                             = mustFD((*pogo.TappableEncounterProto)(nil).ProtoReflect().Descriptor(), "active_item")
+	fd_TappableEncounterProto_npc_encounter                                           = mustFD((*pogo.TappableEncounterProto)(nil).ProtoReflect().Descriptor(), "npc_encounter")
+	fd_TappableLocation_spawnpoint_id                                                 = mustFD((*pogo.TappableLocation)(nil).ProtoReflect().Descriptor(), "spawnpoint_id")
+	fd_TappableLocation_fort_id                                                       = mustFD((*pogo.TappableLocation)(nil).ProtoReflect().Descriptor(), "fort_id")
+	fd_TimedGroupChallengePlayerStatsProto_challenges                                 = mustFD((*pogo.TimedGroupChallengePlayerStatsProto)(nil).ProtoReflect().Descriptor(), "challenges")
+	fd_TimedGroupChallengePlayerStatsProto_IndividualChallengeStats_challenge_id      = mustFD((*pogo.TimedGroupChallengePlayerStatsProto_IndividualChallengeStats)(nil).ProtoReflect().Descriptor(), "challenge_id")
+	fd_TimedGroupChallengePlayerStatsProto_IndividualChallengeStats_player_score      = mustFD((*pogo.TimedGroupChallengePlayerStatsProto_IndividualChallengeStats)(nil).ProtoReflect().Descriptor(), "player_score")
+	fd_TradePokemonQuestProto_friend_id                                               = mustFD((*pogo.TradePokemonQuestProto)(nil).ProtoReflect().Descriptor(), "friend_id")
+	fd_TravelRouteQuestProto_route_id                                                 = mustFD((*pogo.TravelRouteQuestProto)(nil).ProtoReflect().Descriptor(), "route_id")
+	fd_TutorialCreateDetail_caught_in_wild                                            = mustFD((*pogo.TutorialCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
+	fd_VsActionHistory_invoke_time_ms                                                 = mustFD((*pogo.VsActionHistory)(nil).ProtoReflect().Descriptor(), "invoke_time_ms")
+	fd_VsActionHistory_pokemon                                                        = mustFD((*pogo.VsActionHistory)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_VsActionHistory_move_modifier                                                  = mustFD((*pogo.VsActionHistory)(nil).ProtoReflect().Descriptor(), "move_modifier")
+	fd_VsActionHistory_item                                                           = mustFD((*pogo.VsActionHistory)(nil).ProtoReflect().Descriptor(), "item")
+	fd_VsActionHistory_move                                                           = mustFD((*pogo.VsActionHistory)(nil).ProtoReflect().Descriptor(), "move")
+	fd_VsSeekerCreateDetail_season                                                    = mustFD((*pogo.VsSeekerCreateDetail)(nil).ProtoReflect().Descriptor(), "season")
+	fd_VsSeekerCreateDetail_league                                                    = mustFD((*pogo.VsSeekerCreateDetail)(nil).ProtoReflect().Descriptor(), "league")
+	fd_WeatherAlertProto_severity                                                     = mustFD((*pogo.WeatherAlertProto)(nil).ProtoReflect().Descriptor(), "severity")
+	fd_WeatherAlertProto_warn_weather                                                 = mustFD((*pogo.WeatherAlertProto)(nil).ProtoReflect().Descriptor(), "warn_weather")
+	fd_WildCreateDetail_caught_in_wild                                                = mustFD((*pogo.WildCreateDetail)(nil).ProtoReflect().Descriptor(), "caught_in_wild")
+	fd_WildPokemonProto_encounter_id                                                  = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "encounter_id")
+	fd_WildPokemonProto_last_modified_ms                                              = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "last_modified_ms")
+	fd_WildPokemonProto_latitude                                                      = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "latitude")
+	fd_WildPokemonProto_longitude                                                     = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "longitude")
+	fd_WildPokemonProto_spawn_point_id                                                = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "spawn_point_id")
+	fd_WildPokemonProto_pokemon                                                       = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "pokemon")
+	fd_WildPokemonProto_time_till_hidden_ms                                           = mustFD((*pogo.WildPokemonProto)(nil).ProtoReflect().Descriptor(), "time_till_hidden_ms")
+	fd_WithAuthProviderTypeProto_auth_provider_type                                   = mustFD((*pogo.WithAuthProviderTypeProto)(nil).ProtoReflect().Descriptor(), "auth_provider_type")
+	fd_WithBadgeTypeProto_badge_type                                                  = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_type")
+	fd_WithBadgeTypeProto_badge_rank                                                  = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_rank")
+	fd_WithBadgeTypeProto_amount                                                      = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "amount")
+	fd_WithBadgeTypeProto_badge_types_to_exclude                                      = mustFD((*pogo.WithBadgeTypeProto)(nil).ProtoReflect().Descriptor(), "badge_types_to_exclude")
+	fd_WithBreadMoveTypeProto_bread_move                                              = mustFD((*pogo.WithBreadMoveTypeProto)(nil).ProtoReflect().Descriptor(), "bread_move")
+	fd_WithBuddyProto_min_buddy_level                                                 = mustFD((*pogo.WithBuddyProto)(nil).ProtoReflect().Descriptor(), "min_buddy_level")
+	fd_WithBuddyProto_must_be_on_map                                                  = mustFD((*pogo.WithBuddyProto)(nil).ProtoReflect().Descriptor(), "must_be_on_map")
+	fd_WithCombatTypeProto_combat_type                                                = mustFD((*pogo.WithCombatTypeProto)(nil).ProtoReflect().Descriptor(), "combat_type")
+	fd_WithDailyBuddyAffectionProto_min_buddy_affection_earned_today                  = mustFD((*pogo.WithDailyBuddyAffectionProto)(nil).ProtoReflect().Descriptor(), "min_buddy_affection_earned_today")
+	fd_WithDeviceTypeProto_device_type                                                = mustFD((*pogo.WithDeviceTypeProto)(nil).ProtoReflect().Descriptor(), "device_type")
+	fd_WithDistanceProto_distance_km                                                  = mustFD((*pogo.WithDistanceProto)(nil).ProtoReflect().Descriptor(), "distance_km")
+	fd_WithElapsedTimeProto_elapsed_time_ms                                           = mustFD((*pogo.WithElapsedTimeProto)(nil).ProtoReflect().Descriptor(), "elapsed_time_ms")
+	fd_WithEncounterTypeProto_encounter_type                                          = mustFD((*pogo.WithEncounterTypeProto)(nil).ProtoReflect().Descriptor(), "encounter_type")
+	fd_WithFortIdProto_fort_ids                                                       = mustFD((*pogo.WithFortIdProto)(nil).ProtoReflect().Descriptor(), "fort_ids")
+	fd_WithFriendLevelProto_friendship_level_milestone                                = mustFD((*pogo.WithFriendLevelProto)(nil).ProtoReflect().Descriptor(), "friendship_level_milestone")
+	fd_WithFriendsRaidProto_friend_location                                           = mustFD((*pogo.WithFriendsRaidProto)(nil).ProtoReflect().Descriptor(), "friend_location")
+	fd_WithFriendsRaidProto_min_friends_in_raid                                       = mustFD((*pogo.WithFriendsRaidProto)(nil).ProtoReflect().Descriptor(), "min_friends_in_raid")
+	fd_WithGblRankProto_rank                                                          = mustFD((*pogo.WithGblRankProto)(nil).ProtoReflect().Descriptor(), "rank")
+	fd_WithInvasionCharacterProto_category                                            = mustFD((*pogo.WithInvasionCharacterProto)(nil).ProtoReflect().Descriptor(), "category")
+	fd_WithInvasionCharacterProto_invasion_character                                  = mustFD((*pogo.WithInvasionCharacterProto)(nil).ProtoReflect().Descriptor(), "invasion_character")
+	fd_WithItemProto_item                                                             = mustFD((*pogo.WithItemProto)(nil).ProtoReflect().Descriptor(), "item")
+	fd_WithItemProto_items                                                            = mustFD((*pogo.WithItemProto)(nil).ProtoReflect().Descriptor(), "items")
+	fd_WithItemTypeProto_item_type                                                    = mustFD((*pogo.WithItemTypeProto)(nil).ProtoReflect().Descriptor(), "item_type")
+	fd_WithLocationProto_s2_cell_id                                                   = mustFD((*pogo.WithLocationProto)(nil).ProtoReflect().Descriptor(), "s2_cell_id")
+	fd_WithMaxCpProto_max_cp                                                          = mustFD((*pogo.WithMaxCpProto)(nil).ProtoReflect().Descriptor(), "max_cp")
+	fd_WithNpcCombatProto_requires_win                                                = mustFD((*pogo.WithNpcCombatProto)(nil).ProtoReflect().Descriptor(), "requires_win")
+	fd_WithNpcCombatProto_combat_npc_trainer_id                                       = mustFD((*pogo.WithNpcCombatProto)(nil).ProtoReflect().Descriptor(), "combat_npc_trainer_id")
+	fd_WithOpponentPokemonBattleStatusProto_require_defeat                            = mustFD((*pogo.WithOpponentPokemonBattleStatusProto)(nil).ProtoReflect().Descriptor(), "require_defeat")
+	fd_WithOpponentPokemonBattleStatusProto_opponent_pokemon_type                     = mustFD((*pogo.WithOpponentPokemonBattleStatusProto)(nil).ProtoReflect().Descriptor(), "opponent_pokemon_type")
+	fd_WithPageTypeProto_page_type                                                    = mustFD((*pogo.WithPageTypeProto)(nil).ProtoReflect().Descriptor(), "page_type")
+	fd_WithPlayerLevelProto_level                                                     = mustFD((*pogo.WithPlayerLevelProto)(nil).ProtoReflect().Descriptor(), "level")
+	fd_WithPoiSponsorIdProto_sponsor_id                                               = mustFD((*pogo.WithPoiSponsorIdProto)(nil).ProtoReflect().Descriptor(), "sponsor_id")
+	fd_WithPokemonAlignmentProto_alignment                                            = mustFD((*pogo.WithPokemonAlignmentProto)(nil).ProtoReflect().Descriptor(), "alignment")
+	fd_WithPokemonCategoryProto_category_name                                         = mustFD((*pogo.WithPokemonCategoryProto)(nil).ProtoReflect().Descriptor(), "category_name")
+	fd_WithPokemonCategoryProto_pokemon_ids                                           = mustFD((*pogo.WithPokemonCategoryProto)(nil).ProtoReflect().Descriptor(), "pokemon_ids")
+	fd_WithPokemonCostumeProto_require_no_costume                                     = mustFD((*pogo.WithPokemonCostumeProto)(nil).ProtoReflect().Descriptor(), "require_no_costume")
+	fd_WithPokemonCpProto_max_cp                                                      = mustFD((*pogo.WithPokemonCpProto)(nil).ProtoReflect().Descriptor(), "max_cp")
+	fd_WithPokemonCpProto_min_cp                                                      = mustFD((*pogo.WithPokemonCpProto)(nil).ProtoReflect().Descriptor(), "min_cp")
+	fd_WithPokemonFormProto_forms                                                     = mustFD((*pogo.WithPokemonFormProto)(nil).ProtoReflect().Descriptor(), "forms")
+	fd_WithPokemonLevelProto_max_level                                                = mustFD((*pogo.WithPokemonLevelProto)(nil).ProtoReflect().Descriptor(), "max_level")
+	fd_WithPokemonMoveProto_move_ids                                                  = mustFD((*pogo.WithPokemonMoveProto)(nil).ProtoReflect().Descriptor(), "move_ids")
+	fd_WithPokemonSizeProto_pokemon_size                                              = mustFD((*pogo.WithPokemonSizeProto)(nil).ProtoReflect().Descriptor(), "pokemon_size")
+	fd_WithPokemonTypeProto_pokemon_type                                              = mustFD((*pogo.WithPokemonTypeProto)(nil).ProtoReflect().Descriptor(), "pokemon_type")
+	fd_WithPvpCombatProto_requires_win                                                = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "requires_win")
+	fd_WithPvpCombatProto_combat_league_template_id                                   = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "combat_league_template_id")
+	fd_WithPvpCombatProto_combat_league_badge                                         = mustFD((*pogo.WithPvpCombatProto)(nil).ProtoReflect().Descriptor(), "combat_league_badge")
+	fd_WithQuestContextProto_context                                                  = mustFD((*pogo.WithQuestContextProto)(nil).ProtoReflect().Descriptor(), "context")
+	fd_WithRaidLevelProto_raid_level                                                  = mustFD((*pogo.WithRaidLevelProto)(nil).ProtoReflect().Descriptor(), "raid_level")
+	fd_WithRaidLocationProto_location                                                 = mustFD((*pogo.WithRaidLocationProto)(nil).ProtoReflect().Descriptor(), "location")
+	fd_WithSingleDayProto_last_window                                                 = mustFD((*pogo.WithSingleDayProto)(nil).ProtoReflect().Descriptor(), "last_window")
+	fd_WithTappableTypeProto_tappable_type                                            = mustFD((*pogo.WithTappableTypeProto)(nil).ProtoReflect().Descriptor(), "tappable_type")
+	fd_WithTappableTypeProto_tappable_type_id                                         = mustFD((*pogo.WithTappableTypeProto)(nil).ProtoReflect().Descriptor(), "tappable_type_id")
+	fd_WithTempEvoIdProto_mega_form                                                   = mustFD((*pogo.WithTempEvoIdProto)(nil).ProtoReflect().Descriptor(), "mega_form")
+	fd_WithThrowTypeProto_throw_type                                                  = mustFD((*pogo.WithThrowTypeProto)(nil).ProtoReflect().Descriptor(), "throw_type")
+	fd_WithThrowTypeProto_hit                                                         = mustFD((*pogo.WithThrowTypeProto)(nil).ProtoReflect().Descriptor(), "hit")
+	fd_WithTotalDaysProto_last_window                                                 = mustFD((*pogo.WithTotalDaysProto)(nil).ProtoReflect().Descriptor(), "last_window")
+	fd_WithTraineePokemonAttributesProto_trainee_attribute                            = mustFD((*pogo.WithTraineePokemonAttributesProto)(nil).ProtoReflect().Descriptor(), "trainee_attribute")
+	fd_WithUniquePokestopProto_context                                                = mustFD((*pogo.WithUniquePokestopProto)(nil).ProtoReflect().Descriptor(), "context")
+	fd_YesNoSelectorProto_yes_key                                                     = mustFD((*pogo.YesNoSelectorProto)(nil).ProtoReflect().Descriptor(), "yes_key")
+	fd_YesNoSelectorProto_no_key                                                      = mustFD((*pogo.YesNoSelectorProto)(nil).ProtoReflect().Descriptor(), "no_key")
+	fd_YesNoSelectorProto_yes_next_step                                               = mustFD((*pogo.YesNoSelectorProto)(nil).ProtoReflect().Descriptor(), "yes_next_step")
+	fd_YesNoSelectorProto_no_next_step                                                = mustFD((*pogo.YesNoSelectorProto)(nil).ProtoReflect().Descriptor(), "no_next_step")
 )
