@@ -826,10 +826,10 @@ func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context,
 	pokemon.addEncounterPokemon(ctx, db, encounterData.GetPokemon(), username)
 }
 
-func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
+func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request pogoshim.ProcessTappableProto, encounterData pogoshim.TappableEncounterProto, username string, timestampMs int64) {
 	pokemon.SetIsEvent(0)
-	pokemon.SetLat(request.LocationHintLat)
-	pokemon.SetLon(request.LocationHintLng)
+	pokemon.SetLat(request.GetLocationHintLat())
+	pokemon.SetLon(request.GetLocationHintLng())
 
 	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
 		pokemon.SetSeenType(null.StringFrom(SeenType_TappableEncounter))
@@ -852,8 +852,18 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	if !pokemon.Username.Valid {
 		pokemon.SetUsername(null.StringFrom(username))
 	}
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), pogoshim.AsPokemonDisplayProto(encounterData.Pokemon.PokemonDisplay.ProtoReflect()))
-	pokemon.addEncounterPokemon(ctx, db, pogoshim.AsPokemonProto(encounterData.Pokemon.ProtoReflect()), username)
+	// encounterData.GetPokemon() is itself a shim (pogoshim.PokemonProto);
+	// chaining straight off it replaces the pre-shim code's
+	// pogoshim.AsPokemonDisplayProto(encounterData.Pokemon.PokemonDisplay.ProtoReflect())
+	// / pogoshim.AsPokemonProto(encounterData.Pokemon.ProtoReflect()) bridge
+	// wrappers -- exactly the typed-nil landmine documented in progress.md
+	// ("wrapping a nil *pogo.X via .ProtoReflect() gives shim with
+	// IsZero()==false"): a nil PokemonDisplay would have produced a
+	// non-zero-looking shim via the bridge, whereas GetPokemonDisplay()
+	// degrades correctly to a zero shim when absent.
+	encPokemon := encounterData.GetPokemon()
+	pokemon.setPokemonDisplay(int16(encPokemon.GetPokemonId()), encPokemon.GetPokemonDisplay())
+	pokemon.addEncounterPokemon(ctx, db, encPokemon, username)
 }
 
 func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display pogoshim.PokemonDisplayProto) {

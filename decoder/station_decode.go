@@ -35,7 +35,7 @@ func (station *Station) updateFromStationProto(stationProto pogoshim.StationProt
 	return station
 }
 
-func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto *pogo.GetStationedPokemonDetailsOutProto) *Station {
+func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProto pogoshim.GetStationedPokemonDetailsOutProto) *Station {
 	type stationedPokemonDetail struct {
 		PokemonId             int    `json:"pokemon_id"`
 		Form                  int    `json:"form"`
@@ -52,29 +52,29 @@ func (station *Station) updateFromGetStationedPokemonDetailsOutProto(stationProt
 
 	var stationedPokemon []stationedPokemonDetail
 	stationedGmax := int64(0)
-	for _, stationedPokemonDetails := range stationProto.StationedPokemons {
-		pokemon := stationedPokemonDetails.Pokemon
-		display := pokemon.PokemonDisplay
+	for stationedPokemonDetails := range stationProto.GetStationedPokemons().All() {
+		pokemon := stationedPokemonDetails.GetPokemon()
+		display := pokemon.GetPokemonDisplay()
 		stationedPokemon = append(stationedPokemon, stationedPokemonDetail{
-			PokemonId:             int(pokemon.PokemonId),
-			Form:                  int(display.Form),
-			Costume:               int(display.Costume),
-			Gender:                int(display.Gender),
-			Shiny:                 display.Shiny,
-			TempEvolution:         int(display.CurrentTempEvolution),
-			TempEvolutionFinishMs: display.TemporaryEvolutionFinishMs,
-			Alignment:             int(display.Alignment),
-			Badge:                 int(display.PokemonBadge),
-			Background:            util.ExtractBackgroundFromDisplay(display),
-			BreadMode:             int(display.BreadModeEnum),
+			PokemonId:             int(pokemon.GetPokemonId()),
+			Form:                  int(display.GetForm()),
+			Costume:               int(display.GetCostume()),
+			Gender:                int(display.GetGender()),
+			Shiny:                 display.GetShiny(),
+			TempEvolution:         int(display.GetCurrentTempEvolution()),
+			TempEvolutionFinishMs: display.GetTemporaryEvolutionFinishMs(),
+			Alignment:             int(display.GetAlignment()),
+			Badge:                 int(display.GetPokemonBadge()),
+			Background:            util.ExtractBackgroundFromDisplayShim(display),
+			BreadMode:             int(display.GetBreadModeEnum()),
 		})
-		if display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.BreadModeEnum == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
+		if display.GetBreadModeEnum() == pogo.BreadModeEnum_BREAD_DOUGH_MODE || display.GetBreadModeEnum() == pogo.BreadModeEnum_BREAD_DOUGH_MODE_2 {
 			stationedGmax++
 		}
 	}
 	jsonString, _ := json.Marshal(stationedPokemon)
 	station.SetStationedPokemon(null.StringFrom(string(jsonString)))
-	station.SetTotalStationedPokemon(null.IntFrom(int64(stationProto.TotalNumStationedPokemon)))
+	station.SetTotalStationedPokemon(null.IntFrom(int64(stationProto.GetTotalNumStationedPokemon())))
 	station.SetTotalStationedGmax(null.IntFrom(stationedGmax))
 	return station
 }

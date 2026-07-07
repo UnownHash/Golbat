@@ -242,6 +242,25 @@ func (g *gen) message(name string, md protoreflect.MessageDescriptor) {
 			fmt.Fprintf(&g.out, "func (x %s) %s() %s {\n\tif x.m == nil {\n\t\treturn %s{}\n\t}\n\tif v := x.m.Get(%s).Message(); v.IsValid() {\n\t\treturn %s{v}\n\t}\n\treturn %s{}\n}\n\n",
 				name, getter, sub, sub, fdVar(name, f), sub, sub)
 		default:
+			// A scalar/enum field that is a member of a genuine (explicitly
+			// declared) oneof needs an explicit Has<Field>() the same way a
+			// singular message field does: m.Has(fd) is presence-tracked for
+			// oneof members regardless of kind, so e.g. LootItemProto's
+			// 14-way "Type" oneof (item/stardust/pokecoin/... -- a mix of
+			// enum, bool, and string members) can't be told apart by comparing
+			// Get<Field>() against its zero value the way a plain proto3
+			// scalar can (GetItem() == 0 doesn't distinguish "item explicitly
+			// set to enum value 0" from "some other Type member is set").
+			// Proto3 "optional" scalars get a *synthetic* oneof purely to
+			// track presence for that single field -- IsSynthetic() excludes
+			// those here since scalarGetter's zero-default Get already
+			// matches their semantics (same as every plain proto3 scalar),
+			// and they don't need call sites to disambiguate between
+			// siblings the way a real oneof's members do.
+			if od := f.ContainingOneof(); od != nil && !od.IsSynthetic() {
+				fmt.Fprintf(&g.out, "func (x %s) Has%s() bool {\n\treturn x.m != nil && x.m.Has(%s)\n}\n\n",
+					name, goCamelCase(string(f.Name())), fdVar(name, f))
+			}
 			g.scalarGetter(name, getter, f)
 		}
 	}

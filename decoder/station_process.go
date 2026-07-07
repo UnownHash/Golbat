@@ -7,11 +7,11 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto) string {
-	stationId := request.StationId
+func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.DbDetails, request pogoshim.GetStationedPokemonDetailsProto) string {
+	stationId := request.GetStationId()
 
 	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "ResetStationedPokemon")
 	if err != nil {
@@ -30,8 +30,8 @@ func ResetStationedPokemonWithStationDetailsNotFound(ctx context.Context, db db.
 	return fmt.Sprintf("StationedPokemonDetails %s", stationId)
 }
 
-func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request *pogo.GetStationedPokemonDetailsProto, stationDetails *pogo.GetStationedPokemonDetailsOutProto) string {
-	stationId := request.StationId
+func UpdateStationWithStationDetails(ctx context.Context, db db.DbDetails, request pogoshim.GetStationedPokemonDetailsProto, stationDetails pogoshim.GetStationedPokemonDetailsOutProto) string {
+	stationId := request.GetStationId()
 
 	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "UpdateStationWithDetails")
 	if err != nil {

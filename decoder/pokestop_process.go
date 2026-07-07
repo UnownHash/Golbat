@@ -10,7 +10,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
 	"golbat/pogoshim"
 )
 
@@ -100,28 +99,34 @@ func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db
 	return db.GetPokestopPositions(details, geofence)
 }
 
-func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request *pogo.GetContestDataProto, contestData *pogo.GetContestDataOutProto) string {
-	if contestData.ContestIncident == nil || len(contestData.ContestIncident.Contests) == 0 {
+// UpdatePokestopWithContestData's request parameter is a value type, so
+// there's no way to distinguish "no request bytes on the wire" from "a
+// present-but-empty request" the way the pre-shim code's always-non-nil
+// *pogo.GetContestDataProto pointer (decode.go's decodeGetContestData
+// always passed &decodedContestDataRequest, whether or not it had actually
+// unmarshaled anything into it) implicitly could. That pointer's `request !=
+// nil` check was consequently ALWAYS true at the one real call site, making
+// the getFortIdFromContest(...) fallback below permanently unreachable
+// (verified: decodeGetContestData is UpdatePokestopWithContestData's only
+// caller) -- request.GetFortId() alone reproduces the exact observed
+// behavior (empty string when the request was absent, real value otherwise).
+func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request pogoshim.GetContestDataProto, contestData pogoshim.GetContestDataOutProto) string {
+	if !contestData.HasContestIncident() || contestData.GetContestIncident().GetContests().Len() == 0 {
 		return "No contests found"
 	}
 
-	var fortId string
-	if request != nil {
-		fortId = request.FortId
-	} else {
-		fortId = getFortIdFromContest(contestData.ContestIncident.Contests[0].ContestId)
-	}
-
+	fortId := request.GetFortId()
 	if fortId == "" {
 		return "No fortId found"
 	}
 
-	if len(contestData.ContestIncident.Contests) > 1 {
+	contests := contestData.GetContestIncident().GetContests()
+	if contests.Len() > 1 {
 		log.Errorf("More than one contest found")
 		return fmt.Sprintf("More than one contest found in %s", fortId)
 	}
 
-	contest := contestData.ContestIncident.Contests[0]
+	contest := contests.At(0)
 
 	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopWithContestData")
 	if err != nil {
@@ -145,7 +150,7 @@ func getFortIdFromContest(id string) string {
 	return strings.Split(id, "-")[0]
 }
 
-func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
+func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request pogoshim.GetPokemonSizeLeaderboardEntryProto, contestData pogoshim.GetPokemonSizeLeaderboardEntryOutProto) string {
 	fortId := getFortIdFromContest(request.GetContestId())
 
 	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopWithContestEntry")

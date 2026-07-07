@@ -9,12 +9,12 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.DbDetails, tappable *pogo.ProcessTappableOutProto, request *pogo.ProcessTappableProto, timestampMs int64) {
+func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.DbDetails, tappable pogoshim.ProcessTappableOutProto, request pogoshim.ProcessTappableProto, timestampMs int64) {
 	// update from request
-	ta.Id = request.EncounterId // Id is primary key, don't track as dirty
+	ta.Id = request.GetEncounterId() // Id is primary key, don't track as dirty
 	location := request.GetLocation()
 	if spawnPointId := location.GetSpawnpointId(); spawnPointId != "" {
 		spawnId, err := strconv.ParseInt(spawnPointId, 16, 64)
@@ -26,49 +26,64 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 	if fortId := location.GetFortId(); fortId != "" {
 		ta.SetFortId(null.StringFrom(fortId))
 	}
-	ta.SetType(request.TappableTypeId)
-	ta.SetLat(request.LocationHintLat)
-	ta.SetLon(request.LocationHintLng)
+	ta.SetType(request.GetTappableTypeId())
+	ta.SetLat(request.GetLocationHintLat())
+	ta.SetLon(request.GetLocationHintLng())
 	ta.setExpireTimestamp(ctx, db, timestampMs)
 
 	// update from tappable
-	if encounter := tappable.GetEncounter(); encounter != nil {
+	if tappable.HasEncounter() {
 		// tappable is a Pokèmon, encounter is sent in a separate proto
 		// we store this to link tappable with Pokèmon from encounter proto
-		ta.SetEncounter(null.IntFrom(int64(encounter.Pokemon.PokemonId)))
-	} else if reward := tappable.GetReward(); reward != nil {
-		for _, lootProto := range reward {
-			for _, itemProto := range lootProto.GetLootItem() {
-				switch t := itemProto.Type.(type) {
-				case *pogo.LootItemProto_Item:
-					ta.SetItemId(null.IntFrom(int64(t.Item)))
-					ta.SetCount(null.IntFrom(int64(itemProto.Count)))
-				case *pogo.LootItemProto_Stardust:
-					log.Warnf("[TAPPABLE] Reward is Stardust: %t", t.Stardust)
-				case *pogo.LootItemProto_Pokecoin:
-					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", t.Pokecoin)
-				case *pogo.LootItemProto_PokemonCandy:
-					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", t.PokemonCandy)
-				case *pogo.LootItemProto_Experience:
-					log.Warnf("[TAPPABLE] Reward is Experience: %t", t.Experience)
-				case *pogo.LootItemProto_PokemonEgg:
-					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
-				case *pogo.LootItemProto_AvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", t.AvatarTemplateId)
-				case *pogo.LootItemProto_StickerId:
-					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
-				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", t.MegaEnergyPokemonId)
-				case *pogo.LootItemProto_XlCandy:
-					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", t.XlCandy)
-				case *pogo.LootItemProto_FollowerPokemon:
-					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
-				case *pogo.LootItemProto_NeutralAvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", t.NeutralAvatarTemplateId)
-				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
-				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
+		ta.SetEncounter(null.IntFrom(int64(tappable.GetEncounter().GetPokemon().GetPokemonId())))
+	} else if reward := tappable.GetReward(); reward.Len() > 0 {
+		for lootProto := range reward.All() {
+			for itemProto := range lootProto.GetLootItem().All() {
+				// LootItemProto's 14-way "Type" oneof has no type-switch
+				// equivalent over the shim (there's no interface value to
+				// switch on) -- Has<Field>() replaces each case, in the same
+				// order as the original type switch. This oneof is exactly
+				// why cmd/pogoshimgen/main.go's generator was taught to emit
+				// Has<Field>() for scalar/enum oneof members too (previously
+				// only singular message fields got one): GetItem()==0 alone
+				// can't distinguish "Item explicitly set to enum value 0"
+				// from "some other Type member is set", which would have
+				// silently miscategorized rewards.
+				switch {
+				case itemProto.HasItem():
+					ta.SetItemId(null.IntFrom(int64(itemProto.GetItem())))
+					ta.SetCount(null.IntFrom(int64(itemProto.GetCount())))
+				case itemProto.HasStardust():
+					log.Warnf("[TAPPABLE] Reward is Stardust: %t", itemProto.GetStardust())
+				case itemProto.HasPokecoin():
+					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", itemProto.GetPokecoin())
+				case itemProto.HasPokemonCandy():
+					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", itemProto.GetPokemonCandy())
+				case itemProto.HasExperience():
+					log.Warnf("[TAPPABLE] Reward is Experience: %t", itemProto.GetExperience())
+				case itemProto.HasPokemonEgg():
+					// Message-typed oneof members already had a shim
+					// Has/Get pair before this task's generator fix; only
+					// the %v rendering differs from the pre-shim pointer
+					// (shim has no String() method) -- log-line-only, see
+					// the Wave 3 Task 4 report's Concerns section.
+					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", itemProto.GetPokemonEgg())
+				case itemProto.HasAvatarTemplateId():
+					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", itemProto.GetAvatarTemplateId())
+				case itemProto.HasStickerId():
+					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", itemProto.GetStickerId())
+				case itemProto.HasMegaEnergyPokemonId():
+					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", itemProto.GetMegaEnergyPokemonId())
+				case itemProto.HasXlCandy():
+					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", itemProto.GetXlCandy())
+				case itemProto.HasFollowerPokemon():
+					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", itemProto.GetFollowerPokemon())
+				case itemProto.HasNeutralAvatarTemplateId():
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", itemProto.GetNeutralAvatarTemplateId())
+				case itemProto.HasNeutralAvatarItemTemplate():
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", itemProto.GetNeutralAvatarItemTemplate())
+				case itemProto.HasNeutralAvatarItemDisplay():
+					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", itemProto.GetNeutralAvatarItemDisplay())
 				default:
 					log.Warnf("Unknown or unset Type")
 				}

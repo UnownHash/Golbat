@@ -10,7 +10,6 @@ import (
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 
-	"golbat/pogo"
 	"golbat/pogoshim"
 	"golbat/util"
 )
@@ -292,7 +291,7 @@ func (gym *Gym) updateGymFromMapFortSummary(fortData mapFortSummary, skipName bo
 	return gym
 }
 
-func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gym {
+func (gym *Gym) updateGymFromRsvpProto(fortData pogoshim.GetEventRsvpsOutProto) *Gym {
 	type rsvpTimeslot struct {
 		Timeslot   int64 `json:"timeslot"`
 		GoingCount int32 `json:"going_count"`
@@ -301,12 +300,12 @@ func (gym *Gym) updateGymFromRsvpProto(fortData *pogo.GetEventRsvpsOutProto) *Gy
 
 	timeslots := make([]rsvpTimeslot, 0)
 
-	for _, timeslot := range fortData.RsvpTimeslots {
-		if timeslot.GoingCount > 0 || timeslot.MaybeCount > 0 {
+	for timeslot := range fortData.GetRsvpTimeslots().All() {
+		if timeslot.GetGoingCount() > 0 || timeslot.GetMaybeCount() > 0 {
 			timeslots = append(timeslots, rsvpTimeslot{
-				Timeslot:   timeslot.TimeSlot,
-				GoingCount: timeslot.GoingCount,
-				MaybeCount: timeslot.MaybeCount,
+				Timeslot:   timeslot.GetTimeSlot(),
+				GoingCount: timeslot.GetGoingCount(),
+				MaybeCount: timeslot.GetMaybeCount(),
 			})
 		}
 	}

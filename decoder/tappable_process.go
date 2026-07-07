@@ -7,10 +7,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func UpdateTappable(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, tappableDetails *pogo.ProcessTappableOutProto, timestampMs int64) string {
+func UpdateTappable(ctx context.Context, db db.DbDetails, request pogoshim.ProcessTappableProto, tappableDetails pogoshim.ProcessTappableOutProto, timestampMs int64) string {
 	id := request.GetEncounterId()
 
 	tappable, unlock, err := getOrCreateTappableRecord(ctx, db, id, "UpdateTappableRecord")

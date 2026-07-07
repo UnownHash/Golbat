@@ -13,6 +13,15 @@ import (
 // decodePushGateway classifies a push-gateway message by message_type, unmarshals
 // the PushGatewayMessage, and dispatches to the appropriate decoder update path.
 // Unknown message types are gated before unmarshal to avoid unnecessary work.
+//
+// NOT migrated to the proto engine: every field this function reads
+// (GymId/PlayerCount/LobbyJoinEndMs, StationId/PlayerCount/BreadLobbyJoinEndMs)
+// is extracted into plain scalars immediately below and passed to
+// decoder.UpdateGymRaidLobby/UpdateStationBattleLobby as bare values -- no
+// *pogo.X or pogoshim.X type ever crosses the decoder package boundary, so
+// there is no retention hazard for hyperpb's zero-copy arenas to remove, and
+// std's plain proto.Unmarshal is already as cheap as this low-volume,
+// scalar-only message type needs.
 func decodePushGateway(ctx context.Context, messageType string, payload []byte) {
 	switch messageType {
 	case "raid_lobby_player_count", "bread_lobby_player_count":

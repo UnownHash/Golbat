@@ -67,13 +67,14 @@ func TestShadowComparePairOpenInvasionMatchesAcrossEngines(t *testing.T) {
 }
 
 // TestShadowComparePairDefaultIsNoOp mirrors shadowCompare's pre-Wave-3
-// default (a safe no-op returning true) for any method not wired into
-// shadowComparePair's switch yet -- Task 4 adds the rest of the request+data
-// methods (contest_data, size_contest_entry, station_details, tappable,
-// event_rsvps).
+// default (a safe no-op returning true) for any method with no case in
+// shadowComparePair's switch. Task 4 wired the last of the known
+// request+data methods (contest_data, size_contest_entry, station_details,
+// tappable, event_rsvps, social), so this now exercises an arbitrary
+// unrecognized method key rather than one of those.
 func TestShadowComparePairDefaultIsNoOp(t *testing.T) {
-	if !shadowComparePair(engMethodContestData, []byte{}, []byte{}) {
-		t.Fatal("shadowComparePair should no-op (return true) for a method with no case yet")
+	if !shadowComparePair("not_a_real_method", []byte{}, []byte{}) {
+		t.Fatal("shadowComparePair should no-op (return true) for a method with no case")
 	}
 }
 
@@ -136,5 +137,65 @@ func TestMaybeShadowPairForcedRateRecordsMatchNotMismatch(t *testing.T) {
 	}
 	if got := recorder.count(engMethodOpenInvasion, "match"); got != 1 {
 		t.Fatalf("expected 1 match for a well-formed pair, got %d", got)
+	}
+}
+
+// TestShadowComparePairTask4MethodsMatchAcrossEngines exercises
+// shadowComparePair for the five request-optional request+data methods Task
+// 4 wires in, including the request-absent case (nil request bytes) that
+// open_invasion (mandatory request) never has to handle: compareDigestPair
+// decodes a nil request as a zero-length message on both engines, so the
+// combined digest still compares equal.
+func TestShadowComparePairTask4MethodsMatchAcrossEngines(t *testing.T) {
+	contestReq := marshalOrFatal(t, &pogo.GetContestDataProto{FortId: "FORT1"})
+	contestData := marshalOrFatal(t, &pogo.GetContestDataOutProto{
+		Status:          pogo.GetContestDataOutProto_SUCCESS,
+		ContestIncident: &pogo.ClientContestIncidentProto{Contests: []*pogo.ContestProto{{ContestId: "C1"}}},
+	})
+	if !shadowComparePair(engMethodContestData, contestReq, contestData) {
+		t.Fatal("shadowComparePair(contest_data, ...) = false, want true")
+	}
+	if !shadowComparePair(engMethodContestData, nil, contestData) {
+		t.Fatal("shadowComparePair(contest_data, nil request, ...) = false, want true (nil request must decode identically on both engines)")
+	}
+
+	sizeReq := marshalOrFatal(t, &pogo.GetPokemonSizeLeaderboardEntryProto{ContestId: "C1-1"})
+	sizeData := marshalOrFatal(t, &pogo.GetPokemonSizeLeaderboardEntryOutProto{Status: pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS})
+	if !shadowComparePair(engMethodSizeContestEntry, sizeReq, sizeData) {
+		t.Fatal("shadowComparePair(size_contest_entry, ...) = false, want true")
+	}
+
+	stationReq := marshalOrFatal(t, &pogo.GetStationedPokemonDetailsProto{StationId: "STATION1"})
+	stationData := marshalOrFatal(t, &pogo.GetStationedPokemonDetailsOutProto{Result: pogo.GetStationedPokemonDetailsOutProto_SUCCESS})
+	if !shadowComparePair(engMethodStationDetails, stationReq, stationData) {
+		t.Fatal("shadowComparePair(station_details, ...) = false, want true")
+	}
+
+	tappableReq := marshalOrFatal(t, &pogo.ProcessTappableProto{EncounterId: 42})
+	tappableData := marshalOrFatal(t, &pogo.ProcessTappableOutProto{Status: pogo.ProcessTappableOutProto_SUCCESS})
+	if !shadowComparePair(engMethodTappable, tappableReq, tappableData) {
+		t.Fatal("shadowComparePair(tappable, ...) = false, want true")
+	}
+
+	rsvpReq := marshalOrFatal(t, &pogo.GetEventRsvpsProto{EventDetails: &pogo.GetEventRsvpsProto_Raid{Raid: &pogo.RaidDetails{FortId: "FORT1"}}})
+	rsvpData := marshalOrFatal(t, &pogo.GetEventRsvpsOutProto{Status: pogo.GetEventRsvpsOutProto_SUCCESS})
+	if !shadowComparePair(engMethodEventRsvps, rsvpReq, rsvpData) {
+		t.Fatal("shadowComparePair(event_rsvps, ...) = false, want true")
+	}
+}
+
+// TestShadowComparePairSocialCoversRequestResponseOnly proves the "social"
+// composite compares Request (ProxyRequestProto) + Response
+// (ProxyResponseProto) only: two payloads whose opaque Payload bytes differ
+// (the inner, unverified layer) must still match, since compareDigestPair
+// folds the Payload as a plain bytes field on the two messages it actually
+// decodes -- it never interprets the Payload as one of the inner proto
+// types, that dispatch happens only in the live decodeSocialActionWithRequest
+// path.
+func TestShadowComparePairSocialCoversRequestResponseOnly(t *testing.T) {
+	request := marshalOrFatal(t, &pogo.ProxyRequestProto{Action: uint32(pogo.InternalSocialAction_SOCIAL_ACTION_SEARCH_PLAYER)})
+	data := marshalOrFatal(t, &pogo.ProxyResponseProto{Status: pogo.ProxyResponseProto_COMPLETED, Payload: []byte("anything")})
+	if !shadowComparePair(engMethodSocial, request, data) {
+		t.Fatal("shadowComparePair(social, ...) = false, want true for a well-formed Request+Response pair")
 	}
 }

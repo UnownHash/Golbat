@@ -9,6 +9,7 @@ import (
 
 	"golbat/db"
 	"golbat/pogo"
+	"golbat/pogoshim"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
@@ -1254,7 +1255,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	}
 }
 
-func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicProfileProto) {
+func (player *Player) updateFromPublicProfile(publicProfile pogoshim.PlayerPublicProfileProto) {
 	player.Name = publicProfile.GetName() // Name is primary key, don't track as dirty
 	player.SetTeam(null.IntFrom(int64(publicProfile.GetTeam())))
 	player.SetLevel(null.IntFrom(int64(publicProfile.GetLevel())))
@@ -1267,7 +1268,7 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 
 	eventBadges := ""
 
-	for _, badge := range publicProfile.GetBadges() {
+	for badge := range publicProfile.GetBadges().All() {
 		if badge.GetBadgeType() > pogo.HoloBadgeType_BADGE_EVENT_MIN {
 			if badge.GetCurrentValue() > 0 {
 				if len(eventBadges) > 0 {
@@ -1300,7 +1301,13 @@ func (player *Player) updateFromPublicProfile(publicProfile *pogo.PlayerPublicPr
 	player.SetEventBadges(null.StringFrom(eventBadges))
 }
 
-func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary *pogo.InternalPlayerSummaryProto, publicProfile *pogo.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
+// UpdatePlayerRecordWithPlayerSummary copies every needed value out of
+// playerSummary/publicProfile (via getPlayerRecord/updateFromPublicProfile's
+// plain-Go-typed Set* calls) before returning -- the Player entity cached in
+// playerCache never retains a pogoshim value or protoreflect.Message, so a
+// cached player outlives the hyperpb arena that backed the proto it was
+// built from.
+func UpdatePlayerRecordWithPlayerSummary(db db.DbDetails, playerSummary pogoshim.InternalPlayerSummaryProto, publicProfile pogoshim.PlayerPublicProfileProto, friendCode string, friendshipId string) error {
 	player, err := getPlayerRecord(db, playerSummary.GetCodename(), friendshipId, friendCode)
 	if err != nil {
 		return err

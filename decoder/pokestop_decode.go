@@ -492,7 +492,7 @@ func (stop *Pokestop) updatePokestopFromMapFortSummary(fortData mapFortSummary) 
 	return stop
 }
 
-func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.ContestProto) {
+func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest pogoshim.ContestProto) {
 	stop.SetShowcaseRankingStandard(null.IntFrom(int64(contest.GetMetric().GetRankingStandard())))
 	stop.SetShowcaseExpiry(null.IntFrom(contest.GetSchedule().GetContestCycle().GetEndTimeMs() / 1000))
 
@@ -514,7 +514,7 @@ func (stop *Pokestop) updatePokestopFromGetContestDataOutProto(contest *pogo.Con
 	}
 }
 
-func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) {
+func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(contestData pogoshim.GetPokemonSizeLeaderboardEntryOutProto) {
 	type contestEntry struct {
 		Rank                  int     `json:"rank"`
 		Score                 float64 `json:"score"`
@@ -536,11 +536,11 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 	}
 
 	j := contestJson{LastUpdate: time.Now().Unix()}
-	j.TotalEntries = int(contestData.TotalEntries)
+	j.TotalEntries = int(contestData.GetTotalEntries())
 
 	var newTopScore null.Float
 	var newTopPokemonId null.Int
-	for _, entry := range contestData.GetContestEntries() {
+	for entry := range contestData.GetContestEntries().All() {
 		rank := entry.GetRank()
 		if rank > 3 {
 			break
@@ -549,19 +549,20 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 			newTopScore = null.FloatFrom(entry.GetScore())
 			newTopPokemonId = null.IntFrom(int64(entry.GetPokedexId()))
 		}
+		display := entry.GetPokemonDisplay()
 		j.ContestEntries = append(j.ContestEntries, contestEntry{
 			Rank:                  int(rank),
 			Score:                 entry.GetScore(),
 			PokemonId:             int(entry.GetPokedexId()),
-			Form:                  int(entry.GetPokemonDisplay().Form),
-			Costume:               int(entry.GetPokemonDisplay().Costume),
-			Gender:                int(entry.GetPokemonDisplay().Gender),
-			Shiny:                 entry.GetPokemonDisplay().Shiny,
-			TempEvolution:         int(entry.GetPokemonDisplay().CurrentTempEvolution),
-			TempEvolutionFinishMs: entry.GetPokemonDisplay().TemporaryEvolutionFinishMs,
-			Alignment:             int(entry.GetPokemonDisplay().Alignment),
-			Badge:                 int(entry.GetPokemonDisplay().PokemonBadge),
-			Background:            util.ExtractBackgroundFromDisplay(entry.PokemonDisplay),
+			Form:                  int(display.GetForm()),
+			Costume:               int(display.GetCostume()),
+			Gender:                int(display.GetGender()),
+			Shiny:                 display.GetShiny(),
+			TempEvolution:         int(display.GetCurrentTempEvolution()),
+			TempEvolutionFinishMs: display.GetTemporaryEvolutionFinishMs(),
+			Alignment:             int(display.GetAlignment()),
+			Badge:                 int(display.GetPokemonBadge()),
+			Background:            util.ExtractBackgroundFromDisplayShim(display),
 		})
 
 	}

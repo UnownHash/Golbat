@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"golbat/pogo"
+	"golbat/pogoshim"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
@@ -54,19 +55,31 @@ const (
 	focusShiny            contestFocusType = "shiny"
 )
 
-func createFocusStoreFromContestProto(contest *pogo.ContestProto) map[contestFocusType]map[string]any {
+func createFocusStoreFromContestProto(contest pogoshim.ContestProto) map[contestFocusType]map[string]any {
 	focusStore := make(map[contestFocusType]map[string]any)
 
-	for _, focus := range contest.GetFocuses() {
-		if pok := focus.GetPokemon(); pok != nil {
+	for focus := range contest.GetFocuses().All() {
+		// Has<Field>() replaces each nil-pointer check below: a shim getter
+		// never returns Go nil (a zero-value ContestPokemonFocusProto etc.
+		// with every Get* chaining to its own zero default), so "pok != nil"
+		// has to become an explicit presence check on the parent field.
+		if focus.HasPokemon() {
+			pok := focus.GetPokemon()
 			result := make(map[string]any)
-			result["pokemon_id"] = int32(pok.PokedexId)
-			if pok.RequireFormToMatch {
-				result["pokemon_form"] = int32(pok.PokemonDisplay.Form)
+			result["pokemon_id"] = int32(pok.GetPokedexId())
+			if pok.GetRequireFormToMatch() {
+				// pok.GetPokemonDisplay() degrades to a zero shim when
+				// PokemonDisplay is absent (GetForm() -> 0) instead of the
+				// pre-shim code's un-guarded pok.PokemonDisplay.Form, which
+				// would nil-panic here if RequireFormToMatch were true with
+				// no display set -- same latent-panic-removal class as every
+				// prior wave's shim conversions.
+				result["pokemon_form"] = int32(pok.GetPokemonDisplay().GetForm())
 			}
 			focusStore[focusPokemon] = result
 		}
-		if pokType := focus.GetType(); pokType != nil {
+		if focus.HasType() {
+			pokType := focus.GetType()
 			result := make(map[string]any)
 			result["pokemon_type_1"] = int32(pokType.GetPokemonType1())
 			if type2 := pokType.GetPokemonType2(); type2 != pogo.HoloPokemonType_POKEMON_TYPE_NONE {
@@ -74,48 +87,49 @@ func createFocusStoreFromContestProto(contest *pogo.ContestProto) map[contestFoc
 			}
 			focusStore[focusPokemonType] = result
 		}
-		if alignment := focus.GetAlignment(); alignment != nil {
+		if focus.HasAlignment() {
 			// unset, purified, shadow
 			focusStore[focusPokemonAlignment] = map[string]any{
-				"pokemon_alignment": int32(alignment.GetRequiredAlignment()),
+				"pokemon_alignment": int32(focus.GetAlignment().GetRequiredAlignment()),
 			}
 		}
-		if pokemonClass := focus.GetPokemonClass(); pokemonClass != nil {
+		if focus.HasPokemonClass() {
 			// normal, legendary, mythic, ultra beast
 			focusStore[focusPokemonClass] = map[string]any{
-				"pokemon_class": int32(pokemonClass.GetRequiredClass()),
+				"pokemon_class": int32(focus.GetPokemonClass().GetRequiredClass()),
 			}
 		}
-		if pokemonFamily := focus.GetPokemonFamily(); pokemonFamily != nil {
+		if focus.HasPokemonFamily() {
 			// family pikachu, zubat e.g.
 			focusStore[focusPokemonFamily] = map[string]any{
-				"pokemon_family": int32(pokemonFamily.GetRequiredFamily()),
+				"pokemon_family": int32(focus.GetPokemonFamily().GetRequiredFamily()),
 			}
 		}
-		if buddy := focus.GetBuddy(); buddy != nil {
+		if focus.HasBuddy() {
 			focusStore[focusBuddy] = map[string]any{
-				"min_level": int32(buddy.GetMinBuddyLevel()),
+				"min_level": int32(focus.GetBuddy().GetMinBuddyLevel()),
 			}
 		}
-		if generation := focus.GetGeneration(); generation != nil {
+		if focus.HasGeneration() {
 			focusStore[focusGeneration] = map[string]any{
-				"generation": int32(generation.GetPokemonGeneration()),
+				"generation": int32(focus.GetGeneration().GetPokemonGeneration()),
 			}
 		}
-		if hatched := focus.GetHatched(); hatched != nil {
+		if focus.HasHatched() {
 			focusStore[focusHatched] = map[string]any{
-				"hatched": hatched.GetRequireToBeHatched(),
+				"hatched": focus.GetHatched().GetRequireToBeHatched(),
 			}
 		}
-		if mega := focus.GetMega(); mega != nil {
+		if focus.HasMega() {
+			mega := focus.GetMega()
 			focusStore[focusMega] = map[string]any{
 				"temp_evolution": int32(mega.GetTemporaryEvolutionRequired()),
 				"restriction":    int32(mega.GetRestriction()),
 			}
 		}
-		if shiny := focus.GetShiny(); shiny != nil {
+		if focus.HasShiny() {
 			focusStore[focusShiny] = map[string]any{
-				"shiny": shiny.GetRequireToBeShiny(),
+				"shiny": focus.GetShiny().GetRequireToBeShiny(),
 			}
 		}
 	}

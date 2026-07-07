@@ -2179,11 +2179,19 @@ func AsBattleResourceProto(m protoreflect.Message) BattleResourceProto {
 
 func (x BattleResourceProto) IsZero() bool { return x.m == nil }
 
+func (x BattleResourceProto) HasItem() bool {
+	return x.m != nil && x.m.Has(fd_BattleResourceProto_item)
+}
+
 func (x BattleResourceProto) GetItem() pogo.Item {
 	if x.m == nil {
 		return pogo.Item(0)
 	}
 	return pogo.Item(x.m.Get(fd_BattleResourceProto_item).Enum())
+}
+
+func (x BattleResourceProto) HasPokemonId() bool {
+	return x.m != nil && x.m.Has(fd_BattleResourceProto_pokemon_id)
 }
 
 func (x BattleResourceProto) GetPokemonId() pogo.HoloPokemonId {
@@ -4599,6 +4607,10 @@ func AsContestMetricProto(m protoreflect.Message) ContestMetricProto {
 
 func (x ContestMetricProto) IsZero() bool { return x.m == nil }
 
+func (x ContestMetricProto) HasPokemonMetric() bool {
+	return x.m != nil && x.m.Has(fd_ContestMetricProto_pokemon_metric)
+}
+
 func (x ContestMetricProto) GetPokemonMetric() pogo.ContestPokemonMetric {
 	if x.m == nil {
 		return pogo.ContestPokemonMetric(0)
@@ -5695,6 +5707,10 @@ func AsEventRsvpTimeslotProto_RsvpPlayer(m protoreflect.Message) EventRsvpTimesl
 
 func (x EventRsvpTimeslotProto_RsvpPlayer) IsZero() bool { return x.m == nil }
 
+func (x EventRsvpTimeslotProto_RsvpPlayer) HasAnonymousCount() bool {
+	return x.m != nil && x.m.Has(fd_EventRsvpTimeslotProto_RsvpPlayer_anonymous_count)
+}
+
 func (x EventRsvpTimeslotProto_RsvpPlayer) GetAnonymousCount() int32 {
 	if x.m == nil {
 		return 0
@@ -5816,11 +5832,19 @@ func AsFollowerPokemonProto(m protoreflect.Message) FollowerPokemonProto {
 
 func (x FollowerPokemonProto) IsZero() bool { return x.m == nil }
 
+func (x FollowerPokemonProto) HasPokemonId() bool {
+	return x.m != nil && x.m.Has(fd_FollowerPokemonProto_pokemon_id)
+}
+
 func (x FollowerPokemonProto) GetPokemonId() pogo.HoloPokemonId {
 	if x.m == nil {
 		return pogo.HoloPokemonId(0)
 	}
 	return pogo.HoloPokemonId(x.m.Get(fd_FollowerPokemonProto_pokemon_id).Enum())
+}
+
+func (x FollowerPokemonProto) HasAddress() bool {
+	return x.m != nil && x.m.Has(fd_FollowerPokemonProto_address)
 }
 
 func (x FollowerPokemonProto) GetAddress() string {
@@ -9418,11 +9442,19 @@ func AsLootItemProto(m protoreflect.Message) LootItemProto {
 
 func (x LootItemProto) IsZero() bool { return x.m == nil }
 
+func (x LootItemProto) HasItem() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_item)
+}
+
 func (x LootItemProto) GetItem() pogo.Item {
 	if x.m == nil {
 		return pogo.Item(0)
 	}
 	return pogo.Item(x.m.Get(fd_LootItemProto_item).Enum())
+}
+
+func (x LootItemProto) HasStardust() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_stardust)
 }
 
 func (x LootItemProto) GetStardust() bool {
@@ -9432,6 +9464,10 @@ func (x LootItemProto) GetStardust() bool {
 	return x.m.Get(fd_LootItemProto_stardust).Bool()
 }
 
+func (x LootItemProto) HasPokecoin() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_pokecoin)
+}
+
 func (x LootItemProto) GetPokecoin() bool {
 	if x.m == nil {
 		return false
@@ -9439,11 +9475,19 @@ func (x LootItemProto) GetPokecoin() bool {
 	return x.m.Get(fd_LootItemProto_pokecoin).Bool()
 }
 
+func (x LootItemProto) HasPokemonCandy() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_pokemon_candy)
+}
+
 func (x LootItemProto) GetPokemonCandy() pogo.HoloPokemonId {
 	if x.m == nil {
 		return pogo.HoloPokemonId(0)
 	}
 	return pogo.HoloPokemonId(x.m.Get(fd_LootItemProto_pokemon_candy).Enum())
+}
+
+func (x LootItemProto) HasExperience() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_experience)
 }
 
 func (x LootItemProto) GetExperience() bool {
@@ -9467,11 +9511,19 @@ func (x LootItemProto) GetPokemonEgg() PokemonProto {
 	return PokemonProto{}
 }
 
+func (x LootItemProto) HasAvatarTemplateId() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_avatar_template_id)
+}
+
 func (x LootItemProto) GetAvatarTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
 	return strings.Clone(x.m.Get(fd_LootItemProto_avatar_template_id).String())
+}
+
+func (x LootItemProto) HasStickerId() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_sticker_id)
 }
 
 func (x LootItemProto) GetStickerId() string {
@@ -9481,11 +9533,19 @@ func (x LootItemProto) GetStickerId() string {
 	return strings.Clone(x.m.Get(fd_LootItemProto_sticker_id).String())
 }
 
+func (x LootItemProto) HasMegaEnergyPokemonId() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_mega_energy_pokemon_id)
+}
+
 func (x LootItemProto) GetMegaEnergyPokemonId() pogo.HoloPokemonId {
 	if x.m == nil {
 		return pogo.HoloPokemonId(0)
 	}
 	return pogo.HoloPokemonId(x.m.Get(fd_LootItemProto_mega_energy_pokemon_id).Enum())
+}
+
+func (x LootItemProto) HasXlCandy() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_xl_candy)
 }
 
 func (x LootItemProto) GetXlCandy() pogo.HoloPokemonId {
@@ -9507,6 +9567,10 @@ func (x LootItemProto) GetFollowerPokemon() FollowerPokemonProto {
 		return FollowerPokemonProto{v}
 	}
 	return FollowerPokemonProto{}
+}
+
+func (x LootItemProto) HasNeutralAvatarTemplateId() bool {
+	return x.m != nil && x.m.Has(fd_LootItemProto_neutral_avatar_template_id)
 }
 
 func (x LootItemProto) GetNeutralAvatarTemplateId() string {
@@ -10360,6 +10424,10 @@ func (x NpcEventProto) GetMultiSelector() MultiSelectorProto {
 		return MultiSelectorProto{v}
 	}
 	return MultiSelectorProto{}
+}
+
+func (x NpcEventProto) HasTutorialFlag() bool {
+	return x.m != nil && x.m.Has(fd_NpcEventProto_tutorial_flag)
 }
 
 func (x NpcEventProto) GetTutorialFlag() pogo.TutorialCompletion {
@@ -12909,11 +12977,19 @@ func AsPokemonEncounterRewardProto(m protoreflect.Message) PokemonEncounterRewar
 
 func (x PokemonEncounterRewardProto) IsZero() bool { return x.m == nil }
 
+func (x PokemonEncounterRewardProto) HasPokemonId() bool {
+	return x.m != nil && x.m.Has(fd_PokemonEncounterRewardProto_pokemon_id)
+}
+
 func (x PokemonEncounterRewardProto) GetPokemonId() pogo.HoloPokemonId {
 	if x.m == nil {
 		return pogo.HoloPokemonId(0)
 	}
 	return pogo.HoloPokemonId(x.m.Get(fd_PokemonEncounterRewardProto_pokemon_id).Enum())
+}
+
+func (x PokemonEncounterRewardProto) HasUseQuestPokemonEncounterDistribuition() bool {
+	return x.m != nil && x.m.Has(fd_PokemonEncounterRewardProto_use_quest_pokemon_encounter_distribuition)
 }
 
 func (x PokemonEncounterRewardProto) GetUseQuestPokemonEncounterDistribuition() bool {
@@ -16546,6 +16622,10 @@ func AsQuestRewardProto(m protoreflect.Message) QuestRewardProto {
 
 func (x QuestRewardProto) IsZero() bool { return x.m == nil }
 
+func (x QuestRewardProto) HasExp() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_exp)
+}
+
 func (x QuestRewardProto) GetExp() int32 {
 	if x.m == nil {
 		return 0
@@ -16565,6 +16645,10 @@ func (x QuestRewardProto) GetItem() ItemRewardProto {
 		return ItemRewardProto{v}
 	}
 	return ItemRewardProto{}
+}
+
+func (x QuestRewardProto) HasStardust() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_stardust)
 }
 
 func (x QuestRewardProto) GetStardust() int32 {
@@ -16588,11 +16672,19 @@ func (x QuestRewardProto) GetCandy() PokemonCandyRewardProto {
 	return PokemonCandyRewardProto{}
 }
 
+func (x QuestRewardProto) HasAvatarTemplateId() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_avatar_template_id)
+}
+
 func (x QuestRewardProto) GetAvatarTemplateId() string {
 	if x.m == nil {
 		return ""
 	}
 	return strings.Clone(x.m.Get(fd_QuestRewardProto_avatar_template_id).String())
+}
+
+func (x QuestRewardProto) HasQuestTemplateId() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_quest_template_id)
 }
 
 func (x QuestRewardProto) GetQuestTemplateId() string {
@@ -16616,6 +16708,10 @@ func (x QuestRewardProto) GetPokemonEncounter() PokemonEncounterRewardProto {
 	return PokemonEncounterRewardProto{}
 }
 
+func (x QuestRewardProto) HasPokecoin() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_pokecoin)
+}
+
 func (x QuestRewardProto) GetPokecoin() int32 {
 	if x.m == nil {
 		return 0
@@ -16635,6 +16731,10 @@ func (x QuestRewardProto) GetXlCandy() PokemonCandyRewardProto {
 		return PokemonCandyRewardProto{v}
 	}
 	return PokemonCandyRewardProto{}
+}
+
+func (x QuestRewardProto) HasLevelCap() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_level_cap)
 }
 
 func (x QuestRewardProto) GetLevelCap() int32 {
@@ -16700,11 +16800,19 @@ func (x QuestRewardProto) GetPlayerAttribute() PlayerAttributeRewardProto {
 	return PlayerAttributeRewardProto{}
 }
 
+func (x QuestRewardProto) HasEventBadgeId() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_event_badge_id)
+}
+
 func (x QuestRewardProto) GetEventBadgeId() pogo.HoloBadgeType {
 	if x.m == nil {
 		return pogo.HoloBadgeType(0)
 	}
 	return pogo.HoloBadgeType(x.m.Get(fd_QuestRewardProto_event_badge_id).Enum())
+}
+
+func (x QuestRewardProto) HasNeutralAvatarTemplateId() bool {
+	return x.m != nil && x.m.Has(fd_QuestRewardProto_neutral_avatar_template_id)
 }
 
 func (x QuestRewardProto) GetNeutralAvatarTemplateId() string {
@@ -18569,11 +18677,19 @@ func AsTappableLocation(m protoreflect.Message) TappableLocation {
 
 func (x TappableLocation) IsZero() bool { return x.m == nil }
 
+func (x TappableLocation) HasSpawnpointId() bool {
+	return x.m != nil && x.m.Has(fd_TappableLocation_spawnpoint_id)
+}
+
 func (x TappableLocation) GetSpawnpointId() string {
 	if x.m == nil {
 		return ""
 	}
 	return strings.Clone(x.m.Get(fd_TappableLocation_spawnpoint_id).String())
+}
+
+func (x TappableLocation) HasFortId() bool {
+	return x.m != nil && x.m.Has(fd_TappableLocation_fort_id)
 }
 
 func (x TappableLocation) GetFortId() string {
@@ -20114,11 +20230,19 @@ func AsWithThrowTypeProto(m protoreflect.Message) WithThrowTypeProto {
 
 func (x WithThrowTypeProto) IsZero() bool { return x.m == nil }
 
+func (x WithThrowTypeProto) HasThrowType() bool {
+	return x.m != nil && x.m.Has(fd_WithThrowTypeProto_throw_type)
+}
+
 func (x WithThrowTypeProto) GetThrowType() pogo.HoloActivityType {
 	if x.m == nil {
 		return pogo.HoloActivityType(0)
 	}
 	return pogo.HoloActivityType(x.m.Get(fd_WithThrowTypeProto_throw_type).Enum())
+}
+
+func (x WithThrowTypeProto) HasHit() bool {
+	return x.m != nil && x.m.Has(fd_WithThrowTypeProto_hit)
 }
 
 func (x WithThrowTypeProto) GetHit() bool {

@@ -11,7 +11,6 @@ import (
 	"golbat/pogoshim"
 
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 func decode(ctx context.Context, method int, protoData *ProtoData) {
@@ -165,104 +164,160 @@ func decodeQuest(ctx context.Context, sDec []byte, haveAr *bool) string {
 	return res
 }
 
+// decodeSocialActionWithRequest is "social"'s three-level nesting: Request
+// (ProxyRequestProto) decodes via proxyReqEngine; INSIDE its closure, Data
+// (ProxyResponseProto) decodes via proxyRespEngine -- both shims (and both
+// arenas, under hyperpb) alive together for the status/action-type checks
+// below. The response's own Payload bytes are opaque until the request's
+// action type is known, so a THIRD decodeWithArena level -- one of
+// friendDetailsEngine/searchPlayerOutEngine, chosen by that action type --
+// happens one call further down in decodeGetFriendDetails/decodeSearchPlayer,
+// all under the same "social" config method key (per-root handles, per Task
+// 1's foundation commit). Only the Request+Data pair is shadow-verified
+// (maybeShadowPair below); see shadowComparePair's engMethodSocial case for
+// why the inner payload types are excluded.
 func decodeSocialActionWithRequest(request []byte, payload []byte) string {
-	var proxyRequestProto pogo.ProxyRequestProto
+	maybeShadowPair(engMethodSocial, request, payload)
+	res, err := decodeWithArena(engMethodSocial, proxyReqEngine, request,
+		pogoshim.AsProxyRequestProto,
+		func(proxyRequestProto pogoshim.ProxyRequestProto) string {
+			innerRes, innerErr := decodeWithArena(engMethodSocial, proxyRespEngine, payload,
+				pogoshim.AsProxyResponseProto,
+				func(proxyResponseProto pogoshim.ProxyResponseProto) string {
+					if proxyResponseProto.GetStatus() != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.GetStatus() != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
+						statsCollector.IncDecodeSocialActionWithRequest("error", "non_success")
+						return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.GetStatus()), proxyResponseProto.GetStatus())
+					}
 
-	if err := proto.Unmarshal(request, &proxyRequestProto); err != nil {
+					switch pogo.InternalSocialAction(proxyRequestProto.GetAction()) {
+					case pogo.InternalSocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
+						statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
+						return decodeGetFriendDetails(proxyResponseProto.GetPayload())
+					case pogo.InternalSocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
+						statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
+						return decodeSearchPlayer(proxyRequestProto, proxyResponseProto.GetPayload())
+					}
+
+					statsCollector.IncDecodeSocialActionWithRequest("ok", "unknown")
+					return fmt.Sprintf("Did not process %s", pogo.InternalSocialAction(proxyRequestProto.GetAction()).String())
+				})
+			if innerErr != nil {
+				log.Errorf("Failed to parse %s", innerErr)
+				statsCollector.IncDecodeSocialActionWithRequest("error", "response_parse")
+				return fmt.Sprintf("Failed to parse %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeSocialActionWithRequest("error", "request_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
+	return res
+}
 
-	var proxyResponseProto pogo.ProxyResponseProto
+// decodeGetFriendDetails is social's third level for
+// SOCIAL_ACTION_LIST_FRIEND_STATUS: the response payload bytes decode as
+// InternalGetFriendDetailsOutProto via friendDetailsEngine. Not
+// shadow-verified on its own (see decodeSocialActionWithRequest's doc
+// comment).
+func decodeGetFriendDetails(payload []byte) string {
+	res, err := decodeWithArena(engMethodSocial, friendDetailsEngine, payload,
+		pogoshim.AsInternalGetFriendDetailsOutProto,
+		func(getFriendDetailsOutProto pogoshim.InternalGetFriendDetailsOutProto) string {
+			friends := getFriendDetailsOutProto.GetFriend()
+			if getFriendDetailsOutProto.GetResult() != pogo.InternalGetFriendDetailsOutProto_SUCCESS || friends.Len() == 0 {
+				statsCollector.IncDecodeGetFriendDetails("error", "non_success")
+				return "unsuccessful get friends details"
+			}
 
-	if err := proto.Unmarshal(payload, &proxyResponseProto); err != nil {
+			failures := 0
+			total := friends.Len()
+
+			for friend := range friends.All() {
+				player := friend.GetPlayer()
+
+				// player.GetPublicData() gracefully degrades to a zero shim
+				// if PublicData is absent -- the pre-shim code's direct
+				// player.PublicData field access would nil-panic here if
+				// player were a nil *pogo.InternalPlayerSummaryProto (never
+				// observed on real SUCCESS payloads, same latent-panic-removal
+				// class as every prior wave's shim conversions).
+				updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.GetPublicData(), "", player.GetPlayerId())
+				if updatePlayerError != nil {
+					failures++
+				}
+			}
+
+			statsCollector.IncDecodeGetFriendDetails("ok", "")
+			return fmt.Sprintf("%d players decoded on %d", total-failures, total)
+		})
+	if err != nil {
+		statsCollector.IncDecodeGetFriendDetails("error", "parse")
 		log.Errorf("Failed to parse %s", err)
-		statsCollector.IncDecodeSocialActionWithRequest("error", "response_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED && proxyResponseProto.Status != pogo.ProxyResponseProto_COMPLETED_AND_REASSIGNED {
-		statsCollector.IncDecodeSocialActionWithRequest("error", "non_success")
-		return fmt.Sprintf("unsuccessful proxyResponseProto response %d %s", int(proxyResponseProto.Status), proxyResponseProto.Status)
-	}
-
-	switch pogo.InternalSocialAction(proxyRequestProto.GetAction()) {
-	case pogo.InternalSocialAction_SOCIAL_ACTION_LIST_FRIEND_STATUS:
-		statsCollector.IncDecodeSocialActionWithRequest("ok", "list_friend_status")
-		return decodeGetFriendDetails(proxyResponseProto.Payload)
-	case pogo.InternalSocialAction_SOCIAL_ACTION_SEARCH_PLAYER:
-		statsCollector.IncDecodeSocialActionWithRequest("ok", "search_player")
-		return decodeSearchPlayer(&proxyRequestProto, proxyResponseProto.Payload)
-
-	}
-
-	statsCollector.IncDecodeSocialActionWithRequest("ok", "unknown")
-	return fmt.Sprintf("Did not process %s", pogo.InternalSocialAction(proxyRequestProto.GetAction()).String())
+	return res
 }
 
-func decodeGetFriendDetails(payload []byte) string {
-	var getFriendDetailsOutProto pogo.InternalGetFriendDetailsOutProto
-	getFriendDetailsError := proto.Unmarshal(payload, &getFriendDetailsOutProto)
+// decodeSearchPlayer is social's third level for SOCIAL_ACTION_SEARCH_PLAYER:
+// the response payload decodes as InternalSearchPlayerOutProto via
+// searchPlayerOutEngine, and -- nested inside that, a fourth arena, since the
+// friend code lives in the ORIGINAL request's own payload bytes, not
+// anywhere reachable from the response -- proxyRequestProto's Payload
+// re-decodes as InternalSearchPlayerProto via searchPlayerReqEngine. Neither
+// is shadow-verified on its own (see decodeSocialActionWithRequest's doc
+// comment).
+func decodeSearchPlayer(proxyRequestProto pogoshim.ProxyRequestProto, payload []byte) string {
+	res, err := decodeWithArena(engMethodSocial, searchPlayerOutEngine, payload,
+		pogoshim.AsInternalSearchPlayerOutProto,
+		func(searchPlayerOutProto pogoshim.InternalSearchPlayerOutProto) string {
+			if searchPlayerOutProto.GetResult() != pogo.InternalSearchPlayerOutProto_SUCCESS || !searchPlayerOutProto.HasPlayer() {
+				statsCollector.IncDecodeSearchPlayer("error", "non_success")
+				return "unsuccessful search player response"
+			}
 
-	if getFriendDetailsError != nil {
-		statsCollector.IncDecodeGetFriendDetails("error", "parse")
-		log.Errorf("Failed to parse %s", getFriendDetailsError)
-		return fmt.Sprintf("Failed to parse %s", getFriendDetailsError)
-	}
+			// proxyRequestProto.GetPayload() is already a bytes.Clone'd copy
+			// (pogoshim's BytesKind getter convention), so it's safe to reuse
+			// even though it was originally read from the OUTER
+			// decodeSocialActionWithRequest arena.
+			innerRes, innerErr := decodeWithArena(engMethodSocial, searchPlayerReqEngine, proxyRequestProto.GetPayload(),
+				pogoshim.AsInternalSearchPlayerProto,
+				func(searchPlayerProto pogoshim.InternalSearchPlayerProto) string {
+					if searchPlayerProto.GetFriendCode() == "" {
+						statsCollector.IncDecodeSearchPlayer("error", "parse")
+						// Replicates the pre-shim code's
+						// fmt.Sprintf("Failed to parse %s", searchPlayerError)
+						// in the branch where unmarshal succeeded but
+						// FriendCode was empty -- searchPlayerError is nil
+						// there, and Go's fmt renders a nil error via %s as
+						// "%!s(<nil>)".
+						var nilErr error
+						return fmt.Sprintf("Failed to parse %s", nilErr)
+					}
 
-	if getFriendDetailsOutProto.GetResult() != pogo.InternalGetFriendDetailsOutProto_SUCCESS || getFriendDetailsOutProto.GetFriend() == nil {
-		statsCollector.IncDecodeGetFriendDetails("error", "non_success")
-		return "unsuccessful get friends details"
-	}
+					player := searchPlayerOutProto.GetPlayer()
+					updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.GetPublicData(), searchPlayerProto.GetFriendCode(), "")
+					if updatePlayerError != nil {
+						statsCollector.IncDecodeSearchPlayer("error", "update")
+						return fmt.Sprintf("Failed update player %s", updatePlayerError)
+					}
 
-	failures := 0
-
-	for _, friend := range getFriendDetailsOutProto.GetFriend() {
-		player := friend.GetPlayer()
-
-		updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, "", player.GetPlayerId())
-		if updatePlayerError != nil {
-			failures++
-		}
-	}
-
-	statsCollector.IncDecodeGetFriendDetails("ok", "")
-	return fmt.Sprintf("%d players decoded on %d", len(getFriendDetailsOutProto.GetFriend())-failures, len(getFriendDetailsOutProto.GetFriend()))
-}
-
-func decodeSearchPlayer(proxyRequestProto *pogo.ProxyRequestProto, payload []byte) string {
-	var searchPlayerOutProto pogo.InternalSearchPlayerOutProto
-	searchPlayerOutError := proto.Unmarshal(payload, &searchPlayerOutProto)
-
-	if searchPlayerOutError != nil {
-		log.Errorf("Failed to parse %s", searchPlayerOutError)
+					statsCollector.IncDecodeSearchPlayer("ok", "")
+					return "1 player decoded from SearchPlayerProto"
+				})
+			if innerErr != nil {
+				statsCollector.IncDecodeSearchPlayer("error", "parse")
+				return fmt.Sprintf("Failed to parse %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
+		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeSearchPlayer("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", searchPlayerOutError)
+		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if searchPlayerOutProto.GetResult() != pogo.InternalSearchPlayerOutProto_SUCCESS || searchPlayerOutProto.GetPlayer() == nil {
-		statsCollector.IncDecodeSearchPlayer("error", "non_success")
-		return "unsuccessful search player response"
-	}
-
-	var searchPlayerProto pogo.InternalSearchPlayerProto
-	searchPlayerError := proto.Unmarshal(proxyRequestProto.GetPayload(), &searchPlayerProto)
-
-	if searchPlayerError != nil || searchPlayerProto.GetFriendCode() == "" {
-		statsCollector.IncDecodeSearchPlayer("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", searchPlayerError)
-	}
-
-	player := searchPlayerOutProto.GetPlayer()
-	updatePlayerError := decoder.UpdatePlayerRecordWithPlayerSummary(dbDetails, player, player.PublicData, searchPlayerProto.GetFriendCode(), "")
-	if updatePlayerError != nil {
-		statsCollector.IncDecodeSearchPlayer("error", "update")
-		return fmt.Sprintf("Failed update player %s", updatePlayerError)
-	}
-
-	statsCollector.IncDecodeSearchPlayer("ok", "")
-	return "1 player decoded from SearchPlayerProto"
+	return res
 }
 
 func decodeFortDetails(ctx context.Context, sDec []byte) string {
@@ -665,142 +720,219 @@ func isCellNotEmpty(cell pogoshim.ClientMapCellProto) bool {
 	return cell.GetStations().Len() > 0 || cell.GetFort().Len() > 0 || cell.GetWildPokemon().Len() > 0 || cell.GetNearbyPokemon().Len() > 0 || cell.GetCatchablePokemon().Len() > 0
 }
 
+// decodeGetContestData is the first of Task 4's five request-optional
+// request+data methods (contest_data, size_contest_entry, station_details,
+// tappable, event_rsvps). Their shape is the mirror image of
+// decodeOpenInvasion's mandatory-request template (see that function's doc
+// comment): Data is the OUTER decode (always present on the wire) and
+// Request is the INNER, OPTIONAL decode -- request can legitimately be nil,
+// in which case a zero-value request shim stands in (IsZero()==true, every
+// Get* chains to its zero default), matching the pre-shim code's
+// always-non-nil-but-possibly-unpopulated *pogo.XxxProto pointer exactly.
+// maybeShadowPair runs unconditionally (even with a nil request): decoding
+// zero-length bytes is well-defined and identical across engines, so the
+// composite digest still meaningfully verifies the Data half every time.
 func decodeGetContestData(ctx context.Context, request []byte, data []byte) string {
-	var decodedContestData pogo.GetContestDataOutProto
-	if err := proto.Unmarshal(data, &decodedContestData); err != nil {
+	maybeShadowPair(engMethodContestData, request, data)
+	res, err := decodeWithArena(engMethodContestData, contestDataEngine, data,
+		pogoshim.AsGetContestDataOutProto,
+		func(decodedContestData pogoshim.GetContestDataOutProto) string {
+			if request == nil {
+				return decoder.UpdatePokestopWithContestData(ctx, dbDetails, pogoshim.GetContestDataProto{}, decodedContestData)
+			}
+			innerRes, innerErr := decodeWithArena(engMethodContestData, contestDataReqEngine, request,
+				pogoshim.AsGetContestDataProto,
+				func(decodedRequest pogoshim.GetContestDataProto) string {
+					return decoder.UpdatePokestopWithContestData(ctx, dbDetails, decodedRequest, decodedContestData)
+				})
+			if innerErr != nil {
+				log.Errorf("Failed to parse GetContestDataProto %s", innerErr)
+				return fmt.Sprintf("Failed to parse GetContestDataProto %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse GetContestDataOutProto %s", err)
 		return fmt.Sprintf("Failed to parse GetContestDataOutProto %s", err)
 	}
-
-	var decodedContestDataRequest pogo.GetContestDataProto
-	if request != nil {
-		if err := proto.Unmarshal(request, &decodedContestDataRequest); err != nil {
-			log.Errorf("Failed to parse GetContestDataProto %s", err)
-			return fmt.Sprintf("Failed to parse GetContestDataProto %s", err)
-		}
-	}
-	return decoder.UpdatePokestopWithContestData(ctx, dbDetails, &decodedContestDataRequest, &decodedContestData)
+	return res
 }
 
+// decodeGetPokemonSizeContestEntry follows decodeGetContestData's
+// request-optional shape (see its doc comment). Note the error text below
+// says "...OutProto..." for BOTH the outer AND inner parse failures -- that
+// mismatched label is inherited byte-for-byte from the pre-shim code, which
+// used the same (technically wrong, since the inner failure is actually the
+// non-Out request proto) message for both.
 func decodeGetPokemonSizeContestEntry(ctx context.Context, request []byte, data []byte) string {
-	var decodedPokemonSizeContestEntry pogo.GetPokemonSizeLeaderboardEntryOutProto
-	if err := proto.Unmarshal(data, &decodedPokemonSizeContestEntry); err != nil {
+	maybeShadowPair(engMethodSizeContestEntry, request, data)
+	res, err := decodeWithArena(engMethodSizeContestEntry, sizeEntryEngine, data,
+		pogoshim.AsGetPokemonSizeLeaderboardEntryOutProto,
+		func(decodedEntry pogoshim.GetPokemonSizeLeaderboardEntryOutProto) string {
+			if decodedEntry.GetStatus() != pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS {
+				return fmt.Sprintf("Ignored GetPokemonSizeLeaderboardEntryOutProto non-success status %s", decodedEntry.GetStatus())
+			}
+
+			if request == nil {
+				return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, pogoshim.GetPokemonSizeLeaderboardEntryProto{}, decodedEntry)
+			}
+			innerRes, innerErr := decodeWithArena(engMethodSizeContestEntry, sizeEntryReqEngine, request,
+				pogoshim.AsGetPokemonSizeLeaderboardEntryProto,
+				func(decodedRequest pogoshim.GetPokemonSizeLeaderboardEntryProto) string {
+					return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, decodedRequest, decodedEntry)
+				})
+			if innerErr != nil {
+				log.Errorf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", innerErr)
+				return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
 		return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
 	}
-
-	if decodedPokemonSizeContestEntry.Status != pogo.GetPokemonSizeLeaderboardEntryOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetPokemonSizeLeaderboardEntryOutProto non-success status %s", decodedPokemonSizeContestEntry.Status)
-	}
-
-	var decodedPokemonSizeContestEntryRequest pogo.GetPokemonSizeLeaderboardEntryProto
-	if request != nil {
-		if err := proto.Unmarshal(request, &decodedPokemonSizeContestEntryRequest); err != nil {
-			log.Errorf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
-			return fmt.Sprintf("Failed to parse GetPokemonSizeLeaderboardEntryOutProto %s", err)
-		}
-	}
-
-	return decoder.UpdatePokestopWithPokemonSizeContestEntry(ctx, dbDetails, &decodedPokemonSizeContestEntryRequest, &decodedPokemonSizeContestEntry)
+	return res
 }
 
+// decodeGetStationDetails follows decodeGetContestData's request-optional
+// shape (see its doc comment).
 func decodeGetStationDetails(ctx context.Context, request []byte, data []byte) string {
-	var decodedGetStationDetails pogo.GetStationedPokemonDetailsOutProto
-	if err := proto.Unmarshal(data, &decodedGetStationDetails); err != nil {
+	maybeShadowPair(engMethodStationDetails, request, data)
+	res, err := decodeWithArena(engMethodStationDetails, stationDetailsEngine, data,
+		pogoshim.AsGetStationedPokemonDetailsOutProto,
+		func(decodedDetails pogoshim.GetStationedPokemonDetailsOutProto) string {
+			process := func(decodedRequest pogoshim.GetStationedPokemonDetailsProto) string {
+				if decodedDetails.GetResult() == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
+					// station without stationed pokemon found, therefore we need to reset the columns
+					return decoder.ResetStationedPokemonWithStationDetailsNotFound(ctx, dbDetails, decodedRequest)
+				} else if decodedDetails.GetResult() != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
+					return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedDetails.GetResult())
+				}
+				return decoder.UpdateStationWithStationDetails(ctx, dbDetails, decodedRequest, decodedDetails)
+			}
+			if request == nil {
+				return process(pogoshim.GetStationedPokemonDetailsProto{})
+			}
+			innerRes, innerErr := decodeWithArena(engMethodStationDetails, stationDetailsReqEngine, request,
+				pogoshim.AsGetStationedPokemonDetailsProto, process)
+			if innerErr != nil {
+				log.Errorf("Failed to parse GetStationedPokemonDetailsProto %s", innerErr)
+				return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsProto %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
 		return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsOutProto %s", err)
 	}
-
-	var decodedGetStationDetailsRequest pogo.GetStationedPokemonDetailsProto
-	if request != nil {
-		if err := proto.Unmarshal(request, &decodedGetStationDetailsRequest); err != nil {
-			log.Errorf("Failed to parse GetStationedPokemonDetailsProto %s", err)
-			return fmt.Sprintf("Failed to parse GetStationedPokemonDetailsProto %s", err)
-		}
-	}
-
-	if decodedGetStationDetails.Result == pogo.GetStationedPokemonDetailsOutProto_STATION_NOT_FOUND {
-		// station without stationed pokemon found, therefore we need to reset the columns
-		return decoder.ResetStationedPokemonWithStationDetailsNotFound(ctx, dbDetails, &decodedGetStationDetailsRequest)
-	} else if decodedGetStationDetails.Result != pogo.GetStationedPokemonDetailsOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetStationedPokemonDetailsOutProto non-success status %s", decodedGetStationDetails.Result)
-	}
-
-	return decoder.UpdateStationWithStationDetails(ctx, dbDetails, &decodedGetStationDetailsRequest, &decodedGetStationDetails)
+	return res
 }
 
+// decodeTappable follows decodeGetContestData's request-optional shape (see
+// its doc comment). Note the leading space in "result + \" \" + ...": when
+// there's no encounter, result stays "" and the returned string still starts
+// with a literal space -- preserved byte-for-byte from the pre-shim code.
 func decodeTappable(ctx context.Context, request, data []byte, username string, timestampMs int64) string {
-	var tappable pogo.ProcessTappableOutProto
-	if err := proto.Unmarshal(data, &tappable); err != nil {
+	maybeShadowPair(engMethodTappable, request, data)
+	res, err := decodeWithArena(engMethodTappable, tappableEngine, data,
+		pogoshim.AsProcessTappableOutProto,
+		func(tappable pogoshim.ProcessTappableOutProto) string {
+			process := func(tappableRequest pogoshim.ProcessTappableProto) string {
+				if tappable.GetStatus() != pogo.ProcessTappableOutProto_SUCCESS {
+					return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.GetStatus())
+				}
+				var result string
+				if tappable.HasEncounter() {
+					result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, tappableRequest, tappable.GetEncounter(), username, timestampMs)
+				}
+				return result + " " + decoder.UpdateTappable(ctx, dbDetails, tappableRequest, tappable, timestampMs)
+			}
+			if request == nil {
+				return process(pogoshim.ProcessTappableProto{})
+			}
+			innerRes, innerErr := decodeWithArena(engMethodTappable, tappableReqEngine, request,
+				pogoshim.AsProcessTappableProto, process)
+			if innerErr != nil {
+				log.Errorf("Failed to parse %s", innerErr)
+				return fmt.Sprintf("Failed to parse ProcessTappableProto %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse ProcessTappableOutProto %s", err)
 	}
-
-	var tappableRequest pogo.ProcessTappableProto
-	if request != nil {
-		if err := proto.Unmarshal(request, &tappableRequest); err != nil {
-			log.Errorf("Failed to parse %s", err)
-			return fmt.Sprintf("Failed to parse ProcessTappableProto %s", err)
-		}
-	}
-
-	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
-	}
-	var result string
-	if encounter := tappable.GetEncounter(); encounter != nil {
-		result = decoder.UpdatePokemonRecordWithTappableEncounter(ctx, dbDetails, &tappableRequest, encounter, username, timestampMs)
-	}
-	return result + " " + decoder.UpdateTappable(ctx, dbDetails, &tappableRequest, &tappable, timestampMs)
+	return res
 }
 
+// decodeGetEventRsvp follows decodeGetContestData's request-optional shape
+// (see its doc comment). The RSVP oneof (EventDetails: Raid vs GmaxBattle)
+// uses the generated Has/Get accessors directly -- no manual oneof-type
+// handling needed, matching Wave 2 Task 5's precedent for message-typed
+// oneof members.
 func decodeGetEventRsvp(ctx context.Context, request []byte, data []byte) string {
-	var rsvp pogo.GetEventRsvpsOutProto
-	if err := proto.Unmarshal(data, &rsvp); err != nil {
+	maybeShadowPair(engMethodEventRsvps, request, data)
+	res, err := decodeWithArena(engMethodEventRsvps, rsvpEngine, data,
+		pogoshim.AsGetEventRsvpsOutProto,
+		func(rsvp pogoshim.GetEventRsvpsOutProto) string {
+			process := func(rsvpRequest pogoshim.GetEventRsvpsProto) string {
+				if rsvp.GetStatus() != pogo.GetEventRsvpsOutProto_SUCCESS {
+					return fmt.Sprintf("Ignored GetEventRsvpsOutProto non-success status %s", rsvp.GetStatus())
+				}
+
+				switch {
+				case rsvpRequest.HasRaid():
+					return decoder.UpdateGymRecordWithRsvpProto(ctx, dbDetails, rsvpRequest.GetRaid(), rsvp)
+				case rsvpRequest.HasGmaxBattle():
+					return "Unsupported GmaxBattle Rsvp received"
+				}
+
+				return "Failed to parse GetEventRsvpsProto - unknown event type"
+			}
+			if request == nil {
+				return process(pogoshim.GetEventRsvpsProto{})
+			}
+			innerRes, innerErr := decodeWithArena(engMethodEventRsvps, rsvpReqEngine, request,
+				pogoshim.AsGetEventRsvpsProto, process)
+			if innerErr != nil {
+				log.Errorf("Failed to parse %s", innerErr)
+				return fmt.Sprintf("Failed to parse GetEventRsvpsProto %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse GetEventRsvpsOutProto %s", err)
 	}
-
-	var rsvpRequest pogo.GetEventRsvpsProto
-	if request != nil {
-		if err := proto.Unmarshal(request, &rsvpRequest); err != nil {
-			log.Errorf("Failed to parse %s", err)
-			return fmt.Sprintf("Failed to parse GetEventRsvpsProto %s", err)
-		}
-	}
-
-	if rsvp.Status != pogo.GetEventRsvpsOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetEventRsvpsOutProto non-success status %s", rsvp.Status)
-	}
-
-	switch op := rsvpRequest.EventDetails.(type) {
-	case *pogo.GetEventRsvpsProto_Raid:
-		return decoder.UpdateGymRecordWithRsvpProto(ctx, dbDetails, op.Raid, &rsvp)
-	case *pogo.GetEventRsvpsProto_GmaxBattle:
-		return "Unsupported GmaxBattle Rsvp received"
-	}
-
-	return "Failed to parse GetEventRsvpsProto - unknown event type"
+	return res
 }
 
+// decodeGetEventRsvpCount reads only LocationId/MaybeCount/GoingCount -- no
+// request proto at all -- but is migrated for uniformity with the rest of
+// this wave. genericShadowEngine already wires engMethodEventRsvpCount to
+// rsvpCountEngine (Task 1's foundation commit).
 func decodeGetEventRsvpCount(ctx context.Context, data []byte) string {
-	var rsvp pogo.GetEventRsvpCountOutProto
-	if err := proto.Unmarshal(data, &rsvp); err != nil {
+	maybeShadow(engMethodEventRsvpCount, data)
+	res, err := decodeWithArena(engMethodEventRsvpCount, rsvpCountEngine, data,
+		pogoshim.AsGetEventRsvpCountOutProto,
+		func(rsvp pogoshim.GetEventRsvpCountOutProto) string {
+			if rsvp.GetStatus() != pogo.GetEventRsvpCountOutProto_SUCCESS {
+				return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.GetStatus())
+			}
+
+			var clearLocations []string
+			for rsvpDetails := range rsvp.GetRsvpDetails().All() {
+				if rsvpDetails.GetMaybeCount() == 0 && rsvpDetails.GetGoingCount() == 0 {
+					clearLocations = append(clearLocations, rsvpDetails.GetLocationId())
+					decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.GetLocationId())
+				}
+			}
+
+			return "Cleared RSVP @ " + strings.Join(clearLocations, ", ")
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		return fmt.Sprintf("Failed to parse GetEventRsvpCountOutProto %s", err)
 	}
-
-	if rsvp.Status != pogo.GetEventRsvpCountOutProto_SUCCESS {
-		return fmt.Sprintf("Ignored GetEventRsvpCountOutProto non-success status %s", rsvp.Status)
-	}
-
-	var clearLocations []string
-	for _, rsvpDetails := range rsvp.RsvpDetails {
-		if rsvpDetails.MaybeCount == 0 && rsvpDetails.GoingCount == 0 {
-			clearLocations = append(clearLocations, rsvpDetails.LocationId)
-			decoder.ClearGymRsvp(ctx, dbDetails, rsvpDetails.LocationId)
-		}
-	}
-
-	return "Cleared RSVP @ " + strings.Join(clearLocations, ", ")
+	return res
 }

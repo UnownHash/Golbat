@@ -7,7 +7,6 @@ import (
 	"github.com/guregu/null/v6"
 
 	"golbat/db"
-	"golbat/pogo"
 	"golbat/pogoshim"
 )
 
@@ -57,15 +56,15 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req *pogo.RaidDetails, resp *pogo.GetEventRsvpsOutProto) string {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, req.FortId, "UpdateGymWithRsvp")
+func UpdateGymRecordWithRsvpProto(ctx context.Context, db db.DbDetails, req pogoshim.RaidDetails, resp pogoshim.GetEventRsvpsOutProto) string {
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, req.GetFortId(), "UpdateGymWithRsvp")
 	if err != nil {
 		return err.Error()
 	}
 
 	if gym == nil {
 		// Do not add RSVP details to unknown gyms
-		return fmt.Sprintf("%s Gym not present", req.FortId)
+		return fmt.Sprintf("%s Gym not present", req.GetFortId())
 	}
 	defer unlock()
 

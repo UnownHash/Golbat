@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"golbat/db"
-	"golbat/pogo"
 	"golbat/pogoshim"
 
 	log "github.com/sirupsen/logrus"
@@ -75,7 +74,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.GetPokemon().GetCp())
 }
 
-func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounter *pogo.TappableEncounterProto, username string, timestampMs int64) string {
+func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetails, request pogoshim.ProcessTappableProto, encounter pogoshim.TappableEncounterProto, username string, timestampMs int64) string {
 	encounterId := request.GetEncounterId()
 
 	pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonFromTappableEncounter")
@@ -91,5 +90,5 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 	// even if we have the pokemon record already.
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
 
-	return fmt.Sprintf("%d Tappable Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
+	return fmt.Sprintf("%d Tappable Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.GetPokemon().GetCp())
 }

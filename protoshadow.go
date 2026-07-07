@@ -117,9 +117,10 @@ func genericShadowEngine(method string) *protoEngineHandle {
 //
 // Some methods carry a request proto and a data/response proto as two
 // independent wire payloads sharing one config method key -- open_invasion
-// today (OpenInvasionCombatSessionProto + OpenInvasionCombatSessionOutProto),
-// more in Task 4 (contest_data, size_contest_entry, station_details,
-// tappable, event_rsvps, social). genericShadowEngine can't express this: it
+// (OpenInvasionCombatSessionProto + OpenInvasionCombatSessionOutProto), and
+// Task 4's contest_data, size_contest_entry, station_details, tappable,
+// event_rsvps, and social (Request+Response only -- see its switch case
+// below). genericShadowEngine can't express this: it
 // maps a method to exactly ONE *protoEngineHandle. maybeShadowPair/
 // shadowComparePair/compareDigestPair below are the composite escape hatch --
 // this is the "composite note" referenced by shadowCompare's and
@@ -159,6 +160,30 @@ func shadowComparePair(method string, request, data []byte) bool {
 	switch method {
 	case engMethodOpenInvasion:
 		return compareDigestPair(openInvasionReqEngine, request, openInvasionEngine, data)
+	case engMethodContestData:
+		return compareDigestPair(contestDataReqEngine, request, contestDataEngine, data)
+	case engMethodSizeContestEntry:
+		return compareDigestPair(sizeEntryReqEngine, request, sizeEntryEngine, data)
+	case engMethodStationDetails:
+		return compareDigestPair(stationDetailsReqEngine, request, stationDetailsEngine, data)
+	case engMethodTappable:
+		return compareDigestPair(tappableReqEngine, request, tappableEngine, data)
+	case engMethodEventRsvps:
+		return compareDigestPair(rsvpReqEngine, request, rsvpEngine, data)
+	case engMethodSocial:
+		// Composite covers Request (ProxyRequestProto) + Data
+		// (ProxyResponseProto) only. The response's Payload bytes decode as
+		// one of several inner proto types chosen by the request's action
+		// type (InternalGetFriendDetailsOutProto vs
+		// InternalSearchPlayerOutProto+InternalSearchPlayerProto) -- shadow
+		// verifying those would mean re-implementing the same action-type
+		// dispatch decodeSocialActionWithRequest already does, and an action
+		// type this switch doesn't recognize is a normal "Did not process"
+		// outcome, not a divergence to catch. Request+Response is the pair
+		// that's genuinely comparable between engines without that
+		// ambiguity; the two inner payload types are an accepted shadow
+		// coverage gap (see decodeSocialActionWithRequest's doc comment).
+		return compareDigestPair(proxyReqEngine, request, proxyRespEngine, data)
 	default:
 		return true
 	}
