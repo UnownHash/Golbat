@@ -43,6 +43,12 @@ func PreservePokemonToDatabase(dbDetails db.DbDetails) {
 	startTime := time.Now()
 	now := time.Now().Unix()
 
+	// Upper bound: expired-but-unswept entries are skipped during the walk.
+	// Logged so operators can size their process manager's kill window —
+	// preservation is useless if the process is SIGKILLed mid-save.
+	total := int64(pokemonCache.Len())
+	log.Infof("PreservePokemon: preserving up to %d cached pokemon (expired entries will be skipped)", total)
+
 	var saved, skipped, errored atomic.Int64
 	ctx := context.Background()
 
@@ -63,7 +69,15 @@ func PreservePokemonToDatabase(dbDetails db.DbDetails) {
 					errored.Add(int64(len(batch)))
 				} else {
 					if s := saved.Add(int64(len(batch))); s%10000 == 0 {
-						log.Infof("PreservePokemon: saved %d pokemon...", s)
+						elapsed := time.Since(startTime)
+						rate := float64(s) / elapsed.Seconds()
+						remaining := total - s - skipped.Load()
+						if remaining < 0 {
+							remaining = 0
+						}
+						eta := time.Duration(float64(remaining)/rate) * time.Second
+						log.Infof("PreservePokemon: saved %d/~%d pokemon (%.0f rows/s, ~%s remaining)",
+							s, total, rate, eta.Round(time.Second))
 					}
 				}
 			}
