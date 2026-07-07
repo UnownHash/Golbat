@@ -16,9 +16,19 @@ import (
 	"golbat/cache"
 )
 
+// PokemonLookupCacheItem holds the scan-filter data INLINE BY VALUE.
+// The scan path loads one of these per candidate (15-20M/s in production
+// profiles, 14% of CPU); with pointer fields each candidate cost up to
+// three dependent DRAM misses (map node -> lookup -> pvp) and the map
+// carried 2 heap objects per entry (20M pointees, 1.4x this structure's
+// GC mark cost — see cachebench/lookup_bench_test.go: inline layout is
+// 3.2x faster at production concurrency). Validity flags replace the nil
+// checks.
 type PokemonLookupCacheItem struct {
-	PokemonLookup    *PokemonLookup
-	PokemonPvpLookup *PokemonPvpLookup
+	PokemonLookup    PokemonLookup
+	PokemonPvpLookup PokemonPvpLookup
+	HasLookup        bool
+	HasPvp           bool
 }
 
 type PokemonLookup struct {
@@ -165,7 +175,7 @@ func handlePokemonEviction(pokemon *Pokemon) {
 		// — its owner maintains the lookup/tree entries now.
 		return
 	}
-	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
+	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.HasLookup {
 		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
 	}
 	// Non-blocking: eviction callbacks are one goroutine per item and this
@@ -228,11 +238,12 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	// Track old form key so we can adjust counts
 	var oldKey pokemonFormKey
-	if existed && pokemonLookupCacheItem.PokemonLookup != nil {
+	if existed && pokemonLookupCacheItem.HasLookup {
 		oldKey = pokemonFormKey{pokemonLookupCacheItem.PokemonLookup.PokemonId, pokemonLookupCacheItem.PokemonLookup.Form}
 	}
 
-	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
+	pokemonLookupCacheItem.HasLookup = true
+	pokemonLookupCacheItem.PokemonLookup = PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
 		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
 		Weather:            int8(valueOrMinus1(pokemon.Weather)),
@@ -255,7 +266,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	}
 
 	if changePvp {
-		pokemonLookupCacheItem.PokemonPvpLookup = calculatePokemonPvpLookup(pokemon, pvpResults)
+		if pvp, ok := calculatePokemonPvpLookup(pokemon, pvpResults); ok {
+			pokemonLookupCacheItem.PokemonPvpLookup = pvp
+			pokemonLookupCacheItem.HasPvp = true
+		} else {
+			pokemonLookupCacheItem.PokemonPvpLookup = PokemonPvpLookup{}
+			pokemonLookupCacheItem.HasPvp = false
+		}
 	}
 
 	pokemonLookupCache.Store(pokemonId, pokemonLookupCacheItem)
@@ -272,9 +289,9 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	return existed
 }
 
-func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
+func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) (PokemonPvpLookup, bool) {
 	if pvpResults == nil {
-		return nil
+		return PokemonPvpLookup{}, false
 	}
 
 	pvpStore := make(map[string]int16)
@@ -304,11 +321,11 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 		return 4096
 	}
 
-	return &PokemonPvpLookup{
+	return PokemonPvpLookup{
 		Little: bestValue("little"),
 		Great:  bestValue("great"),
 		Ultra:  bestValue("ultra"),
-	}
+	}, true
 }
 
 func addPokemonToTree(pokemon *Pokemon) {

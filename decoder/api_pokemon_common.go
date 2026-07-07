@@ -93,19 +93,28 @@ func internalGetPokemonInArea[F any](
 		// The shared snapshot can briefly hold duplicate points for one id
 		// (eviction delete still queued while a save re-added the point).
 		seen := make(map[uint64]struct{})
+		// Hoisted outside the closure: its address is passed to the
+		// (indirect) matcher call, which would otherwise heap-escape a
+		// fresh copy per candidate. One escape per scan, reused for all
+		// candidates, keeps the hot line resident.
+		var pokemonLookupItem PokemonLookupCacheItem
 		pokemonTree2.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
 
-				pokemonLookupItem, found := pokemonLookupCache.Load(pokemonId)
+				var found bool
+				pokemonLookupItem, found = pokemonLookupCache.Load(pokemonId)
 				if !found {
 					pokemonSkipped++
 					// Did not find cached result, something amiss?
 					return true
 				}
 
-				pokemonLookup := pokemonLookupItem.PokemonLookup
-				pvpLookup := pokemonLookupItem.PokemonPvpLookup
+				pokemonLookup := &pokemonLookupItem.PokemonLookup
+				var pvpLookup *PokemonPvpLookup
+				if pokemonLookupItem.HasPvp {
+					pvpLookup = &pokemonLookupItem.PokemonPvpLookup
+				}
 
 				matched := false
 
