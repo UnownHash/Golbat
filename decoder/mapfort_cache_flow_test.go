@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"buf.build/go/hyperpb"
-	"golbat/cache"
+	"golbat/ottercache"
 	"google.golang.org/protobuf/proto"
 
 	"golbat/pogo"
@@ -39,7 +39,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 		// extract while the shim (and any arena backing it) is alive, then
 		// store only the plain-value summary.
 		summary := mapFortSummaryFromShim(shim)
-		getMapFortsCache.Set(id, summary, cache.DefaultTTL)
+		getMapFortsCache.Set(id, summary, ottercache.DefaultTTL)
 
 		gym := &Gym{GymData: GymData{Id: id}}
 		updateGymGetMapFortCache(gym, false)
@@ -64,7 +64,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 
 	runPokestop := func(name, id string, shim pogoshim.GetMapFortsOutProto_FortProto) {
 		summary := mapFortSummaryFromShim(shim)
-		getMapFortsCache.Set(id, summary, cache.DefaultTTL)
+		getMapFortsCache.Set(id, summary, ottercache.DefaultTTL)
 
 		stop := &Pokestop{PokestopData: PokestopData{Id: id}}
 		updatePokestopGetMapFortCache(stop)
@@ -102,7 +102,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 	}
 	summary := mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(msg.ProtoReflect()))
 	shared.Free() // arena freed BEFORE the cache Set/consume below
-	getMapFortsCache.Set("GYM_HYPER", summary, cache.DefaultTTL)
+	getMapFortsCache.Set("GYM_HYPER", summary, ottercache.DefaultTTL)
 	gym := &Gym{GymData: GymData{Id: "GYM_HYPER"}}
 	updateGymGetMapFortCache(gym, false)
 	if got, want := gym.Name.ValueOrZero(), "Cached Fort"; got != want {
