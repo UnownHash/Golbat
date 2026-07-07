@@ -1,5 +1,17 @@
 package cachebench
 
+// PRODUCTION TRANSFER NOTE (2026-07-07): these benches predicted 3.2x on
+// the parallel fetch+match path; the deployed change delivered 1.17x on the
+// production treatment band (still ~3.5% of total CPU — kept). The gap:
+// (1) xsync entries remain behind one pointer, so inlining removed the
+// EXTRA pointee hops, not the fundamental entry fetch — that cost
+// consolidated into Map.Load; (2) the bench filled 100% of entries with
+// pvp data, but in production only encountered pokemon have it, so the
+// second deref being eliminated was often absent to begin with; (3) M3
+// laptop vs production server memory behavior. Lesson for future benches
+// here: model field-presence ratios and remember what stays behind a
+// pointer in the map's own structure.
+//
 // Benchmarks for the PokemonLookup de-pointer proposal: the production scan
 // path does pokemonLookupCache.Load(id) per candidate (15-20M/s measured,
 // 14% of CPU flat) where the map value holds TWO POINTERS, so each
