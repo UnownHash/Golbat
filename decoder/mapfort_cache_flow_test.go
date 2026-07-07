@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"buf.build/go/hyperpb"
-	"github.com/jellydator/ttlcache/v3"
+	"golbat/cache"
 	"google.golang.org/protobuf/proto"
 
 	"golbat/pogo"
@@ -39,7 +39,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 		// extract while the shim (and any arena backing it) is alive, then
 		// store only the plain-value summary.
 		summary := mapFortSummaryFromShim(shim)
-		getMapFortsCache.Set(id, summary, ttlcache.DefaultTTL)
+		getMapFortsCache.Set(id, summary, cache.DefaultTTL)
 
 		gym := &Gym{GymData: GymData{Id: id}}
 		updateGymGetMapFortCache(gym, false)
@@ -57,14 +57,14 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 			t.Errorf("%s: gym.Lon = %v, want %v", name, got, want)
 		}
 		// updateGymGetMapFortCache deletes the entry once consumed.
-		if item := getMapFortsCache.Get(id); item != nil {
+		if _, ok := getMapFortsCache.Get(id); ok {
 			t.Errorf("%s: getMapFortsCache entry for %s should be consumed/deleted", name, id)
 		}
 	}
 
 	runPokestop := func(name, id string, shim pogoshim.GetMapFortsOutProto_FortProto) {
 		summary := mapFortSummaryFromShim(shim)
-		getMapFortsCache.Set(id, summary, ttlcache.DefaultTTL)
+		getMapFortsCache.Set(id, summary, cache.DefaultTTL)
 
 		stop := &Pokestop{PokestopData: PokestopData{Id: id}}
 		updatePokestopGetMapFortCache(stop)
@@ -75,7 +75,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 		if got, want := stop.Url.ValueOrZero(), "https://example.com/cached.png"; got != want {
 			t.Errorf("%s: pokestop.Url = %q, want %q", name, got, want)
 		}
-		if item := getMapFortsCache.Get(id); item != nil {
+		if _, ok := getMapFortsCache.Get(id); ok {
 			t.Errorf("%s: getMapFortsCache entry for %s should be consumed/deleted", name, id)
 		}
 	}
@@ -102,7 +102,7 @@ func TestMapFortCacheFlow_SetViaGetMapForts_ConsumeViaFortDetails(t *testing.T) 
 	}
 	summary := mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(msg.ProtoReflect()))
 	shared.Free() // arena freed BEFORE the cache Set/consume below
-	getMapFortsCache.Set("GYM_HYPER", summary, ttlcache.DefaultTTL)
+	getMapFortsCache.Set("GYM_HYPER", summary, cache.DefaultTTL)
 	gym := &Gym{GymData: GymData{Id: "GYM_HYPER"}}
 	updateGymGetMapFortCache(gym, false)
 	if got, want := gym.Name.ValueOrZero(), "Cached Fort"; got != want {
