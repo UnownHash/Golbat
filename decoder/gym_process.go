@@ -40,8 +40,8 @@ func UpdateGymRecordWithGymInfoProto(ctx context.Context, db db.DbDetails, gymIn
 	return fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }
 
-func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, mapFort.Id, "UpdateGymFromGetMapForts")
+func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort pogoshim.GetMapFortsOutProto_FortProto) (bool, string) {
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, mapFort.GetId(), "UpdateGymFromGetMapForts")
 	if err != nil {
 		return false, err.Error()
 	}
@@ -52,7 +52,7 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 	}
 	defer unlock()
 
-	gym.updateGymFromMapFortSummary(mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect())), false)
+	gym.updateGymFromMapFortSummary(mapFortSummaryFromShim(mapFort), false)
 	saveGymRecord(ctx, db, gym)
 	return true, fmt.Sprintf("%s %s", gym.Id, gym.Name.ValueOrZero())
 }

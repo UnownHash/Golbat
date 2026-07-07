@@ -291,77 +291,92 @@ func decodeFortDetails(ctx context.Context, sDec []byte) string {
 }
 
 func decodeGetMapForts(ctx context.Context, sDec []byte) string {
-	decodedMapForts := &pogo.GetMapFortsOutProto{}
-	if err := proto.Unmarshal(sDec, decodedMapForts); err != nil {
+	maybeShadow(engMethodGetMapForts, sDec)
+	res, err := decodeWithArena(engMethodGetMapForts, mapFortsEngine, sDec,
+		pogoshim.AsGetMapFortsOutProto,
+		func(decodedMapForts pogoshim.GetMapFortsOutProto) string {
+			if decodedMapForts.GetStatus() != pogo.GetMapFortsOutProto_SUCCESS {
+				statsCollector.IncDecodeGetMapForts("error", "non_success")
+				res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.GetStatus(),
+					pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.GetStatus())])
+				return res
+			}
+
+			statsCollector.IncDecodeGetMapForts("ok", "")
+			var outputString string
+			processedForts := 0
+
+			for fort := range decodedMapForts.GetFort().All() {
+				status, output := decoder.UpdateFortRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
+				if status {
+					processedForts += 1
+					outputString += output + ", "
+				}
+			}
+
+			if processedForts > 0 {
+				return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
+			}
+			return "No forts updated"
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeGetMapForts("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if decodedMapForts.Status != pogo.GetMapFortsOutProto_SUCCESS {
-		statsCollector.IncDecodeGetMapForts("error", "non_success")
-		res := fmt.Sprintf(`GetMapFortsOutProto: Ignored non-success value %d:%s`, decodedMapForts.Status,
-			pogo.GetMapFortsOutProto_Status_name[int32(decodedMapForts.Status)])
-		return res
-	}
-
-	statsCollector.IncDecodeGetMapForts("ok", "")
-	var outputString string
-	processedForts := 0
-
-	for _, fort := range decodedMapForts.Fort {
-		status, output := decoder.UpdateFortRecordWithGetMapFortsOutProto(ctx, dbDetails, fort)
-		if status {
-			processedForts += 1
-			outputString += output + ", "
-		}
-	}
-
-	if processedForts > 0 {
-		return fmt.Sprintf("Updated %d forts: %s", processedForts, outputString)
-	}
-	return "No forts updated"
+	return res
 }
 
-func decodeGetRoutes(ctx context.Context, payload []byte) string {
-	getRoutesOutProto := &pogo.GetRoutesOutProto{}
-	if err := proto.Unmarshal(payload, getRoutesOutProto); err != nil {
+func decodeGetRoutes(ctx context.Context, sDec []byte) string {
+	maybeShadow(engMethodRoutes, sDec)
+	res, err := decodeWithArena(engMethodRoutes, routesEngine, sDec,
+		pogoshim.AsGetRoutesOutProto,
+		func(getRoutesOutProto pogoshim.GetRoutesOutProto) string {
+			if getRoutesOutProto.GetStatus() != pogo.GetRoutesOutProto_SUCCESS {
+				return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.GetStatus(), getRoutesOutProto.GetStatus().String())
+			}
+
+			decodeSuccesses := map[string]bool{}
+			decodeErrors := map[string]bool{}
+
+			cells := getRoutesOutProto.GetRouteMapCell()
+			for cell := range cells.All() {
+				for route := range cell.GetRoute().All() {
+					// TODO we need to check the repeated field, for now access last element.
+					// Len()>0 guard (absent in the pre-shim direct-index version, which
+					// would have panicked on a genuinely empty list) degrades safely
+					// instead, matching every other getter-chain in this migration.
+					statuses := route.GetRouteSubmissionStatus()
+					if statuses.Len() > 0 {
+						last := statuses.At(statuses.Len() - 1)
+						if last.GetStatus() != pogo.RouteSubmissionStatus_PUBLISHED {
+							log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", last.GetStatus().String())
+							continue
+						}
+					}
+					decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(ctx, dbDetails, route)
+					if decodeError != nil {
+						if !decodeErrors[route.GetId()] {
+							decodeErrors[route.GetId()] = true
+						}
+						log.Errorf("Failed to decode route %s", decodeError)
+					} else if !decodeSuccesses[route.GetId()] {
+						decodeSuccesses[route.GetId()] = true
+					}
+				}
+			}
+
+			return fmt.Sprintf(
+				"Decoded %d routes, failed to decode %d routes, from %d cells",
+				len(decodeSuccesses),
+				len(decodeErrors),
+				cells.Len(),
+			)
+		})
+	if err != nil {
 		return fmt.Sprintf("failed to decode GetRoutesOutProto %s", err)
 	}
-
-	if getRoutesOutProto.Status != pogo.GetRoutesOutProto_SUCCESS {
-		return fmt.Sprintf("GetRoutesOutProto: Ignored non-success value %d:%s", getRoutesOutProto.Status, getRoutesOutProto.Status.String())
-	}
-
-	decodeSuccesses := map[string]bool{}
-	decodeErrors := map[string]bool{}
-
-	for _, routeMapCell := range getRoutesOutProto.GetRouteMapCell() {
-		for _, route := range routeMapCell.GetRoute() {
-			//TODO we need to check the repeated field, for now access last element
-			routeSubmissionStatus := route.RouteSubmissionStatus[len(route.RouteSubmissionStatus)-1]
-			if routeSubmissionStatus != nil && routeSubmissionStatus.Status != pogo.RouteSubmissionStatus_PUBLISHED {
-				log.Warnf("Non published Route found in GetRoutesOutProto, status: %s", routeSubmissionStatus.String())
-				continue
-			}
-			decodeError := decoder.UpdateRouteRecordWithSharedRouteProto(ctx, dbDetails, route)
-			if decodeError != nil {
-				if !decodeErrors[route.Id] {
-					decodeErrors[route.Id] = true
-				}
-				log.Errorf("Failed to decode route %s", decodeError)
-			} else if !decodeSuccesses[route.Id] {
-				decodeSuccesses[route.Id] = true
-			}
-		}
-	}
-
-	return fmt.Sprintf(
-		"Decoded %d routes, failed to decode %d routes, from %d cells",
-		len(decodeSuccesses),
-		len(decodeErrors),
-		len(getRoutesOutProto.GetRouteMapCell()),
-	)
+	return res
 }
 
 func decodeGetGymInfo(ctx context.Context, sDec []byte) string {
@@ -434,52 +449,73 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) stri
 }
 
 func decodeStartIncident(ctx context.Context, sDec []byte) string {
-	decodedIncident := &pogo.StartIncidentOutProto{}
-	if err := proto.Unmarshal(sDec, decodedIncident); err != nil {
+	maybeShadow(engMethodStartIncident, sDec)
+	res, err := decodeWithArena(engMethodStartIncident, startIncidentEngine, sDec,
+		pogoshim.AsStartIncidentOutProto,
+		func(decodedIncident pogoshim.StartIncidentOutProto) string {
+			if decodedIncident.GetStatus() != pogo.StartIncidentOutProto_SUCCESS {
+				statsCollector.IncDecodeStartIncident("error", "non_success")
+				res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.GetStatus(),
+					pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.GetStatus())])
+				return res
+			}
+
+			statsCollector.IncDecodeStartIncident("ok", "")
+			return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeStartIncident("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-
-	if decodedIncident.Status != pogo.StartIncidentOutProto_SUCCESS {
-		statsCollector.IncDecodeStartIncident("error", "non_success")
-		res := fmt.Sprintf(`GiovanniOutProto: Ignored non-success value %d:%s`, decodedIncident.Status,
-			pogo.StartIncidentOutProto_Status_name[int32(decodedIncident.Status)])
-		return res
-	}
-
-	statsCollector.IncDecodeStartIncident("ok", "")
-	return decoder.ConfirmIncident(ctx, dbDetails, decodedIncident)
+	return res
 }
 
+// decodeOpenInvasion is the template for every "request+data" method in this
+// wave (Task 4 copies this shape for contest_data/size_contest_entry/
+// station_details/tappable/event_rsvps): the Request proto is decoded via
+// its own decodeWithArena handle, and the Data proto is decoded via ITS OWN
+// handle INSIDE the Request's process closure. Both shims (and both arenas
+// backing them, when running hyperpb) are therefore alive together for the
+// UpdateIncidentLineup call, which needs fields from both -- and both arenas
+// are freed only once decodeOpenInvasion returns, since the inner
+// decodeWithArena call (and everything under it) completes before the outer
+// one's closure returns.
 func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) string {
-	decodeOpenInvasionRequest := &pogo.OpenInvasionCombatSessionProto{}
+	maybeShadowPair(engMethodOpenInvasion, request, payload)
+	res, err := decodeWithArena(engMethodOpenInvasion, openInvasionReqEngine, request,
+		pogoshim.AsOpenInvasionCombatSessionProto,
+		func(decodeOpenInvasionRequest pogoshim.OpenInvasionCombatSessionProto) string {
+			if !decodeOpenInvasionRequest.HasIncidentLookup() {
+				return "Invalid OpenInvasionCombatSessionProto received"
+			}
 
-	if err := proto.Unmarshal(request, decodeOpenInvasionRequest); err != nil {
+			innerRes, innerErr := decodeWithArena(engMethodOpenInvasion, openInvasionEngine, payload,
+				pogoshim.AsOpenInvasionCombatSessionOutProto,
+				func(decodedOpenInvasionResponse pogoshim.OpenInvasionCombatSessionOutProto) string {
+					if decodedOpenInvasionResponse.GetStatus() != pogo.InvasionStatus_SUCCESS {
+						statsCollector.IncDecodeOpenInvasion("error", "non_success")
+						res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.GetStatus(),
+							pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.GetStatus())])
+						return res
+					}
+
+					statsCollector.IncDecodeOpenInvasion("ok", "")
+					return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
+				})
+			if innerErr != nil {
+				log.Errorf("Failed to parse %s", innerErr)
+				statsCollector.IncDecodeOpenInvasion("error", "parse")
+				return fmt.Sprintf("Failed to parse %s", innerErr)
+			}
+			return innerRes
+		})
+	if err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeOpenInvasion("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
-	if decodeOpenInvasionRequest.IncidentLookup == nil {
-		return "Invalid OpenInvasionCombatSessionProto received"
-	}
-
-	decodedOpenInvasionResponse := &pogo.OpenInvasionCombatSessionOutProto{}
-	if err := proto.Unmarshal(payload, decodedOpenInvasionResponse); err != nil {
-		log.Errorf("Failed to parse %s", err)
-		statsCollector.IncDecodeOpenInvasion("error", "parse")
-		return fmt.Sprintf("Failed to parse %s", err)
-	}
-
-	if decodedOpenInvasionResponse.Status != pogo.InvasionStatus_SUCCESS {
-		statsCollector.IncDecodeOpenInvasion("error", "non_success")
-		res := fmt.Sprintf(`InvasionLineupOutProto: Ignored non-success value %d:%s`, decodedOpenInvasionResponse.Status,
-			pogo.InvasionStatus_Status_name[int32(decodedOpenInvasionResponse.Status)])
-		return res
-	}
-
-	statsCollector.IncDecodeOpenInvasion("ok", "")
-	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
+	return res
 }
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {

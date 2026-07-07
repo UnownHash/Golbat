@@ -9,7 +9,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-	"golbat/pogo"
 	"golbat/pogoshim"
 	"golbat/webhooks"
 
@@ -189,7 +188,7 @@ func getPathFromURL(u string) string {
 	}
 	return strings.TrimPrefix(parsedURL.Path, "/")
 }
-func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort pogoshim.GetMapFortsOutProto_FortProto) (bool, string) {
 	// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
 	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, mapFort)
 	if !status {
@@ -197,9 +196,9 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		summary := mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect()))
-		getMapFortsCache.Set(mapFort.Id, summary, ottercache.DefaultTTL)
-		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
+		summary := mapFortSummaryFromShim(mapFort)
+		getMapFortsCache.Set(mapFort.GetId(), summary, ottercache.DefaultTTL)
+		log.Debugf("Saved getMapFort in cache: %s", mapFort.GetId())
 	}
 	return status, output
 }

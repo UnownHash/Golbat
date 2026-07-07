@@ -58,7 +58,12 @@ func maybeShadow(method string, payload []byte) {
 // with exactly one wire proto to verify -- multi-proto methods (request+data
 // pairs, "social"'s nested payloads) are wired in by the task that adds
 // their decode.go call site, either by extending genericShadowEngine (if a
-// single proto is representative) or by adding a bespoke case here.
+// single proto is representative) or by adding a bespoke case here. For a
+// genuine request+data pair (not just "one proto is representative"),
+// maybeShadow/shadowCompare aren't called at all -- see maybeShadowPair/
+// shadowComparePair/compareDigestPair below ("Composite (request+data) shadow
+// verification"), open_invasion's decode.go call site, and Task 4's other
+// request+data methods, which follow the same pattern.
 func shadowCompare(method string, payload []byte) bool {
 	switch method {
 	case engMethodGmo:
@@ -81,7 +86,10 @@ func shadowCompare(method string, payload []byte) bool {
 // (no hand-written digest). Returns nil for anything else -- including a
 // method with no handle wired here yet -- so shadowCompare's default case
 // is a safe no-op (matching its pre-Wave-3 behavior of skipping verification
-// for any method it doesn't recognize).
+// for any method it doesn't recognize). A method with a genuine request+data
+// pair (rather than one representative proto) belongs in shadowComparePair's
+// switch instead -- see the "Composite (request+data) shadow verification"
+// section below.
 func genericShadowEngine(method string) *protoEngineHandle {
 	switch method {
 	case engMethodFortDetails:
@@ -103,6 +111,98 @@ func genericShadowEngine(method string) *protoEngineHandle {
 	default:
 		return nil
 	}
+}
+
+// --- Composite (request+data) shadow verification ---------------------------
+//
+// Some methods carry a request proto and a data/response proto as two
+// independent wire payloads sharing one config method key -- open_invasion
+// today (OpenInvasionCombatSessionProto + OpenInvasionCombatSessionOutProto),
+// more in Task 4 (contest_data, size_contest_entry, station_details,
+// tappable, event_rsvps, social). genericShadowEngine can't express this: it
+// maps a method to exactly ONE *protoEngineHandle. maybeShadowPair/
+// shadowComparePair/compareDigestPair below are the composite escape hatch --
+// this is the "composite note" referenced by shadowCompare's and
+// genericShadowEngine's doc comments. The pattern: decode both payloads
+// through both engines (std once, hyperpb once) and fold digestMessageGeneric
+// for BOTH messages into the SAME hash.Hash64 per engine (request's fields,
+// then data's), so one equality check catches a divergence in either half.
+// Adding a future method here is a new case in shadowComparePair's switch --
+// compareDigestPair itself is method-agnostic.
+
+// maybeShadowPair is maybeShadow's two-payload counterpart: same sampling
+// and engine-gating logic, but for a method whose payload is a (request,
+// data) pair rather than a single proto.
+func maybeShadowPair(method string, request, data []byte) {
+	if engineFor(method) != "hyperpb" {
+		return
+	}
+	if rand.Float64() >= config.Config.ProtoEngine.ShadowSampleRate {
+		return
+	}
+	if shadowComparePair(method, request, data) {
+		if statsCollector != nil {
+			statsCollector.IncProtoShadow(method, "match")
+		}
+		return
+	}
+	if statsCollector != nil {
+		statsCollector.IncProtoShadow(method, "mismatch")
+	}
+	log.Errorf("[PROTO_SHADOW] digest mismatch method=%s request_len=%d payload_len=%d", method, len(request), len(data))
+}
+
+// shadowComparePair maps method to the request+data handle pair it should
+// verify. The default (true, a safe no-op) mirrors shadowCompare's default
+// case for any method not wired in here yet.
+func shadowComparePair(method string, request, data []byte) bool {
+	switch method {
+	case engMethodOpenInvasion:
+		return compareDigestPair(openInvasionReqEngine, request, openInvasionEngine, data)
+	default:
+		return true
+	}
+}
+
+// compareDigestPair decodes request via reqEng and data via dataEng, once
+// with decodeStd and once with decodeHyperpb, folding digestMessageGeneric
+// for both messages into a single hash.Hash64 per engine (request first,
+// then data), and compares the two engines' combined digests. Both messages
+// share the identity wrap (protoreflect.Message) since neither has a
+// hand-written digest -- the generic descriptor-walk digest is exactly what
+// genericShadowEngine's single-proto path already uses.
+func compareDigestPair(reqEng *protoEngineHandle, request []byte, dataEng *protoEngineHandle, data []byte) bool {
+	method := ""
+	if reqEng != nil {
+		method = reqEng.method
+	}
+
+	fold := func(decode func(*protoEngineHandle, []byte, func(protoreflect.Message) protoreflect.Message, func(protoreflect.Message) string) (string, error)) (uint64, error) {
+		h := fnv.New64a()
+		process := func(m protoreflect.Message) string {
+			digestMessageGeneric(h, m)
+			return ""
+		}
+		if _, err := decode(reqEng, request, identityWrap, process); err != nil {
+			return 0, err
+		}
+		if _, err := decode(dataEng, data, identityWrap, process); err != nil {
+			return 0, err
+		}
+		return h.Sum64(), nil
+	}
+
+	stdDigest, err := fold(decodeStd[protoreflect.Message])
+	if err != nil {
+		log.Errorf("[PROTO_SHADOW] std decode failed method=%s request_len=%d payload_len=%d err=%s", method, len(request), len(data), err)
+		return false
+	}
+	hyperDigest, err := fold(decodeHyperpb[protoreflect.Message])
+	if err != nil {
+		log.Errorf("[PROTO_SHADOW] hyperpb decode failed method=%s request_len=%d payload_len=%d err=%s", method, len(request), len(data), err)
+		return false
+	}
+	return stdDigest == hyperDigest
 }
 
 // identityWrap is the "wrap" function for the generic-digest shadow path:

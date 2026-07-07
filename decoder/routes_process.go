@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"golbat/db"
-	"golbat/pogo"
+	"golbat/pogoshim"
 )
 
-func UpdateRouteRecordWithSharedRouteProto(ctx context.Context, db db.DbDetails, sharedRouteProto *pogo.SharedRouteProto) error {
+func UpdateRouteRecordWithSharedRouteProto(ctx context.Context, db db.DbDetails, sharedRouteProto pogoshim.SharedRouteProto) error {
 	route, unlock, err := getOrCreateRouteRecord(ctx, db, sharedRouteProto.GetId(), "UpdateRouteRecord")
 	if err != nil {
 		return err

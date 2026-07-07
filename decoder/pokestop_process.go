@@ -79,8 +79,8 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 	return res
 }
 
-func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.Id, "UpdatePokestopFromGetMapForts")
+func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort pogoshim.GetMapFortsOutProto_FortProto) (bool, string) {
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.GetId(), "UpdatePokestopFromGetMapForts")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -91,9 +91,9 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	}
 	defer unlock()
 
-	pokestop.updatePokestopFromMapFortSummary(mapFortSummaryFromShim(pogoshim.AsGetMapFortsOutProto_FortProto(mapFort.ProtoReflect())))
+	pokestop.updatePokestopFromMapFortSummary(mapFortSummaryFromShim(mapFort))
 	savePokestopRecord(ctx, db, pokestop)
-	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
+	return true, fmt.Sprintf("%s %s", mapFort.GetId(), mapFort.GetName())
 }
 
 func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
