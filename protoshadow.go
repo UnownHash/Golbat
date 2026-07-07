@@ -2,11 +2,16 @@ package main
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash"
 	"hash/fnv"
 	"math"
 	"math/rand/v2"
+	"os"
+	"path/filepath"
 	"strconv"
+	"sync/atomic"
+	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 
@@ -43,7 +48,37 @@ func maybeShadow(method string, payload []byte) {
 	if statsCollector != nil {
 		statsCollector.IncProtoShadow(method, "mismatch")
 	}
-	log.Errorf("[PROTO_SHADOW] digest mismatch method=%s payload_len=%d", method, len(payload))
+	dumped := dumpShadowMismatch(method, "data", payload)
+	log.Errorf("[PROTO_SHADOW] digest mismatch method=%s payload_len=%d dump=%s", method, len(payload), dumped)
+}
+
+// Mismatch payloads are the only way to debug an engine divergence offline,
+// so the first few per process are written to shadowMismatchDir. Bounded so
+// a systematic divergence on a high-volume method cannot fill the disk.
+const (
+	shadowMismatchDir      = "shadow_mismatch"
+	shadowMismatchMaxFiles = 25
+)
+
+var shadowMismatchCount atomic.Int64
+
+// dumpShadowMismatch writes payload to shadow_mismatch/ and returns the
+// path (or a reason it was skipped). kind distinguishes the request and
+// data halves of pair methods.
+func dumpShadowMismatch(method, kind string, payload []byte) string {
+	n := shadowMismatchCount.Add(1)
+	if n > shadowMismatchMaxFiles {
+		return "skipped(cap)"
+	}
+	if err := os.MkdirAll(shadowMismatchDir, 0o755); err != nil {
+		return "skipped(" + err.Error() + ")"
+	}
+	path := filepath.Join(shadowMismatchDir,
+		fmt.Sprintf("%s_%s_%d_%d.bin", method, kind, time.Now().UnixMilli(), len(payload)))
+	if err := os.WriteFile(path, payload, 0o644); err != nil {
+		return "skipped(" + err.Error() + ")"
+	}
+	return path
 }
 
 // shadowCompare decodes payload with both the std and hyperpb engines and
@@ -150,7 +185,10 @@ func maybeShadowPair(method string, request, data []byte) {
 	if statsCollector != nil {
 		statsCollector.IncProtoShadow(method, "mismatch")
 	}
-	log.Errorf("[PROTO_SHADOW] digest mismatch method=%s request_len=%d payload_len=%d", method, len(request), len(data))
+	dumpedReq := dumpShadowMismatch(method, "request", request)
+	dumpedData := dumpShadowMismatch(method, "data", data)
+	log.Errorf("[PROTO_SHADOW] digest mismatch method=%s request_len=%d payload_len=%d dump_request=%s dump_data=%s",
+		method, len(request), len(data), dumpedReq, dumpedData)
 }
 
 // shadowComparePair maps method to the request+data handle pair it should
