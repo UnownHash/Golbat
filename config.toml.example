@@ -120,11 +120,12 @@ reduce_updates = false
 # A value that is neither "std" nor "hyperpb" (typo, e.g. "hyperbp") logs one
 # [PROTO_ENGINE] warning at startup and runs on "std".
 #
-# Legacy keys: leave "" (or remove) to let a method fall through to
-# [proto_engine.overrides]/default instead.
-gmo = "hyperpb"                 # GetMapObjects (primary data source)
-encounter = "hyperpb"           # Pokemon encounter
-disk_encounter = "hyperpb"      # Disk encounters (Interacted)
+# Legacy keys: commented out so these methods inherit `default` and the
+# [proto_engine.overrides] examples below work when uncommented. Setting a
+# legacy key to a non-empty value pins that method and wins over both.
+#gmo = "hyperpb"                 # GetMapObjects (primary data source)
+#encounter = "hyperpb"           # Pokemon encounter
+#disk_encounter = "hyperpb"      # Disk encounters (Interacted)
 
 # Default engine for every method not pinned by a legacy key above or an
 # entry in [proto_engine.overrides].
