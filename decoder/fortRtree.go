@@ -82,6 +82,7 @@ func initFortRtree() {
 	// plenty and saves ~7.5 MiB vs sharing the pokemon constant.
 	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	initQuestConditions()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
 	// fortLookupCache are created (and after pokestopCache/gymCache/
@@ -134,6 +135,11 @@ func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 	genericUpdateFort(pokestop.Id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
 	if !pokestop.Deleted {
 		updatePokestopLookup(pokestop)
+	} else {
+		// A deleted pokestop drops out of the lookup cache (genericUpdateFort
+		// above) without a matching updatePokestopLookup, so reconcile its
+		// quest contribution to zero here.
+		removeFortQuestConditions(pokestop.Id)
 	}
 }
 
@@ -210,6 +216,13 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		ContestTotalEntries:        getContestTotalEntries(pokestop.ShowcaseRankings),
 		ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 	})
+
+	// This is the sole writer of a pokestop's FortLookup entry, so it is also
+	// the single place quest-condition counts are reconciled: it fires on
+	// cache-miss load, every save (incl. quest change), and startup preload.
+	// FortLookup omits quest title/target, so the previous keys are recovered
+	// from questFortKeys rather than the overwritten FortLookup.
+	reconcileFortQuestConditions(pokestop.Id, questConditionKeysFromPokestop(pokestop))
 }
 
 func updateGymLookup(gym *Gym) {
@@ -324,6 +337,18 @@ func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
 //     (pokestop↔gym) and this is the stale counterpart's cache entry
 //     expiring; the live counterpart owns the lookup and tree point now.
 func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
+	// A pokestop leaving the cache must drop its quest-condition contribution
+	// whether its FortLookup entry is still the resident pokestop one (matched,
+	// deleted just below), was overwritten by a converted gym/station
+	// counterpart (mismatch), or is already gone (deleted). questFortKeys only
+	// ever holds pokestop entries, so this is a no-op miss for gyms/stations and
+	// for pokestops already reconciled to no-quest. Because deferFortEviction
+	// deletes the matched FortLookup entry, removing the count here keeps the
+	// aggregate in lockstep with lookup-cache membership.
+	if expected == POKESTOP {
+		removeFortQuestConditions(fortId)
+	}
+
 	fl, ok := fortLookupCache.Load(fortId)
 	if !ok || fl.FortType != expected {
 		return
