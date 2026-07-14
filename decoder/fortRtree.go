@@ -46,12 +46,9 @@ type FortLookup struct {
 	QuestArRewardPokemonId     int16
 	QuestArRewardPokemonForm   int16
 
-	// Pokestop - incident (first active incident, flat fields)
-	IncidentDisplayType int8
-	IncidentStyle       int8
-	IncidentCharacter   int16
-	IncidentPokemonId   int16
-	IncidentPokemonForm int16
+	// Pokestop - incidents (all active incidents; slot1 only — slots 2/3 are unused).
+	// Mirrors the StationBattles slice pattern.
+	Incidents []FortLookupIncident
 
 	// Pokestop - contest
 	ContestPokemonId    int16
@@ -182,18 +179,10 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
-	// Preserve existing incident fields if present
-	var incidentDisplayType int8
-	var incidentStyle int8
-	var incidentCharacter int16
-	var incidentPokemonId int16
-	var incidentPokemonForm int16
+	// Preserve existing incidents slice if present
+	var incidents []FortLookupIncident
 	if existing, ok := fortLookupCache.Load(pokestop.Id); ok {
-		incidentDisplayType = existing.IncidentDisplayType
-		incidentStyle = existing.IncidentStyle
-		incidentCharacter = existing.IncidentCharacter
-		incidentPokemonId = existing.IncidentPokemonId
-		incidentPokemonForm = existing.IncidentPokemonForm
+		incidents = existing.Incidents
 	}
 
 	fortLookupCache.Store(pokestop.Id, FortLookup{
@@ -214,11 +203,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
 		QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
 		QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
-		IncidentDisplayType:        incidentDisplayType,
-		IncidentStyle:              incidentStyle,
-		IncidentCharacter:          incidentCharacter,
-		IncidentPokemonId:          incidentPokemonId,
-		IncidentPokemonForm:        incidentPokemonForm,
+		Incidents:                  incidents,
 		ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
 		ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 		ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
@@ -260,24 +245,42 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 	fortLookupCache.Store(station.Id, lookup)
 }
 
-// updatePokestopIncidentLookup updates the incident fields on a pokestop's
-// FortLookup entry. Atomic via Compute — see updatePokestopLookup for the
-// cross-lock-domain clobber this prevents.
+// updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup
+// incidents slice (keyed by DisplayType+Character, unique per active incident on a stop),
+// pruning any expired entries in the same pass.
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
-	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
-		if !loaded {
-			// Incidents load before their pokestop only during preload
-			// edge cases; the pokestop writer will carry no incident until
-			// the next incident save.
-			return existing, xsync.CancelOp
+	existing, ok := fortLookupCache.Load(pokestopId)
+	if !ok {
+		return
+	}
+	now := time.Now().Unix()
+	updated := FortLookupIncident{
+		DisplayType:     int8(incident.DisplayType),
+		Style:           int8(incident.Style),
+		Character:       incident.Character,
+		Confirmed:       incident.Confirmed,
+		Slot1PokemonId:  int16(incident.Slot1PokemonId.ValueOrZero()),
+		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
+		ExpireTimestamp: incident.ExpirationTime,
+	}
+	out := existing.Incidents[:0:0] // fresh backing array; never mutate a shared slice in place
+	replaced := false
+	for _, inc := range existing.Incidents {
+		if inc.ExpireTimestamp <= now {
+			continue // prune expired
 		}
-		existing.IncidentDisplayType = int8(incident.DisplayType)
-		existing.IncidentStyle = int8(incident.Style)
-		existing.IncidentCharacter = incident.Character
-		existing.IncidentPokemonId = int16(incident.Slot1PokemonId.ValueOrZero())
-		existing.IncidentPokemonForm = int16(incident.Slot1Form.ValueOrZero())
-		return existing, xsync.UpdateOp
-	})
+		if inc.DisplayType == updated.DisplayType && inc.Character == updated.Character {
+			out = append(out, updated) // replace the same incident
+			replaced = true
+		} else {
+			out = append(out, inc)
+		}
+	}
+	if !replaced && updated.ExpireTimestamp > now {
+		out = append(out, updated)
+	}
+	existing.Incidents = out
+	fortLookupCache.Store(pokestopId, existing)
 }
 
 // getContestTotalEntries parses showcase rankings JSON to get total entries
