@@ -185,36 +185,42 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
-	// Preserve existing incidents slice if present
-	var incidents []FortLookupIncident
-	if existing, ok := fortLookupCache.Load(pokestop.Id); ok {
-		incidents = existing.Incidents
-	}
-
-	fortLookupCache.Store(pokestop.Id, FortLookup{
-		FortType:                   POKESTOP,
-		Lat:                        pokestop.Lat,
-		Lon:                        pokestop.Lon,
-		PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
-		IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
-		LureId:                     pokestop.LureId,
-		LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
-		QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
-		QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
-		QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
-		QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
-		QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
-		QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
-		QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
-		QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
-		QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
-		QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
-		Incidents:                  incidents,
-		ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
-		ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
-		ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-		ContestTotalEntries:        getContestTotalEntries(pokestop.ShowcaseRankings),
-		ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
+	// Atomic per-key read-modify-write via Compute: this writer (under the
+	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
+	// INCIDENT entity lock) update the same key from different lock domains,
+	// each preserving the other's fields. A plain Load->Store pair can
+	// interleave and clobber. Keep the callback to field copies — the
+	// showcase-rankings JSON parse is hoisted out.
+	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
+	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+		nl := FortLookup{
+			FortType:                   POKESTOP,
+			Lat:                        pokestop.Lat,
+			Lon:                        pokestop.Lon,
+			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
+			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
+			LureId:                     pokestop.LureId,
+			LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
+			QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
+			QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
+			QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
+			QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
+			QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
+			QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
+			QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
+			QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
+			QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
+			QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
+			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
+			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+			ContestTotalEntries:        contestTotalEntries,
+			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
+		}
+		if loaded {
+			nl.Incidents = existing.Incidents // preserve the incident writer's slice
+		}
+		return nl, xsync.UpdateOp
 	})
 
 	// This is the sole writer of a pokestop's FortLookup entry, so it is also
@@ -262,10 +268,6 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 // incidents slice (keyed by DisplayType+Character, unique per active incident on a stop),
 // pruning any expired entries in the same pass.
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
-	existing, ok := fortLookupCache.Load(pokestopId)
-	if !ok {
-		return
-	}
 	now := time.Now().Unix()
 	updated := FortLookupIncident{
 		DisplayType:     int8(incident.DisplayType),
@@ -276,24 +278,31 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
 		ExpireTimestamp: incident.ExpirationTime,
 	}
-	out := existing.Incidents[:0:0] // fresh backing array; never mutate a shared slice in place
-	replaced := false
-	for _, inc := range existing.Incidents {
-		if inc.ExpireTimestamp <= now {
-			continue // prune expired
+	// Atomic per-key read-modify-write via Compute — see updatePokestopLookup
+	// for the cross-lock-domain clobber this prevents.
+	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+		if !loaded {
+			return existing, xsync.CancelOp
 		}
-		if inc.DisplayType == updated.DisplayType && inc.Character == updated.Character {
-			out = append(out, updated) // replace the same incident
-			replaced = true
-		} else {
-			out = append(out, inc)
+		out := existing.Incidents[:0:0] // fresh backing array; never mutate a shared slice in place
+		replaced := false
+		for _, inc := range existing.Incidents {
+			if inc.ExpireTimestamp <= now {
+				continue // prune expired
+			}
+			if inc.DisplayType == updated.DisplayType && inc.Character == updated.Character {
+				out = append(out, updated) // replace the same incident
+				replaced = true
+			} else {
+				out = append(out, inc)
+			}
 		}
-	}
-	if !replaced && updated.ExpireTimestamp > now {
-		out = append(out, updated)
-	}
-	existing.Incidents = out
-	fortLookupCache.Store(pokestopId, existing)
+		if !replaced && updated.ExpireTimestamp > now {
+			out = append(out, updated)
+		}
+		existing.Incidents = out
+		return existing, xsync.UpdateOp
+	})
 }
 
 // getContestTotalEntries parses showcase rankings JSON to get total entries
