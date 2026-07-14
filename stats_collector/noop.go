@@ -59,6 +59,7 @@ func (col *noopCollector) IncSlowDbQuery(string)                       {}
 func (col *noopCollector) IncStatsEventsDropped()                      {}
 func (col *noopCollector) AddCacheEvictionsDropped(string, float64)    {}
 func (col *noopCollector) ObserveDbQuery(string, float64)              {}
+func (col *noopCollector) ObserveApiScan(string, float64)              {}
 func (col *noopCollector) SetWriteBehindQueueDepth(string, float64)    {}
 func (col *noopCollector) IncWriteBehindSquashed(string)               {}
 func (col *noopCollector) IncWriteBehindRateLimited(string)            {}

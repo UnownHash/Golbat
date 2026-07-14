@@ -168,9 +168,13 @@ func verifyQuestAggregate(fortRewards map[questRewardKey]int) {
 	}
 }
 
-// logAvailablePokestops is a temporary no-metric log line; Task 5 adds
-// StatsCollector observation alongside it.
-func logAvailablePokestops(took time.Duration, forts, incidents int, res *ApiAvailablePokestops) {
-	log.Infof("GetAvailablePokestops: %d forts, %d incidents, %d lures, %d showcases, %d invasions, %d quests (%s)",
-		forts, incidents, len(res.Lures), len(res.Showcases), len(res.Invasions), len(res.Quests), took)
+// logAvailablePokestops records the available-pokestops build time in the
+// api_scan_duration histogram (StatsCollector.ObserveApiScan) and logs a
+// summary of the scan.
+func logAvailablePokestops(dur time.Duration, forts, incidents int, res *ApiAvailablePokestops) {
+	if statsCollector != nil {
+		statsCollector.ObserveApiScan("available-pokestops", dur.Seconds())
+	}
+	log.Infof("available-pokestops built in %s: scanned %d forts / %d incidents -> %d quests, %d invasions, %d lures, %d showcases",
+		dur, forts, incidents, len(res.Quests), len(res.Invasions), len(res.Lures), len(res.Showcases))
 }
