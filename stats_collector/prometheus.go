@@ -373,6 +373,7 @@ var (
 			Namespace: ns,
 			Name:      "api_scan_duration",
 			Help:      "In-memory API scan build time by operation",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14), // 1ms .. ~8s
 		},
 		[]string{"operation"},
 	)
