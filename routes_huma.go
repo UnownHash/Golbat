@@ -222,6 +222,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/pokestop/available",
 		Summary:       "List currently available pokestop rewards/invasions/lures/showcases",
+		Description:   "Returns everything currently available on resident pokestops — distinct quest rewards (with title/target conditions), invasions, lures and showcases — from the in-memory fort cache, no DB scan. Whole-instance; requires fort_in_memory (503 otherwise). Presence-oriented: `count` is the number of resident forts offering each tuple; consumers typically use the distinct tuples to build filter options.",
 		Tags:          []string{"Pokestop"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
