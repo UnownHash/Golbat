@@ -9,19 +9,16 @@ import (
 	"golbat/pogo"
 )
 
-// TestHyperpbRecompileRepeatedStringDuplication is a CANARY for the hyperpb
-// v0.1.3 bug (https://github.com/bufbuild/hyperpb-go/issues/39) that
-// made proto_engine.pgo default to false: a profile-guided
-// Recompile produces a parser that duplicates repeated-string elements
-// (image_url decodes with 2 entries instead of 1). Found live by shadow
-// verification on fort_details traffic; the baseline compiled parser is
-// unaffected.
-//
-// This test asserts the bug IS PRESENT. When a hyperpb upgrade fixes it,
-// the test fails on purpose — that failure is the signal to delete this
-// canary and flip the proto_engine.pgo default back to true
-// (config/reader.go) for the measured ~4% decode win.
-func TestHyperpbRecompileRepeatedStringDuplication(t *testing.T) {
+// TestHyperpbRecompileRepeatedStringNoDuplication is a permanent regression
+// guard for https://github.com/bufbuild/hyperpb-go/issues/39: a profile-guided
+// Recompile once produced a parser that duplicated repeated-string field
+// elements (image_url decoded with a spurious leading empty entry). Shadow
+// verification caught it live on fort_details traffic; it was fixed upstream
+// in hyperpb PR #40. This test asserts the recompiled parser stays correct, so
+// a hyperpb downgrade or regression re-breaks CI rather than corrupting data
+// (which would only surface as proto_engine.pgo=true silently duplicating
+// strings under the recompiled parser).
+func TestHyperpbRecompileRepeatedStringNoDuplication(t *testing.T) {
 	src := &pogo.FortDetailsOutProto{
 		Id:       "FORT_TEST_1",
 		Name:     "Test Fort",
@@ -60,10 +57,9 @@ func TestHyperpbRecompileRepeatedStringDuplication(t *testing.T) {
 	}
 	recompiled := ty.Recompile(profile)
 
-	if got := parseLen(recompiled); got == 1 {
-		t.Fatal("hyperpb Recompile repeated-string duplication appears FIXED upstream: " +
-			"delete this canary and re-enable proto_engine.pgo by default (config/reader.go)")
-	} else {
-		t.Logf("canary: upstream bug still present (recompiled image_url len=%d, want 1) — proto_engine.pgo stays default-off", got)
+	if got := parseLen(recompiled); got != 1 {
+		t.Fatalf("hyperpb Recompile repeated-string duplication REGRESSED "+
+			"(image_url len=%d, want 1; issue #39): a hyperpb downgrade/regression "+
+			"has re-broken profile-guided decoding — do NOT run proto_engine.pgo=true", got)
 	}
 }

@@ -5,7 +5,7 @@ go 1.26
 toolchain go1.26.0
 
 require (
-	buf.build/go/hyperpb v0.1.3
+	buf.build/go/hyperpb v0.1.4-0.20260713222322-15810fedcdbe
 	github.com/Depado/ginprom v1.8.3
 	github.com/UnownHash/gohbem v0.12.0
 	github.com/danielgtaylor/huma/v2 v2.38.0

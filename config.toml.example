@@ -137,12 +137,11 @@ default = "hyperpb"
 shadow_sample_rate = 0.01
 
 # Hyperpb runtime PGO warmup (profile the first 256 packets/method, then
-# recompile the parser). DEFAULT OFF: hyperpb v0.1.3's Recompile produces a
-# parser that corrupts repeated-string fields (bufbuild/hyperpb-go#39; caught by shadow
-# verification; see TestHyperpbRecompileRepeatedStringDuplication). Leave
-# false until the upstream fix lands. Unrelated to Go compiler PGO
-# (default.pgo / `make pgo-capture`), which is safe and recommended.
-pgo = false
+# recompile the parser for a measured ~4% decode win). The repeated-string
+# corruption bug that forced this off (bufbuild/hyperpb-go#39) was fixed
+# upstream (hyperpb PR #40) and verified against our protos. Unrelated to Go
+# compiler PGO (default.pgo / `make pgo-capture`), which is also recommended.
+pgo = true
 
 # Per-method engine pins, keyed by the [proto_engine] resolution name (the
 # "method" argument to engineFor -- see protoengine.go's engMethod* constants

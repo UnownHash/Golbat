@@ -132,7 +132,7 @@ An unrecognized value (anything other than `"std"`, `"hyperpb"`, or `""`) logs a
 - `default.pgo`, when present, is automatically applied by Go (>= 1.21) when building the main package via the default `-pgo=auto` build flag. It is captured via `make pgo-capture` (see below) and should be committed to the repo once a production profile exists — not yet present on this branch.
 
 **Hyperpb runtime PGO** (config `proto_engine.pgo`, default `true`):
-- Runtime warmup (`proto_engine.pgo`, DEFAULT OFF): when enabled, the first 256 packets per method (or 10 minutes, whichever comes first) record a live-traffic profile and the parser tables are recompiled from it. Off by default because hyperpb v0.1.3's Recompile duplicates repeated-string elements (see the TestHyperpbRecompileRepeatedStringDuplication canary — it fails when an upstream upgrade fixes this, which is the signal to re-enable).
+- Runtime warmup (`proto_engine.pgo`, default on): the first 256 packets per method (or 10 minutes, whichever comes first) record a live-traffic profile and the parser tables are recompiled from it (~4% decode win). This was briefly disabled after a hyperpb Recompile bug duplicated repeated-string elements (bufbuild/hyperpb-go#39), now fixed upstream (PR #40) and verified against our protos; `TestHyperpbRecompileRepeatedStringNoDuplication` guards against a regression.
 - Refresh periodically: `GOLBAT_URL=https://host:9001 GOLBAT_SECRET=... make pgo-capture` on a production instance captures a profile and commits it.
 
 ## Entity Model

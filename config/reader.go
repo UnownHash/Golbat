@@ -66,14 +66,14 @@ func ReadConfig() (configDefinition, error) {
 		ProtoEngine: protoEngine{
 			Default:          "hyperpb",
 			ShadowSampleRate: 0.01,
-			// Runtime PGO recompilation is OFF by default: hyperpb v0.1.3's
-			// Recompile produces a parser that duplicates repeated-string
-			// elements (github.com/bufbuild/hyperpb-go/issues/39; caught live by
-			// shadow verification on fort_details;
-			// minimal repro in TestHyperpbRecompileRepeatedStringDuplication).
-			// The baseline compiled parser is unaffected. Re-enable once the
-			// upstream fix lands — the canary test flips red when it does.
-			Pgo: false,
+			// Runtime PGO recompilation: profile the first 256 packets/method,
+			// then recompile the parser (measured ~4% decode win). The
+			// repeated-string duplication bug that forced this off
+			// (github.com/bufbuild/hyperpb-go/issues/39) was fixed upstream in
+			// hyperpb PR #40 and verified against our protos + the exact prod
+			// payload; TestHyperpbRecompileRepeatedStringNoDuplication guards
+			// against a regression/downgrade.
+			Pgo: true,
 		},
 		Weather: weather{
 			ProactiveIVSwitching:     true,
