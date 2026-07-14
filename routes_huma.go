@@ -226,6 +226,7 @@ func registerFortScanRoutes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
 	}
+	draftBadge(&availableOp)
 	huma.Register(api, availableOp, func(ctx context.Context, _ *struct{}) (*pokestopAvailableOutput, error) {
 		if !config.Config.FortInMemory {
 			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
