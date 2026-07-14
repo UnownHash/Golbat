@@ -34,6 +34,7 @@ type FortLookup struct {
 
 	// Pokestop - quest rewards only (both AR and no-AR stored, filter matches either)
 	LureId                     int16
+	LureExpireTimestamp        int64 // used to check expiry at filter time
 	QuestNoArRewardType        int16
 	QuestNoArRewardAmount      int16
 	QuestNoArRewardItemId      int16
@@ -57,6 +58,7 @@ type FortLookup struct {
 	ContestPokemonForm  int16
 	ContestPokemonType  int8
 	ContestTotalEntries int16
+	ShowcaseExpiry      int64 // used to check expiry at filter time
 
 	// Station
 	BattleEndTimestamp int64 // used to check expiry at filter time
@@ -180,47 +182,48 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
-	// Atomic per-key read-modify-write via Compute: this writer (under the
-	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
-	// INCIDENT entity lock) both update the same key, each preserving the
-	// other's fields. A plain Load->Store pair from the two lock domains
-	// can interleave and clobber — losing a just-stored incident or
-	// reverting quest fields until the next save. Compute's callback runs
-	// under the map's bucket lock, so keep it to field copies only (the
-	// showcase JSON parse happens out here).
-	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
-	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
-		nl := FortLookup{
-			FortType:                   POKESTOP,
-			Lat:                        pokestop.Lat,
-			Lon:                        pokestop.Lon,
-			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
-			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
-			LureId:                     pokestop.LureId,
-			QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
-			QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
-			QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
-			QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
-			QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
-			QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
-			QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
-			QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
-			QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
-			QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
-			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
-			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
-			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-			ContestTotalEntries:        contestTotalEntries,
-		}
-		if loaded {
-			// Preserve the incident writer's fields
-			nl.IncidentDisplayType = existing.IncidentDisplayType
-			nl.IncidentStyle = existing.IncidentStyle
-			nl.IncidentCharacter = existing.IncidentCharacter
-			nl.IncidentPokemonId = existing.IncidentPokemonId
-			nl.IncidentPokemonForm = existing.IncidentPokemonForm
-		}
-		return nl, xsync.UpdateOp
+	// Preserve existing incident fields if present
+	var incidentDisplayType int8
+	var incidentStyle int8
+	var incidentCharacter int16
+	var incidentPokemonId int16
+	var incidentPokemonForm int16
+	if existing, ok := fortLookupCache.Load(pokestop.Id); ok {
+		incidentDisplayType = existing.IncidentDisplayType
+		incidentStyle = existing.IncidentStyle
+		incidentCharacter = existing.IncidentCharacter
+		incidentPokemonId = existing.IncidentPokemonId
+		incidentPokemonForm = existing.IncidentPokemonForm
+	}
+
+	fortLookupCache.Store(pokestop.Id, FortLookup{
+		FortType:                   POKESTOP,
+		Lat:                        pokestop.Lat,
+		Lon:                        pokestop.Lon,
+		PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
+		IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
+		LureId:                     pokestop.LureId,
+		LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
+		QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
+		QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
+		QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
+		QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
+		QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
+		QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
+		QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
+		QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
+		QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
+		QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
+		IncidentDisplayType:        incidentDisplayType,
+		IncidentStyle:              incidentStyle,
+		IncidentCharacter:          incidentCharacter,
+		IncidentPokemonId:          incidentPokemonId,
+		IncidentPokemonForm:        incidentPokemonForm,
+		ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
+		ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+		ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+		ContestTotalEntries:        getContestTotalEntries(pokestop.ShowcaseRankings),
+		ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 	})
 }
 

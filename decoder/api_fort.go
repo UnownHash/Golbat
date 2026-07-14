@@ -137,7 +137,8 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			}
 		}
 	case POKESTOP:
-		if filter.LureId != nil && !slices.Contains(filter.LureId, fortLookup.LureId) {
+		if filter.LureId != nil &&
+			(fortLookup.LureExpireTimestamp <= now || !slices.Contains(filter.LureId, fortLookup.LureId)) {
 			return false
 		}
 
@@ -170,13 +171,17 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 
 		// Contest filters
-		if filter.ContestPokemonType != nil && !slices.Contains(filter.ContestPokemonType, fortLookup.ContestPokemonType) {
+		if filter.ContestPokemonType != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !slices.Contains(filter.ContestPokemonType, fortLookup.ContestPokemonType)) {
 			return false
 		}
-		if filter.ContestTotalEntries != nil && (fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
+		if filter.ContestTotalEntries != nil &&
+			(fortLookup.ShowcaseExpiry <= now ||
+				fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
 			return false
 		}
-		if filter.ContestPokemon != nil && !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm) {
+		if filter.ContestPokemon != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm)) {
 			return false
 		}
 
