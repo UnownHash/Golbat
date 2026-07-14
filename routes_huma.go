@@ -137,8 +137,13 @@ type fortScanOutput struct {
 	Body decoder.ApiFortCombinedScanResult
 }
 
-// registerFortScanRoutes registers the four in-memory fort scan operations.
-// These are gated by config.Config.FortInMemory and return 503 when disabled.
+type pokestopAvailableOutput struct {
+	Body *decoder.ApiAvailablePokestops
+}
+
+// registerFortScanRoutes registers the four in-memory fort scan operations
+// plus the pokestop-available aggregate. These are gated by
+// config.Config.FortInMemory and return 503 when disabled.
 func registerFortScanRoutes(api huma.API) {
 	gymOp := huma.Operation{
 		OperationID:   "scan-gyms",
@@ -210,6 +215,22 @@ func registerFortScanRoutes(api huma.API) {
 			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
 		}
 		return &fortScanOutput{Body: *decoder.FortCombinedScanEndpoint(in.Body, dbDetails)}, nil
+	})
+
+	availableOp := huma.Operation{
+		OperationID:   "available-pokestops",
+		Method:        http.MethodGet,
+		Path:          "/api/pokestop/available",
+		Summary:       "List currently available pokestop rewards/invasions/lures/showcases",
+		Tags:          []string{"Pokestop"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	huma.Register(api, availableOp, func(ctx context.Context, _ *struct{}) (*pokestopAvailableOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &pokestopAvailableOutput{Body: decoder.GetAvailablePokestops(time.Now().Unix())}, nil
 	})
 }
 
