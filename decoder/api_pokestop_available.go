@@ -111,11 +111,15 @@ func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 				Slot1PokemonId: in.Slot1PokemonId, Slot1Form: in.Slot1Form,
 			}]++
 		}
+		// FortLookup QuestNoAr* mirrors quest_* (the AR quest → with_ar=true);
+		// QuestAr* mirrors alternative_quest_* (non-AR → with_ar=false). Must
+		// match the questConditionKeysFromPokestop convention or the cross-check
+		// cries wolf.
 		if fl.QuestNoArRewardType != 0 {
-			rewards[questRewardKey{false, fl.QuestNoArRewardType, fl.QuestNoArRewardItemId, fl.QuestNoArRewardAmount, fl.QuestNoArRewardPokemonId, fl.QuestNoArRewardPokemonForm}]++
+			rewards[questRewardKey{true, fl.QuestNoArRewardType, fl.QuestNoArRewardItemId, fl.QuestNoArRewardAmount, fl.QuestNoArRewardPokemonId, fl.QuestNoArRewardPokemonForm}]++
 		}
 		if fl.QuestArRewardType != 0 {
-			rewards[questRewardKey{true, fl.QuestArRewardType, fl.QuestArRewardItemId, fl.QuestArRewardAmount, fl.QuestArRewardPokemonId, fl.QuestArRewardPokemonForm}]++
+			rewards[questRewardKey{false, fl.QuestArRewardType, fl.QuestArRewardItemId, fl.QuestArRewardAmount, fl.QuestArRewardPokemonId, fl.QuestArRewardPokemonForm}]++
 		}
 		return true
 	})

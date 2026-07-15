@@ -73,9 +73,12 @@ func adjustQuestConditions(keys []questConditionKey, delta int64) {
 // order makes the result directly comparable via questKeysEqual.
 func questConditionKeysFromPokestop(p *Pokestop) []questConditionKey {
 	var keys []questConditionKey
+	// quest_* is the AR quest (Golbat decode writes quest_* when haveAr is
+	// set), which ReactMap labels with_ar=true; alternative_quest_* is the
+	// non-AR quest (with_ar=false).
 	if p.QuestRewardType.Valid {
 		keys = append(keys, questConditionKey{
-			WithAr:     false,
+			WithAr:     true,
 			RewardType: int16(p.QuestRewardType.ValueOrZero()),
 			ItemId:     int16(p.QuestItemId.ValueOrZero()),
 			Amount:     int16(p.QuestRewardAmount.ValueOrZero()),
@@ -87,7 +90,7 @@ func questConditionKeysFromPokestop(p *Pokestop) []questConditionKey {
 	}
 	if p.AlternativeQuestRewardType.Valid {
 		keys = append(keys, questConditionKey{
-			WithAr:     true,
+			WithAr:     false,
 			RewardType: int16(p.AlternativeQuestRewardType.ValueOrZero()),
 			ItemId:     int16(p.AlternativeQuestItemId.ValueOrZero()),
 			Amount:     int16(p.AlternativeQuestRewardAmount.ValueOrZero()),
