@@ -69,7 +69,13 @@ type ApiAvailablePokestops struct {
 // drift between the two.
 func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 	start := time.Now()
-	res := &ApiAvailablePokestops{}
+	// Initialize the slices so empty categories marshal as [] rather than null.
+	res := &ApiAvailablePokestops{
+		Quests:    []ApiPokestopQuestAvailable{},
+		Invasions: []ApiPokestopInvasionAvailable{},
+		Lures:     []ApiPokestopLureAvailable{},
+		Showcases: []ApiPokestopShowcaseAvailable{},
+	}
 	forts, incidents := 0, 0
 	lures := map[int16]int{}
 	shows := map[ApiPokestopShowcaseAvailable]int{} // key without Count
