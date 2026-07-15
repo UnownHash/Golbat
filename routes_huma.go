@@ -137,8 +137,13 @@ type fortScanOutput struct {
 	Body decoder.ApiFortCombinedScanResult
 }
 
-// registerFortScanRoutes registers the four in-memory fort scan operations.
-// These are gated by config.Config.FortInMemory and return 503 when disabled.
+type pokestopAvailableOutput struct {
+	Body *decoder.ApiAvailablePokestops
+}
+
+// registerFortScanRoutes registers the four in-memory fort scan operations
+// plus the pokestop-available aggregate. These are gated by
+// config.Config.FortInMemory and return 503 when disabled.
 func registerFortScanRoutes(api huma.API) {
 	gymOp := huma.Operation{
 		OperationID:   "scan-gyms",
@@ -210,6 +215,24 @@ func registerFortScanRoutes(api huma.API) {
 			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
 		}
 		return &fortScanOutput{Body: *decoder.FortCombinedScanEndpoint(in.Body, dbDetails)}, nil
+	})
+
+	availableOp := huma.Operation{
+		OperationID:   "available-pokestops",
+		Method:        http.MethodGet,
+		Path:          "/api/pokestop/available",
+		Summary:       "List currently available pokestop rewards/invasions/lures/showcases",
+		Description:   "Returns everything currently available on resident pokestops — distinct quest rewards (with title/target conditions), invasions, lures and showcases — from the in-memory fort cache, no DB scan. Whole-instance; requires fort_in_memory (503 otherwise). Presence-oriented: `count` is the number of resident forts offering each tuple; consumers typically use the distinct tuples to build filter options.",
+		Tags:          []string{"Pokestop"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&availableOp)
+	huma.Register(api, availableOp, func(ctx context.Context, _ *struct{}) (*pokestopAvailableOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &pokestopAvailableOutput{Body: decoder.GetAvailablePokestops(time.Now().Unix())}, nil
 	})
 }
 
