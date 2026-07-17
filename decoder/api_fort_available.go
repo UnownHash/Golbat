@@ -24,8 +24,8 @@ func GetAvailableForts(now int64) *ApiAvailableForts {
 		Gyms:      &ApiAvailableGyms{Raids: readRaids(now)},
 		Stations:  &ApiAvailableStations{Battles: readBattles(now)},
 	}
-	log.Infof("available-forts: %d raid, %d lure, %d invasion, %d showcase, %d battle options (maintained)",
-		len(res.Gyms.Raids), len(res.Pokestops.Lures), len(res.Pokestops.Invasions),
-		len(res.Pokestops.Showcases), len(res.Stations.Battles))
+	log.Infof("available-forts: %d quest, %d raid, %d lure, %d invasion, %d showcase, %d battle options (maintained)",
+		len(res.Pokestops.Quests), len(res.Gyms.Raids), len(res.Pokestops.Lures),
+		len(res.Pokestops.Invasions), len(res.Pokestops.Showcases), len(res.Stations.Battles))
 	return res
 }
