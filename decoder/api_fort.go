@@ -12,10 +12,11 @@ import (
 )
 
 type ApiFortScan struct {
-	Min        ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
-	Max        ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
-	Limit      int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
-	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. List conditions apply only when present: omit or send null for no constraint — an explicitly empty list matches nothing."`
+	Min           ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
+	Max           ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
+	Limit         int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
+	DnfFilters    []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. List conditions apply only when present: omit or send null for no constraint — an explicitly empty list matches nothing."`
+	WithIncidents bool               `json:"with_incidents" required:"false" doc:"Pokestop only: when true, each pokestop result includes its active incidents (invasions). Ignored for gym/station."`
 }
 
 type ApiFortDnfFilter struct {
@@ -49,6 +50,8 @@ type ApiFortDnfFilter struct {
 	// Station
 	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
 	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
+	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; null means no constraint."`
+	StationActive *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations whose end_time is in the future (still present); when false, only expired stations. Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
 }
 
 type ApiDnfId struct {
@@ -213,6 +216,12 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			}
 		}
 	case STATION:
+		if filter.StationActive != nil && *filter.StationActive != (fortLookup.StationEndTimestamp > now) {
+			return false
+		}
+		if filter.StationedGmax != nil && *filter.StationedGmax && fortLookup.TotalStationedGmax <= 0 {
+			return false
+		}
 		if filter.BattleLevel != nil || filter.BattlePokemon != nil {
 			if len(fortLookup.StationBattles) == 0 {
 				if fortLookup.BattleEndTimestamp <= now {
@@ -345,11 +354,19 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 	returnKeys, examined, skipped, total := internalGetForts(POKESTOP, retrieveParameters)
 	results := make([]*ApiPokestopResult, 0, len(returnKeys))
 	start := time.Now()
+	now := time.Now().Unix()
 
 	for _, key := range returnKeys {
 		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemon")
 		if err == nil && pokestop != nil {
 			pokestopCopy := buildPokestopResult(pokestop)
+			if unlock != nil {
+				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
+				unlock = nil
+			}
+			if retrieveParameters.WithIncidents {
+				pokestopCopy.Invasions = CollectPokestopIncidents(context.Background(), dbDetails, key, now)
+			}
 			results = append(results, &pokestopCopy)
 		}
 		if unlock != nil {
@@ -394,6 +411,7 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiFortCombinedScanResult {
 	gymKeys, pokestopKeys, stationKeys, examined, skipped, total := internalGetFortsCombined(retrieveParameters)
 	start := time.Now()
+	now := time.Now().Unix()
 
 	gyms := make([]*ApiGymResult, 0, len(gymKeys))
 	for _, key := range gymKeys {
@@ -412,6 +430,13 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemonPokemon")
 		if err == nil && pokestop != nil {
 			pokestopCopy := buildPokestopResult(pokestop)
+			if unlock != nil {
+				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
+				unlock = nil
+			}
+			if retrieveParameters.WithIncidents {
+				pokestopCopy.Invasions = CollectPokestopIncidents(context.Background(), dbDetails, key, now)
+			}
 			pokestops = append(pokestops, &pokestopCopy)
 		}
 		if unlock != nil {

@@ -141,9 +141,18 @@ type pokestopAvailableOutput struct {
 	Body *decoder.ApiAvailablePokestops
 }
 
+type gymAvailableOutput struct {
+	Body *decoder.ApiAvailableGyms
+}
+
+type stationAvailableOutput struct {
+	Body *decoder.ApiAvailableStations
+}
+
 // registerFortScanRoutes registers the four in-memory fort scan operations
-// plus the pokestop-available aggregate. These are gated by
-// config.Config.FortInMemory and return 503 when disabled.
+// plus the pokestop-available, gym-available and station-available
+// aggregates. These are gated by config.Config.FortInMemory and return 503
+// when disabled.
 func registerFortScanRoutes(api huma.API) {
 	gymOp := huma.Operation{
 		OperationID:   "scan-gyms",
@@ -234,6 +243,42 @@ func registerFortScanRoutes(api huma.API) {
 		}
 		return &pokestopAvailableOutput{Body: decoder.GetAvailablePokestops(time.Now().Unix())}, nil
 	})
+
+	gymAvailableOp := huma.Operation{
+		OperationID:   "available-gyms",
+		Method:        http.MethodGet,
+		Path:          "/api/gym/available",
+		Summary:       "List currently available gym teams/slots and raid options",
+		Description:   "Distinct (team, available-slots) pairs and active raid levels/bosses/eggs on resident gyms, from the in-memory fort cache (no DB scan). Whole-instance; requires fort_in_memory (503 otherwise).",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&gymAvailableOp)
+	huma.Register(api, gymAvailableOp, func(ctx context.Context, _ *struct{}) (*gymAvailableOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &gymAvailableOutput{Body: decoder.GetAvailableGyms(time.Now().Unix())}, nil
+	})
+
+	stationAvailableOp := huma.Operation{
+		OperationID:   "available-stations",
+		Method:        http.MethodGet,
+		Path:          "/api/station/available",
+		Summary:       "List currently available station battle options",
+		Description:   "Distinct active (battle level, pokemon) options on resident stations, from the in-memory fort cache (no DB scan). Whole-instance; requires fort_in_memory (503 otherwise).",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&stationAvailableOp)
+	huma.Register(api, stationAvailableOp, func(ctx context.Context, _ *struct{}) (*stationAvailableOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &stationAvailableOutput{Body: decoder.GetAvailableStations(time.Now().Unix())}, nil
+	})
 }
 
 // maxQueryIDs caps the number of ids accepted by the by-id batch query endpoints.
@@ -272,6 +317,11 @@ type gymByIdInput struct {
 	GymId string `path:"gym_id" doc:"Fort ID of the gym"`
 }
 type gymByIdOutput struct{ Body decoder.ApiGymResult }
+
+type stationByIdInput struct {
+	StationId string `path:"station_id" doc:"ID of the station"`
+}
+type stationByIdOutput struct{ Body decoder.ApiStationResult }
 
 type pokestopByIdInput struct {
 	FortId string `path:"fort_id" doc:"Fort ID of the pokestop"`
@@ -506,6 +556,32 @@ func registerTier3Routes(api huma.API) {
 		return &gymByIdOutput{Body: decoder.BuildGymResult(gym)}, nil
 	})
 
+	// GET /api/station/id/{station_id}
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-station",
+		Method:        http.MethodGet,
+		Path:          "/api/station/id/{station_id}",
+		Summary:       "Get a single station by id",
+		Description:   "Returns the station with the given id, or 404 if not present.",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusAccepted,
+	}, func(ctx context.Context, in *stationByIdInput) (*stationByIdOutput, error) {
+		tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		station, unlock, err := decoder.GetStationRecordReadOnly(tctx, dbDetails, in.StationId, "API.GetStation")
+		if unlock != nil {
+			defer unlock()
+		}
+		cancel()
+		if err != nil {
+			return nil, huma.Error500InternalServerError("error retrieving station")
+		}
+		if station == nil {
+			return nil, huma.Error404NotFound("station not found")
+		}
+		return &stationByIdOutput{Body: decoder.BuildStationResult(station)}, nil
+	})
+
 	// GET /api/pokestop/id/{fort_id}
 	huma.Register(api, huma.Operation{
 		OperationID:   "get-pokestop",
@@ -518,16 +594,24 @@ func registerTier3Routes(api huma.API) {
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *pokestopByIdInput) (*pokestopByIdOutput, error) {
 		pokestop, unlock, err := decoder.PeekPokestopRecord(in.FortId, "API.GetPokestop")
-		if unlock != nil {
-			defer unlock()
-		}
 		if err != nil {
+			if unlock != nil {
+				unlock()
+			}
 			return nil, huma.Error500InternalServerError("error retrieving pokestop")
 		}
 		if pokestop == nil {
+			if unlock != nil {
+				unlock()
+			}
 			return nil, huma.Error404NotFound("pokestop not found")
 		}
-		return &pokestopByIdOutput{Body: decoder.BuildPokestopResult(pokestop)}, nil
+		body := decoder.BuildPokestopResult(pokestop)
+		if unlock != nil {
+			unlock() // release before locking incidents
+		}
+		body.Invasions = decoder.CollectPokestopIncidents(ctx, dbDetails, in.FortId, time.Now().Unix())
+		return &pokestopByIdOutput{Body: body}, nil
 	})
 
 	// GET /api/tappable/id/{tappable_id}

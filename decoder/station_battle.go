@@ -49,6 +49,7 @@ type FortLookupStationBattle struct {
 // incidents on a stop so concurrent incidents (e.g. an invasion + a showcase) don't
 // clobber one another.
 type FortLookupIncident struct {
+	Id              string // incident id — fetch handle into incidentCache (not DNF-used)
 	DisplayType     int8
 	Style           int8
 	Character       int16
@@ -445,6 +446,8 @@ func applyTopStationBattleToApiStationResult(result *ApiStationResult, battles [
 	result.BattlePokemonBreadMode = battle.BattlePokemonBreadMode.Ptr()
 	result.BattlePokemonMove1 = battle.BattlePokemonMove1.Ptr()
 	result.BattlePokemonMove2 = battle.BattlePokemonMove2.Ptr()
+	result.BattlePokemonStamina = battle.BattlePokemonStamina.Ptr()
+	result.BattlePokemonCpMultiplier = battle.BattlePokemonCpMultiplier.Ptr()
 }
 
 func applyTopStationBattleToStationWebhook(hook *StationWebhook, battles []StationBattleData) {

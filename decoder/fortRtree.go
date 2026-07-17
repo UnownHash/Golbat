@@ -58,11 +58,13 @@ type FortLookup struct {
 	ShowcaseExpiry      int64 // used to check expiry at filter time
 
 	// Station
-	BattleEndTimestamp int64 // used to check expiry at filter time
-	BattleLevel        int8
-	BattlePokemonId    int16
-	BattlePokemonForm  int16
-	StationBattles     []FortLookupStationBattle
+	StationEndTimestamp int64 // station end_time; liveness gate at filter time
+	BattleEndTimestamp  int64 // used to check expiry at filter time
+	BattleLevel         int8
+	BattlePokemonId     int16
+	BattlePokemonForm   int16
+	StationBattles      []FortLookupStationBattle
+	TotalStationedGmax  int16
 }
 
 var fortLookupCache *xsync.Map[string, FortLookup]
@@ -255,10 +257,12 @@ func updateStationLookup(station *Station) {
 func updateStationLookupWithBattles(station *Station, stationBattles []StationBattleData) {
 	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
-		FortType:       STATION,
-		Lat:            station.Lat,
-		Lon:            station.Lon,
-		StationBattles: battles,
+		FortType:            STATION,
+		Lat:                 station.Lat,
+		Lon:                 station.Lon,
+		StationBattles:      battles,
+		TotalStationedGmax:  int16(station.TotalStationedGmax.ValueOrZero()),
+		StationEndTimestamp: station.EndTime,
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
 	fortLookupCache.Store(station.Id, lookup)
@@ -270,6 +274,7 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 	now := time.Now().Unix()
 	updated := FortLookupIncident{
+		Id:              incident.Id,
 		DisplayType:     int8(incident.DisplayType),
 		Style:           int8(incident.Style),
 		Character:       incident.Character,

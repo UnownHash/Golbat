@@ -9,6 +9,10 @@ import (
 
 // goldenSnapshotGym is a representative gym with a mix of set and unset (null)
 // fields across every nullable column, used to pin the exact wire format.
+// GuardingPokemonDisplay, Defenders, and Rsvps are populated with pre-serialized
+// JSON blobs (as they are stored on the DB record) so the test exercises the
+// raw-JSON passthrough (the stored bytes are emitted verbatim, not decoded and
+// re-encoded), not just the null case.
 func goldenSnapshotGym() *Gym {
 	return &Gym{
 		GymData: GymData{
@@ -24,7 +28,9 @@ func goldenSnapshotGym() *Gym {
 			Updated:             1699999999,
 			RaidPokemonId:       null.IntFrom(150),
 			GuardingPokemonId:   null.IntFrom(143),
-			// GuardingPokemonDisplay intentionally left null
+			GuardingPokemonDisplay: null.StringFrom(
+				`{"form":91,"costume":0,"gender":1,"shiny":true,"temp_evolution":0,"alignment":0,"badge":0,"background":7}`,
+			),
 			AvailableSlots:       null.IntFrom(3),
 			TeamId:               null.IntFrom(2),
 			RaidLevel:            null.IntFrom(5),
@@ -51,7 +57,9 @@ func goldenSnapshotGym() *Gym {
 			PowerUpPoints:        null.IntFrom(50),
 			// PowerUpEndTimestamp intentionally left null
 			Description: null.StringFrom("A test gym"),
-			// Defenders intentionally left null
+			Defenders: null.StringFrom(
+				`[{"pokemon_id":143,"form":0,"costume":0,"gender":1,"shiny":false,"temp_evolution":0,"alignment":1,"badge":0,"background":null,"deployed_ms":3600000,"deployed_time":1699996400,"battles_won":4,"battles_lost":1,"times_fed":2,"motivation_now":0.6667,"cp_now":2500,"cp_when_deployed":2600}]`,
+			),
 			Rsvps: null.StringFrom("[]"),
 		},
 	}
@@ -60,14 +68,17 @@ func goldenSnapshotGym() *Gym {
 // TestBuildGymResult_GoldenSnapshot pins the exact JSON wire format of an
 // ApiGymResult. Any accidental change to a json tag, field type, pointer/null
 // handling, or field order will fail this test. Unset nullable fields serialize
-// as null (pointers are nil, no omitempty).
+// as null (pointers are nil, no omitempty). guarding_pokemon_display and
+// defenders are raw-JSON passthrough, so they appear on the wire exactly as
+// stored (including zero-valued fields that a re-marshal through
+// ApiGymGuardingPokemon/ApiGymDefender would have omitted via omitempty).
 func TestBuildGymResult_GoldenSnapshot(t *testing.T) {
 	got, err := json.Marshal(buildGymResult(goldenSnapshotGym()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":"gym-abc","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":null,"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":null,"rsvps":"[]"}`
+	const want = `{"id":"gym-abc","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":{"form":91,"costume":0,"gender":1,"shiny":true,"temp_evolution":0,"alignment":0,"badge":0,"background":7},"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":[{"pokemon_id":143,"form":0,"costume":0,"gender":1,"shiny":false,"temp_evolution":0,"alignment":1,"badge":0,"background":null,"deployed_ms":3600000,"deployed_time":1699996400,"battles_won":4,"battles_lost":1,"times_fed":2,"motivation_now":0.6667,"cp_now":2500,"cp_when_deployed":2600}],"rsvps":[]}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

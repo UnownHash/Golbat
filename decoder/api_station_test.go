@@ -17,11 +17,14 @@ func goldenSnapshotStation() *Station {
 			Lat:               45.6789,
 			Lon:               -120.9876,
 			Name:              "Test Station",
+			CellId:            1234567890123,
 			StartTime:         1699990000,
 			EndTime:           1700003600,
+			CooldownComplete:  1700002000,
 			IsBattleAvailable: true,
-			Updated:           1699999999,
-			BattleLevel:       null.IntFrom(5),
+			// IsInactive intentionally left false
+			Updated:     1699999999,
+			BattleLevel: null.IntFrom(5),
 			// BattleStart intentionally left null
 			BattleEnd:            null.IntFrom(1700001000),
 			BattlePokemonId:      null.IntFrom(150),
@@ -51,7 +54,7 @@ func TestBuildStationResult_GoldenSnapshot(t *testing.T) {
 
 	// Battle flat-fields are now projected from the station battle cache
 	// (getKnownStationBattles), which is empty here, so they serialize as null.
-	const want = `{"id":"station-abc","lat":45.6789,"lon":-120.9876,"name":"Test Station","start_time":1699990000,"end_time":1700003600,"is_battle_available":true,"updated":1699999999,"battle_level":null,"battle_start":null,"battle_end":null,"battle_pokemon_id":null,"battle_pokemon_form":null,"battle_pokemon_costume":null,"battle_pokemon_gender":null,"battle_pokemon_alignment":null,"battle_pokemon_bread_mode":null,"battle_pokemon_move_1":null,"battle_pokemon_move_2":null,"total_stationed_pokemon":6,"total_stationed_gmax":null,"stationed_pokemon":"[{\"pokemon_id\":150}]"}`
+	const want = `{"id":"station-abc","lat":45.6789,"lon":-120.9876,"name":"Test Station","cell_id":1234567890123,"start_time":1699990000,"end_time":1700003600,"cooldown_complete":1700002000,"is_battle_available":true,"is_inactive":false,"updated":1699999999,"battle_level":null,"battle_start":null,"battle_end":null,"battle_pokemon_id":null,"battle_pokemon_form":null,"battle_pokemon_costume":null,"battle_pokemon_gender":null,"battle_pokemon_alignment":null,"battle_pokemon_bread_mode":null,"battle_pokemon_move_1":null,"battle_pokemon_move_2":null,"battle_pokemon_stamina":null,"battle_pokemon_cp_multiplier":null,"total_stationed_pokemon":6,"total_stationed_gmax":null,"stationed_pokemon":"[{\"pokemon_id\":150}]"}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)
