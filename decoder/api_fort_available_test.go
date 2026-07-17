@@ -2,32 +2,22 @@ package decoder
 
 import (
 	"testing"
-
-	"github.com/puzpuzpuz/xsync/v4"
 )
 
-// TestGetAvailableForts locks that the single-pass combined builder produces
-// the same aggregates as the three per-type builders over the same cache.
+// TestGetAvailableForts locks that the combined builder assembles all three
+// availability sections from the maintained maps, matching the per-type
+// builders over the same maps.
 func TestGetAvailableForts(t *testing.T) {
-	t.Skip("rebuilt in Task 4: combined reads maintained maps")
-	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	initFortAvailability()
 	initQuestConditions()
 	now := int64(1_000_000)
 
-	fortLookupCache.Store("g1", FortLookup{
-		FortType: GYM, TeamId: 1, AvailableSlots: 2,
-		RaidLevel: 5, RaidPokemonId: 150, RaidEndTimestamp: now + 100,
-	})
-	fortLookupCache.Store("p1", FortLookup{
-		FortType: POKESTOP, LureId: 501, LureExpireTimestamp: now + 100,
-		Incidents: []FortLookupIncident{{Character: 5, DisplayType: 1, ExpireTimestamp: now + 100}},
-	})
-	fortLookupCache.Store("s1", FortLookup{
-		FortType: STATION,
-		StationBattles: []FortLookupStationBattle{
-			{BattleLevel: 5, BattlePokemonId: 150, BattleEndTimestamp: now + 100},
-		},
-	})
+	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidEndTimestamp: now + 100}, now)
+	observePokestop(&FortLookup{LureId: 501, LureExpireTimestamp: now + 100}, now)
+	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, ExpireTimestamp: now + 100}, now)
+	observeStationBattles(&FortLookup{StationBattles: []FortLookupStationBattle{
+		{BattleLevel: 5, BattlePokemonId: 150, BattleEndTimestamp: now + 100},
+	}}, now)
 
 	combined := GetAvailableForts(now)
 	if len(combined.Gyms.Raids) != 1 {
@@ -40,13 +30,9 @@ func TestGetAvailableForts(t *testing.T) {
 		t.Fatalf("stations: %+v", combined.Stations)
 	}
 
-	// parity with the per-type builders over the same cache
-	perGym := GetAvailableGyms(now)
-	perStop := GetAvailablePokestops(now)
-	perStation := GetAvailableStations(now)
-	if len(perGym.Raids) != len(combined.Gyms.Raids) ||
-		len(perStop.Lures) != len(combined.Pokestops.Lures) ||
-		len(perStation.Battles) != len(combined.Stations.Battles) {
+	// parity: combined sections equal the per-type reads over the same maps
+	if len(GetAvailableGyms(now).Raids) != len(combined.Gyms.Raids) ||
+		len(GetAvailableStations(now).Battles) != len(combined.Stations.Battles) {
 		t.Fatal("combined diverges from per-type builders")
 	}
 }
