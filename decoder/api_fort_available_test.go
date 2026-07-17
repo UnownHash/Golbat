@@ -29,7 +29,7 @@ func TestGetAvailableForts(t *testing.T) {
 	})
 
 	combined := GetAvailableForts(now)
-	if len(combined.Gyms.Teams) != 1 || len(combined.Gyms.Raids) != 1 {
+	if len(combined.Gyms.Raids) != 1 {
 		t.Fatalf("gyms: %+v", combined.Gyms)
 	}
 	if len(combined.Pokestops.Lures) != 1 || len(combined.Pokestops.Invasions) != 1 {
@@ -43,7 +43,7 @@ func TestGetAvailableForts(t *testing.T) {
 	perGym := GetAvailableGyms(now)
 	perStop := GetAvailablePokestops(now)
 	perStation := GetAvailableStations(now)
-	if len(perGym.Teams) != len(combined.Gyms.Teams) ||
+	if len(perGym.Raids) != len(combined.Gyms.Raids) ||
 		len(perStop.Lures) != len(combined.Pokestops.Lures) ||
 		len(perStation.Battles) != len(combined.Stations.Battles) {
 		t.Fatal("combined diverges from per-type builders")

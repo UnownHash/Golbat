@@ -29,9 +29,6 @@ func TestGetAvailableGyms(t *testing.T) {
 
 	res := GetAvailableGyms(now)
 
-	if len(res.Teams) != 3 { // (1,2),(2,6),(1,0)
-		t.Fatalf("teams: %+v", res.Teams)
-	}
 	// raids: boss 150 lvl5, egg lvl3; expired 999 excluded
 	var bosses, eggs int
 	for _, r := range res.Raids {

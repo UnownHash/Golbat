@@ -6,14 +6,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// ApiGymTeamAvailable is one distinct (team, available-slots) pair present on
-// resident gyms, with how many gyms carry it. ReactMap derives its t/g keys.
-type ApiGymTeamAvailable struct {
-	TeamId         int8 `json:"team_id" doc:"Controlling team id (0 = uncontested)"`
-	AvailableSlots int8 `json:"available_slots" doc:"Open defender slots"`
-	Count          int  `json:"count" doc:"Number of resident gyms with this team/slots"`
-}
-
 // ApiGymRaidAvailable is one distinct active raid option on resident gyms.
 // PokemonId 0 means an egg (no boss yet). ReactMap derives its e/r/boss keys.
 type ApiGymRaidAvailable struct {
@@ -25,8 +17,11 @@ type ApiGymRaidAvailable struct {
 
 // ApiAvailableGyms is the whole-instance gym filter snapshot served by
 // GET /api/gym/available.
+// ApiAvailableGyms is the whole-instance gym filter snapshot. Only raids are
+// dynamic — team/slot filter keys are generated statically by the consumer
+// (every team/slot combination exists on a live instance), so they are not
+// aggregated here.
 type ApiAvailableGyms struct {
-	Teams []ApiGymTeamAvailable `json:"teams" doc:"Distinct team + available-slot pairs on resident gyms"`
 	Raids []ApiGymRaidAvailable `json:"raids" doc:"Distinct active raid levels/bosses/eggs on resident gyms"`
 }
 
@@ -37,18 +32,16 @@ type ApiAvailableGyms struct {
 // gymAvailAcc accumulates the gym availability aggregate; ingest assumes the
 // fort is a GYM. Shared by the per-type and combined builders.
 type gymAvailAcc struct {
-	teams map[ApiGymTeamAvailable]int
 	raids map[ApiGymRaidAvailable]int
 	forts int
 }
 
 func newGymAvailAcc() *gymAvailAcc {
-	return &gymAvailAcc{teams: map[ApiGymTeamAvailable]int{}, raids: map[ApiGymRaidAvailable]int{}}
+	return &gymAvailAcc{raids: map[ApiGymRaidAvailable]int{}}
 }
 
 func (a *gymAvailAcc) ingest(fl *FortLookup, now int64) {
 	a.forts++
-	a.teams[ApiGymTeamAvailable{TeamId: fl.TeamId, AvailableSlots: fl.AvailableSlots}]++
 	if fl.RaidLevel > 0 && fl.RaidEndTimestamp > now {
 		a.raids[ApiGymRaidAvailable{RaidLevel: fl.RaidLevel, PokemonId: fl.RaidPokemonId, Form: fl.RaidPokemonForm}]++
 	}
@@ -57,11 +50,7 @@ func (a *gymAvailAcc) ingest(fl *FortLookup, now int64) {
 // result is a pure finalizer — no logging (the caller owns the log line so the
 // combined builder doesn't emit a spurious per-type "built" entry).
 func (a *gymAvailAcc) result() *ApiAvailableGyms {
-	res := &ApiAvailableGyms{Teams: []ApiGymTeamAvailable{}, Raids: []ApiGymRaidAvailable{}}
-	for k, n := range a.teams {
-		k.Count = n
-		res.Teams = append(res.Teams, k)
-	}
+	res := &ApiAvailableGyms{Raids: []ApiGymRaidAvailable{}}
 	for k, n := range a.raids {
 		k.Count = n
 		res.Raids = append(res.Raids, k)
@@ -82,7 +71,7 @@ func GetAvailableGyms(now int64) *ApiAvailableGyms {
 	if statsCollector != nil {
 		statsCollector.ObserveApiScan("available-gyms", time.Since(start).Seconds())
 	}
-	log.Infof("available-gyms built in %s: scanned %d gyms -> %d team/slot, %d raid options",
-		time.Since(start), acc.forts, len(res.Teams), len(res.Raids))
+	log.Infof("available-gyms built in %s: scanned %d gyms -> %d raid options",
+		time.Since(start), acc.forts, len(res.Raids))
 	return res
 }
