@@ -262,6 +262,7 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
 	fortLookupCache.Store(station.Id, lookup)
+	observeStationBattles(&lookup, time.Now().Unix())
 }
 
 // updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup

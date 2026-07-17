@@ -40,3 +40,34 @@ func TestObserveExpiryAndReadRaids(t *testing.T) {
 		t.Fatal("read must return non-nil empty slice")
 	}
 }
+
+func TestObserveStationBattlesAndRead(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	// station with two active battles (slice) — both distinct options
+	observeStationBattles(&FortLookup{StationBattles: []FortLookupStationBattle{
+		{BattleLevel: 5, BattlePokemonId: 150, BattlePokemonForm: 0, BattleEndTimestamp: 2000},
+		{BattleLevel: 3, BattlePokemonId: 0, BattlePokemonForm: 0, BattleEndTimestamp: 2000},
+	}}, now)
+	// level 0 -> ignored; expired -> ignored
+	observeStationBattles(&FortLookup{StationBattles: []FortLookupStationBattle{
+		{BattleLevel: 0, BattleEndTimestamp: 2000},
+		{BattleLevel: 5, BattlePokemonId: 999, BattleEndTimestamp: 500},
+	}}, now)
+	// no slice: fall back to the top-battle scalar projection
+	observeStationBattles(&FortLookup{BattleLevel: 4, BattlePokemonId: 200, BattleEndTimestamp: 2000}, now)
+
+	got := readBattles(now)
+	if len(got) != 3 {
+		t.Fatalf("want 3 battle options, got %d: %+v", len(got), got)
+	}
+	for _, b := range got {
+		if b.PokemonId == 999 {
+			t.Fatal("expired battle leaked")
+		}
+	}
+	if len(readBattles(3000)) != 0 {
+		t.Fatal("all battles expired -> empty")
+	}
+}

@@ -100,3 +100,38 @@ func readRaids(now int64) []ApiGymRaidAvailable {
 	})
 	return out
 }
+
+// observeStationBattles records every distinct active battle option on a
+// station: the StationBattles slice when present, else the top-battle scalar
+// projection. Level-0 ("no battle") observations are gated out here since
+// observeExpiry only gates on expiry, not on the level-0 sentinel.
+func observeStationBattles(fl *FortLookup, now int64) {
+	obs := func(level int8, id, form int16, end int64) {
+		if level == 0 {
+			return
+		}
+		observeExpiry(battleExpiry, battleKey{level, id, form}, end, now)
+	}
+	if len(fl.StationBattles) == 0 {
+		obs(fl.BattleLevel, fl.BattlePokemonId, fl.BattlePokemonForm, fl.BattleEndTimestamp)
+		return
+	}
+	for _, b := range fl.StationBattles {
+		obs(b.BattleLevel, b.BattlePokemonId, b.BattlePokemonForm, b.BattleEndTimestamp)
+	}
+}
+
+// readBattles emits the distinct active station battle options, pruning
+// expired keys. Strong Range (not RangeRelaxed): each key visited at most once.
+func readBattles(now int64) []ApiStationBattleAvailable {
+	out := []ApiStationBattleAvailable{}
+	battleExpiry.Range(func(k battleKey, exp int64) bool {
+		if exp > now {
+			out = append(out, ApiStationBattleAvailable{BattleLevel: k.BattleLevel, PokemonId: k.PokemonId, Form: k.Form})
+		} else {
+			pruneExpired(battleExpiry, k, now)
+		}
+		return true
+	})
+	return out
+}

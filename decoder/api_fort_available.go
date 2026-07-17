@@ -16,21 +16,17 @@ type ApiAvailableForts struct {
 	Stations  *ApiAvailableStations  `json:"stations" doc:"Station availability (same shape as /api/station/available)"`
 }
 
-// GetAvailableForts builds the pokestop/station availability aggregates in a
-// single fortLookupCache range, dispatching each fort to its type's
-// accumulator. Gyms are read from the maintained raid index (see
-// decoder/fort_availability.go) instead of being scanned here; Tasks 2-4
-// migrate pokestops/stations onto the same maintained-index pattern and drop
+// GetAvailableForts builds the pokestop availability aggregate from a single
+// fortLookupCache range. Gyms and stations are read from their maintained
+// indexes (see decoder/fort_availability.go) instead of being scanned here;
+// Tasks 3-4 migrate pokestops onto the same maintained-index pattern and drop
 // this scan entirely.
 func GetAvailableForts(now int64) *ApiAvailableForts {
 	start := time.Now()
-	p, s := newPokestopAvailAcc(), newStationAvailAcc()
+	p := newPokestopAvailAcc()
 	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
-		switch fl.FortType {
-		case POKESTOP:
+		if fl.FortType == POKESTOP {
 			p.ingest(&fl, now)
-		case STATION:
-			s.ingest(&fl, now)
 		}
 		return true
 	})
@@ -39,13 +35,13 @@ func GetAvailableForts(now int64) *ApiAvailableForts {
 	res := &ApiAvailableForts{
 		Pokestops: p.result(),
 		Gyms:      GetAvailableGyms(now),
-		Stations:  s.result(),
+		Stations:  GetAvailableStations(now),
 	}
 	verifyQuestAggregate(p.rewards) // same pokestop cross-check the per-type build runs
 	if statsCollector != nil {
 		statsCollector.ObserveApiScan("available-forts", time.Since(start).Seconds())
 	}
-	log.Infof("available-forts built in %s: one pass over %d pokestops / %d stations (gyms maintained)",
-		time.Since(start), p.forts, s.forts)
+	log.Infof("available-forts built in %s: one pass over %d pokestops (gyms/stations maintained)",
+		time.Since(start), p.forts)
 	return res
 }
