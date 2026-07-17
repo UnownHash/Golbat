@@ -92,7 +92,7 @@ func readRaids(now int64) []ApiGymRaidAvailable {
 	out := []ApiGymRaidAvailable{}
 	raidExpiry.Range(func(k raidKey, exp int64) bool {
 		if exp > now {
-			out = append(out, ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: k.PokemonId, Form: k.Form})
+			out = append(out, ApiGymRaidAvailable(k))
 		} else {
 			pruneExpired(raidExpiry, k, now)
 		}
@@ -127,7 +127,7 @@ func readBattles(now int64) []ApiStationBattleAvailable {
 	out := []ApiStationBattleAvailable{}
 	battleExpiry.Range(func(k battleKey, exp int64) bool {
 		if exp > now {
-			out = append(out, ApiStationBattleAvailable{BattleLevel: k.BattleLevel, PokemonId: k.PokemonId, Form: k.Form})
+			out = append(out, ApiStationBattleAvailable(k))
 		} else {
 			pruneExpired(battleExpiry, k, now)
 		}
@@ -179,7 +179,7 @@ func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
 	out := []ApiPokestopShowcaseAvailable{}
 	showcaseExpiry.Range(func(k showcaseKey, exp int64) bool {
 		if exp > now {
-			out = append(out, ApiPokestopShowcaseAvailable{PokemonId: k.PokemonId, Form: k.Form, TypeId: k.TypeId})
+			out = append(out, ApiPokestopShowcaseAvailable(k))
 		} else {
 			pruneExpired(showcaseExpiry, k, now)
 		}
@@ -194,10 +194,7 @@ func readInvasions(now int64) []ApiPokestopInvasionAvailable {
 	out := []ApiPokestopInvasionAvailable{}
 	invasionExpiry.Range(func(k invasionKey, exp int64) bool {
 		if exp > now {
-			out = append(out, ApiPokestopInvasionAvailable{
-				Character: k.Character, DisplayType: k.DisplayType, Confirmed: k.Confirmed,
-				Slot1PokemonId: k.Slot1PokemonId, Slot1Form: k.Slot1Form,
-			})
+			out = append(out, ApiPokestopInvasionAvailable(k))
 		} else {
 			pruneExpired(invasionExpiry, k, now)
 		}
