@@ -14,12 +14,15 @@ type ApiAvailableForts struct {
 }
 
 // GetAvailableForts assembles all three availability sections from the
-// maintained indexes — no fortLookupCache scan.
+// maintained indexes — no fortLookupCache scan. It calls the internal
+// build/read helpers directly (not the public GetAvailable{Pokestops,Gyms,
+// Stations} wrappers), so it emits exactly one combined Info line instead of
+// one per section plus its own.
 func GetAvailableForts(now int64) *ApiAvailableForts {
 	res := &ApiAvailableForts{
-		Pokestops: GetAvailablePokestops(now),
-		Gyms:      GetAvailableGyms(now),
-		Stations:  GetAvailableStations(now),
+		Pokestops: buildAvailablePokestops(now),
+		Gyms:      &ApiAvailableGyms{Raids: readRaids(now)},
+		Stations:  &ApiAvailableStations{Battles: readBattles(now)},
 	}
 	log.Infof("available-forts: %d raid, %d lure, %d invasion, %d showcase, %d battle options (maintained)",
 		len(res.Gyms.Raids), len(res.Pokestops.Lures), len(res.Pokestops.Invasions),

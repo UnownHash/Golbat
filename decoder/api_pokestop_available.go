@@ -54,9 +54,13 @@ type ApiAvailablePokestops struct {
 	Showcases []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focus pokemon/type"`
 }
 
-// GetAvailablePokestops reads the maintained lure/showcase/invasion indexes and
-// the maintained quest-conditions aggregate (quests unchanged) — no fort scan.
-func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
+// buildAvailablePokestops assembles the pokestop availability snapshot from
+// the maintained lure/showcase/invasion indexes and the maintained
+// quest-conditions aggregate (quests unchanged) — no fort scan, no logging.
+// Shared by GetAvailablePokestops (which logs its own line for the per-type
+// endpoint) and GetAvailableForts (which folds these counts into its single
+// combined log line instead of logging again here).
+func buildAvailablePokestops(now int64) *ApiAvailablePokestops {
 	res := &ApiAvailablePokestops{
 		Quests:    []ApiPokestopQuestAvailable{},
 		Invasions: readInvasions(now),
@@ -66,6 +70,13 @@ func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 	for _, c := range GetAvailableQuestConditions() {
 		res.Quests = append(res.Quests, ApiPokestopQuestAvailable(c))
 	}
+	return res
+}
+
+// GetAvailablePokestops reads the maintained lure/showcase/invasion indexes and
+// the maintained quest-conditions aggregate (quests unchanged) — no fort scan.
+func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
+	res := buildAvailablePokestops(now)
 	log.Infof("available-pokestops: %d quests, %d invasions, %d lures, %d showcases (maintained)",
 		len(res.Quests), len(res.Invasions), len(res.Lures), len(res.Showcases))
 	return res
