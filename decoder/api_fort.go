@@ -15,7 +15,7 @@ type ApiFortScan struct {
 	Min           ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
 	Max           ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
 	Limit         int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
-	DnfFilters    []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. List conditions apply only when present: omit or send null for no constraint — an explicitly empty list matches nothing."`
+	DnfFilters    []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. Omitting this array (or sending it empty/null) matches ALL forts of the requested type. Within a clause, a list-typed condition applies only when present: omit or send null for no constraint — an explicitly empty inner list matches nothing."`
 	WithIncidents bool               `json:"with_incidents" required:"false" doc:"Pokestop only: when true, each pokestop result includes its active incidents (invasions). Ignored for gym/station."`
 }
 
@@ -37,20 +37,17 @@ type ApiFortDnfFilter struct {
 	QuestRewardPokemon []ApiDnfId        `json:"quest_reward_pokemon" required:"false" doc:"Pokestop only: allowed quest reward pokemon/form pairs; matched against either the AR or no-AR quest. Omitted or null means no reward pokemon constraint."`
 
 	// Pokestop - incident
-	IncidentDisplayType []int8     `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; omitted or null means no incident display type constraint."`
-	IncidentStyle       []int8     `json:"incident_style" required:"false" doc:"Pokestop only: allowed incident styles; omitted or null means no incident style constraint."`
-	IncidentCharacter   []int16    `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
-	IncidentPokemon     []ApiDnfId `json:"incident_pokemon" required:"false" doc:"Pokestop only: allowed incident pokemon/form pairs; omitted or null means no incident pokemon constraint."`
+	IncidentDisplayType []int8  `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; omitted or null means no incident display type constraint."`
+	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
 
 	// Pokestop - contest
-	ContestPokemon      []ApiDnfId        `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
-	ContestPokemonType  []int8            `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
-	ContestTotalEntries *ApiFortDnfMinMax `json:"contest_total_entries" required:"false" doc:"Pokestop only: inclusive range for the contest's total number of entries; null means no contest entries constraint."`
+	ContestPokemon     []ApiDnfId `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemonType []int8     `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
 
 	// Station
 	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
 	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
-	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; null means no constraint."`
+	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; when false, only stations without any. Null means no constraint."`
 	StationActive *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations whose end_time is in the future (still present); when false, only expired stations. Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
 }
 
@@ -178,19 +175,13 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			(fortLookup.ShowcaseExpiry <= now || !slices.Contains(filter.ContestPokemonType, fortLookup.ContestPokemonType)) {
 			return false
 		}
-		if filter.ContestTotalEntries != nil &&
-			(fortLookup.ShowcaseExpiry <= now ||
-				fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
-			return false
-		}
 		if filter.ContestPokemon != nil &&
 			(fortLookup.ShowcaseExpiry <= now || !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm)) {
 			return false
 		}
 
 		// Incident filters - match any non-expired incident in the slice
-		if filter.IncidentDisplayType != nil || filter.IncidentStyle != nil ||
-			filter.IncidentCharacter != nil || filter.IncidentPokemon != nil {
+		if filter.IncidentDisplayType != nil || filter.IncidentCharacter != nil {
 			matched := false
 			for _, inc := range fortLookup.Incidents {
 				if inc.ExpireTimestamp <= now {
@@ -199,13 +190,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 				if filter.IncidentDisplayType != nil && !slices.Contains(filter.IncidentDisplayType, inc.DisplayType) {
 					continue
 				}
-				if filter.IncidentStyle != nil && !slices.Contains(filter.IncidentStyle, inc.Style) {
-					continue
-				}
 				if filter.IncidentCharacter != nil && !slices.Contains(filter.IncidentCharacter, inc.Character) {
-					continue
-				}
-				if filter.IncidentPokemon != nil && !matchDnfIdPair(filter.IncidentPokemon, inc.Slot1PokemonId, inc.Slot1Form) {
 					continue
 				}
 				matched = true
@@ -219,7 +204,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		if filter.StationActive != nil && *filter.StationActive != (fortLookup.StationEndTimestamp > now) {
 			return false
 		}
-		if filter.StationedGmax != nil && *filter.StationedGmax && fortLookup.TotalStationedGmax <= 0 {
+		if filter.StationedGmax != nil && *filter.StationedGmax != (fortLookup.TotalStationedGmax > 0) {
 			return false
 		}
 		if filter.BattleLevel != nil || filter.BattlePokemon != nil {

@@ -1,12 +1,10 @@
 package decoder
 
 import (
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -51,11 +49,10 @@ type FortLookup struct {
 	Incidents []FortLookupIncident
 
 	// Pokestop - contest
-	ContestPokemonId    int16
-	ContestPokemonForm  int16
-	ContestPokemonType  int8
-	ContestTotalEntries int16
-	ShowcaseExpiry      int64 // used to check expiry at filter time
+	ContestPokemonId   int16
+	ContestPokemonForm int16
+	ContestPokemonType int8
+	ShowcaseExpiry     int64 // used to check expiry at filter time
 
 	// Station
 	StationEndTimestamp int64 // station end_time; liveness gate at filter time
@@ -193,7 +190,6 @@ func updatePokestopLookup(pokestop *Pokestop) {
 	// each preserving the other's fields. A plain Load->Store pair can
 	// interleave and clobber. Keep the callback to field copies — the
 	// showcase-rankings JSON parse is hoisted out.
-	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
 	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
 		nl := FortLookup{
 			FortType:                   POKESTOP,
@@ -216,7 +212,6 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
 			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-			ContestTotalEntries:        contestTotalEntries,
 			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 		}
 		if loaded {
@@ -276,7 +271,6 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 	updated := FortLookupIncident{
 		Id:              incident.Id,
 		DisplayType:     int8(incident.DisplayType),
-		Style:           int8(incident.Style),
 		Character:       incident.Character,
 		Confirmed:       incident.Confirmed,
 		Slot1PokemonId:  int16(incident.Slot1PokemonId.ValueOrZero()),
@@ -308,22 +302,6 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 		existing.Incidents = out
 		return existing, xsync.UpdateOp
 	})
-}
-
-// getContestTotalEntries parses showcase rankings JSON to get total entries
-func getContestTotalEntries(rankingsString null.String) int16 {
-	if !rankingsString.Valid {
-		return -1
-	}
-
-	type contestJson struct {
-		TotalEntries int `json:"total_entries"`
-	}
-	var cj contestJson
-	if json.Unmarshal([]byte(rankingsString.String), &cj) == nil {
-		return int16(cj.TotalEntries)
-	}
-	return -1
 }
 
 func addFortToTree(id string, lat float64, lon float64) {

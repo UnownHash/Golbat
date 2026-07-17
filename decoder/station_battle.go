@@ -51,7 +51,6 @@ type FortLookupStationBattle struct {
 type FortLookupIncident struct {
 	Id              string // incident id — fetch handle into incidentCache (not DNF-used)
 	DisplayType     int8
-	Style           int8
 	Character       int16
 	Confirmed       bool
 	Slot1PokemonId  int16

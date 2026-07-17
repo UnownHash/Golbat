@@ -240,3 +240,22 @@ slices can merge incrementally.
 | D | **Three pure per-type backend modules** under `server/src/filters/fort/`, not one class. |
 | E | **Observability log** shows examined → DNF-dropped → returned → residual-dropped → final, to expose the DNF gap per query. |
 | F | Both changes extend the **open PRs** (#385 Golbat, #1228 ReactMap); no new PRs. |
+
+
+## 11. Post-review dead-surface cleanup (2026-07-17)
+
+The dual-PR review audited every `ApiFortDnfFilter` field against what consumers send. Removed
+(structurally unusable by ReactMap, no other reader):
+
+- `incident_style` (+ `FortLookupIncident.Style`) — ReactMap has no style concept.
+- `incident_pokemon` — deliberately rejected consumer-side (confirmed-slot semantics under-return;
+  `a` keys expand to `incident_character` instead). `FortLookupIncident.Slot1PokemonId/Form` stay —
+  `/api/pokestop/available` reads them.
+- `contest_total_entries` (+ `FortLookup.ContestTotalEntries` and the per-save showcase-rankings JSON
+  parse) — no entry-count filter exists in the UI.
+
+Kept though currently unsent — **future-sendable**: `power_up_level`, `team_id`, `available_slots`.
+In `onlyAllGyms` mode `secondaryFilter` DOES narrow by team/slot/power-up keys, so the current
+poison-to-match-all for that mode could be replaced by real clauses using these fields (follow-up
+optimization). Also from review: `stationed_gmax:false` now symmetric (matches gmax-less stations);
+top-level `filters` doc clarified (omitted/empty array = match-all; empty *inner* lists match nothing).
