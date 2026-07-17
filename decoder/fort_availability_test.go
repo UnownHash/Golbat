@@ -71,3 +71,41 @@ func TestObserveStationBattlesAndRead(t *testing.T) {
 		t.Fatal("all battles expired -> empty")
 	}
 }
+
+func TestObservePokestopAggregatesAndRead(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	// lure + showcase on one stop
+	observePokestop(&FortLookup{
+		LureId: 501, LureExpireTimestamp: 2000,
+		ContestPokemonId: 25, ContestPokemonForm: 0, ContestPokemonType: 0, ShowcaseExpiry: 2000,
+	}, now)
+	// expired lure + no showcase -> both ignored
+	observePokestop(&FortLookup{LureId: 502, LureExpireTimestamp: 500}, now)
+
+	// invasions (per incident)
+	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, Confirmed: true, Slot1PokemonId: 41, ExpireTimestamp: 2000}, now)
+	observeInvasion(&FortLookupIncident{DisplayType: 9, ExpireTimestamp: 2000}, now)               // showcase incident, character 0
+	observeInvasion(&FortLookupIncident{Character: 30, DisplayType: 3, ExpireTimestamp: 500}, now) // expired
+
+	if l := readLures(now); len(l) != 1 || l[0].LureId != 501 {
+		t.Fatalf("lures: %+v", l)
+	}
+	if s := readShowcases(now); len(s) != 1 || s[0].PokemonId != 25 {
+		t.Fatalf("showcases: %+v", s)
+	}
+	inv := readInvasions(now)
+	if len(inv) != 2 {
+		t.Fatalf("want 2 invasions, got %d: %+v", len(inv), inv)
+	}
+	for _, in := range inv {
+		if in.Character == 30 {
+			t.Fatal("expired invasion leaked")
+		}
+	}
+	// everything expires
+	if len(readLures(3000)) != 0 || len(readShowcases(3000)) != 0 || len(readInvasions(3000)) != 0 {
+		t.Fatal("all pokestop aggregates should expire to empty")
+	}
+}

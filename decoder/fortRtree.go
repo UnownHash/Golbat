@@ -219,6 +219,15 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		return nl, xsync.UpdateOp
 	})
 
+	observePokestop(&FortLookup{
+		LureId:              pokestop.LureId,
+		LureExpireTimestamp: pokestop.LureExpireTimestamp.ValueOrZero(),
+		ContestPokemonId:    int16(pokestop.ShowcasePokemon.ValueOrZero()),
+		ContestPokemonForm:  int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+		ContestPokemonType:  int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+		ShowcaseExpiry:      pokestop.ShowcaseExpiry.ValueOrZero(),
+	}, time.Now().Unix())
+
 	// This is the sole writer of a pokestop's FortLookup entry, so it is also
 	// the single place quest-condition counts are reconciled: it fires on
 	// cache-miss load, every save (incl. quest change), and startup preload.
@@ -279,6 +288,7 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
 		ExpireTimestamp: incident.ExpirationTime,
 	}
+	observeInvasion(&updated, now)
 	// Atomic per-key read-modify-write via Compute — see updatePokestopLookup
 	// for the cross-lock-domain clobber this prevents.
 	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {

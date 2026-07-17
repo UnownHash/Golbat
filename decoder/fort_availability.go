@@ -135,3 +135,71 @@ func readBattles(now int64) []ApiStationBattleAvailable {
 	})
 	return out
 }
+
+// observePokestop records the lure and showcase options active on a pokestop.
+// LureId 0 means no lure; ContestPokemonId 0 means no active showcase — both
+// are gated here since observeExpiry only gates on expiry, not these sentinels.
+func observePokestop(fl *FortLookup, now int64) {
+	if fl.LureId != 0 {
+		observeExpiry(lureExpiry, fl.LureId, fl.LureExpireTimestamp, now)
+	}
+	if fl.ContestPokemonId != 0 {
+		observeExpiry(showcaseExpiry, showcaseKey{fl.ContestPokemonId, fl.ContestPokemonForm, fl.ContestPokemonType}, fl.ShowcaseExpiry, now)
+	}
+}
+
+// observeInvasion records the active invasion signature on one incident.
+func observeInvasion(inc *FortLookupIncident, now int64) {
+	observeExpiry(invasionExpiry, invasionKey{
+		Character: inc.Character, DisplayType: int16(inc.DisplayType), Confirmed: inc.Confirmed,
+		Slot1PokemonId: inc.Slot1PokemonId, Slot1Form: inc.Slot1Form,
+	}, inc.ExpireTimestamp, now)
+}
+
+// readLures emits the distinct active lure ids, pruning expired keys.
+// Strong Range (not RangeRelaxed): each key visited at most once.
+func readLures(now int64) []ApiPokestopLureAvailable {
+	out := []ApiPokestopLureAvailable{}
+	lureExpiry.Range(func(k int16, exp int64) bool {
+		if exp > now {
+			out = append(out, ApiPokestopLureAvailable{LureId: k})
+		} else {
+			pruneExpired(lureExpiry, k, now)
+		}
+		return true
+	})
+	return out
+}
+
+// readShowcases emits the distinct active showcase options, pruning expired
+// keys. Strong Range (not RangeRelaxed): each key visited at most once.
+func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
+	out := []ApiPokestopShowcaseAvailable{}
+	showcaseExpiry.Range(func(k showcaseKey, exp int64) bool {
+		if exp > now {
+			out = append(out, ApiPokestopShowcaseAvailable{PokemonId: k.PokemonId, Form: k.Form, TypeId: k.TypeId})
+		} else {
+			pruneExpired(showcaseExpiry, k, now)
+		}
+		return true
+	})
+	return out
+}
+
+// readInvasions emits the distinct active invasion signatures, pruning
+// expired keys. Strong Range (not RangeRelaxed): each key visited at most once.
+func readInvasions(now int64) []ApiPokestopInvasionAvailable {
+	out := []ApiPokestopInvasionAvailable{}
+	invasionExpiry.Range(func(k invasionKey, exp int64) bool {
+		if exp > now {
+			out = append(out, ApiPokestopInvasionAvailable{
+				Character: k.Character, DisplayType: k.DisplayType, Confirmed: k.Confirmed,
+				Slot1PokemonId: k.Slot1PokemonId, Slot1Form: k.Slot1Form,
+			})
+		} else {
+			pruneExpired(invasionExpiry, k, now)
+		}
+		return true
+	})
+	return out
+}
