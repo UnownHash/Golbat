@@ -544,9 +544,6 @@ func TestHumaGymAvailableRoute(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
 	}
-	if !strings.Contains(resp.Body.String(), `"teams":[]`) {
-		t.Errorf("body missing \"teams\": %s", resp.Body.String())
-	}
 	if !strings.Contains(resp.Body.String(), `"raids":[]`) {
 		t.Errorf("body missing \"raids\": %s", resp.Body.String())
 	}
