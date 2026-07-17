@@ -76,12 +76,14 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	initFortAvailability()
 	now := int64(1000)
 
-	// lure + showcase on one stop
+	// lure + pokemon-based showcase on one stop
 	observePokestop(&FortLookup{
 		LureId: 501, LureExpireTimestamp: 2000,
 		ContestPokemonId: 25, ContestPokemonForm: 0, ContestPokemonType: 0, ShowcaseExpiry: 2000,
 	}, now)
-	// expired lure + no showcase -> both ignored
+	// type-based showcase (pokemon id 0, type set) -> must also surface
+	observePokestop(&FortLookup{ContestPokemonId: 0, ContestPokemonType: 12, ShowcaseExpiry: 2000}, now)
+	// expired lure + no showcase (all zero) -> both ignored
 	observePokestop(&FortLookup{LureId: 502, LureExpireTimestamp: 500}, now)
 
 	// invasions (per incident)
@@ -92,8 +94,21 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	if l := readLures(now); len(l) != 1 || l[0].LureId != 501 {
 		t.Fatalf("lures: %+v", l)
 	}
-	if s := readShowcases(now); len(s) != 1 || s[0].PokemonId != 25 {
-		t.Fatalf("showcases: %+v", s)
+	if s := readShowcases(now); len(s) != 2 {
+		t.Fatalf("want 2 showcases (pokemon-based + type-based), got %d: %+v", len(s), s)
+	} else {
+		var pokemon, typeOnly bool
+		for _, sc := range s {
+			if sc.PokemonId == 25 {
+				pokemon = true
+			}
+			if sc.PokemonId == 0 && sc.TypeId == 12 {
+				typeOnly = true
+			}
+		}
+		if !pokemon || !typeOnly {
+			t.Fatalf("missing pokemon-based(25) or type-based(type 12) showcase: %+v", s)
+		}
 	}
 	inv := readInvasions(now)
 	if len(inv) != 2 {

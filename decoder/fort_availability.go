@@ -143,7 +143,9 @@ func observePokestop(fl *FortLookup, now int64) {
 	if fl.LureId != 0 {
 		observeExpiry(lureExpiry, fl.LureId, fl.LureExpireTimestamp, now)
 	}
-	if fl.ContestPokemonId != 0 {
+	// A showcase is either pokemon-based (ContestPokemonId) or type-based
+	// (ContestPokemonType, pokemon id 0 -> consumer key `h<type>`); surface both.
+	if fl.ContestPokemonId != 0 || fl.ContestPokemonType != 0 {
 		observeExpiry(showcaseExpiry, showcaseKey{fl.ContestPokemonId, fl.ContestPokemonForm, fl.ContestPokemonType}, fl.ShowcaseExpiry, now)
 	}
 }
