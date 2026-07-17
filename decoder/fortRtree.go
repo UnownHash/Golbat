@@ -18,7 +18,6 @@ type FortLookup struct {
 	FortType         FortType
 	Lat              float64
 	Lon              float64
-	PowerUpLevel     int8
 	IsArScanEligible bool
 
 	// Gym
@@ -195,7 +194,6 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			FortType:                   POKESTOP,
 			Lat:                        pokestop.Lat,
 			Lon:                        pokestop.Lon,
-			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
 			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
 			LureId:                     pokestop.LureId,
 			LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
@@ -233,7 +231,6 @@ func updateGymLookup(gym *Gym) {
 		FortType:            GYM,
 		Lat:                 gym.Lat,
 		Lon:                 gym.Lon,
-		PowerUpLevel:        int8(valueOrMinus1(gym.PowerUpLevel)),
 		IsArScanEligible:    gym.ArScanEligible.ValueOrZero() == 1,
 		AvailableSlots:      int8(gym.AvailableSlots.ValueOrZero()),
 		TeamId:              int8(gym.TeamId.ValueOrZero()),

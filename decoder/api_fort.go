@@ -20,8 +20,7 @@ type ApiFortScan struct {
 }
 
 type ApiFortDnfFilter struct {
-	PowerUpLevel     *ApiFortDnfMinMax `json:"power_up_level" required:"false" doc:"Inclusive power-up level range; null means no power-up level constraint."`
-	IsArScanEligible *bool             `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
+	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
 
 	// Gym
 	AvailableSlots *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
@@ -106,9 +105,6 @@ func matchDnfIdPair(filter []ApiDnfId, pokemonId int16, form int16) bool {
 func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDnfFilter, now int64) bool {
 	// fortType 0 means "match any type" (used by combined scan)
 	if fortType != 0 && fortType != fortLookup.FortType {
-		return false
-	}
-	if filter.PowerUpLevel != nil && (int16(fortLookup.PowerUpLevel) < filter.PowerUpLevel.Min || int16(fortLookup.PowerUpLevel) > filter.PowerUpLevel.Max) {
 		return false
 	}
 	if filter.IsArScanEligible != nil && !fortLookup.IsArScanEligible {
