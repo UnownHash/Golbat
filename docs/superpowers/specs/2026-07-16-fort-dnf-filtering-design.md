@@ -280,6 +280,7 @@ deferred `fort_types` scope), all omitted = bare probe. Locked by `TestCombinedF
 **Part 2 (ReactMap consumer, pending measurement):** best-effort coalescing — a ~10-15ms window keyed
 (user/session, source, bbox) merges the per-type mem-branch scans (which the client fires in the same
 pan tick) into one combined call with each registrant's clauses as its group; late arrivals and any
-combined failure fall back to the existing per-type scan. Decide after grepping
-`GetFortsInArea - scan time` from production logs: if per-scan times are ~1-3ms the saving is
-Golbat-CPU-at-scale only.
+combined failure fall back to the existing per-type scan. **Measured 2026-07-17 and REJECTED:** production scan times are 10-175µs per scan (tree size
+16k, viewport walks of 2-69 forts) — three scans per pan cost ~0.5ms of Golbat CPU total, and a
+coalescing window would add 20-100x more latency than it saves. Per-type scans stay. The typed
+groups remain valuable as an API-correctness fix for any future consumer of the combined endpoint.
