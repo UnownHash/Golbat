@@ -80,25 +80,32 @@ func pruneExpired[K comparable](m *xsync.Map[K, int64], key K, now int64) {
 	})
 }
 
+// readAvailable emits the distinct still-active options from a maintained
+// index, converting each live key to its API shape and pruning expired keys as
+// it goes. It uses the strong Map.Range (each key visited at most once —
+// RangeRelaxed could emit a duplicate); prune-on-read is the conditional
+// pruneExpired, never a blind Delete. Returns a non-nil empty slice, never nil.
+func readAvailable[K comparable, V any](m *xsync.Map[K, int64], now int64, conv func(K) V) []V {
+	out := []V{}
+	m.Range(func(k K, exp int64) bool {
+		if exp > now {
+			out = append(out, conv(k))
+		} else {
+			pruneExpired(m, k, now)
+		}
+		return true
+	})
+	return out
+}
+
 func observeRaid(fl *FortLookup, now int64) {
 	if fl.RaidLevel > 0 {
 		observeExpiry(raidExpiry, raidKey{fl.RaidLevel, fl.RaidPokemonId, fl.RaidPokemonForm}, fl.RaidEndTimestamp, now)
 	}
 }
 
-// readRaids emits the distinct active raid options, pruning expired keys.
-// Strong Range (not RangeRelaxed): each key visited at most once.
 func readRaids(now int64) []ApiGymRaidAvailable {
-	out := []ApiGymRaidAvailable{}
-	raidExpiry.Range(func(k raidKey, exp int64) bool {
-		if exp > now {
-			out = append(out, ApiGymRaidAvailable(k))
-		} else {
-			pruneExpired(raidExpiry, k, now)
-		}
-		return true
-	})
-	return out
+	return readAvailable(raidExpiry, now, func(k raidKey) ApiGymRaidAvailable { return ApiGymRaidAvailable(k) })
 }
 
 // observeStationBattles records every distinct active battle option on a
@@ -121,19 +128,8 @@ func observeStationBattles(fl *FortLookup, now int64) {
 	}
 }
 
-// readBattles emits the distinct active station battle options, pruning
-// expired keys. Strong Range (not RangeRelaxed): each key visited at most once.
 func readBattles(now int64) []ApiStationBattleAvailable {
-	out := []ApiStationBattleAvailable{}
-	battleExpiry.Range(func(k battleKey, exp int64) bool {
-		if exp > now {
-			out = append(out, ApiStationBattleAvailable(k))
-		} else {
-			pruneExpired(battleExpiry, k, now)
-		}
-		return true
-	})
-	return out
+	return readAvailable(battleExpiry, now, func(k battleKey) ApiStationBattleAvailable { return ApiStationBattleAvailable(k) })
 }
 
 // observePokestop records the lure and showcase options active on a pokestop.
@@ -158,47 +154,14 @@ func observeInvasion(inc *FortLookupIncident, now int64) {
 	}, inc.ExpireTimestamp, now)
 }
 
-// readLures emits the distinct active lure ids, pruning expired keys.
-// Strong Range (not RangeRelaxed): each key visited at most once.
 func readLures(now int64) []ApiPokestopLureAvailable {
-	out := []ApiPokestopLureAvailable{}
-	lureExpiry.Range(func(k int16, exp int64) bool {
-		if exp > now {
-			out = append(out, ApiPokestopLureAvailable{LureId: k})
-		} else {
-			pruneExpired(lureExpiry, k, now)
-		}
-		return true
-	})
-	return out
+	return readAvailable(lureExpiry, now, func(k int16) ApiPokestopLureAvailable { return ApiPokestopLureAvailable{LureId: k} })
 }
 
-// readShowcases emits the distinct active showcase options, pruning expired
-// keys. Strong Range (not RangeRelaxed): each key visited at most once.
 func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
-	out := []ApiPokestopShowcaseAvailable{}
-	showcaseExpiry.Range(func(k showcaseKey, exp int64) bool {
-		if exp > now {
-			out = append(out, ApiPokestopShowcaseAvailable(k))
-		} else {
-			pruneExpired(showcaseExpiry, k, now)
-		}
-		return true
-	})
-	return out
+	return readAvailable(showcaseExpiry, now, func(k showcaseKey) ApiPokestopShowcaseAvailable { return ApiPokestopShowcaseAvailable(k) })
 }
 
-// readInvasions emits the distinct active invasion signatures, pruning
-// expired keys. Strong Range (not RangeRelaxed): each key visited at most once.
 func readInvasions(now int64) []ApiPokestopInvasionAvailable {
-	out := []ApiPokestopInvasionAvailable{}
-	invasionExpiry.Range(func(k invasionKey, exp int64) bool {
-		if exp > now {
-			out = append(out, ApiPokestopInvasionAvailable(k))
-		} else {
-			pruneExpired(invasionExpiry, k, now)
-		}
-		return true
-	})
-	return out
+	return readAvailable(invasionExpiry, now, func(k invasionKey) ApiPokestopInvasionAvailable { return ApiPokestopInvasionAvailable(k) })
 }

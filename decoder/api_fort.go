@@ -356,13 +356,13 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 	return returnKeys, fortsExamined, fortsSkipped, fortTreeCopy.Len()
 }
 
-func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiGymScanResult {
-	returnKeys, examined, skipped, total := internalGetForts(GYM, retrieveParameters)
-	results := make([]*ApiGymResult, 0, len(returnKeys))
-	start := time.Now()
-
-	for _, key := range returnKeys {
-		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanGym")
+// collectGymResults loads each key's gym record read-only and builds its API
+// result, always releasing the per-record lock. Shared by the single-type and
+// combined scan endpoints; traceName distinguishes the caller in lock traces.
+func collectGymResults(dbDetails db.DbDetails, keys []string, traceName string) []*ApiGymResult {
+	results := make([]*ApiGymResult, 0, len(keys))
+	for _, key := range keys {
+		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, traceName)
 		if err == nil && gym != nil {
 			gymCopy := buildGymResult(gym)
 			results = append(results, &gymCopy)
@@ -371,6 +371,59 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 			unlock()
 		}
 	}
+	return results
+}
+
+// collectStationResults loads each key's station record read-only and builds
+// its API result, always releasing the per-record lock. Shared by the
+// single-type and combined scan endpoints; traceName distinguishes the caller.
+func collectStationResults(dbDetails db.DbDetails, keys []string, traceName string) []*ApiStationResult {
+	results := make([]*ApiStationResult, 0, len(keys))
+	for _, key := range keys {
+		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, traceName)
+		if err == nil && station != nil {
+			stationCopy := BuildStationResult(station)
+			results = append(results, &stationCopy)
+		}
+		if unlock != nil {
+			unlock()
+		}
+	}
+	return results
+}
+
+// collectPokestopResults loads each key's pokestop record read-only and builds
+// its API result. It releases the pokestop lock BEFORE collecting incidents to
+// preserve lock-order (pokestop then incidents), then optionally attaches
+// invasions. Shared by the single-type and combined scan endpoints; traceName
+// distinguishes the caller in lock traces.
+func collectPokestopResults(dbDetails db.DbDetails, keys []string, withIncidents bool, now int64, traceName string) []*ApiPokestopResult {
+	results := make([]*ApiPokestopResult, 0, len(keys))
+	for _, key := range keys {
+		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, traceName)
+		if err == nil && pokestop != nil {
+			pokestopCopy := buildPokestopResult(pokestop)
+			if unlock != nil {
+				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
+				unlock = nil
+			}
+			if withIncidents {
+				pokestopCopy.Invasions = CollectPokestopIncidents(context.Background(), dbDetails, key, now)
+			}
+			results = append(results, &pokestopCopy)
+		}
+		if unlock != nil {
+			unlock()
+		}
+	}
+	return results
+}
+
+func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiGymScanResult {
+	returnKeys, examined, skipped, total := internalGetForts(GYM, retrieveParameters)
+	start := time.Now()
+
+	results := collectGymResults(dbDetails, returnKeys, "API.GetScanGym")
 	log.Infof("GymScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiGymScanResult{
@@ -383,27 +436,9 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 
 func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiPokestopScanResult {
 	returnKeys, examined, skipped, total := internalGetForts(POKESTOP, retrieveParameters)
-	results := make([]*ApiPokestopResult, 0, len(returnKeys))
 	start := time.Now()
-	now := time.Now().Unix()
 
-	for _, key := range returnKeys {
-		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemon")
-		if err == nil && pokestop != nil {
-			pokestopCopy := buildPokestopResult(pokestop)
-			if unlock != nil {
-				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
-				unlock = nil
-			}
-			if retrieveParameters.WithIncidents {
-				pokestopCopy.Invasions = CollectPokestopIncidents(context.Background(), dbDetails, key, now)
-			}
-			results = append(results, &pokestopCopy)
-		}
-		if unlock != nil {
-			unlock()
-		}
-	}
+	results := collectPokestopResults(dbDetails, returnKeys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemon")
 	log.Infof("PokestopScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiPokestopScanResult{
@@ -416,19 +451,9 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 
 func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiStationScanResult {
 	returnKeys, examined, skipped, total := internalGetForts(STATION, retrieveParameters)
-	results := make([]*ApiStationResult, 0, len(returnKeys))
 	start := time.Now()
 
-	for _, key := range returnKeys {
-		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStation")
-		if err == nil && station != nil {
-			stationCopy := BuildStationResult(station)
-			results = append(results, &stationCopy)
-		}
-		if unlock != nil {
-			unlock()
-		}
-	}
+	results := collectStationResults(dbDetails, returnKeys, "API.GetScanStation")
 	log.Infof("StationScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiStationScanResult{
@@ -442,50 +467,10 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails db.DbDetails) *ApiFortCombinedScanResult {
 	gymKeys, pokestopKeys, stationKeys, examined, skipped, total := internalGetFortsCombined(retrieveParameters)
 	start := time.Now()
-	now := time.Now().Unix()
 
-	gyms := make([]*ApiGymResult, 0, len(gymKeys))
-	for _, key := range gymKeys {
-		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanGymPokemon")
-		if err == nil && gym != nil {
-			gymCopy := buildGymResult(gym)
-			gyms = append(gyms, &gymCopy)
-		}
-		if unlock != nil {
-			unlock()
-		}
-	}
-
-	pokestops := make([]*ApiPokestopResult, 0, len(pokestopKeys))
-	for _, key := range pokestopKeys {
-		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanpokemonPokemon")
-		if err == nil && pokestop != nil {
-			pokestopCopy := buildPokestopResult(pokestop)
-			if unlock != nil {
-				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
-				unlock = nil
-			}
-			if retrieveParameters.WithIncidents {
-				pokestopCopy.Invasions = CollectPokestopIncidents(context.Background(), dbDetails, key, now)
-			}
-			pokestops = append(pokestops, &pokestopCopy)
-		}
-		if unlock != nil {
-			unlock()
-		}
-	}
-
-	stations := make([]*ApiStationResult, 0, len(stationKeys))
-	for _, key := range stationKeys {
-		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, "API.GetScanStationPokemon")
-		if err == nil && station != nil {
-			stationCopy := BuildStationResult(station)
-			stations = append(stations, &stationCopy)
-		}
-		if unlock != nil {
-			unlock()
-		}
-	}
+	gyms := collectGymResults(dbDetails, gymKeys, "API.GetScanGymPokemon")
+	pokestops := collectPokestopResults(dbDetails, pokestopKeys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemonPokemon")
+	stations := collectStationResults(dbDetails, stationKeys, "API.GetScanStationPokemon")
 
 	log.Infof("FortCombinedScan - result buffer time %s, %d+%d+%d added",
 		time.Since(start), len(gyms), len(pokestops), len(stations))
