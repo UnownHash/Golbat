@@ -116,7 +116,9 @@ func (a *pokestopAvailAcc) ingest(fl *FortLookup, now int64) {
 	}
 }
 
-func (a *pokestopAvailAcc) result(start time.Time) *ApiAvailablePokestops {
+// result is a pure finalizer — no logging or verification (the caller owns
+// those, so the combined builder doesn't emit a spurious per-type entry).
+func (a *pokestopAvailAcc) result() *ApiAvailablePokestops {
 	// Initialize the slices so empty categories marshal as [] rather than null.
 	res := &ApiAvailablePokestops{
 		Quests:    []ApiPokestopQuestAvailable{},
@@ -141,8 +143,6 @@ func (a *pokestopAvailAcc) result(start time.Time) *ApiAvailablePokestops {
 		k.Count = n
 		res.Invasions = append(res.Invasions, k)
 	}
-	verifyQuestAggregate(a.rewards) // alert if the maintained map drifted from the direct FortLookup tally
-	logAvailablePokestops(time.Since(start), a.forts, a.incidents, res)
 	return res
 }
 
@@ -158,7 +158,10 @@ func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 		}
 		return true
 	})
-	return acc.result(start)
+	res := acc.result()
+	verifyQuestAggregate(acc.rewards) // alert if the maintained map drifted from the direct FortLookup tally
+	logAvailablePokestops(time.Since(start), acc.forts, acc.incidents, res)
+	return res
 }
 
 // questRewardKey is the reward signature shared by the maintained conditions map (minus title/target)

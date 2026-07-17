@@ -54,7 +54,9 @@ func (a *gymAvailAcc) ingest(fl *FortLookup, now int64) {
 	}
 }
 
-func (a *gymAvailAcc) result(start time.Time) *ApiAvailableGyms {
+// result is a pure finalizer — no logging (the caller owns the log line so the
+// combined builder doesn't emit a spurious per-type "built" entry).
+func (a *gymAvailAcc) result() *ApiAvailableGyms {
 	res := &ApiAvailableGyms{Teams: []ApiGymTeamAvailable{}, Raids: []ApiGymRaidAvailable{}}
 	for k, n := range a.teams {
 		k.Count = n
@@ -64,11 +66,6 @@ func (a *gymAvailAcc) result(start time.Time) *ApiAvailableGyms {
 		k.Count = n
 		res.Raids = append(res.Raids, k)
 	}
-	if statsCollector != nil {
-		statsCollector.ObserveApiScan("available-gyms", time.Since(start).Seconds())
-	}
-	log.Infof("available-gyms built in %s: scanned %d gyms -> %d team/slot, %d raid options",
-		time.Since(start), a.forts, len(res.Teams), len(res.Raids))
 	return res
 }
 
@@ -81,5 +78,11 @@ func GetAvailableGyms(now int64) *ApiAvailableGyms {
 		}
 		return true
 	})
-	return acc.result(start)
+	res := acc.result()
+	if statsCollector != nil {
+		statsCollector.ObserveApiScan("available-gyms", time.Since(start).Seconds())
+	}
+	log.Infof("available-gyms built in %s: scanned %d gyms -> %d team/slot, %d raid options",
+		time.Since(start), acc.forts, len(res.Teams), len(res.Raids))
+	return res
 }

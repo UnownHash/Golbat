@@ -55,17 +55,13 @@ func (a *stationAvailAcc) ingest(fl *FortLookup, now int64) {
 	}
 }
 
-func (a *stationAvailAcc) result(start time.Time) *ApiAvailableStations {
+// result is a pure finalizer — no logging (see gymAvailAcc.result).
+func (a *stationAvailAcc) result() *ApiAvailableStations {
 	res := &ApiAvailableStations{Battles: []ApiStationBattleAvailable{}}
 	for k, n := range a.battles {
 		k.Count = n
 		res.Battles = append(res.Battles, k)
 	}
-	if statsCollector != nil {
-		statsCollector.ObserveApiScan("available-stations", time.Since(start).Seconds())
-	}
-	log.Infof("available-stations built in %s: scanned %d stations -> %d battle options",
-		time.Since(start), a.forts, len(res.Battles))
 	return res
 }
 
@@ -78,5 +74,11 @@ func GetAvailableStations(now int64) *ApiAvailableStations {
 		}
 		return true
 	})
-	return acc.result(start)
+	res := acc.result()
+	if statsCollector != nil {
+		statsCollector.ObserveApiScan("available-stations", time.Since(start).Seconds())
+	}
+	log.Infof("available-stations built in %s: scanned %d stations -> %d battle options",
+		time.Since(start), acc.forts, len(res.Battles))
+	return res
 }

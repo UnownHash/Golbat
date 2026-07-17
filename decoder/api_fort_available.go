@@ -32,11 +32,14 @@ func GetAvailableForts(now int64) *ApiAvailableForts {
 		}
 		return true
 	})
+	// result() is pure — the combined builder emits ONE log line, not one per
+	// per-type finalizer.
 	res := &ApiAvailableForts{
-		Pokestops: p.result(start),
-		Gyms:      g.result(start),
-		Stations:  s.result(start),
+		Pokestops: p.result(),
+		Gyms:      g.result(),
+		Stations:  s.result(),
 	}
+	verifyQuestAggregate(p.rewards) // same pokestop cross-check the per-type build runs
 	if statsCollector != nil {
 		statsCollector.ObserveApiScan("available-forts", time.Since(start).Seconds())
 	}
