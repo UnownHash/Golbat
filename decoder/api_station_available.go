@@ -26,43 +26,57 @@ type ApiAvailableStations struct {
 // StationBattles slice when present, else fall back to the top-battle
 // projection; skip expired and level-0 battles.
 // Unlike isFortDnfMatch, level-0 battles are excluded here (ReactMap's !battle_level convention).
-func GetAvailableStations(now int64) *ApiAvailableStations {
-	start := time.Now()
-	res := &ApiAvailableStations{Battles: []ApiStationBattleAvailable{}}
-	battles := map[ApiStationBattleAvailable]int{}
-	forts := 0
+// stationAvailAcc accumulates the station availability aggregate; ingest
+// assumes the fort is a STATION. Shared by the per-type and combined builders.
+type stationAvailAcc struct {
+	battles map[ApiStationBattleAvailable]int
+	forts   int
+}
 
-	add := func(level int8, pokemonId, form int16, end int64) {
-		if level == 0 || end <= now {
-			return
-		}
-		battles[ApiStationBattleAvailable{BattleLevel: level, PokemonId: pokemonId, Form: form}]++
+func newStationAvailAcc() *stationAvailAcc {
+	return &stationAvailAcc{battles: map[ApiStationBattleAvailable]int{}}
+}
+
+func (a *stationAvailAcc) add(level int8, pokemonId, form int16, end, now int64) {
+	if level == 0 || end <= now {
+		return
 	}
+	a.battles[ApiStationBattleAvailable{BattleLevel: level, PokemonId: pokemonId, Form: form}]++
+}
 
-	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
-		if fl.FortType != STATION {
-			return true
-		}
-		forts++
-		if len(fl.StationBattles) == 0 {
-			add(fl.BattleLevel, fl.BattlePokemonId, fl.BattlePokemonForm, fl.BattleEndTimestamp)
-			return true
-		}
-		for _, b := range fl.StationBattles {
-			add(b.BattleLevel, b.BattlePokemonId, b.BattlePokemonForm, b.BattleEndTimestamp)
-		}
-		return true
-	})
+func (a *stationAvailAcc) ingest(fl *FortLookup, now int64) {
+	a.forts++
+	if len(fl.StationBattles) == 0 {
+		a.add(fl.BattleLevel, fl.BattlePokemonId, fl.BattlePokemonForm, fl.BattleEndTimestamp, now)
+		return
+	}
+	for _, b := range fl.StationBattles {
+		a.add(b.BattleLevel, b.BattlePokemonId, b.BattlePokemonForm, b.BattleEndTimestamp, now)
+	}
+}
 
-	for k, n := range battles {
+func (a *stationAvailAcc) result(start time.Time) *ApiAvailableStations {
+	res := &ApiAvailableStations{Battles: []ApiStationBattleAvailable{}}
+	for k, n := range a.battles {
 		k.Count = n
 		res.Battles = append(res.Battles, k)
 	}
-
 	if statsCollector != nil {
 		statsCollector.ObserveApiScan("available-stations", time.Since(start).Seconds())
 	}
 	log.Infof("available-stations built in %s: scanned %d stations -> %d battle options",
-		time.Since(start), forts, len(res.Battles))
+		time.Since(start), a.forts, len(res.Battles))
 	return res
+}
+
+func GetAvailableStations(now int64) *ApiAvailableStations {
+	start := time.Now()
+	acc := newStationAvailAcc()
+	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
+		if fl.FortType == STATION {
+			acc.ingest(&fl, now)
+		}
+		return true
+	})
+	return acc.result(start)
 }

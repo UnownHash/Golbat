@@ -34,38 +34,52 @@ type ApiAvailableGyms struct {
 // range over resident gyms — no maintained map (FortLookup carries every gym
 // filter field). Teams are all-resident (no time filter); raids require an
 // unexpired raid with level > 0.
-func GetAvailableGyms(now int64) *ApiAvailableGyms {
-	start := time.Now()
+// gymAvailAcc accumulates the gym availability aggregate; ingest assumes the
+// fort is a GYM. Shared by the per-type and combined builders.
+type gymAvailAcc struct {
+	teams map[ApiGymTeamAvailable]int
+	raids map[ApiGymRaidAvailable]int
+	forts int
+}
+
+func newGymAvailAcc() *gymAvailAcc {
+	return &gymAvailAcc{teams: map[ApiGymTeamAvailable]int{}, raids: map[ApiGymRaidAvailable]int{}}
+}
+
+func (a *gymAvailAcc) ingest(fl *FortLookup, now int64) {
+	a.forts++
+	a.teams[ApiGymTeamAvailable{TeamId: fl.TeamId, AvailableSlots: fl.AvailableSlots}]++
+	if fl.RaidLevel > 0 && fl.RaidEndTimestamp > now {
+		a.raids[ApiGymRaidAvailable{RaidLevel: fl.RaidLevel, PokemonId: fl.RaidPokemonId, Form: fl.RaidPokemonForm}]++
+	}
+}
+
+func (a *gymAvailAcc) result(start time.Time) *ApiAvailableGyms {
 	res := &ApiAvailableGyms{Teams: []ApiGymTeamAvailable{}, Raids: []ApiGymRaidAvailable{}}
-	teams := map[ApiGymTeamAvailable]int{}
-	raids := map[ApiGymRaidAvailable]int{}
-	forts := 0
-
-	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
-		if fl.FortType != GYM {
-			return true
-		}
-		forts++
-		teams[ApiGymTeamAvailable{TeamId: fl.TeamId, AvailableSlots: fl.AvailableSlots}]++
-		if fl.RaidLevel > 0 && fl.RaidEndTimestamp > now {
-			raids[ApiGymRaidAvailable{RaidLevel: fl.RaidLevel, PokemonId: fl.RaidPokemonId, Form: fl.RaidPokemonForm}]++
-		}
-		return true
-	})
-
-	for k, n := range teams {
+	for k, n := range a.teams {
 		k.Count = n
 		res.Teams = append(res.Teams, k)
 	}
-	for k, n := range raids {
+	for k, n := range a.raids {
 		k.Count = n
 		res.Raids = append(res.Raids, k)
 	}
-
 	if statsCollector != nil {
 		statsCollector.ObserveApiScan("available-gyms", time.Since(start).Seconds())
 	}
 	log.Infof("available-gyms built in %s: scanned %d gyms -> %d team/slot, %d raid options",
-		time.Since(start), forts, len(res.Teams), len(res.Raids))
+		time.Since(start), a.forts, len(res.Teams), len(res.Raids))
 	return res
+}
+
+func GetAvailableGyms(now int64) *ApiAvailableGyms {
+	start := time.Now()
+	acc := newGymAvailAcc()
+	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
+		if fl.FortType == GYM {
+			acc.ingest(&fl, now)
+		}
+		return true
+	})
+	return acc.result(start)
 }

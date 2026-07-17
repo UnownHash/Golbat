@@ -145,6 +145,9 @@ type gymAvailableOutput struct {
 	Body *decoder.ApiAvailableGyms
 }
 
+type fortAvailableOutput struct {
+	Body *decoder.ApiAvailableForts
+}
 type stationAvailableOutput struct {
 	Body *decoder.ApiAvailableStations
 }
@@ -260,6 +263,24 @@ func registerFortScanRoutes(api huma.API) {
 			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
 		}
 		return &gymAvailableOutput{Body: decoder.GetAvailableGyms(time.Now().Unix())}, nil
+	})
+
+	fortAvailableOp := huma.Operation{
+		OperationID:   "available-forts",
+		Method:        http.MethodGet,
+		Path:          "/api/fort/available",
+		Summary:       "List available options for all fort types in one pass",
+		Description:   "Pokestop, gym, and station availability aggregates (same shapes as the per-type /available endpoints) built from a single in-memory cache pass — use this instead of three per-type calls when refreshing everything. Whole-instance; requires fort_in_memory (503 otherwise).",
+		Tags:          []string{"Fort"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&fortAvailableOp)
+	huma.Register(api, fortAvailableOp, func(ctx context.Context, _ *struct{}) (*fortAvailableOutput, error) {
+		if !config.Config.FortInMemory {
+			return nil, huma.Error503ServiceUnavailable("fort_in_memory not enabled")
+		}
+		return &fortAvailableOutput{Body: decoder.GetAvailableForts(time.Now().Unix())}, nil
 	})
 
 	stationAvailableOp := huma.Operation{

@@ -67,8 +67,56 @@ type ApiAvailablePokestops struct {
 // tallies FortLookup's own quest-reward fields and cross-checks that tally
 // against the maintained map (verifyQuestAggregate) to catch reconciliation
 // drift between the two.
-func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
-	start := time.Now()
+// pokestopAvailAcc accumulates the pokestop availability aggregate; ingest
+// assumes the fort is a POKESTOP. Shared by the per-type and combined builders.
+type pokestopAvailAcc struct {
+	lures            map[int16]int
+	shows            map[ApiPokestopShowcaseAvailable]int // key without Count
+	inv              map[ApiPokestopInvasionAvailable]int // key without Count
+	rewards          map[questRewardKey]int               // FortLookup reward tally — cross-checks the maintained map
+	forts, incidents int
+}
+
+func newPokestopAvailAcc() *pokestopAvailAcc {
+	return &pokestopAvailAcc{
+		lures:   map[int16]int{},
+		shows:   map[ApiPokestopShowcaseAvailable]int{},
+		inv:     map[ApiPokestopInvasionAvailable]int{},
+		rewards: map[questRewardKey]int{},
+	}
+}
+
+func (a *pokestopAvailAcc) ingest(fl *FortLookup, now int64) {
+	a.forts++
+	if fl.LureId != 0 && fl.LureExpireTimestamp > now {
+		a.lures[fl.LureId]++
+	}
+	if fl.ContestPokemonId != 0 && fl.ShowcaseExpiry > now {
+		a.shows[ApiPokestopShowcaseAvailable{PokemonId: fl.ContestPokemonId, Form: fl.ContestPokemonForm, TypeId: fl.ContestPokemonType}]++
+	}
+	for _, in := range fl.Incidents {
+		if in.ExpireTimestamp <= now {
+			continue
+		}
+		a.incidents++
+		a.inv[ApiPokestopInvasionAvailable{
+			Character: in.Character, DisplayType: int16(in.DisplayType), Confirmed: in.Confirmed,
+			Slot1PokemonId: in.Slot1PokemonId, Slot1Form: in.Slot1Form,
+		}]++
+	}
+	// FortLookup QuestNoAr* mirrors quest_* (the AR quest → with_ar=true);
+	// QuestAr* mirrors alternative_quest_* (non-AR → with_ar=false). Must
+	// match the questConditionKeysFromPokestop convention or the cross-check
+	// cries wolf.
+	if fl.QuestNoArRewardType != 0 {
+		a.rewards[questRewardKey{true, fl.QuestNoArRewardType, fl.QuestNoArRewardItemId, fl.QuestNoArRewardAmount, fl.QuestNoArRewardPokemonId, fl.QuestNoArRewardPokemonForm}]++
+	}
+	if fl.QuestArRewardType != 0 {
+		a.rewards[questRewardKey{false, fl.QuestArRewardType, fl.QuestArRewardItemId, fl.QuestArRewardAmount, fl.QuestArRewardPokemonId, fl.QuestArRewardPokemonForm}]++
+	}
+}
+
+func (a *pokestopAvailAcc) result(start time.Time) *ApiAvailablePokestops {
 	// Initialize the slices so empty categories marshal as [] rather than null.
 	res := &ApiAvailablePokestops{
 		Quests:    []ApiPokestopQuestAvailable{},
@@ -76,69 +124,41 @@ func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 		Lures:     []ApiPokestopLureAvailable{},
 		Showcases: []ApiPokestopShowcaseAvailable{},
 	}
-	forts, incidents := 0, 0
-	lures := map[int16]int{}
-	shows := map[ApiPokestopShowcaseAvailable]int{} // key without Count
-	inv := map[ApiPokestopInvasionAvailable]int{}   // key without Count
-
 	// Quests (rewards + title/target) come solely from the maintained conditions map — distinct+counted.
 	// ApiQuestConditionResult and ApiPokestopQuestAvailable share identical fields (name/order/type), so
 	// a direct conversion carries every field without restating them.
 	for _, c := range GetAvailableQuestConditions() {
 		res.Quests = append(res.Quests, ApiPokestopQuestAvailable(c))
 	}
-
-	// ONE range: lures + showcases + invasions (response) + a quest-reward tally (verification only).
-	rewards := map[questRewardKey]int{} // direct FortLookup reward count — cross-checks the maintained map
-	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
-		if fl.FortType != POKESTOP {
-			return true
-		}
-		forts++
-		if fl.LureId != 0 && fl.LureExpireTimestamp > now {
-			lures[fl.LureId]++
-		}
-		if fl.ContestPokemonId != 0 && fl.ShowcaseExpiry > now {
-			shows[ApiPokestopShowcaseAvailable{PokemonId: fl.ContestPokemonId, Form: fl.ContestPokemonForm, TypeId: fl.ContestPokemonType}]++
-		}
-		for _, in := range fl.Incidents {
-			if in.ExpireTimestamp <= now {
-				continue
-			}
-			incidents++
-			inv[ApiPokestopInvasionAvailable{
-				Character: in.Character, DisplayType: int16(in.DisplayType), Confirmed: in.Confirmed,
-				Slot1PokemonId: in.Slot1PokemonId, Slot1Form: in.Slot1Form,
-			}]++
-		}
-		// FortLookup QuestNoAr* mirrors quest_* (the AR quest → with_ar=true);
-		// QuestAr* mirrors alternative_quest_* (non-AR → with_ar=false). Must
-		// match the questConditionKeysFromPokestop convention or the cross-check
-		// cries wolf.
-		if fl.QuestNoArRewardType != 0 {
-			rewards[questRewardKey{true, fl.QuestNoArRewardType, fl.QuestNoArRewardItemId, fl.QuestNoArRewardAmount, fl.QuestNoArRewardPokemonId, fl.QuestNoArRewardPokemonForm}]++
-		}
-		if fl.QuestArRewardType != 0 {
-			rewards[questRewardKey{false, fl.QuestArRewardType, fl.QuestArRewardItemId, fl.QuestArRewardAmount, fl.QuestArRewardPokemonId, fl.QuestArRewardPokemonForm}]++
-		}
-		return true
-	})
-
-	for id, n := range lures {
+	for id, n := range a.lures {
 		res.Lures = append(res.Lures, ApiPokestopLureAvailable{LureId: id, Count: n})
 	}
-	for k, n := range shows {
+	for k, n := range a.shows {
 		k.Count = n
 		res.Showcases = append(res.Showcases, k)
 	}
-	for k, n := range inv {
+	for k, n := range a.inv {
 		k.Count = n
 		res.Invasions = append(res.Invasions, k)
 	}
-
-	verifyQuestAggregate(rewards) // alert if the maintained map drifted from the direct FortLookup tally
-	logAvailablePokestops(time.Since(start), forts, incidents, res)
+	verifyQuestAggregate(a.rewards) // alert if the maintained map drifted from the direct FortLookup tally
+	logAvailablePokestops(time.Since(start), a.forts, a.incidents, res)
 	return res
+}
+
+// GetAvailablePokestops: one range over resident pokestops (lures, showcases,
+// invasions + the quest-reward verification tally); quest options come from
+// the maintained conditions map in result().
+func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
+	start := time.Now()
+	acc := newPokestopAvailAcc()
+	fortLookupCache.Range(func(_ string, fl FortLookup) bool {
+		if fl.FortType == POKESTOP {
+			acc.ingest(&fl, now)
+		}
+		return true
+	})
+	return acc.result(start)
 }
 
 // questRewardKey is the reward signature shared by the maintained conditions map (minus title/target)
