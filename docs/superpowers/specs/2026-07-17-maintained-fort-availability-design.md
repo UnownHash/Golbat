@@ -131,6 +131,7 @@ fort save / incident save / preload
 ## 6. Concurrency & correctness notes
 
 - Single-writer-domain per map ⇒ writes never race each other on a key beyond `Compute`'s own atomicity.
+- Use the strong `Map.Range` (each key visited at most once), **not** `RangeRelaxed` (which may visit a key more than once → a duplicate availability entry). `xsync/v4 v4.5.0` documents `Range` as safe to modify during iteration, including deletion — so prune-on-read during `Range` is supported.
 - Prune-on-read must delete **conditionally** (`Compute` with a delete-if-still-`<= now` predicate, §3.3), never a blind `Delete`: a blind delete could race a concurrent `observe` that just refreshed the key to a future expiry and wrongly drop a live option. The conditional re-check runs under the key's lock, so a refreshed key survives.
 - No eviction hook needed: an evicted fort's option remains valid until its expiry passes (the option genuinely is still active until then), then prunes on the next read.
 
