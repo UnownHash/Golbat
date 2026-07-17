@@ -19,6 +19,56 @@ type ApiFortScan struct {
 	WithIncidents bool               `json:"with_incidents" required:"false" doc:"Pokestop only: when true, each pokestop result includes its active incidents (invasions). Ignored for gym/station."`
 }
 
+// ApiFortTypeScanGroup scopes DNF clauses to ONE fort type within a combined
+// scan. Clauses are evaluated only against forts of that type, so a gym
+// clause can never vacuously match a pokestop (a clause's foreign-type fields
+// are all wildcards for other types).
+type ApiFortTypeScanGroup struct {
+	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd clauses for this fort type; omit, null or empty to match every fort of the type."`
+}
+
+// ApiFortCombinedScan is the request body for the combined /api/fort/scan.
+// Each present group opts its fort type into the scan with its own clause
+// set; an omitted/null group EXCLUDES that type. Omitting all three groups
+// matches every fort of every type (bare bbox probe).
+type ApiFortCombinedScan struct {
+	Min           ApiLatLon             `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
+	Max           ApiLatLon             `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
+	Limit         int                   `json:"limit" required:"false" doc:"Max results to return across all types; 0 uses the server default."`
+	WithIncidents bool                  `json:"with_incidents" required:"false" doc:"When true, each pokestop result includes its active incidents (invasions)."`
+	Gyms          *ApiFortTypeScanGroup `json:"gyms" required:"false" doc:"Include gyms, filtered by this group's clauses. Omitted or null excludes gyms (unless all three groups are omitted)."`
+	Pokestops     *ApiFortTypeScanGroup `json:"pokestops" required:"false" doc:"Include pokestops, filtered by this group's clauses. Omitted or null excludes pokestops (unless all three groups are omitted)."`
+	Stations      *ApiFortTypeScanGroup `json:"stations" required:"false" doc:"Include stations, filtered by this group's clauses. Omitted or null excludes stations (unless all three groups are omitted)."`
+}
+
+// combinedFortMatches applies the typed clause groups to one fort: the fort's
+// own type's group governs it exclusively. Excluded type -> false; group with
+// no clauses -> match-all for the type; else OR across the group's clauses.
+func combinedFortMatches(p *ApiFortCombinedScan, fl *FortLookup, now int64) bool {
+	var g *ApiFortTypeScanGroup
+	switch fl.FortType {
+	case GYM:
+		g = p.Gyms
+	case POKESTOP:
+		g = p.Pokestops
+	case STATION:
+		g = p.Stations
+	}
+	if g == nil {
+		// legacy bare-probe: all groups omitted = every type matches
+		return p.Gyms == nil && p.Pokestops == nil && p.Stations == nil
+	}
+	if len(g.DnfFilters) == 0 {
+		return true
+	}
+	for i := range g.DnfFilters {
+		if isFortDnfMatch(fl.FortType, fl, &g.DnfFilters[i], now) {
+			return true
+		}
+	}
+	return false
+}
+
 type ApiFortDnfFilter struct {
 	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
 
@@ -389,7 +439,7 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	}
 }
 
-func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *ApiFortCombinedScanResult {
+func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails db.DbDetails) *ApiFortCombinedScanResult {
 	gymKeys, pokestopKeys, stationKeys, examined, skipped, total := internalGetFortsCombined(retrieveParameters)
 	start := time.Now()
 	now := time.Now().Unix()
@@ -450,7 +500,7 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDet
 	}
 }
 
-func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestopKeys, stationKeys []string, examined, skipped, total int) {
+func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, pokestopKeys, stationKeys []string, examined, skipped, total int) {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
@@ -480,19 +530,7 @@ func internalGetFortsCombined(retrieveParameters ApiFortScan) (gymKeys, pokestop
 				return true
 			}
 
-			matched := false
-			if len(retrieveParameters.DnfFilters) == 0 {
-				matched = true
-			} else {
-				for i := range retrieveParameters.DnfFilters {
-					if isFortDnfMatch(0, &fortLookup, &retrieveParameters.DnfFilters[i], now) {
-						matched = true
-						break
-					}
-				}
-			}
-
-			if matched {
+			if combinedFortMatches(&retrieveParameters, &fortLookup, now) {
 				if _, dup := seenCombined[fortId]; dup {
 					return true
 				}

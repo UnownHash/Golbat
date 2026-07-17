@@ -132,7 +132,7 @@ type pokestopScanOutput struct{ Body decoder.ApiPokestopScanResult }
 type stationScanInput struct{ Body decoder.ApiFortScan }
 type stationScanOutput struct{ Body decoder.ApiStationScanResult }
 
-type fortScanInput struct{ Body decoder.ApiFortScan }
+type fortScanInput struct{ Body decoder.ApiFortCombinedScan }
 type fortScanOutput struct {
 	Body decoder.ApiFortCombinedScanResult
 }
@@ -213,7 +213,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/fort/scan",
 		Summary:       "Search all fort types in a bounding box (DNF filters)",
-		Description:   "Returns gyms, pokestops, and stations within [min,max] matching any DNF filter clause, in a single rtree traversal.",
+		Description:   "Returns the requested fort types within [min,max] in a single rtree traversal. Each present group (gyms/pokestops/stations) opts its type in with its own DNF clause set; omitted groups are excluded. Omitting all three groups returns everything.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
