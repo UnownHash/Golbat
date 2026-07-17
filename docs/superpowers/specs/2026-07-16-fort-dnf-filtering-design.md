@@ -259,3 +259,11 @@ In `onlyAllGyms` mode `secondaryFilter` DOES narrow by team/slot/power-up keys, 
 poison-to-match-all for that mode could be replaced by real clauses using these fields (follow-up
 optimization). Also from review: `stationed_gmax:false` now symmetric (matches gmax-less stations);
 top-level `filters` doc clarified (omitted/empty array = match-all; empty *inner* lists match nothing).
+
+**Follow-ups landed (2026-07-17):** `power_up_level` removed entirely from the DNF filter and
+`FortLookup` (power-ups are no longer in the game; record APIs still expose the columns). The
+all-gyms-mode narrowing landed in ReactMap: the gym layer now sends `team_id`/`available_slots`
+clauses mirroring `finalTeams`/`finalSlots` (t/g keys) for ALL four gym-layer enablers
+(all-gyms/ex/in-battle/ar) — the previous poison and the standalone `is_ar_scan_eligible` gym clause
+are gone; ex/ar/in-battle remain residual halves of an ANDed condition, so the clauses stay a tight
+superset. Badge viewing still poisons.
