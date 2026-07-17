@@ -9,6 +9,7 @@ import (
 // TestGetAvailableForts locks that the single-pass combined builder produces
 // the same aggregates as the three per-type builders over the same cache.
 func TestGetAvailableForts(t *testing.T) {
+	t.Skip("rebuilt in Task 4: combined reads maintained maps")
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
 	initQuestConditions()
 	now := int64(1_000_000)

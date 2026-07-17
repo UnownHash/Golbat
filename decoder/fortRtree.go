@@ -81,6 +81,7 @@ func initFortRtree() {
 	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
 	initQuestConditions()
+	initFortAvailability()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
 	// fortLookupCache are created (and after pokestopCache/gymCache/
@@ -227,7 +228,8 @@ func updatePokestopLookup(pokestop *Pokestop) {
 }
 
 func updateGymLookup(gym *Gym) {
-	fortLookupCache.Store(gym.Id, FortLookup{
+	now := time.Now().Unix()
+	fl := FortLookup{
 		FortType:            GYM,
 		Lat:                 gym.Lat,
 		Lon:                 gym.Lon,
@@ -239,7 +241,9 @@ func updateGymLookup(gym *Gym) {
 		RaidLevel:           int8(gym.RaidLevel.ValueOrZero()),
 		RaidPokemonId:       int16(gym.RaidPokemonId.ValueOrZero()),
 		RaidPokemonForm:     int16(gym.RaidPokemonForm.ValueOrZero()),
-	})
+	}
+	fortLookupCache.Store(gym.Id, fl)
+	observeRaid(&fl, now)
 }
 
 func updateStationLookup(station *Station) {
