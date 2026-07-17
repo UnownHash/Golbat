@@ -1,7 +1,7 @@
 # Maintained Fort Availability Index — Design Spec
 
 - **Date:** 2026-07-17
-- **Status:** Approved design → planning
+- **Status:** Built (2026-07-17) — feat/fort-scan-map-data, all tasks + final review complete
 - **Repo:** Golbat only (`feat/fort-scan-map-data`, worktree `~/GolandProjects/Golbat-wt/pokestop-available-api`, PR #385)
 - **Author:** James Berry (with Claude)
 - **Extends:** the fort availability endpoints (`/api/{pokestop,gym,station}/available` + combined `/api/fort/available`).
