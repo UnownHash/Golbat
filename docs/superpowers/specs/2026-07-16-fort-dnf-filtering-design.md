@@ -267,3 +267,19 @@ clauses mirroring `finalTeams`/`finalSlots` (t/g keys) for ALL four gym-layer en
 (all-gyms/ex/in-battle/ar) — the previous poison and the standalone `is_ar_scan_eligible` gym clause
 are gone; ex/ar/in-battle remain residual halves of an ANDed condition, so the clauses stay a tight
 superset. Badge viewing still poisons.
+
+## 12. Combined-scan typed groups (Part 1 of call-combining, 2026-07-17)
+
+Discovery: the combined `/api/fort/scan`'s flat `filters` list was semantically unusable for
+mixed-type clause sets — `isFortDnfMatch` only evaluates a clause's own-type fields, so a gym clause's
+pokestop-facing fields are all wildcards and it vacuously matched every pokestop/station. The body is
+now **typed groups** (`gyms`/`pokestops`/`stations`, each `{filters: [...]}`): present group = type
+included with its own clauses (empty = type match-all), omitted group = type excluded (subsumes the
+deferred `fort_types` scope), all omitted = bare probe. Locked by `TestCombinedFortMatches`.
+
+**Part 2 (ReactMap consumer, pending measurement):** best-effort coalescing — a ~10-15ms window keyed
+(user/session, source, bbox) merges the per-type mem-branch scans (which the client fires in the same
+pan tick) into one combined call with each registrant's clauses as its group; late arrivals and any
+combined failure fall back to the existing per-type scan. Decide after grepping
+`GetFortsInArea - scan time` from production logs: if per-scan times are ~1-3ms the saving is
+Golbat-CPU-at-scale only.
