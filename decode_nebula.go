@@ -8,7 +8,6 @@ import (
 	"golbat/pogo"
 
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 // decodeNebula routes on the typed context (the proto `oneof context` case,
@@ -36,7 +35,7 @@ func decodeNebula(ctx context.Context, endpoint string, nd *NebulaData) string {
 
 func decodeNebulaInvasionState(ctx context.Context, fortId, incidentId string, payload []byte) string {
 	var out pogo.BattleStateOutProto
-	if err := proto.Unmarshal(payload, &out); err != nil {
+	if err := unmarshalClientProto(payload, &out); err != nil {
 		return "failed to parse BattleStateOutProto"
 	}
 	return decoder.UpdateIncidentLineupFromBattleState(ctx, dbDetails, fortId, incidentId, &out)
