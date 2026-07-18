@@ -7,7 +7,6 @@ import (
 	"golbat/pogo"
 
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 // decodePushGateway classifies a push-gateway message by message_type, unmarshals
@@ -22,7 +21,7 @@ func decodePushGateway(ctx context.Context, messageType string, payload []byte) 
 	}
 
 	var msg pogo.PushGatewayMessage
-	if err := proto.Unmarshal(payload, &msg); err != nil {
+	if err := unmarshalClientProto(payload, &msg); err != nil {
 		log.Warnf("PushGateway: failed to parse %s: %v", messageType, err)
 		return
 	}

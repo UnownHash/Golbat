@@ -382,15 +382,22 @@ func Raw(c *gin.Context) {
 				ScanContext: scanContext,
 				TimestampMs: dataReceivedTimestamp,
 			}
-			protoData.Data, _ = b64.StdEncoding.DecodeString(payload)
-			if request != "" {
-				protoData.Request, _ = b64.StdEncoding.DecodeString(request)
-			}
+			// Pool the decoded-payload buffers. This is the HTTP /raw path;
+			// the payload lives only for this one decode() call and standard
+			// protobuf-go copies bytes out during Unmarshal, so the buffers are
+			// safe to recycle the moment decode() returns. (The gRPC ingest
+			// path has no base64 buffer of ours to pool — its payloads arrive
+			// as raw bytes and grpc-go already pools its transport buffers.)
+			var releaseData, releaseReq func()
+			protoData.Data, releaseData = decodeBase64Pooled(payload)
+			protoData.Request, releaseReq = decodeBase64Pooled(request)
 
 			// provide independent cancellation contexts for each proto decode
 			ctx, cancel := context.WithTimeout(context.Background(), timeout)
 			decode(ctx, method, &protoData)
 			cancel()
+			releaseData()
+			releaseReq()
 		}
 
 		for _, entry := range nebulaItems {
