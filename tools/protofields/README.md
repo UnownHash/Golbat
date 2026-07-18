@@ -27,34 +27,48 @@ JSON=/tmp/fields.json go run . ../..   # also emit the used-field set as JSON
 INCLUDE_TESTS=1 go run . ../..         # count _test.go accesses too
 ```
 
-## Current result (production, non-test code)
+## Current result (production + test code)
 
-- 146 message types accessed, 409 fields.
-- ~50% of accessed messages' fields are thinnable (higher in practice — the
-  denominator undercounts oneof members). The big allocators are heavily
-  thinnable: `PokemonProto` 13/78, `PokemonFortProto` 23/45, `RaidInfoProto`
-  6/20, `FortDetailsOutProto` 8/27.
+- 146 message types accessed, 410 fields.
+- Trimming the full descriptor set keeps **417 of 15807 fields (removes 97%)**
+  and empties 3402 unread messages. Kept fields retain their field numbers, so
+  removed fields decode as skipped unknowns (with `DiscardUnknown`). The thin
+  `vbase.thin.pb.go` is ~271k lines vs ~484k full (44% smaller).
 - **1 escape hatch**, cosmetic: a `.String()` on `RouteSubmissionStatus` inside
   a `log.Warnf` on the (cold) routes path. No `ProtoReflect`, no re-marshaling
   of client protos anywhere. **Golbat is clean for static thinning.**
 
-## Intended thinning pipeline (design)
+## Thinning pipeline (operational)
 
-The `.proto` is not shipped (license), so thinning is a **maintainer-side**
-step and both generated variants ship in the repo:
+The `.proto` is not shipped (license), so thinning is a **maintainer-side** step
+and both generated variants ship in the repo. `../../scripts/thin.sh` runs it
+end to end (needs the `.proto` via `PROTO_SRC` and `protoc`):
 
-1. `protofields` → used-field set (JSON).
-2. A thinning script (maintainer-only, needs the `.proto`): used-field set →
-   thinned `.proto` → regenerate `pogo/vbase.thin.pb.go` with `//go:build thin`.
-3. Ship both `vbase.pb.go` (`//go:build !thin`, full — what IDEs/contributors
-   see for type discovery) and `vbase.thin.pb.go` (`//go:build thin`). Same
-   package, same Go types, mutually exclusive — no registry clash.
-4. `make golbat` / Dockerfile build with `-tags thin` (end users get the win);
-   plain `go build` / gopls stay full (contributor field discovery).
-5. CI builds + tests **both** tags and runs a full-vs-thin differential decode
-   test, so the thin variant can never drift out of compilability or change
-   decoded values.
+1. `protofields` (INCLUDE_TESTS=1) → the `(message, field)` set Golbat accesses,
+   as JSON. Tests are included so the full suite compiles + runs under
+   `-tags thin` — that suite *is* the full-vs-thin differential.
+2. `prototrim` → trims the full descriptor set (`FileDescriptorSet`) to the
+   used set, preserving field numbers and oneof structure, → thin descriptor.
+   A real oneof accessed via a type switch (`switch x.Type.(type)`) keeps all
+   its members, since the code references the per-member wrapper types.
+3. `protoc --descriptor_set_in` → `pogo/vbase.thin.pb.go`, `//go:build thin`.
+4. The full `pogo/vbase.pb.go` carries `//go:build !thin`. Same package, same Go
+   types, mutually exclusive build tags — no proto-registry clash.
 
-A contributor using a not-yet-thinned field just gets a clean `-tags thin`
-compile error in CI naming the field; a maintainer regenerates the thin variant
-(a compile-safe, never-silent step).
+`make golbat` / the Dockerfile build `-tags thin` (end users get the win); plain
+`go build` and gopls stay full (contributor field discovery). `make golbat-full`
+forces the full schema.
+
+### CI gate
+
+Run all four and require them green:
+
+```
+go build ./...            go test ./...            # full
+go build -tags thin ./...  go test -tags thin ./... # thin (the differential)
+```
+
+A contributor who reads a not-yet-thinned field gets a clean `-tags thin`
+compile error in CI naming the exact field (`unknown field X in struct literal
+of type pogo.Y`); a maintainer re-runs `thin.sh` to regenerate the thin variant.
+It is a compile-safe, never-silent step.
