@@ -87,7 +87,7 @@ func main() {
 	fieldTotals := map[string]int{}      // pogo type -> total protobuf fields on the struct
 	type escape struct{ Pos, Kind, Type string }
 	var escapes []escape
-	seenPkg := map[string]bool{}
+	seenFile := map[string]bool{} // dedup by file: a file can appear in several package variants (test-augmented etc.)
 
 	record := func(typ, member string) {
 		if used[typ] == nil {
@@ -100,10 +100,6 @@ func main() {
 		if !strings.HasPrefix(pkg.PkgPath, "golbat") || skipPkgs[strings.TrimSuffix(pkg.PkgPath, ".test")] {
 			continue
 		}
-		if seenPkg[pkg.PkgPath] {
-			continue
-		}
-		seenPkg[pkg.PkgPath] = true
 		for i, file := range pkg.Syntax {
 			fname := ""
 			if i < len(pkg.CompiledGoFiles) {
@@ -112,6 +108,10 @@ func main() {
 			if !includeTests && strings.HasSuffix(fname, "_test.go") {
 				continue
 			}
+			if seenFile[fname] {
+				continue
+			}
+			seenFile[fname] = true
 			ast.Inspect(file, func(n ast.Node) bool {
 				sel, ok := n.(*ast.SelectorExpr)
 				if !ok {
@@ -139,6 +139,31 @@ func main() {
 					return true
 				}
 				record(named.Obj().Name(), strings.TrimPrefix(member, "Get"))
+				fieldTotals[named.Obj().Name()] = fieldCount(named)
+				return true
+			})
+			// Composite literals: pogo.X{Field: ...} SETS fields, which must be
+			// kept or the thin build won't compile.
+			ast.Inspect(file, func(n ast.Node) bool {
+				lit, ok := n.(*ast.CompositeLit)
+				if !ok {
+					return true
+				}
+				tv, ok := pkg.TypesInfo.Types[lit.Type]
+				if !ok {
+					return true
+				}
+				named := namedPogo(tv.Type)
+				if named == nil {
+					return true
+				}
+				for _, e := range lit.Elts {
+					if kv, ok := e.(*ast.KeyValueExpr); ok {
+						if id, ok := kv.Key.(*ast.Ident); ok {
+							record(named.Obj().Name(), id.Name)
+						}
+					}
+				}
 				fieldTotals[named.Obj().Name()] = fieldCount(named)
 				return true
 			})

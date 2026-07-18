@@ -9,7 +9,14 @@ FLAGS = go_json
 #FLAGS := go_json
 #endif
 
+# `thin` selects the trimmed pogo schema (pogo/vbase.thin.pb.go): decode skips
+# the ~97% of proto fields Golbat never reads, cutting decode allocations. This
+# is the default production build. Use `make golbat-full` for the full schema
+# (identical decoded values; only useful for contributors adding field access).
 golbat: FORCE
-	go build -tags $(FLAGS) golbat
+	go build -tags $(FLAGS),thin golbat
+
+golbat-full: FORCE
+	go build -tags $(FLAGS) -o golbat golbat
 
 FORCE: ;
