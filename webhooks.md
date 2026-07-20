@@ -860,6 +860,7 @@ numeric value from the bundled `pogo` proto definitions if you need it.
 | 12     | `MEGA_RESOURCE`                    | `amount` (int), `pokemon_id` (int). |
 | 13     | `INCIDENT`                         | (no info) |
 | 14     | `PLAYER_ATTRIBUTE`                 | (no info) |
+| 20     | `TEMP_EVO_BRANCH_RESOURCE`         | `amount` (int), `pokemon_id` (int), `temp_evolution` (int, omitted when unset). |
 
 **`POKEMON_ENCOUNTER` info**:
 

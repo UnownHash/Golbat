@@ -3,7 +3,7 @@ version: "2"
 run:
   build-tags:
     - go_json
-  timeout: 5m
+  timeout: 10m
 
 linters:
   default: none
@@ -26,6 +26,8 @@ linters:
         - (*encoding/json.Decoder).Decode
 
   exclusions:
+    paths:
+      - pogo/  # generated protobuf package; excluded to avoid whole-program analysis timeout
     rules:
       # Entity access pattern: each entity type provides peek*Record /
       # get*RecordReadOnly / get*RecordForUpdate even when not currently
