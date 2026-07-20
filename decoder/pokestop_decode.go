@@ -343,6 +343,24 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				rewardAmount = null.IntFrom(int64(info.Amount))
 				rewardPokemonId = null.IntFrom(int64(info.PokemonId))
 			}
+		case pogo.QuestRewardProto_TEMP_EVO_BRANCH_RESOURCE:
+			info := rewardData.GetTempEvoResource()
+			if info == nil {
+				break
+			}
+			infoData["amount"] = info.Amount
+			if isFirst {
+				rewardAmount = null.IntFrom(int64(info.Amount))
+			}
+			if branch := info.GetTempEvoPokemonBranch(); branch != nil {
+				infoData["pokemon_id"] = int(branch.PokedexId)
+				if tempEvolution := int(branch.TempEvoId); tempEvolution != 0 {
+					infoData["temp_evolution"] = tempEvolution
+				}
+				if isFirst {
+					rewardPokemonId = null.IntFrom(int64(branch.PokedexId))
+				}
+			}
 		case pogo.QuestRewardProto_AVATAR_CLOTHING:
 		case pogo.QuestRewardProto_QUEST:
 		case pogo.QuestRewardProto_LEVEL_CAP:
