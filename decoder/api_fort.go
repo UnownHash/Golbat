@@ -295,7 +295,7 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxPokemonResults
+	maxForts := config.Config.Tuning.MaxFortResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
 		maxForts = retrieveParameters.Limit
 	}
@@ -491,7 +491,7 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxPokemonResults
+	maxForts := config.Config.Tuning.MaxFortResults
 	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
 		maxForts = retrieveParameters.Limit
 	}
