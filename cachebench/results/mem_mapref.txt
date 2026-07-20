@@ -1,0 +1,8 @@
+=== RUN   TestScenarioMemory
+=== RUN   TestScenarioMemory/mapref
+    scenario_test.go:402: RESULT memory/mapref entries=10000000 heap_delta=9.82GiB bytes_per_entry=1054
+    scenario_test.go:419: RESULT range/mapref visited=10000000 in=63ms rate=159106248 entries/s
+--- PASS: TestScenarioMemory (2.23s)
+    --- PASS: TestScenarioMemory/mapref (2.23s)
+PASS
+ok  	golbat/cachebench	2.497s

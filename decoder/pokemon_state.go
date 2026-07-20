@@ -34,8 +34,7 @@ const pokemonSelectColumns = `id, pokemon_id, lat, lon, spawn_id, expire_timesta
 // Use for read-only checks which will not cause a backing database lookup
 // Caller must use returned unlock function
 func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, func(), error) {
-	if item := pokemonCache.Get(encounterId); item != nil {
-		pokemon := item.Value()
+	if pokemon, ok := pokemonCache.Get(encounterId); ok {
 		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
@@ -44,12 +43,13 @@ func peekPokemonRecordReadOnly(encounterId uint64, caller string) (*Pokemon, fun
 }
 
 func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId uint64, pokemon *Pokemon) error {
-	err := db.PokemonDb.GetContext(ctx, pokemon,
-		"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
-		strconv.FormatUint(encounterId, 10))
-	statsCollector.IncDbQuery("select pokemon", err)
-
-	return err
+	return timedDbQuery("loadPokemonFromDatabase", db.PokemonDb, func() error {
+		err := db.PokemonDb.GetContext(ctx, pokemon,
+			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
+			strconv.FormatUint(encounterId, 10))
+		statsCollector.IncDbQuery("select pokemon", err)
+		return err
+	})
 }
 
 // getPokemonRecordReadOnly acquires lock but does NOT take snapshot.
@@ -62,8 +62,7 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	}
 
 	// Check cache first
-	if item := pokemonCache.Get(encounterId); item != nil {
-		pokemon := item.Value()
+	if pokemon, ok := pokemonCache.Get(encounterId); ok {
 		pokemon.Lock(caller)
 		return pokemon, func() { pokemon.Unlock() }, nil
 	}
@@ -80,13 +79,16 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 
 	// Atomically cache the loaded Pokemon - if another goroutine raced us,
 	// we'll get their Pokemon and use that instead (ensuring same mutex)
-	existingPokemon, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	pokemon, found := pokemonCache.GetOrSetFuncTTL(encounterId, func() *Pokemon {
 		// Only called if key doesn't exist - our Pokemon wins
-		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 		return &dbPokemon
-	})
-
-	pokemon := existingPokemon.Value()
+	}, dbPokemon.remainingDuration(time.Now().Unix()))
+	if !found {
+		// Our dbPokemon won the insert. Index it out here — the GetOrSetFunc
+		// closure runs under the cache shard's write lock and must not take
+		// the tree mutex (tree-lock-under-shard-lock inversion).
+		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
+	}
 	pokemon.Lock(caller)
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
@@ -107,11 +109,9 @@ func getPokemonRecordForUpdate(ctx context.Context, db db.DbDetails, encounterId
 // Caller MUST call returned unlock function.
 func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId uint64, caller string) (*Pokemon, func(), error) {
 	// Create new Pokemon atomically - function only called if key doesn't exist
-	pokemonItem, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
+	pokemon, _ := pokemonCache.GetOrSetFunc(encounterId, func() *Pokemon {
 		return &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encounterId)}, newRecord: true}
 	})
-
-	pokemon := pokemonItem.Value()
 	pokemon.Lock(caller)
 
 	if config.Config.PokemonMemoryOnly {
@@ -132,6 +132,10 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 			pokemon.newRecord = false
 			pokemon.ClearDirty()
 			pokemonRtreeUpdatePokemonOnGet(pokemon)
+
+			// Rehydrated from DB: re-stamp the TTL (despawn-based / jittered) so the
+			// entry doesn't keep the flat placeholder default — see remainingDuration.
+			pokemonCache.Set(encounterId, pokemon, pokemon.remainingDuration(time.Now().Unix()))
 		}
 	}
 
@@ -243,23 +247,38 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	}
 
-	// Update pokemon rtree (immediate, not queued)
+	// Update pokemon rtree: queued through the single tree worker (ordered),
+	// so this save never touches the tree mutex while holding the entity
+	// lock — production dumps showed 90+ savers convoyed there behind
+	// eviction drains. Scan visibility lags by worker latency (ms), well
+	// inside the 1s snapshot staleness budget.
+	addedToTree := false
 	if isNewRecord {
-		addPokemonToTree(pokemon)
+		queuePokemonTreeInsert(pokemon)
+		addedToTree = true
 	} else if pokemon.Lat != pokemon.oldValues.Lat || pokemon.Lon != pokemon.oldValues.Lon {
-		// Position changed - update R-tree by removing from old position and adding to new
-		removePokemonFromTree(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
-		addPokemonToTree(pokemon)
+		// Position changed - remove old point, add new (ordered pair)
+		queuePokemonTreeRemove(uint64(pokemon.Id), pokemon.oldValues.Lat, pokemon.oldValues.Lon)
+		queuePokemonTreeInsert(pokemon)
+		addedToTree = true
 	}
 
-	updatePokemonLookup(pokemon, changePvpField, pvpResults)
+	lookupExisted := updatePokemonLookup(pokemon, changePvpField, pvpResults)
+	if !lookupExisted && !addedToTree {
+		// The lookup entry vanished for an existing pokemon: a cache
+		// eviction fired while we held the entity lock and already removed
+		// (or queued removal of) the tree point. Re-insert it so this live,
+		// about-to-be-re-cached pokemon stays scannable; a queued eviction
+		// delete pairs off against the older duplicate point.
+		queuePokemonTreeInsert(pokemon)
+	}
 
 	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}
-	updatePokemonStats(pokemon, areas, now)
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
 
 	if dbDebugEnabled {
 		pokemon.changedFields = pokemon.changedFields[:0]

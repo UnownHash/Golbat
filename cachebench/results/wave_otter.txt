@@ -1,0 +1,11 @@
+=== RUN   TestScenarioMassExpiryWave
+=== RUN   TestScenarioMassExpiryWave/otter
+    scenario_test.go:160: preloading...
+    scenario_test.go:166: preload of 10000000 entries took 2.892s
+    scenario_test.go:260: RESULT wave/otter steady_get_p50=709ns steady_get_p99=3.708µs wave_get_p50=375ns wave_get_p99=2.292µs wave_vs_steady_p99=0.6x
+    scenario_test.go:262: RESULT wave/otter max_goroutines=39 callbacks_delivered=10598736 expected~10597764 lag_p50=1.024s lag_p99=2.048s lag_max=2.012104412s
+    scenario_test.go:264: RESULT wave/otter gc_pauses=2 gc_pause_p50=5.12µs gc_pause_p99=114.688µs gc_pause_max=114.688µs gc_cpu_delta=0.2s
+--- PASS: TestScenarioMassExpiryWave (158.53s)
+    --- PASS: TestScenarioMassExpiryWave/otter (158.53s)
+PASS
+ok  	golbat/cachebench	158.797s

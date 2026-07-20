@@ -1,0 +1,11 @@
+=== RUN   TestScenarioMassExpiryWave
+=== RUN   TestScenarioMassExpiryWave/ttlcache
+    scenario_test.go:160: preloading...
+    scenario_test.go:166: preload of 10000000 entries took 2.905s
+    scenario_test.go:260: RESULT wave/ttlcache steady_get_p50=2.334µs steady_get_p99=174.125µs wave_get_p50=417ns wave_get_p99=11.709µs wave_vs_steady_p99=0.1x
+    scenario_test.go:262: RESULT wave/ttlcache max_goroutines=53 callbacks_delivered=10606897 expected~10605942 lag_p50=1ms lag_p99=2ms lag_max=26.051ms
+    scenario_test.go:264: RESULT wave/ttlcache gc_pauses=2 gc_pause_p50=8.192µs gc_pause_p99=196.608µs gc_pause_max=196.608µs gc_cpu_delta=0.3s
+--- PASS: TestScenarioMassExpiryWave (158.01s)
+    --- PASS: TestScenarioMassExpiryWave/ttlcache (158.01s)
+PASS
+ok  	golbat/cachebench	158.416s

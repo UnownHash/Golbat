@@ -1,0 +1,7 @@
+=== RUN   TestScenarioCallbackThroughput
+=== RUN   TestScenarioCallbackThroughput/otter
+    scenario_test.go:344: RESULT cbthroughput/otter delivered=1000000 dropped=0 of=1000000 window=9.054s rate=110450/s max_goroutines=20
+--- PASS: TestScenarioCallbackThroughput (12.15s)
+    --- PASS: TestScenarioCallbackThroughput/otter (12.15s)
+PASS
+ok  	golbat/cachebench	12.345s

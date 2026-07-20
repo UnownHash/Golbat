@@ -6,14 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"golbat/db"
 	"golbat/pogo"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/ottercache"
 )
 
 // spawnpointSelectColumns defines the columns for spawnpoint queries.
@@ -41,6 +43,60 @@ type Spawnpoint struct {
 	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
 	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
 	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+
+	// despawnSecFast mirrors DespawnSec for the lock-free read path
+	// (setExpireTimestampFromSpawnpoint runs once per wild/nearby pokemon
+	// and needs only this one value — taking the entity mutex for it queued
+	// readers behind writers holding the lock across DB loads).
+	// Encoding: 0 = not yet synced (fall back to the locked path),
+	// -1 = DespawnSec known-null, 1..3600 = DespawnSec+1.
+	// Lives on Spawnpoint, not SpawnpointData: atomics must not be copied
+	// into write-behind snapshots.
+	despawnSecFast atomic.Int32 `db:"-" json:"-"`
+
+	// lastSeenFast mirrors LastSeen for the lock-free writer fast path
+	// (spawnpointUpdateFromWild runs once per wild sighting; when nothing
+	// would change it must not take the entity mutex at all). 0 = never
+	// seen / not synced, which always routes to the locked path.
+	lastSeenFast atomic.Int64 `db:"-" json:"-"`
+}
+
+// syncFastFields publishes all lock-free mirrors; call after DB loads (and
+// after a no-row load resolves, so readers know null-despawn is authoritative
+// rather than not-yet-loaded).
+func (s *Spawnpoint) syncFastFields() {
+	s.syncDespawnFast()
+	s.lastSeenFast.Store(s.LastSeen)
+}
+
+// LastSeenFast returns the lock-free LastSeen mirror (0 = unknown).
+func (s *Spawnpoint) LastSeenFast() int64 {
+	return s.lastSeenFast.Load()
+}
+
+// syncDespawnFast publishes DespawnSec to the lock-free mirror. Call after
+// any mutation or DB load of DespawnSec (caller holds the entity lock, or
+// has exclusive access during load).
+func (s *Spawnpoint) syncDespawnFast() {
+	if s.DespawnSec.Valid {
+		s.despawnSecFast.Store(int32(s.DespawnSec.Int64) + 1)
+	} else {
+		s.despawnSecFast.Store(-1)
+	}
+}
+
+// DespawnSecFast returns (despawnSec, known, synced) without any locking.
+// synced=false means the mirror has not been populated yet — callers must
+// fall back to the locked read path.
+func (s *Spawnpoint) DespawnSecFast() (int, bool, bool) {
+	switch v := s.despawnSecFast.Load(); {
+	case v == 0:
+		return 0, false, false
+	case v < 0:
+		return 0, false, true
+	default:
+		return int(v - 1), true, true
+	}
 }
 
 //CREATE TABLE `spawnpoint` (
@@ -105,6 +161,11 @@ func (s *Spawnpoint) SetLon(v float64) {
 
 // SetDespawnSec sets despawn_sec with 2-second tolerance logic
 func (s *Spawnpoint) SetDespawnSec(v null.Int) {
+	// Republish the lock-free mirror on every exit path (this function has
+	// several early returns); no-change calls harmlessly re-store the same
+	// value and heal a not-yet-synced mirror.
+	defer s.syncDespawnFast()
+
 	// Handle validity changes
 	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
 		if dbDebugEnabled {
@@ -121,19 +182,11 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	}
 
 	// Both valid - check with tolerance
-	oldVal := s.DespawnSec.Int64
-	newVal := v.Int64
-
-	// Handle wraparound at hour boundary (0/3600)
-	if oldVal <= 1 && newVal >= 3598 {
-		return
-	}
-	if newVal <= 1 && oldVal >= 3598 {
+	if despawnSecUnchanged(s.DespawnSec.Int64, v.Int64) {
 		return
 	}
 
-	// Allow 2-second tolerance for despawn time
-	if Abs(oldVal-newVal) > 2 {
+	{
 		if dbDebugEnabled {
 			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
 		}
@@ -141,7 +194,6 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 		s.dirty = true
 	}
 }
-
 func (s *Spawnpoint) SetUpdated(v int64) {
 	if s.Updated != v {
 		if dbDebugEnabled {
@@ -153,6 +205,9 @@ func (s *Spawnpoint) SetUpdated(v int64) {
 }
 
 func (s *Spawnpoint) SetLastSeen(v int64) {
+	// Closure, not direct defer arg: the mirror must publish the
+	// post-mutation value (deferred call args evaluate at defer time).
+	defer func() { s.lastSeenFast.Store(s.LastSeen) }()
 	if s.LastSeen != v {
 		if dbDebugEnabled {
 			s.changedFields = append(s.changedFields, fmt.Sprintf("LastSeen:%d->%d", s.LastSeen, v))
@@ -161,19 +216,19 @@ func (s *Spawnpoint) SetLastSeen(v int64) {
 		s.dirty = true
 	}
 }
-
 func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpointId int64, spawnpoint *Spawnpoint) error {
-	err := db.GeneralDb.GetContext(ctx, spawnpoint,
-		"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
-	statsCollector.IncDbQuery("select spawnpoint", err)
-	return err
+	return timedDbQuery("loadSpawnpointFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, spawnpoint,
+			"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
+		statsCollector.IncDbQuery("select spawnpoint", err)
+		return err
+	})
 }
 
 // peekSpawnpointRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekSpawnpointRecord(spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
-	if item := spawnpointCache.Get(spawnpointId); item != nil {
-		spawnpoint := item.Value()
+	if spawnpoint, ok := spawnpointCache.Get(spawnpointId); ok {
 		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
@@ -184,8 +239,7 @@ func peekSpawnpointRecord(spawnpointId int64, caller string) (*Spawnpoint, func(
 // Caller MUST call returned unlock function if non-nil.
 func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Check cache first
-	if item := spawnpointCache.Get(spawnpointId); item != nil {
-		spawnpoint := item.Value()
+	if spawnpoint, ok := spawnpointCache.Get(spawnpointId); ok {
 		spawnpoint.Lock(caller)
 		return spawnpoint, func() { spawnpoint.Unlock() }, nil
 	}
@@ -199,14 +253,13 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 		return nil, nil, err
 	}
 	dbSpawnpoint.ClearDirty()
+	dbSpawnpoint.syncFastFields()
 
 	// Atomically cache the loaded Spawnpoint - if another goroutine raced us,
 	// we'll get their Spawnpoint and use that instead (ensuring same mutex)
-	existingSpawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+	spawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
 		return &dbSpawnpoint
 	})
-
-	spawnpoint := existingSpawnpoint.Value()
 	spawnpoint.Lock(caller)
 	return spawnpoint, func() { spawnpoint.Unlock() }, nil
 }
@@ -215,11 +268,9 @@ func getSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int6
 // Caller MUST call returned unlock function.
 func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpointId int64, caller string) (*Spawnpoint, func(), error) {
 	// Create new Spawnpoint atomically - function only called if key doesn't exist
-	spawnpointItem, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
+	spawnpoint, _ := spawnpointCache.GetOrSetFunc(spawnpointId, func() *Spawnpoint {
 		return &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnpointId}, newRecord: true}
 	})
-
-	spawnpoint := spawnpointItem.Value()
 	spawnpoint.Lock(caller)
 
 	if spawnpoint.newRecord {
@@ -230,14 +281,33 @@ func getOrCreateSpawnpointRecord(ctx context.Context, db db.DbDetails, spawnpoin
 				spawnpoint.Unlock()
 				return nil, nil, err
 			}
+			// No DB row: this record's null despawn is now authoritative
+			// (not merely unloaded) — publish so the lock-free read path
+			// engages. lastSeenFast stays 0, keeping the writer fast path
+			// disabled until the record is persisted.
+			spawnpoint.syncDespawnFast()
 		} else {
 			// We loaded from DB
 			spawnpoint.newRecord = false
 			spawnpoint.ClearDirty()
+			spawnpoint.syncFastFields()
 		}
 	}
 
 	return spawnpoint, func() { spawnpoint.Unlock() }, nil
+}
+
+// despawnSecUnchanged is SetDespawnSec's no-change rule: 2-second
+// tolerance, with wraparound at the hour boundary (0/3600). Shared with the
+// lock-free writer fast path so the two can never drift.
+func despawnSecUnchanged(oldVal, newVal int64) bool {
+	if oldVal <= 1 && newVal >= 3598 {
+		return true
+	}
+	if newVal <= 1 && oldVal >= 3598 {
+		return true
+	}
+	return Abs(oldVal-newVal) <= 2
 }
 
 func Abs(x int64) int64 {
@@ -253,11 +323,35 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		panic(err)
 	}
 
-	if wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0 {
+	hasTTH := wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0
+	var secondOfHour int
+	if hasTTH {
 		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
-
 		date := time.Unix(expireTimeStamp, 0)
-		secondOfHour := date.Second() + date.Minute()*60
+		secondOfHour = date.Second() + date.Minute()*60
+	}
+
+	// Lock-free fast path: spawnpoints appear in every GMO (once per wild
+	// sighting), and the overwhelmingly common case changes nothing — the
+	// spawnpoint is known, its despawn second matches within SetDespawnSec's
+	// tolerance, and LastSeen is fresh. Prove all of that from the atomic
+	// mirrors and skip the entity mutex entirely. Anything unprovable
+	// (cache miss, mid-load entity, unpersisted new record via
+	// lastSeenFast==0, stale LastSeen, despawn change) takes the locked
+	// path below, unchanged. Lat/lon are not re-verified here: a
+	// spawnpoint's id derives from its location, and the locked path
+	// re-checks position at least every LastSeen refresh.
+	if sp, ok := spawnpointCache.Get(spawnId); ok {
+		if despawn, known, synced := sp.DespawnSecFast(); synced {
+			if last := sp.LastSeenFast(); last > 0 && time.Now().Unix()-last <= GetUpdateThreshold(21600) {
+				if !hasTTH || (known && despawnSecUnchanged(int64(despawn), int64(secondOfHour))) {
+					return
+				}
+			}
+		}
+	}
+
+	if hasTTH {
 
 		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWild")
 		if err != nil {
@@ -322,7 +416,7 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	spawnpoint.ClearDirty()
 	if isNewRecord {
 		spawnpoint.newRecord = false
-		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ttlcache.DefaultTTL)
+		spawnpointCache.Set(spawnpoint.Id, spawnpoint, ottercache.DefaultTTL)
 	}
 }
 

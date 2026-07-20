@@ -59,7 +59,7 @@ func ReadConfig() (configDefinition, error) {
 			MaxConcurrentProactiveIVSwitch: 6,
 			ReduceUpdates:                  false,
 			WriteBehindStartupDelay:        120, // 2 minutes
-			WriteBehindWorkerCount:         50,  // concurrent writers
+			WriteBehindWorkerCount:         16,  // concurrent writers (see config.toml.example)
 			WriteBehindBatchSize:           50,  // entries per batch
 			WriteBehindBatchTimeoutMs:      100, // ms to wait for batch to fill
 		},

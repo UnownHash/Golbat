@@ -53,9 +53,13 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 	cellHi := cellBound.Hi()
 
 	start := time.Now()
-	pokemonTreeMutex.RLock()
+	// Weather flips are rare; take a fresh copy rather than the shared ≤1s
+	// scan snapshot so pokemon added in the final second before the flip
+	// are included in the sweep. Copy() mutates the source tree's COW
+	// stamp — full lock required.
+	pokemonTreeMutex.Lock()
 	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTreeMutex.Unlock()
 	lockedTime := time.Since(start)
 
 	startUnix := start.Unix()

@@ -1,0 +1,40 @@
+=== RUN   TestSingleWinnerAllCandidates
+=== RUN   TestSingleWinnerAllCandidates/ttlcache
+=== RUN   TestSingleWinnerAllCandidates/ttlcache-hyst
+=== RUN   TestSingleWinnerAllCandidates/otter
+=== RUN   TestSingleWinnerAllCandidates/theine
+=== RUN   TestSingleWinnerAllCandidates/proto
+--- PASS: TestSingleWinnerAllCandidates (0.27s)
+    --- PASS: TestSingleWinnerAllCandidates/ttlcache (0.06s)
+    --- PASS: TestSingleWinnerAllCandidates/ttlcache-hyst (0.06s)
+    --- PASS: TestSingleWinnerAllCandidates/otter (0.05s)
+    --- PASS: TestSingleWinnerAllCandidates/theine (0.04s)
+    --- PASS: TestSingleWinnerAllCandidates/proto (0.07s)
+=== RUN   TestReplacementFiresNoEviction
+=== RUN   TestReplacementFiresNoEviction/ttlcache
+=== RUN   TestReplacementFiresNoEviction/ttlcache-hyst
+=== RUN   TestReplacementFiresNoEviction/otter
+=== RUN   TestReplacementFiresNoEviction/theine
+=== RUN   TestReplacementFiresNoEviction/proto
+--- PASS: TestReplacementFiresNoEviction (10.06s)
+    --- PASS: TestReplacementFiresNoEviction/ttlcache (2.01s)
+    --- PASS: TestReplacementFiresNoEviction/ttlcache-hyst (2.01s)
+    --- PASS: TestReplacementFiresNoEviction/otter (2.00s)
+    --- PASS: TestReplacementFiresNoEviction/theine (2.01s)
+    --- PASS: TestReplacementFiresNoEviction/proto (2.01s)
+=== RUN   TestEvictReasonMapping
+=== RUN   TestEvictReasonMapping/ttlcache
+=== RUN   TestEvictReasonMapping/ttlcache-hyst
+=== RUN   TestEvictReasonMapping/otter
+=== RUN   TestEvictReasonMapping/theine
+=== RUN   TestEvictReasonMapping/proto
+--- PASS: TestEvictReasonMapping (8.61s)
+    --- PASS: TestEvictReasonMapping/ttlcache (1.50s)
+    --- PASS: TestEvictReasonMapping/ttlcache-hyst (1.50s)
+    --- PASS: TestEvictReasonMapping/otter (2.00s)
+    --- PASS: TestEvictReasonMapping/theine (2.00s)
+    --- PASS: TestEvictReasonMapping/proto (1.60s)
+=== RUN   TestHysteresisKeepsHotEntriesResident
+--- PASS: TestHysteresisKeepsHotEntriesResident (6.06s)
+PASS
+ok  	golbat/cachebench	26.312s

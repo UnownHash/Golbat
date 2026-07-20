@@ -103,7 +103,7 @@ func preloadPokestops(dbDetails db.DbDetails, populateRtree bool) int32 {
 			defer wg.Done()
 			for pokestop := range jobs {
 				// Add to cache
-				pokestopCache.Set(pokestop.Id, pokestop, 0) // 0 = use default TTL
+				pokestopCache.Set(pokestop.Id, pokestop, fortCacheEntryTTL())
 
 				// Update rtree if enabled
 				if populateRtree {
@@ -168,7 +168,7 @@ func preloadGyms(dbDetails db.DbDetails, populateRtree bool) int32 {
 			defer wg.Done()
 			for gym := range jobs {
 				// Add to cache
-				gymCache.Set(gym.Id, gym, 0) // 0 = use default TTL
+				gymCache.Set(gym.Id, gym, fortCacheEntryTTL())
 
 				// Update rtree if enabled
 				if populateRtree {
@@ -228,7 +228,7 @@ func preloadStations(dbDetails db.DbDetails, populateRtree bool) int32 {
 			defer wg.Done()
 			for station := range jobs {
 				// Add to cache
-				stationCache.Set(station.Id, station, 0) // 0 = use default TTL
+				stationCache.Set(station.Id, station, fortCacheEntryTTL())
 
 				// Update rtree if enabled
 				if populateRtree {

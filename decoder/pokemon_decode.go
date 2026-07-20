@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/protobuf/proto"
 )
@@ -65,15 +65,41 @@ func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.newRecord
 }
 
+const (
+	// pokemonUnverifiedTTL (+ jitter) replaces the flat cache-default TTL
+	// for pokemon without a verified despawn. The jitter spreads
+	// restart-synchronized cohorts (preload + cold-cache ingest all
+	// stamped in the same few minutes) so their expiry an hour later
+	// arrives as a stream of tree deletes and eviction events rather than
+	// one burst.
+	pokemonUnverifiedTTL       = 55 * time.Minute
+	pokemonUnverifiedTTLJitter = 10 * time.Minute
+)
+
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
-	remaining := ttlcache.DefaultTTL
 	if pokemon.ExpireTimestampVerified {
 		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
-		if timeLeft > 1 {
-			remaining = time.Duration(timeLeft) * time.Second
+		if timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
+		}
+		// At/past despawn: keep briefly for late queries rather than
+		// granting a fresh hour to a corpse.
+		return time.Minute
+	}
+	return pokemonUnverifiedTTL + rand.N(pokemonUnverifiedTTLJitter)
+}
+
+// encounterStatsDuration is the TTL for the encounter-dedup stats cache.
+// Distinct from the pokemon-cache TTL: past-despawn and unverified entries
+// must keep the cache's full default window so late or retried protos still
+// deduplicate instead of inflating per-area encounter/shiny stats.
+func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
+	if pokemon.ExpireTimestampVerified {
+		if timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
 		}
 	}
-	return remaining
+	return 0 // the encounter cache interprets 0 as its default TTL
 }
 
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
@@ -191,7 +217,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.ExpirationTimeMs / 1000))
 		pokemon.SetExpireTimestampVerified(true)
 		// if we have cached an encounter for this pokemon, update the TTL.
-		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.remainingDuration(timestampMs/1000))
+		encounterCache.UpdateTTL(uint64(pokemon.Id), pokemon.encounterStatsDuration(timestampMs/1000))
 	} else {
 		pokemon.SetExpireTimestampVerified(false)
 	}
@@ -294,26 +320,49 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 
 	pokemon.ExpireTimestampVerified = false
+
+	// Lock-free fast path: this runs once per wild/nearby pokemon and needs
+	// only the spawnpoint's despawn second. The atomic mirror avoids the
+	// entity mutex entirely — readers no longer queue behind writers that
+	// hold it across DB loads. Mirror not yet synced (0) falls through to
+	// the locked path below.
+	if sp, ok := spawnpointCache.Get(spawnId); ok {
+		if despawnSecond, known, synced := sp.DespawnSecFast(); synced {
+			if known {
+				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+			} else {
+				pokemon.setUnknownTimestamp(timestampMs / 1000)
+			}
+			return
+		}
+	}
+
 	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "setExpireTimestampFromSpawnpoint")
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
 
-		date := time.Unix(timestampMs/1000, 0)
-		secondOfHour := date.Second() + date.Minute()*60
-
-		despawnOffset := despawnSecond - secondOfHour
-		if despawnOffset < 0 {
-			despawnOffset += 3600
-		}
-		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
-		pokemon.SetExpireTimestampVerified(true)
+		pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
 	} else {
 		if unlock != nil {
 			unlock()
 		}
 		pokemon.setUnknownTimestamp(timestampMs / 1000)
 	}
+}
+
+// applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
+// verified expire timestamp for this pokemon.
+func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
+	date := time.Unix(timestampMs/1000, 0)
+	secondOfHour := date.Second() + date.Minute()*60
+
+	despawnOffset := despawnSecond - secondOfHour
+	if despawnOffset < 0 {
+		despawnOffset += 3600
+	}
+	pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+	pokemon.SetExpireTimestampVerified(true)
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp(now int64) {

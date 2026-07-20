@@ -51,6 +51,15 @@ type StatsCollector interface {
 	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
 	IncFortChange(changeType string)
 
+	// Hot-path health metrics
+	SetWorkerBacklog(worker string, depth float64)
+	SetRawProcessingWaiting(waiting float64)
+	IncRawPacketsShed()
+	IncSlowDbQuery(caller string)
+	IncStatsEventsDropped()
+	AddCacheEvictionsDropped(cache string, n float64)
+	ObserveDbQuery(caller string, seconds float64)
+
 	// Write-behind queue metrics
 	SetWriteBehindQueueDepth(entityType string, depth float64)
 	IncWriteBehindSquashed(entityType string)

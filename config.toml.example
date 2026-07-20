@@ -78,12 +78,25 @@ max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokem
 max_pokemon_results = 3000  # Maximum number of pokemon to return
 extended_timeout = false    # Extend timeouts for processing, hopefully not needed
 write_behind_startup_delay = 120    # Writes will be queued for this quiet time
-write_behind_worker_count = 50      # Maximum number of parallel batch writes
+write_behind_worker_count = 16      # Maximum number of parallel batch writes.
+                                    # One worker sustains thousands of rows/sec; higher values
+                                    # only engage during bursts, where they amplify write
+                                    # pressure on the DB (queueing app-side coalesces writes
+                                    # instead). Raise only if write-behind latency grows in
+                                    # steady state (golbat_db_query_duration_seconds{caller=~"writebehind.*"}).
 write_behind_batch_size = 50        # Number of entries per batch write
 write_behind_batch_timeout = 100    # Max wait time in ms before flushing partial batch
 profile_routes = false      # Turn on debugging endpoints
 profile_contention = false  # Collect data for contention (use with above) - has a perf impact
 s2_cell_lookup = false      # Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups. (default: false)
+# raw_processing_concurrency = 0  # max concurrent raw-proto decoders; 0 = auto (4x CPUs, max 96), -1 = unlimited
+# raw_processing_queue_factor = 32  # parked decode queue cap (x concurrency limit); rides out brief DB stalls before shedding
+# slow_db_query_ms = 0         # log [DB_SLOW] (with pool stats) for entity queries and write-behind batch flushes slower than this many ms; 0 = default (1000), -1 = disabled
+# gogc_percent = 0             # runtime GC target (Go default 100). Higher = fewer GC cycles,
+                               # more peak heap (~(1+n/100)x live). Large-RAM instances with big
+                               # live heaps can reclaim 10%+ CPU at 300-400. 0 = Go default.
+# go_mem_limit_mib = 0         # soft memory limit (GOMEMLIMIT) in MiB; 0 = off. Set below
+                               # available RAM as a backstop when raising gogc_percent.
 
 # When enabled, reduce_updates will make fort update debounce windows much longer
 # to reduce database churn. Specifically, gym/pokestop/station debounce will be

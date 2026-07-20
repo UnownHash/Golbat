@@ -9,6 +9,7 @@ Golbat is a high-performance Go backend that receives raw protobuf data from Pok
 ```
 main.go              — HTTP/gRPC server setup, route registration
 routes.go            — HTTP route handlers (raw ingest, API endpoints)
+raw_limiter.go       — Bounded raw-processing concurrency (semaphore + shed)
 decode.go            — Proto method dispatcher, GMO decoder
 grpc_server_raw.go   — gRPC raw proto receiver
 decoder/
@@ -23,7 +24,10 @@ decoder/
   api_<entity>.go    — API result structs, scan endpoints, DNF filters
   pokemonRtree.go    — Pokemon spatial index + lookup cache
   fortRtree.go       — Fort spatial index + lookup cache
-  fort_tracker.go    — In-memory fort lifecycle tracking via S2 cells
+  fort_tracker.go    — In-memory fort lifecycle tracking via S2 cells (async worker)
+  rtree_evictor.go   — Ordered tree-mutation worker (batched inserts/deletes)
+  stats.go           — Stats aggregation worker, area stats, geofence reload
+  db_timing.go       — timedDbQuery alias for under-lock DB loads
   tracked_mutex.go   — Lock contention instrumentation
   writebehind/       — Write-behind queue implementation
   writebehind_batch.go — Queue initialization and batch flush SQL
@@ -31,8 +35,12 @@ webhooks/
   webhook.go         — Webhook types, config parsing, HTTP dispatch
   sender.go          — Thread-safe message batching and sending
 config/              — TOML config parsing
-db/                  — Database connection details, query helpers
-geo/                 — Geofence loading, R-tree matching, S2 lookup
+db/                  — Database connection details, query helpers; timing.go
+                       wraps DB calls with [DB_SLOW] logging + duration histogram
+geo/                 — Geofence loading, R-tree matching; geofence_compiled.go
+                       (cached-bounds point-in-polygon), s2_lookup.go (S2 cell
+                       fast path for area matching)
+util/                — Small shared helpers (DropReporter, etc.)
 ```
 
 ## Raw Message Processing
@@ -46,6 +54,13 @@ Messages arrive via two paths:
 2. **gRPC `SubmitRawProto`** (`grpc_server_raw.go`): Accepts `RawProtoRequest` with binary proto payloads in `Contents[]`. Same async processing pattern.
 
 Both paths normalize into `ProtoData` structs and call `decode()`.
+
+Processing concurrency is bounded (`raw_limiter.go`): a semaphore of
+`tuning.raw_processing_concurrency` slots (default min(4×CPU, 96)) with a
+bounded parked queue (`raw_processing_queue_factor` × slots, default 32×).
+When the queue is full, packets are shed with aggregated once-per-second
+logging and a `golbat_raw_packets_shed_total` counter — bounded loss under
+overload instead of unbounded goroutine pileup on internal locks.
 
 ### Dispatch (`decode.go`)
 
@@ -116,23 +131,30 @@ type Pokestop struct {
 
 ## Caching
 
-### ShardedCache
+### OtterCache (hot entities)
 
-High-contention entities (pokestop, gym, station, spawnpoint, pokemon) use `ShardedCache[K, V]` — a generic wrapper over multiple `ttlcache.Cache` instances. Keys are distributed across `runtime.NumCPU()` shards via FNV-1a hashing (strings) or identity (integers), reducing lock contention on the underlying cache maps.
+High-contention entities (pokestop, gym, station, spawnpoint, pokemon — plus the encounter stats cache) use `OtterCache[K, V]` (`ottercache/cache.go`), a hardened adapter over otter v2 (Caffeine-style: lock-free reads, hierarchical timing-wheel expiry). The adapter bakes in two non-negotiable behaviors: eviction events are re-dispatched to a single bounded-queue dispatcher goroutine (otter's default is a goroutine per event, and raw inline delivery could deadlock handlers that take entity locks), and only Expired/Deleted causes reach handlers (otter fires Replacement on overwriting live entries, which Golbat does routinely — a Replacement event reaching the eviction guards would enqueue bogus tree deletes). Per-entry TTLs ride on the value (otter has no per-call TTL); touch-on-hit is a per-cache flag choosing `ExpiryAccessingFunc` (forts, spawnpoints — reads reset the entry's own TTL, ~free via the timer wheel) vs `ExpiryWritingFunc` (pokemon — TTL encodes despawn time, must never extend on read). No sharding: the table is internally concurrent (`tuning.cache_shards` is obsolete).
 
-### TTL Cache
+**Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — fort TTLs and eviction-callback registration depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
 
-Lower-contention entities (incident, weather, route, tappable, player, s2cell) use a single `ttlcache.Cache` instance.
+### Singleton caches
+
+Lower-contention entities (incident, weather, route, tappable, player, s2cell, device) use unsharded `OtterCache` instances too — the whole codebase is on one cache model (ttlcache is no longer a dependency).
 
 ### Configuration
 
-- **Fort caches**: 60-minute TTL normally, 25 hours when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations).
-- **Pokemon cache**: 60-minute TTL with `DisableTouchOnHit = true` — TTL counts from creation, not last access, ensuring pokemon expire after their despawn time regardless of query frequency.
+- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter spreads a restart cohort's expiry so downstream work (tree deletes, tracker events, DB reloads) arrives as a stream, not a burst (with otter there is no reader-blocking sweep; jitter survives as burst smoothing).
+- **Pokemon cache**: per-entry TTL from `remainingDuration` with `DisableTouchOnHit = true` — verified despawns get despawn time + 60 s (clamped to 1 minute once at/past despawn), unverified get 55–65 min with per-pokemon jitter.
 - **All other caches**: 60-minute TTL (weather consensus: 2 hours).
 
-### Eviction Callbacks
+### Eviction Callbacks and the Tree Writer
 
-Fort and pokemon caches register eviction callbacks that clean up the corresponding R-tree entries when a cache item expires. This maintains consistency between the cache and spatial index.
+Fort and pokemon caches register eviction callbacks that clean up the lookup-cache entry inline and hand the R-tree mutation to an ordered batching worker (`decoder/rtree_evictor.go`). Important facts about this path:
+
+- Eviction callbacks arrive on each cache's single dispatcher goroutine (see `ottercache/cache.go`) — bounded, but still NOT synchronized with cache operations or entity-lock holders. The pokemon callback therefore takes the entity lock and skips cleanup if the pokemon was re-cached; the fort callback skips when the lookup entry is already gone (deleted fort) or owned by a different fort type (pokestop↔gym conversion).
+- **All runtime pokemon tree mutations go through the writer** — new-record inserts, position moves (delete+insert pairs), rehydration inserts, the eviction-race self-heal, and eviction deletes. Savers holding entity locks never touch `pokemonTreeMutex` (production dumps once showed 90+ savers convoyed there); only the worker and the ~1/s scan-snapshot refresh acquire it. Enqueue order is apply order; deletes match on (coords, id) so stale duplicates are no-ops; the rtree is a multiset so duplicate inserts self-correct. Startup preload uses direct inserts (pre-traffic) to avoid flooding the queue. Fort tree: deletes are queued, adds remain direct (low churn).
+- Mutations apply in batches (~512 per tree-mutex acquisition), so the tree may briefly hold a ghost point (harmless — scans consult the lookup cache) or a duplicate point for a re-added id (scan paths dedupe matched ids).
+- A save that finds its lookup entry missing re-queues the tree insert (`savePokemonRecordAsAtTime`), self-healing the eviction/re-add race.
 
 ## Locking Model
 
@@ -206,6 +228,33 @@ Wild and nearby pokemon use a 30-second write delay (`wildPokemonDelay`). When a
 `DbDetails` holds two connection pools:
 - **`PokemonDb`**: Dedicated pool for the pokemon table (highest write volume).
 - **`GeneralDb`**: Everything else (forts, incidents, weather, routes, etc.).
+
+## Decode-Path Workers
+
+Work that would otherwise serialize the 96 decode goroutines on a global
+lock runs on dedicated single-worker pipelines fed by channels:
+
+| Worker | Channel | Full-channel behavior |
+|--------|---------|----------------------|
+| Tree writer (`rtree_evictor.go`) | 262144 | Blocking send (tree mutations must not be lost) |
+| Stats aggregation (`stats.go`) | 262144 | **Drop + count** (stats are loss-tolerant) |
+| Fort tracker (`fort_tracker.go`) | 8192 | **Drop + count** (staleness needs an hour of absence) |
+
+**Invariant: never add a blocking send from the decode path to a worker
+whose throughput can fall below the event rate.** A saturated worker with
+blocking producers produced a production fill-drain limit cycle (all
+decoders frozen at the enqueue for 3–5s every ~30s). Loss-tolerant paths
+drop and count (`util.DropReporter` aggregates to one log line/second;
+stats drops and cache eviction-event drops have Prometheus counters —
+the latter is the one loss with no self-heal, leaking lookup entries
+until restart; tree-delete and fort-tracker drops are log-only because
+scans/rescans self-heal them). The stats worker drains in
+batches of 512 and takes `pokemonStatsLock` once per batch; geofence
+reloads clear the stats maps via an in-band barrier event so queued
+events with pre-reload area names drain into the old maps.
+
+Worker queue depths are exported every 10s as
+`golbat_worker_backlog{worker}` and warn at >50% capacity.
 
 ## Webhooks
 
@@ -287,9 +336,9 @@ This separation means a scan of 100,000 pokemon in a bounding box only touches t
 **PokemonPvpLookup** stores: best PVP rank in Little/Great/Ultra leagues.
 
 **Lifecycle**:
-- Added to tree when pokemon is first saved or loaded from DB on cache miss (`pokemonRtreeUpdatePokemonOnGet`)
-- Updated on every save via `updatePokemonLookup()` which also recalculates PVP rankings
-- Removed via cache eviction callback when pokemon TTL expires
+- Tree insert queued through the tree writer when first saved or loaded from DB on cache miss (`pokemonRtreeUpdatePokemonOnGet`); preload inserts directly (`pokemonRtreePreloadInsert`)
+- Lookup entry updated synchronously on every save via `updatePokemonLookup()` which also recalculates PVP rankings
+- Tree delete queued via cache eviction callback when pokemon TTL expires
 
 ### Fort R-tree (`fortRtree.go`)
 
@@ -302,13 +351,15 @@ Enabled by `config.Config.FortInMemory`. Fort cache TTL is extended to 25 hours 
 
 **Incident data** on FortLookup is updated separately via `updatePokestopIncidentLookup()` because incidents load after pokestops during preload, and incident updates come through a different code path than pokestop updates.
 
+**Scaling caveat (fort scans are low-traffic today; this is the pre-scoped lever if that changes):** FortLookup's value layout is already right — flat scalars by value, one fetch per candidate, no pointer chain (the design the pokemon lookup converged to in the de-pointer change). The weakness at pokemon-like scan volumes would be **string keys**: ~35-byte fort IDs are hashed per Load, key-compared per bucket walk, and stored as entries in the R-tree itself (pointer-laden tree nodes; ~2M string objects in every GC mark). The fix, when a profile demands it: intern fort IDs to dense integers at save/delete and key both the tree and the lookup map by the intern ID — one change removes the hashing, the compares, and the tree/GC pointer load together.
+
 ### Scanning and DNF Filters
 
 #### Pokemon Scan
 
 Three API versions exist (V1/V2/V3), all following the same pattern:
 
-1. Copy the R-tree (read lock) for thread-safe traversal
+1. Take the shared read-only tree snapshot (`refreshTreeSnapshot`, refreshed at most once per second — scans never copy the tree per request and hold no lock while searching; hits are re-verified against the live lookup cache, so ≤1s staleness only affects candidate discovery)
 2. `rtree.Search(minLon, minLat, maxLon, maxLat)` to get candidate pokemon IDs
 3. For each ID, load `PokemonLookup` + `PokemonPvpLookup` from lookup cache
 4. Apply DNF filter matching
@@ -328,7 +379,7 @@ This avoids iterating all filters for every pokemon.
 
 `internalGetForts()` and `internalGetFortsCombined()` follow the same pattern:
 
-1. Copy fort R-tree
+1. Take the shared fort tree snapshot (same 1s-refresh mechanism as pokemon)
 2. Bounding-box search for fort IDs
 3. Load `FortLookup` from lookup cache
 4. Apply `isFortDnfMatch()` which checks fort type, then type-specific fields:
@@ -338,6 +389,30 @@ This avoids iterating all filters for every pokemon.
 5. Lock and load full entity records for matched IDs
 
 The `FortCombinedScanEndpoint` scans all three fort types in one pass and splits results by type.
+
+## Geofence Matching
+
+Area attribution (stats, webhook filtering) matches points against Koji /
+file geofences via two layers:
+
+1. **S2 cell fast path** (`geo/s2_lookup.go`, `tuning.s2_cell_lookup`):
+   fences are pre-classified into interior cells (stored at coarse levels
+   10–15, looked up via parent walk) and edge cells. Interior hit → area
+   names with no polygon math; edge cell or miss → fall through to layer 2.
+   Loops are `Normalize()`d (CW GeoJSON rings would otherwise cover the
+   planet); hole rings exclude or edge the cells they touch. The lookup is
+   built **asynchronously** (takes ~1 min for large projects) — during a
+   build/reload window the fast path is nil and everything uses layer 2.
+2. **Compiled polygons** (`geo/geofence_compiled.go`): exact
+   point-in-polygon with cached ring bounds (~5× faster than orb's
+   `planar.RingContains`, which recomputes bounds per call). Differentially
+   tested against orb.
+
+Reloads (`ReadGeofences`) are serialized under a mutex, skipped entirely
+when the fetched content hash is unchanged, and stale async S2 builds are
+discarded via a generation counter with publication under `s2PublishMu`.
+A Koji outage at boot degrades (no area matching until a successful
+reload) instead of failing startup.
 
 ## Preload
 

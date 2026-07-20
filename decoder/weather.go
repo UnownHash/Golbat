@@ -11,8 +11,9 @@ import (
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/ottercache"
 )
 
 // Weather struct.
@@ -202,20 +203,21 @@ func (weather *Weather) SetWarnWeather(v null.Bool) {
 }
 
 func loadWeatherFromDatabase(ctx context.Context, db db.DbDetails, weatherId int64, weather *Weather) error {
-	err := db.GeneralDb.GetContext(ctx, weather,
-		"SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
-	statsCollector.IncDbQuery("select weather", err)
-	if err == nil {
-		weather.UpdatedMs *= 1000
-	}
-	return err
+	return timedDbQuery("loadWeatherFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, weather,
+			"SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
+		statsCollector.IncDbQuery("select weather", err)
+		if err == nil {
+			weather.UpdatedMs *= 1000
+		}
+		return err
+	})
 }
 
 // peekWeatherRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekWeatherRecord(weatherId int64, caller string) (*Weather, func(), error) {
-	if item := weatherCache.Get(weatherId); item != nil {
-		weather := item.Value()
+	if weather, ok := weatherCache.Get(weatherId); ok {
 		weather.Lock(caller)
 		return weather, func() { weather.Unlock() }, nil
 	}
@@ -227,8 +229,7 @@ func peekWeatherRecord(weatherId int64, caller string) (*Weather, func(), error)
 // Caller MUST call returned unlock function if non-nil.
 func getWeatherRecordReadOnly(ctx context.Context, db db.DbDetails, weatherId int64, caller string) (*Weather, func(), error) {
 	// Check cache first
-	if item := weatherCache.Get(weatherId); item != nil {
-		weather := item.Value()
+	if weather, ok := weatherCache.Get(weatherId); ok {
 		weather.Lock(caller)
 		return weather, func() { weather.Unlock() }, nil
 	}
@@ -245,11 +246,9 @@ func getWeatherRecordReadOnly(ctx context.Context, db db.DbDetails, weatherId in
 
 	// Atomically cache the loaded Weather - if another goroutine raced us,
 	// we'll get their Weather and use that instead (ensuring same mutex)
-	existingWeather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+	weather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
 		return &dbWeather
 	})
-
-	weather := existingWeather.Value()
 	weather.Lock(caller)
 	return weather, func() { weather.Unlock() }, nil
 }
@@ -269,11 +268,9 @@ func getWeatherRecordForUpdate(ctx context.Context, db db.DbDetails, weatherId i
 // Caller MUST call returned unlock function.
 func getOrCreateWeatherRecord(ctx context.Context, db db.DbDetails, weatherId int64, caller string) (*Weather, func(), error) {
 	// Create new Weather atomically - function only called if key doesn't exist
-	weatherItem, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
+	weather, _ := weatherCache.GetOrSetFunc(weatherId, func() *Weather {
 		return &Weather{Id: weatherId, newRecord: true}
 	})
-
-	weather := weatherItem.Value()
 	weather.Lock(caller)
 
 	if weather.newRecord {
@@ -424,7 +421,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 	createWeatherWebhooks(weather)
 	weather.ClearDirty()
 	if weather.IsNewRecord() {
-		weatherCache.Set(weather.Id, weather, ttlcache.DefaultTTL)
+		weatherCache.Set(weather.Id, weather, ottercache.DefaultTTL)
 		weather.newRecord = false
 	}
 }

@@ -1,0 +1,7 @@
+=== RUN   TestScenarioCallbackThroughput
+=== RUN   TestScenarioCallbackThroughput/ttlcache
+    scenario_test.go:344: RESULT cbthroughput/ttlcache delivered=1000000 dropped=0 of=1000000 window=9.235s rate=108281/s max_goroutines=200
+--- PASS: TestScenarioCallbackThroughput (11.26s)
+    --- PASS: TestScenarioCallbackThroughput/ttlcache (11.26s)
+PASS
+ok  	golbat/cachebench	11.656s

@@ -3,7 +3,7 @@ package decoder
 import (
 	"golbat/pogo"
 
-	"github.com/jellydator/ttlcache/v3"
+	"golbat/ottercache"
 )
 
 type WeatherConsensusState struct {
@@ -28,18 +28,17 @@ func getWeatherConsensusState(cellId int64, hourKey int64) *WeatherConsensusStat
 	if weatherConsensusCache == nil {
 		return nil
 	}
-	item := weatherConsensusCache.Get(cellId)
-	if item != nil {
-		state := item.Value()
+	if state, ok := weatherConsensusCache.Get(cellId); ok {
 		if hourKey > state.HourKey {
 			state.reset(hourKey)
 		}
-		weatherConsensusCache.Set(cellId, state, ttlcache.DefaultTTL)
+		// No re-Set needed: this is a touch-on-hit cache, the Get above
+		// already re-armed the TTL, and state is a shared pointer.
 		return state
 	}
 	state := &WeatherConsensusState{}
 	state.reset(hourKey)
-	weatherConsensusCache.Set(cellId, state, ttlcache.DefaultTTL)
+	weatherConsensusCache.Set(cellId, state, ottercache.DefaultTTL)
 	return state
 }
 

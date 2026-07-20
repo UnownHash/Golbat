@@ -6,12 +6,13 @@ import (
 	"strings"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
 	"golbat/pogo"
 	"golbat/webhooks"
+
+	"golbat/ottercache"
 )
 
 type Location struct {
@@ -195,7 +196,7 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ttlcache.DefaultTTL)
+		getMapFortsCache.Set(mapFort.Id, mapFort, ottercache.DefaultTTL)
 		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
 	}
 	return status, output

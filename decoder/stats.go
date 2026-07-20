@@ -3,11 +3,14 @@ package decoder
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/guregu/null/v6"
 
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
@@ -15,6 +18,7 @@ import (
 	"golbat/config"
 	"golbat/encounter_cache"
 	"golbat/geo"
+	"golbat/util"
 )
 
 type areaStatsCount struct {
@@ -94,12 +98,20 @@ func initLiveStats() {
 	encounterCache = encounter_cache.NewEncounterCache(60 * time.Minute)
 	// TODO: fix later to shutdown cleanly, if we care.
 	go encounterCache.Run(context.Background())
+	go statsAggregationWorker()
 }
 
 func LoadStatsGeofences() {
 	if err := ReadGeofences(); err != nil {
 		if os.IsNotExist(err) {
 			log.Infof("No geofence file found, skipping")
+			return
+		}
+		if errors.Is(err, ErrNoGeofenceData) {
+			// Koji unreachable with no cache at boot: start degraded (no
+			// area matching) instead of crash-looping until Koji recovers.
+			// A later successful reload restores matching.
+			log.Errorf("GEO: starting without geofences: %v", err)
 			return
 		}
 		panic(fmt.Sprintf("Error reading geofences: %v", err))
@@ -151,19 +163,181 @@ func StartStatsWriter(statsDb *sqlx.DB) {
 func ReloadGeofenceAndClearStats() {
 	log.Info("Reloading stats geofence")
 
-	pokemonStatsLock.Lock()
-	defer pokemonStatsLock.Unlock()
-
+	// Load and index the geofence BEFORE taking the stats lock. Geofence
+	// publication is atomic.Value-based and needs no lock, while
+	// updatePokemonStats/updateEncounterStats take pokemonStatsLock under
+	// the pokemon entity lock — holding it across a Koji fetch and
+	// rtree/S2 rebuild would freeze every pokemon save for the duration.
 	if err := ReadGeofences(); err != nil {
 		log.Errorf("Error reading geofences during hot-reload: %v", err)
 		return
 	}
-	pokemonStats = make(map[geo.AreaName]areaStatsCount)          // clear stats
-	pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail) // clear count
+
+	// Clear via an in-band barrier so the queued event backlog (tagged with
+	// pre-reload area names) drains into the OLD maps and the cut is clean.
+	// Blocking send is fine here: this runs on the reload endpoint's
+	// goroutine, not the decode path, and the worker always drains.
+	pokemonStatsEvents <- pokemonStatsEvent{clearMaps: true}
 }
 
-// update stats for an encounterId
-func updateEncounterStats(pokemon *Pokemon) {
+// pokemonStatsSnapshot carries the fields the stats aggregation reads,
+// copied while the entity lock is held so the aggregation worker never
+// touches a live Pokemon. Field names mirror Pokemon so the aggregation
+// functions below keep their original bodies.
+type pokemonStatsSnapshot struct {
+	Id                      Uint64Str
+	PokemonId               int16
+	Form                    null.Int
+	Cp                      null.Int
+	AtkIv, DefIv, StaIv     null.Int
+	SeenType                null.String
+	Username                null.String
+	Shiny                   null.Bool
+	Updated                 null.Int
+	ExpireTimestamp         null.Int
+	ExpireTimestampVerified bool
+	newRecord               bool
+	oldValues               struct {
+		SeenType  null.String
+		Cp        null.Int
+		PokemonId int16
+	}
+}
+
+func (s *pokemonStatsSnapshot) isNewRecord() bool { return s.newRecord }
+
+// encounterStatsDuration: see (*Pokemon).encounterStatsDuration.
+func (s *pokemonStatsSnapshot) encounterStatsDuration(now int64) time.Duration {
+	if s.ExpireTimestampVerified {
+		if timeLeft := 60 + s.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+			return time.Duration(timeLeft) * time.Second
+		}
+	}
+	return 0
+}
+
+// statsSnapshot must be called while holding the pokemon's entity lock.
+func (pokemon *Pokemon) statsSnapshot() *pokemonStatsSnapshot {
+	s := &pokemonStatsSnapshot{
+		Id:                      pokemon.Id,
+		PokemonId:               pokemon.PokemonId,
+		Form:                    pokemon.Form,
+		Cp:                      pokemon.Cp,
+		AtkIv:                   pokemon.AtkIv,
+		DefIv:                   pokemon.DefIv,
+		StaIv:                   pokemon.StaIv,
+		SeenType:                pokemon.SeenType,
+		Username:                pokemon.Username,
+		Shiny:                   pokemon.Shiny,
+		Updated:                 pokemon.Updated,
+		ExpireTimestamp:         pokemon.ExpireTimestamp,
+		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
+		newRecord:               pokemon.isNewRecord(),
+	}
+	s.oldValues.SeenType = pokemon.oldValues.SeenType
+	s.oldValues.Cp = pokemon.oldValues.Cp
+	s.oldValues.PokemonId = pokemon.oldValues.PokemonId
+	return s
+}
+
+type pokemonStatsEvent struct {
+	snap      *pokemonStatsSnapshot
+	areas     []geo.AreaName // save events only
+	now       int64
+	encounter bool // true: updateEncounterStats path; false: updatePokemonStats path
+	clearMaps bool // barrier event from ReloadGeofenceAndClearStats
+}
+
+// pokemonStatsEvents feeds the single stats-aggregation worker. Savers used
+// to run the aggregation inline, under the pokemon entity lock, all
+// contending on pokemonStatsLock — with fast geofence matching that global
+// mutex became the decode-throughput ceiling (a goroutine dump showed 66 of
+// 96 decoders parked on it). One worker owning the maps removes the convoy;
+// enqueueing is a channel send.
+var pokemonStatsEvents = make(chan pokemonStatsEvent, 262144)
+
+// StartWorkerBacklogReporter publishes background-worker queue depths to
+// the stats collector every 10s. Call from main after InitDataCache and
+// SetStatsCollector.
+func StartWorkerBacklogReporter() {
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		for range ticker.C {
+			if statsCollector == nil {
+				continue
+			}
+			statsCollector.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
+			statsCollector.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
+			statsCollector.SetWorkerBacklog("cache_evict_pokemon", float64(pokemonCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_pokestop", float64(pokestopCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_gym", float64(gymCache.EvictQueueLen()))
+			statsCollector.SetWorkerBacklog("cache_evict_station", float64(stationCache.EvictQueueLen()))
+			if pokemonTreeEvictor != nil {
+				statsCollector.SetWorkerBacklog("tree_evictor_pokemon", float64(pokemonTreeEvictor.QueueLen()))
+			}
+			if fortTreeEvictor != nil {
+				statsCollector.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
+			}
+		}
+	}()
+}
+
+// statsAggregationWorker drains events in batches, holding pokemonStatsLock
+// once per batch: at production event rates the previous per-event lock
+// cycling (2-3 acquisitions each) was a measurable share of the worker's
+// per-event budget and the worker was saturating (backlog pegged, drops).
+// Batch lock holds are bounded (~ms); the flushers' map swaps wait at most
+// one batch.
+func statsAggregationWorker() {
+	const batchSize = 512
+	batch := make([]pokemonStatsEvent, 0, batchSize)
+	for ev := range pokemonStatsEvents {
+		batch = drainBatch(pokemonStatsEvents, append(batch[:0], ev), batchSize)
+
+		pokemonStatsLock.Lock()
+		for i := range batch {
+			switch {
+			case batch[i].clearMaps:
+				// In-band barrier: events enqueued before a geofence reload
+				// (carrying old area names) have all been aggregated above;
+				// clear here for a clean cut instead of clearing out-of-band
+				// and letting the queued backlog pollute the fresh maps.
+				pokemonStats = make(map[geo.AreaName]areaStatsCount)
+				pokemonCount = make(map[geo.AreaName]*areaPokemonCountDetail)
+			case batch[i].encounter:
+				updateEncounterStats(batch[i].snap)
+			default:
+				updatePokemonStats(batch[i].snap, batch[i].areas, batch[i].now)
+			}
+		}
+		pokemonStatsLock.Unlock()
+	}
+}
+
+// Stats events are loss-tolerant (they are statistics); decode is not
+// block-tolerant. A saturated worker with a blocking send here re-couples
+// decode throughput to stats throughput and produces a fill-drain limit
+// cycle: channel fills -> every decoder freezes at this send -> worker
+// drains -> decoders burn their backlog and refill -> repeat (observed in
+// production as 3-5s shed storms every ~30s). Never block: drop the event,
+// count the drop, and report at most once per second.
+var statsEventDrops util.DropReporter
+
+func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
+	select {
+	case pokemonStatsEvents <- ev:
+	default:
+		statsCollector.IncStatsEventsDropped()
+		statsEventDrops.Report(func(dropped int64) {
+			log.Warnf("[STATS_WORKER] dropped %d stats events in the last second (worker saturated, backlog %d/%d)",
+				dropped, len(pokemonStatsEvents), cap(pokemonStatsEvents))
+		})
+	}
+}
+
+// update stats for an encounterId.
+// Caller (the stats aggregation worker) must hold pokemonStatsLock.
+func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
 	// And double check that we have IVs, anyway.
@@ -195,7 +369,7 @@ func updateEncounterStats(pokemon *Pokemon) {
 		statsCollector.IncDuplicateEncounters(false)
 	}
 
-	encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.remainingDuration(time.Now().Unix()))
+	encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(time.Now().Unix()))
 
 	pokemonIdStr := strconv.Itoa(int(pokemon.PokemonId))
 	var formId int
@@ -205,12 +379,9 @@ func updateEncounterStats(pokemon *Pokemon) {
 		formIdStr = strconv.Itoa(int(pokemon.Form.ValueOrZero()))
 	}
 
-	// For the DB
+	// For the DB (caller — the aggregation worker — holds pokemonStatsLock)
 	func() {
 		areaName := geo.AreaName{Parent: "world", Name: "world"}
-
-		pokemonStatsLock.Lock()
-		defer pokemonStatsLock.Unlock()
 
 		countStats, exists := pokemonCount[areaName]
 		if !exists {
@@ -248,7 +419,9 @@ func updateEncounterStats(pokemon *Pokemon) {
 	}
 }
 
-func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
+// updatePokemonStats aggregates one save event into the stats maps.
+// Caller (the stats aggregation worker) must hold pokemonStatsLock.
+func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now int64) {
 	if len(areas) == 0 {
 		areas = []geo.AreaName{
 			{
@@ -341,7 +514,7 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 
 	// If we have a cache entry, it means we updated it. So now let's store it.
 	if encounterCacheVal != nil {
-		encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.remainingDuration(now))
+		encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(now))
 	}
 
 	if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
@@ -350,8 +523,6 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 		// stats reset
 		statsResetCountIncr = 1
 	}
-
-	locked := false
 
 	var isHundo bool
 	var isNundo bool
@@ -374,11 +545,6 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 		// Count stats
 
 		if pokemon.isNewRecord() || pokemon.oldValues.Cp != pokemon.Cp { // pokemon is new or CP has changed (encountered or re-encountered)
-			if !locked {
-				pokemonStatsLock.Lock()
-				locked = true
-			}
-
 			countStats, exists := pokemonCount[area]
 			if !exists {
 				countStats = &areaPokemonCountDetail{
@@ -419,11 +585,6 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 		if monsSeenIncr > 0 || monsIvIncr > 0 || verifiedEncIncr > 0 || unverifiedEncIncr > 0 ||
 			bucket >= 0 || timeToEncounter > 0 || statsResetCountIncr > 0 ||
 			verifiedReEncounterIncr > 0 {
-			if !locked {
-				pokemonStatsLock.Lock()
-				locked = true
-			}
-
 			areaStats := pokemonStats[area]
 			if bucket >= 0 {
 				areaStats.tthBucket[bucket]++
@@ -447,9 +608,6 @@ func updatePokemonStats(pokemon *Pokemon, areas []geo.AreaName, now int64) {
 		}
 	}
 
-	if locked {
-		pokemonStatsLock.Unlock()
-	}
 }
 
 func updateRaidStats(gym *Gym, areas []geo.AreaName) {
@@ -696,11 +854,14 @@ func logPokemonStats(statsDb *sqlx.DB) {
 		}
 
 		if len(rows) > 0 {
-			_, err := statsDb.NamedExec(
-				"INSERT INTO pokemon_area_stats "+
-					"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
-					"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
-				rows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.pokemon_area_stats (%d rows)", len(rows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO pokemon_area_stats "+
+						"(datetime, area, fence, totMon, ivMon, verifiedEnc, unverifiedEnc, verifiedReEnc, encSecLeft, encTthMax5, encTth5to10, encTth10to15, encTth15to20, encTth20to25, encTth25to30, encTth30to35, encTth35to40, encTth40to45, encTth45to50, encTth50to55, encTthMin55, resetMon, re_encSecLeft, numWiEnc, secWiEnc) "+
+						"VALUES (:datetime, :area, :fence, :totMon, :ivMon, :verifiedEnc, :unverifiedEnc, :verifiedReEnc, :encSecLeft, :encTthMax5, :encTth5to10, :encTth10to15, :encTth15to20, :encTth20to25, :encTth25to30, :encTth30to35, :encTth35to40, :encTth40to45, :encTth45to50, :encTth50to55, :encTthMin55, :resetMon, :re_encSecLeft, :numWiEnc, :secWiEnc)",
+					rows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting pokemon_area_stats: %v", err)
 			}
@@ -812,12 +973,15 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 					rowsToWrite := rows[i:end]
 
-					_, err := statsDb.NamedExec(
-						fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, form_id, `count`)"+
-							" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count)"+
-							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
-						rowsToWrite,
-					)
+					err := timedDbQuery(fmt.Sprintf("statsWriter.%s (%d rows)", table, len(rowsToWrite)), statsDb, func() error {
+						_, err := statsDb.NamedExec(
+							fmt.Sprintf("INSERT INTO %s (date, area, fence, pokemon_id, form_id, `count`)"+
+								" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count)"+
+								" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", table),
+							rowsToWrite,
+						)
+						return err
+					})
 					if err != nil {
 						log.Errorf("Error inserting %s: %v", table, err)
 					}
@@ -843,12 +1007,15 @@ func logPokemonCount(statsDb *sqlx.DB) {
 
 				rowsToWrite := rows[i:end]
 
-				_, err := statsDb.NamedExec(
-					"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, form_id, `count`, total)"+
-						" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count, :total)"+
-						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
-					rowsToWrite,
-				)
+				err := timedDbQuery(fmt.Sprintf("statsWriter.pokemon_shiny_stats (%d rows)", len(rowsToWrite)), statsDb, func() error {
+					_, err := statsDb.NamedExec(
+						"INSERT INTO pokemon_shiny_stats (date, area, fence, pokemon_id, form_id, `count`, total)"+
+							" VALUES (:date, :area, :fence, :pokemon_id, :form_id, :count, :total)"+
+							" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`), total = total + VALUES(total);",
+						rowsToWrite,
+					)
+					return err
+				})
 				if err != nil {
 					log.Errorf("Error inserting pokemon_shiny_stats: %v", err)
 				}
@@ -916,11 +1083,14 @@ func logRaidStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO raid_stats "+
-					"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, `count`)"+
-					" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.raid_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO raid_stats "+
+						"(date, area, fence, level, pokemon_id, form_id, temp_evo_id, `count`)"+
+						" VALUES (:date, :area, :fence, :level, :pokemon_id, :form_id, :temp_evo_id, :count)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting raid_stats: %v", err)
 			}
@@ -975,11 +1145,14 @@ func logInvasionStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO invasion_stats "+
-					"(date, area, fence, `character`, `count`)"+
-					" VALUES (:date, :area, :fence, :character, :count)"+
-					" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.invasion_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO invasion_stats "+
+						"(date, area, fence, `character`, `count`)"+
+						" VALUES (:date, :area, :fence, :character, :count)"+
+						" ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);", batchRows)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting invasion_stats: %v", err)
 			}
@@ -1059,13 +1232,16 @@ func logQuestStats(statsDb *sqlx.DB) {
 			}
 
 			batchRows := rows[i:end]
-			_, err := statsDb.NamedExec(
-				"INSERT INTO quest_stats "+
-					"(date, area, fence, reward_type, pokemon_id, item_id, item_amount, `count`) "+
-					"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :item_amount, :count) "+
-					"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
-				batchRows,
-			)
+			err := timedDbQuery(fmt.Sprintf("statsWriter.quest_stats (%d rows)", len(batchRows)), statsDb, func() error {
+				_, err := statsDb.NamedExec(
+					"INSERT INTO quest_stats "+
+						"(date, area, fence, reward_type, pokemon_id, item_id, item_amount, `count`) "+
+						"VALUES (:date, :area, :fence, :reward_type, :pokemon_id, :item_id, :item_amount, :count) "+
+						"ON DUPLICATE KEY UPDATE `count` = `count` + VALUES(`count`);",
+					batchRows,
+				)
+				return err
+			})
 			if err != nil {
 				log.Errorf("Error inserting quest_stats: %v", err)
 			}
