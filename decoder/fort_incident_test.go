@@ -17,9 +17,9 @@ func TestFortDnfMatch_IncidentSlice(t *testing.T) {
 	if !isFortDnfMatch(POKESTOP, fl, &ApiFortDnfFilter{IncidentDisplayType: []int8{9}}, now) {
 		t.Fatal("showcase (dt9) should match")
 	}
-	// slot1 pokemon matches
-	if !isFortDnfMatch(POKESTOP, fl, &ApiFortDnfFilter{IncidentPokemon: []ApiDnfId{{Pokemon: 41}}}, now) {
-		t.Fatal("slot1 pokemon 41 should match")
+	// active grunt character matches
+	if !isFortDnfMatch(POKESTOP, fl, &ApiFortDnfFilter{IncidentCharacter: []int16{5}}, now) {
+		t.Fatal("grunt (5) should match")
 	}
 	// expired incident does not match
 	if isFortDnfMatch(POKESTOP, fl, &ApiFortDnfFilter{IncidentCharacter: []int16{30}}, now) {

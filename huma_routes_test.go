@@ -246,7 +246,7 @@ func TestTier3ReadEndpoints(t *testing.T) {
 	})
 }
 
-// TestTier3RoutesRegisterInSpec asserts all seven tier-3 operations appear in
+// TestTier3RoutesRegisterInSpec asserts all eight tier-3 operations appear in
 // the OpenAPI spec at their expected method+path (registration smoke test for
 // the endpoints that need a DB and so are not exercised end-to-end here).
 func TestTier3RoutesRegisterInSpec(t *testing.T) {
@@ -271,6 +271,7 @@ func TestTier3RoutesRegisterInSpec(t *testing.T) {
 		{"post", "/api/station/query"},
 		{"post", "/api/gym/search"},
 		{"get", "/api/gym/id/{gym_id}"},
+		{"get", "/api/station/id/{station_id}"},
 		{"get", "/api/pokestop/id/{fort_id}"},
 		{"get", "/api/tappable/id/{tappable_id}"},
 		{"post", "/api/pokestop-positions"},
@@ -502,4 +503,72 @@ func TestTier4OperationalEndpoints(t *testing.T) {
 			t.Errorf("got %d, want 503; body=%s", resp.Code, resp.Body.String())
 		}
 	})
+}
+
+// TestHumaStationByIdRoute verifies the station by-id route is registered and
+// requires the secret; the 404-for-unknown-id path needs a DB, so it is covered
+// by the registration smoke test (TestTier3RoutesRegisterInSpec) instead.
+func TestHumaStationByIdRoute(t *testing.T) {
+	prev := config.Config.ApiSecret
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prev }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerTier3Routes(api)
+
+	t.Run("no secret is 401", func(t *testing.T) {
+		resp := api.Get("/api/station/id/does-not-exist")
+		if resp.Code != http.StatusUnauthorized {
+			t.Errorf("got %d, want 401", resp.Code)
+		}
+	})
+}
+
+func TestHumaGymAvailableRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevFim := config.Config.FortInMemory
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prevSecret; config.Config.FortInMemory = prevFim }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerFortScanRoutes(api)
+
+	config.Config.FortInMemory = false
+	if resp := api.Get("/api/gym/available", "X-Golbat-Secret: topsecret"); resp.Code != http.StatusServiceUnavailable {
+		t.Errorf("fim off: got %d, want 503", resp.Code)
+	}
+	config.Config.FortInMemory = true
+	resp := api.Get("/api/gym/available", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"raids":[]`) {
+		t.Errorf("body missing \"raids\": %s", resp.Body.String())
+	}
+}
+
+func TestHumaStationAvailableRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevFim := config.Config.FortInMemory
+	config.Config.ApiSecret = "topsecret"
+	defer func() { config.Config.ApiSecret = prevSecret; config.Config.FortInMemory = prevFim }()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerFortScanRoutes(api)
+
+	config.Config.FortInMemory = false
+	if resp := api.Get("/api/station/available", "X-Golbat-Secret: topsecret"); resp.Code != http.StatusServiceUnavailable {
+		t.Errorf("fim off: got %d, want 503", resp.Code)
+	}
+	config.Config.FortInMemory = true
+	resp := api.Get("/api/station/available", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"battles":[]`) {
+		t.Errorf("body missing empty battles array: %s", resp.Body.String())
+	}
 }

@@ -4,6 +4,12 @@
 
 Golbat is a high-performance Go backend that receives raw protobuf data from Pokemon GO game clients, decodes it, maintains an in-memory cache of all game entities, persists changes to MySQL via write-behind queues, dispatches webhooks, and serves a REST/gRPC API for querying entities with spatial and attribute-based filters.
 
+## Build, Test, Lint
+
+- **Build:** `go build -tags go_json ./...` — the `go_json` tag is required (selects the go-json codec).
+- **Test:** `go test ./decoder/` — the `decoder` package holds most logic and its `_test.go` files; `go test .` runs the root-package huma route tests. Some tests need the go-json build behavior: `go test -tags go_json ./...`.
+- **Lint:** `golangci-lint run` — CI enforces it (staticcheck included). Run it before pushing. Example: staticcheck `S1016` wants `ApiFoo(k)` conversion instead of a field-by-field literal when two structs have identical fields.
+
 ## Project Layout
 
 ```
@@ -389,6 +395,15 @@ This avoids iterating all filters for every pokemon.
 5. Lock and load full entity records for matched IDs
 
 The `FortCombinedScanEndpoint` scans all three fort types in one pass and splits results by type.
+
+#### Fort Availability (maintained, not scanned)
+
+The `/api/{pokestop,gym,station}/available` and combined `/api/fort/available` endpoints answer "which distinct filter options are active on any resident fort right now?" (lures, showcases, invasions, raids, battles). These are served from **maintained max-expiry indexes** (`decoder/fort_availability.go`), NOT a `fortLookupCache.Range` scan:
+
+- Each fort update function (`updatePokestopLookup` → lures/showcases, `updatePokestopIncidentLookup` → invasions, `updateGymLookup` → raids, `updateStationLookupWithBattles` → battles) calls an `observe*` that records each active option's *latest* expiry in a small `xsync.Map[optionKey, maxExpiry]` (atomic keep-larger; already-expired observations ignored). These hooks fire during preload too, warming the maps at startup.
+- Reads (`GetAvailable*`) use the strong `Map.Range` (not `RangeRelaxed`), emit keys with `exp > now`, and **prune-on-read conditionally** (`Compute` delete-if-still-`<= now`, never a blind `Delete`, so a concurrent refresh isn't dropped).
+- **Quests are the exception**: a quest can be *retracted* mid-life (`RemoveQuestsWithinGeofence`, event swap) while its daily `quest_expiry` is still hours away — max-expiry is monotonic and can't retract — so quests use the `reconcile` count aggregate (`questConditionCount` / `reconcileFortQuestConditions`), never the index. `GetAvailablePokestops` sources quests from `GetAvailableQuestConditions()`.
+- Accepted trade-off: no periodic reconcile sweep, so a replaced option (egg→hatch, grunt confirm) can over-report until its own expiry passes — bounded and self-healing. Design: `docs/superpowers/specs/2026-07-17-maintained-fort-availability-design.md`.
 
 ## Geofence Matching
 

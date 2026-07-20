@@ -76,6 +76,7 @@ url = "http://localhost:4201"
 [tuning]
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
+max_fort_results = 9000  # Maximum number of forts (gyms/pokestops/stations) to return per in-memory scan; separate from max_pokemon_results so the fort map-data API can be tuned independently
 extended_timeout = false    # Extend timeouts for processing, hopefully not needed
 write_behind_startup_delay = 120    # Writes will be queued for this quiet time
 write_behind_worker_count = 16      # Maximum number of parallel batch writes.
