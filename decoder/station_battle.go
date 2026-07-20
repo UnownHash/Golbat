@@ -55,6 +55,10 @@ type FortLookupIncident struct {
 	Confirmed       bool
 	Slot1PokemonId  int16
 	Slot1Form       int16
+	Slot2PokemonId  int16
+	Slot2Form       int16
+	Slot3PokemonId  int16
+	Slot3Form       int16
 	ExpireTimestamp int64 // used to skip expired incidents at filter time
 }
 

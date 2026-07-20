@@ -29,6 +29,10 @@ type ApiPokestopInvasionAvailable struct {
 	Confirmed      bool  `json:"confirmed" doc:"True when the lineup is confirmed (grunts only)"`
 	Slot1PokemonId int16 `json:"slot1_pokemon_id" doc:"Confirmed lead pokemon id (grunts only), else 0"`
 	Slot1Form      int16 `json:"slot1_form" doc:"Confirmed lead pokemon form, else 0"`
+	Slot2PokemonId int16 `json:"slot2_pokemon_id" doc:"Confirmed slot-2 pokemon id (grunts only), else 0"`
+	Slot2Form      int16 `json:"slot2_form" doc:"Confirmed slot-2 pokemon form, else 0"`
+	Slot3PokemonId int16 `json:"slot3_pokemon_id" doc:"Confirmed slot-3 pokemon id (grunts only), else 0"`
+	Slot3Form      int16 `json:"slot3_form" doc:"Confirmed slot-3 pokemon form, else 0"`
 }
 
 // ApiPokestopLureAvailable is one distinct active lure type currently carried

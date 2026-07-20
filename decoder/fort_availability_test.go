@@ -86,8 +86,8 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	// expired lure + no showcase (all zero) -> both ignored
 	observePokestop(&FortLookup{LureId: 502, LureExpireTimestamp: 500}, now)
 
-	// invasions (per incident)
-	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, Confirmed: true, Slot1PokemonId: 41, ExpireTimestamp: 2000}, now)
+	// invasions (per incident) — confirmed lineup carries all three slots
+	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, Confirmed: true, Slot1PokemonId: 41, Slot2PokemonId: 42, Slot2Form: 1, Slot3PokemonId: 43, ExpireTimestamp: 2000}, now)
 	observeInvasion(&FortLookupIncident{DisplayType: 9, ExpireTimestamp: 2000}, now)               // showcase incident, character 0
 	observeInvasion(&FortLookupIncident{Character: 30, DisplayType: 3, ExpireTimestamp: 500}, now) // expired
 
@@ -117,6 +117,11 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	for _, in := range inv {
 		if in.Character == 30 {
 			t.Fatal("expired invasion leaked")
+		}
+		if in.Character == 5 {
+			if in.Slot2PokemonId != 42 || in.Slot2Form != 1 || in.Slot3PokemonId != 43 {
+				t.Fatalf("confirmed invasion lost slots 2/3: %+v", in)
+			}
 		}
 	}
 	// everything expires

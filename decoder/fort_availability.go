@@ -23,6 +23,10 @@ type invasionKey struct {
 	Confirmed      bool
 	Slot1PokemonId int16
 	Slot1Form      int16
+	Slot2PokemonId int16
+	Slot2Form      int16
+	Slot3PokemonId int16
+	Slot3Form      int16
 }
 
 type raidKey struct {
@@ -151,6 +155,8 @@ func observeInvasion(inc *FortLookupIncident, now int64) {
 	observeExpiry(invasionExpiry, invasionKey{
 		Character: inc.Character, DisplayType: int16(inc.DisplayType), Confirmed: inc.Confirmed,
 		Slot1PokemonId: inc.Slot1PokemonId, Slot1Form: inc.Slot1Form,
+		Slot2PokemonId: inc.Slot2PokemonId, Slot2Form: inc.Slot2Form,
+		Slot3PokemonId: inc.Slot3PokemonId, Slot3Form: inc.Slot3Form,
 	}, inc.ExpireTimestamp, now)
 }
 

@@ -286,6 +286,10 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 		Confirmed:       incident.Confirmed,
 		Slot1PokemonId:  int16(incident.Slot1PokemonId.ValueOrZero()),
 		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
+		Slot2PokemonId:  int16(incident.Slot2PokemonId.ValueOrZero()),
+		Slot2Form:       int16(incident.Slot2Form.ValueOrZero()),
+		Slot3PokemonId:  int16(incident.Slot3PokemonId.ValueOrZero()),
+		Slot3Form:       int16(incident.Slot3Form.ValueOrZero()),
 		ExpireTimestamp: incident.ExpirationTime,
 	}
 	observeInvasion(&updated, now)
