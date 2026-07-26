@@ -169,11 +169,12 @@ type weather struct {
 }
 
 type statsIntervals struct {
-	PokemonStatsIntervalMinutes  int `koanf:"pokemon_stats_interval_minutes"`
-	PokemonCountIntervalMinutes  int `koanf:"pokemon_count_interval_minutes"`
-	RaidStatsIntervalMinutes     int `koanf:"raid_stats_interval_minutes"`
-	InvasionStatsIntervalMinutes int `koanf:"invasion_stats_interval_minutes"`
-	QuestStatsIntervalMinutes    int `koanf:"quest_stats_interval_minutes"`
+	PokemonStatsIntervalMinutes  int  `koanf:"pokemon_stats_interval_minutes"`
+	PokemonCountIntervalMinutes  int  `koanf:"pokemon_count_interval_minutes"`
+	RaidStatsIntervalMinutes     int  `koanf:"raid_stats_interval_minutes"`
+	InvasionStatsIntervalMinutes int  `koanf:"invasion_stats_interval_minutes"`
+	QuestStatsIntervalMinutes    int  `koanf:"quest_stats_interval_minutes"`
+	ShinyStatsPerArea            bool `koanf:"shiny_stats_per_area"` // if true, shiny stats are broken down by geofence area instead of world-only
 }
 
 var Config configDefinition

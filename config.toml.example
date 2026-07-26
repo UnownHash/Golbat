@@ -121,3 +121,4 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 #raid_stats_interval_minutes = 10       # Interval for writing raid stats (default: 10 minutes)
 #invasion_stats_interval_minutes = 15   # Interval for writing invasion stats (default: 15 minutes)
 #quest_stats_interval_minutes = 15      # Interval for writing quest stats (default: 15 minutes)
+#shiny_stats_per_area = false           # Break down pokemon_shiny_stats by geofence area instead of world-only (default: false). Increases write volume similar to pokemon_hundo_stats/pokemon_nundo_stats.

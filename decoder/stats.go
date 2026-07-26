@@ -163,7 +163,7 @@ func ReloadGeofenceAndClearStats() {
 }
 
 // update stats for an encounterId
-func updateEncounterStats(pokemon *Pokemon) {
+func updateEncounterStats(pokemon *Pokemon, areas []geo.AreaName) {
 	// We should only be called from encounters. It's important to do so,
 	// so that the 'DuplicateEncounters' stats below are correct.
 	// And double check that we have IVs, anyway.
@@ -207,31 +207,39 @@ func updateEncounterStats(pokemon *Pokemon) {
 
 	// For the DB
 	func() {
-		areaName := geo.AreaName{Parent: "world", Name: "world"}
+		if len(areas) == 0 {
+			areas = []geo.AreaName{{Parent: "unmatched", Name: "unmatched"}}
+		}
+		areas = append(areas, geo.AreaName{Parent: "world", Name: "world"})
+
+		pf := pokemonForm{pokemonId: pokemon.PokemonId, formId: formId}
+		isShiny := pokemon.Shiny.ValueOrZero()
 
 		pokemonStatsLock.Lock()
 		defer pokemonStatsLock.Unlock()
 
-		countStats, exists := pokemonCount[areaName]
-		if !exists {
-			countStats = &areaPokemonCountDetail{
-				hundos:      make(map[pokemonForm]int),
-				nundos:      make(map[pokemonForm]int),
-				count:       make(map[pokemonForm]int),
-				ivCount:     make(map[pokemonForm]int),
-				shinyChecks: make(map[pokemonForm]shinyChecks),
+		for i := 0; i < len(areas); i++ {
+			areaName := areas[i]
+
+			countStats, exists := pokemonCount[areaName]
+			if !exists {
+				countStats = &areaPokemonCountDetail{
+					hundos:      make(map[pokemonForm]int),
+					nundos:      make(map[pokemonForm]int),
+					count:       make(map[pokemonForm]int),
+					ivCount:     make(map[pokemonForm]int),
+					shinyChecks: make(map[pokemonForm]shinyChecks),
+				}
+				pokemonCount[areaName] = countStats
 			}
-			pokemonCount[areaName] = countStats
-		}
 
-		pf := pokemonForm{pokemonId: pokemon.PokemonId, formId: formId}
-
-		entry := countStats.shinyChecks[pf]
-		entry.total++
-		if pokemon.Shiny.ValueOrZero() {
-			entry.shiny++
+			entry := countStats.shinyChecks[pf]
+			entry.total++
+			if isShiny {
+				entry.shiny++
+			}
+			countStats.shinyChecks[pf] = entry
 		}
-		countStats.shinyChecks[pf] = entry
 	}()
 
 	// Prometheus

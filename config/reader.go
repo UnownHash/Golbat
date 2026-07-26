@@ -76,6 +76,7 @@ func ReadConfig() (configDefinition, error) {
 			RaidStatsIntervalMinutes:     10,
 			InvasionStatsIntervalMinutes: 15,
 			QuestStatsIntervalMinutes:    15,
+			ShinyStatsPerArea:            false,
 		},
 	}, "koanf"), nil)
 	if defaultErr != nil {
