@@ -35,7 +35,7 @@ func TestUpdateGymLookupHookWiresRaidAvailability(t *testing.T) {
 	got := GetAvailableGyms(now)
 	found := false
 	for _, r := range got.Raids {
-		if r.RaidLevel == 5 && r.PokemonId == 150 {
+		if r.RaidLevel == 5 && r.PokemonId != nil && *r.PokemonId == 150 {
 			found = true
 			break
 		}
@@ -73,7 +73,7 @@ func TestUpdateStationLookupWithBattlesHookWiresBattleAvailability(t *testing.T)
 	got := GetAvailableStations(now)
 	found := false
 	for _, b := range got.Battles {
-		if b.BattleLevel == 3 && b.PokemonId == 527 {
+		if b.BattleLevel == 3 && b.PokemonId != nil && *b.PokemonId == 527 {
 			found = true
 			break
 		}
@@ -118,7 +118,7 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 
 	foundShowcase := false
 	for _, s := range got.Showcases {
-		if s.PokemonId == 25 {
+		if s.PokemonId != nil && *s.PokemonId == 25 {
 			foundShowcase = true
 			break
 		}
@@ -152,7 +152,7 @@ func TestUpdatePokestopIncidentLookupHookWiresInvasionAvailability(t *testing.T)
 	got := GetAvailablePokestops(now)
 	found := false
 	for _, iv := range got.Invasions {
-		if iv.Character == 5 && iv.Slot1PokemonId == 41 {
+		if iv.Character == 5 && iv.Slot1PokemonId != nil && *iv.Slot1PokemonId == 41 {
 			found = true
 			break
 		}

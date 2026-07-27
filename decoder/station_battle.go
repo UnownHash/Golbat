@@ -482,6 +482,7 @@ func buildApiStationBattleResults(battles []StationBattleData) []ApiStationBattl
 			BattleLevel:               battle.BattleLevel,
 			BattleStart:               battle.BattleStart,
 			BattleEnd:                 battle.BattleEnd,
+			Updated:                   battle.Updated,
 			BattlePokemonId:           battle.BattlePokemonId.Ptr(),
 			BattlePokemonForm:         battle.BattlePokemonForm.Ptr(),
 			BattlePokemonCostume:      battle.BattlePokemonCostume.Ptr(),

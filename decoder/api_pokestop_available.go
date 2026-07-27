@@ -24,15 +24,15 @@ type ApiPokestopQuestAvailable struct {
 // showcase character + slot1 reward) currently present on resident
 // pokestops, with how many forts carry it. Sourced from FortLookup.Incidents.
 type ApiPokestopInvasionAvailable struct {
-	Character      int16 `json:"character" doc:"Invasion character id (grunt/leader/giovanni); 0 for non-rocket displays"`
-	DisplayType    int16 `json:"display_type" doc:"Incident display type (1-4 rocket, 7 goldstop, 8 kecleon, 9 showcase/contest)"`
-	Confirmed      bool  `json:"confirmed" doc:"True when the lineup is confirmed (grunts only)"`
-	Slot1PokemonId int16 `json:"slot1_pokemon_id" doc:"Confirmed lead pokemon id (grunts only), else 0"`
-	Slot1Form      int16 `json:"slot1_form" doc:"Confirmed lead pokemon form, else 0"`
-	Slot2PokemonId int16 `json:"slot2_pokemon_id" doc:"Confirmed slot-2 pokemon id (grunts only), else 0"`
-	Slot2Form      int16 `json:"slot2_form" doc:"Confirmed slot-2 pokemon form, else 0"`
-	Slot3PokemonId int16 `json:"slot3_pokemon_id" doc:"Confirmed slot-3 pokemon id (grunts only), else 0"`
-	Slot3Form      int16 `json:"slot3_form" doc:"Confirmed slot-3 pokemon form, else 0"`
+	Character      int16  `json:"character" doc:"Invasion character id (grunt/leader/giovanni); 0 for non-rocket displays"`
+	DisplayType    int16  `json:"display_type" doc:"Incident display type (1-4 rocket, 7 goldstop, 8 kecleon, 9 showcase/contest)"`
+	Confirmed      bool   `json:"confirmed" doc:"True when the lineup is confirmed (grunts only)"`
+	Slot1PokemonId *int16 `json:"slot1_pokemon_id" doc:"Confirmed lead pokemon id (grunts only); null when unconfirmed/absent"`
+	Slot1Form      *int16 `json:"slot1_form" doc:"Confirmed lead pokemon form (0 is a valid form); null when unconfirmed/absent"`
+	Slot2PokemonId *int16 `json:"slot2_pokemon_id" doc:"Confirmed slot-2 pokemon id (grunts only); null when unconfirmed/absent"`
+	Slot2Form      *int16 `json:"slot2_form" doc:"Confirmed slot-2 pokemon form (0 is a valid form); null when unconfirmed/absent"`
+	Slot3PokemonId *int16 `json:"slot3_pokemon_id" doc:"Confirmed slot-3 pokemon id (grunts only); null when unconfirmed/absent"`
+	Slot3Form      *int16 `json:"slot3_form" doc:"Confirmed slot-3 pokemon form (0 is a valid form); null when unconfirmed/absent"`
 }
 
 // ApiPokestopLureAvailable is one distinct active lure type currently carried
@@ -44,9 +44,9 @@ type ApiPokestopLureAvailable struct {
 // ApiPokestopShowcaseAvailable is one distinct active showcase contest
 // (pokemon/form/type) currently run by resident pokestops.
 type ApiPokestopShowcaseAvailable struct {
-	PokemonId int16 `json:"pokemon_id" doc:"Showcase focus pokemon id, else 0"`
-	Form      int16 `json:"form" doc:"Showcase focus pokemon form, else 0"`
-	TypeId    int8  `json:"type_id" doc:"Showcase focus pokemon type id (type-based showcases), else 0"`
+	PokemonId *int16 `json:"pokemon_id" doc:"Showcase focus pokemon id; null for a type-based showcase"`
+	Form      *int16 `json:"form" doc:"Showcase focus pokemon form (0 is a valid form); null for a type-based showcase"`
+	TypeId    *int8  `json:"type_id" doc:"Showcase focus pokemon type id (type-based showcases); null for a pokemon-based showcase"`
 }
 
 // ApiAvailablePokestops is the whole-instance snapshot served by

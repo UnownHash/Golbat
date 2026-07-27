@@ -102,6 +102,20 @@ func readAvailable[K comparable, V any](m *xsync.Map[K, int64], now int64, conv 
 	return out
 }
 
+// nullablePokemonForm reverses the null.Int -> int16(0) collapse that
+// updateFort*Lookup applies when populating a FortLookup (see fortRtree.go's
+// ValueOrZero calls). Availability output emits the DB-visible value: a 0
+// pokemon id means the source column was NULL (unknown boss / egg / no reward),
+// so both the id AND its form return null. A pokemon id is never legitimately 0
+// (pokedex ids start at 1). Form 0, in contrast, is a VALID form and is
+// preserved whenever the id is present — never null a form on form==0 alone.
+func nullablePokemonForm(id, form int16) (*int16, *int16) {
+	if id == 0 {
+		return nil, nil
+	}
+	return &id, &form
+}
+
 func observeRaid(fl *FortLookup, now int64) {
 	if fl.RaidLevel > 0 {
 		observeExpiry(raidExpiry, raidKey{fl.RaidLevel, fl.RaidPokemonId, fl.RaidPokemonForm}, fl.RaidEndTimestamp, now)
@@ -109,7 +123,10 @@ func observeRaid(fl *FortLookup, now int64) {
 }
 
 func readRaids(now int64) []ApiGymRaidAvailable {
-	return readAvailable(raidExpiry, now, func(k raidKey) ApiGymRaidAvailable { return ApiGymRaidAvailable(k) })
+	return readAvailable(raidExpiry, now, func(k raidKey) ApiGymRaidAvailable {
+		id, form := nullablePokemonForm(k.PokemonId, k.Form)
+		return ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: id, Form: form}
+	})
 }
 
 // observeStationBattles records every distinct active battle option on a
@@ -133,7 +150,10 @@ func observeStationBattles(fl *FortLookup, now int64) {
 }
 
 func readBattles(now int64) []ApiStationBattleAvailable {
-	return readAvailable(battleExpiry, now, func(k battleKey) ApiStationBattleAvailable { return ApiStationBattleAvailable(k) })
+	return readAvailable(battleExpiry, now, func(k battleKey) ApiStationBattleAvailable {
+		id, form := nullablePokemonForm(k.PokemonId, k.Form)
+		return ApiStationBattleAvailable{BattleLevel: k.BattleLevel, PokemonId: id, Form: form}
+	})
 }
 
 // observePokestop records the lure and showcase options active on a pokestop.
@@ -165,9 +185,36 @@ func readLures(now int64) []ApiPokestopLureAvailable {
 }
 
 func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
-	return readAvailable(showcaseExpiry, now, func(k showcaseKey) ApiPokestopShowcaseAvailable { return ApiPokestopShowcaseAvailable(k) })
+	return readAvailable(showcaseExpiry, now, func(k showcaseKey) ApiPokestopShowcaseAvailable {
+		// A showcase is exactly one of pokemon-based or type-based (observePokestop
+		// gates on ContestPokemonId != 0 || ContestPokemonType != 0). Mirror the DB:
+		// pokemon-based -> pokemon/form set, type null; type-based -> pokemon/form
+		// null, type set.
+		id, form := nullablePokemonForm(k.PokemonId, k.Form)
+		var typeId *int8
+		if k.TypeId != 0 {
+			t := k.TypeId
+			typeId = &t
+		}
+		return ApiPokestopShowcaseAvailable{PokemonId: id, Form: form, TypeId: typeId}
+	})
 }
 
 func readInvasions(now int64) []ApiPokestopInvasionAvailable {
-	return readAvailable(invasionExpiry, now, func(k invasionKey) ApiPokestopInvasionAvailable { return ApiPokestopInvasionAvailable(k) })
+	return readAvailable(invasionExpiry, now, func(k invasionKey) ApiPokestopInvasionAvailable {
+		// Character/DisplayType are genuine int16 columns (never a null collapse),
+		// so they pass through as-is; only the confirmed slot pokemon/form pairs
+		// reverse the ValueOrZero collapse.
+		s1id, s1form := nullablePokemonForm(k.Slot1PokemonId, k.Slot1Form)
+		s2id, s2form := nullablePokemonForm(k.Slot2PokemonId, k.Slot2Form)
+		s3id, s3form := nullablePokemonForm(k.Slot3PokemonId, k.Slot3Form)
+		return ApiPokestopInvasionAvailable{
+			Character:      k.Character,
+			DisplayType:    k.DisplayType,
+			Confirmed:      k.Confirmed,
+			Slot1PokemonId: s1id, Slot1Form: s1form,
+			Slot2PokemonId: s2id, Slot2Form: s2form,
+			Slot3PokemonId: s3id, Slot3Form: s3form,
+		}
+	})
 }

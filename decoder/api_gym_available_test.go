@@ -16,10 +16,10 @@ func TestGetAvailableGyms(t *testing.T) {
 
 	var bosses, eggs int
 	for _, r := range res.Raids {
-		if r.PokemonId == 999 {
+		if r.PokemonId != nil && *r.PokemonId == 999 {
 			t.Fatalf("expired raid leaked: %+v", r)
 		}
-		if r.PokemonId == 0 {
+		if r.PokemonId == nil { // egg: unhatched boss is null, not 0
 			eggs++
 		} else {
 			bosses++

@@ -44,6 +44,7 @@ type ApiStationBattleResult struct {
 	BattleLevel               int16    `json:"battle_level" doc:"Battle level"`
 	BattleStart               int64    `json:"battle_start" doc:"Unix timestamp when the battle starts"`
 	BattleEnd                 int64    `json:"battle_end" doc:"Unix timestamp when the battle ends"`
+	Updated                   int64    `json:"updated" doc:"Unix timestamp when this battle record was last updated"`
 	BattlePokemonId           *int64   `json:"battle_pokemon_id" doc:"Pokedex ID of the battle pokemon"`
 	BattlePokemonForm         *int64   `json:"battle_pokemon_form" doc:"Form ID of the battle pokemon"`
 	BattlePokemonCostume      *int64   `json:"battle_pokemon_costume" doc:"Costume ID of the battle pokemon"`

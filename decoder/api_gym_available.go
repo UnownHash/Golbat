@@ -5,11 +5,11 @@ import (
 )
 
 // ApiGymRaidAvailable is one distinct active raid option on resident gyms.
-// PokemonId 0 means an egg (no boss yet). ReactMap derives its e/r/boss keys.
+// A null PokemonId means an egg (no boss yet). ReactMap derives its e/r/boss keys.
 type ApiGymRaidAvailable struct {
-	RaidLevel int8  `json:"raid_level" doc:"Raid level/tier"`
-	PokemonId int16 `json:"pokemon_id" doc:"Raid boss pokemon id; 0 = egg (unhatched)"`
-	Form      int16 `json:"form" doc:"Raid boss form id, else 0"`
+	RaidLevel int8   `json:"raid_level" doc:"Raid level/tier"`
+	PokemonId *int16 `json:"pokemon_id" doc:"Raid boss pokemon id; null for an unhatched egg"`
+	Form      *int16 `json:"form" doc:"Raid boss form id (0 is a valid form); null for an unhatched egg"`
 }
 
 // ApiAvailableGyms is the whole-instance gym filter snapshot. Only raids are

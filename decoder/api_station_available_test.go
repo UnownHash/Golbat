@@ -30,7 +30,7 @@ func TestGetAvailableStations(t *testing.T) {
 		t.Fatalf("battles: %+v", res.Battles)
 	}
 	for _, b := range res.Battles {
-		if b.BattleLevel == 0 || b.PokemonId == 1 {
+		if b.BattleLevel == 0 || (b.PokemonId != nil && *b.PokemonId == 1) {
 			t.Fatalf("excluded battle leaked: %+v", b)
 		}
 	}

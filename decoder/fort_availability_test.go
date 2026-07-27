@@ -19,7 +19,7 @@ func TestObserveExpiryAndReadRaids(t *testing.T) {
 		t.Fatalf("want 2 raid options, got %d: %+v", len(got), got)
 	}
 	for _, r := range got {
-		if r.PokemonId == 999 {
+		if r.PokemonId != nil && *r.PokemonId == 999 {
 			t.Fatal("expired raid must not appear")
 		}
 	}
@@ -63,7 +63,7 @@ func TestObserveStationBattlesAndRead(t *testing.T) {
 		t.Fatalf("want 3 battle options, got %d: %+v", len(got), got)
 	}
 	for _, b := range got {
-		if b.PokemonId == 999 {
+		if b.PokemonId != nil && *b.PokemonId == 999 {
 			t.Fatal("expired battle leaked")
 		}
 	}
@@ -99,10 +99,11 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	} else {
 		var pokemon, typeOnly bool
 		for _, sc := range s {
-			if sc.PokemonId == 25 {
+			if sc.PokemonId != nil && *sc.PokemonId == 25 {
 				pokemon = true
 			}
-			if sc.PokemonId == 0 && sc.TypeId == 12 {
+			// type-based: pokemon/form null, type set
+			if sc.PokemonId == nil && sc.TypeId != nil && *sc.TypeId == 12 {
 				typeOnly = true
 			}
 		}
@@ -119,7 +120,10 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 			t.Fatal("expired invasion leaked")
 		}
 		if in.Character == 5 {
-			if in.Slot2PokemonId != 42 || in.Slot2Form != 1 || in.Slot3PokemonId != 43 {
+			// slots present -> non-null; form 0 stays 0, form 1 stays 1
+			if in.Slot2PokemonId == nil || *in.Slot2PokemonId != 42 ||
+				in.Slot2Form == nil || *in.Slot2Form != 1 ||
+				in.Slot3PokemonId == nil || *in.Slot3PokemonId != 43 {
 				t.Fatalf("confirmed invasion lost slots 2/3: %+v", in)
 			}
 		}
