@@ -137,7 +137,8 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			}
 		}
 	case POKESTOP:
-		if filter.LureId != nil && !slices.Contains(filter.LureId, fortLookup.LureId) {
+		if filter.LureId != nil &&
+			(fortLookup.LureExpireTimestamp <= now || !slices.Contains(filter.LureId, fortLookup.LureId)) {
 			return false
 		}
 
@@ -170,28 +171,46 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 
 		// Contest filters
-		if filter.ContestPokemonType != nil && !slices.Contains(filter.ContestPokemonType, fortLookup.ContestPokemonType) {
+		if filter.ContestPokemonType != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !slices.Contains(filter.ContestPokemonType, fortLookup.ContestPokemonType)) {
 			return false
 		}
-		if filter.ContestTotalEntries != nil && (fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
+		if filter.ContestTotalEntries != nil &&
+			(fortLookup.ShowcaseExpiry <= now ||
+				fortLookup.ContestTotalEntries < filter.ContestTotalEntries.Min || fortLookup.ContestTotalEntries > filter.ContestTotalEntries.Max) {
 			return false
 		}
-		if filter.ContestPokemon != nil && !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm) {
+		if filter.ContestPokemon != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm)) {
 			return false
 		}
 
-		// Incident filters - flat field checks
-		if filter.IncidentDisplayType != nil && !slices.Contains(filter.IncidentDisplayType, fortLookup.IncidentDisplayType) {
-			return false
-		}
-		if filter.IncidentStyle != nil && !slices.Contains(filter.IncidentStyle, fortLookup.IncidentStyle) {
-			return false
-		}
-		if filter.IncidentCharacter != nil && !slices.Contains(filter.IncidentCharacter, fortLookup.IncidentCharacter) {
-			return false
-		}
-		if filter.IncidentPokemon != nil && !matchDnfIdPair(filter.IncidentPokemon, fortLookup.IncidentPokemonId, fortLookup.IncidentPokemonForm) {
-			return false
+		// Incident filters - match any non-expired incident in the slice
+		if filter.IncidentDisplayType != nil || filter.IncidentStyle != nil ||
+			filter.IncidentCharacter != nil || filter.IncidentPokemon != nil {
+			matched := false
+			for _, inc := range fortLookup.Incidents {
+				if inc.ExpireTimestamp <= now {
+					continue
+				}
+				if filter.IncidentDisplayType != nil && !slices.Contains(filter.IncidentDisplayType, inc.DisplayType) {
+					continue
+				}
+				if filter.IncidentStyle != nil && !slices.Contains(filter.IncidentStyle, inc.Style) {
+					continue
+				}
+				if filter.IncidentCharacter != nil && !slices.Contains(filter.IncidentCharacter, inc.Character) {
+					continue
+				}
+				if filter.IncidentPokemon != nil && !matchDnfIdPair(filter.IncidentPokemon, inc.Slot1PokemonId, inc.Slot1Form) {
+					continue
+				}
+				matched = true
+				break
+			}
+			if !matched {
+				return false
+			}
 		}
 	case STATION:
 		if filter.BattleLevel != nil || filter.BattlePokemon != nil {

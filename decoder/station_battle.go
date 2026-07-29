@@ -44,6 +44,20 @@ type FortLookupStationBattle struct {
 	BattlePokemonForm  int16
 }
 
+// FortLookupIncident is one active incident on a pokestop (slot1 only — slots 2/3 are
+// unused). Mirrors FortLookupStationBattle; FortLookup.Incidents holds all active
+// incidents on a stop so concurrent incidents (e.g. an invasion + a showcase) don't
+// clobber one another.
+type FortLookupIncident struct {
+	DisplayType     int8
+	Style           int8
+	Character       int16
+	Confirmed       bool
+	Slot1PokemonId  int16
+	Slot1Form       int16
+	ExpireTimestamp int64 // used to skip expired incidents at filter time
+}
+
 type stationBattleWrite struct {
 	StationId string
 	Battles   []StationBattleData

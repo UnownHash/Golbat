@@ -368,6 +368,15 @@ var (
 		},
 		[]string{"caller"},
 	)
+	apiScanDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "api_scan_duration",
+			Help:      "In-memory API scan build time by operation",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14), // 1ms .. ~8s
+		},
+		[]string{"operation"},
+	)
 	statsEventsDroppedCounter = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -766,6 +775,10 @@ func (col *promCollector) ObserveDbQuery(caller string, seconds float64) {
 	dbQueryDuration.WithLabelValues(caller).Observe(seconds)
 }
 
+func (col *promCollector) ObserveApiScan(operation string, seconds float64) {
+	apiScanDuration.WithLabelValues(operation).Observe(seconds)
+}
+
 func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
 	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
 }
@@ -807,7 +820,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
-	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, cacheEvictionsDropped)
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

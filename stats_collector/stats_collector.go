@@ -59,6 +59,7 @@ type StatsCollector interface {
 	IncStatsEventsDropped()
 	AddCacheEvictionsDropped(cache string, n float64)
 	ObserveDbQuery(caller string, seconds float64)
+	ObserveApiScan(operation string, seconds float64)
 
 	// Write-behind queue metrics
 	SetWriteBehindQueueDepth(entityType string, depth float64)

@@ -34,6 +34,7 @@ type FortLookup struct {
 
 	// Pokestop - quest rewards only (both AR and no-AR stored, filter matches either)
 	LureId                     int16
+	LureExpireTimestamp        int64 // used to check expiry at filter time
 	QuestNoArRewardType        int16
 	QuestNoArRewardAmount      int16
 	QuestNoArRewardItemId      int16
@@ -45,18 +46,16 @@ type FortLookup struct {
 	QuestArRewardPokemonId     int16
 	QuestArRewardPokemonForm   int16
 
-	// Pokestop - incident (first active incident, flat fields)
-	IncidentDisplayType int8
-	IncidentStyle       int8
-	IncidentCharacter   int16
-	IncidentPokemonId   int16
-	IncidentPokemonForm int16
+	// Pokestop - incidents (all active incidents; slot1 only — slots 2/3 are unused).
+	// Mirrors the StationBattles slice pattern.
+	Incidents []FortLookupIncident
 
 	// Pokestop - contest
 	ContestPokemonId    int16
 	ContestPokemonForm  int16
 	ContestPokemonType  int8
 	ContestTotalEntries int16
+	ShowcaseExpiry      int64 // used to check expiry at filter time
 
 	// Station
 	BattleEndTimestamp int64 // used to check expiry at filter time
@@ -83,6 +82,7 @@ func initFortRtree() {
 	// plenty and saves ~7.5 MiB vs sharing the pokemon constant.
 	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	initQuestConditions()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
 	// fortLookupCache are created (and after pokestopCache/gymCache/
@@ -135,6 +135,11 @@ func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 	genericUpdateFort(pokestop.Id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
 	if !pokestop.Deleted {
 		updatePokestopLookup(pokestop)
+	} else {
+		// A deleted pokestop drops out of the lookup cache (genericUpdateFort
+		// above) without a matching updatePokestopLookup, so reconcile its
+		// quest contribution to zero here.
+		removeFortQuestConditions(pokestop.Id)
 	}
 }
 
@@ -182,12 +187,10 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 func updatePokestopLookup(pokestop *Pokestop) {
 	// Atomic per-key read-modify-write via Compute: this writer (under the
 	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
-	// INCIDENT entity lock) both update the same key, each preserving the
-	// other's fields. A plain Load->Store pair from the two lock domains
-	// can interleave and clobber — losing a just-stored incident or
-	// reverting quest fields until the next save. Compute's callback runs
-	// under the map's bucket lock, so keep it to field copies only (the
-	// showcase JSON parse happens out here).
+	// INCIDENT entity lock) update the same key from different lock domains,
+	// each preserving the other's fields. A plain Load->Store pair can
+	// interleave and clobber. Keep the callback to field copies — the
+	// showcase-rankings JSON parse is hoisted out.
 	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
 	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
 		nl := FortLookup{
@@ -197,6 +200,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
 			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
 			LureId:                     pokestop.LureId,
+			LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
 			QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
 			QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
 			QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
@@ -211,17 +215,20 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
 			ContestTotalEntries:        contestTotalEntries,
+			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 		}
 		if loaded {
-			// Preserve the incident writer's fields
-			nl.IncidentDisplayType = existing.IncidentDisplayType
-			nl.IncidentStyle = existing.IncidentStyle
-			nl.IncidentCharacter = existing.IncidentCharacter
-			nl.IncidentPokemonId = existing.IncidentPokemonId
-			nl.IncidentPokemonForm = existing.IncidentPokemonForm
+			nl.Incidents = existing.Incidents // preserve the incident writer's slice
 		}
 		return nl, xsync.UpdateOp
 	})
+
+	// This is the sole writer of a pokestop's FortLookup entry, so it is also
+	// the single place quest-condition counts are reconciled: it fires on
+	// cache-miss load, every save (incl. quest change), and startup preload.
+	// FortLookup omits quest title/target, so the previous keys are recovered
+	// from questFortKeys rather than the overwritten FortLookup.
+	reconcileFortQuestConditions(pokestop.Id, questConditionKeysFromPokestop(pokestop))
 }
 
 func updateGymLookup(gym *Gym) {
@@ -257,22 +264,43 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 	fortLookupCache.Store(station.Id, lookup)
 }
 
-// updatePokestopIncidentLookup updates the incident fields on a pokestop's
-// FortLookup entry. Atomic via Compute — see updatePokestopLookup for the
-// cross-lock-domain clobber this prevents.
+// updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup
+// incidents slice (keyed by DisplayType+Character, unique per active incident on a stop),
+// pruning any expired entries in the same pass.
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
+	now := time.Now().Unix()
+	updated := FortLookupIncident{
+		DisplayType:     int8(incident.DisplayType),
+		Style:           int8(incident.Style),
+		Character:       incident.Character,
+		Confirmed:       incident.Confirmed,
+		Slot1PokemonId:  int16(incident.Slot1PokemonId.ValueOrZero()),
+		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
+		ExpireTimestamp: incident.ExpirationTime,
+	}
+	// Atomic per-key read-modify-write via Compute — see updatePokestopLookup
+	// for the cross-lock-domain clobber this prevents.
 	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
 		if !loaded {
-			// Incidents load before their pokestop only during preload
-			// edge cases; the pokestop writer will carry no incident until
-			// the next incident save.
 			return existing, xsync.CancelOp
 		}
-		existing.IncidentDisplayType = int8(incident.DisplayType)
-		existing.IncidentStyle = int8(incident.Style)
-		existing.IncidentCharacter = incident.Character
-		existing.IncidentPokemonId = int16(incident.Slot1PokemonId.ValueOrZero())
-		existing.IncidentPokemonForm = int16(incident.Slot1Form.ValueOrZero())
+		out := existing.Incidents[:0:0] // fresh backing array; never mutate a shared slice in place
+		replaced := false
+		for _, inc := range existing.Incidents {
+			if inc.ExpireTimestamp <= now {
+				continue // prune expired
+			}
+			if inc.DisplayType == updated.DisplayType && inc.Character == updated.Character {
+				out = append(out, updated) // replace the same incident
+				replaced = true
+			} else {
+				out = append(out, inc)
+			}
+		}
+		if !replaced && updated.ExpireTimestamp > now {
+			out = append(out, updated)
+		}
+		existing.Incidents = out
 		return existing, xsync.UpdateOp
 	})
 }
@@ -318,6 +346,18 @@ func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
 //     (pokestop↔gym) and this is the stale counterpart's cache entry
 //     expiring; the live counterpart owns the lookup and tree point now.
 func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
+	// A pokestop leaving the cache must drop its quest-condition contribution
+	// whether its FortLookup entry is still the resident pokestop one (matched,
+	// deleted just below), was overwritten by a converted gym/station
+	// counterpart (mismatch), or is already gone (deleted). questFortKeys only
+	// ever holds pokestop entries, so this is a no-op miss for gyms/stations and
+	// for pokestops already reconciled to no-quest. Because deferFortEviction
+	// deletes the matched FortLookup entry, removing the count here keeps the
+	// aggregate in lockstep with lookup-cache membership.
+	if expected == POKESTOP {
+		removeFortQuestConditions(fortId)
+	}
+
 	fl, ok := fortLookupCache.Load(fortId)
 	if !ok || fl.FortType != expected {
 		return
