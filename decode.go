@@ -419,14 +419,14 @@ func decodeDiskEncounter(ctx context.Context, request []byte, sDec []byte, usern
 		return "DiskEncounter without request proto - ignored"
 	}
 	decodedRequest := &pogo.DiskEncounterProto{}
-	if err := proto.Unmarshal(request, decodedRequest); err != nil {
+	if err := unmarshalClientProto(request, decodedRequest); err != nil {
 		log.Errorf("Failed to parse DiskEncounterProto %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "request_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
 	}
 
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
-	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
+	if err := unmarshalClientProto(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
