@@ -194898,6 +194898,7 @@ type QuestRewardProto struct {
 	//	*QuestRewardProto_XlCandy
 	//	*QuestRewardProto_Sticker
 	//	*QuestRewardProto_MegaResource
+	//	*QuestRewardProto_TempEvoResource
 	Reward        isQuestRewardProto_Reward `protobuf_oneof:"Reward"`
 	Type          QuestRewardProto_Type     `protobuf:"varint,1,opt,name=type,proto3,enum=POGOProtos.Rpc.QuestRewardProto_Type" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -195022,6 +195023,15 @@ func (x *QuestRewardProto) GetMegaResource() *PokemonCandyRewardProto {
 	return nil
 }
 
+func (x *QuestRewardProto) GetTempEvoResource() *TempEvoResourceRewardProto {
+	if x != nil {
+		if x, ok := x.Reward.(*QuestRewardProto_TempEvoResource); ok {
+			return x.TempEvoResource
+		}
+	}
+	return nil
+}
+
 func (x *QuestRewardProto) GetType() QuestRewardProto_Type {
 	if x != nil {
 		return x.Type
@@ -195069,6 +195079,10 @@ type QuestRewardProto_MegaResource struct {
 	MegaResource *PokemonCandyRewardProto `protobuf:"bytes,13,opt,name=mega_resource,json=megaResource,proto3,oneof"`
 }
 
+type QuestRewardProto_TempEvoResource struct {
+	TempEvoResource *TempEvoResourceRewardProto `protobuf:"bytes,24,opt,name=temp_evo_resource,json=tempEvoResource,proto3,oneof"`
+}
+
 func (*QuestRewardProto_Exp) isQuestRewardProto_Reward() {}
 
 func (*QuestRewardProto_Item) isQuestRewardProto_Reward() {}
@@ -195086,6 +195100,8 @@ func (*QuestRewardProto_XlCandy) isQuestRewardProto_Reward() {}
 func (*QuestRewardProto_Sticker) isQuestRewardProto_Reward() {}
 
 func (*QuestRewardProto_MegaResource) isQuestRewardProto_Reward() {}
+
+func (*QuestRewardProto_TempEvoResource) isQuestRewardProto_Reward() {}
 
 type QuestSettingsProto struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -212348,7 +212364,9 @@ func (*TempEvoOverrideProto) Descriptor() ([]byte, []int) {
 }
 
 type TempEvoPokemonBranch struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	PokedexId     HoloPokemonId            `protobuf:"varint,1,opt,name=pokedex_id,json=pokedexId,proto3,enum=POGOProtos.Rpc.HoloPokemonId" json:"pokedex_id,omitempty"`
+	TempEvoId     HoloTemporaryEvolutionId `protobuf:"varint,2,opt,name=temp_evo_id,json=tempEvoId,proto3,enum=POGOProtos.Rpc.HoloTemporaryEvolutionId" json:"temp_evo_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -212383,10 +212401,26 @@ func (*TempEvoPokemonBranch) Descriptor() ([]byte, []int) {
 	return file_vbase_proto_rawDescGZIP(), []int{2955}
 }
 
+func (x *TempEvoPokemonBranch) GetPokedexId() HoloPokemonId {
+	if x != nil {
+		return x.PokedexId
+	}
+	return HoloPokemonId_MISSINGNO
+}
+
+func (x *TempEvoPokemonBranch) GetTempEvoId() HoloTemporaryEvolutionId {
+	if x != nil {
+		return x.TempEvoId
+	}
+	return HoloTemporaryEvolutionId_TEMP_EVOLUTION_UNSET
+}
+
 type TempEvoResourceRewardProto struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                protoimpl.MessageState `protogen:"open.v1"`
+	TempEvoPokemonBranch *TempEvoPokemonBranch  `protobuf:"bytes,1,opt,name=temp_evo_pokemon_branch,json=tempEvoPokemonBranch,proto3" json:"temp_evo_pokemon_branch,omitempty"`
+	Amount               int32                  `protobuf:"varint,2,opt,name=amount,proto3" json:"amount,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *TempEvoResourceRewardProto) Reset() {
@@ -212417,6 +212451,20 @@ func (x *TempEvoResourceRewardProto) ProtoReflect() protoreflect.Message {
 // Deprecated: Use TempEvoResourceRewardProto.ProtoReflect.Descriptor instead.
 func (*TempEvoResourceRewardProto) Descriptor() ([]byte, []int) {
 	return file_vbase_proto_rawDescGZIP(), []int{2956}
+}
+
+func (x *TempEvoResourceRewardProto) GetTempEvoPokemonBranch() *TempEvoPokemonBranch {
+	if x != nil {
+		return x.TempEvoPokemonBranch
+	}
+	return nil
+}
+
+func (x *TempEvoResourceRewardProto) GetAmount() int32 {
+	if x != nil {
+		return x.Amount
+	}
+	return 0
 }
 
 type TemplateVariable struct {
@@ -254011,7 +254059,7 @@ const file_vbase_proto_rawDesc = "" +
 	"\x06Status\x12\x14\n" +
 	"\x10STATUS_UNDEFINED\x10\x00\x12\x11\n" +
 	"\rSTATUS_ACTIVE\x10\x01\x12\x14\n" +
-	"\x10STATUS_COMPLETED\x10\x02J\x04\b\x15\x10\x16\"\xc2\a\n" +
+	"\x10STATUS_COMPLETED\x10\x02J\x04\b\x15\x10\x16\"\x9c\b\n" +
 	"\x10QuestRewardProto\x12\x12\n" +
 	"\x03exp\x18\x02 \x01(\x05H\x00R\x03exp\x125\n" +
 	"\x04item\x18\x03 \x01(\v2\x1f.POGOProtos.Rpc.ItemRewardProtoH\x00R\x04item\x12\x1c\n" +
@@ -254022,7 +254070,8 @@ const file_vbase_proto_rawDesc = "" +
 	"\bxl_candy\x18\n" +
 	" \x01(\v2'.POGOProtos.Rpc.PokemonCandyRewardProtoH\x00R\axlCandy\x12>\n" +
 	"\asticker\x18\f \x01(\v2\".POGOProtos.Rpc.StickerRewardProtoH\x00R\asticker\x12N\n" +
-	"\rmega_resource\x18\r \x01(\v2'.POGOProtos.Rpc.PokemonCandyRewardProtoH\x00R\fmegaResource\x129\n" +
+	"\rmega_resource\x18\r \x01(\v2'.POGOProtos.Rpc.PokemonCandyRewardProtoH\x00R\fmegaResource\x12X\n" +
+	"\x11temp_evo_resource\x18\x18 \x01(\v2*.POGOProtos.Rpc.TempEvoResourceRewardProtoH\x00R\x0ftempEvoResource\x129\n" +
 	"\x04type\x18\x01 \x01(\x0e2%.POGOProtos.Rpc.QuestRewardProto.TypeR\x04type\"\xee\x02\n" +
 	"\x04Type\x12\t\n" +
 	"\x05UNSET\x10\x00\x12\x0e\n" +
@@ -255884,9 +255933,14 @@ const file_vbase_proto_rawDesc = "" +
 	"\x0fPARTIAL_FAILURE\x10\x03\"\x1c\n" +
 	"\x1aTempEvoGlobalSettingsProto\"\x1e\n" +
 	"\x1cTempEvoOverrideExtendedProto\"\x16\n" +
-	"\x14TempEvoOverrideProto\"\x16\n" +
-	"\x14TempEvoPokemonBranch\"\x1c\n" +
-	"\x1aTempEvoResourceRewardProto\"\x12\n" +
+	"\x14TempEvoOverrideProto\"\x9e\x01\n" +
+	"\x14TempEvoPokemonBranch\x12<\n" +
+	"\n" +
+	"pokedex_id\x18\x01 \x01(\x0e2\x1d.POGOProtos.Rpc.HoloPokemonIdR\tpokedexId\x12H\n" +
+	"\vtemp_evo_id\x18\x02 \x01(\x0e2(.POGOProtos.Rpc.HoloTemporaryEvolutionIdR\ttempEvoId\"\x91\x01\n" +
+	"\x1aTempEvoResourceRewardProto\x12[\n" +
+	"\x17temp_evo_pokemon_branch\x18\x01 \x01(\v2$.POGOProtos.Rpc.TempEvoPokemonBranchR\x14tempEvoPokemonBranch\x12\x16\n" +
+	"\x06amount\x18\x02 \x01(\x05R\x06amount\"\x12\n" +
 	"\x10TemplateVariable\"\x18\n" +
 	"\x16TemporalFrequencyProto\"\x19\n" +
 	"\x17TemporaryEvolutionProto\"!\n" +
@@ -270590,90 +270644,94 @@ var file_vbase_proto_depIdxs = []int32{
 	3653, // 196: POGOProtos.Rpc.QuestRewardProto.xl_candy:type_name -> POGOProtos.Rpc.PokemonCandyRewardProto
 	4250, // 197: POGOProtos.Rpc.QuestRewardProto.sticker:type_name -> POGOProtos.Rpc.StickerRewardProto
 	3653, // 198: POGOProtos.Rpc.QuestRewardProto.mega_resource:type_name -> POGOProtos.Rpc.PokemonCandyRewardProto
-	1096, // 199: POGOProtos.Rpc.QuestRewardProto.type:type_name -> POGOProtos.Rpc.QuestRewardProto.Type
-	3709, // 200: POGOProtos.Rpc.RaidInfoProto.raid_pokemon:type_name -> POGOProtos.Rpc.PokemonProto
-	219,  // 201: POGOProtos.Rpc.RaidInfoProto.raid_level:type_name -> POGOProtos.Rpc.RaidLevel
-	3994, // 202: POGOProtos.Rpc.RoutePoiAnchor.anchor:type_name -> POGOProtos.Rpc.RouteWaypointProto
-	1149, // 203: POGOProtos.Rpc.RouteSubmissionStatus.status:type_name -> POGOProtos.Rpc.RouteSubmissionStatus.Status
-	3994, // 204: POGOProtos.Rpc.SharedRouteProto.waypoints:type_name -> POGOProtos.Rpc.RouteWaypointProto
-	234,  // 205: POGOProtos.Rpc.SharedRouteProto.type:type_name -> POGOProtos.Rpc.RouteType
-	3972, // 206: POGOProtos.Rpc.SharedRouteProto.image:type_name -> POGOProtos.Rpc.RouteImageProto
-	3990, // 207: POGOProtos.Rpc.SharedRouteProto.route_submission_status:type_name -> POGOProtos.Rpc.RouteSubmissionStatus
-	3984, // 208: POGOProtos.Rpc.SharedRouteProto.start_poi:type_name -> POGOProtos.Rpc.RoutePoiAnchor
-	3984, // 209: POGOProtos.Rpc.SharedRouteProto.end_poi:type_name -> POGOProtos.Rpc.RoutePoiAnchor
-	1220, // 210: POGOProtos.Rpc.StartIncidentOutProto.status:type_name -> POGOProtos.Rpc.StartIncidentOutProto.Status
-	1781, // 211: POGOProtos.Rpc.StartIncidentOutProto.incident:type_name -> POGOProtos.Rpc.ClientIncidentProto
-	1614, // 212: POGOProtos.Rpc.StationProto.battle_details:type_name -> POGOProtos.Rpc.BreadBattleDetailProto
-	3709, // 213: POGOProtos.Rpc.TappableEncounterProto.pokemon:type_name -> POGOProtos.Rpc.PokemonProto
-	1335, // 214: POGOProtos.Rpc.WeatherAlertProto.severity:type_name -> POGOProtos.Rpc.WeatherAlertProto.Severity
-	3709, // 215: POGOProtos.Rpc.WildPokemonProto.pokemon:type_name -> POGOProtos.Rpc.PokemonProto
-	102,  // 216: POGOProtos.Rpc.WithBadgeTypeProto.badge_type:type_name -> POGOProtos.Rpc.HoloBadgeType
-	34,   // 217: POGOProtos.Rpc.WithBuddyProto.min_buddy_level:type_name -> POGOProtos.Rpc.BuddyLevel
-	550,  // 218: POGOProtos.Rpc.WithInvasionCharacterProto.category:type_name -> POGOProtos.Rpc.EnumWrapper.CharacterCategory
-	155,  // 219: POGOProtos.Rpc.WithItemProto.item:type_name -> POGOProtos.Rpc.Item
-	106,  // 220: POGOProtos.Rpc.WithItemTypeProto.item_type:type_name -> POGOProtos.Rpc.HoloItemType
-	1043, // 221: POGOProtos.Rpc.WithPokemonAlignmentProto.alignment:type_name -> POGOProtos.Rpc.PokemonDisplayProto.Alignment
-	110,  // 222: POGOProtos.Rpc.WithPokemonCategoryProto.pokemon_ids:type_name -> POGOProtos.Rpc.HoloPokemonId
-	115,  // 223: POGOProtos.Rpc.WithPokemonTypeProto.pokemon_type:type_name -> POGOProtos.Rpc.HoloPokemonType
-	219,  // 224: POGOProtos.Rpc.WithRaidLevelProto.raid_level:type_name -> POGOProtos.Rpc.RaidLevel
-	116,  // 225: POGOProtos.Rpc.WithTempEvoIdProto.mega_form:type_name -> POGOProtos.Rpc.HoloTemporaryEvolutionId
-	101,  // 226: POGOProtos.Rpc.WithThrowTypeProto.throw_type:type_name -> POGOProtos.Rpc.HoloActivityType
-	1370, // 227: POGOProtos.Rpc.ARDKGetGrapeshotUploadUrlOutProto.FileContextToGrapeshotDataEntry.value:type_name -> POGOProtos.Rpc.ARDKGrapeshotUploadingDataProto
-	4673, // 228: POGOProtos.Rpc.AbilityEnergyMetadata.ChargeRateEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata.ChargeRateSetting
-	1578, // 229: POGOProtos.Rpc.BattleActorProto.ResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
-	1578, // 230: POGOProtos.Rpc.BattleActorProto.ItemResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
-	5056, // 231: POGOProtos.Rpc.BattleParticipantProto.ActivePokemonStatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
-	1396, // 232: POGOProtos.Rpc.BattleParticipantProto.AbilityEnergyEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata
-	1578, // 233: POGOProtos.Rpc.BattlePokemonProto.ResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
-	1578, // 234: POGOProtos.Rpc.BattlePokemonProto.ItemResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
-	4749, // 235: POGOProtos.Rpc.BattlePokemonProto.MovesEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto.MoveData
-	4748, // 236: POGOProtos.Rpc.BattlePokemonProto.ModifiersEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto.Modifier
-	1397, // 237: POGOProtos.Rpc.BattleProto.AbilityResultLocationEntry.value:type_name -> POGOProtos.Rpc.AbilityLookupMap
-	1558, // 238: POGOProtos.Rpc.BattleStateProto.ActorsEntry.value:type_name -> POGOProtos.Rpc.BattleActorProto
-	255,  // 239: POGOProtos.Rpc.BattleStateProto.TeamActorCountEntry.value:type_name -> POGOProtos.Rpc.Team
-	1575, // 240: POGOProtos.Rpc.BattleStateProto.PokemonEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto
-	1396, // 241: POGOProtos.Rpc.BattleUpdateProto.AbilityEnergyEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata
-	5056, // 242: POGOProtos.Rpc.BattleUpdateProto.ActivePokemonStatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
-	2011, // 243: POGOProtos.Rpc.BuddyDataProto.DailyActivityCountersEntry.value:type_name -> POGOProtos.Rpc.DailyCounterProto
-	2011, // 244: POGOProtos.Rpc.BuddyDataProto.DailyCategoryCountersEntry.value:type_name -> POGOProtos.Rpc.DailyCounterProto
-	4176, // 245: POGOProtos.Rpc.BuddyDataProto.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
-	4777, // 246: POGOProtos.Rpc.BuddyDataProto.FortSpinsEntry.value:type_name -> POGOProtos.Rpc.BuddyDataProto.BuddySpinMetadata
-	4176, // 247: POGOProtos.Rpc.BuddyHistoryData.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
-	4176, // 248: POGOProtos.Rpc.BuddyObservedData.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
-	4788, // 249: POGOProtos.Rpc.BuddyStatsShownHearts.BuddyShownHeartsPerCategoryEntry.value:type_name -> POGOProtos.Rpc.BuddyStatsShownHearts.BuddyShownHeartsList
-	4813, // 250: POGOProtos.Rpc.CombatProto.CombatPlayerProto.active_pokemon:type_name -> POGOProtos.Rpc.CombatProto.CombatPokemonProto
-	4813, // 251: POGOProtos.Rpc.CombatProto.CombatPlayerProto.reserve_pokemon:type_name -> POGOProtos.Rpc.CombatProto.CombatPokemonProto
-	110,  // 252: POGOProtos.Rpc.CombatProto.CombatPokemonProto.pokedex_id:type_name -> POGOProtos.Rpc.HoloPokemonId
-	3660, // 253: POGOProtos.Rpc.CombatProto.CombatPokemonProto.pokemon_display:type_name -> POGOProtos.Rpc.PokemonDisplayProto
-	4811, // 254: POGOProtos.Rpc.CombatProto.CombatPlayerProto.IbfcFormTrackerEntry.value:type_name -> POGOProtos.Rpc.CombatProto.CombatIbfcPokemonFormTrackerProto
-	4868, // 255: POGOProtos.Rpc.FastMovePredictionOverride.MatchupOverridesEntry.value:type_name -> POGOProtos.Rpc.FastMovePredictionOverride.DefendingPokemonIds
-	2228, // 256: POGOProtos.Rpc.FitnessRecordProto.HourlyReportsEntry.value:type_name -> POGOProtos.Rpc.FitnessMetricsProto
-	4884, // 257: POGOProtos.Rpc.GetMapFortsOutProto.FortProto.image:type_name -> POGOProtos.Rpc.GetMapFortsOutProto.Image
-	2670, // 258: POGOProtos.Rpc.IapInAppPurchaseSubscriptionInfo.TieredSubPriceEntry.value:type_name -> POGOProtos.Rpc.IapSkuStorePrice
-	2670, // 259: POGOProtos.Rpc.IapRedeemAppleReceiptProto.StorePricesEntry.value:type_name -> POGOProtos.Rpc.IapSkuStorePrice
-	4907, // 260: POGOProtos.Rpc.IapSkuRecord.OfferRecordsEntry.value:type_name -> POGOProtos.Rpc.IapSkuRecord.SkuOfferRecord
-	4916, // 261: POGOProtos.Rpc.InternalAccountSettingsDataProto.GameToSettingsEntry.value:type_name -> POGOProtos.Rpc.InternalAccountSettingsDataProto.GameSettings
-	2228, // 262: POGOProtos.Rpc.InternalFitnessRecordProto.HourlyReportsEntry.value:type_name -> POGOProtos.Rpc.FitnessMetricsProto
-	4964, // 263: POGOProtos.Rpc.InternalSkuRecord.OfferRecordsEntry.value:type_name -> POGOProtos.Rpc.InternalSkuRecord.SkuOfferRecord
-	4999, // 264: POGOProtos.Rpc.LimitedPurchaseSkuRecordProto.PurchasesEntry.value:type_name -> POGOProtos.Rpc.LimitedPurchaseSkuRecordProto.PurchaseProto
-	3547, // 265: POGOProtos.Rpc.PartyActivitySummaryProto.PlayerSummaryMapEntry.value:type_name -> POGOProtos.Rpc.PlayerActivitySummaryProto
-	5028, // 266: POGOProtos.Rpc.PartyQuestStateProto.PlayerQuestStateEntry.value:type_name -> POGOProtos.Rpc.PartyQuestStateProto.PlayerPartyQuestStateProto
-	3548, // 267: POGOProtos.Rpc.PlayerAttributesProto.AttributeMetadataEntry.value:type_name -> POGOProtos.Rpc.PlayerAttributeMetadataProto
-	3558, // 268: POGOProtos.Rpc.PlayerCombatStatsProto.BadgesEntry.value:type_name -> POGOProtos.Rpc.PlayerCombatBadgeStatsProto
-	3560, // 269: POGOProtos.Rpc.PlayerContestStatsProto.BadgeStatsEntry.value:type_name -> POGOProtos.Rpc.PlayerContestBadgeStatsProto
-	5047, // 270: POGOProtos.Rpc.PokedexEntryProto.CategoryStatusEntry.value:type_name -> POGOProtos.Rpc.PokedexEntryProto.PokedexCategoryStatus
-	3647, // 271: POGOProtos.Rpc.PokedexEntryProto.StatsForFormsEntry.value:type_name -> POGOProtos.Rpc.PokedexStatsProto
-	3639, // 272: POGOProtos.Rpc.PokedexEntryProto.LocationCardsForFormsEntry.value:type_name -> POGOProtos.Rpc.PokedexLocationCardStatsProto
-	5056, // 273: POGOProtos.Rpc.PokemonInfo.StatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
-	3137, // 274: POGOProtos.Rpc.PostStaticNewsfeedRequest.LiquidAttributesEntry.value:type_name -> POGOProtos.Rpc.LiquidAttribute
-	5084, // 275: POGOProtos.Rpc.ReferralMilestonesProto.MilestoneEntry.value:type_name -> POGOProtos.Rpc.ReferralMilestonesProto.MilestoneProto
-	4537, // 276: POGOProtos.Rpc.Struct.FieldsEntry.value:type_name -> POGOProtos.Rpc.Value
-	4351, // 277: POGOProtos.Rpc.TitanGetGrapeshotUploadUrlOutProto.FileContextToGrapeshotDataEntry.value:type_name -> POGOProtos.Rpc.TitanGrapeshotUploadingDataProto
-	278,  // [278:278] is the sub-list for method output_type
-	278,  // [278:278] is the sub-list for method input_type
-	278,  // [278:278] is the sub-list for extension type_name
-	278,  // [278:278] is the sub-list for extension extendee
-	0,    // [0:278] is the sub-list for field type_name
+	4296, // 199: POGOProtos.Rpc.QuestRewardProto.temp_evo_resource:type_name -> POGOProtos.Rpc.TempEvoResourceRewardProto
+	1096, // 200: POGOProtos.Rpc.QuestRewardProto.type:type_name -> POGOProtos.Rpc.QuestRewardProto.Type
+	3709, // 201: POGOProtos.Rpc.RaidInfoProto.raid_pokemon:type_name -> POGOProtos.Rpc.PokemonProto
+	219,  // 202: POGOProtos.Rpc.RaidInfoProto.raid_level:type_name -> POGOProtos.Rpc.RaidLevel
+	3994, // 203: POGOProtos.Rpc.RoutePoiAnchor.anchor:type_name -> POGOProtos.Rpc.RouteWaypointProto
+	1149, // 204: POGOProtos.Rpc.RouteSubmissionStatus.status:type_name -> POGOProtos.Rpc.RouteSubmissionStatus.Status
+	3994, // 205: POGOProtos.Rpc.SharedRouteProto.waypoints:type_name -> POGOProtos.Rpc.RouteWaypointProto
+	234,  // 206: POGOProtos.Rpc.SharedRouteProto.type:type_name -> POGOProtos.Rpc.RouteType
+	3972, // 207: POGOProtos.Rpc.SharedRouteProto.image:type_name -> POGOProtos.Rpc.RouteImageProto
+	3990, // 208: POGOProtos.Rpc.SharedRouteProto.route_submission_status:type_name -> POGOProtos.Rpc.RouteSubmissionStatus
+	3984, // 209: POGOProtos.Rpc.SharedRouteProto.start_poi:type_name -> POGOProtos.Rpc.RoutePoiAnchor
+	3984, // 210: POGOProtos.Rpc.SharedRouteProto.end_poi:type_name -> POGOProtos.Rpc.RoutePoiAnchor
+	1220, // 211: POGOProtos.Rpc.StartIncidentOutProto.status:type_name -> POGOProtos.Rpc.StartIncidentOutProto.Status
+	1781, // 212: POGOProtos.Rpc.StartIncidentOutProto.incident:type_name -> POGOProtos.Rpc.ClientIncidentProto
+	1614, // 213: POGOProtos.Rpc.StationProto.battle_details:type_name -> POGOProtos.Rpc.BreadBattleDetailProto
+	3709, // 214: POGOProtos.Rpc.TappableEncounterProto.pokemon:type_name -> POGOProtos.Rpc.PokemonProto
+	110,  // 215: POGOProtos.Rpc.TempEvoPokemonBranch.pokedex_id:type_name -> POGOProtos.Rpc.HoloPokemonId
+	116,  // 216: POGOProtos.Rpc.TempEvoPokemonBranch.temp_evo_id:type_name -> POGOProtos.Rpc.HoloTemporaryEvolutionId
+	4295, // 217: POGOProtos.Rpc.TempEvoResourceRewardProto.temp_evo_pokemon_branch:type_name -> POGOProtos.Rpc.TempEvoPokemonBranch
+	1335, // 218: POGOProtos.Rpc.WeatherAlertProto.severity:type_name -> POGOProtos.Rpc.WeatherAlertProto.Severity
+	3709, // 219: POGOProtos.Rpc.WildPokemonProto.pokemon:type_name -> POGOProtos.Rpc.PokemonProto
+	102,  // 220: POGOProtos.Rpc.WithBadgeTypeProto.badge_type:type_name -> POGOProtos.Rpc.HoloBadgeType
+	34,   // 221: POGOProtos.Rpc.WithBuddyProto.min_buddy_level:type_name -> POGOProtos.Rpc.BuddyLevel
+	550,  // 222: POGOProtos.Rpc.WithInvasionCharacterProto.category:type_name -> POGOProtos.Rpc.EnumWrapper.CharacterCategory
+	155,  // 223: POGOProtos.Rpc.WithItemProto.item:type_name -> POGOProtos.Rpc.Item
+	106,  // 224: POGOProtos.Rpc.WithItemTypeProto.item_type:type_name -> POGOProtos.Rpc.HoloItemType
+	1043, // 225: POGOProtos.Rpc.WithPokemonAlignmentProto.alignment:type_name -> POGOProtos.Rpc.PokemonDisplayProto.Alignment
+	110,  // 226: POGOProtos.Rpc.WithPokemonCategoryProto.pokemon_ids:type_name -> POGOProtos.Rpc.HoloPokemonId
+	115,  // 227: POGOProtos.Rpc.WithPokemonTypeProto.pokemon_type:type_name -> POGOProtos.Rpc.HoloPokemonType
+	219,  // 228: POGOProtos.Rpc.WithRaidLevelProto.raid_level:type_name -> POGOProtos.Rpc.RaidLevel
+	116,  // 229: POGOProtos.Rpc.WithTempEvoIdProto.mega_form:type_name -> POGOProtos.Rpc.HoloTemporaryEvolutionId
+	101,  // 230: POGOProtos.Rpc.WithThrowTypeProto.throw_type:type_name -> POGOProtos.Rpc.HoloActivityType
+	1370, // 231: POGOProtos.Rpc.ARDKGetGrapeshotUploadUrlOutProto.FileContextToGrapeshotDataEntry.value:type_name -> POGOProtos.Rpc.ARDKGrapeshotUploadingDataProto
+	4673, // 232: POGOProtos.Rpc.AbilityEnergyMetadata.ChargeRateEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata.ChargeRateSetting
+	1578, // 233: POGOProtos.Rpc.BattleActorProto.ResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
+	1578, // 234: POGOProtos.Rpc.BattleActorProto.ItemResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
+	5056, // 235: POGOProtos.Rpc.BattleParticipantProto.ActivePokemonStatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
+	1396, // 236: POGOProtos.Rpc.BattleParticipantProto.AbilityEnergyEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata
+	1578, // 237: POGOProtos.Rpc.BattlePokemonProto.ResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
+	1578, // 238: POGOProtos.Rpc.BattlePokemonProto.ItemResourcesEntry.value:type_name -> POGOProtos.Rpc.BattleResourceProto
+	4749, // 239: POGOProtos.Rpc.BattlePokemonProto.MovesEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto.MoveData
+	4748, // 240: POGOProtos.Rpc.BattlePokemonProto.ModifiersEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto.Modifier
+	1397, // 241: POGOProtos.Rpc.BattleProto.AbilityResultLocationEntry.value:type_name -> POGOProtos.Rpc.AbilityLookupMap
+	1558, // 242: POGOProtos.Rpc.BattleStateProto.ActorsEntry.value:type_name -> POGOProtos.Rpc.BattleActorProto
+	255,  // 243: POGOProtos.Rpc.BattleStateProto.TeamActorCountEntry.value:type_name -> POGOProtos.Rpc.Team
+	1575, // 244: POGOProtos.Rpc.BattleStateProto.PokemonEntry.value:type_name -> POGOProtos.Rpc.BattlePokemonProto
+	1396, // 245: POGOProtos.Rpc.BattleUpdateProto.AbilityEnergyEntry.value:type_name -> POGOProtos.Rpc.AbilityEnergyMetadata
+	5056, // 246: POGOProtos.Rpc.BattleUpdateProto.ActivePokemonStatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
+	2011, // 247: POGOProtos.Rpc.BuddyDataProto.DailyActivityCountersEntry.value:type_name -> POGOProtos.Rpc.DailyCounterProto
+	2011, // 248: POGOProtos.Rpc.BuddyDataProto.DailyCategoryCountersEntry.value:type_name -> POGOProtos.Rpc.DailyCounterProto
+	4176, // 249: POGOProtos.Rpc.BuddyDataProto.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
+	4777, // 250: POGOProtos.Rpc.BuddyDataProto.FortSpinsEntry.value:type_name -> POGOProtos.Rpc.BuddyDataProto.BuddySpinMetadata
+	4176, // 251: POGOProtos.Rpc.BuddyHistoryData.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
+	4176, // 252: POGOProtos.Rpc.BuddyObservedData.SouvenirsCollectedEntry.value:type_name -> POGOProtos.Rpc.SouvenirProto
+	4788, // 253: POGOProtos.Rpc.BuddyStatsShownHearts.BuddyShownHeartsPerCategoryEntry.value:type_name -> POGOProtos.Rpc.BuddyStatsShownHearts.BuddyShownHeartsList
+	4813, // 254: POGOProtos.Rpc.CombatProto.CombatPlayerProto.active_pokemon:type_name -> POGOProtos.Rpc.CombatProto.CombatPokemonProto
+	4813, // 255: POGOProtos.Rpc.CombatProto.CombatPlayerProto.reserve_pokemon:type_name -> POGOProtos.Rpc.CombatProto.CombatPokemonProto
+	110,  // 256: POGOProtos.Rpc.CombatProto.CombatPokemonProto.pokedex_id:type_name -> POGOProtos.Rpc.HoloPokemonId
+	3660, // 257: POGOProtos.Rpc.CombatProto.CombatPokemonProto.pokemon_display:type_name -> POGOProtos.Rpc.PokemonDisplayProto
+	4811, // 258: POGOProtos.Rpc.CombatProto.CombatPlayerProto.IbfcFormTrackerEntry.value:type_name -> POGOProtos.Rpc.CombatProto.CombatIbfcPokemonFormTrackerProto
+	4868, // 259: POGOProtos.Rpc.FastMovePredictionOverride.MatchupOverridesEntry.value:type_name -> POGOProtos.Rpc.FastMovePredictionOverride.DefendingPokemonIds
+	2228, // 260: POGOProtos.Rpc.FitnessRecordProto.HourlyReportsEntry.value:type_name -> POGOProtos.Rpc.FitnessMetricsProto
+	4884, // 261: POGOProtos.Rpc.GetMapFortsOutProto.FortProto.image:type_name -> POGOProtos.Rpc.GetMapFortsOutProto.Image
+	2670, // 262: POGOProtos.Rpc.IapInAppPurchaseSubscriptionInfo.TieredSubPriceEntry.value:type_name -> POGOProtos.Rpc.IapSkuStorePrice
+	2670, // 263: POGOProtos.Rpc.IapRedeemAppleReceiptProto.StorePricesEntry.value:type_name -> POGOProtos.Rpc.IapSkuStorePrice
+	4907, // 264: POGOProtos.Rpc.IapSkuRecord.OfferRecordsEntry.value:type_name -> POGOProtos.Rpc.IapSkuRecord.SkuOfferRecord
+	4916, // 265: POGOProtos.Rpc.InternalAccountSettingsDataProto.GameToSettingsEntry.value:type_name -> POGOProtos.Rpc.InternalAccountSettingsDataProto.GameSettings
+	2228, // 266: POGOProtos.Rpc.InternalFitnessRecordProto.HourlyReportsEntry.value:type_name -> POGOProtos.Rpc.FitnessMetricsProto
+	4964, // 267: POGOProtos.Rpc.InternalSkuRecord.OfferRecordsEntry.value:type_name -> POGOProtos.Rpc.InternalSkuRecord.SkuOfferRecord
+	4999, // 268: POGOProtos.Rpc.LimitedPurchaseSkuRecordProto.PurchasesEntry.value:type_name -> POGOProtos.Rpc.LimitedPurchaseSkuRecordProto.PurchaseProto
+	3547, // 269: POGOProtos.Rpc.PartyActivitySummaryProto.PlayerSummaryMapEntry.value:type_name -> POGOProtos.Rpc.PlayerActivitySummaryProto
+	5028, // 270: POGOProtos.Rpc.PartyQuestStateProto.PlayerQuestStateEntry.value:type_name -> POGOProtos.Rpc.PartyQuestStateProto.PlayerPartyQuestStateProto
+	3548, // 271: POGOProtos.Rpc.PlayerAttributesProto.AttributeMetadataEntry.value:type_name -> POGOProtos.Rpc.PlayerAttributeMetadataProto
+	3558, // 272: POGOProtos.Rpc.PlayerCombatStatsProto.BadgesEntry.value:type_name -> POGOProtos.Rpc.PlayerCombatBadgeStatsProto
+	3560, // 273: POGOProtos.Rpc.PlayerContestStatsProto.BadgeStatsEntry.value:type_name -> POGOProtos.Rpc.PlayerContestBadgeStatsProto
+	5047, // 274: POGOProtos.Rpc.PokedexEntryProto.CategoryStatusEntry.value:type_name -> POGOProtos.Rpc.PokedexEntryProto.PokedexCategoryStatus
+	3647, // 275: POGOProtos.Rpc.PokedexEntryProto.StatsForFormsEntry.value:type_name -> POGOProtos.Rpc.PokedexStatsProto
+	3639, // 276: POGOProtos.Rpc.PokedexEntryProto.LocationCardsForFormsEntry.value:type_name -> POGOProtos.Rpc.PokedexLocationCardStatsProto
+	5056, // 277: POGOProtos.Rpc.PokemonInfo.StatModifiersEntry.value:type_name -> POGOProtos.Rpc.PokemonInfo.StatModifierContainer
+	3137, // 278: POGOProtos.Rpc.PostStaticNewsfeedRequest.LiquidAttributesEntry.value:type_name -> POGOProtos.Rpc.LiquidAttribute
+	5084, // 279: POGOProtos.Rpc.ReferralMilestonesProto.MilestoneEntry.value:type_name -> POGOProtos.Rpc.ReferralMilestonesProto.MilestoneProto
+	4537, // 280: POGOProtos.Rpc.Struct.FieldsEntry.value:type_name -> POGOProtos.Rpc.Value
+	4351, // 281: POGOProtos.Rpc.TitanGetGrapeshotUploadUrlOutProto.FileContextToGrapeshotDataEntry.value:type_name -> POGOProtos.Rpc.TitanGrapeshotUploadingDataProto
+	282,  // [282:282] is the sub-list for method output_type
+	282,  // [282:282] is the sub-list for method input_type
+	282,  // [282:282] is the sub-list for extension type_name
+	282,  // [282:282] is the sub-list for extension extendee
+	0,    // [0:282] is the sub-list for field type_name
 }
 
 func init() { file_vbase_proto_init() }
@@ -270764,6 +270822,7 @@ func file_vbase_proto_init() {
 		(*QuestRewardProto_XlCandy)(nil),
 		(*QuestRewardProto_Sticker)(nil),
 		(*QuestRewardProto_MegaResource)(nil),
+		(*QuestRewardProto_TempEvoResource)(nil),
 	}
 	file_vbase_proto_msgTypes[2943].OneofWrappers = []any{
 		(*TappableLocation_SpawnpointId)(nil),

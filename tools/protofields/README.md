@@ -29,30 +29,37 @@ INCLUDE_TESTS=1 go run . ../..         # count _test.go accesses too
 
 ## Current result (production + test code)
 
-- 146 message types accessed, 410 fields.
-- Trimming the full descriptor set keeps **417 of 15807 fields (removes 97%)**
-  and empties 3402 unread messages. Kept fields retain their field numbers, so
+- 149 message types accessed, 416 fields.
+- Trimming the full descriptor set keeps **422 of 15807 fields (removes 97%)**
+  and empties 3400 unread messages. Kept fields retain their field numbers, so
   removed fields decode as skipped unknowns (with `DiscardUnknown`). The thin
-  `vbase.thin.pb.go` is ~271k lines vs ~484k full (44% smaller).
-- **1 escape hatch**, cosmetic: a `.String()` on `RouteSubmissionStatus` inside
-  a `log.Warnf` on the (cold) routes path. No `ProtoReflect`, no re-marshaling
-  of client protos anywhere. **Golbat is clean for static thinning.**
+  `vbase.thin.pb.go` is ~271k lines vs ~430k full.
+- **4 escape hatches, all benign**: a `.String()` on `RouteSubmissionStatus` in
+  a `log.Warnf` (cosmetic, cold routes path), and three `proto.Marshal` calls in
+  `_test.go` files that build wire fixtures (the fields they set are recorded and
+  kept, so the tests round-trip under thin). No `ProtoReflect`, no re-marshaling
+  of client protos in production. **Golbat is clean for static thinning.**
 
 ## Thinning pipeline (operational)
 
-The `.proto` is not shipped (license), so thinning is a **maintainer-side** step
-and both generated variants ship in the repo. `../../scripts/thin.sh` runs it
-end to end (needs the `.proto` via `PROTO_SRC` and `protoc`):
+Thinning is a **maintainer-side** step and both generated variants ship in the
+repo. `../../scripts/thin.sh` runs it end to end. It needs only `protoc` + Go —
+**not** the licensed `vbase.proto`: the full descriptor is read from the
+already-compiled `pogo` package (`tools/dumpdesc`), so the thin variant is
+guaranteed a faithful subset of exactly what `pogo/vbase.pb.go` ships. Rerun it
+whenever `pogo/vbase.pb.go` is regenerated or field usage changes.
 
-1. `protofields` (INCLUDE_TESTS=1) → the `(message, field)` set Golbat accesses,
+1. `tools/dumpdesc` → the full descriptor set, extracted from the compiled
+   `pogo.File_vbase_proto` (no `.proto` text needed).
+2. `protofields` (INCLUDE_TESTS=1) → the `(message, field)` set Golbat accesses,
    as JSON. Tests are included so the full suite compiles + runs under
    `-tags thin` — that suite *is* the full-vs-thin differential.
-2. `prototrim` → trims the full descriptor set (`FileDescriptorSet`) to the
+3. `prototrim` → trims the full descriptor set (`FileDescriptorSet`) to the
    used set, preserving field numbers and oneof structure, → thin descriptor.
    A real oneof accessed via a type switch (`switch x.Type.(type)`) keeps all
    its members, since the code references the per-member wrapper types.
-3. `protoc --descriptor_set_in` → `pogo/vbase.thin.pb.go`, `//go:build thin`.
-4. The full `pogo/vbase.pb.go` carries `//go:build !thin`. Same package, same Go
+4. `protoc --descriptor_set_in` → `pogo/vbase.thin.pb.go`, `//go:build thin`.
+5. The full `pogo/vbase.pb.go` carries `//go:build !thin`. Same package, same Go
    types, mutually exclusive build tags — no proto-registry clash.
 
 `make golbat` / the Dockerfile build `-tags thin` (end users get the win); plain
