@@ -497,6 +497,43 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
 }
 
+// extractFortMapPokemon collects a fort's lure pokemon as RawMapPokemonData,
+// with placement taken from the enclosing fort — the nested MapPokemonProto's
+// own lat/lon are zero on the wire. Current clients deliver lure pokemon in
+// the repeated ActiveFortPokemon wrapper (SpawnType LURE; POWER_UP entries
+// are not lures); older payloads used the singular ActivePokemon field. Both
+// are honored, deduplicated by encounter ID.
+func extractFortMapPokemon(fort *pogo.PokemonFortProto, cellId uint64, timestampMs int64) []decoder.RawMapPokemonData {
+	var out []decoder.RawMapPokemonData
+	add := func(mapPokemon *pogo.MapPokemonProto) {
+		for i := range out {
+			if out[i].Data.EncounterId == mapPokemon.EncounterId {
+				return
+			}
+		}
+		out = append(out, decoder.RawMapPokemonData{
+			Cell:      cellId,
+			Data:      mapPokemon,
+			Timestamp: timestampMs,
+			FortId:    fort.FortId,
+			Lat:       fort.Latitude,
+			Lon:       fort.Longitude,
+		})
+	}
+	if fort.ActivePokemon != nil {
+		add(fort.ActivePokemon)
+	}
+	for _, wrapper := range fort.ActiveFortPokemon {
+		if wrapper.GetSpawnType() != pogo.FortPokemonProto_LURE {
+			continue
+		}
+		if mapPokemon := wrapper.GetPokemonProto(); mapPokemon != nil {
+			add(mapPokemon)
+		}
+	}
+	return out
+}
+
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
@@ -550,16 +587,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				}
 			}
 
-			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{
-					Cell:      mapCell.S2CellId,
-					Data:      fort.ActivePokemon,
-					Timestamp: mapCell.AsOfTimeMs,
-					FortId:    fort.FortId,
-					Lat:       fort.Latitude,
-					Lon:       fort.Longitude,
-				})
-			}
+			newMapPokemon = append(newMapPokemon, extractFortMapPokemon(fort, mapCell.S2CellId, mapCell.AsOfTimeMs)...)
 		}
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})

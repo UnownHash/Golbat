@@ -83,7 +83,7 @@ the shared record keyed by encounter ID:
 |--------|-------------|
 | `DiskEncounterProto` (request) | encounter ID, fort ID, fort coords — placement for `lure_encounter` |
 | `DiskEncounterOutProto` (response) | species, IVs, CP, level (existing apply, unchanged) |
-| GMO fort entry + `fort.ActivePokemon` | fort ID + coords (placement for `lure_wild`), verified `ExpirationTimeMs`, display, cell ID |
+| GMO fort entry (`fort.ActiveFortPokemon[]` LURE wrappers; legacy singular `fort.ActivePokemon`) | fort ID + coords (placement for `lure_wild`), verified `ExpirationTimeMs`, display, cell ID |
 
 `diskEncounterCache` is deleted — nothing ever waits for anything, and no
 lure path consults the pokestop record.
@@ -104,6 +104,14 @@ any poisoned records are long gone (maintainer decision).
 - `RawMapPokemonData` gains `FortId string` and `Lat, Lon float64`,
   populated from the enclosing fort entry (`fort.FortId`, `fort.Latitude`,
   `fort.Longitude`) at extraction time.
+- Lure pokemon are collected from both the repeated
+  `fort.ActiveFortPokemon` wrappers (`SpawnType == LURE`, nested
+  `MapPokemonProto`) and the legacy singular `fort.ActivePokemon`,
+  deduplicated by encounter ID. Live captures (PR #391 review) show current
+  clients send only the repeated form, with zero lat/lon on the nested
+  proto — the enclosing fort's coordinates are the only usable ones, which
+  the capture-at-extraction design already provides. `POWER_UP` wrapper
+  entries are not lures and never enter this path.
 
 **`decode.go` — `decodeDiskEncounter`**
 - Gains the request parameter (`protoData.Request`).
