@@ -177,22 +177,15 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 
 	for _, mapPokemon := range mapPokemonList {
-		encounterId := mapPokemon.Data.EncounterId
-
-		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.map")
+		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, mapPokemon.Data.EncounterId, "UpdatePokemonBatch.map")
 		if err != nil {
 			log.Printf("getOrCreatePokemonRecord: %s", err)
 			continue
 		}
 
-		pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
-		if diskEncounter, ok := diskEncounterCache.Get(encounterId); ok {
-			diskEncounterCache.Delete(encounterId)
-			pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
-			//log.Infof("Processed stored disk encounter")
+		if pokemon.updateFromMap(ctx, db, mapPokemon, weatherLookup, username) {
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
 		}
-		savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
-
 		unlock()
 	}
 }

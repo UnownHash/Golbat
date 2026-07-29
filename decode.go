@@ -531,7 +531,14 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			}
 
 			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
+				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{
+					Cell:      mapCell.S2CellId,
+					Data:      fort.ActivePokemon,
+					Timestamp: mapCell.AsOfTimeMs,
+					FortId:    fort.FortId,
+					Lat:       fort.Latitude,
+					Lon:       fort.Longitude,
+				})
 			}
 		}
 		for _, mon := range mapCell.WildPokemon {

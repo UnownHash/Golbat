@@ -49,6 +49,9 @@ type RawMapPokemonData struct {
 	Cell      uint64
 	Data      *pogo.MapPokemonProto
 	Timestamp int64
+	FortId    string
+	Lat       float64
+	Lon       float64
 }
 
 type webhooksSenderInterface interface {
