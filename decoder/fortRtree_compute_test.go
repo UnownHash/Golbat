@@ -26,7 +26,6 @@ func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
 	}}
 	inc := &Incident{IncidentData: IncidentData{
 		DisplayType:    3,
-		Style:          2,
 		Character:      44,
 		Slot1PokemonId: null.IntFrom(215),
 		ExpirationTime: 9_999_999_999, // far future so the upsert does not prune it

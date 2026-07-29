@@ -1,12 +1,10 @@
 package decoder
 
 import (
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
@@ -20,7 +18,6 @@ type FortLookup struct {
 	FortType         FortType
 	Lat              float64
 	Lon              float64
-	PowerUpLevel     int8
 	IsArScanEligible bool
 
 	// Gym
@@ -51,18 +48,19 @@ type FortLookup struct {
 	Incidents []FortLookupIncident
 
 	// Pokestop - contest
-	ContestPokemonId    int16
-	ContestPokemonForm  int16
-	ContestPokemonType  int8
-	ContestTotalEntries int16
-	ShowcaseExpiry      int64 // used to check expiry at filter time
+	ContestPokemonId   int16
+	ContestPokemonForm int16
+	ContestPokemonType int8
+	ShowcaseExpiry     int64 // used to check expiry at filter time
 
 	// Station
-	BattleEndTimestamp int64 // used to check expiry at filter time
-	BattleLevel        int8
-	BattlePokemonId    int16
-	BattlePokemonForm  int16
-	StationBattles     []FortLookupStationBattle
+	StationEndTimestamp int64 // station end_time; liveness gate at filter time
+	BattleEndTimestamp  int64 // used to check expiry at filter time
+	BattleLevel         int8
+	BattlePokemonId     int16
+	BattlePokemonForm   int16
+	StationBattles      []FortLookupStationBattle
+	TotalStationedGmax  int16
 }
 
 var fortLookupCache *xsync.Map[string, FortLookup]
@@ -83,6 +81,7 @@ func initFortRtree() {
 	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
 	fortLookupCache = xsync.NewMap[string, FortLookup]()
 	initQuestConditions()
+	initFortAvailability()
 
 	// OnEviction registrations live here, after fortTreeEvictor and
 	// fortLookupCache are created (and after pokestopCache/gymCache/
@@ -191,13 +190,11 @@ func updatePokestopLookup(pokestop *Pokestop) {
 	// each preserving the other's fields. A plain Load->Store pair can
 	// interleave and clobber. Keep the callback to field copies — the
 	// showcase-rankings JSON parse is hoisted out.
-	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
 	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
 		nl := FortLookup{
 			FortType:                   POKESTOP,
 			Lat:                        pokestop.Lat,
 			Lon:                        pokestop.Lon,
-			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
 			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
 			LureId:                     pokestop.LureId,
 			LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
@@ -214,7 +211,6 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
 			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-			ContestTotalEntries:        contestTotalEntries,
 			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 		}
 		if loaded {
@@ -222,6 +218,15 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		}
 		return nl, xsync.UpdateOp
 	})
+
+	observePokestop(&FortLookup{
+		LureId:              pokestop.LureId,
+		LureExpireTimestamp: pokestop.LureExpireTimestamp.ValueOrZero(),
+		ContestPokemonId:    int16(pokestop.ShowcasePokemon.ValueOrZero()),
+		ContestPokemonForm:  int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+		ContestPokemonType:  int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+		ShowcaseExpiry:      pokestop.ShowcaseExpiry.ValueOrZero(),
+	}, time.Now().Unix())
 
 	// This is the sole writer of a pokestop's FortLookup entry, so it is also
 	// the single place quest-condition counts are reconciled: it fires on
@@ -232,11 +237,11 @@ func updatePokestopLookup(pokestop *Pokestop) {
 }
 
 func updateGymLookup(gym *Gym) {
-	fortLookupCache.Store(gym.Id, FortLookup{
+	now := time.Now().Unix()
+	fl := FortLookup{
 		FortType:            GYM,
 		Lat:                 gym.Lat,
 		Lon:                 gym.Lon,
-		PowerUpLevel:        int8(valueOrMinus1(gym.PowerUpLevel)),
 		IsArScanEligible:    gym.ArScanEligible.ValueOrZero() == 1,
 		AvailableSlots:      int8(gym.AvailableSlots.ValueOrZero()),
 		TeamId:              int8(gym.TeamId.ValueOrZero()),
@@ -245,7 +250,9 @@ func updateGymLookup(gym *Gym) {
 		RaidLevel:           int8(gym.RaidLevel.ValueOrZero()),
 		RaidPokemonId:       int16(gym.RaidPokemonId.ValueOrZero()),
 		RaidPokemonForm:     int16(gym.RaidPokemonForm.ValueOrZero()),
-	})
+	}
+	fortLookupCache.Store(gym.Id, fl)
+	observeRaid(&fl, now)
 }
 
 func updateStationLookup(station *Station) {
@@ -255,13 +262,16 @@ func updateStationLookup(station *Station) {
 func updateStationLookupWithBattles(station *Station, stationBattles []StationBattleData) {
 	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
-		FortType:       STATION,
-		Lat:            station.Lat,
-		Lon:            station.Lon,
-		StationBattles: battles,
+		FortType:            STATION,
+		Lat:                 station.Lat,
+		Lon:                 station.Lon,
+		StationBattles:      battles,
+		TotalStationedGmax:  int16(station.TotalStationedGmax.ValueOrZero()),
+		StationEndTimestamp: station.EndTime,
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
 	fortLookupCache.Store(station.Id, lookup)
+	observeStationBattles(&lookup, time.Now().Unix())
 }
 
 // updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup
@@ -270,14 +280,19 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 	now := time.Now().Unix()
 	updated := FortLookupIncident{
+		Id:              incident.Id,
 		DisplayType:     int8(incident.DisplayType),
-		Style:           int8(incident.Style),
 		Character:       incident.Character,
 		Confirmed:       incident.Confirmed,
 		Slot1PokemonId:  int16(incident.Slot1PokemonId.ValueOrZero()),
 		Slot1Form:       int16(incident.Slot1Form.ValueOrZero()),
+		Slot2PokemonId:  int16(incident.Slot2PokemonId.ValueOrZero()),
+		Slot2Form:       int16(incident.Slot2Form.ValueOrZero()),
+		Slot3PokemonId:  int16(incident.Slot3PokemonId.ValueOrZero()),
+		Slot3Form:       int16(incident.Slot3Form.ValueOrZero()),
 		ExpireTimestamp: incident.ExpirationTime,
 	}
+	observeInvasion(&updated, now)
 	// Atomic per-key read-modify-write via Compute — see updatePokestopLookup
 	// for the cross-lock-domain clobber this prevents.
 	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
@@ -303,22 +318,6 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 		existing.Incidents = out
 		return existing, xsync.UpdateOp
 	})
-}
-
-// getContestTotalEntries parses showcase rankings JSON to get total entries
-func getContestTotalEntries(rankingsString null.String) int16 {
-	if !rankingsString.Valid {
-		return -1
-	}
-
-	type contestJson struct {
-		TotalEntries int `json:"total_entries"`
-	}
-	var cj contestJson
-	if json.Unmarshal([]byte(rankingsString.String), &cj) == nil {
-		return int16(cj.TotalEntries)
-	}
-	return -1
 }
 
 func addFortToTree(id string, lat float64, lon float64) {

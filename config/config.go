@@ -133,6 +133,7 @@ type database struct {
 type tuning struct {
 	ExtendedTimeout                bool    `koanf:"extended_timeout"`
 	MaxPokemonResults              int     `koanf:"max_pokemon_results"`
+	MaxFortResults                 int     `koanf:"max_fort_results"`
 	MaxPokemonDistance             float64 `koanf:"max_pokemon_distance"`
 	ProfileRoutes                  bool    `koanf:"profile_routes"`
 	ProfileContention              bool    `koanf:"profile_contention"` // Enable mutex/block profiling (has overhead)

@@ -64,9 +64,10 @@ func PreloadForts(dbDetails db.DbDetails, populateRtree bool) error {
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
-	var pokestopCount, gymCount int32
+	var pokestopCount, gymCount, stationCount int32
 
-	wg.Add(2)
+	// Phase 1: forts (pokestops, gyms, stations) in parallel.
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		pokestopCount = preloadPokestops(dbDetails, populateRtree)
@@ -75,10 +76,17 @@ func PreloadForts(dbDetails db.DbDetails, populateRtree bool) error {
 		defer wg.Done()
 		gymCount = preloadGyms(dbDetails, populateRtree)
 	}()
+	go func() {
+		defer wg.Done()
+		stationCount = preloadStations(dbDetails, populateRtree)
+	}()
 	wg.Wait()
 
-	log.Infof("PreloadForts: loaded %d pokestops and %d gyms in %v (rtree=%v)",
-		pokestopCount, gymCount, time.Since(startTime), populateRtree)
+	// Phase 2: station battles depend on stationCache being populated.
+	stationBattleCount := preloadStationBattles(dbDetails, populateRtree)
+
+	log.Infof("PreloadForts: loaded %d pokestops, %d gyms, %d stations, %d station battles in %v (rtree=%v)",
+		pokestopCount, gymCount, stationCount, stationBattleCount, time.Since(startTime), populateRtree)
 
 	return nil
 }
