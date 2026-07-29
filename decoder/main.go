@@ -72,7 +72,6 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
-var diskEncounterCache *ottercache.OtterCache[uint64, *pogo.DiskEncounterOutProto]
 var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
@@ -213,12 +212,6 @@ func initDataCache() {
 		Name:       "player",
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
-	})
-
-	diskEncounterCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *pogo.DiskEncounterOutProto]{
-		Name:       "disk_encounter",
-		DefaultTTL: 10 * time.Minute,
-		TouchOnHit: false,
 	})
 
 	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
