@@ -210,3 +210,153 @@ func TestUpdatePokemonBatchPlacesLureWithUnknownFort(t *testing.T) {
 		t.Errorf("webhook DisappearTime = %d, want %d", hook.DisappearTime, expireMs/1000)
 	}
 }
+
+func testDiskEncounterProtos(encId uint64, fortId string, lat, lon float64) (*pogo.DiskEncounterProto, *pogo.DiskEncounterOutProto) {
+	request := &pogo.DiskEncounterProto{
+		EncounterId:   int64(encId),
+		FortId:        fortId,
+		GymLatDegrees: lat,
+		GymLngDegrees: lon,
+	}
+	response := &pogo.DiskEncounterOutProto{
+		Result: pogo.DiskEncounterOutProto_SUCCESS,
+		Pokemon: &pogo.PokemonProto{
+			PokemonId:         pogo.HoloPokemonId(25),
+			Cp:                500,
+			CpMultiplier:      0.5,
+			IndividualAttack:  15,
+			IndividualDefense: 14,
+			IndividualStamina: 13,
+			PokemonDisplay:    &pogo.PokemonDisplayProto{DisplayId: int64(encId)},
+		},
+	}
+	return request, response
+}
+
+// #283: an encounter with no prior GMO creates a fully placed record from
+// the request proto — real coords, estimated expiry, IVs, webhook.
+func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
+	sink := lureTestSetup(t)
+	const encId = uint64(910105)
+	request, response := testDiskEncounterProtos(encId, "lure-fort-910105", 40.7580, -73.9855)
+
+	before := time.Now().Unix()
+	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
+	after := time.Now().Unix()
+
+	pokemon, unlock, _ := peekPokemonRecordReadOnly(encId, "test")
+	if pokemon == nil {
+		t.Fatalf("pokemon %d not in cache after disk encounter", encId)
+	}
+	if got := pokemon.PokestopId.ValueOrZero(); got != "lure-fort-910105" {
+		t.Errorf("PokestopId = %q, want lure-fort-910105", got)
+	}
+	if pokemon.Lat != 40.7580 || pokemon.Lon != -73.9855 {
+		t.Errorf("Lat/Lon = %v/%v, want request coords 40.7580/-73.9855", pokemon.Lat, pokemon.Lon)
+	}
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
+		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	}
+	if pokemon.ExpireTimestampVerified {
+		t.Errorf("ExpireTimestampVerified = true, want false (estimate)")
+	}
+	exp := pokemon.ExpireTimestamp.ValueOrZero()
+	if exp < before+lureSpawnLifetimeSeconds || exp > after+lureSpawnLifetimeSeconds {
+		t.Errorf("ExpireTimestamp = %d, want now+%ds (in [%d, %d])",
+			exp, lureSpawnLifetimeSeconds, before+lureSpawnLifetimeSeconds, after+lureSpawnLifetimeSeconds)
+	}
+	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
+		t.Errorf("AtkIv = %d, want 15", got)
+	}
+	unlock()
+
+	hooks := sink.drain()
+	if len(hooks) == 0 {
+		t.Fatalf("no webhook emitted for encounter-created lure pokemon")
+	}
+	hook, ok := hooks[0].message.(PokemonWebhook)
+	if !ok {
+		t.Fatalf("webhook message type %T, want PokemonWebhook", hooks[0].message)
+	}
+	if hook.Latitude != 40.7580 || hook.Longitude != -73.9855 {
+		t.Errorf("webhook coords = %v/%v, want 40.7580/-73.9855 (the #390 symptom was 0/0)", hook.Latitude, hook.Longitude)
+	}
+	if hook.DisappearTime <= 0 {
+		t.Errorf("webhook DisappearTime = %d, want > 0 (the #390 symptom was 0)", hook.DisappearTime)
+	}
+}
+
+// A GMO arriving after the encounter tightens the estimate to a verified
+// despawn without downgrading the seen type or touching IVs.
+func TestGmoAfterDiskEncounterContributesVerifiedExpiry(t *testing.T) {
+	lureTestSetup(t)
+	const encId = uint64(910106)
+	request, response := testDiskEncounterProtos(encId, "lure-fort-910106", 40.0, -73.0)
+	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
+
+	expireMs := time.Now().UnixMilli() + 100_000
+	raw := testRawMapPokemon(encId, "lure-fort-910106", 40.0, -73.0, expireMs)
+	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{}, nil, nil,
+		[]RawMapPokemonData{raw}, nil, "tester")
+
+	pokemon, unlock, _ := peekPokemonRecordReadOnly(encId, "test")
+	if pokemon == nil {
+		t.Fatalf("pokemon %d missing", encId)
+	}
+	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+		t.Errorf("expiry = %d verified=%v, want %d verified=true",
+			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+	}
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
+		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenType_LureEncounter)
+	}
+	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
+		t.Errorf("AtkIv = %d, want 15 (encounter data must survive the GMO merge)", got)
+	}
+	unlock()
+}
+
+// The classic order still works with no cache hop: GMO creates lure_wild,
+// the encounter upgrades it in place.
+func TestDiskEncounterAfterGmoUpgradesRecord(t *testing.T) {
+	lureTestSetup(t)
+	const encId = uint64(910107)
+	expireMs := time.Now().UnixMilli() + 110_000
+	raw := testRawMapPokemon(encId, "lure-fort-910107", 35.6595, 139.7005, expireMs)
+	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{}, nil, nil,
+		[]RawMapPokemonData{raw}, nil, "tester")
+
+	request, response := testDiskEncounterProtos(encId, "lure-fort-910107", 35.6595, 139.7005)
+	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
+
+	pokemon, unlock, _ := peekPokemonRecordReadOnly(encId, "test")
+	if pokemon == nil {
+		t.Fatalf("pokemon %d missing", encId)
+	}
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
+		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	}
+	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
+		t.Errorf("AtkIv = %d, want 15", got)
+	}
+	// GMO-verified expiry must survive: the estimate is only for new records.
+	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+		t.Errorf("expiry = %d verified=%v, want %d verified=true (estimate must not overwrite)",
+			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+	}
+	unlock()
+}
+
+// The issue's visibility symptom: the v2/v3 result collector must include a
+// record whose only expiry is the unverified estimate.
+func TestCollectApiPokemonResultsIncludesEstimatedExpiry(t *testing.T) {
+	lureTestSetup(t)
+	const encId = uint64(910108)
+	request, response := testDiskEncounterProtos(encId, "lure-fort-910108", 40.1, -73.1)
+	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
+
+	results := collectApiPokemonResults([]uint64{encId}, "test")
+	if len(results) != 1 {
+		t.Fatalf("collectApiPokemonResults returned %d results, want 1", len(results))
+	}
+}

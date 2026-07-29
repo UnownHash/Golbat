@@ -314,6 +314,11 @@ const SeenType_LureEncounter string = "lure_encounter"                  // Pokem
 const SeenType_TappableEncounter string = "tappable_encounter"          // Pokemon has been encountered from tappable
 const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokemon has been encountered from a lured tappable
 
+// A lure spits out a new pokemon every 3 minutes, and each lasts 3 minutes.
+// Worst-case remaining life when a lure pokemon is first seen via a disk
+// encounter, before any GMO has supplied the real despawn time.
+const lureSpawnLifetimeSeconds = 180
+
 // setExpireTimestampFromSpawnpoint sets the current Pokemon object ExpireTimeStamp, and ExpireTimeStampVerified from the Spawnpoint
 // information held.
 // db - the database connection to be used

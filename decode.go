@@ -74,7 +74,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
-		result = decodeDiskEncounter(ctx, protoData.Data, protoData.Account)
+		result = decodeDiskEncounter(ctx, protoData.Request, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
 		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
@@ -409,9 +409,24 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
 
-func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
+func decodeDiskEncounter(ctx context.Context, request []byte, sDec []byte, username string) string {
+	if len(request) == 0 {
+		// The request carries the encounter id, fort id and fort location —
+		// without it the encounter cannot be placed. len covers both nil
+		// (gRPC, no payload) and empty (HTTP path base64-decodes "" to a
+		// non-nil empty slice).
+		statsCollector.IncDecodeDiskEncounter("error", "request_missing")
+		return "DiskEncounter without request proto - ignored"
+	}
+	decodedRequest := &pogo.DiskEncounterProto{}
+	if err := proto.Unmarshal(request, decodedRequest); err != nil {
+		log.Errorf("Failed to parse DiskEncounterProto %s", err)
+		statsCollector.IncDecodeDiskEncounter("error", "request_parse")
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
-	if err := unmarshalClientProto(sDec, decodedEncounterInfo); err != nil {
+	if err := proto.Unmarshal(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "parse")
 		return fmt.Sprintf("Failed to parse %s", err)
@@ -425,7 +440,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) stri
 	}
 
 	statsCollector.IncDecodeDiskEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedRequest, decodedEncounterInfo, username)
 }
 
 func decodeStartIncident(ctx context.Context, sDec []byte) string {
