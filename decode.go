@@ -30,6 +30,8 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		return
 	}
 
+	CaptureRawPayload(getMethodName(method, true), protoData.Data)
+
 	processed := false
 	ignore := false
 	start := time.Now()

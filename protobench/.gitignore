@@ -1,0 +1,6 @@
+pogo/
+bin/
+build/
+pogovt/
+hypershim/*.gen.go
+pogothin/

@@ -27,6 +27,7 @@ type configDefinition struct {
 	Pvp                     pvp            `koanf:"pvp"`
 	Koji                    koji           `koanf:"koji"`
 	Tuning                  tuning         `koanf:"tuning"`
+	RawCapture              rawCapture     `koanf:"raw_capture"`
 	Weather                 weather        `koanf:"weather"`
 	ScanRules               []scanRule     `koanf:"scan_rules"`
 	StatsIntervals          statsIntervals `koanf:"stats_intervals"`
@@ -149,6 +150,14 @@ type tuning struct {
 	SlowDbQueryMs                  int     `koanf:"slow_db_query_ms"`            // log [DB_SLOW] for entity queries and write-behind batch flushes slower than this (ms); 0 = default (1000), -1 = disabled
 	GoGCPercent                    int     `koanf:"gogc_percent"`                // runtime GC target percent (Go default 100). Higher = fewer GC cycles, more peak heap: cost ~1/(1+n/100). Large-RAM instances with big live heaps can win 10%+ CPU at 300-400. 0 = leave Go default.
 	GoMemLimitMiB                  int     `koanf:"go_mem_limit_mib"`            // runtime soft memory limit (GOMEMLIMIT), MiB. 0 = off.
+}
+
+// rawCapture samples raw proto payloads to disk for the protobench decode
+// harness. See docs/superpowers/specs/2026-07-05-proto-decoding-gc-design.md.
+type rawCapture struct {
+	Enabled        bool   `koanf:"enabled"`
+	Dir            string `koanf:"dir"`
+	PerBucketLimit int    `koanf:"per_bucket_limit"`
 }
 
 type scanRule struct {
