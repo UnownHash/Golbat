@@ -74,7 +74,7 @@ func decode(ctx context.Context, method int, protoData *ProtoData) {
 		}
 		processed = true
 	case pogo.Method_METHOD_DISK_ENCOUNTER:
-		result = decodeDiskEncounter(ctx, protoData.Data, protoData.Account)
+		result = decodeDiskEncounter(ctx, protoData.Request, protoData.Data, protoData.Account)
 		processed = true
 	case pogo.Method_METHOD_FORT_SEARCH:
 		result = decodeQuest(ctx, protoData.Data, protoData.HaveAr)
@@ -409,7 +409,27 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 	return decoder.UpdatePokemonRecordWithEncounterProto(ctx, dbDetails, decodedEncounterInfo, username, timestampMs)
 }
 
-func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) string {
+func decodeDiskEncounter(ctx context.Context, request []byte, sDec []byte, username string) string {
+	if len(request) == 0 {
+		// The request carries the encounter id, fort id and fort location —
+		// without it the encounter cannot be placed. len covers a missing
+		// request regardless of ingest path: gRPC leaves it nil, and the
+		// HTTP path's decodeBase64Pooled("") also returns nil.
+		statsCollector.IncDecodeDiskEncounter("error", "request_missing")
+		return "DiskEncounter without request proto - ignored"
+	}
+	decodedRequest := &pogo.DiskEncounterProto{}
+	if err := unmarshalClientProto(request, decodedRequest); err != nil {
+		log.Errorf("Failed to parse DiskEncounterProto %s", err)
+		statsCollector.IncDecodeDiskEncounter("error", "request_parse")
+		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedRequest.EncounterId == 0 {
+		statsCollector.IncDecodeDiskEncounter("error", "request_no_encounter_id")
+		return "DiskEncounter request without encounter id - ignored"
+	}
+
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}
 	if err := unmarshalClientProto(sDec, decodedEncounterInfo); err != nil {
 		log.Errorf("Failed to parse %s", err)
@@ -425,7 +445,7 @@ func decodeDiskEncounter(ctx context.Context, sDec []byte, username string) stri
 	}
 
 	statsCollector.IncDecodeDiskEncounter("ok", "")
-	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedEncounterInfo, username)
+	return decoder.UpdatePokemonRecordWithDiskEncounterProto(ctx, dbDetails, decodedRequest, decodedEncounterInfo, username)
 }
 
 func decodeStartIncident(ctx context.Context, sDec []byte) string {
@@ -475,6 +495,43 @@ func decodeOpenInvasion(ctx context.Context, request []byte, payload []byte) str
 
 	statsCollector.IncDecodeOpenInvasion("ok", "")
 	return decoder.UpdateIncidentLineup(ctx, dbDetails, decodeOpenInvasionRequest, decodedOpenInvasionResponse)
+}
+
+// extractFortMapPokemon collects a fort's lure pokemon as RawMapPokemonData,
+// with placement taken from the enclosing fort — the nested MapPokemonProto's
+// own lat/lon are zero on the wire. Current clients deliver lure pokemon in
+// the repeated ActiveFortPokemon wrapper (SpawnType LURE; POWER_UP entries
+// are not lures); older payloads used the singular ActivePokemon field. Both
+// are honored, deduplicated by encounter ID.
+func extractFortMapPokemon(fort *pogo.PokemonFortProto, cellId uint64, timestampMs int64) []decoder.RawMapPokemonData {
+	var out []decoder.RawMapPokemonData
+	add := func(mapPokemon *pogo.MapPokemonProto) {
+		for i := range out {
+			if out[i].Data.EncounterId == mapPokemon.EncounterId {
+				return
+			}
+		}
+		out = append(out, decoder.RawMapPokemonData{
+			Cell:      cellId,
+			Data:      mapPokemon,
+			Timestamp: timestampMs,
+			FortId:    fort.FortId,
+			Lat:       fort.Latitude,
+			Lon:       fort.Longitude,
+		})
+	}
+	if fort.ActivePokemon != nil {
+		add(fort.ActivePokemon)
+	}
+	for _, wrapper := range fort.ActiveFortPokemon {
+		if wrapper.GetSpawnType() != pogo.FortPokemonProto_LURE {
+			continue
+		}
+		if mapPokemon := wrapper.GetPokemonProto(); mapPokemon != nil {
+			add(mapPokemon)
+		}
+	}
+	return out
 }
 
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
@@ -530,9 +587,7 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 				}
 			}
 
-			if fort.ActivePokemon != nil {
-				newMapPokemon = append(newMapPokemon, decoder.RawMapPokemonData{Cell: mapCell.S2CellId, Data: fort.ActivePokemon, Timestamp: mapCell.AsOfTimeMs})
-			}
+			newMapPokemon = append(newMapPokemon, extractFortMapPokemon(fort, mapCell.S2CellId, mapCell.AsOfTimeMs)...)
 		}
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})

@@ -34,6 +34,12 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
+	if db.GeneralDb == nil {
+		// Zero-value test DbDetails{} has a nil GeneralDb; treat that as
+		// "not found" so tests can run without a real DB. Production always
+		// wires the DB before decode starts, so this never fires there.
+		return sql.ErrNoRows
+	}
 	return timedDbQuery("loadPokestopFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, pokestop,
 			`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
