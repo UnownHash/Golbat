@@ -1,0 +1,10 @@
+=== RUN   TestScenarioCallbackBomb
+=== RUN   TestScenarioCallbackBomb/theine/stall
+    scenario_test.go:469: RESULT cbbomb/theine/stall delivered=200000 of=200000 stall_goroutines=18 max_goroutines=18 drain_after_recovery=1.256s probe_set_max=76µs
+=== RUN   TestScenarioCallbackBomb/theine/slow
+    scenario_test.go:469: RESULT cbbomb/theine/slow delivered=200000 of=200000 stall_goroutines=18 max_goroutines=18 drain_after_recovery=19.006s probe_set_max=6.968271s
+--- PASS: TestScenarioCallbackBomb (40.45s)
+    --- PASS: TestScenarioCallbackBomb/theine/stall (11.35s)
+    --- PASS: TestScenarioCallbackBomb/theine/slow (29.10s)
+PASS
+ok  	golbat/cachebench	40.685s

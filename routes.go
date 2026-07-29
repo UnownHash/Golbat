@@ -349,6 +349,14 @@ func Raw(c *gin.Context) {
 
 	// Process each proto in a packet in sequence, but in a go-routine
 	go func() {
+		release, ok := acquireRawProcessingSlot()
+		if !ok {
+			// Parked queue over its cap during a stall — shed rather than
+			// pin yet another decoded payload in memory (already logged).
+			return
+		}
+		defer release()
+
 		timeout := 5 * time.Second
 		if config.Config.Tuning.ExtendedTimeout {
 			timeout = 30 * time.Second
@@ -386,7 +394,9 @@ func Raw(c *gin.Context) {
 		}
 
 		for _, entry := range nebulaItems {
-			go decodeNebula(context.Background(), entry.Endpoint, &entry)
+			ctx, cancel := context.WithTimeout(context.Background(), timeout)
+			decodeNebula(ctx, entry.Endpoint, &entry)
+			cancel()
 		}
 
 		for _, entry := range pushItems {
@@ -440,9 +450,7 @@ func PokemonScan(c *gin.Context) {
 	c.JSON(http.StatusAccepted, res)
 }
 
-
 // GetHealth provides unrestricted health status for monitoring tools
 func GetHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
-

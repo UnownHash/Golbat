@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
 	log "github.com/sirupsen/logrus"
 
@@ -35,20 +34,21 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
-	err := db.GeneralDb.GetContext(ctx, pokestop,
-		`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
-	statsCollector.IncDbQuery("select pokestop", err)
-	if err == nil {
-		pokestop.afterLoadFromDB()
-	}
-	return err
+	return timedDbQuery("loadPokestopFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, pokestop,
+			`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
+		statsCollector.IncDbQuery("select pokestop", err)
+		if err == nil {
+			pokestop.afterLoadFromDB()
+		}
+		return err
+	})
 }
 
 // PeekPokestopRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func PeekPokestopRecord(fortId string, caller string) (*Pokestop, func(), error) {
-	if item := pokestopCache.Get(fortId); item != nil {
-		pokestop := item.Value()
+	if pokestop, ok := pokestopCache.Get(fortId); ok {
 		pokestop.Lock(caller)
 		return pokestop, func() { pokestop.Unlock() }, nil
 	}
@@ -59,13 +59,15 @@ func PeekPokestopRecord(fortId string, caller string) (*Pokestop, func(), error)
 // This is useful for checking if a fort was converted from a pokestop before doing cross-entity updates.
 func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 	// Check cache first (fast path)
-	if item := pokestopCache.Get(fortId); item != nil {
+	if pokestopCache.Has(fortId) {
 		return true
 	}
 
 	// Check database
 	var exists bool
-	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
+	err := timedDbQuery("DoesPokestopExist", db.GeneralDb, func() error {
+		return db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM pokestop WHERE id = ?)", fortId)
+	})
 	if err != nil {
 		return false
 	}
@@ -77,8 +79,7 @@ func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool
 // Caller MUST call returned unlock function if non-nil.
 func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
 	// Check cache first
-	if item := pokestopCache.Get(fortId); item != nil {
-		pokestop := item.Value()
+	if pokestop, ok := pokestopCache.Get(fortId); ok {
 		pokestop.Lock(caller)
 		return pokestop, func() { pokestop.Unlock() }, nil
 	}
@@ -96,15 +97,15 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 
 	// Atomically cache the loaded Pokestop - if another goroutine raced us,
 	// we'll get their Pokestop and use that instead (ensuring same mutex)
-	existingPokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+	pokestop, found := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		// Only called if key doesn't exist - our Pokestop wins
-		if config.Config.FortInMemory {
-			fortRtreeUpdatePokestopOnGet(&dbPokestop)
-		}
 		return &dbPokestop
 	})
-
-	pokestop := existingPokestop.Value()
+	if !found && config.Config.FortInMemory {
+		// Index out here — the GetOrSetFunc closure runs under the cache
+		// shard's write lock and must not take the fort tree mutex.
+		fortRtreeUpdatePokestopOnGet(&dbPokestop)
+	}
 	pokestop.Lock(caller)
 	return pokestop, func() { pokestop.Unlock() }, nil
 }
@@ -125,11 +126,9 @@ func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId str
 // Caller MUST call returned unlock function.
 func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
 	// Create new Pokestop atomically - function only called if key doesn't exist
-	pokestopItem, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
+	pokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		return &Pokestop{PokestopData: PokestopData{Id: fortId}, newRecord: true}
 	})
-
-	pokestop := pokestopItem.Value()
 	pokestop.Lock(caller)
 
 	if pokestop.newRecord {
@@ -364,7 +363,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	createPokestopFortWebhooks(pokestop)
 
 	if isNewRecord {
-		pokestopCache.Set(pokestop.Id, pokestop, ttlcache.DefaultTTL)
+		pokestopCache.Set(pokestop.Id, pokestop, fortCacheEntryTTL())
 		pokestop.newRecord = false
 	}
 	pokestop.ClearDirty()
@@ -477,9 +476,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 }
 
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {
-	storedGetMapFort := getMapFortsCache.Get(pokestop.Id)
-	if storedGetMapFort != nil {
-		getMapFort := storedGetMapFort.Value()
+	if getMapFort, ok := getMapFortsCache.Get(pokestop.Id); ok {
 		getMapFortsCache.Delete(pokestop.Id)
 		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
 		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)

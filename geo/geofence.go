@@ -199,45 +199,37 @@ func (p *Geofence) intersectsWithRaycast(point Location, start Location, end Loc
 	return raySlope >= diagSlope
 }
 
-func LoadRtree(featureCollection *geojson.FeatureCollection) *rtree.RTreeG[*geojson.Feature] {
+// LoadRtree builds a spatial index of compiled geofences. Compilation caches
+// per-ring bounds so containment tests don't recompute them (see CompiledFence).
+func LoadRtree(featureCollection *geojson.FeatureCollection) *rtree.RTreeG[*CompiledFence] {
 	if featureCollection == nil {
 		return nil
 	}
 
-	var tree rtree.RTreeG[*geojson.Feature]
+	var tree rtree.RTreeG[*CompiledFence]
 
 	for _, f := range featureCollection.Features {
+		cf := CompileFence(f)
+		if cf == nil {
+			continue // not a Polygon/MultiPolygon
+		}
 		bbox := f.Geometry.Bound()
-		tree.Insert(bbox.Min, bbox.Max, f)
+		tree.Insert(bbox.Min, bbox.Max, cf)
 	}
 
 	return &tree
 }
 
-func MatchGeofencesRtree(tree *rtree.RTreeG[*geojson.Feature], lat, lon float64) (areas []AreaName) {
+func MatchGeofencesRtree(tree *rtree.RTreeG[*CompiledFence], lat, lon float64) (areas []AreaName) {
 	if tree == nil {
 		return
 	}
 
 	p := orb.Point{lon, lat}
 
-	tree.Search([2]float64{lon, lat}, [2]float64{lon, lat}, func(min, max [2]float64, f *geojson.Feature) bool {
-		geoType := f.Geometry.GeoJSONType()
-		switch geoType {
-		case "Polygon":
-			polygon := f.Geometry.(orb.Polygon)
-			if planar.PolygonContains(polygon, p) {
-				name := f.Properties.MustString("name", "unknown")
-				parent := f.Properties.MustString("parent", name)
-				areas = append(areas, AreaName{Parent: parent, Name: name})
-			}
-		case "MultiPolygon":
-			multiPolygon := f.Geometry.(orb.MultiPolygon)
-			if planar.MultiPolygonContains(multiPolygon, p) {
-				name := f.Properties.MustString("name", "unknown")
-				parent := f.Properties.MustString("parent", name)
-				areas = append(areas, AreaName{Parent: parent, Name: name})
-			}
+	tree.Search([2]float64{lon, lat}, [2]float64{lon, lat}, func(min, max [2]float64, cf *CompiledFence) bool {
+		if cf.Contains(p) {
+			areas = append(areas, cf.Area)
 		}
 		return true // always continue
 	})

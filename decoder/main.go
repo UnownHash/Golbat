@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"runtime"
+	"math/rand/v2"
+	"sync"
 	"time"
 
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -18,6 +18,8 @@ import (
 	"golbat/pogo"
 	"golbat/stats_collector"
 	"golbat/webhooks"
+
+	"golbat/ottercache"
 )
 
 type RawFortData struct {
@@ -55,28 +57,40 @@ type webhooksSenderInterface interface {
 
 var webhooksSender webhooksSenderInterface
 var statsCollector stats_collector.StatsCollector
-var pokestopCache *ShardedCache[string, *Pokestop]
-var gymCache *ShardedCache[string, *Gym]
-var stationCache *ShardedCache[string, *Station]
-var tappableCache *ttlcache.Cache[uint64, *Tappable]
-var weatherCache *ttlcache.Cache[int64, *Weather]
-var weatherConsensusCache *ttlcache.Cache[int64, *WeatherConsensusState]
-var s2CellCache *ttlcache.Cache[uint64, *S2Cell]
-var spawnpointCache *ShardedCache[int64, *Spawnpoint]
-var pokemonCache *ShardedCache[uint64, *Pokemon]
-var incidentCache *ttlcache.Cache[string, *Incident]
-var playerCache *ttlcache.Cache[string, *Player]
-var routeCache *ttlcache.Cache[string, *Route]
-var diskEncounterCache *ttlcache.Cache[uint64, *pogo.DiskEncounterOutProto]
-var getMapFortsCache *ttlcache.Cache[string, *pogo.GetMapFortsOutProto_FortProto]
+var pokestopCache *ottercache.OtterCache[string, *Pokestop]
+var gymCache *ottercache.OtterCache[string, *Gym]
+var stationCache *ottercache.OtterCache[string, *Station]
+var tappableCache *ottercache.OtterCache[uint64, *Tappable]
+var weatherCache *ottercache.OtterCache[int64, *Weather]
+var weatherConsensusCache *ottercache.OtterCache[int64, *WeatherConsensusState]
+var s2CellCache *ottercache.OtterCache[uint64, *S2Cell]
+var spawnpointCache *ottercache.OtterCache[int64, *Spawnpoint]
+var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
+var incidentCache *ottercache.OtterCache[string, *Incident]
+var playerCache *ottercache.OtterCache[string, *Player]
+var routeCache *ottercache.OtterCache[string, *Route]
+var diskEncounterCache *ottercache.OtterCache[uint64, *pogo.DiskEncounterOutProto]
+var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
 
 var ohbem *gohbem.Ohbem
 
 func init() {
-	initDataCache()
+	// initLiveStats is config-independent, so package-init timing is fine.
+	// Entity caches are NOT — they must be built after config load via
+	// InitDataCache (see below).
 	initLiveStats()
+}
+
+var initDataCacheOnce sync.Once
+
+// InitDataCache constructs all entity caches and spatial-index plumbing.
+// Must be called from main() AFTER config is loaded — cache shard counts,
+// fort TTLs, and fort eviction-callback registration all read config.
+// (Package init() is too early: it runs before config.ReadConfig().)
+func InitDataCache() {
+	initDataCacheOnce.Do(initDataCache)
 }
 
 func InitProactiveIVSwitchSem() {
@@ -89,6 +103,20 @@ func (cl *gohbemLogger) Print(message string) {
 	log.Info("Gohbem - ", message)
 }
 
+// fortCacheEntryTTL is the per-entry TTL for pokestop/gym/station cache
+// inserts. Jittered so a restart's preload cohort (stamped within minutes)
+// doesn't expire as one mass burst of downstream work — tree deletes,
+// fort-tracker events, DB reload churn. (With otter there is no
+// reader-blocking sweep to defend against; the jitter survives purely as
+// burst smoothing.) Touch-on-hit refreshes each entry to its own jittered
+// TTL, so actively-seen forts never expire.
+func fortCacheEntryTTL() time.Duration {
+	if config.Config.FortInMemory {
+		return 25*time.Hour + rand.N(2*time.Hour)
+	}
+	return time.Hour + rand.N(10*time.Minute)
+}
+
 func initDataCache() {
 	// Sharded caches for high-concurrency tables
 	// When fort_in_memory is enabled, extend TTL to 25 hours so that the
@@ -98,107 +126,109 @@ func initDataCache() {
 		fortCacheTTL = 25 * time.Hour
 	}
 
-	pokestopCache = NewShardedCache(ShardedCacheConfig[string, *Pokestop]{
-		NumShards:  runtime.NumCPU(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
-	})
-	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Pokestop]) {
-			p := item.Value()
-			evictFortFromTree(p.Id, p.Lat, p.Lon)
-		})
+	// Cache eviction-event drops are the one non-self-healing loss; feed
+	// them to prometheus alongside the [CACHE_EVICT] log line.
+	ottercache.DroppedEvictionsHook = func(cacheName string, dropped int64) {
+		statsCollector.AddCacheEvictionsDropped(cacheName, float64(dropped))
 	}
 
-	gymCache = NewShardedCache(ShardedCacheConfig[string, *Gym]{
-		NumShards:  runtime.NumCPU(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
-	})
-	if config.Config.FortInMemory {
-		gymCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Gym]) {
-			g := item.Value()
-			evictFortFromTree(g.Id, g.Lat, g.Lon)
-		})
-	}
-
-	stationCache = NewShardedCache(ShardedCacheConfig[string, *Station]{
-		NumShards:  runtime.NumCPU(),
-		TTL:        fortCacheTTL,
-		KeyToShard: StringKeyToShard,
-	})
-	stationCache.OnEviction(func(ctx context.Context, reason ttlcache.EvictionReason, item *ttlcache.Item[string, *Station]) {
-		clearStationBattleState(item.Key())
-		if config.Config.FortInMemory {
-			s := item.Value()
-			evictFortFromTree(s.Id, s.Lat, s.Lon)
-		}
+	// Fort caches: touch-on-hit keeps actively-seen forts resident past
+	// their (jittered, set-at-save) TTLs; otter touches via the timing
+	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
+	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Pokestop]{
+		Name:       "pokestop",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
 	})
 
-	tappableCache = ttlcache.New[uint64, *Tappable](
-		ttlcache.WithTTL[uint64, *Tappable](60 * time.Minute),
-	)
-	go tappableCache.Start()
-
-	weatherCache = ttlcache.New[int64, *Weather](
-		ttlcache.WithTTL[int64, *Weather](60 * time.Minute),
-	)
-	go weatherCache.Start()
-
-	weatherConsensusCache = ttlcache.New[int64, *WeatherConsensusState](
-		ttlcache.WithTTL[int64, *WeatherConsensusState](2 * time.Hour),
-	)
-	go weatherConsensusCache.Start()
-
-	s2CellCache = ttlcache.New[uint64, *S2Cell](
-		ttlcache.WithTTL[uint64, *S2Cell](60 * time.Minute),
-	)
-	go s2CellCache.Start()
-
-	spawnpointCache = NewShardedCache(ShardedCacheConfig[int64, *Spawnpoint]{
-		NumShards:  runtime.NumCPU(),
-		TTL:        60 * time.Minute,
-		KeyToShard: Int64KeyToShard,
+	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Gym]{
+		Name:       "gym",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
 	})
 
-	// Pokemon cache: sharded for high concurrency
-	// By picking NumShards to be nproc, we should expect ~nproc*(1-1/e) ~ 63% concurrency
-	pokemonCache = NewShardedCache(ShardedCacheConfig[uint64, *Pokemon]{
-		NumShards:         runtime.NumCPU(),
-		TTL:               60 * time.Minute,
-		KeyToShard:        Uint64KeyToShard,
-		DisableTouchOnHit: true, // Pokemon will last 60 mins from when we first see them not last see them
+	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Station]{
+		Name:       "station",
+		DefaultTTL: fortCacheTTL,
+		TouchOnHit: true,
+	})
+	// OnEviction registrations for pokestopCache/gymCache/stationCache are
+	// registered in initFortRtree() (called below), after fortTreeEvictor
+	// and fortLookupCache exist, so they can never fire against a nil
+	// evictor/lookup cache.
+
+	tappableCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *Tappable]{
+		Name:       "tappable",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
+
+	weatherCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[int64, *Weather]{
+		Name:       "weather",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
+
+	weatherConsensusCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[int64, *WeatherConsensusState]{
+		Name:       "weather_consensus",
+		DefaultTTL: 2 * time.Hour,
+		TouchOnHit: true,
+	})
+
+	s2CellCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *S2Cell]{
+		Name:       "s2cell",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
+
+	// Spawnpoints are read once per wild sighting; touch-on-hit keeps
+	// active spawnpoints resident.
+	spawnpointCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[int64, *Spawnpoint]{
+		Name:       "spawnpoint",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
+
+	// Pokemon TTLs encode despawn times (remainingDuration) and must never
+	// extend on read: writing-based expiry only.
+	pokemonCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *Pokemon]{
+		Name:       "pokemon",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: false,
 	})
 	initPokemonRtree()
 	initFortRtree()
 	initStationBattleCache()
 
-	incidentCache = ttlcache.New[string, *Incident](
-		ttlcache.WithTTL[string, *Incident](60 * time.Minute),
-	)
-	go incidentCache.Start()
+	incidentCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Incident]{
+		Name:       "incident",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
 
-	playerCache = ttlcache.New[string, *Player](
-		ttlcache.WithTTL[string, *Player](60 * time.Minute),
-	)
-	go playerCache.Start()
+	playerCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Player]{
+		Name:       "player",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
 
-	diskEncounterCache = ttlcache.New[uint64, *pogo.DiskEncounterOutProto](
-		ttlcache.WithTTL[uint64, *pogo.DiskEncounterOutProto](10*time.Minute),
-		ttlcache.WithDisableTouchOnHit[uint64, *pogo.DiskEncounterOutProto](),
-	)
-	go diskEncounterCache.Start()
+	diskEncounterCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *pogo.DiskEncounterOutProto]{
+		Name:       "disk_encounter",
+		DefaultTTL: 10 * time.Minute,
+		TouchOnHit: false,
+	})
 
-	getMapFortsCache = ttlcache.New[string, *pogo.GetMapFortsOutProto_FortProto](
-		ttlcache.WithTTL[string, *pogo.GetMapFortsOutProto_FortProto](5*time.Minute),
-		ttlcache.WithDisableTouchOnHit[string, *pogo.GetMapFortsOutProto_FortProto](),
-	)
-	go getMapFortsCache.Start()
+	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+		Name:       "map_forts",
+		DefaultTTL: 5 * time.Minute,
+		TouchOnHit: false,
+	})
 
-	routeCache = ttlcache.New[string, *Route](
-		ttlcache.WithTTL[string, *Route](60 * time.Minute),
-	)
-	go routeCache.Start()
+	routeCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Route]{
+		Name:       "route",
+		DefaultTTL: 60 * time.Minute,
+		TouchOnHit: true,
+	})
 }
 
 func InitialiseOhbem() {
@@ -264,14 +294,6 @@ func reloadOhbemFromMasterFile() {
 	} else {
 		log.Infof("ohbem reloaded from MasterFile cache")
 	}
-}
-
-func ClearPokestopCache() {
-	pokestopCache.DeleteAll()
-}
-
-func ClearGymCache() {
-	gymCache.DeleteAll()
 }
 
 const floatTolerance = 0.000001

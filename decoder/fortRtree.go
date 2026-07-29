@@ -3,12 +3,17 @@ package decoder
 import (
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/puzpuzpuz/xsync/v3"
+	"github.com/puzpuzpuz/xsync/v4"
 	log "github.com/sirupsen/logrus"
 	"github.com/tidwall/rtree"
+
+	"golbat/config"
+
+	"golbat/ottercache"
 )
 
 type FortLookup struct {
@@ -61,12 +66,44 @@ type FortLookup struct {
 	StationBattles     []FortLookupStationBattle
 }
 
-var fortLookupCache *xsync.MapOf[string, FortLookup]
+var fortLookupCache *xsync.Map[string, FortLookup]
 var fortTreeMutex sync.RWMutex
 var fortTree rtree.RTreeG[string]
 
+var fortTreeSnapshot atomic.Pointer[treeSnapshot[string]]
+
+// getFortTreeSnapshot: see refreshTreeSnapshot.
+func getFortTreeSnapshot() *rtree.RTreeG[string] {
+	return refreshTreeSnapshot(&fortTreeSnapshot, &fortTreeMutex, &fortTree)
+}
+
 func initFortRtree() {
-	fortLookupCache = xsync.NewMapOf[string, FortLookup]()
+	// Fort tree churn is a fraction of pokemon's, and this evictor's only
+	// producer drops on full (deferFortEviction) — 64k of headroom is
+	// plenty and saves ~7.5 MiB vs sharing the pokemon constant.
+	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
+	fortLookupCache = xsync.NewMap[string, FortLookup]()
+
+	// OnEviction registrations live here, after fortTreeEvictor and
+	// fortLookupCache are created (and after pokestopCache/gymCache/
+	// stationCache are created by initDataCache before calling this
+	// function), so callbacks can never observe a nil evictor or lookup
+	// cache. Mirrors the structure of initPokemonRtree.
+	if config.Config.FortInMemory {
+		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ ottercache.EvictionReason) {
+			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
+		})
+		gymCache.OnEviction(func(_ string, g *Gym, _ ottercache.EvictionReason) {
+			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
+		})
+	}
+
+	stationCache.OnEviction(func(stationId string, s *Station, _ ottercache.EvictionReason) {
+		clearStationBattleState(stationId)
+		if config.Config.FortInMemory {
+			deferFortEviction(STATION, s.Id, s.Lat, s.Lon)
+		}
+	})
 }
 
 type IdRecord struct {
@@ -143,46 +180,47 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
-	// Preserve existing incident fields if present
-	var incidentDisplayType int8
-	var incidentStyle int8
-	var incidentCharacter int16
-	var incidentPokemonId int16
-	var incidentPokemonForm int16
-	if existing, ok := fortLookupCache.Load(pokestop.Id); ok {
-		incidentDisplayType = existing.IncidentDisplayType
-		incidentStyle = existing.IncidentStyle
-		incidentCharacter = existing.IncidentCharacter
-		incidentPokemonId = existing.IncidentPokemonId
-		incidentPokemonForm = existing.IncidentPokemonForm
-	}
-
-	fortLookupCache.Store(pokestop.Id, FortLookup{
-		FortType:                   POKESTOP,
-		Lat:                        pokestop.Lat,
-		Lon:                        pokestop.Lon,
-		PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
-		IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
-		LureId:                     pokestop.LureId,
-		QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
-		QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
-		QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
-		QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
-		QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
-		QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
-		QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
-		QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
-		QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
-		QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
-		IncidentDisplayType:        incidentDisplayType,
-		IncidentStyle:              incidentStyle,
-		IncidentCharacter:          incidentCharacter,
-		IncidentPokemonId:          incidentPokemonId,
-		IncidentPokemonForm:        incidentPokemonForm,
-		ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
-		ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
-		ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-		ContestTotalEntries:        getContestTotalEntries(pokestop.ShowcaseRankings),
+	// Atomic per-key read-modify-write via Compute: this writer (under the
+	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
+	// INCIDENT entity lock) both update the same key, each preserving the
+	// other's fields. A plain Load->Store pair from the two lock domains
+	// can interleave and clobber — losing a just-stored incident or
+	// reverting quest fields until the next save. Compute's callback runs
+	// under the map's bucket lock, so keep it to field copies only (the
+	// showcase JSON parse happens out here).
+	contestTotalEntries := getContestTotalEntries(pokestop.ShowcaseRankings)
+	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+		nl := FortLookup{
+			FortType:                   POKESTOP,
+			Lat:                        pokestop.Lat,
+			Lon:                        pokestop.Lon,
+			PowerUpLevel:               int8(valueOrMinus1(pokestop.PowerUpLevel)),
+			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
+			LureId:                     pokestop.LureId,
+			QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
+			QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
+			QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
+			QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
+			QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
+			QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
+			QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
+			QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
+			QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
+			QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
+			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
+			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+			ContestTotalEntries:        contestTotalEntries,
+		}
+		if loaded {
+			// Preserve the incident writer's fields
+			nl.IncidentDisplayType = existing.IncidentDisplayType
+			nl.IncidentStyle = existing.IncidentStyle
+			nl.IncidentCharacter = existing.IncidentCharacter
+			nl.IncidentPokemonId = existing.IncidentPokemonId
+			nl.IncidentPokemonForm = existing.IncidentPokemonForm
+		}
+		return nl, xsync.UpdateOp
 	})
 }
 
@@ -219,20 +257,24 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 	fortLookupCache.Store(station.Id, lookup)
 }
 
-// updatePokestopIncidentLookup updates the incident fields on a pokestop's FortLookup entry
+// updatePokestopIncidentLookup updates the incident fields on a pokestop's
+// FortLookup entry. Atomic via Compute — see updatePokestopLookup for the
+// cross-lock-domain clobber this prevents.
 func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
-	existing, ok := fortLookupCache.Load(pokestopId)
-	if !ok {
-		return
-	}
-
-	existing.IncidentDisplayType = int8(incident.DisplayType)
-	existing.IncidentStyle = int8(incident.Style)
-	existing.IncidentCharacter = incident.Character
-	existing.IncidentPokemonId = int16(incident.Slot1PokemonId.ValueOrZero())
-	existing.IncidentPokemonForm = int16(incident.Slot1Form.ValueOrZero())
-
-	fortLookupCache.Store(pokestopId, existing)
+	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+		if !loaded {
+			// Incidents load before their pokestop only during preload
+			// edge cases; the pokestop writer will carry no incident until
+			// the next incident save.
+			return existing, xsync.CancelOp
+		}
+		existing.IncidentDisplayType = int8(incident.DisplayType)
+		existing.IncidentStyle = int8(incident.Style)
+		existing.IncidentCharacter = incident.Character
+		existing.IncidentPokemonId = int16(incident.Slot1PokemonId.ValueOrZero())
+		existing.IncidentPokemonForm = int16(incident.Slot1Form.ValueOrZero())
+		return existing, xsync.UpdateOp
+	})
 }
 
 // getContestTotalEntries parses showcase rankings JSON to get total entries
@@ -257,10 +299,33 @@ func addFortToTree(id string, lat float64, lon float64) {
 	fortTreeMutex.Unlock()
 }
 
-// evictFortFromTree is called from cache eviction callbacks to clean up all fort state
-func evictFortFromTree(fortId string, lat, lon float64) {
+var fortTreeEvictor *treeEvictor[string]
+
+// flushFortTreeEvictions: see flushTreeEvictions.
+func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
+	flushTreeEvictions(&fortTreeMutex, &fortTree, entries)
+}
+
+// deferFortEviction is the eviction-callback cleanup path: lookup cache is
+// cleared inline (lock-free) so scans skip the fort immediately, tree
+// removal is batched. Eviction callbacks arrive on the cache dispatcher
+// goroutine — async relative to fort saves and genericUpdateFort's
+// synchronous cleanup — so guard before touching shared state:
+//   - lookup entry already gone → a deleted fort; genericUpdateFort already
+//     removed the tree point, and enqueueing an unpaired delete here could
+//     erase the point of a fort restored in the meantime.
+//   - lookup entry belongs to a different fort type → the fort converted
+//     (pokestop↔gym) and this is the stale counterpart's cache entry
+//     expiring; the live counterpart owns the lookup and tree point now.
+func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
+	fl, ok := fortLookupCache.Load(fortId)
+	if !ok || fl.FortType != expected {
+		return
+	}
 	fortLookupCache.Delete(fortId)
-	removeFortFromTree(fortId, lat, lon)
+	// Non-blocking for the same reason as the pokemon eviction callback:
+	// the cache's eviction dispatcher must never park on a full channel.
+	fortTreeEvictor.TryEnqueue(fortId, lat, lon)
 }
 
 func removeFortFromTree(fortId string, lat, lon float64) {

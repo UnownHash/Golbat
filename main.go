@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/pprof"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 	_ "time/tzdata"
@@ -64,6 +65,11 @@ func main() {
 		cfg.Logging.MaxBackups,
 		cfg.Logging.Compress,
 	)
+
+	// Construct entity caches now that config is loaded. Must run before any
+	// other decoder call (config drives cache shard counts, fort TTLs, and
+	// fort eviction-callback registration).
+	decoder.InitDataCache()
 
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
@@ -211,6 +217,9 @@ func main() {
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
+	initRawProcessingLimiter()
+	initSlowDbQueryLogging()
+	decoder.StartWorkerBacklogReporter()
 	InitDeviceCache()
 
 	wg.Add(1)
@@ -231,6 +240,16 @@ func main() {
 
 	if cfg.Tuning.ExtendedTimeout {
 		log.Info("Extended timeout enabled")
+	}
+
+	if n := cfg.Tuning.GoGCPercent; n > 0 {
+		prev := debug.SetGCPercent(n)
+		log.Infof("GC target set to %d%% (was %d%%): cycles ~%.1fx less frequent, peak heap up to ~%.1fx live",
+			n, prev, float64(100+n)/float64(100+prev), 1+float64(n)/100)
+	}
+	if m := cfg.Tuning.GoMemLimitMiB; m > 0 {
+		debug.SetMemoryLimit(int64(m) << 20)
+		log.Infof("Go memory limit set to %d MiB", m)
 	}
 
 	if cfg.Cleanup.Pokemon && (!cfg.PokemonMemoryOnly || cfg.PreserveInMemoryPokemon) {
@@ -410,7 +429,7 @@ func main() {
 
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		if err == context.DeadlineExceeded {
-			log.Warn("Graceful shutdown timed out, exiting.")
+			log.Warn("http server drain timed out after 5s (in-flight requests dropped); continuing shutdown — write-behind flush and pokemon preservation still run")
 		} else {
 			log.Errorf("Error during http server shutdown: %s", err)
 		}

@@ -1,0 +1,11 @@
+=== RUN   TestScenarioMassExpiryWave
+=== RUN   TestScenarioMassExpiryWave/proto
+    scenario_test.go:160: preloading...
+    scenario_test.go:166: preload of 10000000 entries took 1.694s
+    scenario_test.go:260: RESULT wave/proto steady_get_p50=875ns steady_get_p99=2.666µs wave_get_p50=292ns wave_get_p99=2.041µs wave_vs_steady_p99=0.8x
+    scenario_test.go:262: RESULT wave/proto max_goroutines=38 callbacks_delivered=10565194 expected~10562344 lag_p50=512ms lag_p99=1.024s lag_max=1.148649s
+    scenario_test.go:264: RESULT wave/proto gc_pauses=2 gc_pause_p50=8.192µs gc_pause_p99=262.144µs gc_pause_max=262.144µs gc_cpu_delta=0.3s
+--- PASS: TestScenarioMassExpiryWave (157.36s)
+    --- PASS: TestScenarioMassExpiryWave/proto (157.36s)
+PASS
+ok  	golbat/cachebench	157.716s

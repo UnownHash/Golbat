@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -29,22 +28,26 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 	power_up_end_timestamp, description, defenders, rsvps`
 
 func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
-	err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
-	statsCollector.IncDbQuery("select gym", err)
-	return err
+	return timedDbQuery("loadGymFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
+		statsCollector.IncDbQuery("select gym", err)
+		return err
+	})
 }
 
 // DoesGymExist checks if a gym exists in cache or database without acquiring a lock.
 // This is useful for checking if a fort was converted from a gym before doing cross-entity updates.
 func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 	// Check cache first (fast path)
-	if item := gymCache.Get(fortId); item != nil {
+	if gymCache.Has(fortId) {
 		return true
 	}
 
 	// Check database
 	var exists bool
-	err := db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM gym WHERE id = ?)", fortId)
+	err := timedDbQuery("DoesGymExist", db.GeneralDb, func() error {
+		return db.GeneralDb.GetContext(ctx, &exists, "SELECT EXISTS(SELECT 1 FROM gym WHERE id = ?)", fortId)
+	})
 	if err != nil {
 		return false
 	}
@@ -54,8 +57,7 @@ func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 // PeekGymRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func PeekGymRecord(fortId string, caller string) (*Gym, func(), error) {
-	if item := gymCache.Get(fortId); item != nil {
-		gym := item.Value()
+	if gym, ok := gymCache.Get(fortId); ok {
 		gym.Lock(caller)
 		return gym, func() { gym.Unlock() }, nil
 	}
@@ -67,8 +69,7 @@ func PeekGymRecord(fortId string, caller string) (*Gym, func(), error) {
 // Caller MUST call returned unlock function if non-nil.
 func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
 	// Check cache first
-	if item := gymCache.Get(fortId); item != nil {
-		gym := item.Value()
+	if gym, ok := gymCache.Get(fortId); ok {
 		gym.Lock(caller)
 		return gym, func() { gym.Unlock() }, nil
 	}
@@ -85,15 +86,15 @@ func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, c
 
 	// Atomically cache the loaded Gym - if another goroutine raced us,
 	// we'll get their Gym and use that instead (ensuring same mutex)
-	existingGym, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
-		// Only called if key doesn't exist - our Pokestop wins
-		if config.Config.FortInMemory {
-			fortRtreeUpdateGymOnGet(&dbGym)
-		}
+	gym, found := gymCache.GetOrSetFunc(fortId, func() *Gym {
+		// Only called if key doesn't exist - our Gym wins
 		return &dbGym
 	})
-
-	gym := existingGym.Value()
+	if !found && config.Config.FortInMemory {
+		// Index out here — the GetOrSetFunc closure runs under the cache
+		// shard's write lock and must not take the fort tree mutex.
+		fortRtreeUpdateGymOnGet(&dbGym)
+	}
 	gym.Lock(caller)
 	return gym, func() { gym.Unlock() }, nil
 }
@@ -114,11 +115,9 @@ func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, 
 // Caller MUST call returned unlock function.
 func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
 	// Create new Gym atomically - function only called if key doesn't exist
-	gymItem, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
+	gym, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
 		return &Gym{GymData: GymData{Id: fortId}, newRecord: true}
 	})
-
-	gym := gymItem.Value()
 	gym.Lock(caller)
 
 	if gym.newRecord {
@@ -357,7 +356,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 		gym.changedFields = gym.changedFields[:0]
 	}
 	if isNewRecord {
-		gymCache.Set(gym.Id, gym, ttlcache.DefaultTTL)
+		gymCache.Set(gym.Id, gym, fortCacheEntryTTL())
 		gym.newRecord = false
 	}
 	gym.ClearDirty()
@@ -480,9 +479,7 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 }
 
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
-	storedGetMapFort := getMapFortsCache.Get(gym.Id)
-	if storedGetMapFort != nil {
-		getMapFort := storedGetMapFort.Value()
+	if getMapFort, ok := getMapFortsCache.Get(gym.Id); ok {
 		getMapFortsCache.Delete(gym.Id)
 		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
 		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)

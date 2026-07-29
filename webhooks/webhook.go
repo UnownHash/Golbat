@@ -58,18 +58,18 @@ func init() {
 }
 
 var webhookConfigStringToType = map[string][]WebhookType{
-	"gym":           []WebhookType{GymDetails},
-	"raid":          []WebhookType{Raid},
-	"quest":         []WebhookType{Quest},
-	"pokestop":      []WebhookType{Pokestop},
-	"invasion":      []WebhookType{Invasion},
-	"weather":       []WebhookType{Weather},
-	"fort_update":   []WebhookType{FortUpdate},
-	"pokemon_iv":    []WebhookType{PokemonIV},
-	"pokemon_no_iv": []WebhookType{PokemonNoIV},
-	"pokemon":       []WebhookType{PokemonIV, PokemonNoIV},
-	"max_battle":      []WebhookType{MaxBattle},
-	"raid_lobby":      []WebhookType{RaidLobby},
+	"gym":              []WebhookType{GymDetails},
+	"raid":             []WebhookType{Raid},
+	"quest":            []WebhookType{Quest},
+	"pokestop":         []WebhookType{Pokestop},
+	"invasion":         []WebhookType{Invasion},
+	"weather":          []WebhookType{Weather},
+	"fort_update":      []WebhookType{FortUpdate},
+	"pokemon_iv":       []WebhookType{PokemonIV},
+	"pokemon_no_iv":    []WebhookType{PokemonNoIV},
+	"pokemon":          []WebhookType{PokemonIV, PokemonNoIV},
+	"max_battle":       []WebhookType{MaxBattle},
+	"raid_lobby":       []WebhookType{RaidLobby},
 	"max_battle_lobby": []WebhookType{MaxBattleLobby},
 }
 

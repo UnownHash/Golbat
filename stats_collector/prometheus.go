@@ -336,6 +336,62 @@ var (
 		[]string{"change_type"},
 	)
 
+	// Hot-path health metrics
+	workerBacklog = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "worker_backlog",
+			Help:      "Queued items in background worker channels (stats aggregator, fort tracker, tree evictors)",
+		},
+		[]string{"worker"},
+	)
+	rawProcessingWaitingGauge = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "raw_processing_waiting",
+			Help:      "Goroutines parked waiting for a raw processing slot",
+		},
+	)
+	rawPacketsShed = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "raw_packets_shed_total",
+			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
+		},
+	)
+	dbQueryDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: ns,
+			Name:      "db_query_duration_seconds",
+			Help:      "Duration of timed database calls, by caller function",
+			Buckets:   prometheus.ExponentialBuckets(0.001, 2, 14), // 1ms .. ~8s
+		},
+		[]string{"caller"},
+	)
+	statsEventsDroppedCounter = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "stats_events_dropped_total",
+			Help:      "Pokemon stats events dropped because the aggregation worker was saturated",
+		},
+	)
+	cacheEvictionsDropped = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "cache_eviction_events_dropped_total",
+			Help:      "Cache eviction events dropped by a saturated dispatcher; these leak lookup entries until restart (the one non-self-healing drop path)",
+		},
+		[]string{"cache"},
+	)
+	slowDbQueries = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "slow_db_queries_total",
+			Help:      "Database calls exceeding the DB_SLOW log threshold, by caller",
+		},
+		[]string{"caller"},
+	)
+
 	// Write-behind queue metrics
 	writeBehindQueueDepth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -682,6 +738,34 @@ func (col *promCollector) IncFortChange(changeType string) {
 	fortChange.WithLabelValues(changeType).Inc()
 }
 
+func (col *promCollector) SetWorkerBacklog(worker string, depth float64) {
+	workerBacklog.WithLabelValues(worker).Set(depth)
+}
+
+func (col *promCollector) SetRawProcessingWaiting(waiting float64) {
+	rawProcessingWaitingGauge.Set(waiting)
+}
+
+func (col *promCollector) IncRawPacketsShed() {
+	rawPacketsShed.Inc()
+}
+
+func (col *promCollector) IncSlowDbQuery(caller string) {
+	slowDbQueries.WithLabelValues(caller).Inc()
+}
+
+func (col *promCollector) IncStatsEventsDropped() {
+	statsEventsDroppedCounter.Inc()
+}
+
+func (col *promCollector) AddCacheEvictionsDropped(cache string, n float64) {
+	cacheEvictionsDropped.WithLabelValues(cache).Add(n)
+}
+
+func (col *promCollector) ObserveDbQuery(caller string, seconds float64) {
+	dbQueryDuration.WithLabelValues(caller).Observe(seconds)
+}
+
 func (col *promCollector) SetWriteBehindQueueDepth(entityType string, depth float64) {
 	writeBehindQueueDepth.WithLabelValues(entityType).Set(depth)
 }
@@ -723,6 +807,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 }
 
 func initPrometheus() {
+	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

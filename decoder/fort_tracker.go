@@ -10,6 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
+	"golbat/util"
 )
 
 // FortTracker provides memory-based tracking of forts (pokestops/gyms) per S2 cell
@@ -65,6 +66,7 @@ func InitFortTracker(staleThresholdSeconds int64, minMissCount int) {
 		staleThreshold: staleThresholdSeconds,
 		minMissCount:   minMissCount,
 	}
+	go fortTrackerWorker()
 	log.Infof("FortTracker: initialized with stale threshold of %d seconds, min miss count %d", staleThresholdSeconds, minMissCount)
 }
 
@@ -632,9 +634,53 @@ func clearFortWithLock[T comparable](ctx context.Context, dbDetails db.DbDetails
 	}
 }
 
-// CheckRemovedForts uses the in-memory fort tracker for fast detection.
-// Iterates cellForts directly — its keyset already matches mapCells.
+// fortTrackerEvent is one GMO's worth of cell contents queued for the
+// tracker worker.
+type fortTrackerEvent struct {
+	dbDetails db.DbDetails
+	cellForts map[uint64]*FortTrackerGMOContents
+}
+
+// fortTrackerEvents feeds the single tracker worker. Decoders used to run
+// ProcessCellUpdate inline, all serializing on the tracker's global mutex
+// (a goroutine dump showed 27 of 96 decoders parked on it). Staleness
+// detection is hour-granularity work — there is no reason for it to be
+// synchronous in the decode path. One worker owns all tracker writes.
+var fortTrackerEvents = make(chan fortTrackerEvent, 8192)
+
+func fortTrackerWorker() {
+	for ev := range fortTrackerEvents {
+		// Bound each event's DB work: the decode path used to lend its 5s
+		// deadline to these deletes; without one, a single hung query would
+		// wedge staleness detection instance-wide until restart.
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		checkRemovedForts(ctx, ev.dbDetails, ev.cellForts)
+		cancel()
+	}
+}
+
+var fortTrackerDrops util.DropReporter
+
+// CheckRemovedForts queues a GMO's cell contents for the tracker worker.
+// The map must not be mutated by the caller after this call.
 func CheckRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts map[uint64]*FortTrackerGMOContents) {
+	select {
+	case fortTrackerEvents <- fortTrackerEvent{dbDetails: dbDetails, cellForts: cellForts}:
+	default:
+		// Tracker backlogged — dropping one GMO's staleness observation is
+		// harmless (forts must be missing for an hour across multiple scans
+		// before anything happens); wedging a decoder is not.
+		fortTrackerDrops.Report(func(dropped int64) {
+			log.Warnf("[FORT_TRACKER] dropped %d cell updates in the last second (worker backlogged, queue %d/%d)",
+				dropped, len(fortTrackerEvents), cap(fortTrackerEvents))
+		})
+	}
+}
+
+// checkRemovedForts uses the in-memory fort tracker for fast detection.
+// Iterates cellForts directly — its keyset already matches mapCells.
+// Runs only on the tracker worker goroutine.
+func checkRemovedForts(ctx context.Context, dbDetails db.DbDetails, cellForts map[uint64]*FortTrackerGMOContents) {
 	for cellId, cf := range cellForts {
 		// Process cell through tracker - returns stale and converted forts.
 		// nil result means this GMO timestamp is older than last processed for this cell.

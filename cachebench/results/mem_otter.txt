@@ -1,0 +1,9 @@
+=== RUN   TestScenarioMemory
+=== RUN   TestScenarioMemory/otter
+    scenario_test.go:495: RESULT memory/otter entries=10000000 heap_delta=10.39GiB bytes_per_entry=1116
+    scenario_test.go:512: RESULT range/otter visited=10000000 in=1.521s rate=6574854 entries/s
+    scenario_test.go:548: RESULT churn/otter gc_cycles=2 gc_pauses=4 gc_pause_p50=4.096µs gc_pause_p99=163.84µs gc_pause_max=163.84µs gc_cpu_delta=3.5s (GOGC=5 forced)
+--- PASS: TestScenarioMemory (24.63s)
+    --- PASS: TestScenarioMemory/otter (24.63s)
+PASS
+ok  	golbat/cachebench	24.952s

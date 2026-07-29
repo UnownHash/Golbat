@@ -80,9 +80,7 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 		return nil, fmt.Errorf("SearchPokemon - the distance between max and min points is greater than the configurable max distance")
 	}
 
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 
 	maxPokemon := config.Config.Tuning.MaxPokemonResults
 	if request.Limit > 0 && request.Limit < maxPokemon {
@@ -95,6 +93,9 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 		maxDistance = 10
 	}
 
+	// Dedupe: the shared snapshot can briefly hold duplicate points for one
+	// id (eviction delete still queued while a save re-added the point).
+	seenIds := make(map[uint64]struct{})
 	pokemonTree2.Nearby(
 		rtree.BoxDist[float64, uint64]([2]float64{request.Center.Lon, request.Center.Lat}, [2]float64{request.Center.Lon, request.Center.Lat}, nil),
 		func(min, max [2]float64, pokemonId uint64, dist float64) bool {
@@ -114,6 +115,10 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 			found := slices.Contains(request.SearchIds, pokemonLookupItem.PokemonLookup.PokemonId)
 
 			if found {
+				if _, dup := seenIds[pokemonId]; dup {
+					return true
+				}
+				seenIds[pokemonId] = struct{}{}
 				results = append(results, pokemonId)
 				pokemonMatched++
 

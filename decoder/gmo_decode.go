@@ -186,9 +186,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		}
 
 		pokemon.updateFromMap(ctx, db, mapPokemon.Data, int64(mapPokemon.Cell), weatherLookup, mapPokemon.Timestamp, username)
-		storedDiskEncounter := diskEncounterCache.Get(encounterId)
-		if storedDiskEncounter != nil {
-			diskEncounter := storedDiskEncounter.Value()
+		if diskEncounter, ok := diskEncounterCache.Get(encounterId); ok {
 			diskEncounterCache.Delete(encounterId)
 			pokemon.updatePokemonFromDiskEncounterProto(ctx, db, diskEncounter, username)
 			//log.Infof("Processed stored disk encounter")

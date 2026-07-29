@@ -1,0 +1,10 @@
+=== RUN   TestScenarioCallbackBomb
+=== RUN   TestScenarioCallbackBomb/proto/stall
+    scenario_test.go:469: RESULT cbbomb/proto/stall delivered=200000 of=200000 stall_goroutines=7 max_goroutines=7 drain_after_recovery=251ms probe_set_max=101µs
+=== RUN   TestScenarioCallbackBomb/proto/slow
+    scenario_test.go:469: RESULT cbbomb/proto/slow delivered=200000 of=200000 stall_goroutines=7 max_goroutines=7 drain_after_recovery=17.001s probe_set_max=77µs
+--- PASS: TestScenarioCallbackBomb (37.32s)
+    --- PASS: TestScenarioCallbackBomb/proto/stall (10.29s)
+    --- PASS: TestScenarioCallbackBomb/proto/slow (27.03s)
+PASS
+ok  	golbat/cachebench	37.557s

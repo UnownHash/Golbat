@@ -6,12 +6,13 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
 	"golbat/db"
 	"golbat/webhooks"
+
+	"golbat/ottercache"
 )
 
 // incidentSelectColumns defines the columns for incident queries.
@@ -19,17 +20,18 @@ import (
 const incidentSelectColumns = "id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form"
 
 func loadIncidentFromDatabase(ctx context.Context, db db.DbDetails, incidentId string, incident *Incident) error {
-	err := db.GeneralDb.GetContext(ctx, incident,
-		"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
-	statsCollector.IncDbQuery("select incident", err)
-	return err
+	return timedDbQuery("loadIncidentFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, incident,
+			"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
+		statsCollector.IncDbQuery("select incident", err)
+		return err
+	})
 }
 
 // peekIncidentRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekIncidentRecord(incidentId string, caller string) (*Incident, func(), error) {
-	if item := incidentCache.Get(incidentId); item != nil {
-		incident := item.Value()
+	if incident, ok := incidentCache.Get(incidentId); ok {
 		incident.Lock(caller)
 		return incident, func() { incident.Unlock() }, nil
 	}
@@ -41,8 +43,7 @@ func peekIncidentRecord(incidentId string, caller string) (*Incident, func(), er
 // Caller MUST call returned unlock function if non-nil.
 func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId string, caller string) (*Incident, func(), error) {
 	// Check cache first
-	if item := incidentCache.Get(incidentId); item != nil {
-		incident := item.Value()
+	if incident, ok := incidentCache.Get(incidentId); ok {
 		incident.Lock(caller)
 		return incident, func() { incident.Unlock() }, nil
 	}
@@ -59,14 +60,12 @@ func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId 
 
 	// Atomically cache the loaded Incident - if another goroutine raced us,
 	// we'll get their Incident and use that instead (ensuring same mutex)
-	existingIncident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
+	incident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
 		if config.Config.FortInMemory {
 			updatePokestopIncidentLookup(dbIncident.PokestopId, &dbIncident)
 		}
 		return &dbIncident
 	})
-
-	incident := existingIncident.Value()
 	incident.Lock(caller)
 	return incident, func() { incident.Unlock() }, nil
 }
@@ -86,11 +85,9 @@ func getIncidentRecordForUpdate(ctx context.Context, db db.DbDetails, incidentId
 // Caller MUST call returned unlock function.
 func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string, pokestopId string, caller string) (*Incident, func(), error) {
 	// Create new Incident atomically - function only called if key doesn't exist
-	incidentItem, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
+	incident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
 		return &Incident{IncidentData: IncidentData{Id: incidentId, PokestopId: pokestopId}, newRecord: true}
 	})
-
-	incident := incidentItem.Value()
 	incident.Lock(caller)
 
 	if incident.newRecord {
@@ -167,7 +164,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	incident.ClearDirty()
 	if isNewRecord {
 		incident.newRecord = false
-		incidentCache.Set(incident.Id, incident, ttlcache.DefaultTTL)
+		incidentCache.Set(incident.Id, incident, ottercache.DefaultTTL)
 	}
 }
 

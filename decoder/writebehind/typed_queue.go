@@ -3,6 +3,7 @@ package writebehind
 import (
 	"cmp"
 	"context"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -312,9 +313,23 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		data[i] = entry.Data
 	}
 
+	// TimedOn logs [DB_SLOW] with pool stats when a flush attempt is slow,
+	// in the same identifiable format as the entity loaders — so slow batch
+	// writes and slow under-lock retrievals can be correlated in one log
+	// stream. Each attempt is timed individually: the deadlock-retry
+	// backoff sleeps must not be counted as database time (the retry
+	// warnings below record the attempts themselves).
+	pool := q.db.GeneralDb
+	if q.name == "pokemon" {
+		pool = q.db.PokemonDb
+	}
+	caller := fmt.Sprintf("writebehind.%s flush(%d entries)", q.name, len(entries))
+
 	var err error
 	for attempt := 0; attempt <= deadlockRetries; attempt++ {
-		err = q.flushFunc(ctx, q.db, data)
+		err = db.TimedOn(pool, caller, func() error {
+			return q.flushFunc(ctx, q.db, data)
+		})
 		if err == nil {
 			break
 		}

@@ -8,25 +8,27 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
+
+	"golbat/ottercache"
 )
 
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
-	err := db.GeneralDb.GetContext(ctx, tappable,
-		`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
+	return timedDbQuery("loadTappableFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, tappable,
+			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
          FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
-	statsCollector.IncDbQuery("select tappable", err)
-	return err
+		statsCollector.IncDbQuery("select tappable", err)
+		return err
+	})
 }
 
 // PeekTappableRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func PeekTappableRecord(id uint64, caller string) (*Tappable, func(), error) {
-	if item := tappableCache.Get(id); item != nil {
-		tappable := item.Value()
+	if tappable, ok := tappableCache.Get(id); ok {
 		tappable.Lock(caller)
 		return tappable, func() { tappable.Unlock() }, nil
 	}
@@ -38,8 +40,7 @@ func PeekTappableRecord(id uint64, caller string) (*Tappable, func(), error) {
 // Caller MUST call returned unlock function if non-nil.
 func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64, caller string) (*Tappable, func(), error) {
 	// Check cache first
-	if item := tappableCache.Get(id); item != nil {
-		tappable := item.Value()
+	if tappable, ok := tappableCache.Get(id); ok {
 		tappable.Lock(caller)
 		return tappable, func() { tappable.Unlock() }, nil
 	}
@@ -56,11 +57,9 @@ func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64, 
 
 	// Atomically cache the loaded Tappable - if another goroutine raced us,
 	// we'll get their Tappable and use that instead (ensuring same mutex)
-	existingTappable, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
+	tappable, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
 		return &dbTappable
 	})
-
-	tappable := existingTappable.Value()
 	tappable.Lock(caller)
 	return tappable, func() { tappable.Unlock() }, nil
 }
@@ -69,11 +68,9 @@ func getTappableRecordReadOnly(ctx context.Context, db db.DbDetails, id uint64, 
 // Caller MUST call returned unlock function.
 func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, caller string) (*Tappable, func(), error) {
 	// Create new Tappable atomically - function only called if key doesn't exist
-	tappableItem, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
+	tappable, _ := tappableCache.GetOrSetFunc(id, func() *Tappable {
 		return &Tappable{TappableData: TappableData{Id: id}, newRecord: true}
 	})
-
-	tappable := tappableItem.Value()
 	tappable.Lock(caller)
 
 	if tappable.newRecord {
@@ -128,7 +125,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 	tappable.ClearDirty()
 	if isNewRecord {
-		tappableCache.Set(tappable.Id, tappable, ttlcache.DefaultTTL)
+		tappableCache.Set(tappable.Id, tappable, ottercache.DefaultTTL)
 		tappable.newRecord = false
 	}
 }

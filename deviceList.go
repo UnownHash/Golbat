@@ -4,7 +4,7 @@ import (
 	"golbat/config"
 	"time"
 
-	"github.com/jellydator/ttlcache/v3"
+	"golbat/ottercache"
 )
 
 type DeviceLocation struct {
@@ -14,13 +14,14 @@ type DeviceLocation struct {
 	ScanContext string
 }
 
-var deviceLocation *ttlcache.Cache[string, DeviceLocation]
+var deviceLocation *ottercache.OtterCache[string, DeviceLocation]
 
 func InitDeviceCache() {
-	deviceLocation = ttlcache.New[string, DeviceLocation](
-		ttlcache.WithTTL[string, DeviceLocation](time.Hour * time.Duration(config.Config.Cleanup.DeviceHours)),
-	)
-	go deviceLocation.Start()
+	deviceLocation = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, DeviceLocation]{
+		Name:       "device_location",
+		DefaultTTL: time.Hour * time.Duration(config.Config.Cleanup.DeviceHours),
+		TouchOnHit: true,
+	})
 }
 
 func UpdateDeviceLocation(deviceId string, lat, lon float64, scanContext string) {
@@ -41,8 +42,9 @@ type ApiDeviceLocation struct {
 
 func GetAllDevices() map[string]ApiDeviceLocation {
 	locations := map[string]ApiDeviceLocation{}
-	for _, key := range deviceLocation.Items() {
-		locations[key.Key()] = ApiDeviceLocation(key.Value())
-	}
+	deviceLocation.Range(func(deviceId string, loc DeviceLocation) bool {
+		locations[deviceId] = ApiDeviceLocation(loc)
+		return true
+	})
 	return locations
 }

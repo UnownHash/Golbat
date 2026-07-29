@@ -11,8 +11,9 @@ import (
 	"golbat/pogo"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
+
+	"golbat/ottercache"
 )
 
 // Player struct. Name is the primary key.
@@ -1047,9 +1048,7 @@ var badgeTypeToPlayerKey = map[pogo.HoloBadgeType]string{
 }
 
 func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCode string) (*Player, error) {
-	inMemoryPlayer := playerCache.Get(name)
-	if inMemoryPlayer != nil {
-		player := inMemoryPlayer.Value()
+	if player, ok := playerCache.Get(name); ok {
 		return player, nil
 	}
 
@@ -1099,7 +1098,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		return nil, err
 	}
 
-	playerCache.Set(name, &player, ttlcache.DefaultTTL)
+	playerCache.Set(name, &player, ottercache.DefaultTTL)
 	return &player, nil
 }
 
@@ -1251,7 +1250,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 	player.ClearDirty()
 	if player.IsNewRecord() {
 		player.newRecord = false
-		playerCache.Set(player.Name, player, ttlcache.DefaultTTL)
+		playerCache.Set(player.Name, player, ottercache.DefaultTTL)
 	}
 }
 

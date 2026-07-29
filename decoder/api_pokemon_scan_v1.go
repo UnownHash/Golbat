@@ -167,27 +167,34 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 		return filterMatched || pvpMatched || additionalMatch
 	}
 
-	pokemonTreeMutex.RLock()
-	pokemonTree2 := pokemonTree.Copy()
-	pokemonTreeMutex.RUnlock()
+	pokemonTree2 := getPokemonTreeSnapshot()
 
 	lockedTime := time.Since(start)
 
 	performScan := func() (returnKeys []uint64) {
+		// Dedupe: the shared snapshot can briefly hold duplicate points for
+		// one id (eviction delete still queued while a save re-added it).
+		seen := make(map[uint64]struct{})
 		pokemonMatched := 0
+		// Hoisted: address passed to indirect matcher; see api_pokemon_common.go.
+		var pokemonLookupItem PokemonLookupCacheItem
 		pokemonTree2.Search([2]float64{min.Longitude, min.Latitude}, [2]float64{max.Longitude, max.Latitude},
 			func(min, max [2]float64, pokemonId uint64) bool {
 				pokemonExamined++
 
-				pokemonLookupItem, found := pokemonLookupCache.Load(pokemonId)
+				var found bool
+				pokemonLookupItem, found = pokemonLookupCache.Load(pokemonId)
 				if !found {
 					pokemonSkipped++
 					// Did not find cached result, something amiss?
 					return true
 				}
 
-				pokemonLookup := pokemonLookupItem.PokemonLookup
-				pvpLookup := pokemonLookupItem.PokemonPvpLookup
+				pokemonLookup := &pokemonLookupItem.PokemonLookup
+				var pvpLookup *PokemonPvpLookup
+				if pokemonLookupItem.HasPvp {
+					pvpLookup = &pokemonLookupItem.PokemonPvpLookup
+				}
 
 				globalFilterMatched := false
 				if globalFilter != nil {
@@ -208,6 +215,10 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 				}
 
 				if globalFilterMatched || specificFilterMatched {
+					if _, dup := seen[pokemonId]; dup {
+						return true
+					}
+					seen[pokemonId] = struct{}{}
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
 					if pokemonMatched > maxPokemon {

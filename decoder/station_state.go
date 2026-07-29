@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
@@ -67,17 +66,18 @@ type StationBattleWebhook struct {
 }
 
 func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
-	err := db.GeneralDb.GetContext(ctx, station,
-		`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
-	statsCollector.IncDbQuery("select station", err)
-	return err
+	return timedDbQuery("loadStationFromDatabase", db.GeneralDb, func() error {
+		err := db.GeneralDb.GetContext(ctx, station,
+			`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
+		statsCollector.IncDbQuery("select station", err)
+		return err
+	})
 }
 
 // peekStationRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
 func peekStationRecord(stationId string, caller string) (*Station, func(), error) {
-	if item := stationCache.Get(stationId); item != nil {
-		station := item.Value()
+	if station, ok := stationCache.Get(stationId); ok {
 		station.Lock(caller)
 		return station, func() { station.Unlock() }, nil
 	}
@@ -89,8 +89,7 @@ func peekStationRecord(stationId string, caller string) (*Station, func(), error
 // Caller MUST call returned unlock function if non-nil.
 func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
 	// Check cache first
-	if item := stationCache.Get(stationId); item != nil {
-		station := item.Value()
+	if station, ok := stationCache.Get(stationId); ok {
 		station.Lock(caller)
 		if !hasLoadedStationBattles(stationId) {
 			if err := hydrateStationBattlesForStation(ctx, db, station, time.Now().Unix()); err != nil {
@@ -114,11 +113,9 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 
 	// Atomically cache the loaded Station - if another goroutine raced us,
 	// we'll get their Station and use that instead (ensuring same mutex)
-	existingStation, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
+	station, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
 		return &dbStation
 	})
-
-	station := existingStation.Value()
 	station.Lock(caller)
 	loadedFromDb := station == &dbStation
 	hydratedBattles := false
@@ -150,11 +147,9 @@ func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId s
 // Caller MUST call returned unlock function.
 func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
 	// Create new Station atomically - function only called if key doesn't exist
-	stationItem, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
+	station, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
 		return &Station{StationData: StationData{Id: stationId}, newRecord: true}
 	})
-
-	station := stationItem.Value()
 	station.Lock(caller)
 
 	if station.newRecord {
@@ -237,7 +232,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 	createStationWebhooksWithBattles(station, battles, battleSnapshot, isNewRecord, now)
 	if isNewRecord {
-		stationCache.Set(station.Id, station, ttlcache.DefaultTTL)
+		stationCache.Set(station.Id, station, fortCacheEntryTTL())
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {

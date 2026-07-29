@@ -1,0 +1,7 @@
+=== RUN   TestScenarioCallbackThroughput
+=== RUN   TestScenarioCallbackThroughput/theine
+    scenario_test.go:344: RESULT cbthroughput/theine delivered=1000000 dropped=0 of=1000000 window=8.727s rate=114585/s max_goroutines=19
+--- PASS: TestScenarioCallbackThroughput (11.91s)
+    --- PASS: TestScenarioCallbackThroughput/theine (11.91s)
+PASS
+ok  	golbat/cachebench	12.137s

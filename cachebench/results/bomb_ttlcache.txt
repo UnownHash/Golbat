@@ -1,0 +1,10 @@
+=== RUN   TestScenarioCallbackBomb
+=== RUN   TestScenarioCallbackBomb/ttlcache/stall
+    scenario_test.go:469: RESULT cbbomb/ttlcache/stall delivered=200000 of=200000 stall_goroutines=200017 max_goroutines=200017 drain_after_recovery=251ms probe_set_max=89.86ms
+=== RUN   TestScenarioCallbackBomb/ttlcache/slow
+    scenario_test.go:469: RESULT cbbomb/ttlcache/slow delivered=200000 of=200000 stall_goroutines=199448 max_goroutines=199448 drain_after_recovery=0s probe_set_max=6.747ms
+--- PASS: TestScenarioCallbackBomb (20.48s)
+    --- PASS: TestScenarioCallbackBomb/ttlcache/stall (10.38s)
+    --- PASS: TestScenarioCallbackBomb/ttlcache/slow (10.11s)
+PASS
+ok  	golbat/cachebench	20.822s

@@ -1,23 +1,34 @@
 package decoder
 
 import (
-	"context"
 	"math"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"golbat/config"
 
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
-	"github.com/jellydator/ttlcache/v3"
-	"github.com/puzpuzpuz/xsync/v3"
-	log "github.com/sirupsen/logrus"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/tidwall/rtree"
+
+	"golbat/ottercache"
 )
 
+// PokemonLookupCacheItem holds the scan-filter data INLINE BY VALUE.
+// The scan path loads one of these per candidate (15-20M/s in production
+// profiles, 14% of CPU); with pointer fields each candidate cost up to
+// three dependent DRAM misses (map node -> lookup -> pvp) and the map
+// carried 2 heap objects per entry (20M pointees, 1.4x this structure's
+// GC mark cost — see cachebench/lookup_bench_test.go: inline layout is
+// 3.2x faster at production concurrency). Validity flags replace the nil
+// checks.
 type PokemonLookupCacheItem struct {
-	PokemonLookup    *PokemonLookup
-	PokemonPvpLookup *PokemonPvpLookup
+	PokemonLookup    PokemonLookup
+	PokemonPvpLookup PokemonPvpLookup
+	HasLookup        bool
+	HasPvp           bool
 }
 
 type PokemonLookup struct {
@@ -48,28 +59,141 @@ type pokemonFormKey struct {
 	form      int16
 }
 
-var pokemonLookupCache *xsync.MapOf[uint64, PokemonLookupCacheItem]
-var pokemonFormCount *xsync.MapOf[pokemonFormKey, int64]
+var pokemonLookupCache *xsync.Map[uint64, PokemonLookupCacheItem]
+var pokemonFormCount *xsync.Map[pokemonFormKey, int64]
 var pokemonTreeMutex sync.RWMutex
 var pokemonTree rtree.RTreeG[uint64]
 
+// treeSnapshotMaxAge bounds scan-snapshot staleness. Scans re-verify hits
+// against the lookup caches (and lock records for final results), so a
+// slightly stale spatial index only costs a few extra skips/misses.
+const treeSnapshotMaxAge = time.Second
+
+type treeSnapshot[K comparable] struct {
+	tree      rtree.RTreeG[K]
+	createdAt time.Time
+}
+
+var pokemonTreeSnapshot atomic.Pointer[treeSnapshot[uint64]]
+
+// refreshTreeSnapshot returns a read-only spatial index snapshot shared by
+// all scans, refreshed at most every treeSnapshotMaxAge. This replaces
+// per-request Copy(), which kept the live tree permanently copy-on-write.
+// Double-checked under the lock so a burst of scans arriving at expiry
+// produces one Copy(), not one per caller. Copy() mutates the source tree's
+// COW stamp — full lock required. The result is shared by concurrent
+// goroutines: only read-only operations (Search, Nearby, Len) are safe on
+// it — never Copy, Insert, Delete, or Replace.
+func refreshTreeSnapshot[K comparable](snapPtr *atomic.Pointer[treeSnapshot[K]], mu *sync.RWMutex, tree *rtree.RTreeG[K]) *rtree.RTreeG[K] {
+	if snap := snapPtr.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+		return &snap.tree
+	}
+	mu.Lock()
+	if snap := snapPtr.Load(); snap != nil && time.Since(snap.createdAt) < treeSnapshotMaxAge {
+		mu.Unlock()
+		return &snap.tree
+	}
+	snap := &treeSnapshot[K]{tree: *tree.Copy(), createdAt: time.Now()}
+	snapPtr.Store(snap)
+	mu.Unlock()
+	return &snap.tree
+}
+
+func getPokemonTreeSnapshot() *rtree.RTreeG[uint64] {
+	return refreshTreeSnapshot(&pokemonTreeSnapshot, &pokemonTreeMutex, &pokemonTree)
+}
+
+const (
+	treeEvictorQueueSize = 262144
+	treeEvictorBatchSize = 512
+)
+
+var pokemonTreeEvictor *treeEvictor[uint64]
+
+// flushTreeEvictions applies a batch of tree mutations, in enqueue order,
+// under a single tree-mutex acquisition. Deletes match on (coords, id), so
+// a stale duplicate delete (e.g. eviction racing a position move) finds
+// nothing and is harmless; duplicate identical inserts leave a second
+// point that the next delete pairs off against (rtree is a multiset).
+func flushTreeEvictions[K comparable](mu *sync.RWMutex, tree *rtree.RTreeG[K], entries []treeEvictionEntry[K]) {
+	mu.Lock()
+	for _, e := range entries {
+		point := [2]float64{e.lon, e.lat}
+		if e.op == treeOpInsert {
+			tree.Insert(point, point, e.id)
+		} else {
+			tree.Delete(point, point, e.id)
+		}
+	}
+	mu.Unlock()
+}
+
+func flushPokemonTreeEvictions(entries []treeEvictionEntry[uint64]) {
+	flushTreeEvictions(&pokemonTreeMutex, &pokemonTree, entries)
+}
+
 func adjustPokemonFormCount(key pokemonFormKey, delta int64) {
-	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, bool) {
+	pokemonFormCount.Compute(key, func(oldValue int64, loaded bool) (int64, xsync.ComputeOp) {
 		newValue := oldValue + delta
-		return newValue, newValue <= 0 // delete entry when count reaches zero
+		if newValue <= 0 {
+			return 0, xsync.DeleteOp // delete entry when count reaches zero
+		}
+		return newValue, xsync.UpdateOp
 	})
 }
 
 func initPokemonRtree() {
-	pokemonLookupCache = xsync.NewMapOf[uint64, PokemonLookupCacheItem]()
-	pokemonFormCount = xsync.NewMapOf[pokemonFormKey, int64]()
+	pokemonLookupCache = xsync.NewMap[uint64, PokemonLookupCacheItem]()
+	pokemonFormCount = xsync.NewMap[pokemonFormKey, int64]()
 
-	// Set up OnEviction callback on all shards
-	pokemonCache.OnEviction(func(ctx context.Context, ev ttlcache.EvictionReason, v *ttlcache.Item[uint64, *Pokemon]) {
-		pokemon := v.Value()
-		removePokemonFromTree(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
-		// Rely on the pokemon pvp lookup caches to remove themselves rather than trying to synchronise
+	pokemonTreeEvictor = newTreeEvictor[uint64]("pokemon", treeEvictorQueueSize, treeEvictorBatchSize, flushPokemonTreeEvictions)
+
+	// Eviction callbacks arrive on the OtterCache dispatcher goroutine —
+	// async relative to updaters holding the entity lock, so this races
+	// concurrent saves; the cleanup itself is serialized in
+	// handlePokemonEviction.
+	pokemonCache.OnEviction(func(_ uint64, pokemon *Pokemon, _ ottercache.EvictionReason) {
+		handlePokemonEviction(pokemon)
 	})
+}
+
+// handlePokemonEviction removes an evicted pokemon from the lookup cache
+// (inline, lock-free — scans stop seeing it immediately) and defers its
+// tree removal to the batched evictor. It runs on the cache's eviction
+// dispatcher goroutine, so it takes the entity lock to serialize against
+// updaters: if
+// a save re-cached the pokemon after the eviction fired, the lookup and
+// tree entries are current and must be left alone — cleaning them would
+// make a live, cached pokemon invisible to every scan.
+func handlePokemonEviction(pokemon *Pokemon) {
+	pokemonId := uint64(pokemon.Id)
+	pokemon.Lock("cacheEviction")
+	defer pokemon.Unlock()
+
+	if pokemonCache.Has(pokemonId) {
+		// Re-cached (same pokemon re-saved, or a successor record created)
+		// — its owner maintains the lookup/tree entries now.
+		return
+	}
+	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.HasLookup {
+		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
+	}
+	// Non-blocking: eviction callbacks are one goroutine per item and this
+	// one holds the entity lock — see treeEvictor.Enqueue for the incident
+	// a blocking send here caused.
+	pokemonTreeEvictor.TryEnqueue(pokemonId, pokemon.Lat, pokemon.Lon)
+}
+
+// queuePokemonTreeInsert / queuePokemonTreeRemove are the runtime-path tree
+// mutations: ordered through the single tree worker so savers (which hold
+// entity locks) never contend on the tree mutex. Preload and tests use the
+// direct add/remove functions below.
+func queuePokemonTreeInsert(pokemon *Pokemon) {
+	pokemonTreeEvictor.EnqueueInsert(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
+}
+
+func queuePokemonTreeRemove(pokemonId uint64, lat, lon float64) {
+	pokemonTreeEvictor.Enqueue(pokemonId, lat, lon)
 }
 
 func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
@@ -78,8 +202,20 @@ func pokemonRtreeUpdatePokemonOnGet(pokemon *Pokemon) {
 	_, inMap := pokemonLookupCache.Load(pokemonId)
 
 	if !inMap {
-		addPokemonToTree(pokemon)
+		queuePokemonTreeInsert(pokemon)
 		// this pokemon won't be available for pvp searches
+		updatePokemonLookup(pokemon, false, nil)
+	}
+}
+
+// pokemonRtreePreloadInsert is the startup-preload variant: inserts
+// directly instead of through the tree worker. Preload runs before traffic
+// (no contention to avoid) and its parallel workers would otherwise flood
+// the writer channel — and a full channel blocks enqueuers, which at
+// runtime includes savers holding entity locks.
+func pokemonRtreePreloadInsert(pokemon *Pokemon) {
+	if _, inMap := pokemonLookupCache.Load(uint64(pokemon.Id)); !inMap {
+		addPokemonToTree(pokemon)
 		updatePokemonLookup(pokemon, false, nil)
 	}
 }
@@ -91,18 +227,23 @@ func valueOrMinus1(n null.Int) int {
 	return -1
 }
 
-func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) {
+// updatePokemonLookup refreshes the scan lookup entry and reports whether
+// one already existed — false means an eviction removed it (and the tree
+// point) while the caller held the entity lock, so the caller must restore
+// the tree point.
+func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string][]gohbem.PokemonEntry) bool {
 	pokemonId := uint64(pokemon.Id)
 
 	pokemonLookupCacheItem, existed := pokemonLookupCache.Load(pokemonId)
 
 	// Track old form key so we can adjust counts
 	var oldKey pokemonFormKey
-	if existed && pokemonLookupCacheItem.PokemonLookup != nil {
+	if existed && pokemonLookupCacheItem.HasLookup {
 		oldKey = pokemonFormKey{pokemonLookupCacheItem.PokemonLookup.PokemonId, pokemonLookupCacheItem.PokemonLookup.Form}
 	}
 
-	pokemonLookupCacheItem.PokemonLookup = &PokemonLookup{
+	pokemonLookupCacheItem.HasLookup = true
+	pokemonLookupCacheItem.PokemonLookup = PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
 		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
 		Weather:            int8(valueOrMinus1(pokemon.Weather)),
@@ -125,7 +266,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	}
 
 	if changePvp {
-		pokemonLookupCacheItem.PokemonPvpLookup = calculatePokemonPvpLookup(pokemon, pvpResults)
+		if pvp, ok := calculatePokemonPvpLookup(pokemon, pvpResults); ok {
+			pokemonLookupCacheItem.PokemonPvpLookup = pvp
+			pokemonLookupCacheItem.HasPvp = true
+		} else {
+			pokemonLookupCacheItem.PokemonPvpLookup = PokemonPvpLookup{}
+			pokemonLookupCacheItem.HasPvp = false
+		}
 	}
 
 	pokemonLookupCache.Store(pokemonId, pokemonLookupCacheItem)
@@ -138,11 +285,13 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	if !existed || oldKey != newKey {
 		adjustPokemonFormCount(newKey, 1)
 	}
+
+	return existed
 }
 
-func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) *PokemonPvpLookup {
+func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) (PokemonPvpLookup, bool) {
 	if pvpResults == nil {
-		return nil
+		return PokemonPvpLookup{}, false
 	}
 
 	pvpStore := make(map[string]int16)
@@ -172,11 +321,11 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 		return 4096
 	}
 
-	return &PokemonPvpLookup{
+	return PokemonPvpLookup{
 		Little: bestValue("little"),
 		Great:  bestValue("great"),
 		Ultra:  bestValue("ultra"),
-	}
+	}, true
 }
 
 func addPokemonToTree(pokemon *Pokemon) {
@@ -185,19 +334,4 @@ func addPokemonToTree(pokemon *Pokemon) {
 	pokemonTreeMutex.Lock()
 	pokemonTree.Insert([2]float64{pokemon.Lon, pokemon.Lat}, [2]float64{pokemon.Lon, pokemon.Lat}, pokemonId)
 	pokemonTreeMutex.Unlock()
-}
-
-func removePokemonFromTree(pokemonId uint64, lat, lon float64) {
-	pokemonTreeMutex.Lock()
-	beforeLen := pokemonTree.Len()
-	pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, pokemonId)
-	afterLen := pokemonTree.Len()
-	pokemonTreeMutex.Unlock()
-	if item, ok := pokemonLookupCache.LoadAndDelete(pokemonId); ok && item.PokemonLookup != nil {
-		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
-	}
-
-	if beforeLen != afterLen+1 {
-		log.Infof("PokemonRtree - UNEXPECTED removing %d, lat %f lon %f size %d->%d Map Len %d", pokemonId, lat, lon, beforeLen, afterLen, pokemonLookupCache.Size())
-	}
 }

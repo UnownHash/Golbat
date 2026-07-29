@@ -1,0 +1,13 @@
+goos: darwin
+goarch: arm64
+pkg: golbat/cachebench
+cpu: Apple M3 Pro
+BenchmarkReadHot/theine/g8-12          	21700856	       100.7 ns/op	     102 B/op	       0 allocs/op
+BenchmarkReadHot/theine/g32-12         	23604312	        85.63 ns/op	     102 B/op	       0 allocs/op
+BenchmarkReadHot/theine/g96-12         	29593716	        85.04 ns/op	     102 B/op	       0 allocs/op
+BenchmarkTouch/theine/touch/get-12     	 4935525	       484.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTouch/theine/notouch/get-12   	84943348	        27.69 ns/op	       0 B/op	       0 allocs/op
+BenchmarkGetOrSetStorm/theine-12       	159612810	        14.72 ns/op	      24 B/op	       1 allocs/op
+BenchmarkSingleGoroutineConsumer/theine-12         	 2999176	       820.3 ns/op	    1146 B/op	       2 allocs/op
+PASS
+ok  	golbat/cachebench	53.878s
