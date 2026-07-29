@@ -40,6 +40,10 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	if encounter.Pokemon == nil {
 		return "No encounter"
 	}
+	if encounter.Pokemon.PokemonDisplay == nil {
+		log.Warnf("[POKEMON] Disk encounter %d without PokemonDisplay - ignored", request.EncounterId)
+		return "Disk encounter without display"
+	}
 
 	encounterId := uint64(request.EncounterId)
 	if encounterId == 0 {

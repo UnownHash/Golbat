@@ -412,9 +412,9 @@ func decodeEncounter(ctx context.Context, sDec []byte, username string, timestam
 func decodeDiskEncounter(ctx context.Context, request []byte, sDec []byte, username string) string {
 	if len(request) == 0 {
 		// The request carries the encounter id, fort id and fort location —
-		// without it the encounter cannot be placed. len covers both nil
-		// (gRPC, no payload) and empty (HTTP path base64-decodes "" to a
-		// non-nil empty slice).
+		// without it the encounter cannot be placed. len covers a missing
+		// request regardless of ingest path: gRPC leaves it nil, and the
+		// HTTP path's decodeBase64Pooled("") also returns nil.
 		statsCollector.IncDecodeDiskEncounter("error", "request_missing")
 		return "DiskEncounter without request proto - ignored"
 	}
@@ -423,6 +423,11 @@ func decodeDiskEncounter(ctx context.Context, request []byte, sDec []byte, usern
 		log.Errorf("Failed to parse DiskEncounterProto %s", err)
 		statsCollector.IncDecodeDiskEncounter("error", "request_parse")
 		return fmt.Sprintf("Failed to parse %s", err)
+	}
+
+	if decodedRequest.EncounterId == 0 {
+		statsCollector.IncDecodeDiskEncounter("error", "request_no_encounter_id")
+		return "DiskEncounter request without encounter id - ignored"
 	}
 
 	decodedEncounterInfo := &pogo.DiskEncounterOutProto{}

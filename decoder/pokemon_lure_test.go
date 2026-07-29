@@ -10,7 +10,6 @@ import (
 	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
-	"golbat/stats_collector"
 	"golbat/webhooks"
 
 	"github.com/guregu/null/v6"
@@ -49,7 +48,6 @@ func lureTestSetup(t *testing.T) *testWebhookSink {
 	config.Config.PokemonMemoryOnly = true
 	sink := &testWebhookSink{}
 	SetWebhooksSender(sink)
-	SetStatsCollector(stats_collector.NewNoopStatsCollector())
 	t.Cleanup(func() {
 		config.Config.PokemonMemoryOnly = prevMemOnly
 		SetWebhooksSender(nil)
