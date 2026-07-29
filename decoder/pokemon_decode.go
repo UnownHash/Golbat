@@ -208,7 +208,6 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 			pokemon.SetExpireTimestampVerified(false)
 		}
 		pokemon.SetCellId(null.IntFrom(int64(mapPokemon.Cell)))
-		pokemon.newRecord = false
 		return true
 	}
 

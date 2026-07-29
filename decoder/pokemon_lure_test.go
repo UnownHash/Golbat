@@ -128,6 +128,10 @@ func TestUpdateFromMapMergeAddsVerifiedExpiryOnce(t *testing.T) {
 		t.Fatalf("ExpireTimestampVerified = true after no-expiry GMO, want false")
 	}
 
+	// Simulate the commit the batch loop performs after a true return —
+	// in production savePokemonRecordAsAtTime clears newRecord.
+	pokemon.newRecord = false
+
 	// Second sighting supplies the despawn time.
 	expireMs := time.Now().UnixMilli() + 90_000
 	withExpiry := testRawMapPokemon(encId, "lure-fort-910102", 51.5, -0.12, expireMs)
