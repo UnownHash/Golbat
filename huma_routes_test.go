@@ -63,7 +63,7 @@ func TestHumaScanEndpointsE2E(t *testing.T) {
 		if err := gojson.Unmarshal([]byte(body), &m); err != nil {
 			t.Fatalf("v3 body is not a JSON object: %v; body=%s", err, body)
 		}
-		for _, key := range []string{"pokemon", "examined", "skipped", "total"} {
+		for _, key := range []string{"pokemon", "examined", "skipped", "total", "limit_reached"} {
 			if _, ok := m[key]; !ok {
 				t.Errorf("v3 body missing key %q: %s", key, body)
 			}

@@ -159,10 +159,11 @@ func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 // ApiPokemonScanResultV3 is the v3-only response envelope wrapping the matched
 // pokemon together with the spatial-index candidate counts.
 type ApiPokemonScanResultV3 struct {
-	Pokemon  []ApiPokemonResult `json:"pokemon" doc:"Matched pokemon"`
-	Examined int                `json:"examined" doc:"Candidates examined from the spatial index"`
-	Skipped  int                `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
-	Total    int                `json:"total" doc:"Total candidates in the bounding box"`
+	Pokemon      []ApiPokemonResult `json:"pokemon" doc:"Matched pokemon"`
+	Examined     int                `json:"examined" doc:"Candidates examined from the spatial index"`
+	Skipped      int                `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
+	Total        int                `json:"total" doc:"Total candidates in the bounding box"`
+	LimitReached bool               `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 // GetPokemonInArea2Clean runs the v2 rtree/DNF search and returns a bare array of
@@ -177,10 +178,11 @@ func GetPokemonInArea2Clean(req ApiPokemonScan2) []ApiPokemonResult {
 func GetPokemonInArea3Clean(req ApiPokemonScan3) *ApiPokemonScanResultV3 {
 	keys, examined, skipped, total := internalGetPokemonInArea3(req)
 	return &ApiPokemonScanResultV3{
-		Pokemon:  collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean"),
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Pokemon:      collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean"),
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: pokemonScanLimitReached(req, len(keys)),
 	}
 }
 
