@@ -63,6 +63,18 @@ type PokemonScanRetrieveParameters interface {
 	GetLimit() int
 }
 
+func pokemonScanLimit(retrieveParameters PokemonScanRetrieveParameters) int {
+	maxPokemon := config.Config.Tuning.MaxPokemonResults
+	if retrieveParameters.GetLimit() > 0 && retrieveParameters.GetLimit() < maxPokemon {
+		maxPokemon = retrieveParameters.GetLimit()
+	}
+	return maxPokemon
+}
+
+func pokemonScanLimitReached(retrieveParameters PokemonScanRetrieveParameters, resultCount int) bool {
+	return resultCount >= pokemonScanLimit(retrieveParameters)
+}
+
 func internalGetPokemonInArea[F any](
 	retrieveParameters PokemonScanRetrieveParameters,
 	dnfFilters map[dnfFilterLookup][]F,
@@ -73,10 +85,7 @@ func internalGetPokemonInArea[F any](
 	minLocation := retrieveParameters.GetMin()
 	maxLocation := retrieveParameters.GetMax()
 
-	maxPokemon := config.Config.Tuning.MaxPokemonResults
-	if retrieveParameters.GetLimit() > 0 && retrieveParameters.GetLimit() < maxPokemon {
-		maxPokemon = retrieveParameters.GetLimit()
-	}
+	maxPokemon := pokemonScanLimit(retrieveParameters)
 
 	pokemonExamined := 0
 	pokemonSkipped := 0
