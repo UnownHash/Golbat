@@ -572,3 +572,51 @@ func TestHumaStationAvailableRoute(t *testing.T) {
 		t.Errorf("body missing empty battles array: %s", resp.Body.String())
 	}
 }
+
+// TestHumaStatusRoute covers /api/status: secret-gated like every API route,
+// but NOT gated on fort_in_memory — it exists to report that flag (and the
+// server's scan caps) so consumers can detect capabilities without probing.
+func TestHumaStatusRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevFim := config.Config.FortInMemory
+	prevMaxP := config.Config.Tuning.MaxPokemonResults
+	prevMaxF := config.Config.Tuning.MaxFortResults
+	config.Config.ApiSecret = "topsecret"
+	config.Config.Tuning.MaxPokemonResults = 3000
+	config.Config.Tuning.MaxFortResults = 4000
+	defer func() {
+		config.Config.ApiSecret = prevSecret
+		config.Config.FortInMemory = prevFim
+		config.Config.Tuning.MaxPokemonResults = prevMaxP
+		config.Config.Tuning.MaxFortResults = prevMaxF
+	}()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerStatusRoutes(api)
+
+	if resp := api.Get("/api/status"); resp.Code != http.StatusUnauthorized {
+		t.Errorf("no secret: got %d, want 401", resp.Code)
+	}
+
+	config.Config.FortInMemory = false
+	resp := api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim off: got %d, want 200 (status must not be 503-gated); body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"fort_in_memory":false`) {
+		t.Errorf("fim off body: %s", resp.Body.String())
+	}
+
+	config.Config.FortInMemory = true
+	resp = api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s: %s", want, body)
+		}
+	}
+}

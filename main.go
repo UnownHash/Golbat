@@ -389,6 +389,7 @@ func main() {
 
 	humaAPI := setupHumaAPI(r)
 	registerHumaRoutes(humaAPI)
+	registerStatusRoutes(humaAPI)
 	registerFortScanRoutes(humaAPI)
 	registerPokemonReadRoutes(humaAPI)
 	registerTier3Routes(humaAPI)
