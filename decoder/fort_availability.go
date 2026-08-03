@@ -12,9 +12,10 @@ import "github.com/puzpuzpuz/xsync/v4"
 // aggregate (questConditionCount).
 
 type showcaseKey struct {
-	PokemonId int16
-	Form      int16
-	TypeId    int8
+	PokemonId       int16
+	Form            int16
+	TypeId          int8
+	RankingStandard int16
 }
 
 type invasionKey struct {
@@ -30,9 +31,10 @@ type invasionKey struct {
 }
 
 type raidKey struct {
-	RaidLevel int8
-	PokemonId int16
-	Form      int16
+	RaidLevel     int8
+	PokemonId     int16
+	Form          int16
+	TempEvolution int16
 }
 
 type battleKey struct {
@@ -118,14 +120,19 @@ func nullablePokemonForm(id, form int16) (*int16, *int16) {
 
 func observeRaid(fl *FortLookup, now int64) {
 	if fl.RaidLevel > 0 {
-		observeExpiry(raidExpiry, raidKey{fl.RaidLevel, fl.RaidPokemonId, fl.RaidPokemonForm}, fl.RaidEndTimestamp, now)
+		observeExpiry(raidExpiry, raidKey{
+			RaidLevel:     fl.RaidLevel,
+			PokemonId:     fl.RaidPokemonId,
+			Form:          fl.RaidPokemonForm,
+			TempEvolution: fl.RaidPokemonEvolution,
+		}, fl.RaidEndTimestamp, now)
 	}
 }
 
 func readRaids(now int64) []ApiGymRaidAvailable {
 	return readAvailable(raidExpiry, now, func(k raidKey) ApiGymRaidAvailable {
 		id, form := nullablePokemonForm(k.PokemonId, k.Form)
-		return ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: id, Form: form}
+		return ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: id, Form: form, TempEvolutionId: k.TempEvolution}
 	})
 }
 
@@ -166,7 +173,12 @@ func observePokestop(fl *FortLookup, now int64) {
 	// A showcase is either pokemon-based (ContestPokemonId) or type-based
 	// (ContestPokemonType, pokemon id 0 -> consumer key `h<type>`); surface both.
 	if fl.ContestPokemonId != 0 || fl.ContestPokemonType != 0 {
-		observeExpiry(showcaseExpiry, showcaseKey{fl.ContestPokemonId, fl.ContestPokemonForm, fl.ContestPokemonType}, fl.ShowcaseExpiry, now)
+		observeExpiry(showcaseExpiry, showcaseKey{
+			PokemonId:       fl.ContestPokemonId,
+			Form:            fl.ContestPokemonForm,
+			TypeId:          fl.ContestPokemonType,
+			RankingStandard: fl.ShowcaseRankingStandard,
+		}, fl.ShowcaseExpiry, now)
 	}
 }
 
@@ -196,7 +208,7 @@ func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
 			t := k.TypeId
 			typeId = &t
 		}
-		return ApiPokestopShowcaseAvailable{PokemonId: id, Form: form, TypeId: typeId}
+		return ApiPokestopShowcaseAvailable{PokemonId: id, Form: form, TypeId: typeId, RankingStandard: k.RankingStandard}
 	})
 }
 

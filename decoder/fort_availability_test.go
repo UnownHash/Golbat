@@ -133,3 +133,44 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 		t.Fatal("all pokestop aggregates should expire to empty")
 	}
 }
+
+func TestRaidAvailabilityCarriesTempEvolution(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	// same boss id/form, one mega (evolution 2) and one base — two distinct options
+	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidPokemonForm: 0, RaidPokemonEvolution: 2, RaidEndTimestamp: 2000}, now)
+	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidPokemonForm: 0, RaidEndTimestamp: 2000}, now)
+
+	got := readRaids(now)
+	if len(got) != 2 {
+		t.Fatalf("mega and base must be distinct options, got %d: %+v", len(got), got)
+	}
+	var mega, base bool
+	for _, r := range got {
+		switch r.TempEvolutionId {
+		case 2:
+			mega = true
+		case 0:
+			base = true
+		}
+	}
+	if !mega || !base {
+		t.Fatalf("want mega and base entries: %+v", got)
+	}
+}
+
+func TestShowcaseAvailabilityCarriesRankingStandard(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	observePokestop(&FortLookup{ContestPokemonId: 25, ShowcaseRankingStandard: 3, ShowcaseExpiry: 2000}, now)
+
+	s := readShowcases(now)
+	if len(s) != 1 {
+		t.Fatalf("want 1 showcase, got %d: %+v", len(s), s)
+	}
+	if s[0].RankingStandard != 3 {
+		t.Fatalf("ranking standard not carried: %+v", s[0])
+	}
+}
