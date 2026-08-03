@@ -36,7 +36,7 @@ type ApiPokestopResult struct {
 	CellId                        *int64                `json:"cell_id" doc:"S2 cell ID the pokestop belongs to"`
 	Deleted                       bool                  `json:"deleted" doc:"Whether the pokestop has been deleted"`
 	LureId                        int16                 `json:"lure_id" doc:"ID of the current lure module"`
-	FirstSeenTimestamp            int16                 `json:"first_seen_timestamp" doc:"Unix timestamp when the pokestop was first seen"`
+	FirstSeenTimestamp            int64                 `json:"first_seen_timestamp" doc:"Unix timestamp when the pokestop was first seen"`
 	SponsorId                     *int64                `json:"sponsor_id" doc:"Sponsor ID of the pokestop, if sponsored"`
 	PartnerId                     *string               `json:"partner_id" doc:"Partner ID of the pokestop, if partnered"`
 	ArScanEligible                *int64                `json:"ar_scan_eligible" doc:"Whether the pokestop is eligible for AR scanning"`
