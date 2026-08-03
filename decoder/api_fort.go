@@ -113,33 +113,37 @@ type ApiFortDnfMinMax struct {
 }
 
 type ApiGymScanResult struct {
-	Gyms     []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
-	Examined int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped  int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total    int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Gyms         []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Examined     int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool            `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiPokestopScanResult struct {
-	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
-	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Pokestops    []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiStationScanResult struct {
-	Stations []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
-	Examined int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped  int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total    int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Stations     []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined     int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiFortCombinedScanResult struct {
-	Gyms      []*ApiGymResult      `json:"gyms" doc:"Matching gyms within the bounding box."`
-	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
-	Stations  []*ApiStationResult  `json:"stations" doc:"Matching stations within the bounding box."`
-	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Gyms         []*ApiGymResult      `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Pokestops    []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Stations     []*ApiStationResult  `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 // matchDnfIdPair checks if any ApiDnfId in the filter matches the given pokemon/form pair
@@ -289,16 +293,28 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 	return true
 }
 
+// fortScanLimit resolves the effective result limit for a fort scan: the
+// requested limit clamped by the server's max_fort_results tuning cap
+// (0 = server default). Mirrors pokemonScanLimit.
+func fortScanLimit(limit int) int {
+	maxForts := config.Config.Tuning.MaxFortResults
+	if limit > 0 && limit < maxForts {
+		maxForts = limit
+	}
+	return maxForts
+}
+
+func fortScanLimitReached(limit, resultCount int) bool {
+	return resultCount >= fortScanLimit(limit)
+}
+
 func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]string, int, int, int) {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxFortResults
-	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
-		maxForts = retrieveParameters.Limit
-	}
+	maxForts := fortScanLimit(retrieveParameters.Limit)
 
 	fortsExamined := 0
 	fortsSkipped := 0
@@ -427,10 +443,11 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 	log.Infof("GymScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiGymScanResult{
-		Gyms:     results,
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Gyms:         results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -442,10 +459,11 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 	log.Infof("PokestopScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiPokestopScanResult{
-		Pokestops: results,
-		Examined:  examined,
-		Skipped:   skipped,
-		Total:     total,
+		Pokestops:    results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -457,10 +475,11 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	log.Infof("StationScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiStationScanResult{
-		Stations: results,
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Stations:     results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -476,12 +495,13 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails 
 		time.Since(start), len(gyms), len(pokestops), len(stations))
 
 	return &ApiFortCombinedScanResult{
-		Gyms:      gyms,
-		Pokestops: pokestops,
-		Stations:  stations,
-		Examined:  examined,
-		Skipped:   skipped,
-		Total:     total,
+		Gyms:         gyms,
+		Pokestops:    pokestops,
+		Stations:     stations,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(gymKeys)+len(pokestopKeys)+len(stationKeys)),
 	}
 }
 
@@ -491,10 +511,7 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxFortResults
-	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
-		maxForts = retrieveParameters.Limit
-	}
+	maxForts := fortScanLimit(retrieveParameters.Limit)
 
 	now := time.Now().Unix()
 	totalMatched := 0
