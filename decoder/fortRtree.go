@@ -21,14 +21,14 @@ type FortLookup struct {
 	IsArScanEligible bool
 
 	// Gym
-	AvailableSlots      int8
-	TeamId              int8
-	RaidEndTimestamp    int64 // used to check expiry at filter time
-	RaidBattleTimestamp int64
+	AvailableSlots       int8
+	TeamId               int8
+	RaidEndTimestamp     int64 // used to check expiry at filter time
+	RaidBattleTimestamp  int64
 	RaidLevel            int8
+	RaidPokemonEvolution int8 // tiny enum; int8 in RaidLevel's pad byte keeps the struct at its pre-enrichment size
 	RaidPokemonId        int16
 	RaidPokemonForm      int16
-	RaidPokemonEvolution int16
 
 	// Pokestop - quest rewards only (both AR and no-AR stored, filter matches either)
 	LureId                     int16
@@ -52,7 +52,7 @@ type FortLookup struct {
 	ContestPokemonId        int16
 	ContestPokemonForm      int16
 	ContestPokemonType      int8
-	ShowcaseRankingStandard int16
+	ShowcaseRankingStandard int8  // tiny enum; int8 fits the pad before ShowcaseExpiry — zero struct growth
 	ShowcaseExpiry          int64 // used to check expiry at filter time
 
 	// Station
@@ -213,7 +213,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
 			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-			ShowcaseRankingStandard:    int16(pokestop.ShowcaseRankingStandard.ValueOrZero()),
+			ShowcaseRankingStandard:    int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
 			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 		}
 		if loaded {
@@ -228,7 +228,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		ContestPokemonId:        int16(pokestop.ShowcasePokemon.ValueOrZero()),
 		ContestPokemonForm:      int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 		ContestPokemonType:      int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-		ShowcaseRankingStandard: int16(pokestop.ShowcaseRankingStandard.ValueOrZero()),
+		ShowcaseRankingStandard: int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
 		ShowcaseExpiry:          pokestop.ShowcaseExpiry.ValueOrZero(),
 	}, time.Now().Unix())
 
@@ -243,18 +243,18 @@ func updatePokestopLookup(pokestop *Pokestop) {
 func updateGymLookup(gym *Gym) {
 	now := time.Now().Unix()
 	fl := FortLookup{
-		FortType:            GYM,
-		Lat:                 gym.Lat,
-		Lon:                 gym.Lon,
-		IsArScanEligible:    gym.ArScanEligible.ValueOrZero() == 1,
-		AvailableSlots:      int8(gym.AvailableSlots.ValueOrZero()),
-		TeamId:              int8(gym.TeamId.ValueOrZero()),
-		RaidEndTimestamp:    gym.RaidEndTimestamp.ValueOrZero(),
-		RaidBattleTimestamp: gym.RaidBattleTimestamp.ValueOrZero(),
+		FortType:             GYM,
+		Lat:                  gym.Lat,
+		Lon:                  gym.Lon,
+		IsArScanEligible:     gym.ArScanEligible.ValueOrZero() == 1,
+		AvailableSlots:       int8(gym.AvailableSlots.ValueOrZero()),
+		TeamId:               int8(gym.TeamId.ValueOrZero()),
+		RaidEndTimestamp:     gym.RaidEndTimestamp.ValueOrZero(),
+		RaidBattleTimestamp:  gym.RaidBattleTimestamp.ValueOrZero(),
 		RaidLevel:            int8(gym.RaidLevel.ValueOrZero()),
 		RaidPokemonId:        int16(gym.RaidPokemonId.ValueOrZero()),
 		RaidPokemonForm:      int16(gym.RaidPokemonForm.ValueOrZero()),
-		RaidPokemonEvolution: int16(gym.RaidPokemonEvolution.ValueOrZero()),
+		RaidPokemonEvolution: int8(gym.RaidPokemonEvolution.ValueOrZero()),
 	}
 	fortLookupCache.Store(gym.Id, fl)
 	observeRaid(&fl, now)

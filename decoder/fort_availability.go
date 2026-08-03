@@ -15,7 +15,7 @@ type showcaseKey struct {
 	PokemonId       int16
 	Form            int16
 	TypeId          int8
-	RankingStandard int16
+	RankingStandard int8
 }
 
 type invasionKey struct {
@@ -34,7 +34,7 @@ type raidKey struct {
 	RaidLevel     int8
 	PokemonId     int16
 	Form          int16
-	TempEvolution int16
+	TempEvolution int8
 }
 
 type battleKey struct {

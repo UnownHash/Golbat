@@ -47,7 +47,7 @@ type ApiPokestopShowcaseAvailable struct {
 	PokemonId       *int16 `json:"pokemon_id" doc:"Showcase focus pokemon id; null for a type-based showcase"`
 	Form            *int16 `json:"form" doc:"Showcase focus pokemon form (0 is a valid form); null for a type-based showcase"`
 	TypeId          *int8  `json:"type_id" doc:"Showcase focus pokemon type id (type-based showcases); null for a pokemon-based showcase"`
-	RankingStandard int16  `json:"ranking_standard" doc:"Ranking standard of the showcase contest; 0 when unknown"`
+	RankingStandard int8   `json:"ranking_standard" doc:"Ranking standard of the showcase contest; 0 when unknown"`
 }
 
 // ApiAvailablePokestops is the whole-instance snapshot served by
