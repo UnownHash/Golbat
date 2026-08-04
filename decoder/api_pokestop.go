@@ -28,7 +28,7 @@ type ApiPokestopResult struct {
 	QuestRewardAmount             *int64                `json:"quest_reward_amount" doc:"Reward amount of the AR quest"`
 	QuestPokemonId                *int64                `json:"quest_pokemon_id" doc:"Pokemon id of the AR quest reward, if a pokemon/candy reward"`
 	QuestPokemonFormId            *int64                `json:"quest_pokemon_form_id" doc:"Form id of the AR quest reward pokemon, if a pokemon reward"`
-	QuestConditions               *string               `json:"quest_conditions" doc:"Serialized conditions of the AR quest"`
+	QuestConditions               *json.RawMessage      `json:"quest_conditions" doc:"Conditions of the AR quest as native JSON; null when no quest"`
 	QuestRewards                  *json.RawMessage      `json:"quest_rewards" doc:"Rewards of the AR quest as native JSON (array of {type, info}); null when no quest"`
 	QuestTemplate                 *string               `json:"quest_template" doc:"Template ID of the AR quest"`
 	QuestTitle                    *string               `json:"quest_title" doc:"Title of the AR quest"`
@@ -51,19 +51,19 @@ type ApiPokestopResult struct {
 	AlternativeQuestRewardAmount  *int64                `json:"alternative_quest_reward_amount" doc:"Reward amount of the non-AR quest"`
 	AlternativeQuestPokemonId     *int64                `json:"alternative_quest_pokemon_id" doc:"Pokemon id of the non-AR quest reward, if a pokemon/candy reward"`
 	AlternativeQuestPokemonFormId *int64                `json:"alternative_quest_pokemon_form_id" doc:"Form id of the non-AR quest reward pokemon, if a pokemon reward"`
-	AlternativeQuestConditions    *string               `json:"alternative_quest_conditions" doc:"Serialized conditions of the non-AR quest"`
+	AlternativeQuestConditions    *json.RawMessage      `json:"alternative_quest_conditions" doc:"Conditions of the non-AR quest as native JSON; null when no quest"`
 	AlternativeQuestRewards       *json.RawMessage      `json:"alternative_quest_rewards" doc:"Rewards of the non-AR quest as native JSON (array of {type, info}); null when no quest"`
 	AlternativeQuestTemplate      *string               `json:"alternative_quest_template" doc:"Template ID of the non-AR quest"`
 	AlternativeQuestTitle         *string               `json:"alternative_quest_title" doc:"Title of the non-AR quest"`
 	AlternativeQuestExpiry        *int64                `json:"alternative_quest_expiry" doc:"Unix timestamp when the non-AR quest expires"`
 	Description                   *string               `json:"description" doc:"Description of the pokestop"`
-	ShowcaseFocus                 *string               `json:"showcase_focus" doc:"Focus type of the showcase contest"`
+	ShowcaseFocus                 *json.RawMessage      `json:"showcase_focus" doc:"Focus of the showcase contest as native JSON; null when no showcase"`
 	ShowcasePokemon               *int64                `json:"showcase_pokemon_id" doc:"Pokedex ID of the showcase contest pokemon"`
 	ShowcasePokemonForm           *int64                `json:"showcase_pokemon_form_id" doc:"Form ID of the showcase contest pokemon"`
 	ShowcasePokemonType           *int64                `json:"showcase_pokemon_type_id" doc:"Type ID of the showcase contest pokemon"`
 	ShowcaseRankingStandard       *int64                `json:"showcase_ranking_standard" doc:"Ranking standard of the showcase contest"`
 	ShowcaseExpiry                *int64                `json:"showcase_expiry" doc:"Unix timestamp when the showcase contest expires"`
-	ShowcaseRankings              *string               `json:"showcase_rankings" doc:"Serialized showcase contest rankings"`
+	ShowcaseRankings              *json.RawMessage      `json:"showcase_rankings" doc:"Showcase contest rankings as native JSON; null when no showcase"`
 	Invasions                     []ApiPokestopIncident `json:"invasions,omitempty" doc:"Active incidents; present when the pokestop has active incidents (always attempted on by-id, on scans only when with_incidents is set)"`
 }
 
@@ -86,7 +86,7 @@ func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
 		QuestRewardAmount:             stop.QuestRewardAmount.Ptr(),
 		QuestPokemonId:                stop.QuestPokemonId.Ptr(),
 		QuestPokemonFormId:            stop.QuestPokemonFormId.Ptr(),
-		QuestConditions:               stop.QuestConditions.Ptr(),
+		QuestConditions:               jsonRaw(stop.QuestConditions),
 		QuestRewards:                  jsonRaw(stop.QuestRewards),
 		QuestTemplate:                 stop.QuestTemplate.Ptr(),
 		QuestTitle:                    stop.QuestTitle.Ptr(),
@@ -109,19 +109,19 @@ func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
 		AlternativeQuestRewardAmount:  stop.AlternativeQuestRewardAmount.Ptr(),
 		AlternativeQuestPokemonId:     stop.AlternativeQuestPokemonId.Ptr(),
 		AlternativeQuestPokemonFormId: stop.AlternativeQuestPokemonFormId.Ptr(),
-		AlternativeQuestConditions:    stop.AlternativeQuestConditions.Ptr(),
+		AlternativeQuestConditions:    jsonRaw(stop.AlternativeQuestConditions),
 		AlternativeQuestRewards:       jsonRaw(stop.AlternativeQuestRewards),
 		AlternativeQuestTemplate:      stop.AlternativeQuestTemplate.Ptr(),
 		AlternativeQuestTitle:         stop.AlternativeQuestTitle.Ptr(),
 		AlternativeQuestExpiry:        stop.AlternativeQuestExpiry.Ptr(),
 		Description:                   stop.Description.Ptr(),
-		ShowcaseFocus:                 stop.ShowcaseFocus.Ptr(),
+		ShowcaseFocus:                 jsonRaw(stop.ShowcaseFocus),
 		ShowcasePokemon:               stop.ShowcasePokemon.Ptr(),
 		ShowcasePokemonForm:           stop.ShowcasePokemonForm.Ptr(),
 		ShowcasePokemonType:           stop.ShowcasePokemonType.Ptr(),
 		ShowcaseRankingStandard:       stop.ShowcaseRankingStandard.Ptr(),
 		ShowcaseExpiry:                stop.ShowcaseExpiry.Ptr(),
-		ShowcaseRankings:              stop.ShowcaseRankings.Ptr(),
+		ShowcaseRankings:              jsonRaw(stop.ShowcaseRankings),
 	}
 }
 

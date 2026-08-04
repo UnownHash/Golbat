@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -34,7 +35,7 @@ type ApiStationResult struct {
 	BattlePokemonCpMultiplier *float64                 `json:"battle_pokemon_cp_multiplier" doc:"CP multiplier of the top battle pokemon"`
 	TotalStationedPokemon     *int64                   `json:"total_stationed_pokemon" doc:"Total number of pokemon stationed"`
 	TotalStationedGmax        *int64                   `json:"total_stationed_gmax" doc:"Total number of Gigantamax pokemon stationed"`
-	StationedPokemon          *string                  `json:"stationed_pokemon" doc:"Serialized list of stationed pokemon"`
+	StationedPokemon          *json.RawMessage         `json:"stationed_pokemon" doc:"Stationed pokemon as native JSON (array of pokemon display objects); null when none"`
 	Battles                   []ApiStationBattleResult `json:"battles,omitempty" doc:"Known battles at this station"`
 }
 
@@ -75,7 +76,7 @@ func BuildStationResult(station *Station) ApiStationResult {
 		Updated:               station.Updated,
 		TotalStationedPokemon: station.TotalStationedPokemon.Ptr(),
 		TotalStationedGmax:    station.TotalStationedGmax.Ptr(),
-		StationedPokemon:      station.StationedPokemon.Ptr(),
+		StationedPokemon:      jsonRaw(station.StationedPokemon),
 		Battles:               buildApiStationBattleResults(battles),
 	}
 	applyTopStationBattleToApiStationResult(&result, battles)
