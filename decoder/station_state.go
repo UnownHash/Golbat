@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -350,12 +352,33 @@ func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId st
 	station.ClearDirty()
 }
 
+// debugStationBattleWindows renders each stored battle's window/seed for the
+// [STATION-WEBHOOK-DEBUG] line. Temporary (debug/station-window-logging branch).
+func debugStationBattleWindows(battles []StationBattleData) string {
+	parts := make([]string, 0, len(battles))
+	for _, b := range battles {
+		parts = append(parts, fmt.Sprintf("lvl%d:%d-%d(seed=%d,pkmn=%d)",
+			b.BattleLevel, b.BattleStart, b.BattleEnd, b.BreadBattleSeed, b.BattlePokemonId.ValueOrZero()))
+	}
+	return strings.Join(parts, ",")
+}
+
 func createStationWebhooksWithBattles(station *Station, battles []StationBattleData, battleSnapshot stationBattleSnapshot, isNew bool, updated int64) {
 	old := &station.oldValues
 
 	if len(battles) == 0 {
 		return
 	}
+
+	// [STATION-WEBHOOK-DEBUG] temporary: which clause fires the max_battle webhook,
+	// the committed station window, and every stored battle window. If a duplicate
+	// fires with snapshotChanged=false and only endTimeChanged=true, the second
+	// webhook is a station-window flap carrying no new battle data.
+	log.Infof("[STATION-WEBHOOK-DEBUG] %s emit=%v isNew=%v endTimeChanged=%v(%d->%d) snapshotChanged=%v committedWindow=%d-%d battles=[%s]",
+		station.Id, isNew || old.EndTime != station.EndTime || old.BattleSnapshot != battleSnapshot,
+		isNew, old.EndTime != station.EndTime, old.EndTime, station.EndTime,
+		old.BattleSnapshot != battleSnapshot, station.StartTime, station.EndTime,
+		debugStationBattleWindows(battles))
 
 	if isNew || old.EndTime != station.EndTime || old.BattleSnapshot != battleSnapshot {
 		stationHook := StationWebhook{

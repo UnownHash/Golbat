@@ -11,6 +11,22 @@ import (
 )
 
 func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
+	// [STATION-WINDOW-DEBUG] temporary: attribute duplicate max_battle webhooks.
+	// station.StartTime/EndTime here are the PREVIOUS committed values (SetStartTime
+	// below overwrites them), so this shows the raw proto window vs. what we held,
+	// plus the single battle detail this proto carries. Correlate with the
+	// [STATION-WEBHOOK-DEBUG] line for the same id to see whether a second window
+	// comes from the proto or from something internal.
+	protoStart := stationProto.StartTimeMs / 1000
+	protoEnd := stationProto.EndTimeMs / 1000
+	if bd := stationProto.BattleDetails; bd != nil {
+		log.Infof("[STATION-WINDOW-DEBUG] %s protoWindow=%d-%d prevStationWindow=%d-%d battleDetail seed=%d level=%d bWindow=%d-%d",
+			stationProto.Id, protoStart, protoEnd, station.StartTime, station.EndTime,
+			bd.GetBreadBattleSeed(), bd.GetBattleLevel(), bd.GetBattleWindowStartMs()/1000, bd.GetBattleWindowEndMs()/1000)
+	} else if station.StartTime != protoStart || station.EndTime != protoEnd {
+		log.Infof("[STATION-WINDOW-DEBUG] %s protoWindow=%d-%d prevStationWindow=%d-%d (no battle detail, window CHANGED)",
+			stationProto.Id, protoStart, protoEnd, station.StartTime, station.EndTime)
+	}
 	station.SetId(stationProto.Id)
 	name := stationProto.Name
 	// NOTE: Some names have more than 255 runes, which won't fit in our
