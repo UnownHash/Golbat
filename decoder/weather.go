@@ -206,7 +206,7 @@ func loadWeatherFromDatabase(ctx context.Context, db db.DbDetails, weatherId int
 	return timedDbQuery("loadWeatherFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, weather,
 			"SELECT id, latitude, longitude, level, gameplay_condition, wind_direction, cloud_level, rain_level, wind_level, snow_level, fog_level, special_effect_level, severity, warn_weather, updated FROM weather WHERE id = ?", weatherId)
-		statsCollector.IncDbQuery("select weather", err)
+		getStatsCollector().IncDbQuery("select weather", err)
 		if err == nil {
 			weather.UpdatedMs *= 1000
 		}
@@ -387,7 +387,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 				":wind_level, :snow_level, :fog_level, :special_effect_level, :severity, :warn_weather, "+
 				":updated/1000)",
 			weather)
-		statsCollector.IncDbQuery("insert weather", err)
+		getStatsCollector().IncDbQuery("insert weather", err)
 		if err != nil {
 			log.Errorf("insert weather: %s", err)
 			return
@@ -411,7 +411,7 @@ func saveWeatherRecord(ctx context.Context, db db.DbDetails, weather *Weather) {
 			"updated = :updated/1000 "+
 			"WHERE id = :id",
 			weather)
-		statsCollector.IncDbQuery("update weather", err)
+		getStatsCollector().IncDbQuery("update weather", err)
 		if err != nil {
 			log.Errorf("update weather: %s", err)
 			return

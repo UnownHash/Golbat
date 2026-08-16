@@ -220,7 +220,7 @@ func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpoint
 	return timedDbQuery("loadSpawnpointFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, spawnpoint,
 			"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
-		statsCollector.IncDbQuery("select spawnpoint", err)
+		getStatsCollector().IncDbQuery("select spawnpoint", err)
 		return err
 	})
 }
@@ -435,7 +435,7 @@ func spawnpointWriteDB(db db.DbDetails, spawnpoint *Spawnpoint) error {
 		"last_seen=VALUES(last_seen),"+
 		"despawn_sec=VALUES(despawn_sec)", spawnpoint)
 
-	statsCollector.IncDbQuery("insert spawnpoint", err)
+	getStatsCollector().IncDbQuery("insert spawnpoint", err)
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
 		return err
@@ -454,7 +454,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint
 		//_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
 		//	"SET last_seen=? "+
 		//	"WHERE id = ? ", now, spawnpoint.Id)
-		//statsCollector.IncDbQuery("update spawnpoint", err)
+		//getStatsCollector().IncDbQuery("update spawnpoint", err)
 		//if err != nil {
 		//	log.Printf("Error updating spawnpoint last seen %s", err)
 		//	return

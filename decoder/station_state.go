@@ -69,7 +69,7 @@ func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId str
 	return timedDbQuery("loadStationFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, station,
 			`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
-		statsCollector.IncDbQuery("select station", err)
+		getStatsCollector().IncDbQuery("select station", err)
 		return err
 	})
 }
@@ -253,7 +253,7 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 			VALUES (:id,:lat,:lon,:name,:cell_id,:start_time,:end_time,:cooldown_complete,:is_battle_available,:is_inactive,:updated,:battle_level,:battle_start,:battle_end,:battle_pokemon_id,:battle_pokemon_form,:battle_pokemon_costume,:battle_pokemon_gender,:battle_pokemon_alignment,:battle_pokemon_bread_mode,:battle_pokemon_move_1,:battle_pokemon_move_2,:battle_pokemon_stamina,:battle_pokemon_cp_multiplier,:total_stationed_pokemon,:total_stationed_gmax,:stationed_pokemon)
 			`, station)
 
-		statsCollector.IncDbQuery("insert station", err)
+		getStatsCollector().IncDbQuery("insert station", err)
 		if err != nil {
 			log.Errorf("insert station: %s", err)
 			return err
@@ -292,7 +292,7 @@ func stationWriteDB(db db.DbDetails, station *Station, isNewRecord bool) error {
 			WHERE id = :id
 		`, station,
 		)
-		statsCollector.IncDbQuery("update station", err)
+		getStatsCollector().IncDbQuery("update station", err)
 		if err != nil {
 			log.Errorf("Update station %s", err)
 			return err
@@ -376,7 +376,7 @@ func createStationWebhooksWithBattles(station *Station, battles []StationBattleD
 		webhooksSender.AddMessage(webhooks.MaxBattle, stationHook, areas)
 		if topBattle := topStationBattleFromSlice(battles); topBattle != nil {
 			if isNew || !old.BattleSnapshot.HasTopBreadBattle || old.BattleSnapshot.TopBreadBattleSeed != topBattle.BreadBattleSeed {
-				statsCollector.UpdateMaxBattleCount(areas, int64(topBattle.BattleLevel))
+				getStatsCollector().UpdateMaxBattleCount(areas, int64(topBattle.BattleLevel))
 			}
 		}
 	}

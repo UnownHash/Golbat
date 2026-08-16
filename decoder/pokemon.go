@@ -175,10 +175,10 @@ func clampUint8(v null.Int, field string) nulltypes.NullUint8 {
 	i := v.Int64
 	switch {
 	case i < 0:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = 0
 	case i > math.MaxUint8:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint8
 	}
 	return nulltypes.Uint8From(uint8(i))
@@ -191,10 +191,10 @@ func clampUint16(v null.Int, field string) nulltypes.NullUint16 {
 	i := v.Int64
 	switch {
 	case i < 0:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = 0
 	case i > math.MaxUint16:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint16
 	}
 	return nulltypes.Uint16From(uint16(i))
@@ -207,10 +207,10 @@ func clampUint32(v null.Int, field string) nulltypes.NullUint32 {
 	i := v.Int64
 	switch {
 	case i < 0:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = 0
 	case i > math.MaxUint32:
-		statsCollector.IncFieldClamped(field)
+		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint32
 	}
 	return nulltypes.Uint32From(uint32(i))

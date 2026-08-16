@@ -20,7 +20,7 @@ func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, t
 		err := db.GeneralDb.GetContext(ctx, tappable,
 			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
          FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
-		statsCollector.IncDbQuery("select tappable", err)
+		getStatsCollector().IncDbQuery("select tappable", err)
 		return err
 	})
 }
@@ -143,7 +143,7 @@ func tappableWriteDB(details db.DbDetails, tappable *Tappable, isNewRecord bool)
 				"%d", :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :item_id, :count, :expire_timestamp, :expire_timestamp_verified, :updated
 			)
 			`, tappable.Id), tappable)
-		statsCollector.IncDbQuery("insert tappable", err)
+		getStatsCollector().IncDbQuery("insert tappable", err)
 		if err != nil {
 			log.Errorf("insert tappable %d: %s", tappable.Id, err)
 			return err
@@ -165,7 +165,7 @@ func tappableWriteDB(details db.DbDetails, tappable *Tappable, isNewRecord bool)
 				updated = :updated
 			WHERE id = "%d"
 			`, tappable.Id), tappable)
-		statsCollector.IncDbQuery("update tappable", err)
+		getStatsCollector().IncDbQuery("update tappable", err)
 		if err != nil {
 			log.Errorf("update tappable %d: %s", tappable.Id, err)
 			return err

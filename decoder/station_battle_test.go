@@ -324,13 +324,11 @@ func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
-	previousStats := statsCollector
 	sender := &recordingWebhooksSender{}
 	webhooksSender = sender
-	statsCollector = stats_collector.NewNoopStatsCollector()
+	setStatsCollectorForTest(t, stats_collector.NewNoopStatsCollector())
 	defer func() {
 		webhooksSender = previousSender
-		statsCollector = previousStats
 	}()
 
 	now := time.Now().Unix()
@@ -368,13 +366,11 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 func TestCreateStationWebhooksUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
 	previousSender := webhooksSender
-	previousStats := statsCollector
 	sender := &recordingWebhooksSender{}
 	webhooksSender = sender
-	statsCollector = stats_collector.NewNoopStatsCollector()
+	setStatsCollectorForTest(t, stats_collector.NewNoopStatsCollector())
 	defer func() {
 		webhooksSender = previousSender
-		statsCollector = previousStats
 	}()
 
 	now := time.Now().Unix()
@@ -490,7 +486,6 @@ func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T
 	previousStationQueue := stationQueue
 	previousStationBattleQueue := stationBattleQueue
 	previousSender := webhooksSender
-	previousStats := statsCollector
 	stats := stats_collector.NewNoopStatsCollector()
 	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
 		Name:      "station",
@@ -505,12 +500,11 @@ func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T
 		KeyFunc:   func(d stationBattleWrite) string { return d.StationId },
 	})
 	webhooksSender = &recordingWebhooksSender{}
-	statsCollector = stats
+	setStatsCollectorForTest(t, stats)
 	defer func() {
 		stationQueue = previousStationQueue
 		stationBattleQueue = previousStationBattleQueue
 		webhooksSender = previousSender
-		statsCollector = previousStats
 	}()
 
 	now := time.Now().Unix()

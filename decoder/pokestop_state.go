@@ -43,7 +43,7 @@ func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId strin
 	return timedDbQuery("loadPokestopFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, pokestop,
 			`SELECT `+pokestopSelectColumns+` FROM pokestop WHERE id = ?`, fortId)
-		statsCollector.IncDbQuery("select pokestop", err)
+		getStatsCollector().IncDbQuery("select pokestop", err)
 		if err == nil {
 			pokestop.afterLoadFromDB()
 		}
@@ -410,7 +410,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 				:showcase_pokemon_form_id, :showcase_pokemon_type_id, :showcase_ranking_standard, :showcase_expiry, :showcase_rankings)`,
 			pokestop)
 
-		statsCollector.IncDbQuery("insert pokestop", err)
+		getStatsCollector().IncDbQuery("insert pokestop", err)
 		if err != nil {
 			log.Errorf("insert pokestop: %s", err)
 			return err
@@ -472,7 +472,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 			WHERE id = :id`,
 			pokestop,
 		)
-		statsCollector.IncDbQuery("update pokestop", err)
+		getStatsCollector().IncDbQuery("update pokestop", err)
 		if err != nil {
 			log.Errorf("update pokestop %s: %s", pokestop.Id, err)
 			return err
@@ -505,7 +505,7 @@ func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geo
 			"WHERE lat >= ? AND lon >= ? AND lat <= ? AND lon <= ? AND enabled = 1 "+
 			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
 		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
-	statsCollector.IncDbQuery("select pokestops for quest removal", err)
+	getStatsCollector().IncDbQuery("select pokestops for quest removal", err)
 	if err != nil {
 		return 0, err
 	}
@@ -567,7 +567,7 @@ func ExpireQuests(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 	var expiredQuestIds []string
 	err := dbDetails.GeneralDb.SelectContext(ctx, &expiredQuestIds,
 		"SELECT id FROM pokestop WHERE quest_expiry IS NOT NULL AND quest_expiry < ?", now)
-	statsCollector.IncDbQuery("select expired quests", err)
+	getStatsCollector().IncDbQuery("select expired quests", err)
 	if err != nil {
 		return 0, err
 	}
@@ -576,7 +576,7 @@ func ExpireQuests(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 	var expiredAltQuestIds []string
 	err = dbDetails.GeneralDb.SelectContext(ctx, &expiredAltQuestIds,
 		"SELECT id FROM pokestop WHERE alternative_quest_expiry IS NOT NULL AND alternative_quest_expiry < ?", now)
-	statsCollector.IncDbQuery("select expired alt quests", err)
+	getStatsCollector().IncDbQuery("select expired alt quests", err)
 	if err != nil {
 		return 0, err
 	}
