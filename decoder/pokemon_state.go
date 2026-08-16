@@ -231,10 +231,11 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			// Determine delay based on seen type
 			// Wild/nearby Pokemon wait for potential encounter data, encounter writes immediately
 			delay := time.Duration(0)
-			// pokemon.SeenType.Valid guards the switch: SeenTypeCode's zero
-			// value is SeenTypeCodeWild, so an unset SeenType would otherwise
-			// false-match the Wild case and delay a write that should go out
-			// immediately.
+			// pokemon.SeenType.Valid guards the switch even though
+			// SeenTypeCode's zero value is now SeenTypeCodeUnset (matches no
+			// case below, so an unguarded read is harmless): belt and
+			// braces, kept so the intent — an unset SeenType never delays a
+			// write — stays explicit rather than relying on the sentinel.
 			if pokemon.SeenType.Valid {
 				switch pokemon.SeenType.Code {
 				case SeenTypeCodeWild, SeenTypeCodeLureWild, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
