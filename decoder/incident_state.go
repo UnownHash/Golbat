@@ -126,9 +126,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	// Debug logging before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Incident", incident.Id, incident.changedFields)
+			dbDebugLog("INSERT", "Incident", incident.Id, incident.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
+			dbDebugLog("UPDATE", "Incident", incident.Id, incident.debug.fields())
 		}
 	}
 
@@ -159,7 +159,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	}
 
 	if dbDebugEnabled {
-		incident.changedFields = incident.changedFields[:0]
+		incident.debug.reset()
 	}
 	incident.ClearDirty()
 	if isNewRecord {

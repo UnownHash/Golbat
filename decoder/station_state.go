@@ -201,9 +201,9 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		// Debug logging before queueing
 		if dbDebugEnabled {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Station", station.Id, station.changedFields)
+				dbDebugLog("INSERT", "Station", station.Id, station.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Station", station.Id, station.changedFields)
+				dbDebugLog("UPDATE", "Station", station.Id, station.debug.fields())
 			}
 		}
 
@@ -225,7 +225,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 
 	if stationNeedsWrite && dbDebugEnabled {
-		station.changedFields = station.changedFields[:0]
+		station.debug.reset()
 	}
 	if stationNeedsWrite {
 		station.ClearDirty()

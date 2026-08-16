@@ -72,7 +72,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 	//
 	// Task 6 dropped the `changedFields []string` field (24 bytes): 416 - 24
 	// = 392. In a PRODUCTION (non-dbdebug)
-	// build the field's replacement, `debug pokemonDebugState`, is defined
+	// build the field's replacement, `debug debugChangeAccumulator`, is defined
 	// zero-sized (see db_debug_off.go), so it costs nothing — the 392 is a
 	// real, full 24-byte reduction in compiled struct size, not a rounding
 	// artifact. It did NOT change the GC size class the allocator actually
@@ -92,7 +92,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// exactly, against 416.0 for a 392-byte control struct. Each history
 	// entry also shrank, 88 -> 44 bytes (allocator 96 -> 48).
 	//
-	// A dbdebug build (`-tags dbdebug`) keeps pokemonDebugState's real
+	// A dbdebug build (`-tags dbdebug`) keeps debugChangeAccumulator's real
 	// `[]string` accumulator (24 bytes, see db_debug.go) so it can still
 	// aggregate per-field change descriptions into one dbDebugLog line per
 	// save, matching the original behavior. Pokemon is therefore 376 bytes
@@ -113,7 +113,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 		t.Errorf("unsafe.Sizeof(PokemonData{}) = %d, want %d", got, wantPokemonData)
 	}
 	if dbDebugEnabled {
-		// dbdebug build: pokemonDebugState carries a real 24-byte slice
+		// dbdebug build: debugChangeAccumulator carries a real 24-byte slice
 		// header, so Pokemon is 24 bytes larger (376). See the comment above
 		// wantPokemon for why this test doesn't pin the production number
 		// here.
@@ -138,5 +138,55 @@ func TestPokemonEntitySizes(t *testing.T) {
 func TestPokemonUnderGCThreshold(t *testing.T) {
 	if got := unsafe.Sizeof(Pokemon{}); got > gcSizeThreshold {
 		t.Errorf("unsafe.Sizeof(Pokemon{}) = %d, want <= %d", got, gcSizeThreshold)
+	}
+}
+
+// TestClassMovedEntitySizes pins the four entities whose allocator size
+// class actually moved when their `changedFields []string` field was
+// replaced by the shared debugChangeAccumulator (a build-tag-split type,
+// real accumulator under -tags dbdebug and zero-sized otherwise — see
+// db_debug.go / db_debug_off.go and the `debug` field on each struct below).
+//
+// Eight entities got this same 24-byte-field-drop treatment; only these four
+// crossed a Go size-class boundary in the production (non-dbdebug) build, so
+// only these four get an allocator-visible win and only these four are
+// pinned here. The other four (Pokestop, Gym, Route, Player) shrank their
+// compiled struct size by the same 24 bytes but landed in the SAME size
+// class as before — nothing for the allocator to hand out less of — so
+// pinning them would just be nine constants to maintain for four real wins
+// (see review-task-4-report.md for the full measured table and the
+// scan-vs-noscan class-table wrinkle that makes "shrank 24 bytes" not
+// synonymous with "moved a class" here).
+//
+// Sizes measured with runtime.MemStats.TotalAlloc delta / n (n=100000 live
+// pointers each, matching TestPokemonEntitySizes's methodology):
+//
+//	Station:    496 (class 512) -> 472 (class 480), 32 bytes/instance saved
+//	Spawnpoint: 136 (class 144) -> 104 (class 112), 32 bytes/instance saved
+//	Incident:   272 (class 288) -> 248 (class 256), 32 bytes/instance saved
+//	Tappable:   224 (class 224) -> 200 (class 208), 16 bytes/instance saved
+//
+// Spawnpoint is the one that matters most here: millions of entries cached,
+// same order of magnitude as Pokemon.
+//
+// This test only enforces the production (non-dbdebug) numbers, same
+// carve-out as TestPokemonEntitySizes: a dbdebug build's real accumulator
+// changes these compiled sizes (and isn't deployed at scale), so there is
+// nothing to gain by also pinning that number here.
+func TestClassMovedEntitySizes(t *testing.T) {
+	if dbDebugEnabled {
+		return
+	}
+	for name, tc := range map[string]struct {
+		got, want uintptr
+	}{
+		"Station":    {unsafe.Sizeof(Station{}), 472},
+		"Spawnpoint": {unsafe.Sizeof(Spawnpoint{}), 104},
+		"Incident":   {unsafe.Sizeof(Incident{}), 248},
+		"Tappable":   {unsafe.Sizeof(Tappable{}), 200},
+	} {
+		if tc.got != tc.want {
+			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)
+		}
 	}
 }

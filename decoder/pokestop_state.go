@@ -336,12 +336,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	if dbDebugEnabled {
 		if pokestop.IsDirty() {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.changedFields)
+				dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.changedFields)
+				dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.debug.fields())
 			}
 		} else {
-			dbDebugLog("MEMORY", "Pokestop", pokestop.Id, pokestop.changedFields)
+			dbDebugLog("MEMORY", "Pokestop", pokestop.Id, pokestop.debug.fields())
 		}
 	}
 
@@ -357,7 +357,7 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	}
 
 	if dbDebugEnabled {
-		pokestop.changedFields = pokestop.changedFields[:0]
+		pokestop.debug.reset()
 	}
 
 	if config.Config.FortInMemory {

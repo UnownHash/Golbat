@@ -116,9 +116,9 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	// Debug logging before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Route", route.Id, route.changedFields)
+			dbDebugLog("INSERT", "Route", route.Id, route.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Route", route.Id, route.changedFields)
+			dbDebugLog("UPDATE", "Route", route.Id, route.debug.fields())
 		}
 	}
 
@@ -133,7 +133,7 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	}
 
 	if dbDebugEnabled {
-		route.changedFields = route.changedFields[:0]
+		route.debug.reset()
 	}
 	route.ClearDirty()
 	if isNewRecord {
