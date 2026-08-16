@@ -14,12 +14,22 @@ import (
 // This struct is embedded in Pokemon and can be safely copied for write-behind
 // queueing.
 //
-// FIELD ORDER IS LOAD-BEARING. Fields are declared in descending alignment
-// order to minimise padding; the design doc's trial of these same narrowed
-// types in arbitrary order measured 264 bytes, against 280 in this order
-// (not the 232 originally estimated — see TestPokemonEntitySizes's comment
-// for why). That test guards the result — if it fails after you add a
-// field, read its doc comment before touching the constant.
+// FIELD ORDER IS LOAD-BEARING in the sense that a careless ordering
+// (interleaving fields of different alignments) can make this bigger than
+// 280 bytes — but not smaller. The field payload sums to 273 bytes (8-byte
+// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 23 + pointer
+// group 120), and Go's struct alignment (8, driven by the uint64/float64/
+// pointer fields) rounds any total up to the next multiple of 8: 280 either
+// way. This order achieves that minimum — the pointer group's own 8-byte
+// alignment forces exactly 7 bytes of mandatory padding immediately before
+// it (offset 153->160), and every other ordering pays those same 7 bytes
+// somewhere else instead (e.g. as trailing padding at the very end), not
+// zero. The design doc's original estimate of 232 for this order (264 for
+// an arbitrary one) was an arithmetic error — 264 was never achievable
+// either, being below the 273-byte payload. See TestPokemonEntitySizes's
+// comment for the full breakdown; that test guards the 280 result — if it
+// fails after you add a field, read its doc comment before touching the
+// constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
 // sql/*.up.sql, NOT against the schema comment further down this file, which
@@ -489,6 +499,15 @@ func (pokemon *Pokemon) SetMove2(v null.Int) {
 	}
 }
 
+// SetHeight compares the clamped float32 values for exact equality rather
+// than the null.Float tolerance comparison the pre-narrowing setter used
+// (nullFloatAlmostEqual, floatTolerance=1e-6). That tolerance existed to
+// absorb float64 promotion jitter on values not yet narrowed; here both the
+// stored and incoming value are already float32 by the time they're
+// compared, so sub-float32-precision jitter has already been collapsed by
+// clampFloat32 itself, and two "same" readings land on the identical float32
+// bit pattern. Dropping the tolerance was a deliberate simplification, not
+// an oversight — flag it for review if a case turns up where it isn't.
 func (pokemon *Pokemon) SetHeight(v null.Float) {
 	next := clampFloat32(v)
 	if pokemon.Height != next {
@@ -500,6 +519,8 @@ func (pokemon *Pokemon) SetHeight(v null.Float) {
 	}
 }
 
+// SetWeight: see SetHeight's doc comment — same deliberate drop of the
+// tolerance comparison, same reasoning.
 func (pokemon *Pokemon) SetWeight(v null.Float) {
 	next := clampFloat32(v)
 	if pokemon.Weight != next {
