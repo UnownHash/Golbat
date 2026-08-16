@@ -12,6 +12,7 @@ import (
 // Pokemon is cached in the millions, so staying under this is the entire point
 // of the packing work in
 // docs/superpowers/specs/2026-08-16-pokemon-struct-packing-design.md.
+//
 //nolint:unused
 const gcSizeThreshold = 512
 
@@ -24,9 +25,22 @@ const gcSizeThreshold = 512
 // either side of Pokemon are 416, 448, 480 and 512 bytes. Check which one you
 // landed in, and whether the field could be narrower or live somewhere else.
 func TestPokemonEntitySizes(t *testing.T) {
+	// wantPokemonData: the design doc estimated 232 for this field order, but
+	// measured is 280. The doc's estimate treated "pointer-carrying, last" as
+	// free; it isn't — grouping PokestopId/SeenType/Username/Pvp/GolbatInternal
+	// at the end (their own 8-byte alignment, deliberately kept separate from
+	// the struct's other 8-byte-aligned fields for a tighter GC pointer scan)
+	// reintroduces the 7 bytes of padding a fully-monotonic size ordering would
+	// have avoided. Still 592 -> 280: a 2.1x reduction. Landing inside the
+	// [257, 288] Go GC size class either way, so no field regrouping was made
+	// to chase the doc's number — see this test's file-level comment for why
+	// that's not how a fail here should be resolved.
+	//
+	// wantPokemon: 800 -> 456, still carries `changedFields []string` and
+	// `internal grpc.PokemonInternal`, both left for a later task.
 	const (
-		wantPokemonData = 592
-		wantPokemon     = 800
+		wantPokemonData = 280
+		wantPokemon     = 456
 	)
 
 	if got := unsafe.Sizeof(PokemonData{}); got != wantPokemonData {

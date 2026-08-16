@@ -149,7 +149,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	if pokemon.FirstSeenTimestamp == 0 {
-		pokemon.FirstSeenTimestamp = now
+		pokemon.FirstSeenTimestamp = uint32(now)
 	}
 
 	pokemon.SetUpdated(null.IntFrom(now))
@@ -274,7 +274,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	// Webhooks and stats happen immediately (not queued)
-	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
+	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, pokemon.CellId.ValueOrZero())
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}
@@ -422,7 +422,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 
 		spawnpointId := "None"
 		if pokemon.SpawnId.Valid {
-			spawnpointId = strconv.FormatInt(pokemon.SpawnId.ValueOrZero(), 16)
+			spawnpointId = strconv.FormatUint(pokemon.SpawnId.ValueOrZero(), 16)
 		}
 
 		pokestopId := "None"
@@ -454,34 +454,39 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			PokemonId:             pokemon.PokemonId,
 			Latitude:              pokemon.Lat,
 			Longitude:             pokemon.Lon,
-			DisappearTime:         pokemon.ExpireTimestamp.ValueOrZero(),
+			DisappearTime:         int64(pokemon.ExpireTimestamp.ValueOrZero()),
 			DisappearTimeVerified: pokemon.ExpireTimestampVerified,
-			FirstSeen:             pokemon.FirstSeenTimestamp,
-			LastModifiedTime:      pokemon.Updated,
-			Gender:                pokemon.Gender,
-			Cp:                    pokemon.Cp,
-			Form:                  pokemon.Form,
-			Costume:               pokemon.Costume,
-			IndividualAttack:      pokemon.AtkIv,
-			IndividualDefense:     pokemon.DefIv,
-			IndividualStamina:     pokemon.StaIv,
-			PokemonLevel:          pokemon.Level,
-			Move1:                 pokemon.Move1,
-			Move2:                 pokemon.Move2,
-			Weight:                pokemon.Weight,
-			Size:                  pokemon.Size,
-			Height:                pokemon.Height,
-			Weather:               pokemon.Weather,
-			Capture1:              pokemon.Capture1.ValueOrZero(),
-			Capture2:              pokemon.Capture2.ValueOrZero(),
-			Capture3:              pokemon.Capture3.ValueOrZero(),
-			Shiny:                 pokemon.Shiny,
-			Username:              pokemon.Username,
-			DisplayPokemonId:      pokemon.DisplayPokemonId,
-			DisplayPokemonForm:    pokemon.DisplayPokemonForm,
-			IsEvent:               pokemon.IsEvent,
-			SeenType:              pokemon.SeenType,
-			Pvp:                   pvp,
+			FirstSeen:             int64(pokemon.FirstSeenTimestamp),
+			LastModifiedTime:      nullIntFromUint(pokemon.Updated),
+			Gender:                nullIntFromUint(pokemon.Gender),
+			Cp:                    nullIntFromUint(pokemon.Cp),
+			Form:                  nullIntFromUint(pokemon.Form),
+			Costume:               nullIntFromUint(pokemon.Costume),
+			IndividualAttack:      nullIntFromUint(pokemon.AtkIv),
+			IndividualDefense:     nullIntFromUint(pokemon.DefIv),
+			IndividualStamina:     nullIntFromUint(pokemon.StaIv),
+			PokemonLevel:          nullIntFromUint(pokemon.Level),
+			Move1:                 nullIntFromUint(pokemon.Move1),
+			Move2:                 nullIntFromUint(pokemon.Move2),
+			Weight:                nullFloatFromFloat32(pokemon.Weight),
+			Size:                  nullIntFromUint(pokemon.Size),
+			Height:                nullFloatFromFloat32(pokemon.Height),
+			Weather:               nullIntFromUint(pokemon.Weather),
+			// capture_1/2/3 have never been populated by any code path — the
+			// setters existed but had no callers, and the columns were in
+			// neither pokemonSelectColumns nor pokemonBatchUpsertQuery. The
+			// payload keeps the fields at their long-standing value so
+			// consumers see no change.
+			Capture1:           0,
+			Capture2:           0,
+			Capture3:           0,
+			Shiny:              nullBoolFromNulltypes(pokemon.Shiny),
+			Username:           pokemon.Username,
+			DisplayPokemonId:   nullIntFromUint(pokemon.DisplayPokemonId),
+			DisplayPokemonForm: nullIntFromUint(pokemon.DisplayPokemonForm),
+			IsEvent:            pokemon.IsEvent,
+			SeenType:           pokemon.SeenType,
+			Pvp:                pvp,
 		}
 
 		if pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid {

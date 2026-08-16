@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -82,6 +83,40 @@ type ApiPokemonResult struct {
 	IsEvent                 int8           `json:"is_event" doc:"Whether the pokemon is part of an event"`
 }
 
+// widenPtr converts a pointer to a narrow numeric into a pointer to a wider
+// one, preserving nil. The API response types stay as they are: api.md is a
+// public contract and the storage width is an internal detail.
+func widenPtr[N, W ~int8 | ~int16 | ~int32 | ~int64 | ~uint8 | ~uint16 | ~uint32 | ~uint64](p *N) *W {
+	if p == nil {
+		return nil
+	}
+	w := W(*p)
+	return &w
+}
+
+// widenFloatPtr converts a *float32 into a *float64 for the API response,
+// preserving nil. Deliberately NOT a naive float64(*p) cast (which is what
+// widenPtr's numeric widening does for the integer fields): promoting a
+// float32 straight to float64 exposes the float32's own binary rounding at
+// float64's tighter shortest-round-trip resolution — 3.14 becomes
+// 3.140000104904175 — which is worse than what shipped before this field was
+// narrowed. Round-tripping through the shortest decimal string that
+// reproduces the SAME float32 value (bitSize 32, same technique
+// nulltypes.NullFloat32.MarshalJSON uses) keeps the compact rendering
+// instead, without changing ApiPokemonResult's *float64 wire type.
+func widenFloatPtr(p *float32) *float64 {
+	if p == nil {
+		return nil
+	}
+	v, err := strconv.ParseFloat(strconv.FormatFloat(float64(*p), 'f', -1, 32), 64)
+	if err != nil {
+		// Unreachable: FormatFloat's shortest-round-trip output always
+		// parses back cleanly.
+		v = float64(*p)
+	}
+	return &v
+}
+
 // buildApiPokemonResult builds an ApiPokemonResult from a cached Pokemon.
 //
 // PARITY: Capture1, Capture2, Capture3 and IsEvent are intentionally left unset.
@@ -92,33 +127,33 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 	return ApiPokemonResult{
 		Id:                      pokemon.Id.String(),
 		PokestopId:              pokemon.PokestopId.Ptr(),
-		SpawnId:                 pokemon.SpawnId.Ptr(),
+		SpawnId:                 widenPtr[uint64, int64](pokemon.SpawnId.Ptr()),
 		Lat:                     pokemon.Lat,
 		Lon:                     pokemon.Lon,
-		Weight:                  pokemon.Weight.Ptr(),
-		Size:                    pokemon.Size.Ptr(),
-		Height:                  pokemon.Height.Ptr(),
-		ExpireTimestamp:         pokemon.ExpireTimestamp.Ptr(),
-		Updated:                 pokemon.Updated.Ptr(),
+		Weight:                  widenFloatPtr(pokemon.Weight.Ptr()),
+		Size:                    widenPtr[uint8, int64](pokemon.Size.Ptr()),
+		Height:                  widenFloatPtr(pokemon.Height.Ptr()),
+		ExpireTimestamp:         widenPtr[uint32, int64](pokemon.ExpireTimestamp.Ptr()),
+		Updated:                 widenPtr[uint32, int64](pokemon.Updated.Ptr()),
 		PokemonId:               pokemon.PokemonId,
-		Move1:                   pokemon.Move1.Ptr(),
-		Move2:                   pokemon.Move2.Ptr(),
-		Gender:                  pokemon.Gender.Ptr(),
-		Cp:                      pokemon.Cp.Ptr(),
-		AtkIv:                   pokemon.AtkIv.Ptr(),
-		DefIv:                   pokemon.DefIv.Ptr(),
-		StaIv:                   pokemon.StaIv.Ptr(),
-		Iv:                      pokemon.Iv.Ptr(),
-		Form:                    pokemon.Form.Ptr(),
-		Level:                   pokemon.Level.Ptr(),
-		Weather:                 pokemon.Weather.Ptr(),
-		Costume:                 pokemon.Costume.Ptr(),
-		FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
-		Changed:                 pokemon.Changed,
-		CellId:                  pokemon.CellId.Ptr(),
+		Move1:                   widenPtr[uint16, int64](pokemon.Move1.Ptr()),
+		Move2:                   widenPtr[uint16, int64](pokemon.Move2.Ptr()),
+		Gender:                  widenPtr[uint8, int64](pokemon.Gender.Ptr()),
+		Cp:                      widenPtr[uint16, int64](pokemon.Cp.Ptr()),
+		AtkIv:                   widenPtr[uint8, int64](pokemon.AtkIv.Ptr()),
+		DefIv:                   widenPtr[uint8, int64](pokemon.DefIv.Ptr()),
+		StaIv:                   widenPtr[uint8, int64](pokemon.StaIv.Ptr()),
+		Iv:                      widenFloatPtr(pokemon.Iv.Ptr()),
+		Form:                    widenPtr[uint16, int64](pokemon.Form.Ptr()),
+		Level:                   widenPtr[uint8, int64](pokemon.Level.Ptr()),
+		Weather:                 widenPtr[uint8, int64](pokemon.Weather.Ptr()),
+		Costume:                 widenPtr[uint8, int64](pokemon.Costume.Ptr()),
+		FirstSeenTimestamp:      int64(pokemon.FirstSeenTimestamp),
+		Changed:                 int64(pokemon.Changed),
+		CellId:                  widenPtr[uint64, int64](pokemon.CellId.Ptr()),
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
-		DisplayPokemonId:        pokemon.DisplayPokemonId.Ptr(),
-		DisplayPokemonForm:      pokemon.DisplayPokemonForm.Ptr(),
+		DisplayPokemonId:        widenPtr[uint16, int64](pokemon.DisplayPokemonId.Ptr()),
+		DisplayPokemonForm:      widenPtr[uint16, int64](pokemon.DisplayPokemonForm.Ptr()),
 		IsDitto:                 pokemon.IsDitto,
 		SeenType:                pokemon.SeenType.Ptr(),
 		Shiny:                   pokemon.Shiny.Ptr(),
@@ -194,7 +229,7 @@ func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
 	for _, key := range keys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
 		if pokemon != nil {
-			if pokemon.ExpireTimestamp.ValueOrZero() > nowUnix {
+			if int64(pokemon.ExpireTimestamp.ValueOrZero()) > nowUnix {
 				results = append(results, buildApiPokemonResult(pokemon))
 			}
 			unlock()
