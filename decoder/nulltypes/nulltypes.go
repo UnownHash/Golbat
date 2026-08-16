@@ -17,7 +17,10 @@ package nulltypes
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding/json"
 	"fmt"
+	"math"
+	"reflect"
 	"strconv"
 )
 
@@ -167,10 +170,15 @@ func (n *NullUint[T]) UnmarshalJSON(data []byte) error {
 // NullUint64 is a nullable uint64.
 //
 // At 16 bytes it is the same size as guregu/null's Int and saves nothing; it
-// exists for type clarity and because cell_id needs the full 64-bit range.
-// MariaDB's `bigint unsigned` round-trips through the driver as a signed
-// int64, so Scan and Value reinterpret the bits rather than range-checking.
-// This matches the existing uint64(x.Int64) casts at decoder/preload.go.
+// exists for type clarity and because the full 64-bit range is needed for
+// certain fields.
+//
+// The type is designed for signed bigint columns (the current schema), and
+// Scan tolerates both signed int64 values (reinterpreted as bit patterns) and
+// genuine uint64 values. For []byte/string inputs, it tries ParseInt first,
+// then ParseUint as a fallback, so both signed and unsigned representations
+// round-trip correctly. This matches the existing uint64(x.Int64) casts at
+// decoder/preload.go.
 type NullUint64 struct {
 	V     uint64
 	Valid bool
@@ -204,12 +212,30 @@ func (n *NullUint64) Scan(value any) error {
 		n.V, n.Valid = u, true
 		return nil
 	}
+	// Try signed int64 path first (for signed bigint columns).
 	i, err := asInt64(value)
-	if err != nil {
-		return fmt.Errorf("nulltypes: scanning uint64: %w", err)
+	if err == nil {
+		n.V, n.Valid = uint64(i), true
+		return nil
 	}
-	n.V, n.Valid = uint64(i), true
-	return nil
+	// Fallback to unsigned for []byte/string values that may represent
+	// unsigned numbers above MaxInt64 (unlikely but prevents silent failure
+	// if schema changes).
+	if b, ok := value.([]byte); ok {
+		u, err := strconv.ParseUint(string(b), 10, 64)
+		if err == nil {
+			n.V, n.Valid = u, true
+			return nil
+		}
+	}
+	if s, ok := value.(string); ok {
+		u, err := strconv.ParseUint(s, 10, 64)
+		if err == nil {
+			n.V, n.Valid = u, true
+			return nil
+		}
+	}
+	return fmt.Errorf("nulltypes: scanning uint64: %w", err)
 }
 
 func (n NullUint64) Value() (driver.Value, error) {
@@ -244,6 +270,12 @@ func (n *NullUint64) UnmarshalJSON(data []byte) error {
 // Used for weight, height and iv, which are approximate game-supplied values.
 // Latitude and longitude deliberately stay float64: the columns are
 // double(18,14) and the precision is load-bearing for spatial matching.
+//
+// JSON marshalling uses bitSize 32, deliberately differing from guregu/null's
+// bitSize 64. The values come from protobuf float fields promoted through
+// float64(), so the extra digits in bitSize 64 carry no information. This
+// produces cleaner JSON output (e.g. 6.7 instead of 6.699999809265137) and
+// matches the precision the application actually needs.
 type NullFloat32 struct {
 	V     float32
 	Valid bool
@@ -292,7 +324,14 @@ func (n NullFloat32) MarshalJSON() ([]byte, error) {
 	if !n.Valid {
 		return []byte("null"), nil
 	}
-	return strconv.AppendFloat(nil, float64(n.V), 'f', -1, 32), nil
+	// Reject NaN/Inf — they would produce invalid JSON tokens.
+	// Golbat's raw ingest is client-supplied data, so a malformed proto float
+	// must surface an error, not silently corrupt the payload.
+	f := float64(n.V)
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return nil, &json.UnsupportedValueError{Value: reflect.ValueOf(n.V), Str: fmt.Sprintf("NullFloat32(%v)", n.V)}
+	}
+	return strconv.AppendFloat(nil, f, 'f', -1, 32), nil
 }
 
 func (n *NullFloat32) UnmarshalJSON(data []byte) error {

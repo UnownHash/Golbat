@@ -2,6 +2,7 @@ package nulltypes
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 	"unsafe"
 
@@ -186,22 +187,83 @@ func TestBool(t *testing.T) {
 // TestUint64FullRange covers the S2 cell id case: cell_id is `bigint unsigned`
 // and uses the full 64-bit range, but the driver hands it back as a signed
 // int64. The bits must survive, matching the existing uint64(x.Int64) casts at
-// decoder/preload.go.
+// decoder/preload.go. Also tests the []byte path for completeness.
 func TestUint64FullRange(t *testing.T) {
-	cellID := uint64(0xFFFFFFFFFFFFFFF0)
-	cellIDAsInt := int64(cellID) // bit reinterpretation
-	var n NullUint64
-	if err := n.Scan(cellIDAsInt); err != nil {
-		t.Fatalf("Scan: %v", err)
-	}
-	if !n.Valid || n.V != cellID {
-		t.Errorf("Scan = {%#x %t}, want {%#x true}", n.V, n.Valid, cellID)
-	}
-	v, err := n.Value()
+	t.Run("int64-path", func(t *testing.T) {
+		cellID := uint64(0xFFFFFFFFFFFFFFF0)
+		cellIDAsInt := int64(cellID) // bit reinterpretation
+		var n NullUint64
+		if err := n.Scan(cellIDAsInt); err != nil {
+			t.Fatalf("Scan: %v", err)
+		}
+		if !n.Valid || n.V != cellID {
+			t.Errorf("Scan = {%#x %t}, want {%#x true}", n.V, n.Valid, cellID)
+		}
+		v, err := n.Value()
+		if err != nil {
+			t.Fatalf("Value: %v", err)
+		}
+		if v != cellIDAsInt {
+			t.Errorf("Value = %v, want %v", v, cellIDAsInt)
+		}
+	})
+
+	t.Run("bytes-path", func(t *testing.T) {
+		// Test that []byte path also survives the full range via ParseUint fallback.
+		bytesVal := []byte("14219788758686216192") // decimal representation of 0xC5A0000000000000
+		var n NullUint64
+		if err := n.Scan(bytesVal); err != nil {
+			t.Fatalf("Scan: %v", err)
+		}
+		if !n.Valid || n.V != 14219788758686216192 {
+			t.Errorf("Scan bytes = {%d %t}, want {14219788758686216192 true}", n.V, n.Valid)
+		}
+	})
+}
+
+// TestFloat32JSONIsNarrower verifies that NullFloat32 deliberately produces
+// narrower JSON than guregu/null (bitSize 32 vs 64). This is the expected
+// behavior — the values come from protobuf float fields promoted through
+// float64(), so the extra digits in bitSize 64 are promotion noise with no
+// information.
+func TestFloat32JSONIsNarrower(t *testing.T) {
+	val := float32(6.7)
+	mine, err := json.Marshal(Float32From(val))
 	if err != nil {
-		t.Fatalf("Value: %v", err)
+		t.Fatalf("marshal: %v", err)
 	}
-	if v != cellIDAsInt {
-		t.Errorf("Value = %v, want %v", v, cellIDAsInt)
+	theirs, err := json.Marshal(null.FloatFrom(float64(val)))
+	if err != nil {
+		t.Fatalf("marshal guregu: %v", err)
+	}
+	// Verify the divergence is intentional: mine should be narrower
+	if string(mine) == string(theirs) {
+		t.Errorf("marshal = %s, but should differ from guregu = %s (bitSize 32 vs 64)", mine, theirs)
+	}
+	// Verify mine is the cleaner output
+	if string(mine) != "6.7" {
+		t.Errorf("marshal = %s, want 6.7 (bitSize 32 produces clean output)", mine)
+	}
+}
+
+// TestFloat32JSONNaNInf verifies that NaN and Inf values return an error
+// rather than emitting invalid JSON tokens.
+func TestFloat32JSONNaNInf(t *testing.T) {
+	cases := []struct {
+		name string
+		val  float32
+	}{
+		{"NaN", float32(math.NaN())},
+		{"Inf", float32(math.Inf(1))},
+		{"NegInf", float32(math.Inf(-1))},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			n := Float32From(c.val)
+			_, err := json.Marshal(n)
+			if err == nil {
+				t.Error("MarshalJSON returned nil error, want UnsupportedValueError")
+			}
+		})
 	}
 }
