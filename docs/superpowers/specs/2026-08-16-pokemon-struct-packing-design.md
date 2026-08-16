@@ -155,7 +155,7 @@ spatial matching.
 | `Lat` | `float64` (8) | `double(18,14)` NOT NULL | unchanged (8) |
 | `Lon` | `float64` (8) | `double(18,14)` NOT NULL | unchanged (8) |
 | `Weight` | `null.Float` (16) | `double(18,14)` | `NullFloat32` (8) |
-| `Size` | `null.Int` (16) | `double(18,14)`, actual range 1–5 | `NullUint8` (2) |
+| `Size` | `null.Int` (16) | `tinyint unsigned` | `NullUint8` (2) |
 | `Height` | `null.Float` (16) | `double(18,14)` | `NullFloat32` (8) |
 | `ExpireTimestamp` | `null.Int` (16) | `int unsigned` | `NullUint32` (8) |
 | `Updated` | `null.Int` (16) | `int unsigned` | `NullUint32` (8) |
@@ -250,6 +250,22 @@ boundaries, so both wire formats are unchanged.
 The four-value enum at `decoder/pokemon.go:117` and in
 `sql/1_rdmdb_tables.up.sql` is a stale schema comment. The migrations are
 authoritative.
+
+### The schema comment is not to be trusted
+
+Three separate claims in the block comment at `decoder/pokemon.go:88-140` are
+out of date, and two of them nearly sent this design the wrong way:
+
+- `iv` is described as `GENERATED ALWAYS AS ... VIRTUAL`;
+  `sql/11_ivchanges.up.sql` replaced it with a plain writable column.
+- `seen_type` is described as a four-value enum;
+  `sql/45_tappables_seen_type_lure.up.sql` widened it to eight.
+- `size` is described as `double(18,14)`; `sql/7_add_height_size.up.sql`
+  renamed that column to `height` and added a new `size tinyint unsigned`.
+
+**Verify every column type against `sql/*.up.sql` before narrowing it**, not
+against the comment. Refreshing the comment to match is worth doing as part of
+this work.
 
 ### Expected result
 
