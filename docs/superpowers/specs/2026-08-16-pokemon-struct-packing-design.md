@@ -442,3 +442,60 @@ That measurement takes about 30 minutes and should gate the effort.
   caller string into its `atomic.Value`. That is allocation-rate pressure on
   every entity access, unrelated to this design, but it surfaced during
   measurement and deserves its own look.
+
+## Results
+
+Measured on 2026-08-16 following Tasks 1–6 implementation:
+
+### Measured sizes
+
+Running `go test -tags go_json -run 'TestPokemonEntitySizes|TestPokemonUnderGCThreshold' -v ./decoder/`:
+
+- `PokemonData`: 256 bytes (from 592)
+- `Pokemon`: 392 bytes in production builds (from 800)
+- `Pokemon`: 416 bytes under `-tags dbdebug` build
+
+### Where the design got the numbers wrong
+
+**1. The 232-byte estimate for `PokemonData` was arithmetically impossible.**
+
+The field set carries 273 bytes of payload (8-byte group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 23 + pointer group 120). Go's struct alignment is 8 bytes, driven by `uint64`/`float64`/pointer fields. No field ordering can fit 273 bytes of payload into less than 280 bytes — this is the alignment floor, not a target that better ordering approaches. Task 3 measured exactly 280 bytes, confirming the minimum. Field ordering is still load-bearing (a careless reordering adds padding), but it cannot beat 280 for this field set.
+
+Task 5's `SeenType` narrowing (24-byte `null.String` to 2-byte `NullUint8`) reduced the pointer group from 120 bytes to 96 bytes, dropping the overall payload to 251 bytes and rounding to 256. The design's original estimate of 232 was wrong; 256 is what the architecture actually delivers.
+
+**2. The Task 6 `changedFields` removal produced no allocator saving.**
+
+Removing the 24-byte `changedFields []string` field shrunk `Pokemon` structurally from 416 to 392 bytes. However, Go's allocation size classes put both 416 and 392 in the same size class (416 bytes), so the allocator hands out identical 416-byte blocks either way. The structural shrink does not translate to heap savings.
+
+What Task 6 did buy:
+- One fewer pointer word in the GC scan bitmap per cached pokemon
+- Removal of a field that was already dead in production builds (the replacement under non-dbdebug is zero-sized)
+
+The field deletion improved the struct definition; it did not improve what the allocator actually hands out.
+
+### What the change delivered
+
+**Go's size-class boundaries are what matter.**
+
+- **Before:** `Pokemon` at 800 bytes fits in the 896-byte size class → allocator returns 896 bytes
+- **After:** `Pokemon` at 392 bytes fits in the 416-byte size class → allocator returns 416 bytes
+- **Per-entity saving:** 896 − 416 = **480 bytes**
+- **At 5M cached pokemon:** 480 × 5,000,000 = **2.4 GB**
+
+This matches the design's prediction of "roughly 480 bytes per cached pokemon" and "about 2.4 GB at 5M." The headline number held.
+
+### GC threshold acceptance gate
+
+`TestPokemonUnderGCThreshold` (`decoder/entity_sizes_test.go:125-129`) enforces `unsafe.Sizeof(Pokemon{}) <= 512` bytes. At the measured 392 bytes, there is 120 bytes of headroom before the next threshold step at 520 bytes (where a single additional byte costs 3.1x mark time). Future field additions will trigger this gate rather than silently degrading GC performance.
+
+### CPU claim remains unverified
+
+The design estimated low single-digit percent CPU savings from reducing GC pressure. This claim is **unverified**. Tasks 1–3 of the verification plan require running `/debug/pprof` against a production Golbat instance with millions of cached pokemon. No such instance exists in this session, and the profiling data was never captured. The per-entity allocation saving (480 bytes at 5M) is measured; the CPU impact is predicted but not confirmed.
+
+### Reaching the 384-byte class
+
+The next size class down is 384 bytes, requiring roughly 32 more bytes trimmed. Candidates:
+- `PokemonOldValues` (32 bytes) — holds three nullable fields, could take the same narrowing treatment.
+- Embedded `grpc.PokemonInternal` (64 bytes) — a generated proto type.
+
+Both were left out of scope. The current 2.4 GB saving at 5M pokemon was sufficient, and either field would require additional scope and testing.
