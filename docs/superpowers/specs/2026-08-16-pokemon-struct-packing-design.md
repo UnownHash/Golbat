@@ -492,10 +492,12 @@ This matches the design's prediction of "roughly 480 bytes per cached pokemon" a
 
 The design estimated low single-digit percent CPU savings from reducing GC pressure. This claim is **unverified**. Tasks 1–3 of the verification plan require running `/debug/pprof` against a production Golbat instance with millions of cached pokemon. No such instance exists in this session, and the profiling data was never captured. The per-entity allocation saving (480 bytes at 5M) is measured; the CPU impact is predicted but not confirmed.
 
-### Reaching the 384-byte class
+### Reaching the 384-byte class — done during review, and it went further
 
-The next size class down is 384 bytes, requiring roughly 32 more bytes trimmed. Candidates:
+The next size class down was 384 bytes, requiring roughly 32 more bytes trimmed. Candidates:
 - `PokemonOldValues` (32 bytes) — holds three nullable fields, could take the same narrowing treatment.
 - Embedded `grpc.PokemonInternal` (64 bytes) — a generated proto type.
 
-Both were left out of scope. The current 2.4 GB saving at 5M pokemon was sufficient, and either field would require additional scope and testing.
+The second one was taken during maintainer review: the embedded message became `scanHistory []*pokemonScan`, a plain Go slice of plain Go structs, with the protobuf built only at the two boundaries that need bytes (see `decoder/pokemon_scan.go`). That is 40 bytes, not 32, so `Pokemon` went 392 → 352 and skipped the 384 class entirely — 352 is itself a size class, so the allocator hands out 352 instead of 416. Each scan-history entry also went 88 → 44 bytes (allocator 96 → 48).
+
+`PokemonOldValues` remains untouched and is still the lever if more headroom is ever wanted.

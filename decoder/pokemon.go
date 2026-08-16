@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"golbat/grpc"
-
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 )
@@ -95,7 +93,12 @@ type Pokemon struct {
 
 	PokemonData // Embedded data fields - can be copied for write-behind queue
 
-	internal grpc.PokemonInternal `db:"-"` // Memory-only internal state
+	// scanHistory is memory-only Ditto-detection state, hydrated from the
+	// golbat_internal column on demand (see populateInternal) and converted
+	// back to protobuf only when writing that column. Elements stay behind
+	// pointers because the Ditto code holds one across other work and
+	// mutates through it.
+	scanHistory []*pokemonScan `db:"-"`
 
 	dirty     bool `db:"-"` // Not persisted - tracks if object needs saving
 	newRecord bool `db:"-"`

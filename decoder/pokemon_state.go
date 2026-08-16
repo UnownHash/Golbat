@@ -209,7 +209,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			if strong != nil {
 				strong.RemoveDittoAuxInfo()
 			}
-			marshaled, err := proto.Marshal(&pokemon.internal)
+			marshaled, err := proto.Marshal(scanHistoryToProto(pokemon.scanHistory))
 			if err == nil {
 				pokemon.GolbatInternal = marshaled
 			} else {
