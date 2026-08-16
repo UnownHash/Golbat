@@ -21,14 +21,21 @@ const gcSizeThreshold = 512
 // If this fails because you added a field: do not simply update the constant.
 // Go rounds every heap allocation up to a size class, so the cost of your
 // field is not its own width but the distance to the next class boundary.
-// The classes either side of Pokemon's 392-byte compiled size are 384 and
-// 416 — unsafe.Sizeof(Pokemon{}) = 392 does NOT mean the allocator hands out
-// 392 bytes; it rounds up to 416, confirmed empirically (n=200000 live
-// *Pokemon, runtime.MemStats.TotalAlloc delta / n = 416.0 exactly). 392 is
-// mid-class: there is 24 bytes of free space before the next class boundary
-// (416) is actually crossed, so a modest field addition is "free" in
-// allocator terms even though it moves unsafe.Sizeof. Check which class you
-// landed in, and whether the field could be narrower or live somewhere else.
+//
+// THERE IS NO HEADROOM. Pokemon's 352-byte compiled size is EXACTLY a Go size
+// class, so the allocator hands out 352 bytes (confirmed empirically: n=200000
+// live *Pokemon, runtime.MemStats.TotalAlloc delta / n = 352.0 exactly). Every
+// byte you add crosses into the next class, 384. A single bool costs 32 bytes
+// per cached pokemon — roughly 160 MB at 5M, about half of what task 7 won by
+// removing the embedded protobuf.
+//
+// So a field addition here is NOT free, and this is the opposite of the
+// situation before task 7, when Pokemon sat mid-class at 392 with 24 bytes of
+// slack. If you are here because the test failed, the question is not "what is
+// the new number" — it is whether the field can be narrower, packed into an
+// existing byte, or live somewhere other than the per-pokemon struct. Bump the
+// constant only once you have decided the 32 bytes are worth paying, and say so
+// in the paragraph below.
 func TestPokemonEntitySizes(t *testing.T) {
 	// wantPokemonData: field payload sums to 273 bytes (8-byte group 56 +
 	// 4-byte group 48 + 2-byte group 26 + 1-byte group 23 + pointer group
@@ -68,9 +75,8 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// build the field's replacement, `debug pokemonDebugState`, is defined
 	// zero-sized (see db_debug_off.go), so it costs nothing — the 392 is a
 	// real, full 24-byte reduction in compiled struct size, not a rounding
-	// artifact. It does NOT change the GC size class the allocator actually
-	// hands out (see this test's top-of-function comment): 392 still rounds
-	// up to 416, same as before this task. The durable win is the removed
+	// artifact. It did NOT change the GC size class the allocator actually
+	// handed out: 392 still rounded up to 416, same as before that task. The durable win is the removed
 	// field itself — one fewer pointer word in the GC scan bitmap per cached
 	// pokemon, and a dead-in-production field gone from the struct — not a
 	// reduction in allocated bytes.
