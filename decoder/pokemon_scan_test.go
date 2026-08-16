@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"encoding/hex"
+	"reflect"
 	"testing"
 
 	"golbat/grpc"
@@ -81,9 +82,10 @@ func TestPopulateInternalDecodesLegacyBytes(t *testing.T) {
 // byte-identical to what the old code wrote for the same content (so a row
 // written after this change is still readable by a Golbat running before it).
 func TestScanHistoryWireRoundTrip(t *testing.T) {
-	history := make([]*pokemonScan, 0, 2)
-	for _, scan := range wantScanHistory() {
-		history = append(history, &scan)
+	scans := wantScanHistory()
+	history := make([]*pokemonScan, len(scans))
+	for i := range scans {
+		history[i] = &scans[i]
 	}
 
 	marshaled, err := proto.Marshal(scanHistoryToProto(history))
@@ -103,6 +105,46 @@ func TestScanHistoryWireRoundTrip(t *testing.T) {
 		t.Fatalf("unmarshal: %s", err)
 	}
 	assertScanHistory(t, scanHistoryFromProto(&decoded), wantScanHistory())
+}
+
+// TestPokemonScanCoversEveryProtoField fails loudly when grpc.PokemonScan
+// gains, loses or renames a field without pokemonScan following it. That drift
+// is invisible to every other test here: the golden fixture only knows about
+// the fields it was built with, so a thirteenth proto field would decode into
+// the temporary at the read boundary, never reach pokemonScan, and never be
+// written back — silent data loss on a column operators keep.
+func TestPokemonScanCoversEveryProtoField(t *testing.T) {
+	exportedFields := func(v any) map[string]struct{} {
+		names := map[string]struct{}{}
+		typ := reflect.TypeOf(v)
+		for i := 0; i < typ.NumField(); i++ {
+			if field := typ.Field(i); field.IsExported() {
+				names[field.Name] = struct{}{}
+			}
+		}
+		return names
+	}
+
+	want := exportedFields(grpc.PokemonScan{})
+	got := exportedFields(pokemonScan{})
+	for name := range want {
+		if _, ok := got[name]; !ok {
+			t.Errorf("grpc.PokemonScan.%s has no pokemonScan counterpart — add it to pokemonScan "+
+				"AND to both converters in pokemon_scan.go, or it is dropped at the boundary", name)
+		}
+	}
+	for name := range got {
+		if _, ok := want[name]; !ok {
+			t.Errorf("pokemonScan.%s does not exist on grpc.PokemonScan — it can never round-trip "+
+				"through golbat_internal", name)
+		}
+	}
+
+	// Cross-check against the wire descriptor: exported struct fields and
+	// declared proto fields should be the same set of twelve.
+	if n := (&grpc.PokemonScan{}).ProtoReflect().Descriptor().Fields().Len(); n != len(want) {
+		t.Errorf("grpc.PokemonScan has %d exported Go fields but %d proto fields", len(want), n)
+	}
 }
 
 func TestScanHistoryEmptyRoundTrip(t *testing.T) {

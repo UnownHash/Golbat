@@ -21,6 +21,13 @@ import (
 //
 // Fields are int32 to match the proto, so both conversions are a straight
 // copy. The two bools are last so the ten int32 pack without holes.
+//
+// ADDING A FIELD TO grpc.PokemonScan REQUIRES ADDING IT HERE AND TO BOTH
+// CONVERTERS BELOW. Miss either and the field is silently dropped at the
+// boundary: it decodes out of stored bytes into a temporary that is thrown
+// away, and it is never written back. No golden-bytes fixture can catch that,
+// because a fixture only knows about the fields it was built with —
+// TestPokemonScanCoversEveryProtoField is what fails instead.
 type pokemonScan struct {
 	Weather     int32
 	Level       int32
@@ -118,19 +125,23 @@ func scanHistoryFromProto(internal *grpc.PokemonInternal) []*pokemonScan {
 	}
 	history := make([]*pokemonScan, len(internal.ScanHistory))
 	for i, entry := range internal.ScanHistory {
+		// Getters rather than direct field access: proto.Unmarshal never
+		// produces a nil element in a repeated message field, but the
+		// getters are nil-safe for free and this is the one place the
+		// elements come from outside our own code.
 		history[i] = &pokemonScan{
-			Weather:     entry.Weather,
-			Level:       entry.Level,
-			Attack:      entry.Attack,
-			Defense:     entry.Defense,
-			Stamina:     entry.Stamina,
-			CellWeather: entry.CellWeather,
-			Pokemon:     entry.Pokemon,
-			Costume:     entry.Costume,
-			Gender:      entry.Gender,
-			Form:        entry.Form,
-			Strong:      entry.Strong,
-			Confirmed:   entry.Confirmed,
+			Weather:     entry.GetWeather(),
+			Level:       entry.GetLevel(),
+			Attack:      entry.GetAttack(),
+			Defense:     entry.GetDefense(),
+			Stamina:     entry.GetStamina(),
+			CellWeather: entry.GetCellWeather(),
+			Pokemon:     entry.GetPokemon(),
+			Costume:     entry.GetCostume(),
+			Gender:      entry.GetGender(),
+			Form:        entry.GetForm(),
+			Strong:      entry.GetStrong(),
+			Confirmed:   entry.GetConfirmed(),
 		}
 	}
 	return history

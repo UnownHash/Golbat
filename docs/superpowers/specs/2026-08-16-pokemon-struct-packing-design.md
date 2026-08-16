@@ -455,6 +455,8 @@ Running `go test -tags go_json -run 'TestPokemonEntitySizes|TestPokemonUnderGCTh
 - `Pokemon`: 392 bytes in production builds (from 800)
 - `Pokemon`: 416 bytes under `-tags dbdebug` build
 
+These are the tasks 1–6 numbers. The review change described at the end of this document took `Pokemon` further, to 352 production / 376 dbdebug; `PokemonData` is unchanged at 256.
+
 ### Where the design got the numbers wrong
 
 **1. The 232-byte estimate for `PokemonData` was arithmetically impossible.**
@@ -478,15 +480,19 @@ The field deletion improved the struct definition; it did not improve what the a
 **Go's size-class boundaries are what matter.**
 
 - **Before:** `Pokemon` at 800 bytes fits in the 896-byte size class → allocator returns 896 bytes
-- **After:** `Pokemon` at 392 bytes fits in the 416-byte size class → allocator returns 416 bytes
+- **After tasks 1–6:** `Pokemon` at 392 bytes fits in the 416-byte size class → allocator returns 416 bytes
 - **Per-entity saving:** 896 − 416 = **480 bytes**
 - **At 5M cached pokemon:** 480 × 5,000,000 = **2.4 GB**
 
 This matches the design's prediction of "roughly 480 bytes per cached pokemon" and "about 2.4 GB at 5M." The headline number held.
 
+The review change at the end of this document then took `Pokemon` to 352, which is itself a size class: 896 → 352 is **544 bytes** per entity, **2.7 GB** at 5M.
+
 ### GC threshold acceptance gate
 
-`TestPokemonUnderGCThreshold` (`decoder/entity_sizes_test.go:125-129`) enforces `unsafe.Sizeof(Pokemon{}) <= 512` bytes. At the measured 392 bytes, there is 120 bytes of headroom before the next threshold step at 520 bytes (where a single additional byte costs 3.1x mark time). Future field additions will trigger this gate rather than silently degrading GC performance.
+`TestPokemonUnderGCThreshold` enforces `unsafe.Sizeof(Pokemon{}) <= 512` bytes. At the measured 352 bytes (after the review change described below took it from 392), there is 160 bytes of headroom before the next threshold step at 520 bytes, where a single additional byte costs 3.1x mark time. Future field additions will trigger this gate rather than silently degrading GC performance.
+
+Headroom against the GC threshold is not the same as headroom against the *allocator*, and the two now disagree: 352 is exactly a size class, so the very next byte added costs 32 per cached pokemon even though the GC gate stays quiet for another 160. `TestPokemonEntitySizes` is the one that catches that, and its doc comment says so.
 
 ### CPU claim remains unverified
 
