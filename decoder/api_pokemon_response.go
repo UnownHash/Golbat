@@ -102,8 +102,9 @@ func widenPtr[N, W ~int8 | ~int16 | ~int32 | ~int64 | ~uint8 | ~uint16 | ~uint32
 // 3.140000104904175 — which is worse than what shipped before this field was
 // narrowed. Round-tripping through the shortest decimal string that
 // reproduces the SAME float32 value (bitSize 32, same technique
-// nulltypes.NullFloat32.MarshalJSON uses) keeps the compact rendering
-// instead, without changing ApiPokemonResult's *float64 wire type.
+// null.Value[float32]'s MarshalJSON uses via encoding/json's native float32
+// handling) keeps the compact rendering instead, without changing
+// ApiPokemonResult's *float64 wire type.
 func widenFloatPtr(p *float32) *float64 {
 	if p == nil {
 		return nil
@@ -150,7 +151,7 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		Costume:                 widenPtr[uint8, int64](pokemon.Costume.Ptr()),
 		FirstSeenTimestamp:      int64(pokemon.FirstSeenTimestamp),
 		Changed:                 int64(pokemon.Changed),
-		CellId:                  widenPtr[uint64, int64](pokemon.CellId.Ptr()),
+		CellId:                  pokemon.CellId.Ptr(),
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
 		DisplayPokemonId:        widenPtr[uint16, int64](pokemon.DisplayPokemonId.Ptr()),
 		DisplayPokemonForm:      widenPtr[uint16, int64](pokemon.DisplayPokemonForm.Ptr()),

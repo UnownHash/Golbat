@@ -5,7 +5,6 @@ import (
 	"sync"
 	"testing"
 
-	"golbat/decoder/nulltypes"
 	"golbat/stats_collector"
 
 	"github.com/guregu/null/v6"
@@ -62,7 +61,7 @@ func TestSetGenderClampsUint8BoundaryAndCounts(t *testing.T) {
 
 	over := &Pokemon{}
 	over.SetGender(null.IntFrom(300))
-	if want := nulltypes.Uint8From(math.MaxUint8); over.Gender != want {
+	if want := null.ValueFrom(uint8(math.MaxUint8)); over.Gender != want {
 		t.Errorf("Gender after SetGender(300) = %+v, want %+v", over.Gender, want)
 	}
 	if got := fake.count("gender"); got != 1 {
@@ -71,7 +70,7 @@ func TestSetGenderClampsUint8BoundaryAndCounts(t *testing.T) {
 
 	under := &Pokemon{}
 	under.SetGender(null.IntFrom(-1))
-	if want := nulltypes.Uint8From(0); under.Gender != want {
+	if want := null.ValueFrom(uint8(0)); under.Gender != want {
 		t.Errorf("Gender after SetGender(-1) = %+v, want %+v", under.Gender, want)
 	}
 	if got := fake.count("gender"); got != 2 {
@@ -80,7 +79,7 @@ func TestSetGenderClampsUint8BoundaryAndCounts(t *testing.T) {
 
 	inRange := &Pokemon{}
 	inRange.SetGender(null.IntFrom(1))
-	if want := nulltypes.Uint8From(1); inRange.Gender != want {
+	if want := null.ValueFrom(uint8(1)); inRange.Gender != want {
 		t.Errorf("Gender after SetGender(1) = %+v, want %+v (unclamped)", inRange.Gender, want)
 	}
 	if got := fake.count("gender"); got != 2 {
@@ -104,7 +103,7 @@ func TestSetCpClampsUint16BoundaryAndCounts(t *testing.T) {
 
 	over := &Pokemon{}
 	over.SetCp(null.IntFrom(70000))
-	if want := nulltypes.Uint16From(math.MaxUint16); over.Cp != want {
+	if want := null.ValueFrom(uint16(math.MaxUint16)); over.Cp != want {
 		t.Errorf("Cp after SetCp(70000) = %+v, want %+v", over.Cp, want)
 	}
 	if got := fake.count("cp"); got != 1 {
@@ -113,7 +112,7 @@ func TestSetCpClampsUint16BoundaryAndCounts(t *testing.T) {
 
 	under := &Pokemon{}
 	under.SetCp(null.IntFrom(-1))
-	if want := nulltypes.Uint16From(0); under.Cp != want {
+	if want := null.ValueFrom(uint16(0)); under.Cp != want {
 		t.Errorf("Cp after SetCp(-1) = %+v, want %+v", under.Cp, want)
 	}
 	if got := fake.count("cp"); got != 2 {
@@ -122,7 +121,7 @@ func TestSetCpClampsUint16BoundaryAndCounts(t *testing.T) {
 
 	inRange := &Pokemon{}
 	inRange.SetCp(null.IntFrom(1500))
-	if want := nulltypes.Uint16From(1500); inRange.Cp != want {
+	if want := null.ValueFrom(uint16(1500)); inRange.Cp != want {
 		t.Errorf("Cp after SetCp(1500) = %+v, want %+v (unclamped)", inRange.Cp, want)
 	}
 	if got := fake.count("cp"); got != 2 {
@@ -137,7 +136,7 @@ func TestSetExpireTimestampClampsUint32BoundaryAndCounts(t *testing.T) {
 
 	over := &Pokemon{}
 	over.SetExpireTimestamp(null.IntFrom(math.MaxUint32 + 100))
-	if want := nulltypes.Uint32From(math.MaxUint32); over.ExpireTimestamp != want {
+	if want := null.ValueFrom(uint32(math.MaxUint32)); over.ExpireTimestamp != want {
 		t.Errorf("ExpireTimestamp after over-range Set = %+v, want %+v", over.ExpireTimestamp, want)
 	}
 	if got := fake.count("expire_timestamp"); got != 1 {
@@ -146,7 +145,7 @@ func TestSetExpireTimestampClampsUint32BoundaryAndCounts(t *testing.T) {
 
 	under := &Pokemon{}
 	under.SetExpireTimestamp(null.IntFrom(-5))
-	if want := nulltypes.Uint32From(0); under.ExpireTimestamp != want {
+	if want := null.ValueFrom(uint32(0)); under.ExpireTimestamp != want {
 		t.Errorf("ExpireTimestamp after under-range Set = %+v, want %+v", under.ExpireTimestamp, want)
 	}
 	if got := fake.count("expire_timestamp"); got != 2 {
@@ -155,7 +154,7 @@ func TestSetExpireTimestampClampsUint32BoundaryAndCounts(t *testing.T) {
 
 	inRange := &Pokemon{}
 	inRange.SetExpireTimestamp(null.IntFrom(1700000000))
-	if want := nulltypes.Uint32From(1700000000); inRange.ExpireTimestamp != want {
+	if want := null.ValueFrom(uint32(1700000000)); inRange.ExpireTimestamp != want {
 		t.Errorf("ExpireTimestamp after in-range Set = %+v, want %+v (unclamped)", inRange.ExpireTimestamp, want)
 	}
 	if got := fake.count("expire_timestamp"); got != 2 {

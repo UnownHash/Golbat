@@ -279,7 +279,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	// Webhooks and stats happen immediately (not queued)
-	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, pokemon.CellId.ValueOrZero())
+	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
 		createPokemonWebhooks(ctx, db, pokemon, areas)
 	}
@@ -485,7 +485,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture1:           0,
 			Capture2:           0,
 			Capture3:           0,
-			Shiny:              nullBoolFromNulltypes(pokemon.Shiny),
+			Shiny:              nullBoolToGuregu(pokemon.Shiny),
 			Username:           pokemon.Username,
 			DisplayPokemonId:   nullIntFromUint(pokemon.DisplayPokemonId),
 			DisplayPokemonForm: nullIntFromUint(pokemon.DisplayPokemonForm),

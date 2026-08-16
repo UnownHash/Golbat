@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"golbat/config"
-	"golbat/decoder/nulltypes"
 
 	"github.com/UnownHash/gohbem"
+	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/tidwall/rtree"
 
@@ -223,7 +223,7 @@ func pokemonRtreePreloadInsert(pokemon *Pokemon) {
 // valueOrMinus1 reads a narrowed nullable field for the lookup-cache struct,
 // which uses -1 as its own "no value" sentinel (see PokemonLookup's int8
 // fields) instead of a separate validity flag.
-func valueOrMinus1[T ~uint8 | ~uint16 | ~uint32](n nulltypes.NullUint[T]) int {
+func valueOrMinus1[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int {
 	if n.Valid {
 		return int(n.V)
 	}
