@@ -172,6 +172,7 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		Size:                    nulltypes.Uint8From(5),
 		Shiny:                   nulltypes.BoolFrom(true),
 		Weight:                  nulltypes.Float32From(3.5),
+		Iv:                      nulltypes.Float32From(93.33),
 		SeenType:                SeenTypeFrom(SeenTypeCodeLureEncounter),
 	}
 
@@ -196,6 +197,18 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	}
 	if got.Shiny != want.Shiny {
 		t.Errorf("Shiny = %v, want %v", got.Shiny, want.Shiny)
+	}
+	// Weight and Iv are the pinning case for NullFloat32: Value() widens the
+	// stored float32 to float64(n.V) on the way in, and MariaDB rounds it to
+	// the column's own precision (double(18,14) for weight, float(5,2) for
+	// iv) rather than the driver. Fixture values are chosen to already sit on
+	// exact boundaries of both precisions so this only checks the narrowed
+	// type's round-trip, not MariaDB's rounding behavior.
+	if got.Weight != want.Weight {
+		t.Errorf("Weight = %v, want %v", got.Weight, want.Weight)
+	}
+	if got.Iv != want.Iv {
+		t.Errorf("Iv = %v, want %v", got.Iv, want.Iv)
 	}
 	if got.Lat != want.Lat {
 		t.Errorf("Lat = %.14f, want %.14f (float64 precision must survive)", got.Lat, want.Lat)

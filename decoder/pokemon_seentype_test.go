@@ -90,3 +90,19 @@ func TestNullSeenTypeUnknownValue(t *testing.T) {
 		t.Error("Scan of unknown seen type returned nil error, want failure")
 	}
 }
+
+func TestNullSeenTypeValueOutOfRange(t *testing.T) {
+	// Code and SeenTypeFrom are both exported, so nothing at the type level
+	// stops a caller from building a NullSeenType whose Code has no matching
+	// string. Value() must refuse to hand such a code to the driver — writing
+	// '' to the seen_type ENUM column would be silently accepted by MariaDB
+	// and would corrupt scan statistics with no error anywhere in the path.
+	n := SeenTypeFrom(SeenTypeCode(len(seenTypeStrings)))
+	v, err := n.Value()
+	if err == nil {
+		t.Errorf("Value() for out-of-range code = %v, nil error; want a non-nil error", v)
+	}
+	if v != nil {
+		t.Errorf("Value() for out-of-range code returned %v, want nil", v)
+	}
+}
