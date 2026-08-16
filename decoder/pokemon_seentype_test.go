@@ -91,6 +91,33 @@ func TestNullSeenTypeUnknownValue(t *testing.T) {
 	}
 }
 
+// TestNullSeenTypeZeroValueIsUnset is the point of reserving code 0: without
+// it, NullSeenType{}'s zero value would equal SeenTypeCodeWild, and any code
+// that read .Code without checking .Valid would silently treat a NULL
+// seen_type as wild. This asserts the sentinel is in place and that it can
+// never reach the seen_type column as a real enum member.
+func TestNullSeenTypeZeroValueIsUnset(t *testing.T) {
+	var zero NullSeenType
+	if zero.Code == SeenTypeCodeWild {
+		t.Fatal("NullSeenType{}.Code == SeenTypeCodeWild — the zero-value hazard is back")
+	}
+	if zero.Code != SeenTypeCodeUnset {
+		t.Errorf("NullSeenType{}.Code = %d, want SeenTypeCodeUnset (0)", zero.Code)
+	}
+
+	// Value() must refuse Unset even when explicitly marked Valid — a
+	// caller-constructed NullSeenType, not just the Go zero value (which is
+	// already caught by !n.Valid).
+	explicit := SeenTypeFrom(SeenTypeCodeUnset)
+	v, err := explicit.Value()
+	if err == nil {
+		t.Errorf("Value() for SeenTypeCodeUnset = %v, nil error; want a non-nil error", v)
+	}
+	if v != nil {
+		t.Errorf("Value() for SeenTypeCodeUnset returned %v, want nil", v)
+	}
+}
+
 func TestNullSeenTypeValueOutOfRange(t *testing.T) {
 	// Code and SeenTypeFrom are both exported, so nothing at the type level
 	// stops a caller from building a NullSeenType whose Code has no matching

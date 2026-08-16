@@ -326,10 +326,18 @@ const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokem
 // 24-byte header plus a heap pointer per cached pokemon. The code is one byte.
 // NullSeenType converts at the database and JSON boundaries so both wire
 // formats are unchanged.
+//
+// Code 0 is reserved as SeenTypeCodeUnset, not a real seen type. Without
+// this, `SeenTypeCodeWild = iota` would make Wild — the enum's most common
+// real value — indistinguishable from a NullSeenType's Go zero value, so any
+// code that read .Code without checking .Valid would silently treat a NULL
+// seen_type as Wild. Reserving 0 makes that misread produce Unset instead,
+// which has no string form and which Value() refuses to write.
 type SeenTypeCode uint8
 
 const (
-	SeenTypeCodeWild SeenTypeCode = iota
+	SeenTypeCodeUnset SeenTypeCode = iota // zero value: not a real seen type
+	SeenTypeCodeWild
 	SeenTypeCodeEncounter
 	SeenTypeCodeNearbyStop
 	SeenTypeCodeCell
@@ -339,10 +347,14 @@ const (
 	SeenTypeCodeTappableLureEncounter
 )
 
-// seenTypeStrings maps codes to the exact strings in the enum column. The order
-// must match the constants above. Adding a value here requires a migration
-// widening the enum — see sql/45_tappables_seen_type_lure.up.sql.
+// seenTypeStrings maps codes to the exact strings in the enum column. The
+// order must match the constants above, including the leading "" at index 0
+// for SeenTypeCodeUnset — it is never a value the enum column holds, and
+// String() relies on it to make Unset (and any other out-of-range code)
+// report as "". Adding a real value here requires a migration widening the
+// enum — see sql/45_tappables_seen_type_lure.up.sql.
 var seenTypeStrings = [...]string{
+	"", // SeenTypeCodeUnset
 	SeenType_Wild,
 	SeenType_Encounter,
 	SeenType_NearbyStop,
@@ -353,9 +365,15 @@ var seenTypeStrings = [...]string{
 	SeenType_TappableLureEncounter,
 }
 
+// seenTypeCodes maps the eight real enum strings to their codes. The empty
+// string at seenTypeStrings[0] is deliberately excluded — SeenTypeCodeUnset
+// must never be reachable by parsing a string, only by the Go zero value.
 var seenTypeCodes = func() map[string]SeenTypeCode {
-	m := make(map[string]SeenTypeCode, len(seenTypeStrings))
+	m := make(map[string]SeenTypeCode, len(seenTypeStrings)-1)
 	for i, s := range seenTypeStrings {
+		if s == "" {
+			continue
+		}
 		m[s] = SeenTypeCode(i)
 	}
 	return m
@@ -437,14 +455,20 @@ func (n *NullSeenType) Scan(value any) error {
 	return nil
 }
 
+// Value rejects any code with no string form — that includes both
+// SeenTypeCodeUnset and any code past the end of the table. Writing "" to
+// the seen_type ENUM column is accepted silently by MariaDB, so this must
+// fail loudly instead: the same data-loss shape ParseSeenType already
+// guards against on the read side.
 func (n NullSeenType) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
 	}
-	if int(n.Code) >= len(seenTypeStrings) {
+	s := n.Code.String()
+	if s == "" {
 		return nil, fmt.Errorf("seen_type code %d has no string representation", n.Code)
 	}
-	return n.Code.String(), nil
+	return s, nil
 }
 
 func (n NullSeenType) MarshalJSON() ([]byte, error) {
