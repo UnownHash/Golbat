@@ -166,7 +166,15 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		// 0xFFFFFFFFFFFFFFF0 bit pattern: cell_id is a signed bigint and real
 		// S2 cell ids are frequently negative (see decoder/pokemon.go's
 		// SetCellId), so this exercises that a negative value round-trips.
-		CellId:   null.ValueFrom(int64(-16)),
+		CellId: null.ValueFrom(int64(-16)),
+		// SpawnId is null.Value[int64] (not [uint64]) specifically because
+		// sql.Null[uint64]'s Value() refuses any value with the high bit
+		// set, even though spawn_id is bigint unsigned — see SetSpawnId's
+		// doc comment. A plain positive value like this one round-trips
+		// under either type, so it doesn't exercise that boundary, but it
+		// does prove the chosen type binds and scans correctly end to end
+		// against the real column, which nothing here previously did.
+		SpawnId:  null.ValueFrom(int64(424242)),
 		AtkIv:    null.ValueFrom(uint8(15)),
 		DefIv:    null.ValueFrom(uint8(14)),
 		StaIv:    null.ValueFrom(uint8(13)),
@@ -193,6 +201,9 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 
 	if got.CellId != want.CellId {
 		t.Errorf("CellId = %#x, want %#x (negative signed values must survive)", got.CellId.V, want.CellId.V)
+	}
+	if got.SpawnId != want.SpawnId {
+		t.Errorf("SpawnId = %v, want %v", got.SpawnId, want.SpawnId)
 	}
 	if got.Cp != want.Cp {
 		t.Errorf("Cp = %v, want %v", got.Cp, want.Cp)

@@ -66,7 +66,7 @@ func goldenSnapshotPokemon() *Pokemon {
 		PokemonData: PokemonData{
 			Id:                      9876543210,
 			PokestopId:              null.StringFrom("stop-abc"),
-			SpawnId:                 null.ValueFrom(uint64(7777)),
+			SpawnId:                 null.ValueFrom(int64(7777)),
 			Lat:                     12.3456,
 			Lon:                     -65.4321,
 			Weight:                  null.ValueFrom(float32(3.14)),
