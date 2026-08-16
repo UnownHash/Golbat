@@ -4,7 +4,7 @@
 **Status:** Design approved, not yet implemented
 **Scope:** Shrink the cached `Pokemon` entity below Go's 512-byte allocation
 threshold by narrowing nullable field wrappers, reordering for alignment, and
-deleting four fields that cost memory without earning it.
+deleting three fields that cost memory without earning it.
 
 ## Motivation
 
@@ -79,15 +79,15 @@ implementation — see [Verification](#verification).
 | | `PokemonData` | `Pokemon` (est.) | verdict |
 | --- | --- | --- | --- |
 | **A** — single `ValidMask uint64`, plain narrow types | 168 B | ~346 B | smaller, riskier |
-| **B** — narrow null wrapper types | 224 B | ~402 B | **chosen** |
+| **B** — narrow null wrapper types | 232 B | ~410 B | **chosen** |
 | **C** — deletions and reordering only, no narrowing | 647 B | — | rejected |
 
 C is rejected because it does not clear 512, so it buys 1.5x instead of 6.9x.
 The cheap deletions are worth doing, but only as part of the narrowing pass — on
 their own most of their value is stranded.
 
-**B is chosen over A** at a cost of 56 bytes per pokemon (about 280 MB at 5M,
-against ~1.8 GB saved either way), because:
+**B is chosen over A** at a cost of 64 bytes per pokemon (about 320 MB at 5M,
+against ~2.4 GB saved either way), because:
 
 - **No `PokemonRow` shim.** B's types implement `sql.Scanner` and `driver.Valuer`,
   so all six sqlx call sites keep working untouched. A required a parallel
@@ -101,7 +101,7 @@ against ~1.8 GB saved either way), because:
   Go forbids a field and method sharing a name.
 - **No mask bookkeeping** in 33 setters.
 
-A is smaller; B is simpler and safer. At 56 bytes, take B.
+A is smaller; B is simpler and safer. At 64 bytes, take B.
 
 **Accepted wart:** `NullUint64` is 16 bytes, identical to today's `null.Int`, so
 `SpawnId` and `CellId` gain nothing under B. A hybrid using a small mask for just
@@ -166,7 +166,7 @@ spatial matching.
 | `Cp` | `null.Int` (16) | `smallint unsigned` | `NullUint16` (4) |
 | `AtkIv` / `DefIv` / `StaIv` | `null.Int` (16 each) | `tinyint unsigned` | `NullUint8` (2 each) |
 | `GolbatInternal` | `[]byte` (24) | `tinyblob` | unchanged (24) |
-| `Iv` | `null.Float` (16) | `float(5,2)` GENERATED VIRTUAL | **dropped**, computed |
+| `Iv` | `null.Float` (16) | `float(5,2)` nullable | `NullFloat32` (8) |
 | `Form` | `null.Int` (16) | `smallint unsigned` | `NullUint16` (4) |
 | `Level` | `null.Int` (16) | `tinyint unsigned` | `NullUint8` (2) |
 | `IsStrong` | `null.Bool` (2) | `BOOLEAN` nullable | `NullBool` (2) |
@@ -193,21 +193,33 @@ then 1, then the string and slice headers. This is not cosmetic. On the approach
 A prototype, narrowing every type but keeping the original declaration order
 measured **264 bytes**; the same types reordered measured **232 bytes**.
 Reordering was worth 32 bytes there, about 12% of the struct, and cost nothing.
-The lesson transfers directly to approach B, whose 224-byte figure already
+The lesson transfers directly to approach B, whose 232-byte figure already
 assumes the ordered layout — declare the fields out of order and it will not
 reproduce.
 
-### The four deletions
+### Why `Iv` is kept
 
-**`Iv`** — the column is `GENERATED ALWAYS AS (((atk_iv + def_iv + sta_iv) * 100) / 45) VIRTUAL`
-(schema comment at `decoder/pokemon.go:113`). Storing it in memory duplicates a
-value the database derives. Replace with an `IvFloat()` method computing the same
-expression from the three IV fields.
+An earlier draft of this design dropped `Iv` as a derived value, on the strength
+of the schema comment at `decoder/pokemon.go:113` declaring the column
+`GENERATED ALWAYS AS (((atk_iv + def_iv + sta_iv) * 100) / 45) VIRTUAL`.
 
-`pokemonBatchUpsertQuery` (`decoder/writebehind_batch.go:428-449`) currently
-writes an explicit `iv` value and `iv = VALUES(iv)` on duplicate key, against a
-generated column. That is pre-existing behavior, not introduced here, but it must
-be resolved as part of this work rather than carried forward.
+**That comment is stale.** `sql/11_ivchanges.up.sql` drops the generated column
+and adds a plain nullable `float(5,2)` in its place. The column is real and
+writable, `pokemonBatchUpsertQuery` writing `:iv` is correct, and there is no
+pre-existing bug to fix here.
+
+`Iv` could still be dropped from memory and recomputed, since its value is
+genuinely derived from the three IV fields. That would mean replacing `:iv` with
+an arithmetic expression in the upsert, removing `iv` from
+`pokemonSelectColumns`, and computing at four call sites
+(`api_pokemon_response.go:111`, `pokemonRtree.go:256-258`, and two setters in
+`pokemon_decode.go`). It saves 8 further bytes.
+
+Not worth it. The threshold is cleared with roughly 100 bytes to spare either
+way, and one of those call sites is on the public API response path. Narrow it to
+`NullFloat32` and leave the logic alone.
+
+### The three deletions
 
 **`Capture1` / `Capture2` / `Capture3`** — functionally dead. Absent from both
 `pokemonSelectColumns` (`decoder/pokemon_state.go:28-31`) and
@@ -241,9 +253,9 @@ authoritative.
 
 ### Expected result
 
-- `PokemonData`: **224 bytes**, from 592 (measured on a prototype).
-- `Pokemon` wrapper, also dropping `changedFields`: **~400 bytes**, from 800 —
-  under the 512 threshold with roughly 110 bytes of headroom. This figure is
+- `PokemonData`: **232 bytes**, from 592 (measured on a prototype).
+- `Pokemon` wrapper, also dropping `changedFields`: **~410 bytes**, from 800 —
+  under the 512 threshold with roughly 100 bytes of headroom. This figure is
   computed by summing components, not measured, and confirming it is the first
   task of the plan.
 - **What the allocator actually returns matters more than the struct size.** Go
@@ -332,8 +344,8 @@ Four commits, each independently compiling and green:
    fields by descending alignment. Add `IvFloat()`.
 3. **Fix the read sites the compiler flags** — casts where `ValueOrZero()` width
    changed, setter calls where `pokemon_decode.go` assigned directly.
-4. **Resolve the generated-column `iv` write** in `pokemonBatchUpsertQuery`, and
-   add the size-assertion test.
+4. **Drop `changedFields`** behind the debug build tag and add the size-assertion
+   test proving `Pokemon` is under 512.
 
 Commits 2 and 3 will not compile independently — the type change and the
 call-site fixes are one atomic unit. Note that in the commit message rather than
