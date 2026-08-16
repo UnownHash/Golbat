@@ -165,7 +165,7 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 				apiPokemon := pb.PokemonDetails{
 					Id:         uint64(pokemon.Id),
 					PokestopId: pokemon.PokestopId.Ptr(),
-					SpawnId:    widenPtr[uint64, int64](pokemon.SpawnId.Ptr()),
+					SpawnId:    pokemon.SpawnId.Ptr(),
 					Lat:        pokemon.Lat,
 					Lon:        pokemon.Lon,
 				}

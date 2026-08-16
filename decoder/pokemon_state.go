@@ -427,7 +427,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 
 		spawnpointId := "None"
 		if pokemon.SpawnId.Valid {
-			spawnpointId = strconv.FormatUint(pokemon.SpawnId.ValueOrZero(), 16)
+			spawnpointId = strconv.FormatUint(uint64(pokemon.SpawnId.ValueOrZero()), 16)
 		}
 
 		pokestopId := "None"

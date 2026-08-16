@@ -489,7 +489,7 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		return
 	}
 
-	spawnId := int64(pokemon.SpawnId.ValueOrZero())
+	spawnId := pokemon.SpawnId.ValueOrZero()
 	if spawnId == 0 {
 		return
 	}

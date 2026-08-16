@@ -128,7 +128,7 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 	return ApiPokemonResult{
 		Id:                      pokemon.Id.String(),
 		PokestopId:              pokemon.PokestopId.Ptr(),
-		SpawnId:                 widenPtr[uint64, int64](pokemon.SpawnId.Ptr()),
+		SpawnId:                 pokemon.SpawnId.Ptr(),
 		Lat:                     pokemon.Lat,
 		Lon:                     pokemon.Lon,
 		Weight:                  widenFloatPtr(pokemon.Weight.Ptr()),

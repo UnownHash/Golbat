@@ -36,11 +36,11 @@ import (
 // relevant migrations, not a substitute for checking sql/*.up.sql directly.
 type PokemonData struct {
 	// --- 8-byte aligned ---
-	Id      Uint64Str          `db:"id"`
-	SpawnId null.Value[uint64] `db:"spawn_id"`
-	CellId  null.Value[int64]  `db:"cell_id"`
-	Lat     float64            `db:"lat"`
-	Lon     float64            `db:"lon"`
+	Id      Uint64Str         `db:"id"`
+	SpawnId null.Value[int64] `db:"spawn_id"`
+	CellId  null.Value[int64] `db:"cell_id"`
+	Lat     float64           `db:"lat"`
+	Lon     float64           `db:"lon"`
 
 	// --- 4-byte aligned ---
 	FirstSeenTimestamp uint32              `db:"first_seen_timestamp"`
@@ -283,12 +283,21 @@ func (pokemon *Pokemon) SetPokestopId(v null.String) {
 	}
 }
 
-// SetSpawnId stores the full 64-bit unsigned range; spawn_id is bigint
-// unsigned and legitimate values use it all, so no clamping applies.
+// SetSpawnId stores the value directly; no clamping applies.
+//
+// SpawnId's Go type is null.Value[int64], not [uint64], even though
+// spawn_id is bigint unsigned. sql.Null[uint64]'s Value() (via
+// driver.DefaultParameterConverter) refuses to write any value with the
+// high bit set ("uint64 values with high bit set are not supported"), so a
+// [uint64] field can Scan the column's full unsigned range but cannot
+// always persist it back. [int64] has no such restriction and this
+// column's real values are ~48-bit, far below the boundary either type
+// would need to worry about — so storing v.Int64 as-is is both simpler and
+// strictly more capable than a [uint64] field would be.
 func (pokemon *Pokemon) SetSpawnId(v null.Int) {
-	var next null.Value[uint64]
+	var next null.Value[int64]
 	if v.Valid {
-		next = null.ValueFrom(uint64(v.Int64))
+		next = null.ValueFrom(v.Int64)
 	}
 	if pokemon.SpawnId != next {
 		if dbDebugEnabled {
