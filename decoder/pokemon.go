@@ -105,12 +105,15 @@ type Pokemon struct {
 
 	// debug accumulates per-field change descriptions for dbDebugLog, one
 	// aggregated log line per save (see pokemon_state.go). Its type is
-	// pokemonDebugState, defined once per build tag in db_debug.go /
+	// debugChangeAccumulator, defined once per build tag in db_debug.go /
 	// db_debug_off.go: a real `[]string`-backed accumulator when built with
 	// -tags dbdebug, and a zero-sized stub otherwise — so production builds
 	// carry no bytes for it, unlike the [24]byte slice header this field
-	// used to be unconditionally.
-	debug pokemonDebugState `db:"-"`
+	// used to be unconditionally. It is placed here, before oldValues, not
+	// last: a zero-sized field placed last forces Go to add a word of
+	// padding to keep a past-the-end pointer valid, which would cancel this
+	// saving.
+	debug debugChangeAccumulator `db:"-"`
 
 	oldValues PokemonOldValues `db:"-"` // Old values for webhook comparison and stats
 }

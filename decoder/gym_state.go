@@ -325,12 +325,12 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	if dbDebugEnabled {
 		if gym.IsDirty() {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Gym", gym.Id, gym.changedFields)
+				dbDebugLog("INSERT", "Gym", gym.Id, gym.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Gym", gym.Id, gym.changedFields)
+				dbDebugLog("UPDATE", "Gym", gym.Id, gym.debug.fields())
 			}
 		} else {
-			dbDebugLog("MEMORY", "Gym", gym.Id, gym.changedFields)
+			dbDebugLog("MEMORY", "Gym", gym.Id, gym.debug.fields())
 		}
 	}
 
@@ -353,7 +353,7 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	createGymFortWebhooks(gym)
 	updateRaidStats(gym, areas)
 	if dbDebugEnabled {
-		gym.changedFields = gym.changedFields[:0]
+		gym.debug.reset()
 	}
 	if isNewRecord {
 		gymCache.Set(gym.Id, gym, fortCacheEntryTTL())

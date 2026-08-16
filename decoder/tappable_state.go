@@ -106,9 +106,9 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	// Debug logging before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
+			dbDebugLog("INSERT", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.changedFields)
+			dbDebugLog("UPDATE", "Tappable", strconv.FormatUint(tappable.Id, 10), tappable.debug.fields())
 		}
 	}
 
@@ -121,7 +121,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 
 	if dbDebugEnabled {
-		tappable.changedFields = tappable.changedFields[:0]
+		tappable.debug.reset()
 	}
 	tappable.ClearDirty()
 	if isNewRecord {
