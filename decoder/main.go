@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -59,7 +60,24 @@ type webhooksSenderInterface interface {
 }
 
 var webhooksSender webhooksSenderInterface
-var statsCollector stats_collector.StatsCollector
+
+// statsCollector is read on hot decode/save paths and swapped by a handful
+// of tests (see setStatsCollectorForTest in init_test.go); atomic.Pointer
+// keeps concurrent Store/Load race-free without a mutex. Use
+// getStatsCollector() to read it — see that function's doc comment.
+var statsCollector atomic.Pointer[stats_collector.StatsCollector]
+
+// getStatsCollector returns the current StatsCollector. Returns nil if
+// called before SetStatsCollector — callers on paths that can run that
+// early (e.g. StartWorkerBacklogReporter's ticker) must nil-check, same as
+// before this was made atomic.
+func getStatsCollector() stats_collector.StatsCollector {
+	if p := statsCollector.Load(); p != nil {
+		return *p
+	}
+	return nil
+}
+
 var pokestopCache *ottercache.OtterCache[string, *Pokestop]
 var gymCache *ottercache.OtterCache[string, *Gym]
 var stationCache *ottercache.OtterCache[string, *Station]
@@ -131,7 +149,7 @@ func initDataCache() {
 	// Cache eviction-event drops are the one non-self-healing loss; feed
 	// them to prometheus alongside the [CACHE_EVICT] log line.
 	ottercache.DroppedEvictionsHook = func(cacheName string, dropped int64) {
-		statsCollector.AddCacheEvictionsDropped(cacheName, float64(dropped))
+		getStatsCollector().AddCacheEvictionsDropped(cacheName, float64(dropped))
 	}
 
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
@@ -325,14 +343,14 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 }
 
 func SetStatsCollector(collector stats_collector.StatsCollector) {
-	statsCollector = collector
+	statsCollector.Store(&collector)
 }
 
 // InitWriteBehindQueue initializes the typed write-behind queues
 // Should be called after SetStatsCollector
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
 	// Use the new typed queue system
-	InitTypedQueues(ctx, dbDetails, statsCollector)
+	InitTypedQueues(ctx, dbDetails, getStatsCollector())
 }
 
 // FlushWriteBehindQueue flushes all pending writes (for shutdown)

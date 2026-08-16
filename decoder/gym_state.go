@@ -30,7 +30,7 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
 	return timedDbQuery("loadGymFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
-		statsCollector.IncDbQuery("select gym", err)
+		getStatsCollector().IncDbQuery("select gym", err)
 		return err
 	})
 }
@@ -302,7 +302,7 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 			}
 
 			webhooksSender.AddMessage(webhooks.Raid, raidHook, areas)
-			statsCollector.UpdateRaidCount(areas, gym.RaidLevel.ValueOrZero())
+			getStatsCollector().UpdateRaidCount(areas, gym.RaidLevel.ValueOrZero())
 		}
 	}
 }
@@ -371,7 +371,7 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 		res, err := db.GeneralDb.NamedExecContext(ctx, "INSERT INTO gym (id,lat,lon,name,url,last_modified_timestamp,raid_end_timestamp,raid_spawn_timestamp,raid_battle_timestamp,updated,raid_pokemon_id,guarding_pokemon_id,guarding_pokemon_display,available_slots,team_id,raid_level,enabled,ex_raid_eligible,in_battle,raid_pokemon_move_1,raid_pokemon_move_2,raid_pokemon_form,raid_pokemon_alignment,raid_pokemon_cp,raid_is_exclusive,cell_id,deleted,total_cp,first_seen_timestamp,raid_pokemon_gender,sponsor_id,partner_id,raid_pokemon_costume,raid_pokemon_evolution,ar_scan_eligible,power_up_level,power_up_points,power_up_end_timestamp,description, defenders, rsvps) "+
 			"VALUES (:id,:lat,:lon,:name,:url,UNIX_TIMESTAMP(),:raid_end_timestamp,:raid_spawn_timestamp,:raid_battle_timestamp,:updated,:raid_pokemon_id,:guarding_pokemon_id,:guarding_pokemon_display,:available_slots,:team_id,:raid_level,:enabled,:ex_raid_eligible,:in_battle,:raid_pokemon_move_1,:raid_pokemon_move_2,:raid_pokemon_form,:raid_pokemon_alignment,:raid_pokemon_cp,:raid_is_exclusive,:cell_id,0,:total_cp,UNIX_TIMESTAMP(),:raid_pokemon_gender,:sponsor_id,:partner_id,:raid_pokemon_costume,:raid_pokemon_evolution,:ar_scan_eligible,:power_up_level,:power_up_points,:power_up_end_timestamp,:description, :defenders, :rsvps)", gym)
 
-		statsCollector.IncDbQuery("insert gym", err)
+		getStatsCollector().IncDbQuery("insert gym", err)
 		if err != nil {
 			log.Errorf("insert gym: %s", err)
 			return err
@@ -420,7 +420,7 @@ func gymWriteDB(db db.DbDetails, gym *Gym, isNewRecord bool) error {
 			"rsvps = :rsvps "+
 			"WHERE id = :id", gym,
 		)
-		statsCollector.IncDbQuery("update gym", err)
+		getStatsCollector().IncDbQuery("update gym", err)
 		if err != nil {
 			log.Errorf("Update gym %s", err)
 			return err

@@ -1061,7 +1061,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 		`,
 		name,
 	)
-	statsCollector.IncDbQuery("select player_name", err)
+	getStatsCollector().IncDbQuery("select player_name", err)
 	if err == sql.ErrNoRows {
 		if friendshipId != "" {
 			err = db.GeneralDb.Get(&player,
@@ -1072,7 +1072,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`,
 				friendshipId,
 			)
-			statsCollector.IncDbQuery("select player_friendship_id", err)
+			getStatsCollector().IncDbQuery("select player_friendship_id", err)
 		} else if friendCode != "" {
 			err = db.GeneralDb.Get(&player,
 				`
@@ -1082,7 +1082,7 @@ func getPlayerRecord(db db.DbDetails, name string, friendshipId string, friendCo
 				`,
 				friendCode,
 			)
-			statsCollector.IncDbQuery("select player_friend_code", err)
+			getStatsCollector().IncDbQuery("select player_friend_code", err)
 		}
 
 		if err == sql.ErrNoRows {
@@ -1147,7 +1147,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 			player,
 		)
 
-		statsCollector.IncDbQuery("insert player", err)
+		getStatsCollector().IncDbQuery("insert player", err)
 		if err != nil {
 			log.Errorf("insert player error: %s", err)
 			return
@@ -1241,7 +1241,7 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 			player,
 		)
 
-		statsCollector.IncDbQuery("update player", err)
+		getStatsCollector().IncDbQuery("update player", err)
 		if err != nil {
 			log.Errorf("Update player error %s", err)
 		}

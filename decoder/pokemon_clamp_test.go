@@ -41,19 +41,14 @@ func (c *clampCountingCollector) count(field string) int {
 }
 
 // withClampCountingCollector swaps the package-level statsCollector for the
-// duration of one test and restores it on cleanup. Mirrors the swap/defer
-// pattern already used by TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges
-// in station_battle_test.go — this package doesn't run tests in parallel, so
-// the sequential swap is safe against other *tests*; the background stats
-// aggregation worker (decoder/stats.go) only ever calls IncFieldClamped from
-// setters running synchronously on the calling goroutine, never from its own
-// drain loop, so it never contends with this swap either.
+// duration of one test and restores it on cleanup, via the shared
+// setStatsCollectorForTest helper (init_test.go) — race-free against the
+// background stats-aggregation worker/ticker because statsCollector is an
+// atomic.Pointer.
 func withClampCountingCollector(t *testing.T) *clampCountingCollector {
 	t.Helper()
-	previous := statsCollector
 	fake := newClampCountingCollector()
-	statsCollector = fake
-	t.Cleanup(func() { statsCollector = previous })
+	setStatsCollectorForTest(t, fake)
 	return fake
 }
 

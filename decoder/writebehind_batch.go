@@ -268,7 +268,7 @@ func flushS2CellBatch(ctx context.Context, dbDetails db.DbDetails, cells []S2Cel
 	if err != nil {
 		log.Errorf("flushS2CellBatch: %s", err)
 	}
-	statsCollector.IncDbQuery("insert s2cell", err)
+	getStatsCollector().IncDbQuery("insert s2cell", err)
 	return err
 }
 

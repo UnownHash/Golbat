@@ -264,20 +264,21 @@ func StartWorkerBacklogReporter() {
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
-			if statsCollector == nil {
+			sc := getStatsCollector()
+			if sc == nil {
 				continue
 			}
-			statsCollector.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
-			statsCollector.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
-			statsCollector.SetWorkerBacklog("cache_evict_pokemon", float64(pokemonCache.EvictQueueLen()))
-			statsCollector.SetWorkerBacklog("cache_evict_pokestop", float64(pokestopCache.EvictQueueLen()))
-			statsCollector.SetWorkerBacklog("cache_evict_gym", float64(gymCache.EvictQueueLen()))
-			statsCollector.SetWorkerBacklog("cache_evict_station", float64(stationCache.EvictQueueLen()))
+			sc.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
+			sc.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
+			sc.SetWorkerBacklog("cache_evict_pokemon", float64(pokemonCache.EvictQueueLen()))
+			sc.SetWorkerBacklog("cache_evict_pokestop", float64(pokestopCache.EvictQueueLen()))
+			sc.SetWorkerBacklog("cache_evict_gym", float64(gymCache.EvictQueueLen()))
+			sc.SetWorkerBacklog("cache_evict_station", float64(stationCache.EvictQueueLen()))
 			if pokemonTreeEvictor != nil {
-				statsCollector.SetWorkerBacklog("tree_evictor_pokemon", float64(pokemonTreeEvictor.QueueLen()))
+				sc.SetWorkerBacklog("tree_evictor_pokemon", float64(pokemonTreeEvictor.QueueLen()))
 			}
 			if fortTreeEvictor != nil {
-				statsCollector.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
+				sc.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
 			}
 		}
 	}()
@@ -328,7 +329,7 @@ func enqueuePokemonStatsEvent(ev pokemonStatsEvent) {
 	select {
 	case pokemonStatsEvents <- ev:
 	default:
-		statsCollector.IncStatsEventsDropped()
+		getStatsCollector().IncStatsEventsDropped()
 		statsEventDrops.Report(func(dropped int64) {
 			log.Warnf("[STATS_WORKER] dropped %d stats events in the last second (worker saturated, backlog %d/%d)",
 				dropped, len(pokemonStatsEvents), cap(pokemonStatsEvents))
@@ -360,14 +361,14 @@ func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 
 	if encounterCacheVal.SetAccountSeen(username) {
 		// account has already seen this encounter Id
-		statsCollector.IncDuplicateEncounters(true)
+		getStatsCollector().IncDuplicateEncounters(true)
 		return
 	}
 
 	if !isNewEncounter {
 		// at least one other account has already seen this
 		// encounter. This is the first time for this account.
-		statsCollector.IncDuplicateEncounters(false)
+		getStatsCollector().IncDuplicateEncounters(false)
 	}
 
 	encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(time.Now().Unix()))
@@ -408,15 +409,15 @@ func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 
 	// Prometheus
 	if pokemon.Shiny.ValueOrZero() {
-		statsCollector.IncPokemonCountShiny(pokemonIdStr, formIdStr)
+		getStatsCollector().IncPokemonCountShiny(pokemonIdStr, formIdStr)
 		if pokemon.AtkIv.V == 15 && pokemon.DefIv.V == 15 && pokemon.StaIv.V == 15 {
-			statsCollector.IncPokemonCountShundo()
+			getStatsCollector().IncPokemonCountShundo()
 		} else if pokemon.AtkIv.V == 0 && pokemon.DefIv.V == 0 && pokemon.StaIv.V == 0 {
-			statsCollector.IncPokemonCountSnundo()
+			getStatsCollector().IncPokemonCountSnundo()
 		}
 	} else {
 		// send non-shinies also, so that we can compute odds.
-		statsCollector.IncPokemonCountNonShiny(pokemonIdStr, formIdStr)
+		getStatsCollector().IncPokemonCountNonShiny(pokemonIdStr, formIdStr)
 	}
 }
 
@@ -563,20 +564,20 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 
 			if pokemon.isNewRecord() || pokemon.oldValues.PokemonId != pokemon.PokemonId { // pokemon is new or type has changed
 				countStats.count[pf]++
-				statsCollector.IncPokemonCountNew(fullAreaName)
+				getStatsCollector().IncPokemonCountNew(fullAreaName)
 				if pokemon.ExpireTimestampVerified {
-					statsCollector.UpdateVerifiedTtl(area, pokemon.SeenType, nullIntFromUint(pokemon.ExpireTimestamp))
+					getStatsCollector().UpdateVerifiedTtl(area, pokemon.SeenType, nullIntFromUint(pokemon.ExpireTimestamp))
 				}
 			}
 
 			if pokemon.Cp.Valid {
 				countStats.ivCount[pf]++
-				statsCollector.IncPokemonCountIv(fullAreaName)
+				getStatsCollector().IncPokemonCountIv(fullAreaName)
 				if isHundo {
-					statsCollector.IncPokemonCountHundo(fullAreaName)
+					getStatsCollector().IncPokemonCountHundo(fullAreaName)
 					countStats.hundos[pf]++
 				} else if isNundo {
-					statsCollector.IncPokemonCountNundo(fullAreaName)
+					getStatsCollector().IncPokemonCountNundo(fullAreaName)
 					countStats.nundos[pf]++
 				}
 			}
@@ -591,7 +592,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				areaStats.tthBucket[bucket]++
 			}
 
-			statsCollector.AddPokemonStatsResetCount(fullAreaName, float64(statsResetCountIncr))
+			getStatsCollector().AddPokemonStatsResetCount(fullAreaName, float64(statsResetCountIncr))
 
 			areaStats.monsIv += monsIvIncr
 			areaStats.monsSeen += monsSeenIncr

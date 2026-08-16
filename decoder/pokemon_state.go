@@ -47,7 +47,7 @@ func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId u
 		err := db.PokemonDb.GetContext(ctx, pokemon,
 			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
 			strconv.FormatUint(encounterId, 10))
-		statsCollector.IncDbQuery("select pokemon", err)
+		getStatsCollector().IncDbQuery("select pokemon", err)
 		return err
 	})
 }
@@ -315,7 +315,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
 			":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
 
-		statsCollector.IncDbQuery("insert pokemon", err)
+		getStatsCollector().IncDbQuery("insert pokemon", err)
 		if err != nil {
 			log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
 			pokemonCache.Delete(uint64(pokemon.Id))
@@ -366,7 +366,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			"is_event = :is_event "+
 			"WHERE id = \"%d\"", pvpUpdate, pokemon.Id), pokemon,
 		)
-		statsCollector.IncDbQuery("update pokemon", err)
+		getStatsCollector().IncDbQuery("update pokemon", err)
 		if err != nil {
 			log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
 			pokemonCache.Delete(uint64(pokemon.Id))

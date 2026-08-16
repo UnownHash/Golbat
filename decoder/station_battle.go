@@ -595,7 +595,7 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 		return nil
 	}
 	tx, err := dbDetails.GeneralDb.BeginTxx(ctx, nil)
-	statsCollector.IncDbQuery("begin station_battle", err)
+	getStatsCollector().IncDbQuery("begin station_battle", err)
 	if err != nil {
 		return err
 	}
@@ -603,29 +603,29 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 	if len(battles) > 0 {
 		if _, err = tx.NamedExecContext(ctx, stationBattleBatchUpsertQuery, battles); err != nil {
 			_ = tx.Rollback()
-			statsCollector.IncDbQuery("upsert station_battle", err)
+			getStatsCollector().IncDbQuery("upsert station_battle", err)
 			return err
 		}
-		statsCollector.IncDbQuery("upsert station_battle", nil)
+		getStatsCollector().IncDbQuery("upsert station_battle", nil)
 	}
 
 	deleteQuery, deleteArgs, err := buildDeleteObsoleteStationBattlesQuery(stationIds, battles)
 	if err != nil {
 		_ = tx.Rollback()
-		statsCollector.IncDbQuery("delete obsolete station_battle", err)
+		getStatsCollector().IncDbQuery("delete obsolete station_battle", err)
 		return err
 	}
 	if deleteQuery != "" {
 		if _, err = tx.ExecContext(ctx, deleteQuery, deleteArgs...); err != nil {
 			_ = tx.Rollback()
-			statsCollector.IncDbQuery("delete obsolete station_battle", err)
+			getStatsCollector().IncDbQuery("delete obsolete station_battle", err)
 			return err
 		}
-		statsCollector.IncDbQuery("delete obsolete station_battle", nil)
+		getStatsCollector().IncDbQuery("delete obsolete station_battle", nil)
 	}
 
 	err = tx.Commit()
-	statsCollector.IncDbQuery("commit station_battle", err)
+	getStatsCollector().IncDbQuery("commit station_battle", err)
 	return err
 }
 
@@ -638,7 +638,7 @@ func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, s
 		WHERE station_id = ? AND battle_end > ?
 		ORDER BY battle_end ASC
 	`, stationId, now)
-		statsCollector.IncDbQuery("select station_battle station", err)
+		getStatsCollector().IncDbQuery("select station_battle station", err)
 		return err
 	})
 	if err != nil {
@@ -679,7 +679,7 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 		"JOIN station s ON s.id = sb.station_id " +
 		"WHERE sb.battle_end > ? ORDER BY sb.station_id, sb.battle_end ASC"
 	rows, err := dbDetails.GeneralDb.Queryx(query, now)
-	statsCollector.IncDbQuery("select station_battle non_expired", err)
+	getStatsCollector().IncDbQuery("select station_battle non_expired", err)
 	if err != nil {
 		log.Errorf("Preload: failed to query station battles - %s", err)
 		return 0
