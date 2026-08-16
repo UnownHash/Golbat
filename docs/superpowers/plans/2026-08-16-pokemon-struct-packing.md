@@ -18,6 +18,7 @@
 - **Do not change the database schema.** Every narrowed Go type matches a column width that already exists. If you find one that does not, stop and report it rather than adding a migration.
 - **Verify column types against `sql/*.up.sql`, never against the block comment at `decoder/pokemon.go:88-140`.** That comment has three known-stale claims: `iv` is not a generated column (`sql/11_ivchanges.up.sql` replaced it), `seen_type` has eight values not four (`sql/45_tappables_seen_type_lure.up.sql`), and `size` is `tinyint unsigned` not `double` (`sql/7_add_height_size.up.sql` renamed the old double to `height`).
 - **JSON output is a public contract.** The API responses (`api.md`) and webhooks (`webhooks.md`) are consumed by other people's software. A nullable field must marshal to `null`, never to `0`.
+- **One deliberate JSON divergence, ruled on 2026-08-16.** `NullFloat32` formats at bitSize 32, where `guregu/null.Float` formats at 64. A weight of 6.7 emits `6.7` where it used to emit `6.699999809265137`. The values originate as protobuf `float` fields promoted through `float64()` (`decoder/pokemon_decode.go:749,751`), so the extra digits were promotion noise that never carried information. Every other type stays byte-identical to `guregu/null`.
 - **Commit messages** end with `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>` only if an agent authored the commit.
 
 ---

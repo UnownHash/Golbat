@@ -132,7 +132,14 @@ Each type implements:
 - `sql.Scanner` and `driver.Valuer` — so sqlx keeps working with no shim
 - `ValueOrZero()`, `Ptr()`, `IsZero()` — so existing call sites keep compiling
 - `MarshalJSON` / `UnmarshalJSON` producing output byte-identical to
-  `guregu/null`'s — the API endpoints and webhook payloads are public contracts
+  `guregu/null`'s — the API endpoints and webhook payloads are public contracts —
+  with one deliberate exception: `NullFloat32` formats at bitSize 32 where
+  `guregu/null.Float` formats at 64, so a weight of 6.7 emits `6.7` rather than
+  `6.699999809265137`. `weight` and `height` arrive as protobuf `float` fields
+  promoted through `float64()` (`decoder/pokemon_decode.go:749,751`), so the
+  extra digits were an artefact of that promotion and never carried
+  information. Ruled 2026-08-16; pinned by its own test so it cannot regress
+  silently.
 
 **This API surface is the compatibility contract for the whole change.** The
 package has no Golbat dependencies and is testable in complete isolation, which
