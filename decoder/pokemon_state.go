@@ -231,10 +231,15 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			// Determine delay based on seen type
 			// Wild/nearby Pokemon wait for potential encounter data, encounter writes immediately
 			delay := time.Duration(0)
-			seenType := pokemon.SeenType.ValueOrZero()
-			if seenType == SeenType_Wild || seenType == SeenType_LureWild ||
-				seenType == SeenType_Cell || seenType == SeenType_NearbyStop {
-				delay = wildPokemonDelay
+			// pokemon.SeenType.Valid guards the switch: SeenTypeCode's zero
+			// value is SeenTypeCodeWild, so an unset SeenType would otherwise
+			// false-match the Wild case and delay a write that should go out
+			// immediately.
+			if pokemon.SeenType.Valid {
+				switch pokemon.SeenType.Code {
+				case SeenTypeCodeWild, SeenTypeCodeLureWild, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
+					delay = wildPokemonDelay
+				}
 			}
 			pokemonQueue.Enqueue(pokemon.PokemonData, isNewRecord, delay)
 		} else {
@@ -410,7 +415,7 @@ type PokemonWebhook struct {
 	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
 	DisplayPokemonForm    null.Int        `json:"display_pokemon_form"`
 	IsEvent               int8            `json:"is_event"`
-	SeenType              null.String     `json:"seen_type"`
+	SeenType              NullSeenType    `json:"seen_type"` // MarshalJSON matches null.String: a quoted string, or null
 	Pvp                   json.RawMessage `json:"pvp"`
 }
 

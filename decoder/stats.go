@@ -191,7 +191,7 @@ type pokemonStatsSnapshot struct {
 	Form                    nulltypes.NullUint16
 	Cp                      nulltypes.NullUint16
 	AtkIv, DefIv, StaIv     nulltypes.NullUint8
-	SeenType                null.String
+	SeenType                NullSeenType
 	Username                null.String
 	Shiny                   nulltypes.NullBool
 	Updated                 nulltypes.NullUint32
@@ -199,7 +199,7 @@ type pokemonStatsSnapshot struct {
 	ExpireTimestampVerified bool
 	newRecord               bool
 	oldValues               struct {
-		SeenType  null.String
+		SeenType  NullSeenType
 		Cp        nulltypes.NullUint16
 		PokemonId int16
 	}
@@ -566,7 +566,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				countStats.count[pf]++
 				getStatsCollector().IncPokemonCountNew(fullAreaName)
 				if pokemon.ExpireTimestampVerified {
-					getStatsCollector().UpdateVerifiedTtl(area, pokemon.SeenType, nullIntFromUint(pokemon.ExpireTimestamp))
+					getStatsCollector().UpdateVerifiedTtl(area, null.NewString(pokemon.SeenType.ValueOrZero(), pokemon.SeenType.Valid), nullIntFromUint(pokemon.ExpireTimestamp))
 				}
 			}
 

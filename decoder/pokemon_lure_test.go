@@ -11,8 +11,6 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
-
-	"github.com/guregu/null/v6"
 )
 
 type recordedWebhook struct {
@@ -157,7 +155,7 @@ func TestUpdateFromMapLeavesNonLureRecordsAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getOrCreatePokemonRecord: %v", err)
 	}
-	pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
+	pokemon.SetSeenType(SeenType_Wild)
 	pokemon.newRecord = false
 
 	raw := testRawMapPokemon(encId, "lure-fort-910103", 51.5, -0.12, time.Now().UnixMilli()+90_000)
