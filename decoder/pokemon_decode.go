@@ -442,6 +442,9 @@ func (n NullSeenType) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
 	}
+	if int(n.Code) >= len(seenTypeStrings) {
+		return nil, fmt.Errorf("seen_type code %d has no string representation", n.Code)
+	}
 	return n.Code.String(), nil
 }
 

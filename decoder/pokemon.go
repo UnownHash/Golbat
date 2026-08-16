@@ -17,24 +17,24 @@ import (
 //
 // FIELD ORDER IS LOAD-BEARING in the sense that a careless ordering
 // (interleaving fields of different alignments) can make this bigger than
-// 280 bytes — but not smaller. The field payload sums to 273 bytes (8-byte
-// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 23 + pointer
-// group 120), and Go's struct alignment (8, driven by the uint64/float64/
-// pointer fields) rounds any total up to the next multiple of 8: 280 either
+// 256 bytes — but not smaller. The field payload sums to 251 bytes (8-byte
+// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 25 + pointer
+// group 96), and Go's struct alignment (8, driven by the uint64/float64/
+// pointer fields) rounds any total up to the next multiple of 8: 256 either
 // way. This order achieves that minimum — the pointer group's own 8-byte
-// alignment forces exactly 7 bytes of mandatory padding immediately before
-// it (offset 153->160), and every other ordering pays those same 7 bytes
+// alignment forces exactly 5 bytes of mandatory padding immediately before
+// it (offset 155->160), and every other ordering pays those same 5 bytes
 // somewhere else instead (e.g. as trailing padding at the very end), not
-// zero. The design doc's original estimate of 232 for this order (264 for
-// an arbitrary one) was an arithmetic error — 264 was never achievable
-// either, being below the 273-byte payload. See TestPokemonEntitySizes's
-// comment for the full breakdown; that test guards the 280 result — if it
-// fails after you add a field, read its doc comment before touching the
+// zero. See TestPokemonEntitySizes's comment for the full breakdown and the
+// history behind this number (it dropped from 280 when task 5 narrowed
+// SeenType out of the pointer group); that test guards the 256 result — if
+// it fails after you add a field, read its doc comment before touching the
 // constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
-// sql/*.up.sql, NOT against the schema comment further down this file, which
-// has three known-stale claims.
+// sql/*.up.sql. The schema comment further down this file documents three
+// known divergences from the original CREATE TABLE — it's a pointer to the
+// relevant migrations, not a substitute for checking sql/*.up.sql directly.
 type PokemonData struct {
 	// --- 8-byte aligned ---
 	Id      Uint64Str            `db:"id"`
@@ -85,7 +85,6 @@ type PokemonData struct {
 }
 
 // Pokemon struct.
-// REMINDER! Keep hasChangesPokemon updated after making changes
 //
 // AtkIv/DefIv/StaIv: Should not be set directly. Use calculateIv
 //

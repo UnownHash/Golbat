@@ -210,7 +210,7 @@ func TestUint64FullRange(t *testing.T) {
 
 	t.Run("bytes-path", func(t *testing.T) {
 		// Test that []byte path also survives the full range via ParseUint fallback.
-		bytesVal := []byte("14219788758686216192") // decimal representation of 0xC5A0000000000000
+		bytesVal := []byte("14219788758686216192") // decimal representation of 0xc556d6894e95b000
 		var n NullUint64
 		if err := n.Scan(bytesVal); err != nil {
 			t.Fatalf("Scan: %v", err)
