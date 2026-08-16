@@ -195,6 +195,7 @@ package nulltypes
 import (
 	"encoding/json"
 	"testing"
+	"unsafe"
 
 	"github.com/guregu/null/v6"
 )
@@ -207,12 +208,12 @@ func TestSizes(t *testing.T) {
 		got  uintptr
 		want uintptr
 	}{
-		{"NullUint8", sizeofUint8(), 2},
-		{"NullUint16", sizeofUint16(), 4},
-		{"NullUint32", sizeofUint32(), 8},
-		{"NullUint64", sizeofUint64(), 16},
-		{"NullFloat32", sizeofFloat32(), 8},
-		{"NullBool", sizeofBool(), 2},
+		{"NullUint8", unsafe.Sizeof(NullUint8{}), 2},
+		{"NullUint16", unsafe.Sizeof(NullUint16{}), 4},
+		{"NullUint32", unsafe.Sizeof(NullUint32{}), 8},
+		{"NullUint64", unsafe.Sizeof(NullUint64{}), 16},
+		{"NullFloat32", unsafe.Sizeof(NullFloat32{}), 8},
+		{"NullBool", unsafe.Sizeof(NullBool{}), 2},
 	}
 	for _, c := range cases {
 		if c.got != c.want {
@@ -790,19 +791,6 @@ func (n *NullBool) UnmarshalJSON(data []byte) error {
 	return nil
 }
 ```
-
-Add the size helpers the test calls, at the bottom of `nulltypes_test.go`:
-
-```go
-func sizeofUint8() uintptr   { return unsafe.Sizeof(NullUint8{}) }
-func sizeofUint16() uintptr  { return unsafe.Sizeof(NullUint16{}) }
-func sizeofUint32() uintptr  { return unsafe.Sizeof(NullUint32{}) }
-func sizeofUint64() uintptr  { return unsafe.Sizeof(NullUint64{}) }
-func sizeofFloat32() uintptr { return unsafe.Sizeof(NullFloat32{}) }
-func sizeofBool() uintptr    { return unsafe.Sizeof(NullBool{}) }
-```
-
-with `"unsafe"` added to that file's imports.
 
 - [ ] **Step 4: Run the tests to verify they pass**
 
