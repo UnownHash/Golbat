@@ -64,7 +64,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// size class.
 	//
 	// Task 6 dropped the `changedFields []string` field (24 bytes): 416 - 24
-	// = 392, this test's current pinned value. In a PRODUCTION (non-dbdebug)
+	// = 392. In a PRODUCTION (non-dbdebug)
 	// build the field's replacement, `debug pokemonDebugState`, is defined
 	// zero-sized (see db_debug_off.go), so it costs nothing — the 392 is a
 	// real, full 24-byte reduction in compiled struct size, not a rounding
@@ -73,19 +73,26 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// up to 416, same as before this task. The durable win is the removed
 	// field itself — one fewer pointer word in the GC scan bitmap per cached
 	// pokemon, and a dead-in-production field gone from the struct — not a
-	// reduction in allocated bytes. Reaching the next class down (384) would
-	// need roughly 32 more bytes trimmed from PokemonOldValues (32 bytes) or
-	// the embedded `internal grpc.PokemonInternal` (64 bytes); both are out
-	// of scope here.
+	// reduction in allocated bytes.
+	//
+	// Task 7 took the other lever that comment named: the embedded
+	// `internal grpc.PokemonInternal` (64 bytes of protobuf machinery —
+	// MessageState, sizeCache, unknownFields, slice header) became
+	// `scanHistory []*pokemonScan` (a 24-byte slice header), 392 - 40 = 352,
+	// this test's current pinned value. Unlike task 6 this one DOES move the
+	// allocator: 352 is itself a Go size class, so the bytes handed out per
+	// cached pokemon go 416 -> 352. Measured the same way as the 416 above
+	// (n=200000 live *Pokemon, runtime.MemStats.TotalAlloc delta / n): 352.0
+	// exactly, against 416.0 for a 392-byte control struct. Each history
+	// entry also shrank, 88 -> 44 bytes (allocator 96 -> 48).
 	//
 	// A dbdebug build (`-tags dbdebug`) keeps pokemonDebugState's real
 	// `[]string` accumulator (24 bytes, see db_debug.go) so it can still
 	// aggregate per-field change descriptions into one dbDebugLog line per
-	// save, matching the original behavior. Pokemon is therefore 416 bytes
-	// under dbdebug — identical to its pre-task-6 size — not the 392 pinned
-	// here for production; that's expected instrumentation overhead in a
-	// build that's never deployed at scale, so this test only enforces the
-	// production number.
+	// save, matching the original behavior. Pokemon is therefore 376 bytes
+	// under dbdebug, not the 352 pinned here for production; that's expected
+	// instrumentation overhead in a build that's never deployed at scale, so
+	// this test only enforces the production number.
 	//
 	// PokemonData itself is never independently heap-allocated — it's
 	// embedded in Pokemon and copied by value into []PokemonData
@@ -93,7 +100,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// class boundary only matters for Pokemon.
 	const (
 		wantPokemonData = 256
-		wantPokemon     = 392
+		wantPokemon     = 352
 	)
 
 	if got := unsafe.Sizeof(PokemonData{}); got != wantPokemonData {
@@ -101,9 +108,9 @@ func TestPokemonEntitySizes(t *testing.T) {
 	}
 	if dbDebugEnabled {
 		// dbdebug build: pokemonDebugState carries a real 24-byte slice
-		// header, so Pokemon is back to its pre-task-6 416 bytes. See the
-		// comment above wantPokemon for why this test doesn't pin the
-		// production number here.
+		// header, so Pokemon is 24 bytes larger (376). See the comment above
+		// wantPokemon for why this test doesn't pin the production number
+		// here.
 		if got := unsafe.Sizeof(Pokemon{}); got != wantPokemon+24 {
 			t.Errorf("unsafe.Sizeof(Pokemon{}) [dbdebug build] = %d, want %d", got, wantPokemon+24)
 		}
