@@ -95,7 +95,7 @@ func goldenSnapshotPokemon() *Pokemon {
 			ExpireTimestampVerified: true,
 			// DisplayPokemonId / DisplayPokemonForm intentionally left null
 			IsDitto:  false,
-			SeenType: null.StringFrom("encounter"),
+			SeenType: SeenTypeFrom(SeenTypeCodeEncounter),
 			Shiny:    nulltypes.BoolFrom(true),
 			// Username intentionally left null
 		},

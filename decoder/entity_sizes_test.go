@@ -43,17 +43,30 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// this test's file-level comment for why that's not how a fail here
 	// should be resolved.
 	//
-	// wantPokemon: 800 -> 456, still carries `changedFields []string` and
-	// `internal grpc.PokemonInternal`, both left for a later task. 456 lands
-	// in the 480-byte GC size class (see the class list in this file's
-	// top-level comment), comfortably under the 512-byte threshold where
-	// mark cost jumps. PokemonData itself is never independently
-	// heap-allocated — it's embedded in Pokemon and copied by value into
-	// []PokemonData write-behind batches — so no size class applies to it
-	// directly; the class boundary only matters for Pokemon.
+	// Task 5 moved SeenType out of the pointer group (null.String, 24 bytes,
+	// 8-byte aligned) into the 1-byte group (NullSeenType — a uint8 code plus
+	// a bool, 2 bytes, 1-byte aligned): pointer group 120 -> 96, 1-byte group
+	// 23 -> 25. New payload: 56 + 48 + 26 + 25 + 96 = 251, rounding up to 256.
+	// That is a 24-byte drop, not the design doc's estimated 22 — another of
+	// its arithmetic misses (see the 232/264 note above); 256 is what the
+	// test actually measures and is the number that matters.
+	//
+	// wantPokemon: 800 -> 456 from tasks 1-4, then a further 40-byte drop
+	// from this task's SeenType narrowing: PokemonData embeds the same
+	// 24-byte drop as above, and PokemonOldValues (also holding a SeenType,
+	// used for webhook/stats comparison) shrinks from 48 to 32 bytes for the
+	// same reason, a 16-byte drop. 456 - 24 - 16 = 416. Pokemon still carries
+	// `changedFields []string` and `internal grpc.PokemonInternal`, both left
+	// for a later task. 416 now lands exactly on a GC size class boundary
+	// (see the class list in this file's top-level comment), comfortably
+	// under the 512-byte threshold where mark cost jumps. PokemonData itself
+	// is never independently heap-allocated — it's embedded in Pokemon and
+	// copied by value into []PokemonData write-behind batches — so no size
+	// class applies to it directly; the class boundary only matters for
+	// Pokemon.
 	const (
-		wantPokemonData = 280
-		wantPokemon     = 456
+		wantPokemonData = 256
+		wantPokemon     = 416
 	)
 
 	if got := unsafe.Sizeof(PokemonData{}); got != wantPokemonData {

@@ -172,6 +172,7 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		Size:                    nulltypes.Uint8From(5),
 		Shiny:                   nulltypes.BoolFrom(true),
 		Weight:                  nulltypes.Float32From(3.5),
+		SeenType:                SeenTypeFrom(SeenTypeCodeLureEncounter),
 	}
 
 	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{want}); err != nil {
@@ -198,5 +199,11 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	}
 	if got.Lat != want.Lat {
 		t.Errorf("Lat = %.14f, want %.14f (float64 precision must survive)", got.Lat, want.Lat)
+	}
+	if got.SeenType != want.SeenType {
+		t.Errorf("SeenType = %+v, want %+v", got.SeenType, want.SeenType)
+	}
+	if got.SeenType.ValueOrZero() != SeenType_LureEncounter {
+		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenType_LureEncounter)
 	}
 }

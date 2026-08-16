@@ -8,6 +8,7 @@ import (
 	"golbat/grpc"
 
 	"github.com/guregu/null/v6"
+	log "github.com/sirupsen/logrus"
 )
 
 // PokemonData contains all database-persisted fields for Pokemon.
@@ -74,10 +75,10 @@ type PokemonData struct {
 	ExpireTimestampVerified bool                `db:"expire_timestamp_verified"`
 	IsDitto                 bool                `db:"is_ditto"`
 	IsEvent                 int8                `db:"is_event"`
+	SeenType                NullSeenType        `db:"seen_type"`
 
 	// --- pointer-carrying, last ---
 	PokestopId     null.String `db:"pokestop_id"`
-	SeenType       null.String `db:"seen_type"`
 	Username       null.String `db:"username"`
 	Pvp            null.String `db:"pvp"`
 	GolbatInternal []byte      `db:"golbat_internal"`
@@ -110,7 +111,7 @@ type PokemonOldValues struct {
 	PokemonId int16
 	Weather   nulltypes.NullUint8
 	Cp        nulltypes.NullUint16
-	SeenType  null.String
+	SeenType  NullSeenType
 	Lat       float64
 	Lon       float64
 }
@@ -399,12 +400,23 @@ func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 	}
 }
 
-func (pokemon *Pokemon) SetSeenType(v null.String) {
-	if pokemon.SeenType != v {
+// SetSeenType takes the string form directly, since the decode path already
+// produces the SeenType_* constants. An unrecognised value means the game
+// added a seen type before the migrations caught up; it is logged and the
+// field is left unchanged rather than corrupting scan statistics with a
+// wrong code.
+func (pokemon *Pokemon) SetSeenType(s string) {
+	next, err := ParseSeenType(s)
+	if err != nil {
+		log.Warnf("SetSeenType(%d): %s", pokemon.Id, err)
+		return
+	}
+	if pokemon.SeenType != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("SeenType:%s->%s", FormatNull(pokemon.SeenType), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields,
+				fmt.Sprintf("SeenType:%s->%s", pokemon.SeenType.ValueOrZero(), next.ValueOrZero()))
 		}
-		pokemon.SeenType = v
+		pokemon.SeenType = next
 		pokemon.dirty = true
 	}
 }
