@@ -5,8 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"golbat/decoder/nulltypes"
-
+	"github.com/guregu/null/v6"
 	"github.com/jmoiron/sqlx"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -14,11 +13,13 @@ import (
 
 // TestPokemonNullColumnRoundTrip is the test the packing change exists to pass.
 //
-// Every nullable pokemon column is narrowed from guregu/null's 16-byte wrappers
-// to nulltypes equivalents. Those implement sql.Scanner, so a NULL should land
-// as Valid=false — but that is a runtime property, not a compile-time one, and
-// getting it wrong means the first production row with a null gender panics
-// inside database/sql's convertAssign.
+// Every nullable pokemon column is narrowed from guregu/null's 16-byte
+// null.Int/null.Float wrappers to null.Value[T] instantiated at the narrow
+// width (uint8/uint16/uint32/float32/bool). Those implement sql.Scanner via
+// the embedded sql.Null[T], so a NULL should land as Valid=false — but that
+// is a runtime property, not a compile-time one, and getting it wrong means
+// the first production row with a null gender panics inside database/sql's
+// convertAssign.
 //
 // Requires a MariaDB with the golbat schema. Set GOLBAT_TEST_DSN, e.g.
 //
@@ -161,19 +162,23 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		FirstSeenTimestamp:      1000,
 		Changed:                 2000,
 		ExpireTimestampVerified: true,
-		CellId:                  nulltypes.Uint64From(0xFFFFFFFFFFFFFFF0),
-		AtkIv:                   nulltypes.Uint8From(15),
-		DefIv:                   nulltypes.Uint8From(14),
-		StaIv:                   nulltypes.Uint8From(13),
-		Level:                   nulltypes.Uint8From(35),
-		Cp:                      nulltypes.Uint16From(3500),
-		Move1:                   nulltypes.Uint16From(216),
-		Gender:                  nulltypes.Uint8From(1),
-		Size:                    nulltypes.Uint8From(5),
-		Shiny:                   nulltypes.BoolFrom(true),
-		Weight:                  nulltypes.Float32From(3.5),
-		Iv:                      nulltypes.Float32From(93.33),
-		SeenType:                SeenTypeFrom(SeenTypeCodeLureEncounter),
+		// -16, chosen as the signed equivalent of the old test's
+		// 0xFFFFFFFFFFFFFFF0 bit pattern: cell_id is a signed bigint and real
+		// S2 cell ids are frequently negative (see decoder/pokemon.go's
+		// SetCellId), so this exercises that a negative value round-trips.
+		CellId:   null.ValueFrom(int64(-16)),
+		AtkIv:    null.ValueFrom(uint8(15)),
+		DefIv:    null.ValueFrom(uint8(14)),
+		StaIv:    null.ValueFrom(uint8(13)),
+		Level:    null.ValueFrom(uint8(35)),
+		Cp:       null.ValueFrom(uint16(3500)),
+		Move1:    null.ValueFrom(uint16(216)),
+		Gender:   null.ValueFrom(uint8(1)),
+		Size:     null.ValueFrom(uint8(5)),
+		Shiny:    null.ValueFrom(true),
+		Weight:   null.ValueFrom(float32(3.5)),
+		Iv:       null.ValueFrom(float32(93.33)),
+		SeenType: SeenTypeFrom(SeenTypeCodeLureEncounter),
 	}
 
 	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{want}); err != nil {
@@ -187,7 +192,7 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	}
 
 	if got.CellId != want.CellId {
-		t.Errorf("CellId = %#x, want %#x (full 64-bit range must survive)", got.CellId.V, want.CellId.V)
+		t.Errorf("CellId = %#x, want %#x (negative signed values must survive)", got.CellId.V, want.CellId.V)
 	}
 	if got.Cp != want.Cp {
 		t.Errorf("Cp = %v, want %v", got.Cp, want.Cp)

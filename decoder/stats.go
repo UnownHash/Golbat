@@ -16,7 +16,6 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
-	"golbat/decoder/nulltypes"
 	"golbat/encounter_cache"
 	"golbat/geo"
 	"golbat/util"
@@ -188,19 +187,19 @@ func ReloadGeofenceAndClearStats() {
 type pokemonStatsSnapshot struct {
 	Id                      Uint64Str
 	PokemonId               int16
-	Form                    nulltypes.NullUint16
-	Cp                      nulltypes.NullUint16
-	AtkIv, DefIv, StaIv     nulltypes.NullUint8
+	Form                    null.Value[uint16]
+	Cp                      null.Value[uint16]
+	AtkIv, DefIv, StaIv     null.Value[uint8]
 	SeenType                NullSeenType
 	Username                null.String
-	Shiny                   nulltypes.NullBool
-	Updated                 nulltypes.NullUint32
-	ExpireTimestamp         nulltypes.NullUint32
+	Shiny                   null.Value[bool]
+	Updated                 null.Value[uint32]
+	ExpireTimestamp         null.Value[uint32]
 	ExpireTimestampVerified bool
 	newRecord               bool
 	oldValues               struct {
 		SeenType  NullSeenType
-		Cp        nulltypes.NullUint16
+		Cp        null.Value[uint16]
 		PokemonId int16
 	}
 }

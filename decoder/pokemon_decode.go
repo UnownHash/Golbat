@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"golbat/db"
-	"golbat/decoder/nulltypes"
 	"golbat/grpc"
 	"golbat/pogo"
 
@@ -881,9 +880,9 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	if pokemon.AtkIv.Valid || pokemon.DefIv.Valid || pokemon.StaIv.Valid || pokemon.Iv.Valid {
 		pokemon.dirty = true
 	}
-	pokemon.AtkIv = nulltypes.NullUint8{}
-	pokemon.DefIv = nulltypes.NullUint8{}
-	pokemon.StaIv = nulltypes.NullUint8{}
+	pokemon.AtkIv = null.Value[uint8]{}
+	pokemon.DefIv = null.Value[uint8]{}
+	pokemon.StaIv = null.Value[uint8]{}
 	pokemon.SetIv(null.Float{})
 	if cp {
 		switch pokemon.SeenType.ValueOrZero() {
@@ -1034,7 +1033,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
-		var oldForm nulltypes.NullUint16
+		var oldForm null.Value[uint16]
 		if pokemon.IsDitto {
 			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
 			oldForm = pokemon.DisplayPokemonForm

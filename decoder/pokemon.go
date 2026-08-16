@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"golbat/decoder/nulltypes"
 	"golbat/grpc"
 
 	"github.com/guregu/null/v6"
@@ -37,45 +36,45 @@ import (
 // relevant migrations, not a substitute for checking sql/*.up.sql directly.
 type PokemonData struct {
 	// --- 8-byte aligned ---
-	Id      Uint64Str            `db:"id"`
-	SpawnId nulltypes.NullUint64 `db:"spawn_id"`
-	CellId  nulltypes.NullUint64 `db:"cell_id"`
-	Lat     float64              `db:"lat"`
-	Lon     float64              `db:"lon"`
+	Id      Uint64Str          `db:"id"`
+	SpawnId null.Value[uint64] `db:"spawn_id"`
+	CellId  null.Value[int64]  `db:"cell_id"`
+	Lat     float64            `db:"lat"`
+	Lon     float64            `db:"lon"`
 
 	// --- 4-byte aligned ---
-	FirstSeenTimestamp uint32                `db:"first_seen_timestamp"`
-	Changed            uint32                `db:"changed"`
-	ExpireTimestamp    nulltypes.NullUint32  `db:"expire_timestamp"`
-	Updated            nulltypes.NullUint32  `db:"updated"`
-	Weight             nulltypes.NullFloat32 `db:"weight"`
-	Height             nulltypes.NullFloat32 `db:"height"`
-	Iv                 nulltypes.NullFloat32 `db:"iv"`
+	FirstSeenTimestamp uint32              `db:"first_seen_timestamp"`
+	Changed            uint32              `db:"changed"`
+	ExpireTimestamp    null.Value[uint32]  `db:"expire_timestamp"`
+	Updated            null.Value[uint32]  `db:"updated"`
+	Weight             null.Value[float32] `db:"weight"`
+	Height             null.Value[float32] `db:"height"`
+	Iv                 null.Value[float32] `db:"iv"`
 
 	// --- 2-byte aligned ---
-	PokemonId          int16                `db:"pokemon_id"`
-	Move1              nulltypes.NullUint16 `db:"move_1"`
-	Move2              nulltypes.NullUint16 `db:"move_2"`
-	Cp                 nulltypes.NullUint16 `db:"cp"`
-	Form               nulltypes.NullUint16 `db:"form"`
-	DisplayPokemonId   nulltypes.NullUint16 `db:"display_pokemon_id"`
-	DisplayPokemonForm nulltypes.NullUint16 `db:"display_pokemon_form"`
+	PokemonId          int16              `db:"pokemon_id"`
+	Move1              null.Value[uint16] `db:"move_1"`
+	Move2              null.Value[uint16] `db:"move_2"`
+	Cp                 null.Value[uint16] `db:"cp"`
+	Form               null.Value[uint16] `db:"form"`
+	DisplayPokemonId   null.Value[uint16] `db:"display_pokemon_id"`
+	DisplayPokemonForm null.Value[uint16] `db:"display_pokemon_form"`
 
 	// --- 1-byte ---
-	Gender                  nulltypes.NullUint8 `db:"gender"`
-	AtkIv                   nulltypes.NullUint8 `db:"atk_iv"`
-	DefIv                   nulltypes.NullUint8 `db:"def_iv"`
-	StaIv                   nulltypes.NullUint8 `db:"sta_iv"`
-	Level                   nulltypes.NullUint8 `db:"level"`
-	Weather                 nulltypes.NullUint8 `db:"weather"`
-	Costume                 nulltypes.NullUint8 `db:"costume"`
-	Size                    nulltypes.NullUint8 `db:"size"`
-	IsStrong                nulltypes.NullBool  `db:"strong"`
-	Shiny                   nulltypes.NullBool  `db:"shiny"`
-	ExpireTimestampVerified bool                `db:"expire_timestamp_verified"`
-	IsDitto                 bool                `db:"is_ditto"`
-	IsEvent                 int8                `db:"is_event"`
-	SeenType                NullSeenType        `db:"seen_type"`
+	Gender                  null.Value[uint8] `db:"gender"`
+	AtkIv                   null.Value[uint8] `db:"atk_iv"`
+	DefIv                   null.Value[uint8] `db:"def_iv"`
+	StaIv                   null.Value[uint8] `db:"sta_iv"`
+	Level                   null.Value[uint8] `db:"level"`
+	Weather                 null.Value[uint8] `db:"weather"`
+	Costume                 null.Value[uint8] `db:"costume"`
+	Size                    null.Value[uint8] `db:"size"`
+	IsStrong                null.Value[bool]  `db:"strong"`
+	Shiny                   null.Value[bool]  `db:"shiny"`
+	ExpireTimestampVerified bool              `db:"expire_timestamp_verified"`
+	IsDitto                 bool              `db:"is_ditto"`
+	IsEvent                 int8              `db:"is_event"`
+	SeenType                NullSeenType      `db:"seen_type"`
 
 	// --- pointer-carrying, last ---
 	PokestopId     null.String `db:"pokestop_id"`
@@ -116,8 +115,8 @@ type Pokemon struct {
 // PokemonOldValues holds old field values for webhook comparison, stats, and R-tree updates
 type PokemonOldValues struct {
 	PokemonId int16
-	Weather   nulltypes.NullUint8
-	Cp        nulltypes.NullUint16
+	Weather   null.Value[uint8]
+	Cp        null.Value[uint16]
 	SeenType  NullSeenType
 	Lat       float64
 	Lon       float64
@@ -172,13 +171,13 @@ func (pokemon *Pokemon) Unlock() {
 // keeps the value at the boundary and counts the event; truncating would
 // silently produce a plausible-looking wrong number, which is worse.
 //
-// Note this is the opposite policy to nulltypes' Scan, which rejects
-// out-of-range values outright. That is deliberate: a bad value from our own
-// database is a bug worth failing on, a bad value from a game server is a fact
-// worth recording.
-func clampUint8(v null.Int, field string) nulltypes.NullUint8 {
+// Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
+// which rejects out-of-range values outright. That is deliberate: a bad value
+// from our own database is a bug worth failing on, a bad value from a game
+// server is a fact worth recording.
+func clampUint8(v null.Int, field string) null.Value[uint8] {
 	if !v.Valid {
-		return nulltypes.NullUint8{}
+		return null.Value[uint8]{}
 	}
 	i := v.Int64
 	switch {
@@ -189,12 +188,12 @@ func clampUint8(v null.Int, field string) nulltypes.NullUint8 {
 		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint8
 	}
-	return nulltypes.Uint8From(uint8(i))
+	return null.ValueFrom(uint8(i))
 }
 
-func clampUint16(v null.Int, field string) nulltypes.NullUint16 {
+func clampUint16(v null.Int, field string) null.Value[uint16] {
 	if !v.Valid {
-		return nulltypes.NullUint16{}
+		return null.Value[uint16]{}
 	}
 	i := v.Int64
 	switch {
@@ -205,12 +204,12 @@ func clampUint16(v null.Int, field string) nulltypes.NullUint16 {
 		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint16
 	}
-	return nulltypes.Uint16From(uint16(i))
+	return null.ValueFrom(uint16(i))
 }
 
-func clampUint32(v null.Int, field string) nulltypes.NullUint32 {
+func clampUint32(v null.Int, field string) null.Value[uint32] {
 	if !v.Valid {
-		return nulltypes.NullUint32{}
+		return null.Value[uint32]{}
 	}
 	i := v.Int64
 	switch {
@@ -221,51 +220,51 @@ func clampUint32(v null.Int, field string) nulltypes.NullUint32 {
 		getStatsCollector().IncFieldClamped(field)
 		i = math.MaxUint32
 	}
-	return nulltypes.Uint32From(uint32(i))
+	return null.ValueFrom(uint32(i))
 }
 
 // clampFloat32 narrows a null.Float. Range is not checked: the values are
 // weight, height and iv, all far inside float32's range.
-func clampFloat32(v null.Float) nulltypes.NullFloat32 {
+func clampFloat32(v null.Float) null.Value[float32] {
 	if !v.Valid {
-		return nulltypes.NullFloat32{}
+		return null.Value[float32]{}
 	}
-	return nulltypes.Float32From(float32(v.Float64))
+	return null.ValueFrom(float32(v.Float64))
 }
 
-// nullBoolFrom converts a guregu/null.Bool into a nulltypes.NullBool.
-func nullBoolFrom(v null.Bool) nulltypes.NullBool {
+// nullBoolFrom converts a guregu/null.Bool into a null.Value[bool].
+func nullBoolFrom(v null.Bool) null.Value[bool] {
 	if !v.Valid {
-		return nulltypes.NullBool{}
+		return null.Value[bool]{}
 	}
-	return nulltypes.BoolFrom(v.Bool)
+	return null.ValueFrom(v.Bool)
 }
 
 // nullIntFromUint is the reverse of clampUint8/16/32: it widens a narrowed
-// nulltypes.NullUint[T] back into a guregu/null.Int. Used at call sites that
-// still speak null.Int — a setter fed by another narrowed field (e.g.
+// null.Value[T] back into a guregu/null.Int. Used at call sites that still
+// speak null.Int — a setter fed by another narrowed field (e.g.
 // SetForm(nullIntFromUint(pokemon.DisplayPokemonForm))) and the webhook
 // payload, whose null.Int fields are a public contract external consumers
 // already depend on.
-func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n nulltypes.NullUint[T]) null.Int {
+func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	if !n.Valid {
 		return null.Int{}
 	}
 	return null.IntFrom(int64(n.V))
 }
 
-// nullFloatFromFloat32 widens a nulltypes.NullFloat32 back into a
+// nullFloatFromFloat32 widens a null.Value[float32] back into a
 // guregu/null.Float, for the same reason as nullIntFromUint.
-func nullFloatFromFloat32(n nulltypes.NullFloat32) null.Float {
+func nullFloatFromFloat32(n null.Value[float32]) null.Float {
 	if !n.Valid {
 		return null.Float{}
 	}
 	return null.FloatFrom(float64(n.V))
 }
 
-// nullBoolFromNulltypes is nullBoolFrom's reverse: nulltypes.NullBool back
-// into a guregu/null.Bool, for the webhook payload.
-func nullBoolFromNulltypes(n nulltypes.NullBool) null.Bool {
+// nullBoolToGuregu is nullBoolFrom's reverse: null.Value[bool] back into a
+// guregu/null.Bool, for the webhook payload.
+func nullBoolToGuregu(n null.Value[bool]) null.Bool {
 	if !n.Valid {
 		return null.Bool{}
 	}
@@ -287,9 +286,9 @@ func (pokemon *Pokemon) SetPokestopId(v null.String) {
 // SetSpawnId stores the full 64-bit unsigned range; spawn_id is bigint
 // unsigned and legitimate values use it all, so no clamping applies.
 func (pokemon *Pokemon) SetSpawnId(v null.Int) {
-	var next nulltypes.NullUint64
+	var next null.Value[uint64]
 	if v.Valid {
-		next = nulltypes.Uint64From(uint64(v.Int64))
+		next = null.ValueFrom(uint64(v.Int64))
 	}
 	if pokemon.SpawnId != next {
 		if dbDebugEnabled {
@@ -435,14 +434,14 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 	}
 }
 
-// SetCellId stores the raw bit pattern of a wrapped S2 cell id. cell_id is a
-// signed bigint whose real values are frequently negative; converting via
-// uint64(v.Int64) reinterprets the same bits rather than clamping, so the
-// round trip through storage is lossless in both directions.
+// SetCellId stores the signed S2 cell id directly. cell_id is a signed
+// bigint whose real values are frequently negative, and CellId's type
+// (null.Value[int64]) matches the column exactly, so v.Int64 is stored as-is
+// with no clamping or bit-reinterpretation.
 func (pokemon *Pokemon) SetCellId(v null.Int) {
-	var next nulltypes.NullUint64
+	var next null.Value[int64]
 	if v.Valid {
-		next = nulltypes.Uint64From(uint64(v.Int64))
+		next = null.ValueFrom(v.Int64)
 	}
 	if pokemon.CellId != next {
 		if dbDebugEnabled {
