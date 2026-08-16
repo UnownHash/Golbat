@@ -1161,12 +1161,20 @@ In `decoder/entity_sizes_test.go`, change the constants:
 
 ```go
 	const (
-		wantPokemonData = 232
+		wantPokemonData = 280
 		wantPokemon     = 424
 	)
 ```
 
-`wantPokemon` is an estimate at this point — `changedFields` is still present and is removed in Task 6. Run the test, and if the actual number differs, put the actual number in and note it in the commit message. The value of this test is that the number is deliberate, not that it was predicted correctly.
+**Corrected 2026-08-16, measured:** `PokemonData` is **280**, not the 232 this
+plan originally estimated. That estimate was arithmetically impossible — the
+declared fields carry 273 bytes of payload and the struct aligns to 8, so every
+ordering rounds to 280 with 7 bytes of mandatory trailing padding. Field order is
+still load-bearing (a careless reordering adds padding) but 280 is the floor.
+`Pokemon` measured **456**, which lands in Go's 480-byte size class, under the
+512 threshold. Run the test, put the actual numbers in, and note them in the
+commit message. The value of this test is that the number is deliberate, not
+that it was predicted correctly.
 
 - [ ] **Step 9: Refresh the stale schema comment**
 
@@ -1201,7 +1209,7 @@ Expected: PASS and clean. `decoder/api_pokemon_response_test.go` constructs a `P
 git add -A
 git commit -m "perf: narrow PokemonData numeric fields to column widths
 
-PokemonData 592 -> 232 bytes. Nullable numerics move from guregu/null's
+PokemonData 592 -> 280 bytes. Nullable numerics move from guregu/null's
 16-byte wrappers to nulltypes equivalents sized to the actual columns, and
 fields are reordered by descending alignment.
 
