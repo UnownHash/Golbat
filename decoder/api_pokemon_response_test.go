@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"golbat/decoder/nulltypes"
+
 	"github.com/guregu/null/v6"
 )
 
@@ -14,8 +16,8 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 			Lat:                51.5,
 			Lon:                -0.1,
 			PokemonId:          25,
-			Cp:                 null.IntFrom(500),
-			AtkIv:              null.IntFrom(15),
+			Cp:                 nulltypes.Uint16From(500),
+			AtkIv:              nulltypes.Uint8From(15),
 			FirstSeenTimestamp: 1000,
 			Changed:            2000,
 			// Level intentionally left unset -> should be a nil pointer (null)
@@ -66,35 +68,35 @@ func goldenSnapshotPokemon() *Pokemon {
 		PokemonData: PokemonData{
 			Id:                      9876543210,
 			PokestopId:              null.StringFrom("stop-abc"),
-			SpawnId:                 null.IntFrom(7777),
+			SpawnId:                 nulltypes.Uint64From(7777),
 			Lat:                     12.3456,
 			Lon:                     -65.4321,
-			Weight:                  null.FloatFrom(3.14),
-			Size:                    null.IntFrom(2),
-			Height:                  null.FloatFrom(0.5),
-			ExpireTimestamp:         null.IntFrom(1700000000),
-			Updated:                 null.IntFrom(1699999999),
+			Weight:                  nulltypes.Float32From(3.14),
+			Size:                    nulltypes.Uint8From(2),
+			Height:                  nulltypes.Float32From(0.5),
+			ExpireTimestamp:         nulltypes.Uint32From(1700000000),
+			Updated:                 nulltypes.Uint32From(1699999999),
 			PokemonId:               150,
-			Move1:                   null.IntFrom(216),
-			Move2:                   null.IntFrom(94),
-			Gender:                  null.IntFrom(1),
-			Cp:                      null.IntFrom(3500),
-			AtkIv:                   null.IntFrom(15),
-			DefIv:                   null.IntFrom(14),
-			StaIv:                   null.IntFrom(13),
-			Iv:                      null.FloatFrom(93.33),
-			Form:                    null.IntFrom(0),
-			Level:                   null.IntFrom(35),
-			Weather:                 null.IntFrom(1),
-			Costume:                 null.IntFrom(0),
+			Move1:                   nulltypes.Uint16From(216),
+			Move2:                   nulltypes.Uint16From(94),
+			Gender:                  nulltypes.Uint8From(1),
+			Cp:                      nulltypes.Uint16From(3500),
+			AtkIv:                   nulltypes.Uint8From(15),
+			DefIv:                   nulltypes.Uint8From(14),
+			StaIv:                   nulltypes.Uint8From(13),
+			Iv:                      nulltypes.Float32From(93.33),
+			Form:                    nulltypes.Uint16From(0),
+			Level:                   nulltypes.Uint8From(35),
+			Weather:                 nulltypes.Uint8From(1),
+			Costume:                 nulltypes.Uint8From(0),
 			FirstSeenTimestamp:      1699990000,
 			Changed:                 1699995000,
-			CellId:                  null.IntFrom(1234567890123),
+			CellId:                  nulltypes.Uint64From(1234567890123),
 			ExpireTimestampVerified: true,
 			// DisplayPokemonId / DisplayPokemonForm intentionally left null
 			IsDitto:  false,
 			SeenType: null.StringFrom("encounter"),
-			Shiny:    null.BoolFrom(true),
+			Shiny:    nulltypes.BoolFrom(true),
 			// Username intentionally left null
 		},
 	}

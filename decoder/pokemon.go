@@ -2,55 +2,75 @@ package decoder
 
 import (
 	"fmt"
+	"math"
 
+	"golbat/decoder/nulltypes"
 	"golbat/grpc"
 
 	"github.com/guregu/null/v6"
 )
 
 // PokemonData contains all database-persisted fields for Pokemon.
-// This struct is embedded in Pokemon and can be safely copied for write-behind queueing.
+// This struct is embedded in Pokemon and can be safely copied for write-behind
+// queueing.
+//
+// FIELD ORDER IS LOAD-BEARING. Fields are declared in descending alignment
+// order to minimise padding; the design doc's trial of these same narrowed
+// types in arbitrary order measured 264 bytes, against 280 in this order
+// (not the 232 originally estimated — see TestPokemonEntitySizes's comment
+// for why). That test guards the result — if it fails after you add a
+// field, read its doc comment before touching the constant.
+//
+// Types are narrowed to the actual column widths. Verify any change against
+// sql/*.up.sql, NOT against the schema comment further down this file, which
+// has three known-stale claims.
 type PokemonData struct {
-	Id                      Uint64Str   `db:"id"`
-	PokestopId              null.String `db:"pokestop_id"`
-	SpawnId                 null.Int    `db:"spawn_id"`
-	Lat                     float64     `db:"lat"`
-	Lon                     float64     `db:"lon"`
-	Weight                  null.Float  `db:"weight"`
-	Size                    null.Int    `db:"size"`
-	Height                  null.Float  `db:"height"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
-	Updated                 null.Int    `db:"updated"`
-	PokemonId               int16       `db:"pokemon_id"`
-	Move1                   null.Int    `db:"move_1"`
-	Move2                   null.Int    `db:"move_2"`
-	Gender                  null.Int    `db:"gender"`
-	Cp                      null.Int    `db:"cp"`
-	AtkIv                   null.Int    `db:"atk_iv"`
-	DefIv                   null.Int    `db:"def_iv"`
-	StaIv                   null.Int    `db:"sta_iv"`
-	GolbatInternal          []byte      `db:"golbat_internal"`
-	Iv                      null.Float  `db:"iv"`
-	Form                    null.Int    `db:"form"`
-	Level                   null.Int    `db:"level"`
-	IsStrong                null.Bool   `db:"strong"`
-	Weather                 null.Int    `db:"weather"`
-	Costume                 null.Int    `db:"costume"`
-	FirstSeenTimestamp      int64       `db:"first_seen_timestamp"`
-	Changed                 int64       `db:"changed"`
-	CellId                  null.Int    `db:"cell_id"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
-	DisplayPokemonId        null.Int    `db:"display_pokemon_id"`
-	DisplayPokemonForm      null.Int    `db:"display_pokemon_form"`
-	IsDitto                 bool        `db:"is_ditto"`
-	SeenType                null.String `db:"seen_type"`
-	Shiny                   null.Bool   `db:"shiny"`
-	Username                null.String `db:"username"`
-	Capture1                null.Float  `db:"capture_1"`
-	Capture2                null.Float  `db:"capture_2"`
-	Capture3                null.Float  `db:"capture_3"`
-	Pvp                     null.String `db:"pvp"`
-	IsEvent                 int8        `db:"is_event"`
+	// --- 8-byte aligned ---
+	Id      Uint64Str            `db:"id"`
+	SpawnId nulltypes.NullUint64 `db:"spawn_id"`
+	CellId  nulltypes.NullUint64 `db:"cell_id"`
+	Lat     float64              `db:"lat"`
+	Lon     float64              `db:"lon"`
+
+	// --- 4-byte aligned ---
+	FirstSeenTimestamp uint32                `db:"first_seen_timestamp"`
+	Changed            uint32                `db:"changed"`
+	ExpireTimestamp    nulltypes.NullUint32  `db:"expire_timestamp"`
+	Updated            nulltypes.NullUint32  `db:"updated"`
+	Weight             nulltypes.NullFloat32 `db:"weight"`
+	Height             nulltypes.NullFloat32 `db:"height"`
+	Iv                 nulltypes.NullFloat32 `db:"iv"`
+
+	// --- 2-byte aligned ---
+	PokemonId          int16                `db:"pokemon_id"`
+	Move1              nulltypes.NullUint16 `db:"move_1"`
+	Move2              nulltypes.NullUint16 `db:"move_2"`
+	Cp                 nulltypes.NullUint16 `db:"cp"`
+	Form               nulltypes.NullUint16 `db:"form"`
+	DisplayPokemonId   nulltypes.NullUint16 `db:"display_pokemon_id"`
+	DisplayPokemonForm nulltypes.NullUint16 `db:"display_pokemon_form"`
+
+	// --- 1-byte ---
+	Gender                  nulltypes.NullUint8 `db:"gender"`
+	AtkIv                   nulltypes.NullUint8 `db:"atk_iv"`
+	DefIv                   nulltypes.NullUint8 `db:"def_iv"`
+	StaIv                   nulltypes.NullUint8 `db:"sta_iv"`
+	Level                   nulltypes.NullUint8 `db:"level"`
+	Weather                 nulltypes.NullUint8 `db:"weather"`
+	Costume                 nulltypes.NullUint8 `db:"costume"`
+	Size                    nulltypes.NullUint8 `db:"size"`
+	IsStrong                nulltypes.NullBool  `db:"strong"`
+	Shiny                   nulltypes.NullBool  `db:"shiny"`
+	ExpireTimestampVerified bool                `db:"expire_timestamp_verified"`
+	IsDitto                 bool                `db:"is_ditto"`
+	IsEvent                 int8                `db:"is_event"`
+
+	// --- pointer-carrying, last ---
+	PokestopId     null.String `db:"pokestop_id"`
+	SeenType       null.String `db:"seen_type"`
+	Username       null.String `db:"username"`
+	Pvp            null.String `db:"pvp"`
+	GolbatInternal []byte      `db:"golbat_internal"`
 }
 
 // Pokemon struct.
@@ -78,65 +98,21 @@ type Pokemon struct {
 // PokemonOldValues holds old field values for webhook comparison, stats, and R-tree updates
 type PokemonOldValues struct {
 	PokemonId int16
-	Weather   null.Int
-	Cp        null.Int
+	Weather   nulltypes.NullUint8
+	Cp        nulltypes.NullUint16
 	SeenType  null.String
 	Lat       float64
 	Lon       float64
 }
 
-//
-//CREATE TABLE `pokemon` (
-//`id` varchar(25) NOT NULL,
-//`pokestop_id` varchar(35) DEFAULT NULL,
-//`spawn_id` bigint unsigned DEFAULT NULL,
-//`lat` double(18,14) NOT NULL,
-//`lon` double(18,14) NOT NULL,
-//`weight` double(18,14) DEFAULT NULL,
-//`size` double(18,14) DEFAULT NULL,
-//`expire_timestamp` int unsigned DEFAULT NULL,
-//`updated` int unsigned DEFAULT NULL,
-//`pokemon_id` smallint unsigned NOT NULL,
-//`move_1` smallint unsigned DEFAULT NULL,
-//`move_2` smallint unsigned DEFAULT NULL,
-//`gender` tinyint unsigned DEFAULT NULL,
-//`cp` smallint unsigned DEFAULT NULL,
-//`atk_iv` tinyint unsigned DEFAULT NULL,
-//`def_iv` tinyint unsigned DEFAULT NULL,
-//`sta_iv` tinyint unsigned DEFAULT NULL,
-//`form` smallint unsigned DEFAULT NULL,
-//`level` tinyint unsigned DEFAULT NULL,
-//`weather` tinyint unsigned DEFAULT NULL,
-//`costume` tinyint unsigned DEFAULT NULL,
-//`first_seen_timestamp` int unsigned NOT NULL,
-//`changed` int unsigned NOT NULL DEFAULT '0',
-//`iv` float(5,2) unsigned GENERATED ALWAYS AS (((((`atk_iv` + `def_iv`) + `sta_iv`) * 100) / 45)) VIRTUAL,
-//`cell_id` bigint unsigned DEFAULT NULL,
-//`expire_timestamp_verified` tinyint unsigned NOT NULL,
-//`display_pokemon_id` smallint unsigned DEFAULT NULL,
-//`seen_type` enum('wild','encounter','nearby_stop','nearby_cell') DEFAULT NULL,
-//`shiny` tinyint(1) DEFAULT '0',
-//`username` varchar(32) DEFAULT NULL,
-//`capture_1` double(18,14) DEFAULT NULL,
-//`capture_2` double(18,14) DEFAULT NULL,
-//`capture_3` double(18,14) DEFAULT NULL,
-//`pvp` text,
-//`is_event` tinyint unsigned NOT NULL DEFAULT '0',
-//PRIMARY KEY (`id`,`is_event`),
-//KEY `ix_coords` (`lat`,`lon`),
-//KEY `ix_pokemon_id` (`pokemon_id`),
-//KEY `ix_updated` (`updated`),
-//KEY `fk_spawn_id` (`spawn_id`),
-//KEY `fk_pokestop_id` (`pokestop_id`),
-//KEY `ix_atk_iv` (`atk_iv`),
-//KEY `ix_def_iv` (`def_iv`),
-//KEY `ix_sta_iv` (`sta_iv`),
-//KEY `ix_changed` (`changed`),
-//KEY `ix_level` (`level`),
-//KEY `fk_pokemon_cell_id` (`cell_id`),
-//KEY `ix_expire_timestamp` (`expire_timestamp`),
-//KEY `ix_iv` (`iv`)
-//)
+// The pokemon table's current shape is the composition of sql/1_rdmdb_tables.up.sql
+// and every migration after it. Notable divergences from the original CREATE TABLE
+// that used to be reproduced here:
+//   - iv is a plain nullable float(5,2), not a generated column (sql/11_ivchanges.up.sql)
+//   - seen_type is an eight-value enum (sql/45_tappables_seen_type_lure.up.sql)
+//   - size is tinyint unsigned; the original double column was renamed to height
+//     (sql/7_add_height_size.up.sql)
+// Check sql/*.up.sql before relying on a column's type.
 
 // IsDirty returns true if any field has been modified
 func (pokemon *Pokemon) IsDirty() bool {
@@ -171,6 +147,113 @@ func (pokemon *Pokemon) Unlock() {
 	pokemon.mu.Unlock("Pokemon", uint64(pokemon.Id))
 }
 
+// clampUint8 narrows a null.Int for storage in a tinyint-backed field.
+//
+// Values arrive from decoded game protos and are bounded in practice, so
+// out-of-range means the protocol changed rather than a normal case. Clamping
+// keeps the value at the boundary and counts the event; truncating would
+// silently produce a plausible-looking wrong number, which is worse.
+//
+// Note this is the opposite policy to nulltypes' Scan, which rejects
+// out-of-range values outright. That is deliberate: a bad value from our own
+// database is a bug worth failing on, a bad value from a game server is a fact
+// worth recording.
+func clampUint8(v null.Int, field string) nulltypes.NullUint8 {
+	if !v.Valid {
+		return nulltypes.NullUint8{}
+	}
+	i := v.Int64
+	switch {
+	case i < 0:
+		statsCollector.IncFieldClamped(field)
+		i = 0
+	case i > math.MaxUint8:
+		statsCollector.IncFieldClamped(field)
+		i = math.MaxUint8
+	}
+	return nulltypes.Uint8From(uint8(i))
+}
+
+func clampUint16(v null.Int, field string) nulltypes.NullUint16 {
+	if !v.Valid {
+		return nulltypes.NullUint16{}
+	}
+	i := v.Int64
+	switch {
+	case i < 0:
+		statsCollector.IncFieldClamped(field)
+		i = 0
+	case i > math.MaxUint16:
+		statsCollector.IncFieldClamped(field)
+		i = math.MaxUint16
+	}
+	return nulltypes.Uint16From(uint16(i))
+}
+
+func clampUint32(v null.Int, field string) nulltypes.NullUint32 {
+	if !v.Valid {
+		return nulltypes.NullUint32{}
+	}
+	i := v.Int64
+	switch {
+	case i < 0:
+		statsCollector.IncFieldClamped(field)
+		i = 0
+	case i > math.MaxUint32:
+		statsCollector.IncFieldClamped(field)
+		i = math.MaxUint32
+	}
+	return nulltypes.Uint32From(uint32(i))
+}
+
+// clampFloat32 narrows a null.Float. Range is not checked: the values are
+// weight, height and iv, all far inside float32's range.
+func clampFloat32(v null.Float) nulltypes.NullFloat32 {
+	if !v.Valid {
+		return nulltypes.NullFloat32{}
+	}
+	return nulltypes.Float32From(float32(v.Float64))
+}
+
+// nullBoolFrom converts a guregu/null.Bool into a nulltypes.NullBool.
+func nullBoolFrom(v null.Bool) nulltypes.NullBool {
+	if !v.Valid {
+		return nulltypes.NullBool{}
+	}
+	return nulltypes.BoolFrom(v.Bool)
+}
+
+// nullIntFromUint is the reverse of clampUint8/16/32: it widens a narrowed
+// nulltypes.NullUint[T] back into a guregu/null.Int. Used at call sites that
+// still speak null.Int — a setter fed by another narrowed field (e.g.
+// SetForm(nullIntFromUint(pokemon.DisplayPokemonForm))) and the webhook
+// payload, whose null.Int fields are a public contract external consumers
+// already depend on.
+func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n nulltypes.NullUint[T]) null.Int {
+	if !n.Valid {
+		return null.Int{}
+	}
+	return null.IntFrom(int64(n.V))
+}
+
+// nullFloatFromFloat32 widens a nulltypes.NullFloat32 back into a
+// guregu/null.Float, for the same reason as nullIntFromUint.
+func nullFloatFromFloat32(n nulltypes.NullFloat32) null.Float {
+	if !n.Valid {
+		return null.Float{}
+	}
+	return null.FloatFrom(float64(n.V))
+}
+
+// nullBoolFromNulltypes is nullBoolFrom's reverse: nulltypes.NullBool back
+// into a guregu/null.Bool, for the webhook payload.
+func nullBoolFromNulltypes(n nulltypes.NullBool) null.Bool {
+	if !n.Valid {
+		return null.Bool{}
+	}
+	return null.BoolFrom(n.V)
+}
+
 // --- Set methods with dirty tracking ---
 
 func (pokemon *Pokemon) SetPokestopId(v null.String) {
@@ -183,12 +266,18 @@ func (pokemon *Pokemon) SetPokestopId(v null.String) {
 	}
 }
 
+// SetSpawnId stores the full 64-bit unsigned range; spawn_id is bigint
+// unsigned and legitimate values use it all, so no clamping applies.
 func (pokemon *Pokemon) SetSpawnId(v null.Int) {
-	if pokemon.SpawnId != v {
+	var next nulltypes.NullUint64
+	if v.Valid {
+		next = nulltypes.Uint64From(uint64(v.Int64))
+	}
+	if pokemon.SpawnId != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("SpawnId:%s->%s", FormatNull(pokemon.SpawnId), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("SpawnId:%s->%s", FormatNull(pokemon.SpawnId), FormatNull(next)))
 		}
-		pokemon.SpawnId = v
+		pokemon.SpawnId = next
 		pokemon.dirty = true
 	}
 }
@@ -224,61 +313,68 @@ func (pokemon *Pokemon) SetPokemonId(v int16) {
 }
 
 func (pokemon *Pokemon) SetForm(v null.Int) {
-	if pokemon.Form != v {
+	next := clampUint16(v, "form")
+	if pokemon.Form != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Form:%s->%s", FormatNull(pokemon.Form), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Form:%s->%s", FormatNull(pokemon.Form), FormatNull(next)))
 		}
-		pokemon.Form = v
+		pokemon.Form = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetCostume(v null.Int) {
-	if pokemon.Costume != v {
+	next := clampUint8(v, "costume")
+	if pokemon.Costume != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Costume:%s->%s", FormatNull(pokemon.Costume), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Costume:%s->%s", FormatNull(pokemon.Costume), FormatNull(next)))
 		}
-		pokemon.Costume = v
+		pokemon.Costume = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetGender(v null.Int) {
-	if pokemon.Gender != v {
+	next := clampUint8(v, "gender")
+	if pokemon.Gender != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Gender:%s->%s", FormatNull(pokemon.Gender), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields,
+				fmt.Sprintf("Gender:%s->%s", FormatNull(pokemon.Gender), FormatNull(next)))
 		}
-		pokemon.Gender = v
+		pokemon.Gender = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetWeather(v null.Int) {
-	if pokemon.Weather != v {
+	next := clampUint8(v, "weather")
+	if pokemon.Weather != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weather:%s->%s", FormatNull(pokemon.Weather), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weather:%s->%s", FormatNull(pokemon.Weather), FormatNull(next)))
 		}
-		pokemon.Weather = v
+		pokemon.Weather = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetIsStrong(v null.Bool) {
-	if pokemon.IsStrong != v {
+	next := nullBoolFrom(v)
+	if pokemon.IsStrong != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("IsStrong:%s->%s", FormatNull(pokemon.IsStrong), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("IsStrong:%s->%s", FormatNull(pokemon.IsStrong), FormatNull(next)))
 		}
-		pokemon.IsStrong = v
+		pokemon.IsStrong = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetExpireTimestamp(v null.Int) {
-	if pokemon.ExpireTimestamp != v {
+	next := clampUint32(v, "expire_timestamp")
+	if pokemon.ExpireTimestamp != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("ExpireTimestamp:%s->%s", FormatNull(pokemon.ExpireTimestamp), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("ExpireTimestamp:%s->%s", FormatNull(pokemon.ExpireTimestamp), FormatNull(next)))
 		}
-		pokemon.ExpireTimestamp = v
+		pokemon.ExpireTimestamp = next
 		pokemon.dirty = true
 	}
 }
@@ -310,12 +406,20 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 	}
 }
 
+// SetCellId stores the raw bit pattern of a wrapped S2 cell id. cell_id is a
+// signed bigint whose real values are frequently negative; converting via
+// uint64(v.Int64) reinterprets the same bits rather than clamping, so the
+// round trip through storage is lossless in both directions.
 func (pokemon *Pokemon) SetCellId(v null.Int) {
-	if pokemon.CellId != v {
+	var next nulltypes.NullUint64
+	if v.Valid {
+		next = nulltypes.Uint64From(uint64(v.Int64))
+	}
+	if pokemon.CellId != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("CellId:%s->%s", FormatNull(pokemon.CellId), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("CellId:%s->%s", FormatNull(pokemon.CellId), FormatNull(next)))
 		}
-		pokemon.CellId = v
+		pokemon.CellId = next
 		pokemon.dirty = true
 	}
 }
@@ -331,81 +435,104 @@ func (pokemon *Pokemon) SetIsEvent(v int8) {
 }
 
 func (pokemon *Pokemon) SetShiny(v null.Bool) {
-	if pokemon.Shiny != v {
+	next := nullBoolFrom(v)
+	if pokemon.Shiny != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Shiny:%s->%s", FormatNull(pokemon.Shiny), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Shiny:%s->%s", FormatNull(pokemon.Shiny), FormatNull(next)))
 		}
-		pokemon.Shiny = v
+		pokemon.Shiny = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetCp(v null.Int) {
-	if pokemon.Cp != v {
+	next := clampUint16(v, "cp")
+	if pokemon.Cp != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Cp:%s->%s", FormatNull(pokemon.Cp), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Cp:%s->%s", FormatNull(pokemon.Cp), FormatNull(next)))
 		}
-		pokemon.Cp = v
+		pokemon.Cp = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetLevel(v null.Int) {
-	if pokemon.Level != v {
+	next := clampUint8(v, "level")
+	if pokemon.Level != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Level:%s->%s", FormatNull(pokemon.Level), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Level:%s->%s", FormatNull(pokemon.Level), FormatNull(next)))
 		}
-		pokemon.Level = v
+		pokemon.Level = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetMove1(v null.Int) {
-	if pokemon.Move1 != v {
+	next := clampUint16(v, "move_1")
+	if pokemon.Move1 != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move1:%s->%s", FormatNull(pokemon.Move1), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move1:%s->%s", FormatNull(pokemon.Move1), FormatNull(next)))
 		}
-		pokemon.Move1 = v
+		pokemon.Move1 = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetMove2(v null.Int) {
-	if pokemon.Move2 != v {
+	next := clampUint16(v, "move_2")
+	if pokemon.Move2 != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move2:%s->%s", FormatNull(pokemon.Move2), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Move2:%s->%s", FormatNull(pokemon.Move2), FormatNull(next)))
 		}
-		pokemon.Move2 = v
+		pokemon.Move2 = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetHeight(v null.Float) {
-	if !nullFloatAlmostEqual(pokemon.Height, v, floatTolerance) {
+	next := clampFloat32(v)
+	if pokemon.Height != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Height:%s->%s", FormatNull(pokemon.Height), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Height:%s->%s", FormatNull(pokemon.Height), FormatNull(next)))
 		}
-		pokemon.Height = v
+		pokemon.Height = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetWeight(v null.Float) {
-	if !nullFloatAlmostEqual(pokemon.Weight, v, floatTolerance) {
+	next := clampFloat32(v)
+	if pokemon.Weight != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weight:%s->%s", FormatNull(pokemon.Weight), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Weight:%s->%s", FormatNull(pokemon.Weight), FormatNull(next)))
 		}
-		pokemon.Weight = v
+		pokemon.Weight = next
+		pokemon.dirty = true
+	}
+}
+
+// SetIv sets the overall IV percentage. Unlike the other narrowed setters,
+// callers previously wrote pokemon.Iv directly (see calculateIv/clearIv in
+// pokemon_decode.go); routing it through a setter here closes that gap so it
+// gets clamping and dirty tracking like everything else.
+func (pokemon *Pokemon) SetIv(v null.Float) {
+	next := clampFloat32(v)
+	if pokemon.Iv != next {
+		if dbDebugEnabled {
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Iv:%s->%s", FormatNull(pokemon.Iv), FormatNull(next)))
+		}
+		pokemon.Iv = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetSize(v null.Int) {
-	if pokemon.Size != v {
+	next := clampUint8(v, "size")
+	if pokemon.Size != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Size:%s->%s", FormatNull(pokemon.Size), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Size:%s->%s", FormatNull(pokemon.Size), FormatNull(next)))
 		}
-		pokemon.Size = v
+		pokemon.Size = next
 		pokemon.dirty = true
 	}
 }
@@ -421,21 +548,23 @@ func (pokemon *Pokemon) SetIsDitto(v bool) {
 }
 
 func (pokemon *Pokemon) SetDisplayPokemonId(v null.Int) {
-	if pokemon.DisplayPokemonId != v {
+	next := clampUint16(v, "display_pokemon_id")
+	if pokemon.DisplayPokemonId != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonId:%s->%s", FormatNull(pokemon.DisplayPokemonId), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonId:%s->%s", FormatNull(pokemon.DisplayPokemonId), FormatNull(next)))
 		}
-		pokemon.DisplayPokemonId = v
+		pokemon.DisplayPokemonId = next
 		pokemon.dirty = true
 	}
 }
 
 func (pokemon *Pokemon) SetDisplayPokemonForm(v null.Int) {
-	if pokemon.DisplayPokemonForm != v {
+	next := clampUint16(v, "display_pokemon_form")
+	if pokemon.DisplayPokemonForm != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonForm:%s->%s", FormatNull(pokemon.DisplayPokemonForm), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("DisplayPokemonForm:%s->%s", FormatNull(pokemon.DisplayPokemonForm), FormatNull(next)))
 		}
-		pokemon.DisplayPokemonForm = v
+		pokemon.DisplayPokemonForm = next
 		pokemon.dirty = true
 	}
 }
@@ -450,52 +579,27 @@ func (pokemon *Pokemon) SetPvp(v null.String) {
 	}
 }
 
-func (pokemon *Pokemon) SetCapture1(v null.Float) {
-	if !nullFloatAlmostEqual(pokemon.Capture1, v, floatTolerance) {
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture1:%s->%s", FormatNull(pokemon.Capture1), FormatNull(v)))
-		}
-		pokemon.Capture1 = v
-		pokemon.dirty = true
-	}
-}
-
-func (pokemon *Pokemon) SetCapture2(v null.Float) {
-	if !nullFloatAlmostEqual(pokemon.Capture2, v, floatTolerance) {
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture2:%s->%s", FormatNull(pokemon.Capture2), FormatNull(v)))
-		}
-		pokemon.Capture2 = v
-		pokemon.dirty = true
-	}
-}
-
-func (pokemon *Pokemon) SetCapture3(v null.Float) {
-	if !nullFloatAlmostEqual(pokemon.Capture3, v, floatTolerance) {
-		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Capture3:%s->%s", FormatNull(pokemon.Capture3), FormatNull(v)))
-		}
-		pokemon.Capture3 = v
-		pokemon.dirty = true
-	}
-}
-
 func (pokemon *Pokemon) SetUpdated(v null.Int) {
-	if pokemon.Updated != v {
+	next := clampUint32(v, "updated")
+	if pokemon.Updated != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Updated:%s->%s", FormatNull(pokemon.Updated), FormatNull(v)))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Updated:%s->%s", FormatNull(pokemon.Updated), FormatNull(next)))
 		}
-		pokemon.Updated = v
+		pokemon.Updated = next
 		pokemon.dirty = true
 	}
 }
 
+// SetChanged stores a Unix timestamp. changed is an unsigned int column;
+// timestamps fit uint32 until year 2106, so this converts without clamping
+// (same reasoning as SetSpawnId/SetCellId).
 func (pokemon *Pokemon) SetChanged(v int64) {
-	if pokemon.Changed != v {
+	next := uint32(v)
+	if pokemon.Changed != next {
 		if dbDebugEnabled {
-			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Changed:%d->%d", pokemon.Changed, v))
+			pokemon.changedFields = append(pokemon.changedFields, fmt.Sprintf("Changed:%d->%d", pokemon.Changed, next))
 		}
-		pokemon.Changed = v
+		pokemon.Changed = next
 		pokemon.dirty = true
 	}
 }

@@ -16,6 +16,7 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/config"
+	"golbat/decoder/nulltypes"
 	"golbat/encounter_cache"
 	"golbat/geo"
 	"golbat/util"
@@ -187,19 +188,19 @@ func ReloadGeofenceAndClearStats() {
 type pokemonStatsSnapshot struct {
 	Id                      Uint64Str
 	PokemonId               int16
-	Form                    null.Int
-	Cp                      null.Int
-	AtkIv, DefIv, StaIv     null.Int
+	Form                    nulltypes.NullUint16
+	Cp                      nulltypes.NullUint16
+	AtkIv, DefIv, StaIv     nulltypes.NullUint8
 	SeenType                null.String
 	Username                null.String
-	Shiny                   null.Bool
-	Updated                 null.Int
-	ExpireTimestamp         null.Int
+	Shiny                   nulltypes.NullBool
+	Updated                 nulltypes.NullUint32
+	ExpireTimestamp         nulltypes.NullUint32
 	ExpireTimestampVerified bool
 	newRecord               bool
 	oldValues               struct {
 		SeenType  null.String
-		Cp        null.Int
+		Cp        nulltypes.NullUint16
 		PokemonId int16
 	}
 }
@@ -209,7 +210,7 @@ func (s *pokemonStatsSnapshot) isNewRecord() bool { return s.newRecord }
 // encounterStatsDuration: see (*Pokemon).encounterStatsDuration.
 func (s *pokemonStatsSnapshot) encounterStatsDuration(now int64) time.Duration {
 	if s.ExpireTimestampVerified {
-		if timeLeft := 60 + s.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+		if timeLeft := 60 + int64(s.ExpireTimestamp.ValueOrZero()) - now; timeLeft > 60 {
 			return time.Duration(timeLeft) * time.Second
 		}
 	}
@@ -408,9 +409,9 @@ func updateEncounterStats(pokemon *pokemonStatsSnapshot) {
 	// Prometheus
 	if pokemon.Shiny.ValueOrZero() {
 		statsCollector.IncPokemonCountShiny(pokemonIdStr, formIdStr)
-		if pokemon.AtkIv.Int64 == 15 && pokemon.DefIv.Int64 == 15 && pokemon.StaIv.Int64 == 15 {
+		if pokemon.AtkIv.V == 15 && pokemon.DefIv.V == 15 && pokemon.StaIv.V == 15 {
 			statsCollector.IncPokemonCountShundo()
-		} else if pokemon.AtkIv.Int64 == 0 && pokemon.DefIv.Int64 == 0 && pokemon.StaIv.Int64 == 0 {
+		} else if pokemon.AtkIv.V == 0 && pokemon.DefIv.V == 0 && pokemon.StaIv.V == 0 {
 			statsCollector.IncPokemonCountSnundo()
 		}
 	} else {
@@ -468,7 +469,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				// transition to wild for the first time..
 				populateEncounterCacheVal()
 				encounterCacheVal.FirstEncounter = 0
-				encounterCacheVal.FirstWild = pokemon.Updated.ValueOrZero()
+				encounterCacheVal.FirstWild = int64(pokemon.Updated.ValueOrZero())
 				// This will be put into the cache later.
 			}
 
@@ -482,7 +483,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 			populateEncounterCacheVal()
 			if encounterCacheVal.FirstEncounter == 0 {
 				// This is first encounter
-				encounterCacheVal.FirstEncounter = pokemon.Updated.ValueOrZero()
+				encounterCacheVal.FirstEncounter = int64(pokemon.Updated.ValueOrZero())
 
 				if encounterCacheVal.FirstWild > 0 {
 					timeToEncounter = encounterCacheVal.FirstEncounter - encounterCacheVal.FirstWild
@@ -491,7 +492,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				monsIvIncr = 1
 
 				if pokemon.ExpireTimestampVerified {
-					tth := pokemon.ExpireTimestamp.ValueOrZero() - pokemon.Updated.ValueOrZero() // relies on Updated being set
+					tth := int64(pokemon.ExpireTimestamp.ValueOrZero()) - int64(pokemon.Updated.ValueOrZero()) // relies on Updated being set
 					bucket = tth / (5 * 60)
 					if bucket > 11 {
 						bucket = 11
@@ -503,7 +504,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				}
 			} else {
 				if pokemon.ExpireTimestampVerified {
-					tth := pokemon.ExpireTimestamp.ValueOrZero() - pokemon.Updated.ValueOrZero() // relies on Updated being set
+					tth := int64(pokemon.ExpireTimestamp.ValueOrZero()) - int64(pokemon.Updated.ValueOrZero()) // relies on Updated being set
 
 					verifiedReEncounterIncr = 1
 					verifiedReEncSecTotalIncr = tth
@@ -564,7 +565,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				countStats.count[pf]++
 				statsCollector.IncPokemonCountNew(fullAreaName)
 				if pokemon.ExpireTimestampVerified {
-					statsCollector.UpdateVerifiedTtl(area, pokemon.SeenType, pokemon.ExpireTimestamp)
+					statsCollector.UpdateVerifiedTtl(area, pokemon.SeenType, nullIntFromUint(pokemon.ExpireTimestamp))
 				}
 			}
 
