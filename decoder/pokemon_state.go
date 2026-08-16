@@ -220,9 +220,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		// Debug logging happens here, before queueing
 		if dbDebugEnabled {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+				dbDebugLog("INSERT", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+				dbDebugLog("UPDATE", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 			}
 		}
 
@@ -248,7 +248,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	} else {
 		if dbDebugEnabled {
-			dbDebugLog("MEMORY", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+			dbDebugLog("MEMORY", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 		}
 	}
 
@@ -286,7 +286,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
 
 	if dbDebugEnabled {
-		pokemon.changedFields = pokemon.changedFields[:0]
+		pokemon.debug.reset()
 	}
 	pokemon.newRecord = false // After saving, it's no longer a new record
 	pokemon.ClearDirty()
