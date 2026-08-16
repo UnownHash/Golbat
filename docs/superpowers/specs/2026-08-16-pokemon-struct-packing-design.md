@@ -276,6 +276,17 @@ this work.
 
 ### Expected result
 
+**Correction, 2026-08-16 (measured during Task 3):** the 232-byte figure below
+is an arithmetic error and the real floor is **280 bytes**. Summing the declared
+fields gives 273 bytes of payload (8-byte group 56, 4-byte 48, 2-byte 26,
+1-byte 23, pointer group 120); struct alignment is 8, so *every* ordering rounds
+to 280 and only 7 bytes of mandatory trailing padding remain. Field order is
+still load-bearing — a careless reordering adds padding — but it cannot go below
+280 for this field set. Measured result: `PokemonData` 592 -> 280,
+`Pokemon` 800 -> 456, which lands in Go's 480-byte size class, under the
+512-byte threshold with room to spare.
+
+
 - `PokemonData`: **232 bytes**, from 592 (measured on a prototype).
 - `Pokemon` wrapper, also dropping `changedFields`: **~410 bytes**, from 800 —
   under the 512 threshold with roughly 100 bytes of headroom. This figure is
