@@ -382,42 +382,52 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 	return nil
 }
 
+// PokemonWebhook's IV/stat fields hold the same narrowed types as
+// PokemonData rather than widening back to guregu/null's int64/float64. The
+// widening used to happen at the payload boundary (nullIntFromUint /
+// nullFloatFromFloat32) to keep webhook bytes identical to before the
+// struct-packing PR; the maintainer judged that requirement misattributed —
+// webhook consumers are this project's call, not a wire contract this code
+// owes byte-identity to. Once the float fields were narrowed for that
+// reason, narrowing the int fields alongside them keeps the struct
+// consistent: every field mirrors its storage width, and none goes through
+// a widen-for-no-reason step the others don't.
 type PokemonWebhook struct {
-	SpawnpointId          string          `json:"spawnpoint_id"`
-	PokestopId            string          `json:"pokestop_id"`
-	PokestopName          *string         `json:"pokestop_name"`
-	EncounterId           string          `json:"encounter_id"`
-	PokemonId             int16           `json:"pokemon_id"`
-	Latitude              float64         `json:"latitude"`
-	Longitude             float64         `json:"longitude"`
-	DisappearTime         int64           `json:"disappear_time"`
-	DisappearTimeVerified bool            `json:"disappear_time_verified"`
-	FirstSeen             int64           `json:"first_seen"`
-	LastModifiedTime      null.Int        `json:"last_modified_time"`
-	Gender                null.Int        `json:"gender"`
-	Cp                    null.Int        `json:"cp"`
-	Form                  null.Int        `json:"form"`
-	Costume               null.Int        `json:"costume"`
-	IndividualAttack      null.Int        `json:"individual_attack"`
-	IndividualDefense     null.Int        `json:"individual_defense"`
-	IndividualStamina     null.Int        `json:"individual_stamina"`
-	PokemonLevel          null.Int        `json:"pokemon_level"`
-	Move1                 null.Int        `json:"move_1"`
-	Move2                 null.Int        `json:"move_2"`
-	Weight                null.Float      `json:"weight"`
-	Size                  null.Int        `json:"size"`
-	Height                null.Float      `json:"height"`
-	Weather               null.Int        `json:"weather"`
-	Capture1              float64         `json:"capture_1"`
-	Capture2              float64         `json:"capture_2"`
-	Capture3              float64         `json:"capture_3"`
-	Shiny                 null.Bool       `json:"shiny"`
-	Username              null.String     `json:"username"`
-	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
-	DisplayPokemonForm    null.Int        `json:"display_pokemon_form"`
-	IsEvent               int8            `json:"is_event"`
-	SeenType              NullSeenType    `json:"seen_type"` // MarshalJSON matches null.String: a quoted string, or null
-	Pvp                   json.RawMessage `json:"pvp"`
+	SpawnpointId          string              `json:"spawnpoint_id"`
+	PokestopId            string              `json:"pokestop_id"`
+	PokestopName          *string             `json:"pokestop_name"`
+	EncounterId           string              `json:"encounter_id"`
+	PokemonId             int16               `json:"pokemon_id"`
+	Latitude              float64             `json:"latitude"`
+	Longitude             float64             `json:"longitude"`
+	DisappearTime         int64               `json:"disappear_time"`
+	DisappearTimeVerified bool                `json:"disappear_time_verified"`
+	FirstSeen             int64               `json:"first_seen"`
+	LastModifiedTime      null.Value[uint32]  `json:"last_modified_time"`
+	Gender                null.Value[uint8]   `json:"gender"`
+	Cp                    null.Value[uint16]  `json:"cp"`
+	Form                  null.Value[uint16]  `json:"form"`
+	Costume               null.Value[uint8]   `json:"costume"`
+	IndividualAttack      null.Value[uint8]   `json:"individual_attack"`
+	IndividualDefense     null.Value[uint8]   `json:"individual_defense"`
+	IndividualStamina     null.Value[uint8]   `json:"individual_stamina"`
+	PokemonLevel          null.Value[uint8]   `json:"pokemon_level"`
+	Move1                 null.Value[uint16]  `json:"move_1"`
+	Move2                 null.Value[uint16]  `json:"move_2"`
+	Weight                null.Value[float32] `json:"weight"`
+	Size                  null.Value[uint8]   `json:"size"`
+	Height                null.Value[float32] `json:"height"`
+	Weather               null.Value[uint8]   `json:"weather"`
+	Capture1              float64             `json:"capture_1"`
+	Capture2              float64             `json:"capture_2"`
+	Capture3              float64             `json:"capture_3"`
+	Shiny                 null.Bool           `json:"shiny"`
+	Username              null.String         `json:"username"`
+	DisplayPokemonId      null.Value[uint16]  `json:"display_pokemon_id"`
+	DisplayPokemonForm    null.Value[uint16]  `json:"display_pokemon_form"`
+	IsEvent               int8                `json:"is_event"`
+	SeenType              NullSeenType        `json:"seen_type"` // MarshalJSON matches null.String: a quoted string, or null
+	Pvp                   json.RawMessage     `json:"pvp"`
 }
 
 func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
@@ -463,21 +473,21 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			DisappearTime:         int64(pokemon.ExpireTimestamp.ValueOrZero()),
 			DisappearTimeVerified: pokemon.ExpireTimestampVerified,
 			FirstSeen:             int64(pokemon.FirstSeenTimestamp),
-			LastModifiedTime:      nullIntFromUint(pokemon.Updated),
-			Gender:                nullIntFromUint(pokemon.Gender),
-			Cp:                    nullIntFromUint(pokemon.Cp),
-			Form:                  nullIntFromUint(pokemon.Form),
-			Costume:               nullIntFromUint(pokemon.Costume),
-			IndividualAttack:      nullIntFromUint(pokemon.AtkIv),
-			IndividualDefense:     nullIntFromUint(pokemon.DefIv),
-			IndividualStamina:     nullIntFromUint(pokemon.StaIv),
-			PokemonLevel:          nullIntFromUint(pokemon.Level),
-			Move1:                 nullIntFromUint(pokemon.Move1),
-			Move2:                 nullIntFromUint(pokemon.Move2),
-			Weight:                nullFloatFromFloat32(pokemon.Weight),
-			Size:                  nullIntFromUint(pokemon.Size),
-			Height:                nullFloatFromFloat32(pokemon.Height),
-			Weather:               nullIntFromUint(pokemon.Weather),
+			LastModifiedTime:      pokemon.Updated,
+			Gender:                pokemon.Gender,
+			Cp:                    pokemon.Cp,
+			Form:                  pokemon.Form,
+			Costume:               pokemon.Costume,
+			IndividualAttack:      pokemon.AtkIv,
+			IndividualDefense:     pokemon.DefIv,
+			IndividualStamina:     pokemon.StaIv,
+			PokemonLevel:          pokemon.Level,
+			Move1:                 pokemon.Move1,
+			Move2:                 pokemon.Move2,
+			Weight:                pokemon.Weight,
+			Size:                  pokemon.Size,
+			Height:                pokemon.Height,
+			Weather:               pokemon.Weather,
 			// capture_1/2/3 have never been populated by any code path — the
 			// setters existed but had no callers, and the columns were in
 			// neither pokemonSelectColumns nor pokemonBatchUpsertQuery. The
@@ -488,8 +498,8 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture3:           0,
 			Shiny:              nullBoolToGuregu(pokemon.Shiny),
 			Username:           pokemon.Username,
-			DisplayPokemonId:   nullIntFromUint(pokemon.DisplayPokemonId),
-			DisplayPokemonForm: nullIntFromUint(pokemon.DisplayPokemonForm),
+			DisplayPokemonId:   pokemon.DisplayPokemonId,
+			DisplayPokemonForm: pokemon.DisplayPokemonForm,
 			IsEvent:            pokemon.IsEvent,
 			SeenType:           pokemon.SeenType,
 			Pvp:                pvp,

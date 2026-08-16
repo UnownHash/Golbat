@@ -243,9 +243,14 @@ func nullBoolFrom(v null.Bool) null.Value[bool] {
 // nullIntFromUint is the reverse of clampUint8/16/32: it widens a narrowed
 // null.Value[T] back into a guregu/null.Int. Used at call sites that still
 // speak null.Int — a setter fed by another narrowed field (e.g.
-// SetForm(nullIntFromUint(pokemon.DisplayPokemonForm))) and the webhook
-// payload, whose null.Int fields are a public contract external consumers
-// already depend on.
+// SetForm(nullIntFromUint(pokemon.DisplayPokemonForm))) and the stats
+// collector interface (UpdateVerifiedTtl), which is shared with non-pokemon
+// callers and speaks guregu/null throughout.
+//
+// The webhook payload used to widen through here too, to keep webhook bytes
+// identical to before the struct-packing PR. The maintainer judged that
+// requirement misattributed, so PokemonWebhook's IV/stat fields now hold
+// the narrowed types directly — see the doc comment on PokemonWebhook.
 func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	if !n.Valid {
 		return null.Int{}
@@ -253,17 +258,8 @@ func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	return null.IntFrom(int64(n.V))
 }
 
-// nullFloatFromFloat32 widens a null.Value[float32] back into a
-// guregu/null.Float, for the same reason as nullIntFromUint.
-func nullFloatFromFloat32(n null.Value[float32]) null.Float {
-	if !n.Valid {
-		return null.Float{}
-	}
-	return null.FloatFrom(float64(n.V))
-}
-
 // nullBoolToGuregu is nullBoolFrom's reverse: null.Value[bool] back into a
-// guregu/null.Bool, for the webhook payload.
+// guregu/null.Bool, for the webhook payload's Shiny field.
 func nullBoolToGuregu(n null.Value[bool]) null.Bool {
 	if !n.Valid {
 		return null.Bool{}
