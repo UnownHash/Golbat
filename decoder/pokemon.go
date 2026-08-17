@@ -201,9 +201,9 @@ func (pokemon *Pokemon) Unlock() {
 // caller clamps above its own equality check — the setters (form, costume,
 // gender, weather, cp, level, size, move_1, move_2, expire_timestamp,
 // updated, changed, display_pokemon_id, display_pokemon_form) by
-// construction, and
-// calculateIv (atk_iv, def_iv, sta_iv), the only caller that is not a
-// setter, because its three clamped values are what its comparison reads.
+// construction, and calculateIv (atk_iv, def_iv, sta_iv), the only caller
+// that is not a setter, because its three clamped values are what its
+// comparison reads.
 // So a repeat sighting of an unchanged out-of-range value counts again, and
 // the rate tracks sightings for every label alike. Two label values can be
 // compared directly.
