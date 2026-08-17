@@ -9,6 +9,12 @@ env:
 
 jobs:
   test:
+    # Runs on every push (as before) plus pull_request, but only when the PR
+    # is the one case push doesn't already cover: a fork PR (push never
+    # fires on a fork's commits). A same-repo PR's pull_request event is
+    # skipped here since its push event already runs this job — without
+    # this guard every same-repo PR push would run the suite twice.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     services:
       # Schema-complete MariaDB for the pokemon round-trip tests
