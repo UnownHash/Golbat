@@ -184,18 +184,23 @@ func (pokemon *Pokemon) Unlock() {
 // use the non-counting narrowUint8/16/32 instead, and see their doc comment
 // for why the two exist separately.
 //
-// golbat_field_clamped_total does not mean quite the same thing for every
-// field, which matters before comparing two of its label values. The
-// setters clamp above their own equality check, so every field they own
-// (form, costume, gender, weather, cp, level, size, move_1, move_2,
-// expire_timestamp, updated, display_pokemon_id, display_pokemon_form)
-// counts once per setter call — a repeat store of an unchanged out-of-range
-// value counts again, so the rate tracks sightings. calculateIv, the only
-// caller that is not a setter, clamps below its comparison, so atk_iv,
-// def_iv and sta_iv count once per value that actually reaches the record:
-// five identical out-of-range encounters on one pokemon count one, five
-// distinct pokemon count five. Both are honest per-store rates. They are
-// just not the same rate.
+// golbat_field_clamped_total means the same thing for every field: one
+// count per call that had something to clamp, whether or not the clamped
+// value then differs from what is already stored. Every caller clamps above
+// its own equality check — the setters (form, costume, gender, weather, cp,
+// level, size, move_1, move_2, expire_timestamp, updated,
+// display_pokemon_id, display_pokemon_form) by construction, and
+// calculateIv (atk_iv, def_iv, sta_iv), the only caller that is not a
+// setter, because its three clamped values are what the comparison itself
+// reads. So a repeat sighting of an unchanged out-of-range value counts
+// again and the rate tracks sightings, uniformly.
+//
+// atk_iv/def_iv/sta_iv used to be the exception, counting once per value
+// that actually reached the record because calculateIv clamped below its
+// comparison. That ended when calculateIv was made to narrow once and feed
+// the comparison, the stores and the Iv sum from the same values — the
+// comparison needs the clamped values, so the clamp had to move above it.
+// Comparing label values across fields no longer needs a caveat.
 //
 // Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
 // which rejects out-of-range values outright. That is deliberate: a bad value
@@ -240,11 +245,17 @@ func clampUint32(v null.Int, field string) null.Value[uint32] {
 //
 // So: narrow wherever a stored field meets a value that has not been
 // through a setter yet, clamp where the value is actually stored. Do not
-// collapse the two back into one helper. Routing comparisons through the
-// counting clamp would inflate golbat_field_clamped_total to one clamp per
-// sighting instead of one per store (which is why they were written that
-// way originally); routing stores through the non-counting narrow would
-// silence the metric altogether.
+// collapse the two back into one helper. Routing a setter's comparison
+// through the counting clamp would count it twice per sighting, once for
+// the comparison and once for the store; routing stores through the
+// non-counting narrow would silence the metric altogether.
+//
+// calculateIv is the one place that compares against clampUint8's own
+// output rather than narrowing separately, and it is not an exception to
+// the rule above: it is not a setter, so nothing else clamps those three
+// values, and the clamped values are what it stores. Comparing anything
+// else there is what let Iv drift away from the columns — see its doc
+// comment.
 func narrowUint8(v int64) int64 { return saturate(v, math.MaxUint8) }
 
 func narrowUint16(v int64) int64 { return saturate(v, math.MaxUint16) }

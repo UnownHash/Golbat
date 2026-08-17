@@ -253,17 +253,34 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 // have no exported setters (see the Pokemon doc comment) so that all three
 // stay consistent with each other and with Iv. Clamped directly here rather
 // than through Set*Iv methods that don't exist.
+//
+// The clamp happens once, up front, and the three clamped values are the
+// only thing read afterwards: the comparison, the stores and the Iv sum all
+// come from them, so they cannot disagree. Two earlier shapes of this
+// function could. Comparing the stored (clamped) IVs against the raw a/d/s
+// never converged, so an out-of-range encounter re-wrote and re-dirtied the
+// record forever. Fixing only that half left the other: Iv was still the
+// raw sum divided by .45 while the columns held the clamped values, and the
+// convergence fix made the mismatch permanent by reporting "unchanged"
+// from then on. iv is float(5,2) unsigned, so a raw sum above 450 produces
+// a value MariaDB rejects under STRICT_TRANS_TABLES — and a rejected value
+// fails the entire multi-row batch upsert, taking every other pokemon in
+// the batch with it.
+//
+// Clamping above the comparison also moves atk_iv/def_iv/sta_iv onto the
+// same golbat_field_clamped_total rate as every other field — one count per
+// call rather than one per value that reached the record. See clampUint's
+// doc comment, which used to describe the two rates separately.
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	// Narrowed on both sides (see narrowUint8): the stored IVs hold the
-	// clamped value, so comparing them against the raw a/d/s would rewrite
-	// and re-dirty the record on every encounter once one is out of range.
-	if int64OrZero(pokemon.AtkIv) != narrowUint8(a) || int64OrZero(pokemon.DefIv) != narrowUint8(d) ||
-		int64OrZero(pokemon.StaIv) != narrowUint8(s) ||
-		!pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
-		pokemon.AtkIv = clampUint8(null.IntFrom(a), "atk_iv")
-		pokemon.DefIv = clampUint8(null.IntFrom(d), "def_iv")
-		pokemon.StaIv = clampUint8(null.IntFrom(s), "sta_iv")
-		pokemon.SetIv(null.FloatFrom(float64(a+d+s) / .45))
+	atk := clampUint8(null.IntFrom(a), "atk_iv")
+	def := clampUint8(null.IntFrom(d), "def_iv")
+	sta := clampUint8(null.IntFrom(s), "sta_iv")
+
+	// Comparing the whole null.Value covers the previously separate
+	// !Valid checks: an unset field never equals a clamped one.
+	if pokemon.AtkIv != atk || pokemon.DefIv != def || pokemon.StaIv != sta {
+		pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv = atk, def, sta
+		pokemon.SetIv(null.FloatFrom(float64(int64OrZero(atk)+int64OrZero(def)+int64OrZero(sta)) / .45))
 		pokemon.dirty = true
 	}
 }

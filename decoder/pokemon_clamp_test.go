@@ -432,3 +432,71 @@ func TestRepopulateIvConvergesOnOutOfRangeLevel(t *testing.T) {
 		t.Errorf("repeat repopulateIv cleared cp/pvp: cp=%+v pvp=%+v level=%+v", p.Cp, p.Pvp, p.Level)
 	}
 }
+
+// TestCalculateIvComputesIvFromTheNarrowedValues is the batch-failure
+// regression. calculateIv stored clamped atk/def/sta but divided the *raw*
+// sum to get Iv, and the convergence fix in the same function made that
+// divergence permanent: the narrowed comparison reports "unchanged"
+// forever, so the wrong Iv is never recomputed.
+//
+// iv is float(5,2) unsigned, so it tops out at 999.99. A raw a/d/s sum
+// above 450 divides to more than that, and under MariaDB's default
+// STRICT_TRANS_TABLES an out-of-range value fails the *whole* multi-row
+// batch upsert, not just the offending row — every other pokemon in the
+// batch is lost with it.
+//
+// Residual, deliberately not covered here because it predates this PR and
+// is not what this fix is about: the uint8 ceiling bounds the stored sum at
+// 3*255 = 765, and anything above 450 still divides past 999.99 — two
+// saturated IVs are already 510. Values in that band were out of the
+// column's range before the narrowing existed too, and closing it means
+// bounding Iv itself, not the inputs.
+func TestCalculateIvComputesIvFromTheNarrowedValues(t *testing.T) {
+	// float(5,2) unsigned: five significant digits, two after the point.
+	const ivColumnMax = 999.99
+
+	cases := []struct {
+		name    string
+		a, d, s int64
+		wantIv  float64
+	}{
+		// The production shape: one field far out of range drags the raw sum
+		// past 450 while the stored value saturates at the uint8 ceiling.
+		{"one field over the ceiling", 1000, 15, 15, (255 + 15 + 15) / .45},
+		// The other end of saturate: a negative reading stores 0, so the raw
+		// sum is now *lower* than what was stored. Divergence in both
+		// directions, one narrowing.
+		{"one field below zero", -5, 15, 15, (0 + 15 + 15) / .45},
+		// Just inside the column: nothing saturates, and 445 is the largest
+		// sum that still divides below 999.99.
+		{"at the column's edge", 255, 100, 90, (255 + 100 + 90) / .45},
+		// A real hundo must be untouched by any of this.
+		{"in range", 15, 15, 15, 100},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			p := &Pokemon{}
+			p.calculateIv(c.a, c.d, c.s)
+
+			if !p.Iv.Valid {
+				t.Fatalf("Iv after calculateIv(%d, %d, %d) is invalid", c.a, c.d, c.s)
+			}
+			if got := float64(p.Iv.ValueOrZero()); got > ivColumnMax {
+				t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want <= %v — MariaDB rejects this under STRICT_TRANS_TABLES and fails the entire batch upsert",
+					c.a, c.d, c.s, got, ivColumnMax)
+			}
+			if got, want := float64(p.Iv.ValueOrZero()), c.wantIv; math.Abs(got-want) > 0.01 {
+				t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want %v (the sum of the values actually stored)",
+					c.a, c.d, c.s, got, want)
+			}
+
+			// The stores and the Iv sum must agree, whatever the inputs were.
+			stored := int64OrZero(p.AtkIv) + int64OrZero(p.DefIv) + int64OrZero(p.StaIv)
+			if got, want := float64(p.Iv.ValueOrZero()), float64(stored)/.45; math.Abs(got-want) > 0.01 {
+				t.Errorf("Iv = %v but atk+def+sta = %d divides to %v — the stores and the Iv computation disagree",
+					got, stored, want)
+			}
+		})
+	}
+}
