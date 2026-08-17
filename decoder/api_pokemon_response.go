@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -42,36 +41,42 @@ type ApiPvpRankings struct {
 // pokemon scan/search endpoint (v1/v2/v3 and search). Nullable database columns
 // are represented as pointers (nil => JSON null) without omitempty so every key is
 // always present.
+//
+// Field widths match PokemonData's storage widths exactly (e.g. *uint8, *float32),
+// so pokemon.Field.Ptr() assigns directly — no widen/convert step. encoding/json
+// (and the goccy/go-json encoder Huma is configured with) render an integer or a
+// float32 identically regardless of the surrounding Go type's width, so this is a
+// pure type narrowing with no wire-format change (see TestBuildApiPokemonResult_GoldenSnapshot).
 type ApiPokemonResult struct {
 	Id                      string         `json:"id" doc:"Encounter ID of the pokemon"`
 	PokestopId              *string        `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
 	SpawnId                 *int64         `json:"spawn_id" doc:"Spawnpoint ID for this pokemon, if known"`
 	Lat                     float64        `json:"lat" doc:"Latitude of the pokemon"`
 	Lon                     float64        `json:"lon" doc:"Longitude of the pokemon"`
-	Weight                  *float64       `json:"weight" doc:"Weight of the pokemon"`
-	Size                    *int64         `json:"size" doc:"Size value of the pokemon"`
-	Height                  *float64       `json:"height" doc:"Height of the pokemon"`
-	ExpireTimestamp         *int64         `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
-	Updated                 *int64         `json:"updated" doc:"Unix timestamp when the record was last updated"`
+	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
+	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
+	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
+	ExpireTimestamp         *uint32        `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
+	Updated                 *uint32        `json:"updated" doc:"Unix timestamp when the record was last updated"`
 	PokemonId               int16          `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
-	Move1                   *int64         `json:"move_1" doc:"Fast move ID"`
-	Move2                   *int64         `json:"move_2" doc:"Charge move ID"`
-	Gender                  *int64         `json:"gender" doc:"Gender of the pokemon"`
-	Cp                      *int64         `json:"cp" doc:"Combat power of the pokemon"`
-	AtkIv                   *int64         `json:"atk_iv" doc:"Attack individual value"`
-	DefIv                   *int64         `json:"def_iv" doc:"Defense individual value"`
-	StaIv                   *int64         `json:"sta_iv" doc:"Stamina individual value"`
-	Iv                      *float64       `json:"iv" doc:"Overall IV percentage"`
-	Form                    *int64         `json:"form" doc:"Form ID of the pokemon"`
-	Level                   *int64         `json:"level" doc:"Level of the pokemon"`
-	Weather                 *int64         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
-	Costume                 *int64         `json:"costume" doc:"Costume ID of the pokemon"`
+	Move1                   *uint16        `json:"move_1" doc:"Fast move ID"`
+	Move2                   *uint16        `json:"move_2" doc:"Charge move ID"`
+	Gender                  *uint8         `json:"gender" doc:"Gender of the pokemon"`
+	Cp                      *uint16        `json:"cp" doc:"Combat power of the pokemon"`
+	AtkIv                   *uint8         `json:"atk_iv" doc:"Attack individual value"`
+	DefIv                   *uint8         `json:"def_iv" doc:"Defense individual value"`
+	StaIv                   *uint8         `json:"sta_iv" doc:"Stamina individual value"`
+	Iv                      *float32       `json:"iv" doc:"Overall IV percentage"`
+	Form                    *uint16        `json:"form" doc:"Form ID of the pokemon"`
+	Level                   *uint8         `json:"level" doc:"Level of the pokemon"`
+	Weather                 *uint8         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
+	Costume                 *uint8         `json:"costume" doc:"Costume ID of the pokemon"`
 	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" doc:"Unix timestamp when the pokemon was first seen"`
 	Changed                 int64          `json:"changed" doc:"Unix timestamp when the pokemon last changed"`
 	CellId                  *int64         `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
 	ExpireTimestampVerified bool           `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
-	DisplayPokemonId        *int64         `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
-	DisplayPokemonForm      *int64         `json:"display_pokemon_form" doc:"Displayed pokemon form"`
+	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
+	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
 	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
 	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
 	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
@@ -81,41 +86,6 @@ type ApiPokemonResult struct {
 	Capture3                *float64       `json:"capture_3" doc:"Base capture rate with three balls"`
 	Pvp                     ApiPvpRankings `json:"pvp" doc:"PVP rankings for the pokemon"`
 	IsEvent                 int8           `json:"is_event" doc:"Whether the pokemon is part of an event"`
-}
-
-// widenPtr converts a pointer to a narrow numeric into a pointer to a wider
-// one, preserving nil. The API response types stay as they are: api.md is a
-// public contract and the storage width is an internal detail.
-func widenPtr[N, W ~int8 | ~int16 | ~int32 | ~int64 | ~uint8 | ~uint16 | ~uint32 | ~uint64](p *N) *W {
-	if p == nil {
-		return nil
-	}
-	w := W(*p)
-	return &w
-}
-
-// widenFloatPtr converts a *float32 into a *float64 for the API response,
-// preserving nil. Deliberately NOT a naive float64(*p) cast (which is what
-// widenPtr's numeric widening does for the integer fields): promoting a
-// float32 straight to float64 exposes the float32's own binary rounding at
-// float64's tighter shortest-round-trip resolution — 3.14 becomes
-// 3.140000104904175 — which is worse than what shipped before this field was
-// narrowed. Round-tripping through the shortest decimal string that
-// reproduces the SAME float32 value (bitSize 32, same technique
-// null.Value[float32]'s MarshalJSON uses via encoding/json's native float32
-// handling) keeps the compact rendering instead, without changing
-// ApiPokemonResult's *float64 wire type.
-func widenFloatPtr(p *float32) *float64 {
-	if p == nil {
-		return nil
-	}
-	v, err := strconv.ParseFloat(strconv.FormatFloat(float64(*p), 'f', -1, 32), 64)
-	if err != nil {
-		// Unreachable: FormatFloat's shortest-round-trip output always
-		// parses back cleanly.
-		v = float64(*p)
-	}
-	return &v
 }
 
 // buildApiPokemonResult builds an ApiPokemonResult from a cached Pokemon.
@@ -131,30 +101,30 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		SpawnId:                 pokemon.SpawnId.Ptr(),
 		Lat:                     pokemon.Lat,
 		Lon:                     pokemon.Lon,
-		Weight:                  widenFloatPtr(pokemon.Weight.Ptr()),
-		Size:                    widenPtr[uint8, int64](pokemon.Size.Ptr()),
-		Height:                  widenFloatPtr(pokemon.Height.Ptr()),
-		ExpireTimestamp:         widenPtr[uint32, int64](pokemon.ExpireTimestamp.Ptr()),
-		Updated:                 widenPtr[uint32, int64](pokemon.Updated.Ptr()),
+		Weight:                  pokemon.Weight.Ptr(),
+		Size:                    pokemon.Size.Ptr(),
+		Height:                  pokemon.Height.Ptr(),
+		ExpireTimestamp:         pokemon.ExpireTimestamp.Ptr(),
+		Updated:                 pokemon.Updated.Ptr(),
 		PokemonId:               pokemon.PokemonId,
-		Move1:                   widenPtr[uint16, int64](pokemon.Move1.Ptr()),
-		Move2:                   widenPtr[uint16, int64](pokemon.Move2.Ptr()),
-		Gender:                  widenPtr[uint8, int64](pokemon.Gender.Ptr()),
-		Cp:                      widenPtr[uint16, int64](pokemon.Cp.Ptr()),
-		AtkIv:                   widenPtr[uint8, int64](pokemon.AtkIv.Ptr()),
-		DefIv:                   widenPtr[uint8, int64](pokemon.DefIv.Ptr()),
-		StaIv:                   widenPtr[uint8, int64](pokemon.StaIv.Ptr()),
-		Iv:                      widenFloatPtr(pokemon.Iv.Ptr()),
-		Form:                    widenPtr[uint16, int64](pokemon.Form.Ptr()),
-		Level:                   widenPtr[uint8, int64](pokemon.Level.Ptr()),
-		Weather:                 widenPtr[uint8, int64](pokemon.Weather.Ptr()),
-		Costume:                 widenPtr[uint8, int64](pokemon.Costume.Ptr()),
+		Move1:                   pokemon.Move1.Ptr(),
+		Move2:                   pokemon.Move2.Ptr(),
+		Gender:                  pokemon.Gender.Ptr(),
+		Cp:                      pokemon.Cp.Ptr(),
+		AtkIv:                   pokemon.AtkIv.Ptr(),
+		DefIv:                   pokemon.DefIv.Ptr(),
+		StaIv:                   pokemon.StaIv.Ptr(),
+		Iv:                      pokemon.Iv.Ptr(),
+		Form:                    pokemon.Form.Ptr(),
+		Level:                   pokemon.Level.Ptr(),
+		Weather:                 pokemon.Weather.Ptr(),
+		Costume:                 pokemon.Costume.Ptr(),
 		FirstSeenTimestamp:      int64(pokemon.FirstSeenTimestamp),
 		Changed:                 int64(pokemon.Changed),
 		CellId:                  pokemon.CellId.Ptr(),
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
-		DisplayPokemonId:        widenPtr[uint16, int64](pokemon.DisplayPokemonId.Ptr()),
-		DisplayPokemonForm:      widenPtr[uint16, int64](pokemon.DisplayPokemonForm.Ptr()),
+		DisplayPokemonId:        pokemon.DisplayPokemonId.Ptr(),
+		DisplayPokemonForm:      pokemon.DisplayPokemonForm.Ptr(),
 		IsDitto:                 pokemon.IsDitto,
 		SeenType:                pokemon.SeenType.Ptr(),
 		Shiny:                   pokemon.Shiny.Ptr(),
