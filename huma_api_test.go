@@ -352,15 +352,18 @@ func TestApiPokemonResultSchemaWidths(t *testing.T) {
 		// *float32, nullable — no minimum; unsigned-ness doesn't apply to floats.
 		{"weight", "number", "float", false},
 		// The four timestamps. All are uint32 in storage and int64 here, so
-		// all four advertise int64 with no minimum — a *uint32 would be
-		// advertised as int32, which a generated client overflows in January
-		// 2038 (see ApiPokemonResult's doc comment). The pair that is
-		// nullable and the pair that is not must still agree on the width;
-		// they did not before, and that inconsistency is what this pins.
-		{"expire_timestamp", "integer", "int64", false},
-		{"updated", "integer", "int64", false},
-		{"first_seen_timestamp", "integer", "int64", false},
-		{"changed", "integer", "int64", false},
+		// all four advertise int64 — a *uint32 would be advertised as int32,
+		// which a generated client overflows in January 2038 (see
+		// ApiPokemonResult's doc comment). Widening the Go type drops the
+		// unsignedness huma used to infer from it, so all four carry an
+		// explicit `minimum:"0"` tag to put the real floor back. The two that
+		// are nullable and the two that are not must agree on both the width
+		// and the bound; they agreed on neither before, and that is what this
+		// pins.
+		{"expire_timestamp", "integer", "int64", true},
+		{"updated", "integer", "int64", true},
+		{"first_seen_timestamp", "integer", "int64", true},
+		{"changed", "integer", "int64", true},
 	}
 	for _, c := range cases {
 		p, ok := props[c.field]

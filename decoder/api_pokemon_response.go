@@ -57,6 +57,14 @@ type ApiPvpRankings struct {
 // int64 while expire_timestamp and updated were int32. int64 is the one width
 // that describes all four honestly, and the JSON is unaffected either way: an
 // integer renders the same regardless of the surrounding Go type's width.
+//
+// Widening the Go type is what drops the `minimum: 0` huma used to infer from
+// uint32, so all four carry an explicit `minimum:"0"` tag instead. The bound
+// is real — every one of them is backed by an unsigned column — and losing it
+// was a side effect of the widening rather than part of the point, so the tag
+// puts it back and gets first_seen_timestamp and changed a floor they never
+// advertised in the first place.
+//
 // FirstSeenTimestamp and Changed are assigned via a bare int64(...) cast in
 // buildApiPokemonResult below; ExpireTimestamp and Updated are nullable, so
 // they go through int64PtrFromUint.
@@ -77,8 +85,8 @@ type ApiPokemonResult struct {
 	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
 	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
 	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
-	ExpireTimestamp         *int64         `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
-	Updated                 *int64         `json:"updated" doc:"Unix timestamp when the record was last updated"`
+	ExpireTimestamp         *int64         `json:"expire_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon despawns"`
+	Updated                 *int64         `json:"updated" minimum:"0" doc:"Unix timestamp when the record was last updated"`
 	PokemonId               int16          `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
 	Move1                   *uint16        `json:"move_1" doc:"Fast move ID"`
 	Move2                   *uint16        `json:"move_2" doc:"Charge move ID"`
@@ -92,8 +100,8 @@ type ApiPokemonResult struct {
 	Level                   *uint8         `json:"level" doc:"Level of the pokemon"`
 	Weather                 *uint8         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
 	Costume                 *uint8         `json:"costume" doc:"Costume ID of the pokemon"`
-	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" doc:"Unix timestamp when the pokemon was first seen"`
-	Changed                 int64          `json:"changed" doc:"Unix timestamp when the pokemon last changed"`
+	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon was first seen"`
+	Changed                 int64          `json:"changed" minimum:"0" doc:"Unix timestamp when the pokemon last changed"`
 	CellId                  *int64         `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
 	ExpireTimestampVerified bool           `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
 	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
