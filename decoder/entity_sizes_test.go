@@ -31,18 +31,20 @@ const gcSizeThreshold = 512
 // won by removing the embedded protobuf.
 //
 // The boundary in the SHRINKING direction is worth knowing before anyone
-// spends effort chasing it, because it is further away than Go's published
-// size-class table suggests. Measured on this toolchain (go1.26.5) with
-// pointer-containing control structs, which is what Pokemon is:
+// spends effort chasing it. Measured on this toolchain (go1.26.5):
 //
 //	280 -> 288    288 -> 288    304 -> 320    312 -> 320
 //
-// 304 is a listed size class but is not an available one for a scan object
-// at this size — the same effect TestClassMovedEntitySizes documents at
-// 1152. So the next class DOWN from Pokemon's is 288, and a change has to
-// shrink the struct by at least 24 bytes to make the allocator hand out any
-// less. Anything smaller than that is a real GC-scan-span improvement and a
+// So the next class DOWN from Pokemon's is 288, and a change has to shrink
+// the struct by at least 24 bytes to make the allocator hand out any less.
+// Anything smaller than that is a real GC-scan-span improvement and a
 // zero-byte allocation improvement; say which one you measured.
+//
+// The reason is simply that this toolchain has no class between 288 and 320.
+// It is NOT the scan/noscan effect that TestClassMovedEntitySizes documents
+// at 1152 — an earlier draft of this comment said it was, and that was
+// wrong. Measured both ways: pointerless control structs give the identical
+// 288/320/320 for 288/296/304, so pointers make no difference here.
 //
 // So a field addition here is NOT free, and this is the opposite of the
 // situation before task 7, when Pokemon sat mid-class at 392 with 24 bytes of
