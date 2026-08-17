@@ -134,8 +134,8 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 
 	// The display fields are stored narrowed, so the incoming readings are
 	// narrowed too before they are compared — see narrowUint8's doc comment.
-	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
-		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
+	return pokemon.SeenType.Code == SeenTypeCodeCell ||
+		pokemon.SeenType.Code == SeenTypeCodeNearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
 		int64(pokemon.Form.ValueOrZero()) != narrowUint16(int64(pokemonDisplay.Form)) ||
 		int64(pokemon.Weather.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
@@ -167,7 +167,7 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 		return true
 	}
 
-	if pokemon.SeenType.ValueOrZero() == SeenType_Cell {
+	if pokemon.SeenType.Code == SeenTypeCodeCell {
 		return true
 	}
 
@@ -177,9 +177,9 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
-	switch pokemon.SeenType.ValueOrZero() {
-	case "", SeenType_Cell, SeenType_NearbyStop:
-		pokemon.SetSeenType(SeenType_Wild)
+	switch pokemon.SeenType.Code {
+	case SeenTypeCodeUnset, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
+		pokemon.SetSeenType(SeenTypeCodeWild)
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
@@ -197,7 +197,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetPokestopId(null.StringFrom(mapPokemon.FortId))
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
-		pokemon.SetSeenType(SeenType_LureWild)
+		pokemon.SetSeenType(SeenTypeCodeLureWild)
 
 		if mapPokemon.Data.PokemonDisplay != nil {
 			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
@@ -224,8 +224,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	// Existing record: the GMO contributes only what it alone knows — the
 	// verified despawn time. Never touch encounter data and never downgrade
 	// lure_encounter to lure_wild.
-	switch pokemon.SeenType.ValueOrZero() {
-	case SeenType_LureWild, SeenType_LureEncounter:
+	switch pokemon.SeenType.Code {
+	case SeenTypeCodeLureWild, SeenTypeCodeLureEncounter:
 	default:
 		return false
 	}
@@ -278,10 +278,10 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	overrideLatLon := pokemon.isNewRecord()
 	useCellLatLon := true
 	if pokestopId != "" {
-		switch pokemon.SeenType.ValueOrZero() {
-		case "", SeenType_Cell:
+		switch pokemon.SeenType.Code {
+		case SeenTypeCodeUnset, SeenTypeCodeCell:
 			overrideLatLon = true // a better estimate is available
-		case SeenType_NearbyStop:
+		case SeenTypeCodeNearbyStop:
 		default:
 			return
 		}
@@ -290,7 +290,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
-			pokemon.SetSeenType(SeenType_NearbyStop)
+			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
 			pokemon.SetPokestopId(null.StringFrom(pokestopId))
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
@@ -299,7 +299,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	if useCellLatLon {
 		// Cell Pokemon
-		if !overrideLatLon && pokemon.SeenType.ValueOrZero() != SeenType_Cell {
+		if !overrideLatLon && pokemon.SeenType.Code != SeenTypeCodeCell {
 			// do not downgrade to nearby cell
 			return
 		}
@@ -308,7 +308,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
-		pokemon.SetSeenType(SeenType_Cell)
+		pokemon.SetSeenType(SeenTypeCodeCell)
 	}
 	if overrideLatLon {
 		pokemon.SetLat(lat)
@@ -323,15 +323,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
-const SeenType_Cell string = "nearby_cell"                              // Pokemon was seen in a cell (without accurate location)
-const SeenType_NearbyStop string = "nearby_stop"                        // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-const SeenType_Wild string = "wild"                                     // Pokemon was seen in the wild, accurate location but with no IV details
-const SeenType_Encounter string = "encounter"                           // Pokemon has been encountered giving exact details of current IV
-const SeenType_LureWild string = "lure_wild"                            // Pokemon was seen at a lure
-const SeenType_LureEncounter string = "lure_encounter"                  // Pokemon has been encountered at a lure
-const SeenType_TappableEncounter string = "tappable_encounter"          // Pokemon has been encountered from tappable
-const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokemon has been encountered from a lured tappable
-
 // SeenTypeCode is the in-memory representation of the seen_type enum column.
 //
 // The column holds one of eight strings; storing it as a null.String costs a
@@ -345,18 +336,24 @@ const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokem
 // code that read .Code without checking .Valid would silently treat a NULL
 // seen_type as Wild. Reserving 0 makes that misread produce Unset instead,
 // which has no string form and which Value() refuses to write.
+//
+// These are the only named constants for the enum — the decode path works
+// entirely in SeenTypeCode (SetSeenType takes one directly), so a typo'd
+// name fails to compile instead of silently no-opping the way a runtime
+// string-to-code lookup would. A string form only exists at seenTypeStrings
+// below and at the output boundaries (Value, MarshalJSON) that read it.
 type SeenTypeCode uint8
 
 const (
-	SeenTypeCodeUnset SeenTypeCode = iota // zero value: not a real seen type
-	SeenTypeCodeWild
-	SeenTypeCodeEncounter
-	SeenTypeCodeNearbyStop
-	SeenTypeCodeCell
-	SeenTypeCodeLureWild
-	SeenTypeCodeLureEncounter
-	SeenTypeCodeTappableEncounter
-	SeenTypeCodeTappableLureEncounter
+	SeenTypeCodeUnset                 SeenTypeCode = iota // zero value: not a real seen type
+	SeenTypeCodeWild                                      // Pokemon was seen in the wild, accurate location but with no IV details
+	SeenTypeCodeEncounter                                 // Pokemon has been encountered giving exact details of current IV
+	SeenTypeCodeNearbyStop                                // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+	SeenTypeCodeCell                                      // Pokemon was seen in a cell (without accurate location)
+	SeenTypeCodeLureWild                                  // Pokemon was seen at a lure
+	SeenTypeCodeLureEncounter                             // Pokemon has been encountered at a lure
+	SeenTypeCodeTappableEncounter                         // Pokemon has been encountered from tappable
+	SeenTypeCodeTappableLureEncounter                     // Pokemon has been encountered from a lured tappable
 )
 
 // seenTypeStrings maps codes to the exact strings in the enum column. The
@@ -366,15 +363,15 @@ const (
 // report as "". Adding a real value here requires a migration widening the
 // enum — see sql/45_tappables_seen_type_lure.up.sql.
 var seenTypeStrings = [...]string{
-	"", // SeenTypeCodeUnset
-	SeenType_Wild,
-	SeenType_Encounter,
-	SeenType_NearbyStop,
-	SeenType_Cell,
-	SeenType_LureWild,
-	SeenType_LureEncounter,
-	SeenType_TappableEncounter,
-	SeenType_TappableLureEncounter,
+	"",                        // SeenTypeCodeUnset
+	"wild",                    // SeenTypeCodeWild
+	"encounter",               // SeenTypeCodeEncounter
+	"nearby_stop",             // SeenTypeCodeNearbyStop
+	"nearby_cell",             // SeenTypeCodeCell
+	"lure_wild",               // SeenTypeCodeLureWild
+	"lure_encounter",          // SeenTypeCodeLureEncounter
+	"tappable_encounter",      // SeenTypeCodeTappableEncounter
+	"tappable_lure_encounter", // SeenTypeCodeTappableLureEncounter
 }
 
 // seenTypeCodes maps the eight real enum strings to their codes. The empty
@@ -921,11 +918,11 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	pokemon.StaIv = null.Value[uint8]{}
 	pokemon.SetIv(null.Float{})
 	if cp {
-		switch pokemon.SeenType.ValueOrZero() {
-		case SeenType_LureEncounter:
-			pokemon.SetSeenType(SeenType_LureWild)
-		case SeenType_Encounter:
-			pokemon.SetSeenType(SeenType_Wild)
+		switch pokemon.SeenType.Code {
+		case SeenTypeCodeLureEncounter:
+			pokemon.SetSeenType(SeenTypeCodeLureWild)
+		case SeenTypeCodeEncounter:
+			pokemon.SetSeenType(SeenTypeCodeWild)
 		}
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
@@ -1013,7 +1010,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
 	// tappable encounter can also be available in seen as normal encounter once tapped
 	if pokemon.isSeenFromTappable() {
-		pokemon.SetSeenType(SeenType_Encounter)
+		pokemon.SetSeenType(SeenTypeCodeEncounter)
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
@@ -1025,13 +1022,13 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 }
 
 func (pokemon *Pokemon) isSeenFromTappable() bool {
-	return pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter && pokemon.SeenType.ValueOrZero() != SeenType_TappableLureEncounter
+	return pokemon.SeenType.Code != SeenTypeCodeTappableEncounter && pokemon.SeenType.Code != SeenTypeCodeTappableLureEncounter
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
 	pokemon.SetIsEvent(0)
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
-	pokemon.SetSeenType(SeenType_LureEncounter)
+	pokemon.SetSeenType(SeenTypeCodeLureEncounter)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
@@ -1041,7 +1038,7 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	pokemon.SetLon(request.LocationHintLng)
 
 	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
-		pokemon.SetSeenType(SeenType_TappableEncounter)
+		pokemon.SetSeenType(SeenTypeCodeTappableEncounter)
 
 		spawnId, err := strconv.ParseInt(spawnpointId, 16, 64)
 		if err != nil {
@@ -1051,7 +1048,7 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetSpawnId(null.IntFrom(spawnId))
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
-		pokemon.SetSeenType(SeenType_TappableLureEncounter)
+		pokemon.SetSeenType(SeenTypeCodeTappableLureEncounter)
 
 		pokemon.SetPokestopId(null.StringFrom(fortId))
 		// we don't know any despawn times from lured/fort tappables
@@ -1170,11 +1167,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		newLevel := int64(matchingScan.Level)
 		if isBoostedMatches || isStrong { // strong Pokemon IV is unaffected by weather
 			pokemon.calculateIv(int64(matchingScan.Attack), int64(matchingScan.Defense), int64(matchingScan.Stamina))
-			switch pokemon.SeenType.ValueOrZero() {
-			case SeenType_LureWild:
-				pokemon.SetSeenType(SeenType_LureEncounter)
-			case SeenType_Wild:
-				pokemon.SetSeenType(SeenType_Encounter)
+			switch pokemon.SeenType.Code {
+			case SeenTypeCodeLureWild:
+				pokemon.SetSeenType(SeenTypeCodeLureEncounter)
+			case SeenTypeCodeWild:
+				pokemon.SetSeenType(SeenTypeCodeEncounter)
 			}
 		} else {
 			pokemon.clearIv(true)

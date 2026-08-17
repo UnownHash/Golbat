@@ -5,7 +5,6 @@ import (
 	"math"
 
 	"github.com/guregu/null/v6"
-	log "github.com/sirupsen/logrus"
 )
 
 // PokemonData contains all database-persisted fields for Pokemon.
@@ -447,17 +446,13 @@ func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 	}
 }
 
-// SetSeenType takes the string form directly, since the decode path already
-// produces the SeenType_* constants. An unrecognised value means the game
-// added a seen type before the migrations caught up; it is logged and the
-// field is left unchanged rather than corrupting scan statistics with a
-// wrong code.
-func (pokemon *Pokemon) SetSeenType(s string) {
-	next, err := ParseSeenType(s)
-	if err != nil {
-		log.Warnf("SetSeenType(%d): %s", pokemon.Id, err)
-		return
-	}
+// SetSeenType takes the code directly — the decode path passes one of the
+// SeenTypeCode* constants, so a typo'd name fails to compile instead of
+// silently no-opping the way a runtime string-to-code lookup would. This
+// also drops the ParseSeenType map lookup from the decode hot path: turning
+// a known-valid code into a NullSeenType is a direct assignment.
+func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
+	next := SeenTypeFrom(c)
 	if pokemon.SeenType != next {
 		if dbDebugEnabled {
 			pokemon.debug.recordChange(

@@ -93,8 +93,8 @@ func TestUpdateFromMapPlacesNewRecordFromCapturedFort(t *testing.T) {
 	if pokemon.Lat != 51.5007 || pokemon.Lon != -0.1246 {
 		t.Errorf("Lat/Lon = %v/%v, want 51.5007/-0.1246", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureWild {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureWild)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureWild.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureWild.String())
 	}
 	if !pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = false, want true (GMO supplied ExpirationTimeMs)")
@@ -155,7 +155,7 @@ func TestUpdateFromMapLeavesNonLureRecordsAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getOrCreatePokemonRecord: %v", err)
 	}
-	pokemon.SetSeenType(SeenType_Wild)
+	pokemon.SetSeenType(SeenTypeCodeWild)
 	pokemon.newRecord = false
 
 	raw := testRawMapPokemon(encId, "lure-fort-910103", 51.5, -0.12, time.Now().UnixMilli()+90_000)
@@ -250,8 +250,8 @@ func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
 	if pokemon.Lat != 40.7580 || pokemon.Lon != -73.9855 {
 		t.Errorf("Lat/Lon = %v/%v, want request coords 40.7580/-73.9855", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = true, want false (estimate)")
@@ -303,8 +303,8 @@ func TestGmoAfterDiskEncounterContributesVerifiedExpiry(t *testing.T) {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true",
 			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15 (encounter data must survive the GMO merge)", got)
@@ -329,8 +329,8 @@ func TestDiskEncounterAfterGmoUpgradesRecord(t *testing.T) {
 	if pokemon == nil {
 		t.Fatalf("pokemon %d missing", encId)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15", got)

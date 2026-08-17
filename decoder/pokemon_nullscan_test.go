@@ -232,7 +232,7 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	if got.SeenType != want.SeenType {
 		t.Errorf("SeenType = %+v, want %+v", got.SeenType, want.SeenType)
 	}
-	if got.SeenType.ValueOrZero() != SeenType_LureEncounter {
-		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenType_LureEncounter)
+	if got.SeenType.ValueOrZero() != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenTypeCodeLureEncounter.String())
 	}
 }

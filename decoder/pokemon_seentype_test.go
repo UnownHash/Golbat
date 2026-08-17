@@ -16,9 +16,9 @@ func TestNullSeenTypeRoundTrip(t *testing.T) {
 	// Every value the decode path can produce must survive string -> code ->
 	// string unchanged. The database column is an enum of these exact strings.
 	all := []string{
-		SeenType_Wild, SeenType_Encounter, SeenType_NearbyStop, SeenType_Cell,
-		SeenType_LureWild, SeenType_LureEncounter, SeenType_TappableEncounter,
-		SeenType_TappableLureEncounter,
+		SeenTypeCodeWild.String(), SeenTypeCodeEncounter.String(), SeenTypeCodeNearbyStop.String(), SeenTypeCodeCell.String(),
+		SeenTypeCodeLureWild.String(), SeenTypeCodeLureEncounter.String(), SeenTypeCodeTappableEncounter.String(),
+		SeenTypeCodeTappableLureEncounter.String(),
 	}
 	for _, s := range all {
 		var n NullSeenType
@@ -61,7 +61,7 @@ func TestNullSeenTypeNull(t *testing.T) {
 func TestNullSeenTypeJSON(t *testing.T) {
 	// The API response marshals seen_type as a string. That must not change.
 	var n NullSeenType
-	if err := n.Scan(SeenType_Encounter); err != nil {
+	if err := n.Scan(SeenTypeCodeEncounter.String()); err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
 	b, err := json.Marshal(n)
