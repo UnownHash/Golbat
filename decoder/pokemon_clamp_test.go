@@ -255,13 +255,13 @@ func TestSetPokemonDisplayConvergesOnOutOfRangeDisplay(t *testing.T) {
 // TestSetPokemonDisplayCountsEachClampOnce is the other half of the
 // regression: the comparisons must converge *without* the fix costing an
 // extra golbat_field_clamped_total increment. Counting lives on the write
-// side (SetForm/SetCostume/SetGender), the comparison side narrows silently
-// — so one sighting of an out-of-range display counts one clamp per field,
-// not two. Routing the comparisons back through clampUint8/16 would double
-// these numbers.
+// side (SetForm/SetCostume/SetGender) and the comparison side narrows
+// silently, so a sighting of an out-of-range display counts one clamp per
+// field, not two.
 func TestSetPokemonDisplayCountsEachClampOnce(t *testing.T) {
 	fake := withClampCountingCollector(t)
 
+	// A fresh record: one clamp per field, from the three setters.
 	p := &Pokemon{}
 	p.setPokemonDisplay(25, outOfRangeDisplay())
 
@@ -274,9 +274,17 @@ func TestSetPokemonDisplayCountsEachClampOnce(t *testing.T) {
 		t.Errorf("total clamp count after one sighting = %d, want 3 (costume, gender, form)", got)
 	}
 
-	// A repeat sighting stores nothing new, but each setter still clamps its
-	// argument on the way in, so the counter advances by exactly one per
-	// field per sighting — the pre-fix rate, unchanged.
+	// This second block is the one that catches a fix which buys convergence
+	// by routing the comparisons back through the counting clampUint8/16 —
+	// do not delete it as redundant. The block above cannot catch that: on a
+	// fresh record every `!oldForm.Valid ||` guard short-circuits before its
+	// comparison is ever evaluated, so a counting comparison would still
+	// total 3 there. From the second sighting on, the fields are Valid, the
+	// comparison runs, and the same naive fix totals 9 instead of 6.
+	//
+	// 6 is the pre-fix rate, unchanged: a repeat sighting stores nothing
+	// new, but each setter still clamps its argument on the way in, so the
+	// counter advances by one per field per sighting.
 	p.setPokemonDisplay(25, outOfRangeDisplay())
 	if got := fake.total(); got != 6 {
 		t.Errorf("total clamp count after two sightings = %d, want 6 (one per field per sighting)", got)
