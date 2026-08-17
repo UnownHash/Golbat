@@ -262,24 +262,35 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 // record forever. Fixing only that half left the other: Iv was still the
 // raw sum divided by .45 while the columns held the clamped values, and the
 // convergence fix made the mismatch permanent by reporting "unchanged"
-// from then on. iv is float(5,2) unsigned, so a raw sum above 450 produces
-// a value MariaDB rejects under STRICT_TRANS_TABLES — and a rejected value
-// fails the entire multi-row batch upsert, taking every other pokemon in
-// the batch with it.
+// from then on.
+//
+// The clamp is clampIv, not clampUint8: 15 rather than the tinyint's 255.
+// That is what bounds Iv. iv is float(5,2) unsigned and tops out at 999.99,
+// and under MariaDB's default STRICT_TRANS_TABLES an out-of-range value
+// fails the entire multi-row batch upsert rather than the one row — so a
+// bound that holds only for most inputs is not a bound. Clamping at the
+// column's 255 leaves a sum of up to 765 and a quotient of up to 1700; two
+// out-of-range IVs alone reach 1133. Clamping at the game's 15 caps the sum
+// at 45 and Iv at exactly 100, for every possible input, with no arithmetic
+// in the argument. See clampIv's doc comment for the two other invariants
+// that ride on the same ceiling.
 //
 // Clamping above the comparison also moves atk_iv/def_iv/sta_iv onto the
 // same golbat_field_clamped_total rate as every other field — one count per
 // call rather than one per value that reached the record. See clampUint's
 // doc comment, which used to describe the two rates separately.
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	atk := clampUint8(null.IntFrom(a), "atk_iv")
-	def := clampUint8(null.IntFrom(d), "def_iv")
-	sta := clampUint8(null.IntFrom(s), "sta_iv")
+	atk := clampIv(null.IntFrom(a), "atk_iv")
+	def := clampIv(null.IntFrom(d), "def_iv")
+	sta := clampIv(null.IntFrom(s), "sta_iv")
 
 	// Comparing the whole null.Value covers the previously separate
 	// !Valid checks: an unset field never equals a clamped one.
 	if pokemon.AtkIv != atk || pokemon.DefIv != def || pokemon.StaIv != sta {
 		pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv = atk, def, sta
+		// .45 is 45/100, and 45 is 3 * maxIvPerStat — the same ceiling the
+		// clamp above uses, and the one the iv column's own generated
+		// definition used before migration 11 made it a plain column.
 		pokemon.SetIv(null.FloatFrom(float64(int64OrZero(atk)+int64OrZero(def)+int64OrZero(sta)) / .45))
 		pokemon.dirty = true
 	}

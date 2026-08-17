@@ -322,11 +322,15 @@ func TestSignificantUpdateConvergesOnOutOfRangeDisplay(t *testing.T) {
 // TestCalculateIvConvergesOnOutOfRangeIv covers the third comparison site:
 // out-of-range IVs are stored clamped, so comparing them against the raw
 // proto values re-wrote and re-dirtied the record on every encounter.
+//
+// The clamped value is maxIvPerStat, not math.MaxUint8: calculateIv clamps
+// at the game's per-stat ceiling rather than the tinyint's, which is what
+// bounds Iv inside float(5,2) for every input. See clampIv.
 func TestCalculateIvConvergesOnOutOfRangeIv(t *testing.T) {
 	p := &Pokemon{}
 	p.calculateIv(300, 15, 15)
 
-	if want := null.ValueFrom(uint8(math.MaxUint8)); p.AtkIv != want {
+	if want := null.ValueFrom(uint8(maxIvPerStat)); p.AtkIv != want {
 		t.Fatalf("AtkIv after calculateIv(300, ...) = %+v, want %+v", p.AtkIv, want)
 	}
 
@@ -439,21 +443,63 @@ func TestRepopulateIvConvergesOnOutOfRangeLevel(t *testing.T) {
 // divergence permanent: the narrowed comparison reports "unchanged"
 // forever, so the wrong Iv is never recomputed.
 //
-// iv is float(5,2) unsigned, so it tops out at 999.99. A raw a/d/s sum
-// above 450 divides to more than that, and under MariaDB's default
-// STRICT_TRANS_TABLES an out-of-range value fails the *whole* multi-row
-// batch upsert, not just the offending row — every other pokemon in the
-// batch is lost with it.
+// iv is float(5,2) unsigned, so it tops out at 999.99. Under MariaDB's
+// default STRICT_TRANS_TABLES an out-of-range value fails the *whole*
+// multi-row batch upsert, not just the offending row — every other pokemon
+// in the batch is lost with it.
 //
-// Residual, deliberately not covered here because it predates this PR and
-// is not what this fix is about: the uint8 ceiling bounds the stored sum at
-// 3*255 = 765, and anything above 450 still divides past 999.99 — two
-// saturated IVs are already 510. Values in that band were out of the
-// column's range before the narrowing existed too, and closing it means
-// bounding Iv itself, not the inputs.
+// The property asserted is therefore the one that maps to the production
+// failure and holds for *every* input, not for the inputs a bound happens
+// to cover: whatever a, d and s are, the computed Iv fits float(5,2)
+// unsigned and the stored IVs are legal IVs. Clamping the inputs at the
+// tinyint's 255 was not enough for that — three at the ceiling divide to
+// 1700, two alone to 1133 — which is why calculateIv clamps at
+// maxIvPerStat. The generator below drives that hard.
 func TestCalculateIvComputesIvFromTheNarrowedValues(t *testing.T) {
 	// float(5,2) unsigned: five significant digits, two after the point.
 	const ivColumnMax = 999.99
+
+	check := func(t *testing.T, a, d, s int64, wantIv float64) {
+		t.Helper()
+		p := &Pokemon{}
+		p.calculateIv(a, d, s)
+
+		if !p.Iv.Valid {
+			t.Fatalf("Iv after calculateIv(%d, %d, %d) is invalid", a, d, s)
+		}
+		got := float64(p.Iv.ValueOrZero())
+		if got > ivColumnMax {
+			t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want <= %v — MariaDB rejects this under STRICT_TRANS_TABLES and fails the entire batch upsert",
+				a, d, s, got, ivColumnMax)
+		}
+		// A legal IV is a legal IV whatever arrived. Above maxIvPerStat the
+		// iv column stops being a percentage, PokemonLookup's int8 turns 255
+		// into the -1 "no IV known" sentinel, and ohbem is handed a value
+		// outside its domain.
+		for _, f := range []struct {
+			name string
+			v    null.Value[uint8]
+		}{{"AtkIv", p.AtkIv}, {"DefIv", p.DefIv}, {"StaIv", p.StaIv}} {
+			if !f.v.Valid {
+				t.Errorf("%s after calculateIv(%d, %d, %d) is invalid", f.name, a, d, s)
+				continue
+			}
+			if f.v.ValueOrZero() > maxIvPerStat {
+				t.Errorf("%s after calculateIv(%d, %d, %d) = %d, want <= %d (a legal IV)",
+					f.name, a, d, s, f.v.ValueOrZero(), maxIvPerStat)
+			}
+		}
+		// The stores and the Iv sum must agree, whatever the inputs were.
+		stored := int64OrZero(p.AtkIv) + int64OrZero(p.DefIv) + int64OrZero(p.StaIv)
+		if want := float64(stored) / .45; math.Abs(got-want) > 0.01 {
+			t.Errorf("Iv = %v but atk+def+sta = %d divides to %v — the stores and the Iv computation disagree",
+				got, stored, want)
+		}
+		if math.Abs(got-wantIv) > 0.01 {
+			t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want %v",
+				a, d, s, got, wantIv)
+		}
+	}
 
 	cases := []struct {
 		name    string
@@ -461,42 +507,46 @@ func TestCalculateIvComputesIvFromTheNarrowedValues(t *testing.T) {
 		wantIv  float64
 	}{
 		// The production shape: one field far out of range drags the raw sum
-		// past 450 while the stored value saturates at the uint8 ceiling.
-		{"one field over the ceiling", 1000, 15, 15, (255 + 15 + 15) / .45},
+		// past 450 while the stored value saturates.
+		{"one field out of range", 1000, 15, 15, 100},
+		// Two out of range. Clamped at the tinyint's 255 these would be
+		// 510/.45 = 1133, past the column and into a failed batch; this is
+		// the case a 255 ceiling cannot cover at all.
+		{"two fields out of range", 300, 260, 15, 100},
+		// Every field out of range, as far out as the raw sum goes.
+		{"all three out of range", 1 << 40, 1 << 40, 1 << 40, 100},
 		// The other end of saturate: a negative reading stores 0, so the raw
 		// sum is now *lower* than what was stored. Divergence in both
-		// directions, one narrowing.
+		// directions, one clamp.
 		{"one field below zero", -5, 15, 15, (0 + 15 + 15) / .45},
-		// Just inside the column: nothing saturates, and 445 is the largest
-		// sum that still divides below 999.99.
-		{"at the column's edge", 255, 100, 90, (255 + 100 + 90) / .45},
-		// A real hundo must be untouched by any of this.
-		{"in range", 15, 15, 15, 100},
+		// Legal but above 15 — inside the tinyint, outside the game. Iv from
+		// the raw sum would be 155.6%, which the column accepts and every
+		// consumer misreads.
+		{"legal byte, illegal IV", 20, 20, 30, 100},
+		// A real hundo, and a real nundo, untouched by any of this.
+		{"hundo", 15, 15, 15, 100},
+		{"nundo", 0, 0, 0, 0},
+		{"ordinary", 15, 14, 13, (15 + 14 + 13) / .45},
 	}
 
 	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			p := &Pokemon{}
-			p.calculateIv(c.a, c.d, c.s)
-
-			if !p.Iv.Valid {
-				t.Fatalf("Iv after calculateIv(%d, %d, %d) is invalid", c.a, c.d, c.s)
-			}
-			if got := float64(p.Iv.ValueOrZero()); got > ivColumnMax {
-				t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want <= %v — MariaDB rejects this under STRICT_TRANS_TABLES and fails the entire batch upsert",
-					c.a, c.d, c.s, got, ivColumnMax)
-			}
-			if got, want := float64(p.Iv.ValueOrZero()), c.wantIv; math.Abs(got-want) > 0.01 {
-				t.Errorf("Iv after calculateIv(%d, %d, %d) = %v, want %v (the sum of the values actually stored)",
-					c.a, c.d, c.s, got, want)
-			}
-
-			// The stores and the Iv sum must agree, whatever the inputs were.
-			stored := int64OrZero(p.AtkIv) + int64OrZero(p.DefIv) + int64OrZero(p.StaIv)
-			if got, want := float64(p.Iv.ValueOrZero()), float64(stored)/.45; math.Abs(got-want) > 0.01 {
-				t.Errorf("Iv = %v but atk+def+sta = %d divides to %v — the stores and the Iv computation disagree",
-					got, stored, want)
-			}
-		})
+		t.Run(c.name, func(t *testing.T) { check(t, c.a, c.d, c.s, c.wantIv) })
 	}
+
+	// And the same property over a wide sweep of the input space, including
+	// the whole tinyint range and well past it, so no future ceiling change
+	// can quietly reintroduce a band that overflows the column.
+	t.Run("sweep", func(t *testing.T) {
+		for _, a := range []int64{-1 << 40, -1, 0, 7, 15, 16, 100, 254, 255, 256, 450, 1000, 1 << 40} {
+			for _, d := range []int64{0, 15, 255, 1 << 40} {
+				for _, s := range []int64{0, 15, 255, 1 << 40} {
+					p := &Pokemon{}
+					p.calculateIv(a, d, s)
+					if got := float64(p.Iv.ValueOrZero()); got > ivColumnMax || got < 0 {
+						t.Fatalf("calculateIv(%d, %d, %d) produced Iv = %v, outside float(5,2) unsigned", a, d, s, got)
+					}
+				}
+			}
+		}
+	})
 }

@@ -171,36 +171,54 @@ func (pokemon *Pokemon) Unlock() {
 
 // clampUint narrows a null.Int for storage in a tinyint/smallint/int
 // unsigned-backed field, saturating into [0, limit] over the shared
-// saturate. clampUint8/16/32 below are its only callers — thin
-// instantiations that fix T and limit together, so every setter still names
-// its own width at the call site instead of spelling out a type parameter.
+// saturate. clampUint8/16/32 and clampIv below are its only callers — thin
+// instantiations that fix T and limit together, so every caller still names
+// what it is storing at the call site instead of spelling out a type
+// parameter.
+//
+// The limit is the *value's* ceiling, which is usually but not always the
+// column's. clampUint8/16/32 take the column's, because for those fields
+// nothing narrower is known. clampIv takes the game's per-stat IV ceiling
+// of 15, four bits below the tinyint it lands in — see its doc comment for
+// why a legal-byte-but-illegal-IV value is not worth preserving.
 //
 // Values arrive from decoded game protos and are bounded in practice, so
 // out-of-range means the protocol changed rather than a normal case. Clamping
 // keeps the value at the boundary and counts the event; truncating would
 // silently produce a plausible-looking wrong number, which is worse.
 //
-// Comparisons against an already-stored value must not come through here:
-// use the non-counting narrowUint8/16/32 instead, and see their doc comment
-// for why the two exist separately.
+// A setter's comparison against an already-stored value must not come
+// through here: use the non-counting narrowUint8/16/32 instead, and see
+// their doc comment for why the two exist separately. calculateIv is the
+// documented exception — it is not a setter, so nothing else clamps those
+// three values, and its comparison reads the clamped values it is about to
+// store.
 //
-// golbat_field_clamped_total means the same thing for every field: one
-// count per call that had something to clamp, whether or not the clamped
-// value then differs from what is already stored. Every caller clamps above
-// its own equality check — the setters (form, costume, gender, weather, cp,
-// level, size, move_1, move_2, expire_timestamp, updated,
-// display_pokemon_id, display_pokemon_form) by construction, and
+// golbat_field_clamped_total counts the same event for every field, with no
+// per-field caveat: one count per call that had something to clamp, whether
+// or not the clamped value then differs from what is already stored. Every
+// caller clamps above its own equality check — the setters (form, costume,
+// gender, weather, cp, level, size, move_1, move_2, expire_timestamp,
+// updated, display_pokemon_id, display_pokemon_form) by construction, and
 // calculateIv (atk_iv, def_iv, sta_iv), the only caller that is not a
-// setter, because its three clamped values are what the comparison itself
-// reads. So a repeat sighting of an unchanged out-of-range value counts
-// again and the rate tracks sightings, uniformly.
+// setter, because its three clamped values are what its comparison reads.
+// So a repeat sighting of an unchanged out-of-range value counts again, and
+// the rate tracks sightings for every label alike. Two label values can be
+// compared directly.
 //
-// atk_iv/def_iv/sta_iv used to be the exception, counting once per value
-// that actually reached the record because calculateIv clamped below its
-// comparison. That ended when calculateIv was made to narrow once and feed
-// the comparison, the stores and the Iv sum from the same values — the
-// comparison needs the clamped values, so the clamp had to move above it.
-// Comparing label values across fields no longer needs a caveat.
+// This used to be a split: atk_iv/def_iv/sta_iv counted once per value that
+// actually reached the record, because calculateIv clamped below its
+// comparison, while every setter-owned field counted once per call. That
+// ended when calculateIv was made to clamp once and feed the comparison,
+// the stores and the Iv sum from the same values — the comparison needs the
+// clamped values, so the clamp had to move above it. The split is gone, not
+// relocated; nothing counts per-store any more.
+//
+// What the IV labels count *over* did change at the same time: clampIv's
+// ceiling is 15, not 255, so atk_iv/def_iv/sta_iv now fire on any reading
+// that is not a legal IV rather than only on one that is not a legal byte.
+// A step change in those three series across that deploy is that, not a
+// regression.
 //
 // Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
 // which rejects out-of-range values outright. That is deliberate: a bad value
@@ -229,6 +247,41 @@ func clampUint32(v null.Int, field string) null.Value[uint32] {
 	return clampUint[uint32](v, field, math.MaxUint32)
 }
 
+// maxIvPerStat is the game's ceiling for a single IV. It is not the
+// tinyint's — atk_iv/def_iv/sta_iv could each hold 255 — but it is the
+// ceiling every consumer of those columns assumes, starting with the
+// database: iv is defined as (atk_iv + def_iv + sta_iv) * 100 / 45, and 45
+// is 3 * 15. A stored IV above 15 makes that column not a percentage.
+const maxIvPerStat = 15
+
+// clampIv narrows a single IV. It clamps at maxIvPerStat rather than the
+// tinyint's 255, which is what keeps every derived value in range by
+// construction rather than by arithmetic:
+//
+//   - iv is float(5,2) unsigned, so it tops out at 999.99. Three IVs at the
+//     tinyint's ceiling sum to 765 and divide to 1700; two alone reach 510
+//     and divide to 1133. Under MariaDB's default STRICT_TRANS_TABLES that
+//     fails the whole multi-row batch upsert, not just the row. Three IVs at
+//     15 sum to 45 and divide to exactly 100. There is no arithmetic left to
+//     get wrong.
+//   - PokemonLookup.Atk/Def/Sta are int8 with -1 meaning "no IV known"
+//     (pokemonRtree.go, valueOrMinus1). int8(255) is -1, so an IV stored at
+//     the tinyint's ceiling becomes indistinguishable from a pokemon that
+//     has never been encountered, silently changing which DNF filters match
+//     it. 15 cannot collide with the sentinel.
+//   - ohbem's CP and PVP ranking are called with these values and are
+//     defined over 0..15.
+//
+// The cost is that a genuine protocol change raising the IV cap would be
+// clamped rather than stored. That is the right trade: the iv column's own
+// definition, the percentage it feeds, the hundo/nundo checks and the PVP
+// ranks would all need a migration on that day anyway, and until then a
+// reading above 15 is garbage rather than data. Clamping it counts the
+// event, which is the signal that day would arrive on.
+func clampIv(v null.Int, field string) null.Value[uint8] {
+	return clampUint[uint8](v, field, maxIvPerStat)
+}
+
 // narrowUint8, narrowUint16 and narrowUint32 saturate an int64 into the
 // range of a tinyint / smallint / int unsigned column and count nothing.
 // They are the comparison-side twins of clampUint8/16/32, which perform the
@@ -250,12 +303,14 @@ func clampUint32(v null.Int, field string) null.Value[uint32] {
 // the comparison and once for the store; routing stores through the
 // non-counting narrow would silence the metric altogether.
 //
-// calculateIv is the one place that compares against clampUint8's own
-// output rather than narrowing separately, and it is not an exception to
-// the rule above: it is not a setter, so nothing else clamps those three
+// calculateIv is the one place that compares against a clamp's own output
+// (clampIv's) rather than narrowing separately, and it is not an exception
+// to the rule above: it is not a setter, so nothing else clamps those three
 // values, and the clamped values are what it stores. Comparing anything
 // else there is what let Iv drift away from the columns — see its doc
-// comment.
+// comment. It is also why narrowUint8 is not a twin for clampIv the way it
+// is for clampUint8: the two saturate at different ceilings on purpose, and
+// nothing needs a non-counting narrow at 15.
 func narrowUint8(v int64) int64 { return saturate(v, math.MaxUint8) }
 
 func narrowUint16(v int64) int64 { return saturate(v, math.MaxUint16) }
@@ -263,8 +318,8 @@ func narrowUint16(v int64) int64 { return saturate(v, math.MaxUint16) }
 func narrowUint32(v int64) int64 { return saturate(v, math.MaxUint32) }
 
 // saturate clamps v into [0, limit]: the shared body of narrowUint8/16/32
-// and, through them, of clampUint8/16/32 — one definition of where each
-// column's range ends.
+// and, through clampUint, of clampUint8/16/32 and clampIv — one definition
+// of what saturating means, with each caller supplying the ceiling.
 func saturate(v, limit int64) int64 {
 	switch {
 	case v < 0:
