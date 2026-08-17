@@ -293,7 +293,7 @@ func TestSignificantUpdateConvergesOnOutOfRangeDisplay(t *testing.T) {
 
 	p := &Pokemon{}
 	p.setPokemonDisplay(25, display)
-	p.SetSeenType(SeenType_Encounter)
+	p.SetSeenType(SeenTypeCodeEncounter)
 	p.SetExpireTimestampVerified(true)
 
 	now := int64(1700000000)

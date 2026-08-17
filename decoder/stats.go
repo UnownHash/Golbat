@@ -458,14 +458,14 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		}
 	}
 
-	currentSeenType := pokemon.SeenType.ValueOrZero()
-	oldSeenType := pokemon.oldValues.SeenType.ValueOrZero()
+	currentSeenType := pokemon.SeenType.Code
+	oldSeenType := pokemon.oldValues.SeenType.Code
 
 	if currentSeenType != oldSeenType {
-		if oldSeenType == "" || oldSeenType == SeenType_NearbyStop || oldSeenType == SeenType_Cell {
+		if oldSeenType == SeenTypeCodeUnset || oldSeenType == SeenTypeCodeNearbyStop || oldSeenType == SeenTypeCodeCell {
 			// New pokemon, or transition from cell or nearby stop
 
-			if currentSeenType == SeenType_Wild {
+			if currentSeenType == SeenTypeCodeWild {
 				// transition to wild for the first time..
 				populateEncounterCacheVal()
 				encounterCacheVal.FirstEncounter = 0
@@ -473,13 +473,13 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				// This will be put into the cache later.
 			}
 
-			if currentSeenType == SeenType_Wild || currentSeenType == SeenType_Encounter {
+			if currentSeenType == SeenTypeCodeWild || currentSeenType == SeenTypeCodeEncounter {
 				// transition to wild or encounter for the first time
 				monsSeenIncr = 1
 			}
 		}
 
-		if currentSeenType == SeenType_Encounter {
+		if currentSeenType == SeenTypeCodeEncounter {
 			populateEncounterCacheVal()
 			if encounterCacheVal.FirstEncounter == 0 {
 				// This is first encounter
@@ -518,8 +518,8 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 		encounterCache.Put(uint64(pokemon.Id), encounterCacheVal, pokemon.encounterStatsDuration(now))
 	}
 
-	if (currentSeenType == SeenType_Wild && oldSeenType == SeenType_Encounter) ||
-		(currentSeenType == SeenType_Encounter && oldSeenType == SeenType_Encounter &&
+	if (currentSeenType == SeenTypeCodeWild && oldSeenType == SeenTypeCodeEncounter) ||
+		(currentSeenType == SeenTypeCodeEncounter && oldSeenType == SeenTypeCodeEncounter &&
 			pokemon.PokemonId != pokemon.oldValues.PokemonId) {
 		// stats reset
 		statsResetCountIncr = 1
