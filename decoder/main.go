@@ -393,6 +393,13 @@ var statsCollectorSet atomic.Bool
 // pre-seeding collector was nil, so the first batch flush panicked — and
 // trading a panic for silence is a bad trade for a boot-ordering mistake that
 // is always a programming error. Check it where the ordering is required.
+//
+// Note for anyone maintaining a fork with its own main(): this is a new crash
+// mode. golbat's main() calls SetStatsCollector before this (see main.go), so
+// the panic is unreachable here, but a main() that ordered the two the other
+// way round used to boot with silently dead write-behind metrics and now
+// fails at startup instead. Swapping the two calls is the fix, not removing
+// this check.
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
 	if !statsCollectorSet.Load() {
 		log.Panic("decoder.InitWriteBehindQueue called before decoder.SetStatsCollector: the write-behind queues would keep the noop collector for the life of the process")

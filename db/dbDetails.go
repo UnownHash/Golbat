@@ -20,10 +20,16 @@ type DbDetails struct {
 // setter runs, but the guarantee is cheaper to hold than to keep re-deriving
 // per call site, and the nil checks in timing.go went away with it.
 //
-// Unlike decoder's this is a plain variable, not an atomic.Pointer: it is
-// written exactly once at boot and no test swaps it, so there is no
-// concurrent Store to make race-free. Keep it that way — if a caller ever
-// needs to swap it at runtime, it needs decoder's treatment first.
+// Unlike decoder's this is a plain variable, not an atomic.Pointer. What
+// makes that safe is not that nothing writes it — TestSetStatsCollectorRefusesNil
+// restores it through a t.Cleanup — but that nothing writes it while anything
+// reads it concurrently: main() sets it once before the goroutines that read
+// it exist, and this package's tests are sequential and start none. decoder's
+// is an atomic.Pointer because that is not true there; its package init()
+// starts a stats-aggregation worker that reads the collector while tests swap
+// it. Keep this a plain variable only for as long as that difference holds —
+// a runtime swap, or a background reader in this package, needs decoder's
+// treatment first.
 var statsCollector = stats_collector.NewNoopStatsCollector()
 
 // SetStatsCollector swaps in the real collector once main() has read config.
