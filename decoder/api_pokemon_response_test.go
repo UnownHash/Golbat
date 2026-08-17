@@ -45,9 +45,9 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 		t.Errorf("PVP leagues should be nil when ohbem is nil, got %+v", got.Pvp)
 	}
 
-	// Marshals through jsonenc (not encoding/json directly) so building this
-	// test under -tags go_json exercises goccy/go-json, the codec
-	// huma_api.go uses to serve every API response.
+	// Marshals through jsonenc, not encoding/json directly, so this test
+	// tracks whichever codec the current build selects — see jsonenc's
+	// package doc for what -tags go_json does and doesn't gate.
 	b, err := jsonenc.Marshal(got)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -110,10 +110,11 @@ func goldenSnapshotPokemon() *Pokemon {
 // by every pokemon endpoint (v1/v2/v3/search), so any accidental change to a json
 // tag, field type, pointer/null handling, or field order will fail this test.
 //
-// Marshals through jsonenc rather than encoding/json directly, so building
-// this test under -tags go_json (as CI now does) round-trips through
-// goccy/go-json — the codec huma_api.go uses to serve every API response —
-// instead of pinning stdlib's output regardless of which codec ships.
+// Marshals through jsonenc, not encoding/json directly, so this test tracks
+// whichever codec the current build selects instead of always pinning
+// stdlib's output — see jsonenc's package doc for what -tags go_json does
+// and doesn't gate (it does not gate huma_api.go, which serves this struct
+// through goccy/go-json unconditionally either way).
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
 	if ohbem != nil {
 		t.Fatalf("expected ohbem to be nil in tests")

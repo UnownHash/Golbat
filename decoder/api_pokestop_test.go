@@ -74,10 +74,11 @@ func goldenSnapshotPokestop() *Pokestop {
 // pointer/null handling, or field order will fail this test. Unset nullable
 // fields serialize as null (pointers are nil, no omitempty).
 //
-// Marshals through jsonenc rather than encoding/json directly, so building
-// this test under -tags go_json (as CI now does) round-trips through
-// goccy/go-json — the codec huma_api.go uses to serve every API response —
-// instead of pinning stdlib's output regardless of which codec ships.
+// Marshals through jsonenc, not encoding/json directly, so this test tracks
+// whichever codec the current build selects instead of always pinning
+// stdlib's output — see jsonenc's package doc for what -tags go_json does
+// and doesn't gate (it does not gate huma_api.go, which serves this struct
+// through goccy/go-json unconditionally either way).
 func TestBuildPokestopResult_GoldenSnapshot(t *testing.T) {
 	got, err := jsonenc.Marshal(buildPokestopResult(goldenSnapshotPokestop()))
 	if err != nil {

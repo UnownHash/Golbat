@@ -1,20 +1,34 @@
 //go:build !go_json
 
-// Package jsonenc indirects JSON marshaling behind the same build tag that
-// picks gin's own internal JSON codec (see gin's codec/json package) and
-// that the production Dockerfile builds with (`go build -tags go_json`).
+// Package jsonenc lets a test's Marshal call track whichever JSON codec the
+// current build actually selects, instead of always hardcoding
+// encoding/json regardless of build tags.
 //
-// huma_api.go serves every API response through goccy/go-json directly, so
-// goccy is what actually ships regardless of this tag. But a test that pins
-// an exact wire-format string by calling encoding/json.Marshal itself never
-// exercises goccy — building the test binary with -tags go_json does not
-// change which package a hardcoded `encoding/json` import resolves to.
-// Golden-JSON tests call jsonenc.Marshal instead, so building and running
-// them under -tags go_json (as CI now does) actually round-trips through
-// goccy, and running them without the tag covers stdlib — both are real
-// codecs the binary can end up using (goccy for API responses always;
-// stdlib for anything, like webhooks/webhook.go, that imports
-// encoding/json directly and isn't touched by this tag at all).
+// -tags go_json does NOT gate huma_api.go: every huma-registered route —
+// which includes everything the golden tests in decoder/api_*_test.go and
+// pokemon_seentype_test.go pin — is marshaled through goccy/go-json
+// unconditionally (huma_api.go's newHumaConfig imports goccy directly, no
+// build constraint). What the tag actually gates is gin's own internal
+// JSON codec (github.com/gin-gonic/gin/codec/json), used by the raw
+// c.JSON() calls outside huma, e.g. routes.go's PokemonScan and GetHealth.
+// Both the Dockerfile (`CGO_ENABLED=0 go build -tags go_json`) and the
+// Makefile default to building with the tag, so in every real build huma's
+// responses (always goccy) and gin's internal codec (goccy, because the
+// tag selected it) agree — but the tag is not what causes huma's choice,
+// and a comment or test that implies it is would be describing a causal
+// link that doesn't exist.
+//
+// A test that pins an exact wire-format string by calling
+// encoding/json.Marshal directly never exercises goccy at all, tag or no
+// tag — a hardcoded `encoding/json` import doesn't change based on how the
+// test binary was built. Golden-JSON tests call jsonenc.Marshal instead:
+// built under -tags go_json (as CI now does, matching the Dockerfile),
+// Marshal is goccy, the codec every real build ships; built without the
+// tag — a configuration nothing ships, but a real `go build .` outcome —
+// Marshal is stdlib. Both are genuine codecs this binary can end up
+// using; routing through jsonenc makes the test track whichever one the
+// build in front of it actually selected, rather than silently pinning
+// stdlib regardless.
 //
 // Without the tag (this file), Marshal *is* stdlib's encoding/json.Marshal
 // — assigned directly, not wrapped, so reflection on the func value (see
