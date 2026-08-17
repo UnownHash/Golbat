@@ -180,6 +180,19 @@ func (pokemon *Pokemon) Unlock() {
 // use the non-counting narrowUint8/16/32 instead, and see their doc comment
 // for why the two exist separately.
 //
+// golbat_field_clamped_total does not mean quite the same thing for every
+// field, which matters before comparing two of its label values. The
+// setters clamp above their own equality check, so every field they own
+// (form, costume, gender, weather, cp, level, size, move_1, move_2,
+// expire_timestamp, updated, display_pokemon_id, display_pokemon_form)
+// counts once per setter call — a repeat store of an unchanged out-of-range
+// value counts again, so the rate tracks sightings. calculateIv, the only
+// caller that is not a setter, clamps below its comparison, so atk_iv,
+// def_iv and sta_iv count once per value that actually reaches the record:
+// five identical out-of-range encounters on one pokemon count one, five
+// distinct pokemon count five. Both are honest per-store rates. They are
+// just not the same rate.
+//
 // Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
 // which rejects out-of-range values outright. That is deliberate: a bad value
 // from our own database is a bug worth failing on, a bad value from a game
