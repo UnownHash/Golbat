@@ -299,19 +299,33 @@ func (h *InternedString[T]) Scan(value any) error {
 // Value resolves the handle back to the exact string that was interned, so
 // the column is written byte-identically to the null.String this replaced.
 //
-// It errors on an unresolvable handle rather than degrading to NULL the way
-// the read boundaries do. The asymmetry is the same one NullSeenType.Value
-// documents: a wrong read is recoverable (the next sighting refills it) while
-// a wrong write is invisible data loss, and here it would be a whole column
-// of pokemon quietly losing their pokestop_id with nothing to notice it.
+// An unresolvable handle degrades to NULL rather than returning an error,
+// matching the read boundaries. Returning an error here looks like the safer
+// choice and is not: the write-behind flush treats a non-MySQL error as
+// unretryable, so it abandons the whole batch — 50 pokemon by default, and up
+// to preserveBatchSize (1000) during a shutdown preserve. The bad handle
+// lives in the cached entity, so every later save re-enqueues it and kills
+// another batch for as long as that entry is cached. The trade is one column
+// going NULL and self-healing on the next sighting, against dozens of
+// unrelated pokemon losing every column, repeatedly.
+//
+// Nothing is lost by degrading, because resolve() has already reported the
+// failure through reportUnresolvable — counter and log both fire regardless
+// of what this returns.
+//
+// This is where the analogy with NullSeenType.Value stops, and the difference
+// is worth stating rather than implying: that one rejects an enum code with
+// no string form, a value MariaDB would silently store as "" with no
+// read-side self-heal. Its error also cannot poison a batch of rows that
+// don't share the bad value, because the check is about the value being
+// written, not about a lookup that only this row's handle can fail.
 func (h InternedString[T]) Value() (driver.Value, error) {
 	if h == 0 {
 		return nil, nil
 	}
 	s, ok := h.resolve()
 	if !ok {
-		var ref T
-		return nil, fmt.Errorf("%s: unresolvable intern handle %d", ref.table().name, uint32(h))
+		return nil, nil
 	}
 	return s, nil
 }

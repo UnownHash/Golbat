@@ -187,16 +187,28 @@ func TestInternedStringScan(t *testing.T) {
 // TestInternedStringUnresolvableHandle covers the failure the table can only
 // reach through a bug — a handle it never issued. Since nothing is ever
 // evicted, a handle that stops resolving means it was fabricated or came
-// from another table, and the point of this test is that it stays loud: a
-// counter fires, and the write boundary refuses rather than quietly writing
-// NULL over a real pokestop_id.
+// from another table.
+//
+// EVERY boundary degrades, including Value(). That is deliberate and easy to
+// "fix" backwards, so it is pinned here: the write-behind flush treats a
+// non-MySQL error as unretryable and abandons the entire batch, 50 pokemon by
+// default and up to preserveBatchSize (1000) during a shutdown preserve, and
+// the bad handle stays in the cached entity so every later save poisons
+// another batch. Erasing one column that refills on the next sighting is the
+// cheaper failure by orders of magnitude. Nothing is lost by degrading
+// because the report fires from resolve() either way, which is what the
+// counter assertion below guards.
 func TestInternedStringUnresolvableHandle(t *testing.T) {
 	collector := withInternFailureCollector(t)
 
 	forged := InternedPokestopId(1 << 30)
 
-	if _, err := forged.Value(); err == nil {
-		t.Error("Value() on an unresolvable handle returned no error; a bad handle must never reach the database")
+	got, err := forged.Value()
+	if err != nil {
+		t.Errorf("Value() = error %v; an unresolvable handle must not fail the write, it takes 50-1000 unrelated rows with it", err)
+	}
+	if got != nil {
+		t.Errorf("Value() = %#v, want nil", got)
 	}
 	if got, err := json.Marshal(forged); err != nil || string(got) != "null" {
 		t.Errorf("MarshalJSON = %s (err %v), want null with no error: an API response should degrade, not fail", got, err)
@@ -204,8 +216,9 @@ func TestInternedStringUnresolvableHandle(t *testing.T) {
 	if forged.Ptr() != nil {
 		t.Error("Ptr() on an unresolvable handle should be nil")
 	}
+	// The visibility that makes degrading acceptable.
 	if n := collector.count(pokestopIdInternTable.name); n == 0 {
-		t.Errorf("no intern lookup failures counted for %s; the failure must be visible in metrics", pokestopIdInternTable.name)
+		t.Errorf("no intern lookup failures counted for %s; degrading is only safe because the counter still fires", pokestopIdInternTable.name)
 	}
 }
 
