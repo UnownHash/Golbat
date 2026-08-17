@@ -265,10 +265,13 @@ const maxIvPerStat = 15
 //     15 sum to 45 and divide to exactly 100. There is no arithmetic left to
 //     get wrong.
 //   - PokemonLookup.Atk/Def/Sta are int8 with -1 meaning "no IV known"
-//     (pokemonRtree.go, valueOrMinus1). int8(255) is -1, so an IV stored at
-//     the tinyint's ceiling becomes indistinguishable from a pokemon that
-//     has never been encountered, silently changing which DNF filters match
-//     it. 15 cannot collide with the sentinel.
+//     (pokemonRtree.go, lookupInt8). An IV stored at the tinyint's ceiling
+//     would be a value the lookup has to saturate rather than represent, and
+//     one at 128 or above cannot be represented at all; 15 needs neither.
+//     lookupInt8 saturates rather than converting so that a stored 255 can
+//     never *become* the sentinel even if it somehow gets past this clamp,
+//     but keeping the stored value inside the lookup's range in the first
+//     place is what makes the two representations agree exactly.
 //   - ohbem's CP and PVP ranking are called with these values and are
 //     defined over 0..15.
 //
