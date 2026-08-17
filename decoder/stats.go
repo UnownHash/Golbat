@@ -263,9 +263,11 @@ func StartWorkerBacklogReporter() {
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
-			// getStatsCollector never returns nil (see its doc comment) — no
-			// guard needed before this used to be a real early-startup
-			// window.
+			// getStatsCollector never returns nil (see its doc comment), so
+			// no guard is needed here. This loop used to check sc == nil
+			// because it could run during a real early-startup window
+			// before statsCollector was seeded with a noop at package
+			// init; that guard was removed along with the window.
 			sc := getStatsCollector()
 			sc.SetWorkerBacklog("stats_aggregator", float64(len(pokemonStatsEvents)))
 			sc.SetWorkerBacklog("fort_tracker", float64(len(fortTrackerEvents)))
