@@ -48,15 +48,26 @@ type ApiPvpRankings struct {
 // float32 identically regardless of the surrounding Go type's width, so this is a
 // pure type narrowing with no wire-format change (see TestBuildApiPokemonResult_GoldenSnapshot).
 //
-// A few fields sit outside that rule and are populated differently in
-// buildApiPokemonResult below: FirstSeenTimestamp and Changed are uint32 in
-// storage but stay int64/*int64 here, assigned via a bare int64(...) cast
-// rather than .Ptr(); SpawnId and CellId are wide by storage (both are
-// already null.Value[int64], not a narrowed uint type — see SetSpawnId's
-// and SetCellId's doc comments for why) and so match this response type
-// exactly without narrowing anything; and Capture1/Capture2/Capture3 are
-// wide by design — they don't map to a PokemonData field at all and are
-// always left unset (see buildApiPokemonResult's PARITY comment).
+// The timestamps sit outside that rule. ExpireTimestamp, Updated,
+// FirstSeenTimestamp and Changed are all uint32 in storage but int64 here,
+// because Huma derives the OpenAPI format from the Go type and advertises a
+// uint32 as format: int32. A generated client's int32 overflows in January
+// 2038, well inside what the uint32 columns can hold, and the four fields did
+// not even agree with each other about it — first_seen_timestamp was already
+// int64 while expire_timestamp and updated were int32. int64 is the one width
+// that describes all four honestly, and the JSON is unaffected either way: an
+// integer renders the same regardless of the surrounding Go type's width.
+// FirstSeenTimestamp and Changed are assigned via a bare int64(...) cast in
+// buildApiPokemonResult below; ExpireTimestamp and Updated are nullable, so
+// they go through int64PtrFromUint.
+//
+// Two more fields are wide for their own reasons. SpawnId and CellId are wide
+// by storage (both are already null.Value[int64], not a narrowed uint type —
+// see SetSpawnId's and SetCellId's doc comments for why) and so match this
+// response type exactly without narrowing anything; and
+// Capture1/Capture2/Capture3 are wide by design — they don't map to a
+// PokemonData field at all and are always left unset (see
+// buildApiPokemonResult's PARITY comment).
 type ApiPokemonResult struct {
 	Id                      string         `json:"id" doc:"Encounter ID of the pokemon"`
 	PokestopId              *string        `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
@@ -66,8 +77,8 @@ type ApiPokemonResult struct {
 	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
 	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
 	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
-	ExpireTimestamp         *uint32        `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
-	Updated                 *uint32        `json:"updated" doc:"Unix timestamp when the record was last updated"`
+	ExpireTimestamp         *int64         `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
+	Updated                 *int64         `json:"updated" doc:"Unix timestamp when the record was last updated"`
 	PokemonId               int16          `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
 	Move1                   *uint16        `json:"move_1" doc:"Fast move ID"`
 	Move2                   *uint16        `json:"move_2" doc:"Charge move ID"`
@@ -114,8 +125,8 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		Weight:                  pokemon.Weight.Ptr(),
 		Size:                    pokemon.Size.Ptr(),
 		Height:                  pokemon.Height.Ptr(),
-		ExpireTimestamp:         pokemon.ExpireTimestamp.Ptr(),
-		Updated:                 pokemon.Updated.Ptr(),
+		ExpireTimestamp:         int64PtrFromUint(pokemon.ExpireTimestamp),
+		Updated:                 int64PtrFromUint(pokemon.Updated),
 		PokemonId:               pokemon.PokemonId,
 		Move1:                   pokemon.Move1.Ptr(),
 		Move2:                   pokemon.Move2.Ptr(),

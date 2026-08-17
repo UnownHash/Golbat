@@ -369,6 +369,25 @@ func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	return null.IntFrom(int64(n.V))
 }
 
+// int64PtrFromUint widens a narrowed null.Value[T] into the *int64 the API
+// response type uses for its nullable timestamps: nil when invalid, else a
+// pointer to the widened value.
+//
+// It exists for exactly the two timestamp fields, and only because of what
+// the Go type means to the OpenAPI schema rather than to the JSON. Every
+// other narrowed field assigns straight through .Ptr() and keeps its storage
+// width at the boundary; a *uint32 timestamp is advertised as format: int32,
+// which a generated client overflows in 2038. See ApiPokemonResult's doc
+// comment. Do not reach for this to widen a field that is not a timestamp —
+// the point of the response type's widths is that they match storage.
+func int64PtrFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) *int64 {
+	if !n.Valid {
+		return nil
+	}
+	v := int64(n.V)
+	return &v
+}
+
 // int64OrZero widens a narrowed null.Value[T] straight to int64, 0 if
 // invalid — the single-term form of the ~45 int64(x.ValueOrZero()) casts
 // scattered across comparisons and assignments in this package. It exists

@@ -306,8 +306,9 @@ func schemaTypeContains(t any, want string) bool {
 // previously failed if a future width change silently altered the public
 // schema, since TestOpenAPISpecIsDiscoverable only checks that the string
 // "ApiPokemonResult" appears in the spec, not any field's shape. This does
-// not cover all 19 — one representative of each width plus one field
-// deliberately left wide is enough to trip on the next regression.
+// not cover all 19 — one representative of each width, plus all four
+// timestamps (which are deliberately wider than storage, and had to agree
+// with each other), is enough to trip on the next regression.
 func TestApiPokemonResultSchemaWidths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -348,13 +349,18 @@ func TestApiPokemonResultSchemaWidths(t *testing.T) {
 		{"gender", "integer", "int32", true},
 		// *uint16, nullable.
 		{"cp", "integer", "int32", true},
-		// *uint32, nullable.
-		{"expire_timestamp", "integer", "int32", true},
 		// *float32, nullable — no minimum; unsigned-ness doesn't apply to floats.
 		{"weight", "number", "float", false},
-		// int64, non-pointer/non-nullable — deliberately left wide (see
-		// ApiPokemonResult's doc comment): not narrowed by this PR, no minimum.
+		// The four timestamps. All are uint32 in storage and int64 here, so
+		// all four advertise int64 with no minimum — a *uint32 would be
+		// advertised as int32, which a generated client overflows in January
+		// 2038 (see ApiPokemonResult's doc comment). The pair that is
+		// nullable and the pair that is not must still agree on the width;
+		// they did not before, and that inconsistency is what this pins.
+		{"expire_timestamp", "integer", "int64", false},
+		{"updated", "integer", "int64", false},
 		{"first_seen_timestamp", "integer", "int64", false},
+		{"changed", "integer", "int64", false},
 	}
 	for _, c := range cases {
 		p, ok := props[c.field]
