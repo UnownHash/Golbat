@@ -15,17 +15,16 @@ import (
 // that path's cache pressure. Widening a field here is not free; if this test
 // fails, that is the change to justify, not the number to update.
 //
-// PokemonLookup carries two dead bytes today: Xxs and Xxl are neither written
-// by updatePokemonLookup nor read by any filter (the XXS/XXL filters read
-// Size instead — api_pokemon_scan_v1.go). They are pinned as-is rather than
-// removed here because removing them is a separate change.
+// PokemonLookup used to carry two dead bytes: Xxs and Xxl were neither
+// written by updatePokemonLookup nor read by any filter (the XXS/XXL filters
+// read Size instead — api_pokemon_scan_v1.go). They have been removed.
 func TestPokemonLookupSizes(t *testing.T) {
 	for name, tc := range map[string]struct {
 		got, want uintptr
 	}{
-		"PokemonLookup":          {unsafe.Sizeof(PokemonLookup{}), 18},
+		"PokemonLookup":          {unsafe.Sizeof(PokemonLookup{}), 16},
 		"PokemonPvpLookup":       {unsafe.Sizeof(PokemonPvpLookup{}), 6},
-		"PokemonLookupCacheItem": {unsafe.Sizeof(PokemonLookupCacheItem{}), 26},
+		"PokemonLookupCacheItem": {unsafe.Sizeof(PokemonLookupCacheItem{}), 24},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)
