@@ -63,19 +63,22 @@ var webhooksSender webhooksSenderInterface
 
 // statsCollector is read on hot decode/save paths and swapped by a handful
 // of tests (see setStatsCollectorForTest in init_test.go); atomic.Pointer
-// keeps concurrent Store/Load race-free without a mutex. Use
-// getStatsCollector() to read it — see that function's doc comment.
+// keeps concurrent Store/Load race-free without a mutex. Seeded with a noop
+// collector below in init(), before any other package code can run — see
+// getStatsCollector's doc comment for why that matters.
 var statsCollector atomic.Pointer[stats_collector.StatsCollector]
 
-// getStatsCollector returns the current StatsCollector. Returns nil if
-// called before SetStatsCollector — callers on paths that can run that
-// early (e.g. StartWorkerBacklogReporter's ticker) must nil-check, same as
-// before this was made atomic.
+// getStatsCollector returns the current StatsCollector. Never nil: init()
+// below seeds statsCollector with a noop collector at package load, and
+// SetStatsCollector later swaps in the real one once main() has read
+// config. Before that seeding was added, callers on paths that could run
+// before SetStatsCollector (e.g. the eviction-drop hook InitDataCache wires
+// up, which main() calls well before SetStatsCollector — see main.go) had
+// to nil-check or risk a nil-interface panic; StartWorkerBacklogReporter's
+// ticker did, DroppedEvictionsHook did not. Seeding closes that window for
+// both, so nothing here needs to treat nil as a meaningful state anymore.
 func getStatsCollector() stats_collector.StatsCollector {
-	if p := statsCollector.Load(); p != nil {
-		return *p
-	}
-	return nil
+	return *statsCollector.Load()
 }
 
 var pokestopCache *ottercache.OtterCache[string, *Pokestop]
@@ -97,6 +100,12 @@ var ProactiveIVSwitchSem chan bool
 var ohbem *gohbem.Ohbem
 
 func init() {
+	// Seed statsCollector with a noop before anything else in this package
+	// (or an importer) can run, so getStatsCollector() is never nil — see
+	// its doc comment for the panic window this closes.
+	noop := stats_collector.NewNoopStatsCollector()
+	statsCollector.Store(&noop)
+
 	// initLiveStats is config-independent, so package-init timing is fine.
 	// Entity caches are NOT — they must be built after config load via
 	// InitDataCache (see below).

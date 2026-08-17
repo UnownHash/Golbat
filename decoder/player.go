@@ -1255,6 +1255,10 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		}
 	}
 
+	if dbDebugEnabled {
+		player.debug.reset()
+	}
+
 	player.ClearDirty()
 	if player.IsNewRecord() {
 		player.newRecord = false
