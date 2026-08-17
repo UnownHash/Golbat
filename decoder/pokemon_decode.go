@@ -408,9 +408,12 @@ func SeenTypeFrom(c SeenTypeCode) NullSeenType {
 	return NullSeenType{Code: c, Valid: true}
 }
 
-// ParseSeenType converts a database or proto string into a NullSeenType.
-// An empty string is treated as NULL; an unrecognised value is an error,
-// because silently mapping it to a valid code would corrupt scan statistics.
+// ParseSeenType converts a database or proto string into a NullSeenType. An
+// empty string is treated as NULL; an unrecognised value is an error. What
+// happens to that error is the caller's call — Scan below degrades it to a
+// warning because the read path must tolerate an enum value this binary
+// doesn't know yet, while Value and UnmarshalJSON stay strict. See Scan's
+// doc comment for why.
 func ParseSeenType(s string) (NullSeenType, error) {
 	if s == "" {
 		return NullSeenType{}, nil
@@ -442,6 +445,30 @@ func (n NullSeenType) Ptr() *string {
 
 func (n NullSeenType) IsZero() bool { return !n.Valid }
 
+// Scan degrades on an unrecognised enum value instead of failing: it sets
+// Valid = false (as if the column were NULL) and logs a warning, rather
+// than returning an error.
+//
+// This is deliberately asymmetric with Value below. The seen_type enum has
+// been widened three times (migrations 3, 43, 45); a newer binary can write
+// a value this one's ParseSeenType doesn't recognise yet — a rollback or a
+// lagging replica during a mixed deployment, both routine. An earlier round
+// of this PR made Scan error on that case, reasoning that silently storing
+// a wrong code would corrupt scan statistics. That reasoning weighs the
+// write side correctly but not the read side: an error here fails the row
+// load, which leaves getOrCreatePokemonRecord's cache entry stuck marked
+// newRecord — every subsequent sighting retries and fails the same load, so
+// that pokemon silently stops being processed for as long as the
+// deployment is mixed. Degrading avoids that: the row loads with seen_type
+// unset, and a later sighting that arrives once the deployment is no
+// longer mixed fills it in normally.
+//
+// Value stays strict on purpose, not by oversight: writing an out-of-enum
+// string to the seen_type ENUM column is silently stored as "" by MariaDB,
+// invisible data loss with no read-side self-heal to fall back on — the
+// write side has no equivalent of "try again next sighting." Read
+// permissive, write strict. Do not "fix" this back to symmetric; see
+// TestNullSeenTypeScanUnknownValueDegrades.
 func (n *NullSeenType) Scan(value any) error {
 	if value == nil {
 		n.Code, n.Valid = 0, false
@@ -458,7 +485,9 @@ func (n *NullSeenType) Scan(value any) error {
 	}
 	parsed, err := ParseSeenType(s)
 	if err != nil {
-		return err
+		log.Warnf("NullSeenType.Scan: %s; treating as NULL", err)
+		n.Code, n.Valid = 0, false
+		return nil
 	}
 	*n = parsed
 	return nil
@@ -467,8 +496,9 @@ func (n *NullSeenType) Scan(value any) error {
 // Value rejects any code with no string form — that includes both
 // SeenTypeCodeUnset and any code past the end of the table. Writing "" to
 // the seen_type ENUM column is accepted silently by MariaDB, so this must
-// fail loudly instead: the same data-loss shape ParseSeenType already
-// guards against on the read side.
+// fail loudly instead of writing it. Kept strict on purpose even though
+// Scan (above) degrades instead of erroring on the mirror-image read
+// failure — see Scan's doc comment for why the two are not symmetric.
 func (n NullSeenType) Value() (driver.Value, error) {
 	if !n.Valid {
 		return nil, nil
