@@ -11,6 +11,37 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 )
 
+// connectNullscanTestDB connects to GOLBAT_TEST_DSN for a pokemon round-trip
+// test, skipping the test if it isn't set.
+//
+// Registers db.Close() via t.Cleanup, not a bare defer: t.Cleanup functions
+// run after the test function's own defers have already fired, so a bare
+// `defer db.Close()` would close the connection before a delete cleanup the
+// caller registers afterward runs, silently skipping it. Cleanups run LIFO,
+// so registering the close here — before the caller registers its own
+// delete cleanup — makes it run last. That ordering was a real bug once
+// already: a bare defer ran before the delete cleanup and silently left
+// test rows in the shared dev database on every run.
+func connectNullscanTestDB(t *testing.T) (*sqlx.DB, context.Context) {
+	t.Helper()
+	dsn := os.Getenv("GOLBAT_TEST_DSN")
+	if dsn == "" {
+		t.Skip("GOLBAT_TEST_DSN not set; skipping database round-trip test")
+	}
+
+	db, err := sqlx.Connect("mysql", dsn)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := db.Close(); err != nil {
+			t.Logf("close: %v", err)
+		}
+	})
+
+	return db, context.Background()
+}
+
 // TestPokemonNullColumnRoundTrip is the test the packing change exists to pass.
 //
 // Every nullable pokemon column is narrowed from guregu/null's 16-byte
@@ -25,27 +56,7 @@ import (
 //
 //	GOLBAT_TEST_DSN='user:pass@tcp(127.0.0.1:3306)/golbat_test?parseTime=true'
 func TestPokemonNullColumnRoundTrip(t *testing.T) {
-	dsn := os.Getenv("GOLBAT_TEST_DSN")
-	if dsn == "" {
-		t.Skip("GOLBAT_TEST_DSN not set; skipping database round-trip test")
-	}
-
-	db, err := sqlx.Connect("mysql", dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	// Registered via t.Cleanup, not a bare defer: t.Cleanup functions run
-	// after the test function's own defers have already fired, so a bare
-	// `defer db.Close()` here would close the connection before the delete
-	// cleanup below runs, silently skipping it. Cleanups run LIFO, so this
-	// must be registered before the delete cleanup to close last.
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Logf("close: %v", err)
-		}
-	})
-
-	ctx := context.Background()
+	db, ctx := connectNullscanTestDB(t)
 	const testID = 999999999999999999
 
 	t.Cleanup(func() {
@@ -63,7 +74,7 @@ func TestPokemonNullColumnRoundTrip(t *testing.T) {
 	// information_schema.COLUMNS). Omitting it from the column list would
 	// insert 0/Valid, not NULL, silently defeating the one check this test
 	// exists to make for that field.
-	_, err = db.ExecContext(ctx, `
+	_, err := db.ExecContext(ctx, `
 		INSERT INTO pokemon (id, pokemon_id, lat, lon, first_seen_timestamp,
 			changed, expire_timestamp_verified, is_event, shiny)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
@@ -127,25 +138,7 @@ func TestPokemonNullColumnRoundTrip(t *testing.T) {
 // upsert the write-behind queue uses, then reads it back, proving driver.Valuer
 // binds correctly for every narrowed type.
 func TestPokemonFullRowRoundTrip(t *testing.T) {
-	dsn := os.Getenv("GOLBAT_TEST_DSN")
-	if dsn == "" {
-		t.Skip("GOLBAT_TEST_DSN not set; skipping database round-trip test")
-	}
-
-	db, err := sqlx.Connect("mysql", dsn)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	// See the matching comment in TestPokemonNullColumnRoundTrip: registered
-	// via t.Cleanup (not a bare defer) so it closes after, not before, the
-	// delete cleanup below.
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Logf("close: %v", err)
-		}
-	})
-
-	ctx := context.Background()
+	db, ctx := connectNullscanTestDB(t)
 	const testID = 999999999999999998
 
 	t.Cleanup(func() {

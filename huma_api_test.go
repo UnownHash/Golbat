@@ -281,6 +281,100 @@ func TestApiDocsGating(t *testing.T) {
 	}
 }
 
+// schemaTypeContains reports whether an OpenAPI "type" value names want, by
+// itself (a plain string, for a non-nullable field) or inside a nullable
+// field's ["want", "null"] array — huma emits the array form for any Go
+// pointer field (see huma's Nullable handling in schema.go).
+func schemaTypeContains(t any, want string) bool {
+	switch v := t.(type) {
+	case string:
+		return v == want
+	case []any:
+		for _, e := range v {
+			if s, ok := e.(string); ok && s == want {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// TestApiPokemonResultSchemaWidths pins the OpenAPI type/format/minimum for a
+// representative sample of ApiPokemonResult's fields. This PR narrowed 19
+// fields' type/format and added `minimum: 0` to 16 of them (see
+// api_pokemon_response.go's doc comment on ApiPokemonResult); nothing
+// previously failed if a future width change silently altered the public
+// schema, since TestOpenAPISpecIsDiscoverable only checks that the string
+// "ApiPokemonResult" appears in the spec, not any field's shape. This does
+// not cover all 19 — one representative of each width plus one field
+// deliberately left wide is enough to trip on the next regression.
+func TestApiPokemonResultSchemaWidths(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	api := humagin.New(r, newHumaConfig("test"))
+	registerHumaRoutes(api)
+
+	raw, err := gojson.Marshal(api.OpenAPI())
+	if err != nil {
+		t.Fatalf("marshal openapi: %v", err)
+	}
+	var doc struct {
+		Components struct {
+			Schemas map[string]struct {
+				Properties map[string]struct {
+					Type    any      `json:"type"`
+					Format  string   `json:"format"`
+					Minimum *float64 `json:"minimum"`
+				} `json:"properties"`
+			} `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := gojson.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("unmarshal openapi: %v", err)
+	}
+
+	props := doc.Components.Schemas["ApiPokemonResult"].Properties
+	if len(props) == 0 {
+		t.Fatal("ApiPokemonResult has no properties")
+	}
+
+	cases := []struct {
+		field       string
+		wantType    string
+		wantFormat  string
+		wantMinimum bool // true: minimum must be present and 0
+	}{
+		// *uint8, nullable.
+		{"gender", "integer", "int32", true},
+		// *uint16, nullable.
+		{"cp", "integer", "int32", true},
+		// *uint32, nullable.
+		{"expire_timestamp", "integer", "int32", true},
+		// *float32, nullable — no minimum; unsigned-ness doesn't apply to floats.
+		{"weight", "number", "float", false},
+		// int64, non-pointer/non-nullable — deliberately left wide (see
+		// ApiPokemonResult's doc comment): not narrowed by this PR, no minimum.
+		{"first_seen_timestamp", "integer", "int64", false},
+	}
+	for _, c := range cases {
+		p, ok := props[c.field]
+		if !ok {
+			t.Errorf("ApiPokemonResult missing property %q", c.field)
+			continue
+		}
+		if !schemaTypeContains(p.Type, c.wantType) {
+			t.Errorf("%s: type = %v, want to contain %q", c.field, p.Type, c.wantType)
+		}
+		if p.Format != c.wantFormat {
+			t.Errorf("%s: format = %q, want %q", c.field, p.Format, c.wantFormat)
+		}
+		gotMinimum := p.Minimum != nil && *p.Minimum == 0
+		if gotMinimum != c.wantMinimum {
+			t.Errorf("%s: minimum = %v, want present-and-0 = %t", c.field, p.Minimum, c.wantMinimum)
+		}
+	}
+}
+
 // TestLatLonSchemaDocumentsOnlyLatLon asserts the OpenAPI advertises only the
 // canonical lat/lon spelling, even though latitude/longitude is still accepted at
 // runtime (see decoder.ApiLatLon.UnmarshalJSON and TestHumaScanAcceptsLatLonSpellings).

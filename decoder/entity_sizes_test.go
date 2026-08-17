@@ -153,10 +153,24 @@ func TestPokemonUnderGCThreshold(t *testing.T) {
 // pinned here. The other four (Pokestop, Gym, Route, Player) shrank their
 // compiled struct size by the same 24 bytes but landed in the SAME size
 // class as before — nothing for the allocator to hand out less of — so
-// pinning them would just be nine constants to maintain for four real wins
-// (see review-task-4-report.md for the full measured table and the
-// scan-vs-noscan class-table wrinkle that makes "shrank 24 bytes" not
-// synonymous with "moved a class" here).
+// pinning them would just be nine constants to maintain for four real wins.
+//
+// Reading Pokestop/Gym/Route/Player as "no win" off Go's static size-class
+// table (8, 16, 24, 32, ..., 1024, 1152, 1280, ...) applied to the compiled
+// struct sizes is not by itself reliable for pointer-containing structs —
+// only measuring is. On this toolchain (go1.26.5), a noscan (no pointer
+// fields) 1152-byte control struct allocates in the 1152-byte class as the
+// table says, but an otherwise-identical 1152-byte struct with one pointer
+// field (scan, in GC terms) measures into 1280, not 1152: 1152 exists as a
+// class for noscan objects but scan objects skip it. Every entity here
+// contains pointers (strings, null.String, slices, ...), so all are scan
+// objects. That's why Pokestop (1176->1152) and Player (1392->1368) don't
+// move a class despite each dropping exactly 24 bytes and despite a naive
+// table read suggesting the after-size (1152, itself a listed class) should
+// drop one: 1152 isn't an available class for a scan object at this size.
+// Confirmed stable across repeated measurement and with
+// debug.SetGCPercent(-1) disabling concurrent GC during the window (to rule
+// out mark-assist noise).
 //
 // Sizes measured with runtime.MemStats.TotalAlloc delta / n (n=100000 live
 // pointers each, matching TestPokemonEntitySizes's methodology):
