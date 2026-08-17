@@ -297,7 +297,19 @@ func TestSetPokemonDisplayCountsEachClampOnce(t *testing.T) {
 // so it is re-decoded and re-written forever.
 func TestSignificantUpdateConvergesOnOutOfRangeDisplay(t *testing.T) {
 	display := outOfRangeDisplay()
-	display.DisplayId = 25 // nearbySignificantUpdate reads the id from here
+
+	// PRE-EXISTING BUG, deliberately left alone here: nearbySignificantUpdate
+	// compares pokemon.PokemonId against PokemonDisplay.DisplayId, which is an
+	// instance id rather than a pokedex number. updateFromNearby — the work
+	// this gate admits — reads NearbyPokemonProto.PokedexNumber instead, so
+	// the gate and the update disagree about which field identifies the
+	// pokemon. Setting DisplayId here is what it takes to make the gate see
+	// "unchanged"; the line exists to hold the wrong-field read still while
+	// the narrowing convergence below is asserted, not to record it as
+	// intended. Fixing the comparison is a separate change: it would flip the
+	// gate's verdict for every nearby sighting whose DisplayId is not equal to
+	// its pokedex number, which is most of them.
+	display.DisplayId = 25
 
 	p := &Pokemon{}
 	p.setPokemonDisplay(25, display)

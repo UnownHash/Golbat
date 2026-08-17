@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"golbat/util"
 
 	log "github.com/sirupsen/logrus"
+	logrustest "github.com/sirupsen/logrus/hooks/test"
 )
 
 func TestNullSeenTypeSize(t *testing.T) {
@@ -120,10 +120,7 @@ func TestNullSeenTypeJSON(t *testing.T) {
 // write strict — this is not an oversight, don't "fix" it back to
 // symmetric. See NullSeenType.Scan's doc comment for the full reasoning.
 func TestNullSeenTypeScanUnknownValueDegrades(t *testing.T) {
-	var buf bytes.Buffer
-	restore := log.StandardLogger().Out
-	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(restore) })
+	warnings := captureStandardLoggerMessages(t)
 
 	// Start from a real value so a successful degrade is visibly resetting
 	// it, not just leaving an already-zero value alone.
@@ -144,8 +141,8 @@ func TestNullSeenTypeScanUnknownValueDegrades(t *testing.T) {
 	if n.Code != SeenTypeCodeUnknown {
 		t.Errorf("Scan of unknown seen type left Code = %d, want SeenTypeCodeUnknown (%d)", n.Code, SeenTypeCodeUnknown)
 	}
-	if !strings.Contains(buf.String(), "teleported") {
-		t.Errorf("Scan of unknown seen type did not log a warning naming the value, got: %s", buf.String())
+	if logged := warnings(); !strings.Contains(logged, "teleported") {
+		t.Errorf("Scan of unknown seen type did not log a warning naming the value, got: %s", logged)
 	}
 }
 
@@ -293,10 +290,7 @@ func TestScanUnknownSeenTypeIsInertInTheDecodeSwitches(t *testing.T) {
 func TestScanUnknownSeenTypeWarnIsThrottled(t *testing.T) {
 	resetSeenTypeScanWarnThrottle(t)
 
-	var buf bytes.Buffer
-	restore := log.StandardLogger().Out
-	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(restore) })
+	warnings := captureStandardLoggerMessages(t)
 
 	const rows = 500
 	for range rows {
@@ -306,8 +300,39 @@ func TestScanUnknownSeenTypeWarnIsThrottled(t *testing.T) {
 		}
 	}
 
-	if got := strings.Count(buf.String(), "teleported"); got != 1 {
+	if got := strings.Count(warnings(), "teleported"); got != 1 {
 		t.Errorf("%d rows with an unrecognised seen_type logged %d warnings, want 1 (throttled to one per second)", rows, got)
+	}
+}
+
+// captureStandardLoggerMessages collects everything logged to the standard
+// logger for the duration of one test, and returns a reader for what has been
+// collected so far.
+//
+// It hooks the logger rather than swapping its io.Writer. Swapping the writer
+// means reading the buffer from the test goroutine while logrus writes to it
+// from anywhere else — this package's init() starts a stats-aggregation worker
+// and an encounter-cache goroutine, both of which log — and logrus holds its
+// own mutex over the write, not over the caller's buffer. That is a -race
+// failure waiting for the wrong scheduling. A hook's entries are appended and
+// read under the hook's own RWMutex, and ReplaceHooks swaps the whole set
+// under the logger's mutex in one step, so both ends are synchronised.
+func captureStandardLoggerMessages(t *testing.T) func() string {
+	t.Helper()
+
+	hook := new(logrustest.Hook)
+	hooks := make(log.LevelHooks)
+	hooks.Add(hook)
+	previous := log.StandardLogger().ReplaceHooks(hooks)
+	t.Cleanup(func() { log.StandardLogger().ReplaceHooks(previous) })
+
+	return func() string {
+		var sb strings.Builder
+		for _, entry := range hook.AllEntries() {
+			sb.WriteString(entry.Message)
+			sb.WriteByte('\n')
+		}
+		return sb.String()
 	}
 }
 
@@ -358,5 +383,33 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 		if p.SeenType != SeenTypeFrom(c) {
 			t.Errorf("SetSeenType(%d) stored %+v, want code %d", c, p.SeenType, c)
 		}
+	}
+}
+
+// TestIsSeenFromTappableMatchesItsName pins the predicate that used to return
+// the negation of what it was called. Its one caller inverted it at the same
+// time, so the behavior is unchanged — this is here so a future inversion of
+// either half alone fails rather than silently downgrading a tappable
+// encounter to a plain one and losing the attribution.
+func TestIsSeenFromTappableMatchesItsName(t *testing.T) {
+	tappable := map[SeenTypeCode]bool{
+		SeenTypeCodeTappableEncounter:     true,
+		SeenTypeCodeTappableLureEncounter: true,
+	}
+	for _, c := range []SeenTypeCode{
+		SeenTypeCodeWild, SeenTypeCodeEncounter, SeenTypeCodeNearbyStop, SeenTypeCodeCell,
+		SeenTypeCodeLureWild, SeenTypeCodeLureEncounter, SeenTypeCodeTappableEncounter,
+		SeenTypeCodeTappableLureEncounter,
+	} {
+		p := &Pokemon{}
+		p.SetSeenType(c)
+		if got := p.isSeenFromTappable(); got != tappable[c] {
+			t.Errorf("isSeenFromTappable() for %s = %t, want %t", c, got, tappable[c])
+		}
+	}
+
+	// The zero value is Unset, which is not a tappable seen type either.
+	if (&Pokemon{}).isSeenFromTappable() {
+		t.Error("isSeenFromTappable() for an unset seen type = true, want false")
 	}
 }
