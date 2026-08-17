@@ -21,7 +21,14 @@ jobs:
       - name: Install dependencies
         run: go get .
       - name: Test with the Go CLI
-        run: go test -v ./...
+        # -tags go_json matches the Dockerfile's production build
+        # (CGO_ENABLED=0 go build -tags go_json) — without it this suite
+        # verifies a binary nothing ships.
+        run: go test -v -tags go_json ./...
+      - name: Test with the Go CLI (dbdebug build)
+        # dbdebug swaps in a real debugChangeAccumulator (see db_debug.go);
+        # nothing else in CI exercises that build, and this PR touches it.
+        run: go test -v -tags "go_json dbdebug" ./...
 
   build:
     # Registry push only follows a real push (branch or tag), never a PR —
