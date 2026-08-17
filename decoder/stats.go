@@ -469,7 +469,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 				// transition to wild for the first time..
 				populateEncounterCacheVal()
 				encounterCacheVal.FirstEncounter = 0
-				encounterCacheVal.FirstWild = int64(pokemon.Updated.ValueOrZero())
+				encounterCacheVal.FirstWild = int64OrZero(pokemon.Updated)
 				// This will be put into the cache later.
 			}
 
@@ -483,7 +483,7 @@ func updatePokemonStats(pokemon *pokemonStatsSnapshot, areas []geo.AreaName, now
 			populateEncounterCacheVal()
 			if encounterCacheVal.FirstEncounter == 0 {
 				// This is first encounter
-				encounterCacheVal.FirstEncounter = int64(pokemon.Updated.ValueOrZero())
+				encounterCacheVal.FirstEncounter = int64OrZero(pokemon.Updated)
 
 				if encounterCacheVal.FirstWild > 0 {
 					timeToEncounter = encounterCacheVal.FirstEncounter - encounterCacheVal.FirstWild

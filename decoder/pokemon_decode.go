@@ -137,11 +137,11 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 	return pokemon.SeenType.Code == SeenTypeCodeCell ||
 		pokemon.SeenType.Code == SeenTypeCodeNearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		int64(pokemon.Form.ValueOrZero()) != narrowUint16(int64(pokemonDisplay.Form)) ||
-		int64(pokemon.Weather.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
-		int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Costume)) ||
-		int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Gender)) ||
-		(!pokemon.ExpireTimestampVerified && int64(pokemon.ExpireTimestamp.ValueOrZero()) < time)
+		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender)) ||
+		(!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time)
 }
 
 // nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -152,16 +152,16 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 
 	// Narrowed on both sides, as in wildSignificantUpdate above.
 	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
-		int64(pokemon.Form.ValueOrZero()) != narrowUint16(int64(pokemonDisplay.Form)) ||
-		int64(pokemon.Weather.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
-		int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Costume)) ||
-		int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Gender))
+		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender))
 
 	if pokemonChanged {
 		return true
 	}
 
-	hasExpired := (!pokemon.ExpireTimestampVerified && int64(pokemon.ExpireTimestamp.ValueOrZero()) < time)
+	hasExpired := (!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time)
 
 	if hasExpired {
 		return true
@@ -256,8 +256,8 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	// Narrowed on both sides (see narrowUint8): the stored IVs hold the
 	// clamped value, so comparing them against the raw a/d/s would rewrite
 	// and re-dirty the record on every encounter once one is out of range.
-	if int64(pokemon.AtkIv.ValueOrZero()) != narrowUint8(a) || int64(pokemon.DefIv.ValueOrZero()) != narrowUint8(d) ||
-		int64(pokemon.StaIv.ValueOrZero()) != narrowUint8(s) ||
+	if int64OrZero(pokemon.AtkIv) != narrowUint8(a) || int64OrZero(pokemon.DefIv) != narrowUint8(d) ||
+		int64OrZero(pokemon.StaIv) != narrowUint8(s) ||
 		!pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
 		pokemon.AtkIv = clampUint8(null.IntFrom(a), "atk_iv")
 		pokemon.DefIv = clampUint8(null.IntFrom(d), "def_iv")
@@ -607,7 +607,7 @@ func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
 	if !pokemon.ExpireTimestamp.Valid {
 		pokemon.SetExpireTimestamp(null.IntFrom(now + 20*60)) // should be configurable, add on 20min
 	} else {
-		if int64(pokemon.ExpireTimestamp.ValueOrZero()) < now {
+		if int64OrZero(pokemon.ExpireTimestamp) < now {
 			pokemon.SetExpireTimestamp(null.IntFrom(now + 10*60)) // should be configurable, add on 10min
 		}
 	}
@@ -1111,9 +1111,9 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 		// encounter data below each time. narrowUint8/16 saturate without
 		// counting, so SetForm/SetCostume/SetGender below stay the only
 		// place golbat_field_clamped_total is incremented.
-		formChanged := !oldForm.Valid || int64(oldForm.ValueOrZero()) != narrowUint16(int64(display.Form))
-		costumeChanged := !pokemon.Costume.Valid || int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(display.Costume))
-		genderChanged := !pokemon.Gender.Valid || int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(display.Gender))
+		formChanged := !oldForm.Valid || int64OrZero(oldForm) != narrowUint16(int64(display.Form))
+		costumeChanged := !pokemon.Costume.Valid || int64OrZero(pokemon.Costume) != narrowUint8(int64(display.Costume))
+		genderChanged := !pokemon.Gender.Valid || int64OrZero(pokemon.Gender) != narrowUint8(int64(display.Gender))
 		if oldId != pokemonId || formChanged ||
 			costumeChanged ||
 			genderChanged ||
@@ -1163,7 +1163,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	if !pokemon.IsDitto {
 		isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
 		if isStrong == pokemon.IsStrong.ValueOrZero() &&
-			int64(pokemon.Weather.ValueOrZero()) != int64(pogo.GameplayWeatherProto_NONE) == isBoosted {
+			int64OrZero(pokemon.Weather) != int64(pogo.GameplayWeatherProto_NONE) == isBoosted {
 			return
 		}
 	} else if isStrong {
@@ -1174,7 +1174,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 		// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
 		// or both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
-		if int64(pokemon.Weather.ValueOrZero()) == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) == isBoosted {
+		if int64OrZero(pokemon.Weather) == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) == isBoosted {
 			return
 		}
 	}
@@ -1184,11 +1184,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {
-		oldLevel := int64(pokemon.Level.ValueOrZero())
+		oldLevel := int64OrZero(pokemon.Level)
 		if pokemon.AtkIv.Valid {
-			oldAtk = int64(pokemon.AtkIv.ValueOrZero())
-			oldDef = int64(pokemon.DefIv.ValueOrZero())
-			oldSta = int64(pokemon.StaIv.ValueOrZero())
+			oldAtk = int64OrZero(pokemon.AtkIv)
+			oldDef = int64OrZero(pokemon.DefIv)
+			oldSta = int64OrZero(pokemon.StaIv)
 		} else {
 			oldAtk = -1
 			oldDef = -1
@@ -1218,7 +1218,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		// (see narrowUint8) — otherwise a level pushed out of range by the
 		// boost adjustment would clear CP and PVP on every sighting.
 		if narrowUint8(newLevel) != oldLevel || pokemon.AtkIv.Valid &&
-			(int64(pokemon.AtkIv.ValueOrZero()) != oldAtk || int64(pokemon.DefIv.ValueOrZero()) != oldDef || int64(pokemon.StaIv.ValueOrZero()) != oldSta) {
+			(int64OrZero(pokemon.AtkIv) != oldAtk || int64OrZero(pokemon.DefIv) != oldDef || int64OrZero(pokemon.StaIv) != oldSta) {
 			pokemon.SetCp(null.NewInt(0, false))
 			pokemon.SetPvp(null.NewString("", false))
 		}
@@ -1236,7 +1236,7 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	if pokemon.IsDitto {
 		displayPokemon = int(pokemon.DisplayPokemonId.ValueOrZero())
 		displayPokemonForm = int(pokemon.DisplayPokemonForm.ValueOrZero())
-		if int64(pokemon.Weather.ValueOrZero()) == int64(pogo.GameplayWeatherProto_NONE) {
+		if int64OrZero(pokemon.Weather) == int64(pogo.GameplayWeatherProto_NONE) {
 			cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
 			cellWeather, found := weather[cellId]
 			if !found {

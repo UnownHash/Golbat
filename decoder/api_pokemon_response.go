@@ -198,7 +198,7 @@ func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
 	for _, key := range keys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
 		if pokemon != nil {
-			if int64(pokemon.ExpireTimestamp.ValueOrZero()) > nowUnix {
+			if int64OrZero(pokemon.ExpireTimestamp) > nowUnix {
 				results = append(results, buildApiPokemonResult(pokemon))
 			}
 			unlock()

@@ -87,7 +87,7 @@ func PreservePokemonToDatabase(dbDetails db.DbDetails) {
 	batch := make([]PokemonData, 0, preserveBatchSize)
 	pokemonCache.Range(func(_ uint64, pokemon *Pokemon) bool {
 		// Skip if expired or no valid expire timestamp (no lock needed at shutdown)
-		if !pokemon.ExpireTimestamp.Valid || int64(pokemon.ExpireTimestamp.ValueOrZero()) <= now {
+		if !pokemon.ExpireTimestamp.Valid || int64OrZero(pokemon.ExpireTimestamp) <= now {
 			skipped.Add(1)
 			return true
 		}

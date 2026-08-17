@@ -169,7 +169,11 @@ func (pokemon *Pokemon) Unlock() {
 	pokemon.mu.Unlock("Pokemon", uint64(pokemon.Id))
 }
 
-// clampUint8 narrows a null.Int for storage in a tinyint-backed field.
+// clampUint narrows a null.Int for storage in a tinyint/smallint/int
+// unsigned-backed field, saturating into [0, limit] over the shared
+// saturate. clampUint8/16/32 below are its only callers — thin
+// instantiations that fix T and limit together, so every setter still names
+// its own width at the call site instead of spelling out a type parameter.
 //
 // Values arrive from decoded game protos and are bounded in practice, so
 // out-of-range means the protocol changed rather than a normal case. Clamping
@@ -197,37 +201,27 @@ func (pokemon *Pokemon) Unlock() {
 // which rejects out-of-range values outright. That is deliberate: a bad value
 // from our own database is a bug worth failing on, a bad value from a game
 // server is a fact worth recording.
-func clampUint8(v null.Int, field string) null.Value[uint8] {
+func clampUint[T ~uint8 | ~uint16 | ~uint32](v null.Int, field string, limit int64) null.Value[T] {
 	if !v.Valid {
-		return null.Value[uint8]{}
+		return null.Value[T]{}
 	}
-	i := narrowUint8(v.Int64)
+	i := saturate(v.Int64, limit)
 	if i != v.Int64 {
 		getStatsCollector().IncFieldClamped(field)
 	}
-	return null.ValueFrom(uint8(i))
+	return null.ValueFrom(T(i))
+}
+
+func clampUint8(v null.Int, field string) null.Value[uint8] {
+	return clampUint[uint8](v, field, math.MaxUint8)
 }
 
 func clampUint16(v null.Int, field string) null.Value[uint16] {
-	if !v.Valid {
-		return null.Value[uint16]{}
-	}
-	i := narrowUint16(v.Int64)
-	if i != v.Int64 {
-		getStatsCollector().IncFieldClamped(field)
-	}
-	return null.ValueFrom(uint16(i))
+	return clampUint[uint16](v, field, math.MaxUint16)
 }
 
 func clampUint32(v null.Int, field string) null.Value[uint32] {
-	if !v.Valid {
-		return null.Value[uint32]{}
-	}
-	i := narrowUint32(v.Int64)
-	if i != v.Int64 {
-		getStatsCollector().IncFieldClamped(field)
-	}
-	return null.ValueFrom(uint32(i))
+	return clampUint[uint32](v, field, math.MaxUint32)
 }
 
 // narrowUint8, narrowUint16 and narrowUint32 saturate an int64 into the
@@ -306,13 +300,32 @@ func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	return null.IntFrom(int64(n.V))
 }
 
-// nullBoolToGuregu is nullBoolFrom's reverse: null.Value[bool] back into a
-// guregu/null.Bool, for the webhook payload's Shiny field.
-func nullBoolToGuregu(n null.Value[bool]) null.Bool {
+// int64OrZero widens a narrowed null.Value[T] straight to int64, 0 if
+// invalid — the single-term form of the ~45 int64(x.ValueOrZero()) casts
+// scattered across comparisons and assignments in this package. It exists
+// only to replace a standalone cast; it must never appear inside an
+// arithmetic expression.
+//
+// The reason is the exact shape of a real bug: int64(a.ValueOrZero()) -
+// int64(b.ValueOrZero()) is correct (each operand is cast to the signed
+// width before the subtraction runs), but
+// int64(a.ValueOrZero() - b.ValueOrZero()) wraps whenever b > a, because
+// the subtraction then happens in T's unsigned width first and only the
+// (already-wrapped) result gets widened. Taking null.Value[T] here rather
+// than a bare T closes off the obvious way to write that second form by
+// accident with this helper — there is no raw unsigned value in scope to
+// subtract before the cast — but it does not make the helper safe to place
+// next to a `+` or `-` regardless: call it once per operand into a local,
+// then do the arithmetic on the resulting int64s. A handful of sites that
+// already did that correctly with explicit int64(...) casts (the tth
+// calculations in stats.go, remainingDuration/encounterStatsDuration's
+// `60 + ... - now`) were deliberately left on the explicit form rather than
+// converted, so nothing here ever sits one edit away from the wrapped form.
+func int64OrZero[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int64 {
 	if !n.Valid {
-		return null.Bool{}
+		return 0
 	}
-	return null.BoolFrom(n.V)
+	return int64(n.V)
 }
 
 // --- Set methods with dirty tracking ---
@@ -469,7 +482,7 @@ func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
 	if pokemon.SeenType != next {
 		if dbDebugEnabled {
 			pokemon.debug.recordChange(
-				fmt.Sprintf("SeenType:%s->%s", pokemon.SeenType.ValueOrZero(), next.ValueOrZero()))
+				fmt.Sprintf("SeenType:%s->%s", FormatNull(pokemon.SeenType), FormatNull(next)))
 		}
 		pokemon.SeenType = next
 		pokemon.dirty = true

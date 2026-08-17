@@ -167,7 +167,7 @@ func GrpcGetPokemonInArea3(retrieveParameters *pb.PokemonScanRequestV3) ([]*pb.P
 	for _, key := range returnKeys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v3.pokemon")
 		if pokemon != nil {
-			if int64(pokemon.ExpireTimestamp.ValueOrZero()) > startUnix {
+			if int64OrZero(pokemon.ExpireTimestamp) > startUnix {
 				apiPokemon := pb.PokemonDetails{
 					Id:         uint64(pokemon.Id),
 					PokestopId: pokemon.PokestopId.Ptr(),

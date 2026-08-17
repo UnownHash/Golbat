@@ -421,7 +421,7 @@ type PokemonWebhook struct {
 	Capture1              float64             `json:"capture_1"`
 	Capture2              float64             `json:"capture_2"`
 	Capture3              float64             `json:"capture_3"`
-	Shiny                 null.Bool           `json:"shiny"`
+	Shiny                 null.Value[bool]    `json:"shiny"`
 	Username              null.String         `json:"username"`
 	DisplayPokemonId      null.Value[uint16]  `json:"display_pokemon_id"`
 	DisplayPokemonForm    null.Value[uint16]  `json:"display_pokemon_form"`
@@ -470,7 +470,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			PokemonId:             pokemon.PokemonId,
 			Latitude:              pokemon.Lat,
 			Longitude:             pokemon.Lon,
-			DisappearTime:         int64(pokemon.ExpireTimestamp.ValueOrZero()),
+			DisappearTime:         int64OrZero(pokemon.ExpireTimestamp),
 			DisappearTimeVerified: pokemon.ExpireTimestampVerified,
 			FirstSeen:             int64(pokemon.FirstSeenTimestamp),
 			LastModifiedTime:      pokemon.Updated,
@@ -496,7 +496,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture1:           0,
 			Capture2:           0,
 			Capture3:           0,
-			Shiny:              nullBoolToGuregu(pokemon.Shiny),
+			Shiny:              pokemon.Shiny,
 			Username:           pokemon.Username,
 			DisplayPokemonId:   pokemon.DisplayPokemonId,
 			DisplayPokemonForm: pokemon.DisplayPokemonForm,
