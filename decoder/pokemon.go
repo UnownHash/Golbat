@@ -13,18 +13,19 @@ import (
 //
 // FIELD ORDER IS LOAD-BEARING in the sense that a careless ordering
 // (interleaving fields of different alignments) can make this bigger than
-// 256 bytes — but not smaller. The field payload sums to 251 bytes (8-byte
-// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 25 + pointer
-// group 96), and Go's struct alignment (8, driven by the uint64/float64/
-// pointer fields) rounds any total up to the next multiple of 8: 256 either
+// 216 bytes — but not smaller. The field payload sums to 211 bytes (8-byte
+// group 56 + 4-byte group 56 + 2-byte group 26 + 1-byte group 25 + pointer
+// group 48), and Go's struct alignment (8, driven by the uint64/float64/
+// pointer fields) rounds any total up to the next multiple of 8: 216 either
 // way. This order achieves that minimum — the pointer group's own 8-byte
 // alignment forces exactly 5 bytes of mandatory padding immediately before
-// it (offset 155->160), and every other ordering pays those same 5 bytes
+// it (offset 163->168), and every other ordering pays those same 5 bytes
 // somewhere else instead (e.g. as trailing padding at the very end), not
 // zero. See TestPokemonEntitySizes's comment for the full breakdown and the
 // history behind this number (it dropped from 280 when task 5 narrowed
-// SeenType out of the pointer group); that test guards the 256 result — if
-// it fails after you add a field, read its doc comment before touching the
+// SeenType out of the pointer group, and from 256 when PokestopId and
+// Username became intern handles); that test guards the 216 result — if it
+// fails after you add a field, read its doc comment before touching the
 // constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
@@ -47,6 +48,13 @@ type PokemonData struct {
 	Weight             null.Value[float32] `db:"weight"`
 	Height             null.Value[float32] `db:"height"`
 	Iv                 null.Value[float32] `db:"iv"`
+	// PokestopId and Username are handles into append-only intern tables,
+	// not strings: both name a small bounded set that millions of cached
+	// pokemon repeat, so a shared copy plus a 4-byte index costs far less
+	// than a per-pokemon string — and, being integers, they leave the GC's
+	// pointer scan entirely. See decoder/interned_string.go.
+	PokestopId InternedPokestopId `db:"pokestop_id"`
+	Username   InternedUsername   `db:"username"`
 
 	// --- 2-byte aligned ---
 	PokemonId          int16              `db:"pokemon_id"`
@@ -74,8 +82,6 @@ type PokemonData struct {
 	SeenType                NullSeenType      `db:"seen_type"`
 
 	// --- pointer-carrying, last ---
-	PokestopId     null.String `db:"pokestop_id"`
-	Username       null.String `db:"username"`
 	Pvp            null.String `db:"pvp"`
 	GolbatInternal []byte      `db:"golbat_internal"`
 }
@@ -330,7 +336,7 @@ func int64OrZero[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int64 {
 
 // --- Set methods with dirty tracking ---
 
-func (pokemon *Pokemon) SetPokestopId(v null.String) {
+func (pokemon *Pokemon) SetPokestopId(v InternedPokestopId) {
 	if pokemon.PokestopId != v {
 		if dbDebugEnabled {
 			pokemon.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", FormatNull(pokemon.PokestopId), FormatNull(v)))
@@ -489,7 +495,7 @@ func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
 	}
 }
 
-func (pokemon *Pokemon) SetUsername(v null.String) {
+func (pokemon *Pokemon) SetUsername(v InternedUsername) {
 	if pokemon.Username != v {
 		pokemon.Username = v
 		//pokemon.dirty = true

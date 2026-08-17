@@ -65,7 +65,7 @@ func goldenSnapshotPokemon() *Pokemon {
 	return &Pokemon{
 		PokemonData: PokemonData{
 			Id:                      9876543210,
-			PokestopId:              null.StringFrom("stop-abc"),
+			PokestopId:              InternPokestopId("stop-abc"),
 			SpawnId:                 null.ValueFrom(int64(7777)),
 			Lat:                     12.3456,
 			Lon:                     -65.4321,

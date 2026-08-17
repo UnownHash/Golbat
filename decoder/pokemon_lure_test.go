@@ -162,7 +162,7 @@ func TestUpdateFromMapLeavesNonLureRecordsAlone(t *testing.T) {
 	if pokemon.updateFromMap(context.Background(), db.DbDetails{}, raw, nil, "tester") {
 		t.Errorf("updateFromMap on wild record = true, want false")
 	}
-	if pokemon.PokestopId.Valid {
+	if pokemon.PokestopId.Valid() {
 		t.Errorf("PokestopId set on wild record, want untouched")
 	}
 	unlock()

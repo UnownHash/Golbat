@@ -442,13 +442,13 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 		}
 
 		pokestopId := "None"
-		if pokemon.PokestopId.Valid {
+		if pokemon.PokestopId.Valid() {
 			pokestopId = pokemon.PokestopId.ValueOrZero()
 		}
 
 		var pokestopName *string
-		if pokemon.PokestopId.Valid {
-			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.String, "createPokemonWebhooks")
+		if pokemon.PokestopId.Valid() {
+			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.ValueOrZero(), "createPokemonWebhooks")
 			name := "Unknown"
 			if pokestop != nil {
 				name = pokestop.Name.ValueOrZero()
@@ -497,7 +497,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture2:           0,
 			Capture3:           0,
 			Shiny:              pokemon.Shiny,
-			Username:           pokemon.Username,
+			Username:           pokemon.Username.NullString(),
 			DisplayPokemonId:   pokemon.DisplayPokemonId,
 			DisplayPokemonForm: pokemon.DisplayPokemonForm,
 			IsEvent:            pokemon.IsEvent,

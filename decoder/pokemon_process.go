@@ -64,7 +64,7 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		// Placement happens exactly once, at record creation, by whichever
 		// proto arrives first — here from the disk encounter request. A
 		// later GMO contributes the verified despawn time.
-		pokemon.SetPokestopId(null.StringFrom(request.FortId))
+		pokemon.SetPokestopId(InternPokestopId(request.FortId))
 		pokemon.SetLat(request.GymLatDegrees)
 		pokemon.SetLon(request.GymLngDegrees)
 		pokemon.SetExpireTimestamp(null.IntFrom(time.Now().Unix() + lureSpawnLifetimeSeconds))
