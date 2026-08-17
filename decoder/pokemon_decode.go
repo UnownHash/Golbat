@@ -1116,8 +1116,11 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
 	pokemon.SetIsEvent(0)
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
-	// tappable encounter can also be available in seen as normal encounter once tapped
-	if pokemon.isSeenFromTappable() {
+	// A tappable encounter also shows up as a normal encounter once tapped.
+	// Downgrading its seen type to a plain encounter would lose the tappable
+	// attribution, so only a pokemon that was NOT seen from a tappable is
+	// rewritten here.
+	if !pokemon.isSeenFromTappable() {
 		pokemon.SetSeenType(SeenTypeCodeEncounter)
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
@@ -1129,8 +1132,18 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	}
 }
 
+// isSeenFromTappable reports whether the pokemon's seen type is one of the
+// two tappable ones.
+//
+// It used to return the negation of that under this same name, with its only
+// call site reading `if pokemon.isSeenFromTappable() { SetSeenType(Encounter) }`
+// — which is to say, overwriting the tappable seen type exactly when the
+// pokemon was not seen from a tappable. The behavior was right and the name
+// was backwards, so a reader who trusted the name and "fixed" the call site
+// would have destroyed tappable attribution. Both were inverted together; the
+// behavior is unchanged.
 func (pokemon *Pokemon) isSeenFromTappable() bool {
-	return pokemon.SeenType.Code != SeenTypeCodeTappableEncounter && pokemon.SeenType.Code != SeenTypeCodeTappableLureEncounter
+	return pokemon.SeenType.Code == SeenTypeCodeTappableEncounter || pokemon.SeenType.Code == SeenTypeCodeTappableLureEncounter
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
