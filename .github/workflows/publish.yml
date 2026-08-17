@@ -10,6 +10,28 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      # Schema-complete MariaDB for the pokemon round-trip tests
+      # (decoder/pokemon_nullscan_test.go), which otherwise skip whenever
+      # GOLBAT_TEST_DSN is unset. Migrated from sql/ below, the same
+      # source main.go applies at boot.
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: golbat_test
+          MARIADB_USER: golbat
+          MARIADB_PASSWORD: golbat
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      # go-sql-driver DSN form, consumed by the round-trip tests themselves.
+      GOLBAT_TEST_DSN: golbat:golbat@tcp(127.0.0.1:3306)/golbat_test?parseTime=true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -20,6 +42,16 @@ jobs:
           cache: true
       - name: Install dependencies
         run: go get .
+      - name: Apply database migrations
+        # golang-migrate's own DSN form (mysql://...), distinct from the
+        # go-sql-driver form GOLBAT_TEST_DSN uses above. -tags mysql pulls in
+        # the mysql database driver; the CLI's default build only registers
+        # a stub driver.
+        run: |
+          go run -tags mysql github.com/golang-migrate/migrate/v4/cmd/migrate \
+            -path sql \
+            -database "mysql://golbat:golbat@tcp(127.0.0.1:3306)/golbat_test?multiStatements=true" \
+            up
       - name: Test with the Go CLI
         # -tags go_json matches the Dockerfile's production build
         # (CGO_ENABLED=0 go build -tags go_json) — without it this suite
