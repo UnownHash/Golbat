@@ -1124,6 +1124,13 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		} else {
 			dbDebugLog("UPDATE", "Player", player.Name, player.debug.fields())
 		}
+		// Reset here rather than after the write below: the INSERT branch
+		// returns early when the write errors, so a reset placed after it is
+		// skipped on exactly the path where the record stays dirty, and the
+		// accumulated changes are then re-logged on top of the next save's.
+		// They have already been logged at this point, so the accumulator is
+		// spent whether or not the write goes on to succeed.
+		player.debug.reset()
 	}
 
 	if player.IsNewRecord() {
@@ -1253,10 +1260,6 @@ func savePlayerRecord(db db.DbDetails, player *Player) {
 		if err != nil {
 			log.Errorf("Update player error %s", err)
 		}
-	}
-
-	if dbDebugEnabled {
-		player.debug.reset()
 	}
 
 	player.ClearDirty()
