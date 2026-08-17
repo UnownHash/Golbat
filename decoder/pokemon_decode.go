@@ -132,13 +132,15 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 	pokemonDisplay := wildPokemon.Pokemon.PokemonDisplay
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
+	// The display fields are stored narrowed, so the incoming readings are
+	// narrowed too before they are compared — see narrowUint8's doc comment.
 	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
 		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		int64(pokemon.Form.ValueOrZero()) != int64(pokemonDisplay.Form) ||
-		int64(pokemon.Weather.ValueOrZero()) != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		int64(pokemon.Costume.ValueOrZero()) != int64(pokemonDisplay.Costume) ||
-		int64(pokemon.Gender.ValueOrZero()) != int64(pokemonDisplay.Gender) ||
+		int64(pokemon.Form.ValueOrZero()) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64(pokemon.Weather.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Gender)) ||
 		(!pokemon.ExpireTimestampVerified && int64(pokemon.ExpireTimestamp.ValueOrZero()) < time)
 }
 
@@ -148,11 +150,12 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 	pokemonDisplay := wildPokemon.PokemonDisplay
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
+	// Narrowed on both sides, as in wildSignificantUpdate above.
 	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
-		int64(pokemon.Form.ValueOrZero()) != int64(pokemonDisplay.Form) ||
-		int64(pokemon.Weather.ValueOrZero()) != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		int64(pokemon.Costume.ValueOrZero()) != int64(pokemonDisplay.Costume) ||
-		int64(pokemon.Gender.ValueOrZero()) != int64(pokemonDisplay.Gender)
+		int64(pokemon.Form.ValueOrZero()) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64(pokemon.Weather.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(pokemonDisplay.Gender))
 
 	if pokemonChanged {
 		return true
@@ -250,7 +253,11 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 // stay consistent with each other and with Iv. Clamped directly here rather
 // than through Set*Iv methods that don't exist.
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	if int64(pokemon.AtkIv.ValueOrZero()) != a || int64(pokemon.DefIv.ValueOrZero()) != d || int64(pokemon.StaIv.ValueOrZero()) != s ||
+	// Narrowed on both sides (see narrowUint8): the stored IVs hold the
+	// clamped value, so comparing them against the raw a/d/s would rewrite
+	// and re-dirty the record on every encounter once one is out of range.
+	if int64(pokemon.AtkIv.ValueOrZero()) != narrowUint8(a) || int64(pokemon.DefIv.ValueOrZero()) != narrowUint8(d) ||
+		int64(pokemon.StaIv.ValueOrZero()) != narrowUint8(s) ||
 		!pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
 		pokemon.AtkIv = clampUint8(null.IntFrom(a), "atk_iv")
 		pokemon.DefIv = clampUint8(null.IntFrom(d), "def_iv")
@@ -1070,14 +1077,16 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			oldId = pokemon.PokemonId
 			oldForm = pokemon.Form
 		}
-		// Narrowed-vs-raw-proto comparisons: compare against the stored
-		// (already-clamped) value's ValueOrZero() rather than re-clamping the
-		// incoming display.* fields here too — clamping is a counted event,
-		// and re-clamping the same value for this comparison and again when
-		// SetForm/SetCostume/SetGender run below would double-count it.
-		formChanged := !oldForm.Valid || int64(oldForm.ValueOrZero()) != int64(display.Form)
-		costumeChanged := !pokemon.Costume.Valid || int64(pokemon.Costume.ValueOrZero()) != int64(display.Costume)
-		genderChanged := !pokemon.Gender.Valid || int64(pokemon.Gender.ValueOrZero()) != int64(display.Gender)
+		// Narrow the incoming display.* readings the same way the stored
+		// fields were narrowed, so the two sides can actually converge: a
+		// costume of 300 is stored as 255, and comparing 255 against a raw
+		// 300 would report a change on every sighting forever — wiping the
+		// encounter data below each time. narrowUint8/16 saturate without
+		// counting, so SetForm/SetCostume/SetGender below stay the only
+		// place golbat_field_clamped_total is incremented.
+		formChanged := !oldForm.Valid || int64(oldForm.ValueOrZero()) != narrowUint16(int64(display.Form))
+		costumeChanged := !pokemon.Costume.Valid || int64(pokemon.Costume.ValueOrZero()) != narrowUint8(int64(display.Costume))
+		genderChanged := !pokemon.Gender.Valid || int64(pokemon.Gender.ValueOrZero()) != narrowUint8(int64(display.Gender))
 		if oldId != pokemonId || formChanged ||
 			costumeChanged ||
 			genderChanged ||
@@ -1118,6 +1127,11 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
+	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
+	// before deriving isBoosted from it (see narrowUint8). Out of range, the
+	// raw reading and the value that actually gets stored can classify
+	// differently, and the two would then disagree on every sighting.
+	weather = narrowUint8(weather)
 	var isBoosted bool
 	if !pokemon.IsDitto {
 		isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
@@ -1173,7 +1187,10 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 			}
 		}
 		pokemon.SetLevel(null.IntFrom(newLevel))
-		if newLevel != oldLevel || pokemon.AtkIv.Valid &&
+		// oldLevel was read from the narrowed field, so narrow newLevel too
+		// (see narrowUint8) — otherwise a level pushed out of range by the
+		// boost adjustment would clear CP and PVP on every sighting.
+		if narrowUint8(newLevel) != oldLevel || pokemon.AtkIv.Valid &&
 			(int64(pokemon.AtkIv.ValueOrZero()) != oldAtk || int64(pokemon.DefIv.ValueOrZero()) != oldDef || int64(pokemon.StaIv.ValueOrZero()) != oldSta) {
 			pokemon.SetCp(null.NewInt(0, false))
 			pokemon.SetPvp(null.NewString("", false))

@@ -177,6 +177,10 @@ func (pokemon *Pokemon) Unlock() {
 // keeps the value at the boundary and counts the event; truncating would
 // silently produce a plausible-looking wrong number, which is worse.
 //
+// Comparisons against an already-stored value must not come through here:
+// use the non-counting narrowUint8/16/32 instead, and see their doc comment
+// for why the two exist separately.
+//
 // Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
 // which rejects out-of-range values outright. That is deliberate: a bad value
 // from our own database is a bug worth failing on, a bad value from a game
@@ -185,14 +189,9 @@ func clampUint8(v null.Int, field string) null.Value[uint8] {
 	if !v.Valid {
 		return null.Value[uint8]{}
 	}
-	i := v.Int64
-	switch {
-	case i < 0:
+	i := narrowUint8(v.Int64)
+	if i != v.Int64 {
 		getStatsCollector().IncFieldClamped(field)
-		i = 0
-	case i > math.MaxUint8:
-		getStatsCollector().IncFieldClamped(field)
-		i = math.MaxUint8
 	}
 	return null.ValueFrom(uint8(i))
 }
@@ -201,14 +200,9 @@ func clampUint16(v null.Int, field string) null.Value[uint16] {
 	if !v.Valid {
 		return null.Value[uint16]{}
 	}
-	i := v.Int64
-	switch {
-	case i < 0:
+	i := narrowUint16(v.Int64)
+	if i != v.Int64 {
 		getStatsCollector().IncFieldClamped(field)
-		i = 0
-	case i > math.MaxUint16:
-		getStatsCollector().IncFieldClamped(field)
-		i = math.MaxUint16
 	}
 	return null.ValueFrom(uint16(i))
 }
@@ -217,16 +211,52 @@ func clampUint32(v null.Int, field string) null.Value[uint32] {
 	if !v.Valid {
 		return null.Value[uint32]{}
 	}
-	i := v.Int64
-	switch {
-	case i < 0:
+	i := narrowUint32(v.Int64)
+	if i != v.Int64 {
 		getStatsCollector().IncFieldClamped(field)
-		i = 0
-	case i > math.MaxUint32:
-		getStatsCollector().IncFieldClamped(field)
-		i = math.MaxUint32
 	}
 	return null.ValueFrom(uint32(i))
+}
+
+// narrowUint8, narrowUint16 and narrowUint32 saturate an int64 into the
+// range of a tinyint / smallint / int unsigned column and count nothing.
+// They are the comparison-side twins of clampUint8/16/32, which perform the
+// identical saturation on the write side and do count it.
+//
+// The split exists because storing a value and comparing against a stored
+// value are different events. Storage narrows: a costume of 300 lands in
+// the tinyint as 255. Comparing that stored 255 against the raw proto's 300
+// is then unequal forever — the two sides can never converge — and the
+// branches these comparisons guard ("has this pokemon's display changed?")
+// wipe the encounter's IVs, CP and PVP data on every single sighting.
+// Narrowing the raw side first makes both sides 255, so the comparison
+// settles exactly as it did when these fields still stored a raw int64.
+//
+// So: narrow wherever a stored field meets a value that has not been
+// through a setter yet, clamp where the value is actually stored. Do not
+// collapse the two back into one helper. Routing comparisons through the
+// counting clamp would inflate golbat_field_clamped_total to one clamp per
+// sighting instead of one per store (which is why they were written that
+// way originally); routing stores through the non-counting narrow would
+// silence the metric altogether.
+func narrowUint8(v int64) int64 { return saturate(v, math.MaxUint8) }
+
+func narrowUint16(v int64) int64 { return saturate(v, math.MaxUint16) }
+
+func narrowUint32(v int64) int64 { return saturate(v, math.MaxUint32) }
+
+// saturate clamps v into [0, limit]: the shared body of narrowUint8/16/32
+// and, through them, of clampUint8/16/32 — one definition of where each
+// column's range ends.
+func saturate(v, limit int64) int64 {
+	switch {
+	case v < 0:
+		return 0
+	case v > limit:
+		return limit
+	default:
+		return v
+	}
 }
 
 // clampFloat32 narrows a null.Float. Range is not checked: the values are
