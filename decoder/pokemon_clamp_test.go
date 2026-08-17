@@ -369,9 +369,6 @@ func TestNarrowSaturatesWithoutCounting(t *testing.T) {
 		{"narrowUint16 under", narrowUint16(-1), 0},
 		{"narrowUint16 over", narrowUint16(70000), math.MaxUint16},
 		{"narrowUint16 in range", narrowUint16(3357), 3357},
-		{"narrowUint32 under", narrowUint32(-1), 0},
-		{"narrowUint32 over", narrowUint32(math.MaxUint32 + 100), math.MaxUint32},
-		{"narrowUint32 in range", narrowUint32(1700000000), 1700000000},
 	}
 	for _, c := range cases {
 		if c.got != c.want {

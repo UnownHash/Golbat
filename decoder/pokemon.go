@@ -171,17 +171,19 @@ func (pokemon *Pokemon) Unlock() {
 }
 
 // clampUint narrows a null.Int for storage in a tinyint/smallint/int
-// unsigned-backed field, saturating into [0, limit] over the shared
-// saturate. clampUint8/16/32 and clampIv below are its only callers — thin
-// instantiations that fix T and limit together, so every caller still names
-// what it is storing at the call site instead of spelling out a type
-// parameter.
+// unsigned-backed field, saturating into [0, T's max] over the shared
+// saturate. The ceiling is T's own (via ^T(0), the standard idiom for "the
+// largest value this unsigned type can hold") rather than a parameter,
+// because clampUint8/16/32 below are its only callers and all three want
+// exactly what T already means — nothing narrower is known for those
+// fields.
 //
-// The limit is the *value's* ceiling, which is usually but not always the
-// column's. clampUint8/16/32 take the column's, because for those fields
-// nothing narrower is known. clampIv takes the game's per-stat IV ceiling
-// of 15, four bits below the tinyint it lands in — see its doc comment for
-// why a legal-byte-but-illegal-IV value is not worth preserving.
+// clampIv is the one caller that wants a *tighter* ceiling than its own
+// storage type: the game's per-stat IV ceiling of 15, four bits below the
+// tinyint it lands in — see its doc comment for why a
+// legal-byte-but-illegal-IV value is not worth preserving. Because that
+// ceiling cannot be derived from T, it goes through clampUintCeiling
+// instead, the explicit-limit twin below.
 //
 // Values arrive from decoded game protos and are bounded in practice, so
 // out-of-range means the protocol changed rather than a normal case. Clamping
@@ -189,7 +191,7 @@ func (pokemon *Pokemon) Unlock() {
 // silently produce a plausible-looking wrong number, which is worse.
 //
 // A setter's comparison against an already-stored value must not come
-// through here: use the non-counting narrowUint8/16/32 instead, and see
+// through here: use the non-counting narrowUint8/16 instead, and see
 // their doc comment for why the two exist separately. calculateIv is the
 // documented exception — it is not a setter, so nothing else clamps those
 // three values, and its comparison reads the clamped values it is about to
@@ -226,7 +228,14 @@ func (pokemon *Pokemon) Unlock() {
 // which rejects out-of-range values outright. That is deliberate: a bad value
 // from our own database is a bug worth failing on, a bad value from a game
 // server is a fact worth recording.
-func clampUint[T ~uint8 | ~uint16 | ~uint32](v null.Int, field string, limit int64) null.Value[T] {
+func clampUint[T ~uint8 | ~uint16 | ~uint32](v null.Int, field string) null.Value[T] {
+	return clampUintCeiling[T](v, field, int64(^T(0)))
+}
+
+// clampUintCeiling is clampUint with the ceiling passed in rather than
+// derived from T, for the one caller — clampIv — whose value ceiling is
+// narrower than its storage type's.
+func clampUintCeiling[T ~uint8 | ~uint16 | ~uint32](v null.Int, field string, limit int64) null.Value[T] {
 	if !v.Valid {
 		return null.Value[T]{}
 	}
@@ -238,15 +247,15 @@ func clampUint[T ~uint8 | ~uint16 | ~uint32](v null.Int, field string, limit int
 }
 
 func clampUint8(v null.Int, field string) null.Value[uint8] {
-	return clampUint[uint8](v, field, math.MaxUint8)
+	return clampUint[uint8](v, field)
 }
 
 func clampUint16(v null.Int, field string) null.Value[uint16] {
-	return clampUint[uint16](v, field, math.MaxUint16)
+	return clampUint[uint16](v, field)
 }
 
 func clampUint32(v null.Int, field string) null.Value[uint32] {
-	return clampUint[uint32](v, field, math.MaxUint32)
+	return clampUint[uint32](v, field)
 }
 
 // maxIvPerStat is the game's ceiling for a single IV. It is not the
@@ -284,13 +293,16 @@ const maxIvPerStat = 15
 // reading above 15 is garbage rather than data. Clamping it counts the
 // event, which is the signal that day would arrive on.
 func clampIv(v null.Int, field string) null.Value[uint8] {
-	return clampUint[uint8](v, field, maxIvPerStat)
+	return clampUintCeiling[uint8](v, field, maxIvPerStat)
 }
 
-// narrowUint8, narrowUint16 and narrowUint32 saturate an int64 into the
-// range of a tinyint / smallint / int unsigned column and count nothing.
-// They are the comparison-side twins of clampUint8/16/32, which perform the
-// identical saturation on the write side and do count it.
+// narrowUint8 and narrowUint16 saturate an int64 into the range of a
+// tinyint / smallint column and count nothing. They are the comparison-side
+// twins of clampUint8/16/32, which perform the identical saturation on the
+// write side and do count it. There is no narrowUint32: nothing compares a
+// stored uint32 column (expire_timestamp, updated) against a not-yet-set
+// raw value the way Form/Weather/Costume/Gender are compared below, so it
+// would have no caller.
 //
 // The split exists because storing a value and comparing against a stored
 // value are different events. Storage narrows: a costume of 300 lands in
@@ -320,11 +332,10 @@ func narrowUint8(v int64) int64 { return saturate(v, math.MaxUint8) }
 
 func narrowUint16(v int64) int64 { return saturate(v, math.MaxUint16) }
 
-func narrowUint32(v int64) int64 { return saturate(v, math.MaxUint32) }
-
-// saturate clamps v into [0, limit]: the shared body of narrowUint8/16/32
-// and, through clampUint, of clampUint8/16/32 and clampIv — one definition
-// of what saturating means, with each caller supplying the ceiling.
+// saturate clamps v into [0, limit]: the shared body of narrowUint8/16 and,
+// through clampUintCeiling (clampUint's explicit-limit twin), of
+// clampUint8/16/32 and clampIv — one definition of what saturating means,
+// with each caller supplying the ceiling.
 func saturate(v, limit int64) int64 {
 	switch {
 	case v < 0:
