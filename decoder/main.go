@@ -63,18 +63,32 @@ var webhooksSender webhooksSenderInterface
 
 // statsCollector is read on hot decode/save paths and swapped by a handful
 // of tests (see setStatsCollectorForTest in init_test.go); atomic.Pointer
-// keeps concurrent Store/Load race-free without a mutex. Seeded with a noop
-// collector below in init(), before any other package code can run — see
-// getStatsCollector's doc comment for why that matters.
-var statsCollector atomic.Pointer[stats_collector.StatsCollector]
+// keeps concurrent Store/Load race-free without a mutex.
+//
+// It is a *atomic.Pointer rather than a plain one so the noop seed can live
+// in this variable's own initializer. That is what makes the seeding actually
+// ordered: Go initializes package-level variables in dependency order, and
+// dependency analysis follows function calls, so any other variable in this
+// package whose initializer reaches getStatsCollector is ordered after this
+// one. Seeding from init() would not give that — package-level variable
+// initializers all run before init() does — which is what the comment here
+// used to claim it did.
+var statsCollector = newSeededStatsCollector()
 
-// getStatsCollector returns the current StatsCollector. Never nil: init()
-// below seeds statsCollector with a noop collector at package load, and
-// SetStatsCollector later swaps in the real one once main() has read
-// config. Before that seeding was added, callers on paths that could run
-// before SetStatsCollector (e.g. the eviction-drop hook InitDataCache wires
-// up, which main() calls well before SetStatsCollector — see main.go) had
-// to nil-check or risk a nil-interface panic; StartWorkerBacklogReporter's
+func newSeededStatsCollector() *atomic.Pointer[stats_collector.StatsCollector] {
+	var p atomic.Pointer[stats_collector.StatsCollector]
+	noop := stats_collector.NewNoopStatsCollector()
+	p.Store(&noop)
+	return &p
+}
+
+// getStatsCollector returns the current StatsCollector. Never nil:
+// statsCollector is seeded with a noop collector in its own initializer at
+// package load, and SetStatsCollector later swaps in the real one once main()
+// has read config. Before that seeding was added, callers on paths that could
+// run before SetStatsCollector (e.g. the eviction-drop hook InitDataCache
+// wires up, which main() calls well before SetStatsCollector — see main.go)
+// had to nil-check or risk a nil-interface panic; StartWorkerBacklogReporter's
 // ticker did, DroppedEvictionsHook did not. Seeding closes that window for
 // both, so nothing here needs to treat nil as a meaningful state anymore.
 func getStatsCollector() stats_collector.StatsCollector {
@@ -100,11 +114,8 @@ var ProactiveIVSwitchSem chan bool
 var ohbem *gohbem.Ohbem
 
 func init() {
-	// Seed statsCollector with a noop before anything else in this package
-	// (or an importer) can run, so getStatsCollector() is never nil — see
-	// its doc comment for the panic window this closes.
-	noop := stats_collector.NewNoopStatsCollector()
-	statsCollector.Store(&noop)
+	// The statsCollector noop seed is NOT here — it is in that variable's own
+	// initializer, which runs strictly earlier. See its doc comment.
 
 	// initLiveStats is config-independent, so package-init timing is fine.
 	// Entity caches are NOT — they must be built after config load via
@@ -351,13 +362,41 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 	webhooksSender = whSender
 }
 
+// SetStatsCollector swaps in the real collector once main() has read config.
+//
+// A nil collector is refused here rather than stored. Storing one would put a
+// nil interface behind an atomic.Pointer that every caller dereferences
+// without checking (see getStatsCollector), so the failure would surface as a
+// nil-interface panic on whichever decode goroutine happened to record a stat
+// first — arbitrarily far from the mistake. Panicking in the setter puts it
+// at the call site, at boot.
 func SetStatsCollector(collector stats_collector.StatsCollector) {
+	if collector == nil {
+		log.Panic("decoder.SetStatsCollector: nil collector. Pass stats_collector.NewNoopStatsCollector() to disable stats")
+	}
 	statsCollector.Store(&collector)
+	statsCollectorSet.Store(true)
 }
 
-// InitWriteBehindQueue initializes the typed write-behind queues
-// Should be called after SetStatsCollector
+// statsCollectorSet records whether SetStatsCollector has run, purely so
+// InitWriteBehindQueue below can enforce its ordering requirement.
+var statsCollectorSet atomic.Bool
+
+// InitWriteBehindQueue initializes the typed write-behind queues. It must be
+// called after SetStatsCollector, and now says so rather than only documenting
+// it.
+//
+// The requirement is real because the collector is passed by value: the queues
+// keep whatever InitTypedQueues was handed, so calling this first hands them
+// the noop seed permanently and every write-behind metric silently reads zero
+// for the life of the process. That used to fail loudly instead — the
+// pre-seeding collector was nil, so the first batch flush panicked — and
+// trading a panic for silence is a bad trade for a boot-ordering mistake that
+// is always a programming error. Check it where the ordering is required.
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
+	if !statsCollectorSet.Load() {
+		log.Panic("decoder.InitWriteBehindQueue called before decoder.SetStatsCollector: the write-behind queues would keep the noop collector for the life of the process")
+	}
 	// Use the new typed queue system
 	InitTypedQueues(ctx, dbDetails, getStatsCollector())
 }
