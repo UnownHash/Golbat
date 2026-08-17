@@ -61,6 +61,7 @@ func (col *noopCollector) IncStatsEventsDropped()                      {}
 func (col *noopCollector) AddCacheEvictionsDropped(string, float64)    {}
 func (col *noopCollector) SetInternTableSize(string, float64)          {}
 func (col *noopCollector) IncInternLookupFailure(string)               {}
+func (col *noopCollector) IncInternRejected(string)                    {}
 func (col *noopCollector) ObserveDbQuery(string, float64)              {}
 func (col *noopCollector) ObserveApiScan(string, float64)              {}
 func (col *noopCollector) SetWriteBehindQueueDepth(string, float64)    {}

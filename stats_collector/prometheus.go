@@ -380,6 +380,14 @@ var (
 		},
 		[]string{"table"},
 	)
+	internRejected = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "intern_rejected_total",
+			Help:      "Strings refused at intern time for exceeding the width of the column they are stored in",
+		},
+		[]string{"table"},
+	)
 	dbQueryDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: ns,
@@ -784,6 +792,10 @@ func (col *promCollector) IncInternLookupFailure(table string) {
 	internLookupFailures.WithLabelValues(table).Inc()
 }
 
+func (col *promCollector) IncInternRejected(table string) {
+	internRejected.WithLabelValues(table).Inc()
+}
+
 func (col *promCollector) SetRawProcessingWaiting(waiting float64) {
 	rawProcessingWaitingGauge.Set(waiting)
 }
@@ -854,7 +866,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
-	prometheus.MustRegister(internTableSize, internLookupFailures)
+	prometheus.MustRegister(internTableSize, internLookupFailures, internRejected)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

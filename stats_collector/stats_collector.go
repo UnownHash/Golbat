@@ -73,6 +73,11 @@ type StatsCollector interface {
 	// that never issued it, which is always a bug.
 	SetInternTableSize(table string, size float64)
 	IncInternLookupFailure(table string)
+	// IncInternRejected counts a string dropped at intern time for being
+	// longer than the column it would be stored in. Non-zero means either a
+	// protocol change or a caller sending values the database would itself
+	// have rejected.
+	IncInternRejected(table string)
 
 	// Write-behind queue metrics
 	SetWriteBehindQueueDepth(entityType string, depth float64)

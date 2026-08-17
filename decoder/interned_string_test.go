@@ -3,6 +3,7 @@ package decoder
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -17,6 +18,7 @@ type internFailureCollector struct {
 	stats_collector.StatsCollector
 	mu       sync.Mutex
 	failures map[string]int
+	rejected map[string]int
 }
 
 func withInternFailureCollector(t *testing.T) *internFailureCollector {
@@ -24,6 +26,7 @@ func withInternFailureCollector(t *testing.T) *internFailureCollector {
 	fake := &internFailureCollector{
 		StatsCollector: stats_collector.NewNoopStatsCollector(),
 		failures:       make(map[string]int),
+		rejected:       make(map[string]int),
 	}
 	setStatsCollectorForTest(t, fake)
 	return fake
@@ -35,10 +38,22 @@ func (c *internFailureCollector) IncInternLookupFailure(table string) {
 	c.failures[table]++
 }
 
+func (c *internFailureCollector) IncInternRejected(table string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.rejected[table]++
+}
+
 func (c *internFailureCollector) count(table string) int {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.failures[table]
+}
+
+func (c *internFailureCollector) rejectedCount(table string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rejected[table]
 }
 
 // TestInternedStringMatchesNullString is the contract this change has to
@@ -222,6 +237,74 @@ func TestInternedStringUnresolvableHandle(t *testing.T) {
 	}
 }
 
+// TestInternRejectsOverlongStrings covers the guard that makes append-only
+// defensible against a caller rather than only against Niantic: username
+// arrives unvalidated from the request body and pokestop_id straight off
+// proto FortId, and nothing evicts, so a string too long for its column must
+// never be retained.
+func TestInternRejectsOverlongStrings(t *testing.T) {
+	collector := withInternFailureCollector(t)
+	table := newInternTable("test_overlong", 8)
+
+	atLimit := "12345678"
+	if h := table.intern(atLimit); h == 0 {
+		t.Errorf("intern(%q) rejected a string exactly at the limit", atLimit)
+	}
+
+	overLimit := "123456789"
+	before := table.size()
+	if h := table.intern(overLimit); h != 0 {
+		t.Errorf("intern(%q) = %d, want the null handle: 9 characters must not fit an 8-character column", overLimit, h)
+	}
+	if got := table.size(); got != before {
+		t.Errorf("table grew from %d to %d; a rejected string must not be retained", before, got)
+	}
+	if n := collector.rejectedCount("test_overlong"); n != 1 {
+		t.Errorf("rejected counter = %d, want 1; a rejection must be visible in metrics", n)
+	}
+
+	// Rejected, not truncated. A truncated fort id would be a
+	// plausible-looking key that later code hands to a pokestop lookup, and a
+	// truncated username silently attributes one account's scans to another.
+	if h, ok := table.handles.Load(overLimit[:8]); ok && h != 1 {
+		t.Errorf("an over-length string was stored under a truncated key (handle %d)", h)
+	}
+
+	// A string far past the byte bound is refused by the O(1) check that runs
+	// before the map probe, so it is never hashed and never retained.
+	huge := strings.Repeat("x", 1<<20)
+	if h := table.intern(huge); h != 0 {
+		t.Errorf("intern of a 1 MiB string = %d, want the null handle", h)
+	}
+	if got := table.size(); got != before {
+		t.Errorf("table grew to %d entries after a 1 MiB string; nothing over-length may be retained", got)
+	}
+
+	// The column widths are utf8mb4 characters, not bytes, so a short string
+	// of wide characters must still be accepted.
+	wide := "☃☃☃☃☃☃☃☃" // 8 characters, 24 bytes
+	if h := table.intern(wide); h == 0 {
+		t.Errorf("intern(%q) rejected 8 characters because they are 24 bytes; the column counts characters", wide)
+	}
+	if h := table.intern("☃☃☃☃☃☃☃☃☃"); h != 0 {
+		t.Errorf("intern of 9 wide characters = %d, want the null handle", h)
+	}
+}
+
+// TestInternProductionTablesMatchColumnWidths ties the caps to the schema, so
+// a migration that widens a column and forgets this file fails here rather
+// than silently dropping values the column would now accept.
+func TestInternProductionTablesMatchColumnWidths(t *testing.T) {
+	// pokemon.pokestop_id varchar(35), sql/1_rdmdb_tables.up.sql
+	if got := pokestopIdInternTable.maxChars; got != 35 {
+		t.Errorf("pokestop_id intern cap = %d, want 35", got)
+	}
+	// pokemon.username varchar(64), sql/36_pokemon_username.up.sql
+	if got := usernameInternTable.maxChars; got != 64 {
+		t.Errorf("username intern cap = %d, want 64", got)
+	}
+}
+
 // TestInternTableConcurrent runs the table the way production does: many
 // goroutines interning overlapping strings at once, including a heavy
 // overlap on the same few strings, while others resolve handles. It is worth
@@ -229,7 +312,7 @@ func TestInternedStringUnresolvableHandle(t *testing.T) {
 // a handle must never become reachable before the slice that can resolve it,
 // or a lookup would report a live handle as unresolvable.
 func TestInternTableConcurrent(t *testing.T) {
-	table := newInternTable("test_concurrent")
+	table := newInternTable("test_concurrent", 64)
 
 	const (
 		goroutines = 16
@@ -292,7 +375,7 @@ func TestInternTableConcurrent(t *testing.T) {
 // TestInternTableNullSlotReserved pins that handle 0 stays reserved, which is
 // what lets the Go zero value of a handle field mean NULL.
 func TestInternTableNullSlotReserved(t *testing.T) {
-	table := newInternTable("test_null_slot")
+	table := newInternTable("test_null_slot", 64)
 	if got := table.size(); got != 0 {
 		t.Errorf("fresh table size() = %d, want 0", got)
 	}
