@@ -1,6 +1,8 @@
 name: publish
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 env:
   GO_VERSION: '1.26.x'
@@ -22,6 +24,12 @@ jobs:
         run: go test -v ./...
 
   build:
+    # Registry push only follows a real push (branch or tag), never a PR —
+    # including same-repo PRs, to avoid publishing an image per PR sync.
+    # A fork PR wouldn't have write access to secrets.GITHUB_TOKEN's
+    # elevated permissions anyway; this keeps the behavior explicit rather
+    # than relying on that.
+    if: github.event_name == 'push'
     needs: [test]
     permissions:
       contents: read
