@@ -15,8 +15,8 @@ import (
 // orders any such variable after this one.
 //
 // newSeededStatsCollector is called directly rather than reading the package
-// variable, which init_test.go has already overwritten by the time any test
-// runs.
+// variable so this pins the initializer itself, not whatever the package
+// variable happens to hold by the time a given test runs.
 func TestStatsCollectorSeedIsInTheVariableInitializer(t *testing.T) {
 	p := newSeededStatsCollector()
 	if p == nil {
