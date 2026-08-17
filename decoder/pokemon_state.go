@@ -365,7 +365,10 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			"display_pokemon_id = :display_pokemon_id, "+
 			"display_pokemon_form = :display_pokemon_form, "+
 			"is_ditto = :is_ditto, "+
-			"seen_type = :seen_type, "+
+			// COALESCE for the same reason as the batch upsert's seen_type
+			// (writebehind_batch.go): a NULL means "this binary does not
+			// recognise the stored value", not "clear it".
+			"seen_type = COALESCE(:seen_type, seen_type), "+
 			"shiny = :shiny, "+
 			"username = :username, "+
 			"%s"+

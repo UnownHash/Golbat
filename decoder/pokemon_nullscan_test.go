@@ -229,3 +229,68 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenTypeCodeLureEncounter.String())
 	}
 }
+
+// TestUnknownSeenTypeIsNotOverwritten is the write half of the
+// unrecognised-seen_type fix (the read half is
+// TestScanUnknownSeenTypeIsInertInTheDecodeSwitches). The chosen policy is
+// refuse-to-overwrite rather than round-trip: this binary never writes a
+// string outside the eight it knows, and the column keeps whatever the
+// newer binary put there.
+//
+// That promise lives half in Go — Scan leaves Valid false, so Value binds
+// NULL — and half in SQL, in the upsert's COALESCE. Either half alone
+// silently erases the newer binary's value, so this exercises both against
+// a real database: write a row with a real seen_type, then write it again
+// the way a record loaded on this binary would (seen_type NULL, other
+// columns updated), and require the enum value to survive.
+func TestUnknownSeenTypeIsNotOverwritten(t *testing.T) {
+	db, ctx := connectNullscanTestDB(t)
+	const testID = 999999999999999997
+
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(ctx, "DELETE FROM pokemon WHERE id = ?", testID); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
+	})
+
+	row := PokemonData{
+		Id:                 testID,
+		PokemonId:          149,
+		Lat:                51.5,
+		Lon:                -0.1,
+		FirstSeenTimestamp: 1000,
+		Changed:            2000,
+		SeenType:           SeenTypeFrom(SeenTypeCodeTappableLureEncounter),
+	}
+	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{row}); err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	// What a record whose seen_type this binary didn't recognise looks like
+	// on the way back out: NullSeenType's zero value, exactly what Scan
+	// leaves behind (Code = SeenTypeCodeUnknown carries the fact in memory,
+	// Valid = false keeps it out of the statement).
+	var degraded NullSeenType
+	if err := degraded.Scan("teleported"); err != nil {
+		t.Fatalf("Scan of unknown seen type: %v", err)
+	}
+	row.SeenType = degraded
+	row.PokemonId = 150 // proves the row really was updated
+	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{row}); err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+
+	var got Pokemon
+	if err := db.GetContext(ctx, &got,
+		"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?", testID); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+
+	if got.PokemonId != 150 {
+		t.Fatalf("PokemonId = %d, want 150 — the second upsert did not update the row, so the seen_type check below proves nothing", got.PokemonId)
+	}
+	if got.SeenType.ValueOrZero() != SeenTypeCodeTappableLureEncounter.String() {
+		t.Errorf("seen_type = %q after a write from a binary that does not recognise it, want %q left untouched",
+			got.SeenType.ValueOrZero(), SeenTypeCodeTappableLureEncounter.String())
+	}
+}

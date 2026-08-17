@@ -15,6 +15,7 @@ import (
 	"golbat/db"
 	"golbat/grpc"
 	"golbat/pogo"
+	"golbat/util"
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
@@ -356,6 +357,29 @@ const (
 	SeenTypeCodeTappableLureEncounter                     // Pokemon has been encountered from a lured tappable
 )
 
+// SeenTypeCodeUnknown is the code for a seen_type this binary does not
+// recognise: a value a newer binary wrote after a migration widened the
+// enum, read back by this one during a rollback or from a lagging replica.
+// Scan degrades to it (see Scan's doc comment for why it must not error).
+//
+// It is deliberately not Unset. Unset means "never set", and two decode
+// switches act on that: updateFromWild's `case Unset, Cell, NearbyStop`
+// rewrites the record to wild, and updateFromNearby's `case Unset, Cell`
+// replaces precise coordinates with a pokestop's or a cell centre's — then
+// the save persists the downgrade over the value the newer binary wrote. An
+// unrecognised value must instead behave the way the opaque null.String it
+// replaced behaved: equal to none of the eight real codes, so every switch
+// falls through to default and the record round-trips unharmed.
+//
+// 255 rather than the next iota so a future enum member (there have been
+// three widenings already: migrations 3, 43, 45) can be appended above
+// without colliding with it, and so no seenTypeStrings index can ever reach
+// it. String() therefore reports "" for it, and it never reaches the column:
+// Scan leaves Valid false so Value returns NULL, and both pokemon write
+// paths spell seen_type as COALESCE(<incoming>, seen_type) so that NULL
+// leaves the stored value alone instead of erasing it.
+const SeenTypeCodeUnknown SeenTypeCode = 255
+
 // seenTypeStrings maps codes to the exact strings in the enum column. The
 // order must match the constants above, including the leading "" at index 0
 // for SeenTypeCodeUnset — it is never a value the enum column holds, and
@@ -446,8 +470,15 @@ func (n NullSeenType) Ptr() *string {
 func (n NullSeenType) IsZero() bool { return !n.Valid }
 
 // Scan degrades on an unrecognised enum value instead of failing: it sets
-// Valid = false (as if the column were NULL) and logs a warning, rather
-// than returning an error.
+// Code = SeenTypeCodeUnknown and Valid = false, and logs a throttled
+// warning, rather than returning an error.
+//
+// Both halves of that matter. Valid = false keeps every existing null check
+// working and keeps the value out of the column (Value returns NULL, and
+// the write paths COALESCE a NULL into "leave the stored value alone").
+// Code = Unknown rather than Unset is what stops the degrade from being
+// destructive: Unset means "never set" and two decode switches rewrite the
+// record on it — see SeenTypeCodeUnknown's doc comment.
 //
 // This is deliberately asymmetric with Value below. The seen_type enum has
 // been widened three times (migrations 3, 43, 45); a newer binary can write
@@ -460,8 +491,9 @@ func (n NullSeenType) IsZero() bool { return !n.Valid }
 // newRecord — every subsequent sighting retries and fails the same load, so
 // that pokemon silently stops being processed for as long as the
 // deployment is mixed. Degrading avoids that: the row loads with seen_type
-// unset, and a later sighting that arrives once the deployment is no
-// longer mixed fills it in normally.
+// unknown, and a later sighting that carries a seen type in its own right
+// (an encounter, a lure, a wild sighting once the deployment is no longer
+// mixed) fills it in normally.
 //
 // Value stays strict on purpose, not by oversight: writing an out-of-enum
 // string to the seen_type ENUM column is silently stored as "" by MariaDB,
@@ -485,16 +517,34 @@ func (n *NullSeenType) Scan(value any) error {
 	}
 	parsed, err := ParseSeenType(s)
 	if err != nil {
-		log.Warnf("NullSeenType.Scan: %s; treating as NULL", err)
-		n.Code, n.Valid = 0, false
+		n.Code, n.Valid = SeenTypeCodeUnknown, false
+		seenTypeScanWarns.Report(func(rows int64) {
+			log.Warnf("[POKEMON] NullSeenType.Scan: %s; %d row(s) in the last second held a seen_type this binary does not recognise. "+
+				"Their records are left with seen_type unknown and the stored value is not overwritten", err, rows)
+		})
 		return nil
 	}
 	*n = parsed
 	return nil
 }
 
-// Value rejects any code with no string form — that includes both
-// SeenTypeCodeUnset and any code past the end of the table. Writing "" to
+// seenTypeScanWarns aggregates Scan's unrecognised-value warning to one
+// line a second. Scan runs once per row loaded — millions during preload,
+// and under the entity lock at runtime — so a warning per row would be log
+// I/O proportional to the pokemon table for a condition that is one fact
+// repeated, not many. util.DropReporter is the codebase's aggregator for
+// exactly this (raw_limiter.go, fort_tracker.go, stats.go).
+//
+// A pointer, unlike the value-typed reporters elsewhere, only so a test can
+// swap in a fresh one and not have its own warning suppressed by a warning
+// an earlier test emitted in the same second.
+var seenTypeScanWarns = &util.DropReporter{}
+
+// Value rejects any code with no string form — that includes
+// SeenTypeCodeUnset and any code past the end of the table. It is never
+// reached for SeenTypeCodeUnknown, which Scan pairs with Valid = false, so
+// the unrecognised case returns NULL above and the write paths' COALESCE
+// turns that into "leave the stored value alone". Writing "" to
 // the seen_type ENUM column is accepted silently by MariaDB, so this must
 // fail loudly instead of writing it. Kept strict on purpose even though
 // Scan (above) degrades instead of erroring on the mirror-image read

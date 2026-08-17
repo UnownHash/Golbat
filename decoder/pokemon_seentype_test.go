@@ -2,10 +2,16 @@ package decoder
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 	"unsafe"
+
+	"golbat/db"
+	"golbat/pogo"
+	"golbat/util"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -115,6 +121,8 @@ func TestNullSeenTypeScanUnknownValueDegrades(t *testing.T) {
 
 	// Start from a real value so a successful degrade is visibly resetting
 	// it, not just leaving an already-zero value alone.
+	resetSeenTypeScanWarnThrottle(t)
+
 	n := SeenTypeFrom(SeenTypeCodeWild)
 	if err := n.Scan("teleported"); err != nil {
 		t.Fatalf("Scan of unknown seen type returned an error, want nil (degrade-and-warn): %v", err)
@@ -122,8 +130,13 @@ func TestNullSeenTypeScanUnknownValueDegrades(t *testing.T) {
 	if n.Valid {
 		t.Error("Scan of unknown seen type left Valid = true, want false")
 	}
-	if n.Code != SeenTypeCodeUnset {
-		t.Errorf("Scan of unknown seen type left Code = %d, want SeenTypeCodeUnset", n.Code)
+	// Not Unset: Unset means "never set", and two decode switches treat that
+	// as licence to rewrite the record (see
+	// TestScanUnknownSeenTypeIsInertInTheDecodeSwitches). Unknown is the
+	// distinct fact — "set to something this binary does not recognise" —
+	// and matches no case anywhere.
+	if n.Code != SeenTypeCodeUnknown {
+		t.Errorf("Scan of unknown seen type left Code = %d, want SeenTypeCodeUnknown (%d)", n.Code, SeenTypeCodeUnknown)
 	}
 	if !strings.Contains(buf.String(), "teleported") {
 		t.Errorf("Scan of unknown seen type did not log a warning naming the value, got: %s", buf.String())
@@ -171,4 +184,133 @@ func TestNullSeenTypeValueOutOfRange(t *testing.T) {
 	if v != nil {
 		t.Errorf("Value() for out-of-range code returned %v, want nil", v)
 	}
+}
+
+// TestScanUnknownSeenTypeIsInertInTheDecodeSwitches is the regression for
+// the degrade landing on SeenTypeCodeUnset. Unset is not an inert value: it
+// means "never set", and two decode switches treat that as licence to fill
+// the record in. Reaching them with a seen_type this binary merely doesn't
+// recognise — the exact mixed-deployment case the degrade exists for —
+// turned a read failure into active damage:
+//
+//   - updateFromWild's `case Unset, Cell, NearbyStop` rewrote the newer
+//     binary's value to "wild" and persisted the downgrade over it.
+//   - updateFromNearby's `case Unset, Cell` set overrideLatLon, replacing
+//     the record's precise coordinates with the pokestop's.
+//
+// Pre-PR main held the unknown value as an opaque string, so every switch
+// fell through to default and the record round-tripped unharmed. Unknown
+// restores that: it equals none of the eight real codes, so it reaches no
+// case in either switch.
+func TestScanUnknownSeenTypeIsInertInTheDecodeSwitches(t *testing.T) {
+	// Scanned, not constructed: the degrade is the thing under test, and a
+	// hand-built SeenTypeFrom(SeenTypeCodeUnknown) would assert nothing
+	// about what a real row load produces. The code itself is checked in
+	// TestNullSeenTypeScanUnknownValueDegrades; the subtests below assert
+	// only on the damage, so they stay meaningful against a build that
+	// degrades to Unset.
+	scanUnknown := func(t *testing.T) NullSeenType {
+		t.Helper()
+		var n NullSeenType
+		if err := n.Scan("teleported"); err != nil {
+			t.Fatalf("Scan of unknown seen type: %v", err)
+		}
+		return n
+	}
+
+	t.Run("updateFromWild does not downgrade to wild", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = 42
+		p.SeenType = scanUnknown(t)
+
+		// SpawnPointId "0" keeps setExpireTimestampFromSpawnpoint off the
+		// spawnpoint cache and the database (it returns early on spawn id 0).
+		wild := &pogo.WildPokemonProto{
+			EncounterId:  42,
+			SpawnPointId: "0",
+			Latitude:     10.5,
+			Longitude:    20.5,
+			Pokemon: &pogo.PokemonProto{
+				PokemonId:      25,
+				PokemonDisplay: &pogo.PokemonDisplayProto{},
+			},
+		}
+		p.updateFromWild(context.Background(), db.DbDetails{}, wild, 99, nil, 1700000000000, "tester")
+
+		if p.SeenType.Code == SeenTypeCodeWild || p.SeenType.Valid {
+			t.Errorf("SeenType after updateFromWild = {Code: %d, Valid: %t}, want the unrecognised value left alone (Code %d, invalid) — the record was downgraded to wild and will be persisted that way over the newer binary's value",
+				p.SeenType.Code, p.SeenType.Valid, SeenTypeCodeUnknown)
+		}
+	})
+
+	t.Run("updateFromNearby keeps precise coordinates", func(t *testing.T) {
+		const fortId = "seentype-unknown-stop"
+		pokestopCache.Set(fortId, &Pokestop{PokestopData: PokestopData{
+			Id:  fortId,
+			Lat: 51.5,
+			Lon: -0.12,
+		}}, time.Minute)
+		t.Cleanup(func() { pokestopCache.Delete(fortId) })
+
+		p := &Pokemon{}
+		p.Id = 43
+		p.SeenType = scanUnknown(t)
+		p.SetLat(10.5)
+		p.SetLon(20.5)
+
+		nearby := &pogo.NearbyPokemonProto{
+			FortId:         fortId,
+			PokedexNumber:  25,
+			PokemonDisplay: &pogo.PokemonDisplayProto{},
+		}
+		p.updateFromNearby(context.Background(), db.DbDetails{}, nearby, 99, nil, 1700000000000, "tester")
+
+		if p.Lat != 10.5 || p.Lon != 20.5 {
+			t.Errorf("coordinates after updateFromNearby = (%v, %v), want (10.5, 20.5) — precise location replaced by the pokestop's",
+				p.Lat, p.Lon)
+		}
+		if p.SeenType.Code == SeenTypeCodeNearbyStop || p.SeenType.Valid {
+			t.Errorf("SeenType after updateFromNearby = {Code: %d, Valid: %t}, want the unrecognised value left alone (Code %d, invalid)",
+				p.SeenType.Code, p.SeenType.Valid, SeenTypeCodeUnknown)
+		}
+		if p.PokestopId.Valid {
+			t.Errorf("PokestopId after updateFromNearby = %q, want unset", p.PokestopId.ValueOrZero())
+		}
+	})
+}
+
+// TestScanUnknownSeenTypeWarnIsThrottled pins the aggregation. Scan runs
+// once per row loaded — millions during preload, and under the entity lock
+// at runtime — so one line per unrecognised row is log I/O proportional to
+// the table. util.DropReporter is the codebase's aggregator for exactly
+// this shape (see raw_limiter.go, fort_tracker.go).
+func TestScanUnknownSeenTypeWarnIsThrottled(t *testing.T) {
+	resetSeenTypeScanWarnThrottle(t)
+
+	var buf bytes.Buffer
+	restore := log.StandardLogger().Out
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(restore) })
+
+	const rows = 500
+	for range rows {
+		var n NullSeenType
+		if err := n.Scan("teleported"); err != nil {
+			t.Fatalf("Scan of unknown seen type: %v", err)
+		}
+	}
+
+	if got := strings.Count(buf.String(), "teleported"); got != 1 {
+		t.Errorf("%d rows with an unrecognised seen_type logged %d warnings, want 1 (throttled to one per second)", rows, got)
+	}
+}
+
+// resetSeenTypeScanWarnThrottle clears the shared throttle so a test's own
+// Scan is guaranteed to log rather than being suppressed by a warning an
+// earlier test emitted in the same second.
+func resetSeenTypeScanWarnThrottle(t *testing.T) {
+	t.Helper()
+	previous := seenTypeScanWarns
+	seenTypeScanWarns = &util.DropReporter{}
+	t.Cleanup(func() { seenTypeScanWarns = previous })
 }
