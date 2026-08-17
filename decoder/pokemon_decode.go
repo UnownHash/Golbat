@@ -183,7 +183,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.SetUsername(InternUsername(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
 }
 
@@ -194,7 +194,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon RawMapPokemonData, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) bool {
 	if pokemon.isNewRecord() {
 		pokemon.SetIsEvent(0)
-		pokemon.SetPokestopId(null.StringFrom(mapPokemon.FortId))
+		pokemon.SetPokestopId(InternPokestopId(mapPokemon.FortId))
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
 		pokemon.SetSeenType(SeenTypeCodeLureWild)
@@ -207,7 +207,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		} else {
 			log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 		}
-		pokemon.SetUsername(null.StringFrom(username))
+		pokemon.SetUsername(InternUsername(username))
 
 		if mapPokemon.Data.ExpirationTimeMs > 0 {
 			pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.Data.ExpirationTimeMs / 1000))
@@ -241,8 +241,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetCellId(null.IntFrom(int64(mapPokemon.Cell)))
 		changed = true
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
+	if !pokemon.Username.Valid() {
+		pokemon.SetUsername(InternUsername(username))
 		changed = true
 	}
 	return changed
@@ -272,7 +272,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokestopId := nearbyPokemon.FortId
 	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.SetUsername(InternUsername(username))
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -291,7 +291,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
 			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
-			pokemon.SetPokestopId(null.StringFrom(pokestopId))
+			pokemon.SetPokestopId(InternPokestopId(pokestopId))
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
 			unlock()
@@ -961,7 +961,7 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.SetUsername(InternUsername(username))
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1080,13 +1080,13 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
 		pokemon.SetSeenType(SeenTypeCodeTappableLureEncounter)
 
-		pokemon.SetPokestopId(null.StringFrom(fortId))
+		pokemon.SetPokestopId(InternPokestopId(fortId))
 		// we don't know any despawn times from lured/fort tappables
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
+	if !pokemon.Username.Valid() {
+		pokemon.SetUsername(InternUsername(username))
 	}
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)

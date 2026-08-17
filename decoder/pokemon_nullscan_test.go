@@ -118,6 +118,10 @@ func TestPokemonNullColumnRoundTrip(t *testing.T) {
 		{"Size", got.Size.Valid},
 		{"IsStrong", got.IsStrong.Valid},
 		{"Shiny", got.Shiny.Valid},
+		// The two interned columns: a NULL must land on the reserved null
+		// handle, not on whatever string happens to sit at index 0.
+		{"PokestopId", got.PokestopId.Valid()},
+		{"Username", got.Username.Valid()},
 	}
 	for _, c := range checks {
 		if c.valid {
@@ -137,6 +141,14 @@ func TestPokemonNullColumnRoundTrip(t *testing.T) {
 // TestPokemonFullRowRoundTrip writes a fully-populated row through the same
 // upsert the write-behind queue uses, then reads it back, proving driver.Valuer
 // binds correctly for every narrowed type.
+// The two interned values used by TestPokemonFullRowRoundTrip. The pokestop
+// id is shaped like a real fort id (32 hex characters and a suffix); the
+// username is shaped like a scanner account.
+const (
+	roundTripPokestopId = "2eb4a5b1e1e94b2ab0b3c8f0d0000000.16"
+	roundTripUsername   = "RoundTripScanner01"
+)
+
 func TestPokemonFullRowRoundTrip(t *testing.T) {
 	db, ctx := connectNullscanTestDB(t)
 	const testID = 999999999999999998
@@ -167,19 +179,25 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		// under either type, so it doesn't exercise that boundary, but it
 		// does prove the chosen type binds and scans correctly end to end
 		// against the real column, which nothing here previously did.
-		SpawnId:  null.ValueFrom(int64(424242)),
-		AtkIv:    null.ValueFrom(uint8(15)),
-		DefIv:    null.ValueFrom(uint8(14)),
-		StaIv:    null.ValueFrom(uint8(13)),
-		Level:    null.ValueFrom(uint8(35)),
-		Cp:       null.ValueFrom(uint16(3500)),
-		Move1:    null.ValueFrom(uint16(216)),
-		Gender:   null.ValueFrom(uint8(1)),
-		Size:     null.ValueFrom(uint8(5)),
-		Shiny:    null.ValueFrom(true),
-		Weight:   null.ValueFrom(float32(3.5)),
-		Iv:       null.ValueFrom(float32(93.33)),
-		SeenType: SeenTypeFrom(SeenTypeCodeLureEncounter),
+		SpawnId: null.ValueFrom(int64(424242)),
+		// The interned columns. Their Valuer has to hand the driver the
+		// original string, and their Scanner has to intern whatever comes
+		// back to the same handle — the whole round trip lives in a pair of
+		// methods that no unit test can exercise against a real driver.
+		PokestopId: InternPokestopId(roundTripPokestopId),
+		Username:   InternUsername(roundTripUsername),
+		AtkIv:      null.ValueFrom(uint8(15)),
+		DefIv:      null.ValueFrom(uint8(14)),
+		StaIv:      null.ValueFrom(uint8(13)),
+		Level:      null.ValueFrom(uint8(35)),
+		Cp:         null.ValueFrom(uint16(3500)),
+		Move1:      null.ValueFrom(uint16(216)),
+		Gender:     null.ValueFrom(uint8(1)),
+		Size:       null.ValueFrom(uint8(5)),
+		Shiny:      null.ValueFrom(true),
+		Weight:     null.ValueFrom(float32(3.5)),
+		Iv:         null.ValueFrom(float32(93.33)),
+		SeenType:   SeenTypeFrom(SeenTypeCodeLureEncounter),
 	}
 
 	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{want}); err != nil {
@@ -227,5 +245,71 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	}
 	if got.SeenType.ValueOrZero() != SeenTypeCodeLureEncounter.String() {
 		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenTypeCodeLureEncounter.String())
+	}
+
+	// Interning is canonical, so a correct round trip returns the very same
+	// handle — a different handle would mean the string came back altered.
+	if got.PokestopId != want.PokestopId {
+		t.Errorf("PokestopId handle = %d, want %d (resolved %q vs %q)",
+			got.PokestopId, want.PokestopId, got.PokestopId.ValueOrZero(), want.PokestopId.ValueOrZero())
+	}
+	if got.Username != want.Username {
+		t.Errorf("Username handle = %d, want %d (resolved %q vs %q)",
+			got.Username, want.Username, got.Username.ValueOrZero(), want.Username.ValueOrZero())
+	}
+
+	// And read the two columns as plain strings, bypassing the Scanner
+	// entirely: this is the check that the bytes sitting in the database are
+	// the ones the interned Valuer was supposed to write, rather than a
+	// Valuer/Scanner pair that agrees with itself while storing something
+	// else.
+	var rawPokestopId, rawUsername string
+	if err := db.QueryRowContext(ctx,
+		"SELECT pokestop_id, username FROM pokemon WHERE id = ?", testID,
+	).Scan(&rawPokestopId, &rawUsername); err != nil {
+		t.Fatalf("raw select: %v", err)
+	}
+	if rawPokestopId != roundTripPokestopId {
+		t.Errorf("stored pokestop_id = %q, want %q (the column must be byte-identical)", rawPokestopId, roundTripPokestopId)
+	}
+	if rawUsername != roundTripUsername {
+		t.Errorf("stored username = %q, want %q (the column must be byte-identical)", rawUsername, roundTripUsername)
+	}
+}
+
+// TestPokemonInternedColumnsLoadPreExistingRow proves rows written before the
+// interning change still load: the values go in through raw SQL, never
+// touching driver.Valuer, and must come back as ordinary interned handles.
+func TestPokemonInternedColumnsLoadPreExistingRow(t *testing.T) {
+	db, ctx := connectNullscanTestDB(t)
+	const testID = 999999999999999997
+	const legacyPokestopId = "0f1e2d3c4b5a69788796a5b4c3d2e1f0.16"
+	const legacyUsername = "LegacyRowScanner"
+
+	t.Cleanup(func() {
+		if _, err := db.ExecContext(ctx, "DELETE FROM pokemon WHERE id = ?", testID); err != nil {
+			t.Logf("cleanup: %v", err)
+		}
+	})
+
+	if _, err := db.ExecContext(ctx, `
+		INSERT INTO pokemon (id, pokemon_id, lat, lon, first_seen_timestamp,
+			changed, expire_timestamp_verified, is_event, pokestop_id, username)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		testID, 25, 51.5, -0.1, 1000, 2000, 0, 0, legacyPokestopId, legacyUsername); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	var got Pokemon
+	if err := db.GetContext(ctx, &got,
+		"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?", testID); err != nil {
+		t.Fatalf("select: %v", err)
+	}
+
+	if !got.PokestopId.Valid() || got.PokestopId.ValueOrZero() != legacyPokestopId {
+		t.Errorf("PokestopId = %q (valid %v), want %q", got.PokestopId.ValueOrZero(), got.PokestopId.Valid(), legacyPokestopId)
+	}
+	if !got.Username.Valid() || got.Username.ValueOrZero() != legacyUsername {
+		t.Errorf("Username = %q (valid %v), want %q", got.Username.ValueOrZero(), got.Username.Valid(), legacyUsername)
 	}
 }

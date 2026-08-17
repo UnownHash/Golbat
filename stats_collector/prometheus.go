@@ -364,6 +364,22 @@ var (
 			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
 		},
 	)
+	internTableSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: ns,
+			Name:      "intern_table_size",
+			Help:      "Distinct strings held by each append-only intern table (never evicted; watch for unbounded growth)",
+		},
+		[]string{"table"},
+	)
+	internLookupFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "intern_lookup_failures_total",
+			Help:      "Intern handles that could not be resolved; always a bug, since handles are never revoked",
+		},
+		[]string{"table"},
+	)
 	dbQueryDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Namespace: ns,
@@ -760,6 +776,14 @@ func (col *promCollector) SetWorkerBacklog(worker string, depth float64) {
 	workerBacklog.WithLabelValues(worker).Set(depth)
 }
 
+func (col *promCollector) SetInternTableSize(table string, size float64) {
+	internTableSize.WithLabelValues(table).Set(size)
+}
+
+func (col *promCollector) IncInternLookupFailure(table string) {
+	internLookupFailures.WithLabelValues(table).Inc()
+}
+
 func (col *promCollector) SetRawProcessingWaiting(waiting float64) {
 	rawProcessingWaitingGauge.Set(waiting)
 }
@@ -830,6 +854,7 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
+	prometheus.MustRegister(internTableSize, internLookupFailures)
 	prometheus.MustRegister(
 		rawRequests, decodeMethods, decodeFortDetails, decodeGetMapForts, decodeGetGymInfo, decodeEncounter,
 		decodeDiskEncounter, decodeQuest, decodeSocialActionWithRequest, decodeGMO, decodeGMOType,

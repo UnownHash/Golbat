@@ -191,7 +191,7 @@ type pokemonStatsSnapshot struct {
 	Cp                      null.Value[uint16]
 	AtkIv, DefIv, StaIv     null.Value[uint8]
 	SeenType                NullSeenType
-	Username                null.String
+	Username                InternedUsername
 	Shiny                   null.Value[bool]
 	Updated                 null.Value[uint32]
 	ExpireTimestamp         null.Value[uint32]
@@ -256,9 +256,9 @@ type pokemonStatsEvent struct {
 // enqueueing is a channel send.
 var pokemonStatsEvents = make(chan pokemonStatsEvent, 262144)
 
-// StartWorkerBacklogReporter publishes background-worker queue depths to
-// the stats collector every 10s. Call from main after InitDataCache and
-// SetStatsCollector.
+// StartWorkerBacklogReporter publishes background-worker queue depths, and
+// the sizes of the never-evicting intern tables, to the stats collector
+// every 10s. Call from main after InitDataCache and SetStatsCollector.
 func StartWorkerBacklogReporter() {
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
@@ -279,6 +279,12 @@ func StartWorkerBacklogReporter() {
 			if fortTreeEvictor != nil {
 				sc.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
 			}
+			// Intern tables never evict, so their size only ever climbs.
+			// Publishing it is what makes "the key set is bounded" an
+			// observation instead of an assumption — see
+			// decoder/interned_string.go.
+			sc.SetInternTableSize(pokestopIdInternTable.name, float64(pokestopIdInternTable.size()))
+			sc.SetInternTableSize(usernameInternTable.name, float64(usernameInternTable.size()))
 		}
 	}()
 }

@@ -66,6 +66,14 @@ type StatsCollector interface {
 	ObserveDbQuery(caller string, seconds float64)
 	ObserveApiScan(operation string, seconds float64)
 
+	// Intern-table metrics. The string-intern tables behind Pokemon's
+	// pokestop_id and username never evict, so their size is published to
+	// make growth visible rather than assumed — see decoder/interned_string.go.
+	// A non-zero failure counter means a handle was resolved against a table
+	// that never issued it, which is always a bug.
+	SetInternTableSize(table string, size float64)
+	IncInternLookupFailure(table string)
+
 	// Write-behind queue metrics
 	SetWriteBehindQueueDepth(entityType string, depth float64)
 	IncWriteBehindSquashed(entityType string)
