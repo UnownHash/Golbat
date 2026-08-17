@@ -71,6 +71,12 @@ func main() {
 	// fort eviction-callback registration).
 	decoder.InitDataCache()
 
+	if cfg.SpawnpointObservationLog != "" {
+		if err := decoder.InitSpawnpointObservationLog(cfg.SpawnpointObservationLog); err != nil {
+			log.Fatalf("failed to open spawnpoint observation log: %s", err)
+		}
+	}
+
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:

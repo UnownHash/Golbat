@@ -150,6 +150,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username)
 				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
 			}
+			// After the save so FirstSeenTimestamp is populated for new records;
+			// outside the significant-update gate so repeat verified sightings
+			// (the jitter measurements) still export.
+			maybeExportSpawnpointObservation(wild, pokemon.FirstSeenTimestamp)
 			unlock()
 		}
 	}

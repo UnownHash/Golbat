@@ -30,6 +30,9 @@ type configDefinition struct {
 	Weather                 weather        `koanf:"weather"`
 	ScanRules               []scanRule     `koanf:"scan_rules"`
 	StatsIntervals          statsIntervals `koanf:"stats_intervals"`
+	// SpawnpointObservationLog appends one raw JSONL row per verified-TTH wild
+	// sighting to this path, for offline despawn-time analysis. Empty = disabled.
+	SpawnpointObservationLog string `koanf:"spawnpoint_observation_log"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {

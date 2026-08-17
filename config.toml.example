@@ -8,6 +8,7 @@ pokemon_memory_only = true  # Use in-memory storage for pokemon only
 #preserve_pokemon = false   # Save pokemon to DB on shutdown, restore on startup (for memory-only mode)
 preload = false         # preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
 fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [experimental]
+#spawnpoint_observation_log = "spawnpoint_observations.jsonl"  # Append raw verified-TTH wild sightings as JSONL for despawn-time analysis
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
