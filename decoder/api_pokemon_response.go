@@ -47,6 +47,16 @@ type ApiPvpRankings struct {
 // (and the goccy/go-json encoder Huma is configured with) render an integer or a
 // float32 identically regardless of the surrounding Go type's width, so this is a
 // pure type narrowing with no wire-format change (see TestBuildApiPokemonResult_GoldenSnapshot).
+//
+// A few fields sit outside that rule and are populated differently in
+// buildApiPokemonResult below: FirstSeenTimestamp and Changed are uint32 in
+// storage but stay int64/*int64 here, assigned via a bare int64(...) cast
+// rather than .Ptr(); SpawnId and CellId are wide by storage (both are
+// already null.Value[int64], not a narrowed uint type — see SetSpawnId's
+// and SetCellId's doc comments for why) and so match this response type
+// exactly without narrowing anything; and Capture1/Capture2/Capture3 are
+// wide by design — they don't map to a PokemonData field at all and are
+// always left unset (see buildApiPokemonResult's PARITY comment).
 type ApiPokemonResult struct {
 	Id                      string         `json:"id" doc:"Encounter ID of the pokemon"`
 	PokestopId              *string        `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`

@@ -96,6 +96,17 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 				pokemon.snapshotOldValues()
 				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
+					// Deliberately SetWeather, not a bare pokemon.Weather = ...
+					// field assignment: SetWeather marks the entity dirty, which
+					// matters here specifically because savePokemonRecordAsAtTime
+					// below early-returns when `!newRecord && !IsDirty()` (see its
+					// first lines). A bare assignment updates only the in-memory
+					// struct; if nothing else in this branch happened to dirty the
+					// pokemon, the save call would no-op and updatePokemonLookup
+					// inside it would never run, leaving the R-tree scan lookup
+					// (PokemonLookup.Weather) stale while the entity's own field
+					// had already changed. Going through the setter closes that
+					// gap. Confirmed intentional in review.
 					pokemon.SetWeather(null.IntFrom(int64(newWeather)))
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
