@@ -550,3 +550,34 @@ func TestCalculateIvComputesIvFromTheNarrowedValues(t *testing.T) {
 		}
 	})
 }
+
+// TestSetChangedSaturatesAndCounts pins the last narrowed setter that was
+// still converting bare. changed is a 32-bit unsigned column, so uint32(v)
+// wraps rather than saturating — a negative or past-2106 timestamp landed on
+// an arbitrary value with no metric behind it.
+func TestSetChangedSaturatesAndCounts(t *testing.T) {
+	fake := withClampCountingCollector(t)
+
+	p := &Pokemon{}
+	p.SetChanged(math.MaxUint32 + 1)
+	if p.Changed != math.MaxUint32 {
+		t.Errorf("SetChanged(MaxUint32+1) stored %d, want %d", p.Changed, uint32(math.MaxUint32))
+	}
+	p.SetChanged(-1)
+	if p.Changed != 0 {
+		t.Errorf("SetChanged(-1) stored %d, want 0", p.Changed)
+	}
+	if got := fake.count("changed"); got != 2 {
+		t.Errorf("clamp count for changed = %d, want 2", got)
+	}
+
+	// An in-range timestamp is stored untouched and counts nothing.
+	const now = 1700000000
+	p.SetChanged(now)
+	if p.Changed != now {
+		t.Errorf("SetChanged(%d) stored %d, want %d", now, p.Changed, now)
+	}
+	if got := fake.count("changed"); got != 2 {
+		t.Errorf("clamp count for changed after an in-range value = %d, want 2", got)
+	}
+}

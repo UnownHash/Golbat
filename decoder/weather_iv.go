@@ -81,20 +81,26 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if boostedWeathers == 0 {
 			return true
 		}
-		var newWeather int32
+		// Narrowed once, here, and used by both comparisons below. The
+		// weather column is a tinyint, so a stored weather has been through
+		// narrowUint8 already; comparing the raw proto value against it would
+		// be two different equivalence relations on the same value in
+		// adjacent lines, and the cheap lookup-cache skip would then disagree
+		// with the entity comparison about what "unchanged" means.
+		var newWeather int64
 		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
-			newWeather = weatherUpdate.NewWeather
+			newWeather = narrowUint8(int64(weatherUpdate.NewWeather))
 		}
-		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather {
+		if newWeather == int64(pokemonLookup.PokemonLookup.Weather) {
 			return true
 		}
 
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(pokemonId, "ProactiveIVSwitch")
 		if pokemon != nil {
 			pokemonLocked++
-			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == int64OrZero(pokemon.Form)) && narrowUint8(int64(newWeather)) != int64OrZero(pokemon.Weather) && int64OrZero(pokemon.ExpireTimestamp) >= startUnix && int64OrZero(pokemon.Updated) < timestamp {
+			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == int64OrZero(pokemon.Form)) && newWeather != int64OrZero(pokemon.Weather) && int64OrZero(pokemon.ExpireTimestamp) >= startUnix && int64OrZero(pokemon.Updated) < timestamp {
 				pokemon.snapshotOldValues()
-				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
+				pokemon.repopulateIv(newWeather, pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
 					// Deliberately SetWeather, not a bare pokemon.Weather = ...
 					// field assignment: SetWeather marks the entity dirty, which
@@ -107,7 +113,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 					// (PokemonLookup.Weather) stale while the entity's own field
 					// had already changed. Going through the setter closes that
 					// gap. Confirmed intentional in review.
-					pokemon.SetWeather(null.IntFrom(int64(newWeather)))
+					pokemon.SetWeather(null.IntFrom(newWeather))
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 					})

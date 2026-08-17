@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/guregu/null/v6"
+	log "github.com/sirupsen/logrus"
 )
 
 // PokemonData contains all database-persisted fields for Pokemon.
@@ -199,7 +200,8 @@ func (pokemon *Pokemon) Unlock() {
 // or not the clamped value then differs from what is already stored. Every
 // caller clamps above its own equality check — the setters (form, costume,
 // gender, weather, cp, level, size, move_1, move_2, expire_timestamp,
-// updated, display_pokemon_id, display_pokemon_form) by construction, and
+// updated, changed, display_pokemon_id, display_pokemon_form) by
+// construction, and
 // calculateIv (atk_iv, def_iv, sta_iv), the only caller that is not a
 // setter, because its three clamped values are what its comparison reads.
 // So a repeat sighting of an unchanged out-of-range value counts again, and
@@ -565,7 +567,21 @@ func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 // silently no-opping the way a runtime string-to-code lookup would. This
 // also drops the ParseSeenType map lookup from the decode hot path: turning
 // a known-valid code into a NullSeenType is a direct assignment.
+//
+// Taking the code directly does mean the setter is the only gate left on
+// what reaches the column, and the two output boundaries disagree about an
+// invalid one: Value() returns an error, which fails the whole multi-row
+// upsert at bind time with no retry, while MarshalJSON emits "" into the
+// webhook. Neither is a good way to find out. Refusing to store a code with
+// no string form keeps both boundaries out of that state, and leaves the
+// previous value in place rather than replacing it with something no
+// consumer can read. SeenTypeCodeUnset is refused here too: it is the "never
+// set" zero value, not something a caller sets deliberately.
 func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
+	if c.String() == "" {
+		log.Warnf("[POKEMON] SetSeenType: refusing seen_type code %d, which has no string form; leaving %s in place", c, FormatNull(pokemon.SeenType))
+		return
+	}
 	next := SeenTypeFrom(c)
 	if pokemon.SeenType != next {
 		if dbDebugEnabled {
@@ -779,11 +795,20 @@ func (pokemon *Pokemon) SetUpdated(v null.Int) {
 	}
 }
 
-// SetChanged stores a Unix timestamp. changed is an unsigned int column;
-// timestamps fit uint32 until year 2106, so this converts without clamping
-// (same reasoning as SetSpawnId/SetCellId).
+// SetChanged stores a Unix timestamp into the changed column, an unsigned
+// int. It clamps through clampUint32 exactly like SetUpdated, its twin.
+//
+// It used to convert with a bare uint32(v) on the reasoning that timestamps
+// fit uint32 until 2106. That is true of the values this is *called* with,
+// but it is the wrong argument for this setter: SetSpawnId and SetCellId
+// convert bare because their fields are int64-wide and a conversion there
+// cannot truncate at all, whereas changed is 32 bits and a bare conversion
+// wraps rather than saturates. Routing it through the shared clamp also
+// gives the field a golbat_field_clamped_total label, so the impossible
+// input is visible rather than silent if it ever stops being impossible.
 func (pokemon *Pokemon) SetChanged(v int64) {
-	next := uint32(v)
+	// Always Valid: null.IntFrom is, and clampUint preserves validity.
+	next := clampUint32(null.IntFrom(v), "changed").V
 	if pokemon.Changed != next {
 		if dbDebugEnabled {
 			pokemon.debug.recordChange(fmt.Sprintf("Changed:%d->%d", pokemon.Changed, next))

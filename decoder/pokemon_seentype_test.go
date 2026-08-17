@@ -320,3 +320,43 @@ func resetSeenTypeScanWarnThrottle(t *testing.T) {
 	seenTypeScanWarns = &util.DropReporter{}
 	t.Cleanup(func() { seenTypeScanWarns = previous })
 }
+
+// TestSetSeenTypeRefusesCodesWithNoStringForm pins the setter's guard. Taking
+// a SeenTypeCode directly means the setter is the only gate left on what
+// reaches the column, and the two output boundaries disagree about an invalid
+// code: Value() errors, which fails a whole multi-row upsert at bind time
+// with no retry, while MarshalJSON emits "" into the webhook. The setter
+// keeps both out of that state by leaving the previous value alone.
+func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
+	p := &Pokemon{}
+	p.SetSeenType(SeenTypeCodeWild)
+	p.dirty = false
+
+	// Unset (the "never set" zero value), Unknown (Scan's degrade code, which
+	// is always paired with Valid = false) and anything past the end of
+	// seenTypeStrings all have no string form.
+	for _, c := range []SeenTypeCode{SeenTypeCodeUnset, SeenTypeCodeUnknown, SeenTypeCode(len(seenTypeStrings)), 200} {
+		p.SetSeenType(c)
+		if p.SeenType != SeenTypeFrom(SeenTypeCodeWild) {
+			t.Fatalf("SetSeenType(%d) replaced the stored value with %+v", c, p.SeenType)
+		}
+		if p.dirty {
+			t.Fatalf("SetSeenType(%d) marked the record dirty", c)
+		}
+		if _, err := p.SeenType.Value(); err != nil {
+			t.Fatalf("SetSeenType(%d) left a value Value() rejects: %v", c, err)
+		}
+	}
+
+	// Every real code still stores.
+	for _, c := range []SeenTypeCode{
+		SeenTypeCodeWild, SeenTypeCodeEncounter, SeenTypeCodeNearbyStop, SeenTypeCodeCell,
+		SeenTypeCodeLureWild, SeenTypeCodeLureEncounter, SeenTypeCodeTappableEncounter,
+		SeenTypeCodeTappableLureEncounter,
+	} {
+		p.SetSeenType(c)
+		if p.SeenType != SeenTypeFrom(c) {
+			t.Errorf("SetSeenType(%d) stored %+v, want code %d", c, p.SeenType, c)
+		}
+	}
+}
