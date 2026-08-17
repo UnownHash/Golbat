@@ -1,10 +1,11 @@
 package decoder
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/jsonenc"
 )
 
 // goldenSnapshotStation is a representative station with a mix of set and
@@ -46,8 +47,13 @@ func goldenSnapshotStation() *Station {
 // ApiStationResult. Any accidental change to a json tag, field type,
 // pointer/null handling, or field order will fail this test. Unset nullable
 // fields serialize as null (pointers are nil, no omitempty).
+//
+// Marshals through jsonenc rather than encoding/json directly, so building
+// this test under -tags go_json (as CI now does) round-trips through
+// goccy/go-json — the codec huma_api.go uses to serve every API response —
+// instead of pinning stdlib's output regardless of which codec ships.
 func TestBuildStationResult_GoldenSnapshot(t *testing.T) {
-	got, err := json.Marshal(BuildStationResult(goldenSnapshotStation()))
+	got, err := jsonenc.Marshal(BuildStationResult(goldenSnapshotStation()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

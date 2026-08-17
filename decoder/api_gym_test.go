@@ -1,10 +1,11 @@
 package decoder
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/jsonenc"
 )
 
 // goldenSnapshotGym is a representative gym with a mix of set and unset (null)
@@ -72,8 +73,13 @@ func goldenSnapshotGym() *Gym {
 // defenders are raw-JSON passthrough, so they appear on the wire exactly as
 // stored (including zero-valued fields that a re-marshal through
 // ApiGymGuardingPokemon/ApiGymDefender would have omitted via omitempty).
+//
+// Marshals through jsonenc rather than encoding/json directly, so building
+// this test under -tags go_json (as CI now does) round-trips through
+// goccy/go-json — the codec huma_api.go uses to serve every API response —
+// instead of pinning stdlib's output regardless of which codec ships.
 func TestBuildGymResult_GoldenSnapshot(t *testing.T) {
-	got, err := json.Marshal(buildGymResult(goldenSnapshotGym()))
+	got, err := jsonenc.Marshal(buildGymResult(goldenSnapshotGym()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

@@ -3,13 +3,13 @@ package decoder
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
 	"golbat/db"
+	"golbat/jsonenc"
 	"golbat/pogo"
 	"golbat/util"
 
@@ -70,11 +70,17 @@ func TestNullSeenTypeNull(t *testing.T) {
 
 func TestNullSeenTypeJSON(t *testing.T) {
 	// The API response marshals seen_type as a string. That must not change.
+	//
+	// Marshals through jsonenc rather than encoding/json directly, so
+	// building this test under -tags go_json (as CI now does) round-trips
+	// through goccy/go-json — the codec huma_api.go uses to serve every API
+	// response — instead of pinning stdlib's output regardless of which
+	// codec ships.
 	var n NullSeenType
 	if err := n.Scan(SeenTypeCodeEncounter.String()); err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
-	b, err := json.Marshal(n)
+	b, err := jsonenc.Marshal(n)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -82,7 +88,7 @@ func TestNullSeenTypeJSON(t *testing.T) {
 		t.Errorf("marshal = %s, want \"encounter\"", b)
 	}
 
-	b, err = json.Marshal(NullSeenType{})
+	b, err = jsonenc.Marshal(NullSeenType{})
 	if err != nil {
 		t.Fatalf("marshal invalid: %v", err)
 	}

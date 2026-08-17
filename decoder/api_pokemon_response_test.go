@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/jsonenc"
 )
 
 func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
@@ -43,7 +45,10 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 		t.Errorf("PVP leagues should be nil when ohbem is nil, got %+v", got.Pvp)
 	}
 
-	b, err := json.Marshal(got)
+	// Marshals through jsonenc (not encoding/json directly) so building this
+	// test under -tags go_json exercises goccy/go-json, the codec
+	// huma_api.go uses to serve every API response.
+	b, err := jsonenc.Marshal(got)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -104,12 +109,17 @@ func goldenSnapshotPokemon() *Pokemon {
 // ApiPokemonResult (with ohbem disabled so pvp is {}). This struct is now shared
 // by every pokemon endpoint (v1/v2/v3/search), so any accidental change to a json
 // tag, field type, pointer/null handling, or field order will fail this test.
+//
+// Marshals through jsonenc rather than encoding/json directly, so building
+// this test under -tags go_json (as CI now does) round-trips through
+// goccy/go-json — the codec huma_api.go uses to serve every API response —
+// instead of pinning stdlib's output regardless of which codec ships.
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
 	if ohbem != nil {
 		t.Fatalf("expected ohbem to be nil in tests")
 	}
 
-	got, err := json.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
+	got, err := jsonenc.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -127,7 +137,7 @@ func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
 func TestApiPvpRankings_OmitsEmptyLeagues(t *testing.T) {
 	// Only Great populated; Little and Ultra empty.
 	pvp := ApiPvpRankings{Great: []ApiPvpEntry{{Pokemon: 99, Rank: 1}}}
-	b, err := json.Marshal(pvp)
+	b, err := jsonenc.Marshal(pvp)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -154,7 +164,7 @@ func TestApiPokemonScanResultV3_WireShape(t *testing.T) {
 		Total:        6,
 		LimitReached: true,
 	}
-	b, err := json.Marshal(res)
+	b, err := jsonenc.Marshal(res)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -174,7 +184,7 @@ func TestApiPokemonScanResultV3_WireShape(t *testing.T) {
 
 func TestApiPokemonV2_BareArrayShape(t *testing.T) {
 	res := []ApiPokemonResult{{Id: "1", PokemonId: 25}}
-	b, err := json.Marshal(res)
+	b, err := jsonenc.Marshal(res)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
