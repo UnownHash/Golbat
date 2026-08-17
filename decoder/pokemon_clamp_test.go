@@ -367,3 +367,68 @@ func TestNarrowSaturatesWithoutCounting(t *testing.T) {
 		t.Errorf("narrow* counted %d clamps, want 0 (counting is the clamp* side's job)", got)
 	}
 }
+
+// TestRepopulateIvConvergesOnOutOfRangeWeather covers the weather reading
+// repopulateIv narrows on the way in. A negative reading is "boosted" read
+// raw and NONE once stored, so the guard that asks whether the boost state
+// changed never settles: repopulateIv runs on every sighting, fails to find
+// a scan matching the boost state it believes in, and clears the IVs, CP
+// and PVP it finds there.
+//
+// Reachable, not theoretical: pogo's enums are open int32 types
+// (`type GameplayWeatherProto_WeatherCondition int32`), so protobuf passes
+// unknown and negative wire values straight through, and Golbat ingests raw
+// protos from third-party scanners.
+func TestRepopulateIvConvergesOnOutOfRangeWeather(t *testing.T) {
+	display := &pogo.PokemonDisplayProto{
+		WeatherBoostedCondition: pogo.GameplayWeatherProto_WeatherCondition(-1),
+	}
+
+	p := &Pokemon{}
+	// One unboosted scan in history, so locateScan has something to return.
+	p.scanHistory = []*pokemonScan{{Weather: 0, Level: 20, Attack: 15, Defense: 15, Stamina: 15}}
+
+	p.setPokemonDisplay(25, display)
+	if want := null.ValueFrom(uint8(0)); p.Weather != want {
+		t.Fatalf("Weather after a negative reading = %+v, want %+v", p.Weather, want)
+	}
+
+	// An encounter enriches the record.
+	p.calculateIv(15, 15, 15)
+	enrichFromEncounter(p)
+
+	// The same sighting again must not re-run the boost repopulation.
+	p.setPokemonDisplay(25, display)
+
+	if !p.Cp.Valid || !p.Pvp.Valid || !p.AtkIv.Valid {
+		t.Errorf("repeat sighting of an out-of-range weather cleared encounter data: cp=%+v pvp=%+v atkIv=%+v",
+			p.Cp, p.Pvp, p.AtkIv)
+	}
+}
+
+// TestRepopulateIvConvergesOnOutOfRangeLevel covers the level comparison at
+// the end of repopulateIv. A level pushed outside the tinyint saturates at
+// 255 in storage while the scan keeps saying 300, so "did the level change?"
+// answered yes on every pass and cleared CP and PVP each time.
+func TestRepopulateIvConvergesOnOutOfRangeLevel(t *testing.T) {
+	p := &Pokemon{}
+	// A boosted scan whose computed level lands outside the tinyint. The
+	// stored weather stays NONE while the incoming reading is boosted, so
+	// repopulateIv's early-return guard never fires and the body runs on
+	// every call.
+	p.scanHistory = []*pokemonScan{{Weather: 1, Level: 300, Attack: 15, Defense: 15, Stamina: 15}}
+
+	p.repopulateIv(1, false)
+	if want := null.ValueFrom(uint8(math.MaxUint8)); p.Level != want {
+		t.Fatalf("Level after a level-300 scan = %+v, want %+v", p.Level, want)
+	}
+
+	// The first pass cleared CP and PVP legitimately — the level really did
+	// change. An encounter refills them.
+	enrichFromEncounter(p)
+
+	p.repopulateIv(1, false)
+	if !p.Cp.Valid || !p.Pvp.Valid {
+		t.Errorf("repeat repopulateIv cleared cp/pvp: cp=%+v pvp=%+v level=%+v", p.Cp, p.Pvp, p.Level)
+	}
+}
