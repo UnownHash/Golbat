@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"math"
 
+	"golbat/util"
+
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
 )
@@ -588,9 +590,21 @@ func (pokemon *Pokemon) SetExpireTimestampVerified(v bool) {
 // previous value in place rather than replacing it with something no
 // consumer can read. SeenTypeCodeUnset is refused here too: it is the "never
 // set" zero value, not something a caller sets deliberately.
+//
+// The warning is aggregated rather than emitted per call. Every call site
+// today passes a compile-time SeenTypeCode* constant, so this branch is
+// unreachable and the throttle costs nothing; the reason it is here anyway is
+// that the branch sits on the decode path, where the thing that would make it
+// reachable — a computed code from a future caller — would also make it
+// reachable once per sighting. That is the same shape NullSeenType.Scan's
+// warning has, and it uses the same aggregator.
 func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
 	if c.String() == "" {
-		log.Warnf("[POKEMON] SetSeenType: refusing seen_type code %d, which has no string form; leaving %s in place", c, FormatNull(pokemon.SeenType))
+		kept := FormatNull(pokemon.SeenType)
+		seenTypeSetWarns.Report(func(refused int64) {
+			log.Warnf("[POKEMON] SetSeenType: refusing seen_type code %d, which has no string form; leaving %s in place. "+
+				"%d call(s) in the last second were refused", c, kept, refused)
+		})
 		return
 	}
 	next := SeenTypeFrom(c)
@@ -603,6 +617,13 @@ func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
 		pokemon.dirty = true
 	}
 }
+
+// seenTypeSetWarns aggregates SetSeenType's refusal warning to one line a
+// second, the same way seenTypeScanWarns does for the read side. A pointer for
+// the same reason as that one: a test can swap in a fresh reporter and not
+// have its own warning suppressed by one an earlier test emitted in the same
+// second.
+var seenTypeSetWarns = &util.DropReporter{}
 
 func (pokemon *Pokemon) SetUsername(v null.String) {
 	if pokemon.Username != v {

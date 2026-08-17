@@ -352,6 +352,11 @@ func resetSeenTypeScanWarnThrottle(t *testing.T) {
 // with no retry, while MarshalJSON emits "" into the webhook. The setter
 // keeps both out of that state by leaving the previous value alone.
 func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
+	previous := seenTypeSetWarns
+	seenTypeSetWarns = &util.DropReporter{}
+	t.Cleanup(func() { seenTypeSetWarns = previous })
+	warnings := captureStandardLoggerMessages(t)
+
 	p := &Pokemon{}
 	p.SetSeenType(SeenTypeCodeWild)
 	p.dirty = false
@@ -370,6 +375,14 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 		if _, err := p.SeenType.Value(); err != nil {
 			t.Fatalf("SetSeenType(%d) left a value Value() rejects: %v", c, err)
 		}
+	}
+
+	// The refusal warns, and the warning is aggregated rather than emitted
+	// once per refused call: the branch sits on the decode path, so whatever
+	// would make it reachable would make it reachable per sighting. Four
+	// refusals above, one line.
+	if got := strings.Count(warnings(), "refusing seen_type code"); got != 1 {
+		t.Errorf("four refused calls logged %d warnings, want 1 (throttled to one per second)", got)
 	}
 
 	// Every real code still stores.
