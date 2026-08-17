@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
@@ -37,6 +38,10 @@ var dbDetails db2.DbDetails
 var statsCollector stats_collector.StatsCollector
 
 func main() {
+	configPath := flag.String("config", config.DefaultConfigPath, "path to the TOML config file")
+	flag.StringVar(configPath, "c", config.DefaultConfigPath, "path to the TOML config file (shorthand)")
+	flag.Parse()
+
 	var wg sync.WaitGroup
 	ctx, cancelFn := context.WithCancel(context.Background())
 	defer cancelFn()
@@ -47,7 +52,7 @@ func main() {
 		watchForShutdown(ctx, cancelFn)
 	}()
 
-	cfg, err := config.ReadConfig()
+	cfg, err := config.ReadConfig(*configPath)
 	if err != nil {
 		panic(err)
 	}
