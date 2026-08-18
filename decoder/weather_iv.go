@@ -91,7 +91,21 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
 			newWeather = narrowUint8(int64(weatherUpdate.NewWeather))
 		}
-		if newWeather == int64(pokemonLookup.PokemonLookup.Weather) {
+		// The lookup and the entity spell "no weather" differently: the
+		// lookup carries lookupInt8's absence marker, -1, while the entity
+		// guard below reads the same absence through int64OrZero as 0.
+		// Compare in the entity's encoding, because the entity guard is the
+		// one that decides — this skip exists only to avoid reaching it, so
+		// the two have to agree on what "unchanged" means or the skip stops
+		// skipping anything. Left at -1, a NULL-weather pokemon never
+		// matches a no-boost update (0 == -1 is false), so every weather
+		// flip in its cell takes the entity lock for a guard that then
+		// compares 0 != 0 and does nothing.
+		storedWeather := int64(pokemonLookup.PokemonLookup.Weather)
+		if storedWeather < 0 {
+			storedWeather = 0
+		}
+		if newWeather == storedWeather {
 			return true
 		}
 
