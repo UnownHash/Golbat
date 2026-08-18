@@ -11,7 +11,6 @@ import (
 	"golbat/db"
 	"golbat/jsonenc"
 	"golbat/pogo"
-	"golbat/util"
 
 	log "github.com/sirupsen/logrus"
 	logrustest "github.com/sirupsen/logrus/hooks/test"
@@ -380,11 +379,16 @@ func captureStandardLoggerMessages(t *testing.T) func() string {
 // resetSeenTypeScanWarnThrottle clears the shared throttle so a test's own
 // Scan is guaranteed to log rather than being suppressed by a warning an
 // earlier test emitted in the same second.
+//
+// Reset, not a swap of the package variable. seenTypeScanWarns is read by
+// NullSeenType.Scan on every row load, so assigning to it from a test is an
+// unsynchronised write to a global production reads concurrently — the same
+// shape init_test.go documents as a former data race for statsCollector.
+// DropReporter's own state is two atomics, so resetting through them leaves
+// nothing to restore and nothing to race with.
 func resetSeenTypeScanWarnThrottle(t *testing.T) {
 	t.Helper()
-	previous := seenTypeScanWarns
-	seenTypeScanWarns = &util.DropReporter{}
-	t.Cleanup(func() { seenTypeScanWarns = previous })
+	seenTypeScanWarns.Reset()
 }
 
 // TestSetSeenTypeRefusesCodesWithNoStringForm pins the setter's guard. Taking
@@ -394,9 +398,9 @@ func resetSeenTypeScanWarnThrottle(t *testing.T) {
 // with no retry, while MarshalJSON emits "" into the webhook. The setter
 // keeps both out of that state by leaving the previous value alone.
 func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
-	previous := seenTypeSetWarns
-	seenTypeSetWarns = &util.DropReporter{}
-	t.Cleanup(func() { seenTypeSetWarns = previous })
+	// Reset rather than swapping the package variable — see
+	// resetSeenTypeScanWarnThrottle for why.
+	seenTypeSetWarns.Reset()
 	warnings := captureStandardLoggerMessages(t)
 
 	p := &Pokemon{}

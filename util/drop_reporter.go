@@ -23,3 +23,19 @@ func (d *DropReporter) Report(report func(dropped int64)) {
 		report(d.count.Swap(0))
 	}
 }
+
+// Reset discards the accumulated count and reopens the reporting window, so
+// the next Report is guaranteed to deliver rather than being suppressed by a
+// report some earlier caller already made this second.
+//
+// Its caller is tests: a package-level reporter is shared by every test in
+// the binary, so a test asserting on its own log line needs the window to
+// start fresh. Doing that by reassigning the package variable is a write to
+// a global that production reads unsynchronised on hot paths — the same data
+// race decoder/init_test.go documents for statsCollector. Both fields here
+// are already atomic, so resetting through them is race-free against a
+// concurrent Report, and the package variable is never written at all.
+func (d *DropReporter) Reset() {
+	d.count.Store(0)
+	d.lastLog.Store(0)
+}

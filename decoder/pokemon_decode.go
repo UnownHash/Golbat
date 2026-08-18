@@ -563,10 +563,10 @@ func (n *NullSeenType) Scan(value any) error {
 // repeated, not many. util.DropReporter is the codebase's aggregator for
 // exactly this (raw_limiter.go, fort_tracker.go, stats.go).
 //
-// A pointer, unlike the value-typed reporters elsewhere, only so a test can
-// swap in a fresh one and not have its own warning suppressed by a warning
-// an earlier test emitted in the same second.
-var seenTypeScanWarns = &util.DropReporter{}
+// Value-typed, like every other reporter in the codebase. A test that needs
+// a fresh window calls Reset on it rather than swapping the variable, which
+// would be an unsynchronised write to a global this decode path reads.
+var seenTypeScanWarns util.DropReporter
 
 // Value rejects any code with no string form — that includes
 // SeenTypeCodeUnset and any code past the end of the table. It is never

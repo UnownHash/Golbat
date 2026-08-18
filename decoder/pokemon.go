@@ -619,11 +619,10 @@ func (pokemon *Pokemon) SetSeenType(c SeenTypeCode) {
 }
 
 // seenTypeSetWarns aggregates SetSeenType's refusal warning to one line a
-// second, the same way seenTypeScanWarns does for the read side. A pointer for
-// the same reason as that one: a test can swap in a fresh reporter and not
-// have its own warning suppressed by one an earlier test emitted in the same
-// second.
-var seenTypeSetWarns = &util.DropReporter{}
+// second, the same way seenTypeScanWarns does for the read side, and is
+// value-typed for the same reason: a test that needs a fresh window calls
+// Reset on it rather than swapping a global the decode path reads.
+var seenTypeSetWarns util.DropReporter
 
 func (pokemon *Pokemon) SetUsername(v null.String) {
 	if pokemon.Username != v {
