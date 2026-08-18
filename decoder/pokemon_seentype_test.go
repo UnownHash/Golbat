@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -93,6 +94,47 @@ func TestNullSeenTypeJSON(t *testing.T) {
 	}
 	if string(b) != "null" {
 		t.Errorf("marshal of invalid = %s, want null", b)
+	}
+}
+
+// TestNullSeenTypeUnmarshalNullIsInert pins the JSON read boundary on the
+// safe sentinel. MarshalJSON collapses both invalid codes to null, so a
+// record whose seen_type degraded to Unknown is indistinguishable on the
+// wire from one that was never set. A decoder has to pick one, and Unset is
+// the code this PR proved destructive: it is what updateFromWild's
+// `case Unset, Cell, NearbyStop` and updateFromNearby's `case Unset, Cell`
+// act on (see TestScanUnknownSeenTypeIsInertInTheDecodeSwitches). Nothing in
+// production unmarshals this type today — the type is exported and is the
+// webhook payload's field type, so a replay tool or a future read path is
+// what this guards.
+func TestNullSeenTypeUnmarshalNullIsInert(t *testing.T) {
+	n := SeenTypeFrom(SeenTypeCodeWild)
+	if err := json.Unmarshal([]byte("null"), &n); err != nil {
+		t.Fatalf("unmarshal null: %v", err)
+	}
+	if n.Valid {
+		t.Error("unmarshal of null left Valid = true, want false")
+	}
+	if n.Code != SeenTypeCodeUnknown {
+		t.Errorf("unmarshal of null left Code = %d, want SeenTypeCodeUnknown (%d) — Unset is the code the decode switches act on", n.Code, SeenTypeCodeUnknown)
+	}
+
+	// The whole round trip, which is the shape a replay tool would take: a
+	// degraded record marshals to null and must come back inert.
+	degraded := SeenTypeFrom(SeenTypeCodeWild)
+	if err := degraded.Scan("teleported"); err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	b, err := json.Marshal(degraded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var round NullSeenType
+	if err := json.Unmarshal(b, &round); err != nil {
+		t.Fatalf("unmarshal %s: %v", b, err)
+	}
+	if round != degraded {
+		t.Errorf("round trip of a degraded seen_type = %+v, want %+v", round, degraded)
 	}
 }
 

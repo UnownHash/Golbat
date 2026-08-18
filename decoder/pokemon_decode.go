@@ -595,9 +595,32 @@ func (n NullSeenType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(n.Code.String())
 }
 
+// UnmarshalJSON decodes a JSON null to SeenTypeCodeUnknown, not to the Go
+// zero value, and the difference matters. MarshalJSON is lossy in one
+// direction: it emits null for any invalid NullSeenType, so both Unset
+// ("never set") and Unknown ("set to something this binary cannot name")
+// come back as the same three characters. A decoder cannot tell them apart
+// and has to pick one, so it picks the one that cannot do damage — Unknown
+// matches no case in either decode switch, while Unset is what licenses
+// updateFromWild's rewrite to "wild" and updateFromNearby's replacement of
+// precise coordinates. Round-tripping a degraded record through the webhook
+// payload (decoder/pokemon_state.go's PokemonWebhook) must not turn the
+// inert sentinel into the destructive one.
+//
+// Deliberately not symmetric with Scan(nil), which does yield Unset. A SQL
+// NULL is unambiguous — the column has never held a value — so a wild or
+// nearby sighting filling it in is the correct behaviour there, and
+// degrading it to Unknown would strand rows that are simply new.
+//
+// Also deliberately not symmetric with Scan on an unrecognised string, which
+// degrades and warns where this returns an error. Scan must not fail, because
+// a failed row load leaves getOrCreatePokemonRecord's cache entry marked
+// newRecord and that pokemon stops being processed (see Scan's doc comment).
+// A JSON decode has no such cache entry to strand: the error goes back to
+// whatever is reading the payload, loudly and recoverably.
 func (n *NullSeenType) UnmarshalJSON(data []byte) error {
 	if string(data) == "null" {
-		n.Code, n.Valid = 0, false
+		n.Code, n.Valid = SeenTypeCodeUnknown, false
 		return nil
 	}
 	var s string
