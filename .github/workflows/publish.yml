@@ -48,6 +48,16 @@ jobs:
           cache: true
       - name: Install dependencies
         run: go get .
+      - name: Vet the untagged build
+        # Every other Go step in this repo passes -tags go_json, and
+        # golangci-lint sets build-tags: [go_json] too, so nothing else in CI
+        # ever compiles the !go_json half of the tree — jsonenc.go and
+        # jsonenc_test.go most of all, which exist only in that
+        # configuration. Nothing ships untagged, but `go build ./...` and
+        # `go test ./...` are what a contributor types, so it has to compile.
+        # go vet type-checks packages and their tests, which is the cheap way
+        # to cover that without a second full test run.
+        run: go vet ./...
       - name: Apply database migrations
         # golang-migrate's own DSN form (mysql://...), distinct from the
         # go-sql-driver form GOLBAT_TEST_DSN uses above. -tags mysql pulls in
