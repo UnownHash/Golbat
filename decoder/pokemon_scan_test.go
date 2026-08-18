@@ -1,11 +1,16 @@
 package decoder
 
 import (
+	"bytes"
 	"encoding/hex"
 	"reflect"
+	"sync"
 	"testing"
 
 	"golbat/grpc"
+	"golbat/stats_collector"
+
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -276,5 +281,208 @@ func TestPokemonScanString(t *testing.T) {
 		if got := c.scan.String(); got != c.want {
 			t.Errorf("String() = %q, want %q", got, c.want)
 		}
+	}
+}
+
+// Field numbers used to build golbat_internal bytes that this build cannot
+// fully parse. scanHistoryField is PokemonInternal's only declared field;
+// the other two are numbers no version of pokemon_internal.proto has used, so
+// bytes carrying them land in unknownFields exactly the way a future field
+// written by a newer Golbat would.
+const (
+	scanHistoryField      protowire.Number = 1
+	unknownInternalField  protowire.Number = 15
+	unknownScanEntryField protowire.Number = 99
+)
+
+// internalWithUnknownTopLevelField returns the legacy content plus one field
+// on PokemonInternal itself that this build has no definition for.
+func internalWithUnknownTopLevelField(t *testing.T) []byte {
+	t.Helper()
+	stored, err := proto.Marshal(legacyScanHistory())
+	if err != nil {
+		t.Fatalf("marshal legacy shape: %s", err)
+	}
+	stored = protowire.AppendTag(stored, unknownInternalField, protowire.VarintType)
+	return protowire.AppendVarint(stored, 1)
+}
+
+// internalWithUnknownElementField puts the unknown field inside the first
+// scan_history element instead, which is the shape a real extension is more
+// likely to take: the one time this proto has been extended, the new fields
+// went on PokemonScan rather than on PokemonInternal.
+func internalWithUnknownElementField(t *testing.T) []byte {
+	t.Helper()
+	var stored []byte
+	for i, entry := range legacyScanHistory().ScanHistory {
+		element, err := proto.Marshal(entry)
+		if err != nil {
+			t.Fatalf("marshal scan element %d: %s", i, err)
+		}
+		if i == 0 {
+			element = protowire.AppendTag(element, unknownScanEntryField, protowire.VarintType)
+			element = protowire.AppendVarint(element, 42)
+		}
+		stored = protowire.AppendTag(stored, scanHistoryField, protowire.BytesType)
+		stored = protowire.AppendBytes(stored, element)
+	}
+	return stored
+}
+
+// internalSkipCountingCollector embeds the noop collector so every other
+// method keeps its normal behavior, and counts the one call these tests care
+// about — the noop discards it, so it cannot be asserted against directly.
+type internalSkipCountingCollector struct {
+	stats_collector.StatsCollector
+	mu      sync.Mutex
+	skipped int
+}
+
+func (c *internalSkipCountingCollector) IncPokemonInternalRewriteSkipped() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.skipped++
+}
+
+func (c *internalSkipCountingCollector) count() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.skipped
+}
+
+func withInternalSkipCountingCollector(t *testing.T) *internalSkipCountingCollector {
+	t.Helper()
+	fake := &internalSkipCountingCollector{StatsCollector: stats_collector.NewNoopStatsCollector()}
+	setStatsCollectorForTest(t, fake)
+	return fake
+}
+
+// TestRewriteGolbatInternalPreservesUnknownFields is the regression test for
+// the data loss the pokemonScan conversion would otherwise introduce. The old
+// write boundary marshaled the message it had unmarshaled, so fields written
+// by a newer Golbat rode along in unknownFields; rebuilding from pokemonScan
+// copies known fields only, so the next encounter would replace a newer node's
+// row with a subset of itself.
+//
+// Both levels are covered because both can carry them: PokemonInternal itself,
+// and any one scan_history element.
+func TestRewriteGolbatInternalPreservesUnknownFields(t *testing.T) {
+	cases := []struct {
+		name   string
+		stored []byte
+	}{
+		{"unknown field on PokemonInternal", internalWithUnknownTopLevelField(t)},
+		{"unknown field inside a scan_history element", internalWithUnknownElementField(t)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			// If this fires, the fixture stopped being a fixture: either
+			// pokemon_internal.proto now declares the field number it uses,
+			// or protowire built something proto.Unmarshal rejects.
+			var decoded grpc.PokemonInternal
+			if err := proto.Unmarshal(c.stored, &decoded); err != nil {
+				t.Fatalf("fixture does not decode: %s", err)
+			}
+			if !storedInternalHasUnknownFields(c.stored) {
+				t.Fatalf("fixture carries no unknown fields, so it tests nothing")
+			}
+
+			fake := withInternalSkipCountingCollector(t)
+			original := bytes.Clone(c.stored)
+
+			pokemon := &Pokemon{}
+			pokemon.GolbatInternal = c.stored
+			pokemon.populateInternal()
+			// The known fields still decode; it is only the unknown ones
+			// that have nowhere to live.
+			assertScanHistory(t, pokemon.scanHistory, wantScanHistory())
+
+			pokemon.rewriteGolbatInternal()
+			if !bytes.Equal(pokemon.GolbatInternal, original) {
+				t.Errorf("stored bytes were rewritten to %s, want them left at %s",
+					hex.EncodeToString(pokemon.GolbatInternal), hex.EncodeToString(original))
+			}
+			if got := fake.count(); got != 1 {
+				t.Errorf("skip count = %d, want 1", got)
+			}
+			// The Ditto trimming is skipped along with the write, so the
+			// in-memory history still matches the bytes on the row.
+			if pokemon.scanHistory[0].Pokemon != 132 {
+				t.Errorf("strong scan was trimmed despite the refusal: %+v", *pokemon.scanHistory[0])
+			}
+
+			// A second encounter on the same row refuses again rather than
+			// catching up on the overwrite it declined the first time.
+			pokemon.rewriteGolbatInternal()
+			if !bytes.Equal(pokemon.GolbatInternal, original) {
+				t.Errorf("second save rewrote the stored bytes to %s",
+					hex.EncodeToString(pokemon.GolbatInternal))
+			}
+			if got := fake.count(); got != 2 {
+				t.Errorf("skip count after two saves = %d, want 2", got)
+			}
+		})
+	}
+}
+
+// TestRewriteGolbatInternalRewritesKnownBytes is the other half: bytes this
+// build understands completely are still rewritten, trimming included, so the
+// guard costs nothing on the ordinary path.
+func TestRewriteGolbatInternalRewritesKnownBytes(t *testing.T) {
+	fake := withInternalSkipCountingCollector(t)
+
+	stored, err := hex.DecodeString(legacyGolbatInternalHex)
+	if err != nil {
+		t.Fatalf("bad golden hex: %s", err)
+	}
+	pokemon := &Pokemon{}
+	pokemon.GolbatInternal = stored
+	pokemon.populateInternal()
+	pokemon.rewriteGolbatInternal()
+
+	if got := fake.count(); got != 0 {
+		t.Errorf("skip count = %d, want 0 for bytes with no unknown fields", got)
+	}
+	// legacyScanHistory's first entry is the strong scan, so RemoveDittoAuxInfo
+	// clears its aux fields — in memory and in the bytes that follow from them.
+	if pokemon.scanHistory[0].Pokemon != 0 || pokemon.scanHistory[0].CellWeather != 0 {
+		t.Errorf("strong scan kept its Ditto aux info: %+v", *pokemon.scanHistory[0])
+	}
+	want, err := proto.Marshal(scanHistoryToProto(pokemon.scanHistory))
+	if err != nil {
+		t.Fatalf("marshal: %s", err)
+	}
+	if !bytes.Equal(pokemon.GolbatInternal, want) {
+		t.Errorf("stored bytes = %s, want the trimmed history's %s",
+			hex.EncodeToString(pokemon.GolbatInternal), hex.EncodeToString(want))
+	}
+}
+
+func TestStoredInternalHasUnknownFields(t *testing.T) {
+	known, err := hex.DecodeString(legacyGolbatInternalHex)
+	if err != nil {
+		t.Fatalf("bad golden hex: %s", err)
+	}
+	cases := []struct {
+		name   string
+		stored []byte
+		want   bool
+	}{
+		{"no stored bytes", nil, false},
+		{"empty stored bytes", []byte{}, false},
+		{"every field known", known, false},
+		// Garbage is not a newer binary's data, and populateInternal has
+		// already dropped the history for it — refusing forever would strand
+		// the row, so it stays rewritable.
+		{"undecodable bytes", []byte{0xff, 0xff, 0xff, 0xff}, false},
+		{"unknown field on PokemonInternal", internalWithUnknownTopLevelField(t), true},
+		{"unknown field inside a scan_history element", internalWithUnknownElementField(t), true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := storedInternalHasUnknownFields(c.stored); got != c.want {
+				t.Errorf("storedInternalHasUnknownFields = %t, want %t", got, c.want)
+			}
+		})
 	}
 }

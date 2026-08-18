@@ -56,6 +56,14 @@ type StatsCollector interface {
 	// either the game protocol changed or a decode path is wrong.
 	IncFieldClamped(field string)
 
+	// IncPokemonInternalRewriteSkipped counts encounter saves that left the
+	// golbat_internal column exactly as they found it, because the stored
+	// bytes carry protobuf fields this build has no definition for. Non-zero
+	// means a newer Golbat wrote those rows: expected while a rolling upgrade
+	// is in flight, and a sign this node is behind if it keeps climbing after
+	// one finishes.
+	IncPokemonInternalRewriteSkipped()
+
 	// Hot-path health metrics
 	SetWorkerBacklog(worker string, depth float64)
 	SetRawProcessingWaiting(waiting float64)

@@ -340,6 +340,13 @@ var (
 		Name:      "field_clamped_total",
 		Help:      "Values clamped to the range of their database column during decode",
 	}, []string{"field"})
+	pokemonInternalRewriteSkipped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "pokemon_internal_rewrite_skipped_total",
+			Help:      "Encounter saves that left golbat_internal untouched because the stored bytes carry protobuf fields this build has no definition for (a newer Golbat wrote them)",
+		},
+	)
 
 	// Hot-path health metrics
 	workerBacklog = prometheus.NewGaugeVec(
@@ -756,6 +763,10 @@ func (col *promCollector) IncFieldClamped(field string) {
 	fieldClamped.WithLabelValues(field).Inc()
 }
 
+func (col *promCollector) IncPokemonInternalRewriteSkipped() {
+	pokemonInternalRewriteSkipped.Inc()
+}
+
 func (col *promCollector) SetWorkerBacklog(worker string, depth float64) {
 	workerBacklog.WithLabelValues(worker).Set(depth)
 }
@@ -841,7 +852,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
-		fieldClamped,
+		fieldClamped, pokemonInternalRewriteSkipped,
 		duplicateEncounters, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,

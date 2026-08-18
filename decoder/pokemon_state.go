@@ -17,7 +17,6 @@ import (
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 // wildPokemonDelay is how long wild Pokemon wait for encounter data before writing
@@ -201,20 +200,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	if writeDB && !config.Config.PokemonMemoryOnly {
 		// Prepare internal data if needed (must happen before queueing)
 		if isEncounter && config.Config.PokemonInternalToDb {
-			unboosted, boosted, strong := pokemon.locateAllScans()
-			if unboosted != nil && boosted != nil {
-				unboosted.RemoveDittoAuxInfo()
-				boosted.RemoveDittoAuxInfo()
-			}
-			if strong != nil {
-				strong.RemoveDittoAuxInfo()
-			}
-			marshaled, err := proto.Marshal(scanHistoryToProto(pokemon.scanHistory))
-			if err == nil {
-				pokemon.GolbatInternal = marshaled
-			} else {
-				log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
-			}
+			pokemon.rewriteGolbatInternal()
 		}
 
 		// Debug logging happens here, before queueing
