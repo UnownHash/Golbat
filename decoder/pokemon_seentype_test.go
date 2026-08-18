@@ -345,8 +345,13 @@ func TestScanUnknownSeenTypeWarnIsThrottled(t *testing.T) {
 		}
 	}
 
-	if got := strings.Count(warnings(), "teleported"); got != 1 {
-		t.Errorf("%d rows with an unrecognised seen_type logged %d warnings, want 1 (throttled to one per second)", rows, got)
+	// A range, not exactly 1. The throttle window is a real second of wall
+	// clock, so a loaded runner that spreads these 500 scans across a window
+	// boundary opens a second window and logs twice — the throttle working,
+	// not failing. What this pins is that the count is bounded by
+	// aggregation rather than by the number of rows.
+	if got := strings.Count(warnings(), "teleported"); got < 1 || got >= rows {
+		t.Errorf("%d rows with an unrecognised seen_type logged %d warnings, want at least 1 and fewer than %d (aggregated, not one line per row)", rows, got, rows)
 	}
 }
 
@@ -415,7 +420,8 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 	// Unset (the "never set" zero value), Unknown (Scan's degrade code, which
 	// is always paired with Valid = false) and anything past the end of
 	// seenTypeStrings all have no string form.
-	for _, c := range []SeenTypeCode{SeenTypeCodeUnset, SeenTypeCodeUnknown, SeenTypeCode(len(seenTypeStrings)), 200} {
+	refused := []SeenTypeCode{SeenTypeCodeUnset, SeenTypeCodeUnknown, SeenTypeCode(len(seenTypeStrings)), 200}
+	for _, c := range refused {
 		p.SetSeenType(c)
 		if p.SeenType != SeenTypeFrom(SeenTypeCodeWild) {
 			t.Fatalf("SetSeenType(%d) replaced the stored value with %+v", c, p.SeenType)
@@ -430,10 +436,12 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 
 	// The refusal warns, and the warning is aggregated rather than emitted
 	// once per refused call: the branch sits on the decode path, so whatever
-	// would make it reachable would make it reachable per sighting. Four
-	// refusals above, one line.
-	if got := strings.Count(warnings(), "refusing seen_type code"); got != 1 {
-		t.Errorf("four refused calls logged %d warnings, want 1 (throttled to one per second)", got)
+	// would make it reachable would make it reachable per sighting. A range
+	// rather than exactly 1, for the same reason as
+	// TestScanUnknownSeenTypeWarnIsThrottled — the window is real wall
+	// clock, and a runner slow enough to straddle a boundary logs twice.
+	if got := strings.Count(warnings(), "refusing seen_type code"); got < 1 || got >= len(refused) {
+		t.Errorf("%d refused calls logged %d warnings, want at least 1 and fewer than %d (aggregated, not one line per call)", len(refused), got, len(refused))
 	}
 
 	// Every real code still stores.
