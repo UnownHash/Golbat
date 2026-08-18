@@ -304,7 +304,7 @@ encountered.
 | `display_pokemon_id`      | null.Value[uint16]  | Apparent Pokédex ID for disguised Pokémon (Ditto). |
 | `display_pokemon_form`    | null.Value[uint16]  | Apparent form for disguised Pokémon. |
 | `is_event`                | int8              | Event flag (part of the composite primary key with `encounter_id`). |
-| `seen_type`               | null.String       | How Golbat learned about this Pokémon. See [seen_type values](#seen_type-values). |
+| `seen_type`               | NullSeenType      | How Golbat learned about this Pokémon. See [seen_type values](#seen_type-values). |
 | `pvp`                     | json.RawMessage   | PvP league rankings produced by gohbem's `QueryPvPRank`. See [pvp structure](#pvp-structure). `null` when IVs are not yet known. |
 
 #### height / weight / size caveats
@@ -333,7 +333,10 @@ Two reasons these fields are unreliable:
 #### seen_type values
 
 The `seen_type` field is an enum tracking the source of the most recent
-update. Full set (defined in `decoder/pokemon_decode.go`, database enum in
+update. `NullSeenType` holds it as a one-byte code in memory and serializes
+it the way the `null.String` it replaced did: one of the quoted strings
+below, or `null` when unset. Full set (defined in
+`decoder/pokemon_decode.go`, database enum in
 `sql/45_tappables_seen_type_lure.up.sql`):
 
 | Value                       | Meaning |

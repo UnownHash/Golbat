@@ -69,12 +69,17 @@ func TestNullSeenTypeNull(t *testing.T) {
 }
 
 func TestNullSeenTypeJSON(t *testing.T) {
-	// The API response marshals seen_type as a string. That must not change.
+	// The webhook payload marshals seen_type as a string, or null. That must
+	// not change. PokemonWebhook's SeenType field is a NullSeenType (see
+	// decoder/pokemon_state.go), so this MarshalJSON is what produces the
+	// bytes consumers read; the huma API response never reaches it, because
+	// its seen_type is a *string built by Ptr().
 	//
-	// Marshals through jsonenc, not encoding/json directly, so this test
-	// tracks whichever codec the current build selects instead of always
-	// pinning stdlib's output — see jsonenc's package doc for what
-	// -tags go_json does and doesn't gate.
+	// The sender encodes with stdlib encoding/json (webhooks/webhook.go).
+	// Marshaling through jsonenc here rather than stdlib directly pins the
+	// output under whichever codec the current build selects as well — a
+	// json.Marshaler has to produce the same bytes either way. See jsonenc's
+	// package doc for what -tags go_json does and doesn't gate.
 	var n NullSeenType
 	if err := n.Scan(SeenTypeCodeEncounter.String()); err != nil {
 		t.Fatalf("Scan: %v", err)

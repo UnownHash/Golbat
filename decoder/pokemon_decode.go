@@ -519,9 +519,19 @@ func (n NullSeenType) IsZero() bool { return !n.Valid }
 // newRecord — every subsequent sighting retries and fails the same load, so
 // that pokemon silently stops being processed for as long as the
 // deployment is mixed. Degrading avoids that: the row loads with seen_type
-// unknown, and a later sighting that carries a seen type in its own right
-// (an encounter, a lure, a wild sighting once the deployment is no longer
-// mixed) fills it in normally.
+// unknown and the pokemon keeps being processed.
+//
+// The in-memory value then stays unknown until an encounter arrives.
+// updatePokemonFromEncounterProto and its disk and tappable siblings are the
+// only paths that set a seen type without first asking what the current one
+// is; wild, lure and nearby sightings all check, and their switches list
+// Unset, Cell and NearbyStop, so Unknown reaches no case. That is not an
+// oversight to fix — adding `case SeenTypeCodeUnknown:` to updateFromWild to
+// make it heal there is exactly the downgrade the sentinel exists to
+// prevent, and TestScanUnknownSeenTypeIsInertInTheDecodeSwitches is what
+// fails if someone does. Waiting costs nothing: the stored column is never
+// overwritten while the value is unrecognised, so the record also comes back
+// whole on the next load once this binary understands the enum again.
 //
 // Value stays strict on purpose, not by oversight: writing an out-of-enum
 // string to the seen_type ENUM column is silently stored as "" by MariaDB,
