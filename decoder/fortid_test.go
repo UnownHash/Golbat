@@ -141,18 +141,25 @@ func TestFortIdCompareMatchesStringOrder(t *testing.T) {
 	// Include a bare/suffixed pair sharing a GUID: the shorter string must
 	// sort first, which the zero suffix byte gives us.
 	ids = append(ids, ids[0][:32], ids[0][:32]+".01")
-	for i := 0; i < len(ids); i++ {
-		a, ok := ParseFortId(ids[i])
+
+	parsed := make([]FortId, len(ids))
+	for i, s := range ids {
+		f, ok := ParseFortId(s)
 		if !ok {
-			t.Fatalf("ParseFortId(%q) failed", ids[i])
+			t.Fatalf("ParseFortId(%q) failed", s)
 		}
-		for j := 0; j < len(ids); j++ {
-			b, ok := ParseFortId(ids[j])
-			if !ok {
-				t.Fatalf("ParseFortId(%q) failed", ids[j])
-			}
+		parsed[i] = f
+	}
+	// ParseFortId never produces the zero FortId (it's the None sentinel),
+	// but Compare still has to order it consistently with its string form:
+	// "", a lexicographic prefix of every id here.
+	ids = append(ids, "")
+	parsed = append(parsed, FortId{})
+
+	for i := range ids {
+		for j := range ids {
 			want := strings.Compare(ids[i], ids[j])
-			if got := a.Compare(b); got != want {
+			if got := parsed[i].Compare(parsed[j]); got != want {
 				t.Fatalf("Compare(%q, %q) = %d, want %d", ids[i], ids[j], got, want)
 			}
 		}
@@ -209,6 +216,17 @@ func TestFortIdValuerScanner(t *testing.T) {
 	if err := bad.Scan("not-a-fort-id"); err == nil {
 		t.Fatal("Scan of a malformed id must return an error")
 	}
+
+	// The empty string is a real production key ('' exists on one pokestop
+	// row today) and must never alias the zero/absent sentinel: it has to
+	// error, like any other malformed id, rather than Scan(nil)'s NULL path.
+	emptyTarget := f
+	if err := emptyTarget.Scan(""); err == nil {
+		t.Fatal("Scan(\"\") must return an error, not silently become the sentinel")
+	}
+	if emptyTarget != f {
+		t.Fatalf("failed Scan(\"\") mutated the receiver: %v != %v", emptyTarget, f)
+	}
 }
 
 func TestFortIdTextMarshaling(t *testing.T) {
@@ -240,6 +258,15 @@ func TestFortIdTextMarshaling(t *testing.T) {
 	}
 	if f != before {
 		t.Fatalf("failed UnmarshalText mutated the receiver: %v != %v", f, before)
+	}
+
+	// The empty string is reserved (see TestFortIdValuerScanner): it must
+	// not silently unmarshal to the zero/absent sentinel.
+	if err := f.UnmarshalText([]byte{}); err == nil {
+		t.Fatal("UnmarshalText of an empty slice must return an error")
+	}
+	if f != before {
+		t.Fatalf("failed UnmarshalText([]byte{}) mutated the receiver: %v != %v", f, before)
 	}
 }
 

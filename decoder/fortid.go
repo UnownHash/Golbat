@@ -87,6 +87,7 @@ var fortIdDotZeroWarn sync.Once
 // is no fallback representation.
 func ParseFortId(s string) (FortId, bool) {
 	var f FortId
+	var sawDotZero bool
 	switch len(s) {
 	case 32:
 	case 35:
@@ -98,12 +99,7 @@ func ParseFortId(s string) (FortId, bool) {
 			return FortId{}, false
 		}
 		f.Suffix = byte(hi)<<4 | byte(lo)
-		if f.Suffix == 0 {
-			fortIdDotZeroWarn.Do(func() {
-				log.Warnf("[FORTID] fort id %q has a .00 suffix, which has never been observed; "+
-					"treating it as the bare form (see decoder/fortid.go)", s)
-			})
-		}
+		sawDotZero = f.Suffix == 0
 	default:
 		return FortId{}, false
 	}
@@ -117,6 +113,15 @@ func ParseFortId(s string) (FortId, bool) {
 	if f == (FortId{}) {
 		// Reserved: the zero value means "no fort".
 		return FortId{}, false
+	}
+	if sawDotZero {
+		// Only warn once the id is known to actually succeed — an all-zero
+		// GUID with ".00" is rejected above as the sentinel, and must not
+		// burn the one-shot slot a genuine occurrence needs.
+		fortIdDotZeroWarn.Do(func() {
+			log.Warnf("[FORTID] fort id %q has a .00 suffix, which has never been observed; "+
+				"treating it as the bare form (see decoder/fortid.go)", s)
+		})
 	}
 	return f, true
 }
@@ -162,13 +167,9 @@ func (f FortId) MarshalText() ([]byte, error) {
 // and assigns only on success, so a failed unmarshal never leaves a
 // half-written receiver.
 func (f *FortId) UnmarshalText(b []byte) error {
-	if len(b) == 0 {
-		*f = FortId{}
-		return nil
-	}
 	parsed, ok := ParseFortId(string(b))
 	if !ok {
-		return fmt.Errorf("FortId: cannot parse %q", b)
+		return fmt.Errorf("FortId.UnmarshalText: cannot parse %q", b)
 	}
 	*f = parsed
 	return nil
