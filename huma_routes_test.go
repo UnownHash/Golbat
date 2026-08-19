@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -199,9 +200,21 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("pokestop/id for unknown id is 404", func(t *testing.T) {
+	t.Run("pokestop/id for unknown (but well-formed) id is 404", func(t *testing.T) {
 		// PeekPokestopRecord is cache-only (no DB fallback), so a missing id is
-		// a clean 404 with no database.
+		// a clean 404 with no database. The id must parse — a well-formed,
+		// simply-absent id — so this actually reaches PeekPokestopRecord and
+		// exercises the cache-miss path, rather than 404ing out of ParseFortId
+		// before the handler ever calls it.
+		resp := api.Get("/api/pokestop/id/00000000000000000000000000000009")
+		if resp.Code != http.StatusNotFound {
+			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("pokestop/id for malformed id is 404", func(t *testing.T) {
+		// A structurally invalid id 404s out of ParseFortId, before
+		// PeekPokestopRecord is ever called.
 		resp := api.Get("/api/pokestop/id/does-not-exist")
 		if resp.Code != http.StatusNotFound {
 			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
@@ -233,16 +246,34 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("gym/query rejecting >500 ids returns 413", func(t *testing.T) {
-		// The cap applies to the deduplicated, parsed id list, so these must be
-		// well-formed (and distinct) fort ids rather than arbitrary short
-		// strings — otherwise dedupeIDs would drop every one as unparseable
-		// and the count would never reach the cap. Start at 1: an all-zero id
-		// (i=0) is FortId's reserved "no fort" sentinel and would itself be
-		// dropped as unparseable, one short of the cap.
+	t.Run("gym/query rejecting >500 well-formed ids returns 413", func(t *testing.T) {
+		// The cap check runs on the raw request size, before dedupeIDs parses
+		// anything, so well-formed vs malformed shouldn't matter here — but
+		// exercise the well-formed case too since it's the realistic one.
+		// Start at 1: an all-zero id (i=0) is FortId's reserved "no fort"
+		// sentinel and ParseFortId would reject it, which is irrelevant to
+		// this path but avoided anyway for clarity.
 		ids := make([]string, 0, 501)
 		for i := 1; i <= 501; i++ {
 			ids = append(ids, fmt.Sprintf("%032x", i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("gym/query rejecting >500 malformed ids still returns 413", func(t *testing.T) {
+		// Regression pin: the cap must apply to the raw request size, not to
+		// dedupeIDs's parsed-and-deduplicated output. Before that ordering
+		// fix, 501 unparseable ids would all get dropped, the deduplicated
+		// list would come back empty (well under the cap), and the request
+		// would wrongly succeed with an empty 200 instead of 413 — and log
+		// one error line per dropped id along the way.
+		ids := make([]string, 0, 501)
+		for i := 0; i < 501; i++ {
+			ids = append(ids, "id"+strconv.Itoa(i))
 		}
 		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
 		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))

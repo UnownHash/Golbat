@@ -137,24 +137,22 @@ func genericUpdateFort(id FortId, lat float64, lon float64, deleted bool) {
 
 // fortRtreeUpdatePokestopOnSave updates rtree and lookup cache when a pokestop is saved
 func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
-	id := pokestop.Id
-	genericUpdateFort(id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
+	genericUpdateFort(pokestop.Id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
 	if !pokestop.Deleted {
-		updatePokestopLookup(id, pokestop)
+		updatePokestopLookup(pokestop.Id, pokestop)
 	} else {
 		// A deleted pokestop drops out of the lookup cache (genericUpdateFort
 		// above) without a matching updatePokestopLookup, so reconcile its
 		// quest contribution to zero here.
-		removeFortQuestConditions(id)
+		removeFortQuestConditions(pokestop.Id)
 	}
 }
 
 // fortRtreeUpdateGymOnSave updates rtree and lookup cache when a gym is saved
 func fortRtreeUpdateGymOnSave(gym *Gym) {
-	id := gym.Id
-	genericUpdateFort(id, gym.Lat, gym.Lon, gym.Deleted)
+	genericUpdateFort(gym.Id, gym.Lat, gym.Lon, gym.Deleted)
 	if !gym.Deleted {
-		updateGymLookup(id, gym)
+		updateGymLookup(gym.Id, gym)
 	}
 }
 
@@ -170,21 +168,19 @@ func fortRtreeUpdateStationOnSave(station *Station) {
 
 // fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
 func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
-	id := pokestop.Id
-	_, inMap := fortLookupCache.Load(id)
+	_, inMap := fortLookupCache.Load(pokestop.Id)
 	if !inMap {
-		addFortToTree(id, pokestop.Lat, pokestop.Lon)
-		updatePokestopLookup(id, pokestop)
+		addFortToTree(pokestop.Id, pokestop.Lat, pokestop.Lon)
+		updatePokestopLookup(pokestop.Id, pokestop)
 	}
 }
 
 // fortRtreeUpdateGymOnGet updates rtree when a gym is loaded from DB (cache miss)
 func fortRtreeUpdateGymOnGet(gym *Gym) {
-	id := gym.Id
-	_, inMap := fortLookupCache.Load(id)
+	_, inMap := fortLookupCache.Load(gym.Id)
 	if !inMap {
-		addFortToTree(id, gym.Lat, gym.Lon)
-		updateGymLookup(id, gym)
+		addFortToTree(gym.Id, gym.Lat, gym.Lon)
+		updateGymLookup(gym.Id, gym)
 	}
 }
 

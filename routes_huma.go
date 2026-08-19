@@ -326,14 +326,22 @@ const maxQueryIDs = 500
 
 // dedupeIDs parses each id, dropping unparseable and duplicate ids while
 // preserving order. Subsumes the previous id == "" filter — ParseFortId
-// rejects "" too.
+// rejects "" too. Callers MUST cap the raw input length against
+// maxQueryIDs before calling this — parsing can only shrink the list
+// (drop malformed/duplicate entries), so checking the cap on its output
+// would let a request full of malformed ids dodge the limit entirely.
+// Parse failures are aggregated into a single log line for the whole call
+// rather than one per id: this runs once per request, not continuously,
+// so a per-event aggregator (util.DropReporter) would be overkill, but an
+// attacker-sized batch of garbage ids must not still cost one log line each.
 func dedupeIDs(in []string) []decoder.FortId {
 	seen := make(map[decoder.FortId]struct{}, len(in))
 	out := make([]decoder.FortId, 0, len(in))
+	dropped := 0
 	for _, raw := range in {
 		id, ok := decoder.ParseFortId(raw)
 		if !ok {
-			log.Errorf("dedupeIDs: unparseable fort id %q, dropping", raw)
+			dropped++
 			continue
 		}
 		if _, dup := seen[id]; dup {
@@ -341,6 +349,9 @@ func dedupeIDs(in []string) []decoder.FortId {
 		}
 		seen[id] = struct{}{}
 		out = append(out, id)
+	}
+	if dropped > 0 {
+		log.Errorf("dedupeIDs: dropped %d unparseable fort id(s) out of %d", dropped, len(in))
 	}
 	return out
 }
@@ -417,10 +428,12 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
 	}, func(ctx context.Context, in *idsQueryInput) (*gymQueryOutput, error) {
-		ids := dedupeIDs(in.Body.IDs)
-		if len(ids) > maxQueryIDs {
+		// Cap check runs on the raw request size, before parsing/dedup — see
+		// dedupeIDs's doc comment for why the order matters.
+		if len(in.Body.IDs) > maxQueryIDs {
 			return nil, huma.Error413RequestEntityTooLarge("too many ids")
 		}
+		ids := dedupeIDs(in.Body.IDs)
 		if len(ids) == 0 {
 			return &gymQueryOutput{Body: []decoder.ApiGymResult{}}, nil
 		}
