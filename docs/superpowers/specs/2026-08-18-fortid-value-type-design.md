@@ -29,9 +29,14 @@ pokemon resident) answered this:
 Decision: **`[16]byte` GUID + 1-byte numeric suffix, everywhere fort ids live, including
 `pokemon.PokestopId`.** On the decisive metric the options tie, so structure wins: the value type
 deletes the global table, its unbounded-growth ceilings, its deleted-fort leak, and its resolve
-failure modes at ~35 emit sites, rather than engineering around them. The accepted cost is
-`Pokemon` returning to the 352 allocator class (~104 MB at 3.25M cached — size-golf we are
-deliberately not optimizing) and one mechanical constraint change in the write-behind queue.
+failure modes at ~35 emit sites, rather than engineering around them. The accepted cost is one
+mechanical constraint change in the write-behind queue (§4). Size was not a cost: this branch
+descends from PR 394's base, where `Pokemon` was already in the 352 allocator class, and PR 395's
+interning was never applied here, so there was no smaller class to give up. Measured after
+implementation, sizes went the other way — `PokemonData` 256→248 bytes and `Pokemon` 352→344
+bytes, both shrinking, because the 17-byte `FortId` moved `PokestopId` out of the 8-byte-aligned
+pointer group into the 1-byte group, where it fills existing padding instead of creating new
+padding. The allocator size class is unchanged at 352.
 
 Username interning consequently buys nothing (`Pokemon` is in the 352 class regardless), so the
 interning machinery exits PR 395 entirely. Username persistence becomes a config option,
@@ -202,10 +207,10 @@ byte-for-byte versus today (§2.2). Purely mechanical; no behavior change for no
 **Config:** top-level `store_username bool` (koanf), **default `false`**, alongside
 `pokemon_memory_only`/`preserve_pokemon`.
 
-**Representation:** `Pokemon.Username` stays `null.String`. No interning — with `FortId` at 17
-bytes, `Pokemon` sits in the 352 allocator class regardless, so a 4-byte username handle buys
-no size class, and the caller-supplied unbounded key set that motivated the PR's open question
-never enters a global table at all.
+**Representation:** `Pokemon.Username` stays `null.String`. No interning — `Pokemon` measures 344
+bytes after the `FortId` conversion (§1), still inside the 352 allocator class, so a 4-byte
+username handle would not buy a size class either, and the caller-supplied unbounded key set
+that motivated the PR's open question never enters a global table at all.
 
 **Off (default):** decode paths never call `SetUsername`; the field stays invalid; the DB
 column writes NULL (existing rows' usernames are progressively NULLed as they re-save — this is
