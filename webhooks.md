@@ -335,7 +335,12 @@ Two reasons these fields are unreliable:
 The `seen_type` field is an enum tracking the source of the most recent
 update. `NullSeenType` holds it as a one-byte code in memory and serializes
 it the way the `null.String` it replaced did: one of the quoted strings
-below, or `null` when unset. Full set (defined in
+below, or `null` when unset. `null` is also emitted for a *degraded* value:
+if this binary reads a `seen_type` string it does not recognise (e.g. a
+value a newer binary wrote after a migration widened the enum, seen during
+a rollback or from a lagging replica in a mixed deployment), it stores the
+inert `SeenTypeCodeUnknown` sentinel rather than failing the row load, and
+that sentinel also serializes to `null`. Full set (defined in
 `decoder/pokemon_decode.go`, database enum in
 `sql/45_tappables_seen_type_lure.up.sql`):
 
