@@ -1,7 +1,6 @@
 package writebehind
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -21,7 +20,7 @@ const (
 )
 
 // Entry represents a pending write in a typed queue
-type Entry[K cmp.Ordered, T any] struct {
+type Entry[K comparable, T any] struct {
 	Key         K
 	Data        T
 	QueuedAt    time.Time
@@ -32,7 +31,7 @@ type Entry[K cmp.Ordered, T any] struct {
 }
 
 // TypedQueueConfig holds configuration for a typed queue
-type TypedQueueConfig[K cmp.Ordered, T any] struct {
+type TypedQueueConfig[K comparable, T any] struct {
 	Name                string
 	BatchSize           int
 	BatchTimeout        time.Duration
@@ -44,10 +43,18 @@ type TypedQueueConfig[K cmp.Ordered, T any] struct {
 	FlushFunc func(ctx context.Context, db db.DbDetails, entries []T) error
 	// KeyFunc extracts the unique key from an entry's data
 	KeyFunc func(data T) K
+	// KeyCompare orders keys for the deterministic lock ordering applied
+	// before each flush (see the sort in flushBatch). Required.
+	//
+	// This exists because the key constraint is `comparable`, not
+	// `cmp.Ordered`: FortId is a fixed-width struct, which no ordered
+	// constraint admits. Pass cmp.Compare for scalar keys; FortId.Compare
+	// for fort ids, which orders identically to the varchar column.
+	KeyCompare func(a, b K) int
 }
 
 // TypedQueue is a type-safe write-behind queue for a specific entity type
-type TypedQueue[K cmp.Ordered, T any] struct {
+type TypedQueue[K comparable, T any] struct {
 	mu      sync.Mutex
 	pending map[K]*Entry[K, T] // key -> entry for squashing
 
@@ -62,6 +69,7 @@ type TypedQueue[K cmp.Ordered, T any] struct {
 	limiter      *SharedLimiter
 	flushFunc    func(ctx context.Context, db db.DbDetails, entries []T) error
 	keyFunc      func(data T) K
+	keyCompare   func(a, b K) int
 	db           db.DbDetails
 	stats        stats_collector.StatsCollector
 
@@ -80,12 +88,15 @@ type TypedQueue[K cmp.Ordered, T any] struct {
 }
 
 // NewTypedQueue creates a new type-safe write-behind queue
-func NewTypedQueue[K cmp.Ordered, T any](cfg TypedQueueConfig[K, T]) *TypedQueue[K, T] {
+func NewTypedQueue[K comparable, T any](cfg TypedQueueConfig[K, T]) *TypedQueue[K, T] {
 	if cfg.BatchSize <= 0 {
 		cfg.BatchSize = 50
 	}
 	if cfg.BatchTimeout <= 0 {
 		cfg.BatchTimeout = 100 * time.Millisecond
+	}
+	if cfg.KeyCompare == nil {
+		log.Fatalf("[WRITEBEHIND] queue %s constructed without KeyCompare", cfg.Name)
 	}
 
 	return &TypedQueue[K, T]{
@@ -97,6 +108,7 @@ func NewTypedQueue[K cmp.Ordered, T any](cfg TypedQueueConfig[K, T]) *TypedQueue
 		limiter:        cfg.Limiter,
 		flushFunc:      cfg.FlushFunc,
 		keyFunc:        cfg.KeyFunc,
+		keyCompare:     cfg.KeyCompare,
 		db:             cfg.Db,
 		stats:          cfg.Stats,
 		warmupComplete: false,
@@ -267,6 +279,15 @@ func (q *TypedQueue[K, T]) addToBatch(ctx context.Context, entry *Entry[K, T]) {
 	}
 }
 
+// sortEntriesForLockOrder orders entries by key so every flush takes
+// entity locks in the same sequence, which is what prevents deadlocks
+// between concurrent flushes.
+func (q *TypedQueue[K, T]) sortEntriesForLockOrder(entries []*Entry[K, T]) {
+	slices.SortFunc(entries, func(a, b *Entry[K, T]) int {
+		return q.keyCompare(a.Key, b.Key)
+	})
+}
+
 // flushBatchLocked flushes the current batch (must be called with batchMu held)
 func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 	if q.batchTimer != nil {
@@ -302,9 +323,7 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 	}
 
 	// Sort entries by key to ensure consistent lock ordering and avoid deadlocks
-	slices.SortFunc(entries, func(a, b *Entry[K, T]) int {
-		return cmp.Compare(a.Key, b.Key)
-	})
+	q.sortEntriesForLockOrder(entries)
 
 	// Execute batch write
 	start := time.Now()

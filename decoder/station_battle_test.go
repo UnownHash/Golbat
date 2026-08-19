@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"cmp"
 	"context"
 	"testing"
 	"time"
@@ -488,16 +489,18 @@ func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T
 	previousSender := webhooksSender
 	stats := stats_collector.NewNoopStatsCollector()
 	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
-		Name:      "station",
-		Stats:     stats,
-		FlushFunc: func(context.Context, db.DbDetails, []StationData) error { return nil },
-		KeyFunc:   func(d StationData) string { return d.Id },
+		Name:       "station",
+		Stats:      stats,
+		FlushFunc:  func(context.Context, db.DbDetails, []StationData) error { return nil },
+		KeyFunc:    func(d StationData) string { return d.Id },
+		KeyCompare: cmp.Compare[string],
 	})
 	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
-		Name:      "station_battle",
-		Stats:     stats,
-		FlushFunc: func(context.Context, db.DbDetails, []stationBattleWrite) error { return nil },
-		KeyFunc:   func(d stationBattleWrite) string { return d.StationId },
+		Name:       "station_battle",
+		Stats:      stats,
+		FlushFunc:  func(context.Context, db.DbDetails, []stationBattleWrite) error { return nil },
+		KeyFunc:    func(d stationBattleWrite) string { return d.StationId },
+		KeyCompare: cmp.Compare[string],
 	})
 	webhooksSender = &recordingWebhooksSender{}
 	setStatsCollectorForTest(t, stats)

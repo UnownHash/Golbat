@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"cmp"
 	"context"
 	"time"
 
@@ -72,6 +73,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushPokestopBatch,
 		KeyFunc:             func(d PokestopData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(pokestopQueue)
 
@@ -85,6 +87,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushGymBatch,
 		KeyFunc:             func(d GymData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(gymQueue)
 
@@ -98,6 +101,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushPokemonBatchTyped,
 		KeyFunc:             func(d PokemonData) uint64 { return uint64(d.Id) },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(pokemonQueue)
 
@@ -111,6 +115,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushSpawnpointBatch,
 		KeyFunc:             func(d SpawnpointData) int64 { return d.Id },
+		KeyCompare:          cmp.Compare[int64],
 	})
 	queueManager.Register(spawnpointQueue)
 
@@ -124,6 +129,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushRouteBatch,
 		KeyFunc:             func(d RouteData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(routeQueue)
 
@@ -137,6 +143,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushTappableBatch,
 		KeyFunc:             func(d TappableData) uint64 { return d.Id },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(tappableQueue)
 
@@ -150,6 +157,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushStationBatch,
 		KeyFunc:             func(d StationData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(stationQueue)
 
@@ -163,6 +171,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushStationBattleBatch,
 		KeyFunc:             func(d stationBattleWrite) string { return d.StationId },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(stationBattleQueue)
 
@@ -176,6 +185,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushIncidentBatch,
 		KeyFunc:             func(d IncidentData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(incidentQueue)
 
@@ -189,6 +199,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushS2CellBatch,
 		KeyFunc:             func(d S2CellData) uint64 { return d.Id },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(s2cellQueue)
 
