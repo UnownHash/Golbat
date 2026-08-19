@@ -162,11 +162,7 @@ func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.Poke
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v2.pokemon")
 		if pokemon != nil {
 			if int64OrZero(pokemon.ExpireTimestamp) > startUnix {
-				var pokestopId *string
-				if pokemon.PokestopId.Valid() {
-					s := pokemon.PokestopId.String()
-					pokestopId = &s
-				}
+				pokestopId := pokemon.PokestopId.Ptr()
 				apiPokemon := pb.PokemonDetails{
 					Id:         uint64(pokemon.Id),
 					PokestopId: pokestopId,

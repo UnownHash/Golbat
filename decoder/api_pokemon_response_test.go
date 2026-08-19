@@ -35,6 +35,9 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 	if got.Level != nil {
 		t.Errorf("Level = %v, want nil (null)", got.Level)
 	}
+	if got.PokestopId != nil {
+		t.Errorf("PokestopId = %v, want nil (null)", got.PokestopId)
+	}
 	if got.PokemonId != 25 {
 		t.Errorf("PokemonId = %d, want 25", got.PokemonId)
 	}
@@ -58,6 +61,9 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 	}
 	if string(m["level"]) != "null" {
 		t.Errorf("level should serialize as null, got %s", m["level"])
+	}
+	if string(m["pokestop_id"]) != "null" {
+		t.Errorf("pokestop_id should serialize as null, got %s", m["pokestop_id"])
 	}
 	if _, ok := m["pvp"]; !ok {
 		t.Errorf("pvp key missing from output")

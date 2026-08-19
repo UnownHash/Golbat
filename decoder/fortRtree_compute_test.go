@@ -34,11 +34,11 @@ func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
 
 	for i := 0; i < 2000; i++ {
 		fortLookupCache.Delete(id)
-		updatePokestopLookup(id, stop) // seed entry (as a fort save would)
+		updatePokestopLookup(stop) // seed entry (as a fort save would)
 
 		var wg sync.WaitGroup
 		wg.Add(2)
-		go func() { defer wg.Done(); updatePokestopLookup(id, stop) }()
+		go func() { defer wg.Done(); updatePokestopLookup(stop) }()
 		go func() { defer wg.Done(); updatePokestopIncidentLookup(id, inc) }()
 		wg.Wait()
 

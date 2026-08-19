@@ -198,7 +198,10 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		if fortId, ok := ParseFortId(mapPokemon.FortId); ok {
 			pokemon.SetPokestopId(fortId)
 		} else if mapPokemon.FortId != "" {
-			log.Errorf("[POKEMON] lure pokemon %d carried an unparseable fort id %q", pokemon.Id, mapPokemon.FortId)
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable lure-pokemon fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, mapPokemon.FortId)
+			})
 		}
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
@@ -317,7 +320,10 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		}
 		fortId, ok := ParseFortId(pokestopId)
 		if !ok {
-			log.Errorf("[POKEMON] updateFromNearby %d: unparseable fort id %q", pokemon.Id, pokestopId)
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable updateFromNearby fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, pokestopId)
+			})
 		}
 		var pokestop *Pokestop
 		var unlock func()
@@ -1216,7 +1222,10 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		if fortId, ok := ParseFortId(fortIdStr); ok {
 			pokemon.SetPokestopId(fortId)
 		} else {
-			log.Errorf("[POKEMON] tappable lure encounter %d carried an unparseable fort id %q", pokemon.Id, fortIdStr)
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable tappable-lure-encounter fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, fortIdStr)
+			})
 		}
 		// we don't know any despawn times from lured/fort tappables
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))

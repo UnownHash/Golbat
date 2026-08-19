@@ -165,14 +165,17 @@ every other proto-format change, which requires a code update regardless.
 | DB write | `driver.Valuer`: `String()` for valid ids, `nil` for the zero value (nullable columns); PK columns are never zero by construction (a fort entity cannot be created without a parsed id) |
 | DB read | `sql.Scanner`: parse; failure → error log and the loading loop skips that row (a malformed id row never enters memory, and never poisons the rest of its batch — the PR 395 lesson) |
 | JSON out (API, webhooks) | `MarshalJSON`: string form; the pokemon webhook's explicit `"None"` sentinel is produced by its existing site checking `Valid()` |
-| JSON in (preserve file, API query bodies) | `UnmarshalJSON`: parse; failure → error log, entry skipped (a query id that fails to parse matches nothing) |
+| JSON in (API query bodies) | `UnmarshalJSON`: parse; failure → error log, entry skipped (a query id that fails to parse matches nothing) |
 | API path/query params | parse at the handler; an unparseable id simply doesn't exist → empty result / 404, never 500 |
 | gRPC `InvasionContext.FortId`, raw-JSON `fort_id` | parse at ingest |
 | `getFortIdFromContest` | parse the derived substring; failure → error log, contest update skipped |
 | `maphash` (station battles) | `h.Write(id.Guid[:])` + suffix byte, replacing `writeString` |
 
-The preserve-on-shutdown pokemon snapshot serializes through JSON: `MarshalJSON`/`UnmarshalJSON`
-keep old snapshot files loadable (they contain the string form either way).
+The preserve-on-shutdown pokemon snapshot does **not** serialize through JSON — there is no
+snapshot file. `PreservePokemonToDatabase` (`decoder/pokemon_preserve.go`) upserts cached pokemon
+into the `pokemon` table via `NamedExecContext`, and `PreloadPreservedPokemon` reads them back via
+`StructScan`; both go through `PokestopId`'s `db` tag, so this boundary is the ordinary DB
+write/read row above (`Valuer`/`Scanner`), not a JSON one.
 
 ## 3. Conversion inventory
 
@@ -235,7 +238,7 @@ the documented meaning of the option); the API returns null.
 |---|---|---|
 | Nonconforming id at ingest (GMO fort, gRPC invasion, contest-derived, raw JSON) | update skipped | error log naming id + path |
 | Nonconforming id in a DB row (preload, bulk loads, tracker pagination) | row skipped, never enters memory | error log |
-| Nonconforming id in a preserve-file entry | entry skipped | error log |
+| Nonconforming id in a pokemon-preserve row (DB round-trip, not a file — see §2.4) | row skipped | error log |
 | API lookup/query with an unparseable id | empty result / 404, never 500 | — |
 | Zero `FortId` reaching a PK write | impossible by construction (entities require a parsed id); asserted in tests | — |
 

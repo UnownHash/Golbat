@@ -580,7 +580,10 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			// track fort by type for memory-based cleanup (only if tracker enabled)
 			if cf, ok := cellForts[mapCell.S2CellId]; ok {
 				if fortId, parsed := decoder.ParseFortId(fort.FortId); !parsed {
-					log.Errorf("[FORT_TRACKER] GMO cell %d carried an unparseable fort id %q, skipping", mapCell.S2CellId, fort.FortId)
+					decoder.FortIdParseDrops.Report(func(dropped int64) {
+						log.Errorf("[FORT_TRACKER] dropped %d unparseable fort id(s) in the last second on GMO cell tracking (most recently cell %d, id %q)",
+							dropped, mapCell.S2CellId, fort.FortId)
+					})
 				} else {
 					switch fort.FortType {
 					case pogo.FortType_GYM:

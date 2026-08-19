@@ -124,11 +124,7 @@ type ApiPokemonResult struct {
 // null and is_event: 0. Replicating that preserves wire compatibility — do not
 // populate them without coordinating a wire change.
 func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
-	var pokestopId *string
-	if pokemon.PokestopId.Valid() {
-		s := pokemon.PokestopId.String()
-		pokestopId = &s
-	}
+	pokestopId := pokemon.PokestopId.Ptr()
 	return ApiPokemonResult{
 		Id:                      pokemon.Id.String(),
 		PokestopId:              pokestopId,

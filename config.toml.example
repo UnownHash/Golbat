@@ -6,7 +6,13 @@ api_docs = true         # Serve interactive API docs at /docs (+ /openapi.json, 
 
 pokemon_memory_only = true  # Use in-memory storage for pokemon only
 #preserve_pokemon = false   # Save pokemon to DB on shutdown, restore on startup (for memory-only mode)
-store_username = false  # store_username: Persist the reporting account's username on the pokemon row (default off). Off means pokemon webhooks report whichever account triggered the save, not the first account to see the pokemon.
+# store_username: Persist the reporting account's username on the pokemon row (default off).
+# Off means pokemon webhooks report whichever account triggered the save, not the first account
+# to see the pokemon. It also affects saves with no triggering account at all — e.g. the
+# proactive IV re-save (weather_iv.go) always passes none — which previously fell back to the
+# stored (first-seen) username; with the option off there is nothing to fall back to, so those
+# webhooks now carry "username": null.
+store_username = false
 preload = false         # preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
 fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [experimental]
 

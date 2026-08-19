@@ -58,7 +58,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	stop := newQuestStop(stopId, "catch_x", 3)
 
 	// Load / first lookup -> +1.
-	updatePokestopLookup(stopId, stop)
+	updatePokestopLookup(stop)
 	if got := GetAvailableQuestConditions(); len(got) != 1 || got[0].Count != 1 || got[0].Title != "catch_x" {
 		t.Fatalf("after load: want 1 entry count=1 title=catch_x, got %+v", got)
 	}
@@ -66,7 +66,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	// Quest change on the same fort -> old key removed, new key added, still one entry.
 	stop.QuestTitle = null.StringFrom("catch_y")
 	stop.QuestTarget = null.IntFrom(7)
-	updatePokestopLookup(stopId, stop)
+	updatePokestopLookup(stop)
 	got := GetAvailableQuestConditions()
 	if len(got) != 1 {
 		t.Fatalf("after change: want exactly 1 entry, got %+v", got)
@@ -82,7 +82,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	const stop2IdStr = "00000000000000000000000000000002"
 	stop2Id := mustFortId(t, stop2IdStr)
 	stop2 := newQuestStop(stop2Id, "catch_y", 7)
-	updatePokestopLookup(stop2Id, stop2)
+	updatePokestopLookup(stop2)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 2 {
 		t.Fatalf("after second fort: want catch_y/target=7 count=2, got %+v", got)
@@ -116,7 +116,7 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	const delIdStr = "00000000000000000000000000000001"
 	delId := mustFortId(t, delIdStr)
 	del := newQuestStop(delId, "spin_x", 4)
-	updatePokestopLookup(delId, del)
+	updatePokestopLookup(del)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("delete setup: want 1 entry")
 	}
@@ -132,12 +132,12 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	const convIdStr = "00000000000000000000000000000002"
 	convId := mustFortId(t, convIdStr)
 	conv := newQuestStop(convId, "battle_x", 2)
-	updatePokestopLookup(convId, conv)
+	updatePokestopLookup(conv)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("conversion setup: want 1 entry")
 	}
 	gym := &Gym{GymData: GymData{Id: conv.Id, Lat: conv.Lat, Lon: conv.Lon}}
-	updateGymLookup(convId, gym) // overwrites FortLookup[id] to GYM; count still stale here
+	updateGymLookup(gym) // overwrites FortLookup[id] to GYM; count still stale here
 	// Stale pokestop eviction: FortLookup is now GYM (mismatch) but the quest
 	// contribution must still be removed.
 	deferFortEviction(POKESTOP, convId, conv.Lat, conv.Lon)
@@ -168,7 +168,7 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
-				updatePokestopLookup(stopId, stop)
+				updatePokestopLookup(stop)
 				deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
 			}
 		}()

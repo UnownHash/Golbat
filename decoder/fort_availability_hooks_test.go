@@ -31,7 +31,7 @@ func TestUpdateGymLookupHookWiresRaidAvailability(t *testing.T) {
 		RaidPokemonForm:  null.IntFrom(0),
 		RaidEndTimestamp: null.IntFrom(now + 1800),
 	}}
-	updateGymLookup(mustFortId(t, gymIdStr), gym)
+	updateGymLookup(gym)
 
 	got := GetAvailableGyms(now)
 	found := false
@@ -104,7 +104,7 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 		ShowcasePokemonType: null.IntFrom(0),
 		ShowcaseExpiry:      null.IntFrom(now + 1800),
 	}}
-	updatePokestopLookup(mustFortId(t, stopIdStr), stop)
+	updatePokestopLookup(stop)
 
 	got := GetAvailablePokestops(now)
 
@@ -145,7 +145,7 @@ func TestUpdatePokestopLookupHookWiresBuddyShowcaseFocus(t *testing.T) {
 		ShowcaseFocus:  null.StringFrom(`{"type":"buddy","min_level":3}`),
 		ShowcaseExpiry: null.IntFrom(now + 1800),
 	}}
-	updatePokestopLookup(stopId, stop)
+	updatePokestopLookup(stop)
 
 	lookup, ok := fortLookupCache.Load(stopId)
 	if !ok || lookup.ShowcaseBuddyMinLevel != 3 {

@@ -21,7 +21,9 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	for _, fort := range p {
 		fortId, ok := ParseFortId(fort.Data.FortId)
 		if !ok {
-			log.Errorf("UpdateFortBatch: unparseable fort id %q, skipping", fort.Data.FortId)
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("UpdateFortBatch: dropped %d unparseable fort id(s) in the last second (most recently %q)", dropped, fort.Data.FortId)
+			})
 			continue
 		}
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
@@ -119,7 +121,9 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	for _, stationProto := range p {
 		stationId, ok := ParseFortId(stationProto.Data.Id)
 		if !ok {
-			log.Errorf("UpdateStationBatch: unparseable station id %q, skipping", stationProto.Data.Id)
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("UpdateStationBatch: dropped %d unparseable station id(s) in the last second (most recently %q)", dropped, stationProto.Data.Id)
+			})
 			continue
 		}
 		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId, "UpdateStationBatch")

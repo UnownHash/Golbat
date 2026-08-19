@@ -170,9 +170,9 @@ func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table strin
 		// "now" rather than row.Updated: load is a confirmation event.
 		// See preloadPokestops for rationale.
 		nowMs := time.Now().UnixMilli()
-		_, cursor := applyFortRows(table, rows, isGym, nowMs)
+		applied, cursor := applyFortRows(table, rows, isGym, nowMs)
 
-		totalCount += len(rows)
+		totalCount += applied
 		lastId = cursor
 
 		if len(rows) < loadBatchSize {

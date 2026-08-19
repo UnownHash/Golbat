@@ -280,6 +280,26 @@ func TestFortIdTextMarshaling(t *testing.T) {
 	}
 }
 
+// TestFortIdPtr pins the absent-fort JSON contract at the type: a nil
+// *string (JSON null) for the zero value, a pointer to the canonical
+// string otherwise. Mirrors null.String.Ptr(), which every FortId field
+// replaced.
+func TestFortIdPtr(t *testing.T) {
+	var zero FortId
+	if p := zero.Ptr(); p != nil {
+		t.Fatalf("zero FortId.Ptr() = %v, want nil", p)
+	}
+
+	f := mustFortId(t, "a1b2c3d4e5f60718293a4b5c6d7e8f90.16")
+	p := f.Ptr()
+	if p == nil {
+		t.Fatal("valid FortId.Ptr() = nil, want a pointer")
+	}
+	if *p != f.String() {
+		t.Fatalf("valid FortId.Ptr() = %q, want %q", *p, f.String())
+	}
+}
+
 func TestFortIdAppendTextDoesNotAllocate(t *testing.T) {
 	f, ok := ParseFortId("a1b2c3d4e5f60718293a4b5c6d7e8f90.16")
 	if !ok {

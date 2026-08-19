@@ -40,7 +40,18 @@ func TestUsernameStoredWhenEnabled(t *testing.T) {
 }
 
 // With the option on, the first account to see the pokemon keeps ownership
-// of the field — the pre-existing behavior the option must not disturb.
+// of the field. This is a deliberate change of the column's meaning, not a
+// preservation of prior behavior: before store_username existed, three of
+// the six setUsernameIfStored call sites (updateFromWild, updateFromNearby,
+// addEncounterPokemon) called SetUsername unconditionally on every
+// re-sighting, i.e. last-account-wins; only the map and tappable sites were
+// already first-wins. First-wins was chosen for all of them here because it
+// avoids re-dirtying (and rewriting) a row on every re-sighting merely for a
+// changed reporter. The webhook and dedup consumers are unaffected by this
+// choice: resolveUsername prefers the live, per-request account over the
+// stored value whenever one is available, so "first account" only matters
+// as the value a client reads back from a persisted row, not for
+// webhook/dedup correctness.
 func TestUsernameNotOverwrittenWhenEnabled(t *testing.T) {
 	withStoreUsername(t, true)
 

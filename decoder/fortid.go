@@ -9,7 +9,28 @@ import (
 	"sync"
 
 	log "github.com/sirupsen/logrus"
+
+	"golbat/util"
 )
+
+// FortIdParseDrops aggregates fort-id parse failures on the decode path
+// (GMO fort/station batches, fort-tracker cell tracking, and pokemon
+// lure/nearby/tappable fort references) into at most one log line per
+// second, via util.DropReporter — the codebase's pattern for exactly this
+// (see stats.go, rtree_evictor.go, raw_limiter.go). Parse failure only
+// happens if Niantic changes the id structure (§2.3 of the design doc),
+// but when it does, every affected fort/pokemon hits this on every GMO
+// across up to tuning.raw_processing_concurrency (default 96) concurrent
+// decoders — five figures of log.Errorf/s, a second incident stacked on
+// top of the ingest outage, burying the one line an operator needs.
+//
+// Exported (unlike the codebase's other DropReporters, which are
+// package-private to their single call site) because decode.go — package
+// main — is one of the routed call sites; sharing one counter across all
+// of them means one aggregated line per second regardless of which site
+// is producing the failures, which is the useful signal here ("fort id
+// parsing is failing"), not which specific call site noticed first.
+var FortIdParseDrops util.DropReporter
 
 // FortId is the in-memory representation of a fort id — the identifier
 // shared by pokestops, gyms and stations, stored in the database as
@@ -133,6 +154,15 @@ func (f FortId) Valid() bool {
 
 // AppendText implements encoding.TextAppender. Callers holding a buffer
 // (batch JSON encoding, SQL argument building) format with no allocation.
+//
+// Asymmetric with UnmarshalText at the zero value: the zero value appends
+// nothing (renders as ""), but UnmarshalText("") fails (Parse("") is
+// rejected — see ParseFortId). This path is write-only for the zero value;
+// no current DTO marshals a bare FortId (every JSON boundary holds
+// string/*string, converted via Ptr/String at the edge), so the asymmetry
+// is latent. A future FortId-typed JSON field must handle absence itself
+// (e.g. Ptr(), or an explicit Valid() check) rather than round-tripping
+// the zero value through this encoding.
 func (f FortId) AppendText(b []byte) ([]byte, error) {
 	if !f.Valid() {
 		return b, nil
@@ -159,17 +189,44 @@ func (f FortId) String() string {
 // MarshalText implements encoding.TextMarshaler, which is what gives
 // FortId its JSON representation (a plain string) in both encoding/json
 // and goccy.
+//
+// Shares AppendText's zero-value asymmetry: marshals the zero value as ""
+// rather than failing, but UnmarshalText("") rejects it. See AppendText.
 func (f FortId) MarshalText() ([]byte, error) {
 	return f.AppendText(make([]byte, 0, 35))
+}
+
+// Ptr returns nil for the zero value (absent fort) and a pointer to the
+// canonical string form otherwise. Named to mirror null.String.Ptr(),
+// which every FortId field replaced — callers that used to write
+// pokemon.PokestopId.Ptr() keep the same call shape. Centralizing this
+// (rather than each site writing `if f.Valid() { s := f.String(); ... }`)
+// makes "absent fort serializes as JSON null, never \"\"" a property of
+// the type: a call site can no longer accidentally write an unconditional
+// `s := f.String(); p = &s`, which would emit "" instead of null for an
+// absent fort.
+func (f FortId) Ptr() *string {
+	if !f.Valid() {
+		return nil
+	}
+	s := f.String()
+	return &s
 }
 
 // UnmarshalText implements encoding.TextUnmarshaler. It parses into a local
 // and assigns only on success, so a failed unmarshal never leaves a
 // half-written receiver.
+//
+// The error text carries "unparseable" — the same word every decode-path
+// ingest site uses for this failure — so it stays grep-compatible with them
+// once a DB-scan loader wraps it (e.g. "Preload: pokestop scan error - %s").
+// One shared token makes "did Niantic change the id format?" a single grep
+// across both ingest logs and DB-scan logs, without needing every loader's
+// wrapper message rewritten individually.
 func (f *FortId) UnmarshalText(b []byte) error {
 	parsed, ok := ParseFortId(string(b))
 	if !ok {
-		return fmt.Errorf("FortId.UnmarshalText: cannot parse %q", b)
+		return fmt.Errorf("FortId.UnmarshalText: unparseable fort id, cannot parse %q", b)
 	}
 	*f = parsed
 	return nil

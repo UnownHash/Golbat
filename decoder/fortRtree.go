@@ -135,7 +135,7 @@ func genericUpdateFort(id FortId, lat float64, lon float64, deleted bool) {
 func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 	genericUpdateFort(pokestop.Id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
 	if !pokestop.Deleted {
-		updatePokestopLookup(pokestop.Id, pokestop)
+		updatePokestopLookup(pokestop)
 	} else {
 		// A deleted pokestop drops out of the lookup cache (genericUpdateFort
 		// above) without a matching updatePokestopLookup, so reconcile its
@@ -148,14 +148,14 @@ func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 func fortRtreeUpdateGymOnSave(gym *Gym) {
 	genericUpdateFort(gym.Id, gym.Lat, gym.Lon, gym.Deleted)
 	if !gym.Deleted {
-		updateGymLookup(gym.Id, gym)
+		updateGymLookup(gym)
 	}
 }
 
 // fortRtreeUpdateStationOnSave updates rtree and lookup cache when a station is saved
 func fortRtreeUpdateStationOnSave(station *Station) {
 	genericUpdateFort(station.Id, station.Lat, station.Lon, false)
-	updateStationLookup(station.Id, station)
+	updateStationLookup(station)
 }
 
 // fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
@@ -163,7 +163,7 @@ func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
 	_, inMap := fortLookupCache.Load(pokestop.Id)
 	if !inMap {
 		addFortToTree(pokestop.Id, pokestop.Lat, pokestop.Lon)
-		updatePokestopLookup(pokestop.Id, pokestop)
+		updatePokestopLookup(pokestop)
 	}
 }
 
@@ -172,7 +172,7 @@ func fortRtreeUpdateGymOnGet(gym *Gym) {
 	_, inMap := fortLookupCache.Load(gym.Id)
 	if !inMap {
 		addFortToTree(gym.Id, gym.Lat, gym.Lon)
-		updateGymLookup(gym.Id, gym)
+		updateGymLookup(gym)
 	}
 }
 
@@ -181,11 +181,13 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 	_, inMap := fortLookupCache.Load(station.Id)
 	if !inMap {
 		addFortToTree(station.Id, station.Lat, station.Lon)
-		updateStationLookup(station.Id, station)
+		updateStationLookup(station)
 	}
 }
 
-func updatePokestopLookup(id FortId, pokestop *Pokestop) {
+func updatePokestopLookup(pokestop *Pokestop) {
+	id := pokestop.Id
+
 	var showcaseFocus *ApiShowcaseFocus
 	var showcaseBuddyMinLevel int8
 	if pokestop.ShowcaseFocus.Valid {
@@ -252,7 +254,8 @@ func updatePokestopLookup(id FortId, pokestop *Pokestop) {
 	reconcileFortQuestConditions(id, questConditionKeysFromPokestop(pokestop))
 }
 
-func updateGymLookup(id FortId, gym *Gym) {
+func updateGymLookup(gym *Gym) {
+	id := gym.Id
 	now := time.Now().Unix()
 	fl := FortLookup{
 		FortType:             GYM,
@@ -272,8 +275,8 @@ func updateGymLookup(id FortId, gym *Gym) {
 	observeRaid(&fl, now)
 }
 
-func updateStationLookup(id FortId, station *Station) {
-	updateStationLookupWithBattles(id, station, getKnownStationBattles(station.Id, time.Now().Unix()))
+func updateStationLookup(station *Station) {
+	updateStationLookupWithBattles(station.Id, station, getKnownStationBattles(station.Id, time.Now().Unix()))
 }
 
 func updateStationLookupWithBattles(id FortId, station *Station, stationBattles []StationBattleData) {

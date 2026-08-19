@@ -44,7 +44,8 @@ type TypedQueueConfig[K comparable, T any] struct {
 	// KeyFunc extracts the unique key from an entry's data
 	KeyFunc func(data T) K
 	// KeyCompare orders keys for the deterministic lock ordering applied
-	// before each flush (see the sort in flushBatch). Required.
+	// before each flush (see sortEntriesForLockOrder, called from
+	// flushBatchLocked). Required.
 	//
 	// This exists because the key constraint is `comparable`, not
 	// `cmp.Ordered`: FortId is a fixed-width struct, which no ordered
@@ -322,7 +323,6 @@ func (q *TypedQueue[K, T]) flushBatchLocked(ctx context.Context) {
 		defer q.limiter.Release()
 	}
 
-	// Sort entries by key to ensure consistent lock ordering and avoid deadlocks
 	q.sortEntriesForLockOrder(entries)
 
 	// Execute batch write
