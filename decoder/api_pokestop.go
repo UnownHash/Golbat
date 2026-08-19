@@ -57,13 +57,13 @@ type ApiPokestopResult struct {
 	AlternativeQuestTitle         *string               `json:"alternative_quest_title" doc:"Title of the non-AR quest"`
 	AlternativeQuestExpiry        *int64                `json:"alternative_quest_expiry" doc:"Unix timestamp when the non-AR quest expires"`
 	Description                   *string               `json:"description" doc:"Description of the pokestop"`
-	ShowcaseFocus                 *json.RawMessage      `json:"showcase_focus" doc:"Focus of the showcase contest as native JSON; null when no showcase"`
+	ShowcaseFocus                 *json.RawMessage      `json:"showcase_focus" doc:"Focus of the most recent showcase contest as native JSON. Like the raid fields, it is retained after the contest ends rather than cleared, so gate on showcase_expiry for liveness. Null only until the pokestop's first observed showcase."`
 	ShowcasePokemon               *int64                `json:"showcase_pokemon_id" doc:"Pokedex ID of the showcase contest pokemon"`
 	ShowcasePokemonForm           *int64                `json:"showcase_pokemon_form_id" doc:"Form ID of the showcase contest pokemon"`
 	ShowcasePokemonType           *int64                `json:"showcase_pokemon_type_id" doc:"Type ID of the showcase contest pokemon"`
 	ShowcaseRankingStandard       *int64                `json:"showcase_ranking_standard" doc:"Ranking standard of the showcase contest"`
 	ShowcaseExpiry                *int64                `json:"showcase_expiry" doc:"Unix timestamp when the showcase contest expires"`
-	ShowcaseRankings              *json.RawMessage      `json:"showcase_rankings" doc:"Showcase contest rankings as native JSON; null when no showcase"`
+	ShowcaseRankings              *json.RawMessage      `json:"showcase_rankings" doc:"Rankings of the most recent showcase contest as native JSON. Retained after the contest ends rather than cleared, so gate on showcase_expiry for liveness. Null only until the pokestop's first observed showcase."`
 	Invasions                     []ApiPokestopIncident `json:"invasions,omitempty" doc:"Active incidents; present when the pokestop has active incidents (always attempted on by-id, on scans only when with_incidents is set)"`
 }
 
