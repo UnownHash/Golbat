@@ -12,7 +12,7 @@ type TappableData struct {
 	Id                      uint64      `db:"id"`
 	Lat                     float64     `db:"lat"`
 	Lon                     float64     `db:"lon"`
-	FortId                  null.String `db:"fort_id"` // either fortId or spawnpointId are given
+	FortId                  FortId      `db:"fort_id"` // either fortId or spawnpointId are given; zero value = absent
 	SpawnId                 null.Int    `db:"spawn_id"`
 	Type                    string      `db:"type"`
 	Encounter               null.Int    `db:"pokemon_id"`
@@ -90,10 +90,10 @@ func (ta *Tappable) SetLon(v float64) {
 	}
 }
 
-func (ta *Tappable) SetFortId(v null.String) {
+func (ta *Tappable) SetFortId(v FortId) {
 	if ta.FortId != v {
 		if dbDebugEnabled {
-			ta.debug.recordChange(fmt.Sprintf("FortId:%s->%s", FormatNull(ta.FortId), FormatNull(v)))
+			ta.debug.recordChange(fmt.Sprintf("FortId:%s->%s", ta.FortId, v))
 		}
 		ta.FortId = v
 		ta.dirty = true

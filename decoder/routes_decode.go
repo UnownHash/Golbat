@@ -10,7 +10,7 @@ import (
 	"golbat/util"
 )
 
-func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto) {
+func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRouteProto, startFortId, endFortId FortId) {
 	route.SetName(sharedRouteProto.GetName())
 	if sharedRouteProto.GetShortCode() != "" {
 		route.SetShortcode(sharedRouteProto.GetShortCode())
@@ -28,14 +28,14 @@ func (route *Route) updateFromSharedRouteProto(sharedRouteProto *pogo.SharedRout
 	route.SetDescription(description)
 	route.SetDistanceMeters(sharedRouteProto.GetRouteDistanceMeters())
 	route.SetDurationSeconds(sharedRouteProto.GetRouteDurationSeconds())
-	route.SetEndFortId(sharedRouteProto.GetEndPoi().GetAnchor().GetFortId())
+	route.SetEndFortId(endFortId)
 	route.SetEndImage(sharedRouteProto.GetEndPoi().GetImageUrl())
 	route.SetEndLat(sharedRouteProto.GetEndPoi().GetAnchor().GetLatDegrees())
 	route.SetEndLon(sharedRouteProto.GetEndPoi().GetAnchor().GetLngDegrees())
 	route.SetImage(sharedRouteProto.GetImage().GetImageUrl())
 	route.SetImageBorderColor(sharedRouteProto.GetImage().GetBorderColorHex())
 	route.SetReversible(sharedRouteProto.GetReversible())
-	route.SetStartFortId(sharedRouteProto.GetStartPoi().GetAnchor().GetFortId())
+	route.SetStartFortId(startFortId)
 	route.SetStartImage(sharedRouteProto.GetStartPoi().GetImageUrl())
 	route.SetStartLat(sharedRouteProto.GetStartPoi().GetAnchor().GetLatDegrees())
 	route.SetStartLon(sharedRouteProto.GetStartPoi().GetAnchor().GetLngDegrees())

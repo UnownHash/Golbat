@@ -27,11 +27,11 @@ func TestCollectPokestopIncidents(t *testing.T) {
 	s1 := mustFortId(t, "00000000000000000000000000000001")
 
 	active := &Incident{IncidentData: IncidentData{
-		Id: "inc-active", PokestopId: "s1", DisplayType: 1, Character: 5,
+		Id: "inc-active", PokestopId: s1, DisplayType: 1, Character: 5,
 		Confirmed: true, Slot1PokemonId: null.IntFrom(41), ExpirationTime: now + 100,
 	}}
 	expired := &Incident{IncidentData: IncidentData{
-		Id: "inc-expired", PokestopId: "s1", DisplayType: 3, Character: 30, ExpirationTime: now - 1,
+		Id: "inc-expired", PokestopId: s1, DisplayType: 3, Character: 30, ExpirationTime: now - 1,
 	}}
 	incidentCache.Set("inc-active", active, 0)
 	incidentCache.Set("inc-expired", expired, 0)

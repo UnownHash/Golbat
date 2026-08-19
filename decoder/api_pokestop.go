@@ -153,7 +153,7 @@ type ApiPokestopIncident struct {
 func buildPokestopIncident(inc *Incident) ApiPokestopIncident {
 	return ApiPokestopIncident{
 		Id:             inc.Id,
-		PokestopId:     inc.PokestopId,
+		PokestopId:     inc.PokestopId.String(),
 		DisplayType:    inc.DisplayType,
 		Style:          inc.Style,
 		Character:      inc.Character,

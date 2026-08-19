@@ -19,11 +19,16 @@ type ApiTappableResult struct {
 }
 
 func buildTappableResult(tappable *Tappable) ApiTappableResult {
+	var fortId *string
+	if tappable.FortId.Valid() {
+		s := tappable.FortId.String()
+		fortId = &s
+	}
 	return ApiTappableResult{
 		Id:                      tappable.Id,
 		Lat:                     tappable.Lat,
 		Lon:                     tappable.Lon,
-		FortId:                  tappable.FortId.Ptr(),
+		FortId:                  fortId,
 		SpawnId:                 tappable.SpawnId.Ptr(),
 		Type:                    tappable.Type,
 		Encounter:               tappable.Encounter.Ptr(),

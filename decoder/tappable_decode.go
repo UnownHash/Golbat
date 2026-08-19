@@ -23,8 +23,12 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 		}
 		ta.SetSpawnId(null.IntFrom(spawnId))
 	}
-	if fortId := location.GetFortId(); fortId != "" {
-		ta.SetFortId(null.StringFrom(fortId))
+	if fortIdStr := location.GetFortId(); fortIdStr != "" {
+		if fortId, ok := ParseFortId(fortIdStr); ok {
+			ta.SetFortId(fortId)
+		} else {
+			log.Errorf("[TAPPABLE] unparseable fort id %q, skipping", fortIdStr)
+		}
 	}
 	ta.SetType(request.TappableTypeId)
 	ta.SetLat(request.LocationHintLat)
@@ -100,7 +104,7 @@ func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, tim
 			}
 			ta.setUnknownTimestamp(timestampMs / 1000)
 		}
-	} else if fortId := ta.FortId.ValueOrZero(); fortId != "" {
+	} else if ta.FortId.Valid() {
 		// we don't know any despawn times from lured/fort tappables
 		ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 	}

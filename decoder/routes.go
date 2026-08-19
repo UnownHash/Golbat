@@ -17,14 +17,14 @@ type RouteData struct {
 	Description      string      `db:"description"`
 	DistanceMeters   int64       `db:"distance_meters"`
 	DurationSeconds  int64       `db:"duration_seconds"`
-	EndFortId        string      `db:"end_fort_id"`
+	EndFortId        FortId      `db:"end_fort_id"`
 	EndImage         string      `db:"end_image"`
 	EndLat           float64     `db:"end_lat"`
 	EndLon           float64     `db:"end_lon"`
 	Image            string      `db:"image"`
 	ImageBorderColor string      `db:"image_border_color"`
 	Reversible       bool        `db:"reversible"`
-	StartFortId      string      `db:"start_fort_id"`
+	StartFortId      FortId      `db:"start_fort_id"`
 	StartImage       string      `db:"start_image"`
 	StartLat         float64     `db:"start_lat"`
 	StartLon         float64     `db:"start_lon"`
@@ -147,7 +147,7 @@ func (r *Route) SetDurationSeconds(v int64) {
 	}
 }
 
-func (r *Route) SetEndFortId(v string) {
+func (r *Route) SetEndFortId(v FortId) {
 	if r.EndFortId != v {
 		if dbDebugEnabled {
 			r.debug.recordChange(fmt.Sprintf("EndFortId:%s->%s", r.EndFortId, v))
@@ -217,7 +217,7 @@ func (r *Route) SetReversible(v bool) {
 	}
 }
 
-func (r *Route) SetStartFortId(v string) {
+func (r *Route) SetStartFortId(v FortId) {
 	if r.StartFortId != v {
 		if dbDebugEnabled {
 			r.debug.recordChange(fmt.Sprintf("StartFortId:%s->%s", r.StartFortId, v))

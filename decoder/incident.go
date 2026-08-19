@@ -10,7 +10,7 @@ import (
 // This struct is embedded in Incident and can be safely copied for write-behind queueing.
 type IncidentData struct {
 	Id             string   `db:"id"`
-	PokestopId     string   `db:"pokestop_id"`
+	PokestopId     FortId   `db:"pokestop_id"`
 	StartTime      int64    `db:"start"`
 	ExpirationTime int64    `db:"expiration"`
 	DisplayType    int16    `db:"display_type"`
@@ -156,7 +156,7 @@ func (incident *Incident) SetId(v string) {
 	}
 }
 
-func (incident *Incident) SetPokestopId(v string) {
+func (incident *Incident) SetPokestopId(v FortId) {
 	if incident.PokestopId != v {
 		if dbDebugEnabled {
 			incident.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", incident.PokestopId, v))
