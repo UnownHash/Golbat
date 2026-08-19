@@ -73,10 +73,11 @@ type ApiFortDnfFilter struct {
 	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
 
 	// Gym
-	AvailableSlots *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
-	TeamId         []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; omitted or null means no team constraint."`
-	RaidLevel      []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; omitted or null means no raid level constraint. Only matches gyms with an active raid."`
-	RaidPokemon    []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; omitted or null means no raid pokemon constraint. Only matches gyms with an active raid."`
+	AvailableSlots      *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
+	TeamId              []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; omitted or null means no team constraint."`
+	RaidLevel           []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; omitted or null means no raid level constraint. Only matches gyms with an active raid."`
+	RaidPokemon         []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; omitted or null means no raid pokemon constraint. Only matches gyms with an active raid."`
+	RaidTempEvolutionId []int8            `json:"raid_temp_evolution_id" required:"false" doc:"Gym only: allowed raid boss temp evolution (mega/primal) ids; 0 selects base-form bosses. Omitted or null means no temp evolution constraint. Only matches gyms with an active raid."`
 
 	// Pokestop - unified quest (matches AR or no-AR)
 	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; omitted or null means no lure constraint."`
@@ -90,9 +91,10 @@ type ApiFortDnfFilter struct {
 	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
 
 	// Pokestop - contest
-	ContestPokemon     []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
-	ContestPokemonType []int8                   `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
-	ContestFocus       []ApiFortDnfContestFocus `json:"contest_focus" required:"false" doc:"Pokestop only: allowed structured contest focuses. Currently supports exact Buddy minimum levels. Omitted or null means no structured focus constraint; an empty list matches nothing."`
+	ContestPokemon         []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemonType     []int8                   `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
+	ContestFocus           []ApiFortDnfContestFocus `json:"contest_focus" required:"false" doc:"Pokestop only: allowed structured contest focuses. Currently supports exact Buddy minimum levels. Omitted or null means no structured focus constraint; an empty list matches nothing."`
+	ContestRankingStandard []int8                   `json:"contest_ranking_standard" required:"false" doc:"Pokestop only: allowed showcase ranking standards; 0 selects showcases whose standard is unknown. Omitted or null means no ranking standard constraint."`
 
 	// Station
 	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
@@ -194,7 +196,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		if filter.TeamId != nil && !slices.Contains(filter.TeamId, fortLookup.TeamId) {
 			return false
 		}
-		if filter.RaidLevel != nil || filter.RaidPokemon != nil {
+		if filter.RaidLevel != nil || filter.RaidPokemon != nil || filter.RaidTempEvolutionId != nil {
 			// Check if raid has expired
 			raidActive := fortLookup.RaidBattleTimestamp > now || fortLookup.RaidEndTimestamp > now
 			if !raidActive {
@@ -204,6 +206,10 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 				return false
 			}
 			if filter.RaidPokemon != nil && !matchDnfIdPair(filter.RaidPokemon, fortLookup.RaidPokemonId, fortLookup.RaidPokemonForm) {
+				return false
+			}
+			// 0 is a real selector here (base form / unhatched egg), not a wildcard.
+			if filter.RaidTempEvolutionId != nil && !slices.Contains(filter.RaidTempEvolutionId, fortLookup.RaidPokemonEvolution) {
 				return false
 			}
 		}
@@ -252,6 +258,10 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 		if filter.ContestFocus != nil &&
 			(fortLookup.ShowcaseExpiry <= now || !matchContestFocus(filter.ContestFocus, fortLookup.ShowcaseBuddyMinLevel)) {
+			return false
+		}
+		if filter.ContestRankingStandard != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !slices.Contains(filter.ContestRankingStandard, fortLookup.ShowcaseRankingStandard)) {
 			return false
 		}
 
