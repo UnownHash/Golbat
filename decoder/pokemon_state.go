@@ -142,7 +142,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
 
-func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64, username string) {
 	if !pokemon.newRecord && !pokemon.IsDirty() {
 		return
 	}
@@ -268,9 +268,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
-		createPokemonWebhooks(ctx, db, pokemon, areas)
+		createPokemonWebhooks(ctx, db, pokemon, areas, username)
 	}
-	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), areas: areas, now: now})
 
 	if dbDebugEnabled {
 		pokemon.debug.reset()
@@ -419,7 +419,7 @@ type PokemonWebhook struct {
 	Pvp                   json.RawMessage     `json:"pvp"`
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName, username string) {
 	if pokemon.isNewRecord() ||
 		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
 		pokemon.oldValues.Weather != pokemon.Weather ||
@@ -449,6 +449,11 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 		var pvp json.RawMessage
 		if pokemon.Pvp.Valid {
 			pvp = json.RawMessage(pokemon.Pvp.ValueOrZero())
+		}
+
+		webhookUsername := pokemon.Username
+		if !webhookUsername.Valid && username != "" {
+			webhookUsername = null.StringFrom(username)
 		}
 
 		pokemonHook := PokemonWebhook{
@@ -486,7 +491,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture2:           0,
 			Capture3:           0,
 			Shiny:              pokemon.Shiny,
-			Username:           pokemon.Username,
+			Username:           webhookUsername,
 			DisplayPokemonId:   pokemon.DisplayPokemonId,
 			DisplayPokemonForm: pokemon.DisplayPokemonForm,
 			IsEvent:            pokemon.IsEvent,

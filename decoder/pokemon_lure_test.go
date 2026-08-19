@@ -395,7 +395,7 @@ func TestCreatePokemonWebhooksPokestopIdSentinelForAbsentFort(t *testing.T) {
 	// Matches production usage in savePokemonRecordAsAtTime: the entity
 	// lock is held across the call, since createPokemonWebhooks reads
 	// pokemon fields without locking internally.
-	createPokemonWebhooks(context.Background(), db.DbDetails{}, pokemon, nil)
+	createPokemonWebhooks(context.Background(), db.DbDetails{}, pokemon, nil, "")
 	unlock()
 
 	hooks := sink.drain()

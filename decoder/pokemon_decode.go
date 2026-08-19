@@ -184,7 +184,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.setUsernameIfStored(username)
 	pokemon.SetCellId(null.IntFrom(cellId))
 }
 
@@ -212,7 +212,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		} else {
 			log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 		}
-		pokemon.SetUsername(null.StringFrom(username))
+		pokemon.setUsernameIfStored(username)
 
 		if mapPokemon.Data.ExpirationTimeMs > 0 {
 			pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.Data.ExpirationTimeMs / 1000))
@@ -246,10 +246,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetCellId(null.IntFrom(int64(mapPokemon.Cell)))
 		changed = true
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
-		changed = true
-	}
+	pokemon.setUsernameIfStored(username)
 	return changed
 }
 
@@ -305,7 +302,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokestopId := nearbyPokemon.FortId
 	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.setUsernameIfStored(username)
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -1084,7 +1081,7 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.SetUsername(null.StringFrom(username))
+	pokemon.setUsernameIfStored(username)
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1225,9 +1222,7 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
-	}
+	pokemon.setUsernameIfStored(username)
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }

@@ -156,7 +156,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			updateTime := wild.Timestamp / 1000
 			if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
 				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
 			}
 			unlock()
 		}
@@ -176,7 +176,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				updateTime := nearby.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
 					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
 				}
 
 				unlock()
@@ -192,7 +192,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		}
 
 		if pokemon.updateFromMap(ctx, db, mapPokemon, weatherLookup, username) {
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000, username)
 		}
 		unlock()
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"golbat/config"
 	"golbat/util"
 
 	"github.com/guregu/null/v6"
@@ -630,6 +631,25 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 		pokemon.Username = v
 		//pokemon.dirty = true
 	}
+}
+
+// setUsernameIfStored records the reporting account only when the operator
+// has opted in via store_username.
+//
+// The field is not load-bearing: its only consumers are the webhook payload
+// and the shiny/duplicate-encounter dedup, both of which are supplied the
+// account name directly from the decode context now. Persisting it stores a
+// caller-supplied identifier on millions of rows for no functional benefit,
+// so the default is off.
+func (pokemon *Pokemon) setUsernameIfStored(username string) {
+	if !config.Config.StoreUsername || username == "" {
+		return
+	}
+	if pokemon.Username.Valid {
+		// First account to see the pokemon keeps the field.
+		return
+	}
+	pokemon.SetUsername(null.StringFrom(username))
 }
 
 // SetCellId stores the signed S2 cell id directly. cell_id is a signed
