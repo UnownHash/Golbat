@@ -103,13 +103,13 @@ Every entity follows the same pattern:
 
 ```go
 type PokestopData struct {    // Copyable data fields with db tags
-    Id   string  `db:"id"`
+    Id   FortId  `db:"id"`
     Name null.String `db:"name"`
     // ... all persisted columns
 }
 
 type Pokestop struct {
-    mu TrackedMutex[string] `db:"-"`  // Entity-level mutex
+    mu TrackedMutex[FortId] `db:"-"`  // Entity-level mutex
     PokestopData                       // Embedded — copied for queue snapshots
     dirty     bool     `db:"-"`        // Needs DB write
     newRecord bool     `db:"-"`        // INSERT vs UPDATE
@@ -308,7 +308,7 @@ The fort tracker detects when forts are removed from the game or converted betwe
 ```
 FortTracker
   ├── cells: map[uint64]*FortTrackerCellState    // S2 cell → {lastSeen, pokestops set, gyms set}
-  └── forts: map[string]*FortTrackerLastSeen      // fort ID → {cellId, lastSeen, isGym}
+  └── forts: map[FortId]*FortTrackerLastSeen      // fort ID → {cellId, lastSeen, isGym}
 ```
 
 ### Detection Flow
