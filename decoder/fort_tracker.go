@@ -21,7 +21,7 @@ type FortTracker struct {
 	cells map[uint64]*FortTrackerCellState
 
 	// fortId -> FortInfo (for quick lookup)
-	forts map[string]*FortTrackerLastSeen
+	forts map[FortId]*FortTrackerLastSeen
 
 	// Configuration
 	staleThreshold int64 // seconds after which a fort is considered stale
@@ -31,8 +31,8 @@ type FortTracker struct {
 // FortTrackerCellState tracks the state of forts within a single S2 cell
 type FortTrackerCellState struct {
 	lastSeen  int64               // last time this cell was seen in GMO
-	pokestops map[string]struct{} // set of pokestop IDs
-	gyms      map[string]struct{} // set of gym IDs
+	pokestops map[FortId]struct{} // set of pokestop IDs
+	gyms      map[FortId]struct{} // set of gym IDs
 }
 
 // FortTrackerLastSeen holds tracker bookkeeping (cell + last-seen + type) for a fort
@@ -45,8 +45,8 @@ type FortTrackerLastSeen struct {
 
 // FortTrackerGMOContents holds fort IDs per cell extracted from a single GMO
 type FortTrackerGMOContents struct {
-	Pokestops []string
-	Gyms      []string
+	Pokestops []FortId
+	Gyms      []FortId
 	Timestamp int64 // GMO AsOfTimeMs for this cell
 }
 
@@ -62,7 +62,7 @@ func InitFortTracker(staleThresholdSeconds int64, minMissCount int) {
 	}
 	fortTracker = &FortTracker{
 		cells:          make(map[uint64]*FortTrackerCellState),
-		forts:          make(map[string]*FortTrackerLastSeen),
+		forts:          make(map[FortId]*FortTrackerLastSeen),
 		staleThreshold: staleThresholdSeconds,
 		minMissCount:   minMissCount,
 	}
@@ -129,17 +129,22 @@ func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table strin
 		nowMs := time.Now().UnixMilli()
 		fortTracker.mu.Lock()
 		for _, row := range rows {
+			id, ok := ParseFortId(row.Id)
+			if !ok {
+				log.Errorf("[FORT_TRACKER] unparseable fort id %q in %s, skipping", row.Id, table)
+				continue
+			}
 			cellId := uint64(row.CellId)
 			cell := fortTracker.getOrCreateCellLocked(cellId)
 			if isGym {
-				cell.gyms[row.Id] = struct{}{}
+				cell.gyms[id] = struct{}{}
 			} else {
-				cell.pokestops[row.Id] = struct{}{}
+				cell.pokestops[id] = struct{}{}
 			}
 			if nowMs > cell.lastSeen {
 				cell.lastSeen = nowMs
 			}
-			fortTracker.forts[row.Id] = &FortTrackerLastSeen{
+			fortTracker.forts[id] = &FortTrackerLastSeen{
 				cellId:   cellId,
 				lastSeen: nowMs,
 				isGym:    isGym,
@@ -165,8 +170,8 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 	cell, exists := ft.cells[cellId]
 	if !exists {
 		cell = &FortTrackerCellState{
-			pokestops: make(map[string]struct{}),
-			gyms:      make(map[string]struct{}),
+			pokestops: make(map[FortId]struct{}),
+			gyms:      make(map[FortId]struct{}),
 		}
 		ft.cells[cellId] = cell
 	}
@@ -176,7 +181,7 @@ func (ft *FortTracker) getOrCreateCellLocked(cellId uint64) *FortTrackerCellStat
 // RegisterFort registers a fort during bulk loading (e.g., from preload).
 // Seeds cell.lastSeen so a partial first GMO does not erase preloaded forts.
 // Does not rewind info.lastSeen if a more recent value is already tracked.
-func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, updatedTimestamp int64) {
+func (ft *FortTracker) RegisterFort(fortId FortId, cellId uint64, isGym bool, updatedTimestamp int64) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
@@ -204,10 +209,10 @@ func (ft *FortTracker) RegisterFort(fortId string, cellId uint64, isGym bool, up
 
 // CellUpdateResult holds the results of processing a cell update
 type CellUpdateResult struct {
-	StalePokestops       []string // pokestops to mark deleted (not seen for staleThreshold)
-	StaleGyms            []string // gyms to mark deleted (not seen for staleThreshold)
-	ConvertedToGyms      []string // pokestops that became gyms (mark pokestop as deleted)
-	ConvertedToPokestops []string // gyms that became pokestops (mark gym as deleted)
+	StalePokestops       []FortId // pokestops to mark deleted (not seen for staleThreshold)
+	StaleGyms            []FortId // gyms to mark deleted (not seen for staleThreshold)
+	ConvertedToGyms      []FortId // pokestops that became gyms (mark pokestop as deleted)
+	ConvertedToPokestops []FortId // gyms that became pokestops (mark gym as deleted)
 }
 
 // ProcessCellUpdate processes a complete cell update from GMO and returns forts to delete.
@@ -215,7 +220,7 @@ type CellUpdateResult struct {
 // Remove when cell.lastSeen - fort.lastSeen > staleThreshold.
 // Returns nil if timestamp is older than last processed for this cell, or
 // far enough in the future to look implausible (clock skew / malicious input).
-func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) *CellUpdateResult {
+func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []FortId, gymIds []FortId, timestamp int64) *CellUpdateResult {
 	// Reject implausibly future timestamps so a single bad GMO cannot
 	// permanently wedge a cell (any later real GMO would always be <= it).
 	nowMs := time.Now().UnixMilli()
@@ -251,7 +256,7 @@ func (ft *FortTracker) ProcessCellUpdate(cellId uint64, pokestopIds []string, gy
 // processCellUpdateLocked is the locked core of ProcessCellUpdate.
 // Caller must hold ft.mu. Returns (result, pendingPokestops, pendingGyms, processed).
 // processed is false when the GMO is older than our last processed timestamp for this cell.
-func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []string, gymIds []string, timestamp int64) (*CellUpdateResult, []string, []string, bool) {
+func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []FortId, gymIds []FortId, timestamp int64) (*CellUpdateResult, []FortId, []FortId, bool) {
 	cell := ft.getOrCreateCellLocked(cellId)
 
 	if timestamp <= cell.lastSeen {
@@ -263,11 +268,11 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 	// Build sets of current forts from GMO. If the same id appears in both
 	// pokestopIds and gymIds (Niantic-side type-change race), gym wins —
 	// matches proto pack order and avoids the conversion loop fighting itself.
-	currentPokestops := make(map[string]struct{}, len(pokestopIds))
+	currentPokestops := make(map[FortId]struct{}, len(pokestopIds))
 	for _, id := range pokestopIds {
 		currentPokestops[id] = struct{}{}
 	}
-	currentGyms := make(map[string]struct{}, len(gymIds))
+	currentGyms := make(map[FortId]struct{}, len(gymIds))
 	for _, id := range gymIds {
 		currentGyms[id] = struct{}{}
 	}
@@ -313,7 +318,7 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 		return result, nil, nil, true
 	}
 
-	var pendingPokestops, pendingGyms []string
+	var pendingPokestops, pendingGyms []FortId
 
 	// A fort qualifies as stale only when both criteria are met:
 	// - missing for at least staleThreshold (time-based, defends against partial GMOs)
@@ -370,7 +375,7 @@ func (ft *FortTracker) processCellUpdateLocked(cellId uint64, pokestopIds []stri
 // applyPresentForts updates lastSeen for forts present in the GMO, handles
 // cell moves and type conversions. `current` is the deduplicated set for the
 // fort kind being processed; ids skipped via dedup are ignored.
-func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint64, ids []string, current map[string]struct{}, isGym bool, converted *[]string, timestamp int64) {
+func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint64, ids []FortId, current map[FortId]struct{}, isGym bool, converted *[]FortId, timestamp int64) {
 	for _, id := range ids {
 		if _, ok := current[id]; !ok {
 			continue
@@ -429,7 +434,7 @@ func (ft *FortTracker) applyPresentForts(cell *FortTrackerCellState, cellId uint
 }
 
 // RemoveFort removes a fort from tracking (called after marking as deleted)
-func (ft *FortTracker) RemoveFort(fortId string) {
+func (ft *FortTracker) RemoveFort(fortId FortId) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
@@ -451,7 +456,7 @@ func (ft *FortTracker) RemoveFort(fortId string) {
 
 // RestoreFort adds a fort back to tracking (called when un-deleting).
 // nowMs MUST be milliseconds (matches tracker's internal unit).
-func (ft *FortTracker) RestoreFort(fortId string, cellId uint64, isGym bool, nowMs int64) {
+func (ft *FortTracker) RestoreFort(fortId FortId, cellId uint64, isGym bool, nowMs int64) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 
@@ -521,12 +526,12 @@ func (ft *FortTracker) GetCellInfo(cellId uint64) *CellFortInfo {
 
 	pokestops := make([]string, 0, len(cell.pokestops))
 	for stopId := range cell.pokestops {
-		pokestops = append(pokestops, stopId)
+		pokestops = append(pokestops, stopId.String())
 	}
 
 	gyms := make([]string, 0, len(cell.gyms))
 	for gymId := range cell.gyms {
-		gyms = append(gyms, gymId)
+		gyms = append(gyms, gymId.String())
 	}
 
 	return &CellFortInfo{
@@ -538,7 +543,7 @@ func (ft *FortTracker) GetCellInfo(cellId uint64) *CellFortInfo {
 }
 
 // GetFortInfo returns information about a specific fort
-func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
+func (ft *FortTracker) GetFortInfo(fortId FortId) *FortTrackerInfo {
 	if ft == nil {
 		return nil
 	}
@@ -552,7 +557,7 @@ func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
 	}
 
 	return &FortTrackerInfo{
-		FortId:   fortId,
+		FortId:   fortId.String(),
 		CellId:   strconv.FormatUint(fort.cellId, 10),
 		LastSeen: fort.lastSeen,
 		IsGym:    fort.isGym,
@@ -561,12 +566,12 @@ func (ft *FortTracker) GetFortInfo(fortId string) *FortTrackerInfo {
 
 // fortKindOps captures the type-specific bits clearFortWithLock needs
 // so the gym/pokestop control flow can share a single implementation.
-type fortKindOps[T comparable] struct {
+type fortKindOps[T any] struct {
 	kindLabel        string
 	convertedToLabel string
 	statDelete       string
 	statConvert      string
-	loadForUpdate    func(context.Context, db.DbDetails, string, string) (T, func(), error)
+	loadForUpdate    func(context.Context, db.DbDetails, FortId, string) (T, func(), error)
 	saveRecord       func(context.Context, db.DbDetails, T)
 	initWebhook      func(T) *FortWebhook
 	setDeleted       func(T)
@@ -578,11 +583,13 @@ var gymClearOps = fortKindOps[*Gym]{
 	convertedToLabel: "pokestop",
 	statDelete:       "gym_delete",
 	statConvert:      "gym_to_pokestop",
-	loadForUpdate:    getGymRecordForUpdate,
-	saveRecord:       saveGymRecord,
-	initWebhook:      InitWebHookFortFromGym,
-	setDeleted:       func(g *Gym) { g.SetDeleted(true) },
-	isNil:            func(g *Gym) bool { return g == nil },
+	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Gym, func(), error) {
+		return getGymRecordForUpdate(ctx, d, id.String(), caller)
+	},
+	saveRecord:  saveGymRecord,
+	initWebhook: InitWebHookFortFromGym,
+	setDeleted:  func(g *Gym) { g.SetDeleted(true) },
+	isNil:       func(g *Gym) bool { return g == nil },
 }
 
 var pokestopClearOps = fortKindOps[*Pokestop]{
@@ -590,18 +597,20 @@ var pokestopClearOps = fortKindOps[*Pokestop]{
 	convertedToLabel: "gym",
 	statDelete:       "pokestop_delete",
 	statConvert:      "pokestop_to_gym",
-	loadForUpdate:    getPokestopRecordForUpdate,
-	saveRecord:       savePokestopRecord,
-	initWebhook:      InitWebHookFortFromPokestop,
-	setDeleted:       func(p *Pokestop) { p.SetDeleted(true) },
-	isNil:            func(p *Pokestop) bool { return p == nil },
+	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Pokestop, func(), error) {
+		return getPokestopRecordForUpdate(ctx, d, id.String(), caller)
+	},
+	saveRecord:  savePokestopRecord,
+	initWebhook: InitWebHookFortFromPokestop,
+	setDeleted:  func(p *Pokestop) { p.SetDeleted(true) },
+	isNil:       func(p *Pokestop) bool { return p == nil },
 }
 
 // clearFortWithLock marks a fort as deleted while holding its object-level mutex.
 // removeFromTracker=true means stale removal (drop tracker entry, fire webhook);
 // false means type conversion (the *other* type still exists in the tracker).
-func clearFortWithLock[T comparable](ctx context.Context, dbDetails db.DbDetails, fortId string, cellId uint64, removeFromTracker bool, ops fortKindOps[T]) {
-	rec, unlock, err := ops.loadForUpdate(ctx, dbDetails, fortId, "clear"+ops.kindLabel+"WithLock")
+func clearFortWithLock[T any](ctx context.Context, dbDetails db.DbDetails, fortId FortId, cellId uint64, removeFromTracker bool, ops fortKindOps[T]) {
+	rec, unlock, err := ops.loadForUpdate(ctx, dbDetails, fortId, "clearFortWithLock[T] ("+ops.kindLabel+")")
 	if err != nil {
 		log.Errorf("FortTracker: failed to load %s %s - %s", ops.kindLabel, fortId, err)
 		return

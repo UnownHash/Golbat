@@ -821,7 +821,11 @@ func registerTier4Routes(api huma.API) {
 		if ft == nil {
 			return nil, huma.Error503ServiceUnavailable("FortTracker not initialized")
 		}
-		info := ft.GetFortInfo(in.FortId)
+		fortId, ok := decoder.ParseFortId(in.FortId)
+		if !ok {
+			return nil, huma.Error404NotFound("Fort not found")
+		}
+		info := ft.GetFortInfo(fortId)
 		if info == nil {
 			return nil, huma.Error404NotFound("Fort not found")
 		}

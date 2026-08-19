@@ -19,7 +19,7 @@ func TestProcessCellUpdate_RemovesStaleGym(t *testing.T) {
 	}
 
 	cellId := uint64(12345)
-	gymId := "gym_1"
+	gymId := mustFortId(t, "00000000000000000000000000000001")
 
 	now := time.Now().UnixMilli()
 	ft.mu.Lock()
@@ -48,7 +48,7 @@ func TestProcessCellUpdate_PendingGymBecomesStaleAfterMultipleScans(t *testing.T
 	ft := GetFortTracker()
 
 	cellId := uint64(12346)
-	gymId := "gym_pending"
+	gymId := mustFortId(t, "00000000000000000000000000000002")
 
 	// Synthetic small timestamps: well below time.Now().UnixMilli()+60_000,
 	// so the future-timestamp guard does not reject them.
@@ -88,10 +88,10 @@ func TestProcessCellUpdate_NewFortOnFirstScanTrackedForFutureStaleCheck(t *testi
 	ft := GetFortTracker()
 
 	cellId := uint64(99999)
-	gymId := "new_gym_first_scan"
+	gymId := mustFortId(t, "00000000000000000000000000000003")
 
 	now := time.Now().UnixMilli()
-	result1 := ft.ProcessCellUpdate(cellId, nil, []string{gymId}, now-3000)
+	result1 := ft.ProcessCellUpdate(cellId, nil, []FortId{gymId}, now-3000)
 	if result1 == nil {
 		t.Fatal("ProcessCellUpdate returned nil on first scan")
 	}
@@ -128,12 +128,16 @@ func TestProcessCellUpdate_PartialFirstGMOPreservesPreloadedForts(t *testing.T) 
 	cellId := uint64(0xdeadbeef)
 	registerTs := int64(10_000)
 
-	ft.RegisterFort("A", cellId, false, registerTs)
-	ft.RegisterFort("B", cellId, false, registerTs)
-	ft.RegisterFort("C", cellId, false, registerTs)
+	idA := mustFortId(t, "00000000000000000000000000000001")
+	idB := mustFortId(t, "00000000000000000000000000000002")
+	idC := mustFortId(t, "00000000000000000000000000000003")
+
+	ft.RegisterFort(idA, cellId, false, registerTs)
+	ft.RegisterFort(idB, cellId, false, registerTs)
+	ft.RegisterFort(idC, cellId, false, registerTs)
 
 	// First GMO is partial: only sees A; gap from register is 500ms < 1s threshold.
-	result1 := ft.ProcessCellUpdate(cellId, []string{"A"}, nil, registerTs+500)
+	result1 := ft.ProcessCellUpdate(cellId, []FortId{idA}, nil, registerTs+500)
 	if result1 == nil {
 		t.Fatal("ProcessCellUpdate returned nil on first GMO")
 	}
@@ -142,7 +146,7 @@ func TestProcessCellUpdate_PartialFirstGMOPreservesPreloadedForts(t *testing.T) 
 	}
 
 	ft.mu.RLock()
-	for _, id := range []string{"A", "B", "C"} {
+	for _, id := range []FortId{idA, idB, idC} {
 		if _, ok := ft.cells[cellId].pokestops[id]; !ok {
 			ft.mu.RUnlock()
 			t.Fatalf("preloaded pokestop %s lost from cell tracking after partial first GMO", id)
@@ -151,18 +155,18 @@ func TestProcessCellUpdate_PartialFirstGMOPreservesPreloadedForts(t *testing.T) 
 	ft.mu.RUnlock()
 
 	// Second partial GMO past the threshold: B and C must now be flagged.
-	result2 := ft.ProcessCellUpdate(cellId, []string{"A"}, nil, registerTs+5000)
+	result2 := ft.ProcessCellUpdate(cellId, []FortId{idA}, nil, registerTs+5000)
 	if result2 == nil {
 		t.Fatal("ProcessCellUpdate returned nil on second GMO")
 	}
-	stale := map[string]bool{}
+	stale := map[FortId]bool{}
 	for _, id := range result2.StalePokestops {
 		stale[id] = true
 	}
-	if !stale["B"] || !stale["C"] {
+	if !stale[idB] || !stale[idC] {
 		t.Fatalf("expected B and C stale after partial second GMO, got: %v", result2.StalePokestops)
 	}
-	if stale["A"] {
+	if stale[idA] {
 		t.Fatalf("A is present in GMO and must not be stale")
 	}
 }
@@ -188,7 +192,8 @@ func TestProcessCellUpdate_RejectsFutureTimestamp(t *testing.T) {
 		t.Fatal("future-dated GMO wedged the cell (cell.lastSeen advanced)")
 	}
 
-	if got := ft.ProcessCellUpdate(cellId, []string{"X"}, nil, now); got == nil {
+	idX := mustFortId(t, "00000000000000000000000000000001")
+	if got := ft.ProcessCellUpdate(cellId, []FortId{idX}, nil, now); got == nil {
 		t.Fatal("subsequent legitimate GMO must be processed")
 	}
 }
@@ -200,7 +205,7 @@ func TestRestoreFort_DoesNotImmediatelyRestale(t *testing.T) {
 	ft := GetFortTracker()
 
 	cellId := uint64(0xabc)
-	stopId := "restored_stop"
+	stopId := mustFortId(t, "00000000000000000000000000000001")
 	now := time.Now().UnixMilli()
 
 	ft.RestoreFort(stopId, cellId, false, now)
@@ -222,10 +227,10 @@ func TestProcessCellUpdate_TypeRaceDedup(t *testing.T) {
 	ft := GetFortTracker()
 
 	cellId := uint64(0x123abc)
-	id := "ambiguous_fort"
+	id := mustFortId(t, "00000000000000000000000000000001")
 	now := time.Now().UnixMilli()
 
-	result := ft.ProcessCellUpdate(cellId, []string{id}, []string{id}, now)
+	result := ft.ProcessCellUpdate(cellId, []FortId{id}, []FortId{id}, now)
 	if result == nil {
 		t.Fatal("ProcessCellUpdate returned nil")
 	}
@@ -252,12 +257,12 @@ func TestApplyPresentForts_TypeConversionClearsOldCellSet(t *testing.T) {
 	ft := GetFortTracker()
 
 	cellId := uint64(0xc0ffee)
-	id := "convert_me"
+	id := mustFortId(t, "00000000000000000000000000000001")
 	registerTs := int64(100_000)
 
 	ft.RegisterFort(id, cellId, false, registerTs)
 
-	result := ft.ProcessCellUpdate(cellId, nil, []string{id}, registerTs+1000)
+	result := ft.ProcessCellUpdate(cellId, nil, []FortId{id}, registerTs+1000)
 	if result == nil {
 		t.Fatal("ProcessCellUpdate returned nil")
 	}
@@ -290,7 +295,7 @@ func TestProcessCellUpdate_MissCountGuard(t *testing.T) {
 	ft := GetFortTracker()
 
 	cellId := uint64(0x456)
-	stopId := "miss_count_stop"
+	stopId := mustFortId(t, "00000000000000000000000000000001")
 	now := time.Now().UnixMilli()
 
 	ft.mu.Lock()
@@ -320,7 +325,7 @@ func TestProcessCellUpdate_MissCountResetOnSighting(t *testing.T) {
 	ft := GetFortTracker()
 
 	cellId := uint64(0x789)
-	stopId := "flapping_stop"
+	stopId := mustFortId(t, "00000000000000000000000000000001")
 	now := time.Now().UnixMilli()
 
 	ft.mu.Lock()
@@ -334,10 +339,24 @@ func TestProcessCellUpdate_MissCountResetOnSighting(t *testing.T) {
 	if r := ft.ProcessCellUpdate(cellId, nil, nil, now-6000); r == nil || len(r.StalePokestops) != 0 {
 		t.Fatalf("first miss: %+v", r)
 	}
-	if r := ft.ProcessCellUpdate(cellId, []string{stopId}, nil, now-4000); r == nil {
+	if r := ft.ProcessCellUpdate(cellId, []FortId{stopId}, nil, now-4000); r == nil {
 		t.Fatal("sighting GMO returned nil")
 	}
 	if r := ft.ProcessCellUpdate(cellId, nil, nil, now-2000); r == nil || len(r.StalePokestops) != 0 {
 		t.Fatalf("post-sighting miss must reset count, got: %+v", r)
+	}
+}
+
+// A junk fort id in the middle of a keyset page must not stall the loader:
+// the cursor advances on the raw string even when the id is unusable.
+func TestFortTrackerParseFailureAdvancesCursor(t *testing.T) {
+	// The empty-string id is the one nonconforming row that exists in
+	// production; it must parse-fail rather than becoming the zero FortId.
+	if _, ok := ParseFortId(""); ok {
+		t.Fatal("empty fort id must not parse")
+	}
+	valid := mustFortId(t, "00000000000000000000000000000001.16")
+	if !valid.Valid() {
+		t.Fatal("valid id reported invalid")
 	}
 }
