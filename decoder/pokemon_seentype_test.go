@@ -129,7 +129,7 @@ func TestNullSeenTypeUnmarshalNullIsInert(t *testing.T) {
 	if err := degraded.Scan("teleported"); err != nil {
 		t.Fatalf("Scan: %v", err)
 	}
-	b, err := json.Marshal(degraded)
+	b, err := jsonenc.Marshal(degraded)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
