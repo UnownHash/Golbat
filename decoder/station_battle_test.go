@@ -305,15 +305,17 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
-	station := &Station{StationData: StationData{Id: "station-1", Lat: 1, Lon: 2}}
+	const stationIdStr = "00000000000000000000000000000001"
+	stationId := mustFortId(t, stationIdStr)
+	station := &Station{StationData: StationData{Id: stationIdStr, Lat: 1, Lon: 2}}
 
 	storeStationBattles(station.Id, []StationBattleData{
 		testStationBattle(station.Id, 1, 1, now-60, now+1800, 527),
 		testStationBattle(station.Id, 2, 2, now-60, now+3600, 133),
 	})
-	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, now))
+	updateStationLookupWithBattles(stationId, station, getKnownStationBattles(station.Id, now))
 
-	lookup, ok := fortLookupCache.Load(station.Id)
+	lookup, ok := fortLookupCache.Load(stationId)
 	if !ok {
 		t.Fatal("expected station lookup")
 	}

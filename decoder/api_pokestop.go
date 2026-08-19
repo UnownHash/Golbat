@@ -175,7 +175,7 @@ func buildPokestopIncident(inc *Incident) ApiPokestopIncident {
 // (read-through to DB on the rare cache miss). Callers MUST NOT hold the
 // pokestop lock — this locks incidents, and saveIncidentRecord locks
 // incident->pokestop, so holding pokestop here would invert the order.
-func CollectPokestopIncidents(ctx context.Context, dbDetails db.DbDetails, fortId string, now int64) []ApiPokestopIncident {
+func CollectPokestopIncidents(ctx context.Context, dbDetails db.DbDetails, fortId FortId, now int64) []ApiPokestopIncident {
 	fl, ok := fortLookupCache.Load(fortId)
 	if !ok || len(fl.Incidents) == 0 {
 		return nil

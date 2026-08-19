@@ -62,7 +62,9 @@ func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId 
 	// we'll get their Incident and use that instead (ensuring same mutex)
 	incident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
 		if config.Config.FortInMemory {
-			updatePokestopIncidentLookup(dbIncident.PokestopId, &dbIncident)
+			if id, ok := fortIdFromLegacyString(dbIncident.PokestopId, "incident rtree get"); ok {
+				updatePokestopIncidentLookup(id, &dbIncident)
+			}
 		}
 		return &dbIncident
 	})
@@ -103,7 +105,9 @@ func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId 
 			incident.newRecord = false
 			incident.ClearDirty()
 			if config.Config.FortInMemory {
-				updatePokestopIncidentLookup(incident.PokestopId, incident)
+				if id, ok := fortIdFromLegacyString(incident.PokestopId, "incident rtree get"); ok {
+					updatePokestopIncidentLookup(id, incident)
+				}
 			}
 		}
 	}
@@ -155,7 +159,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	updateIncidentStats(incident, areas)
 
 	if config.Config.FortInMemory {
-		updatePokestopIncidentLookup(incident.PokestopId, incident)
+		if id, ok := fortIdFromLegacyString(incident.PokestopId, "incident save"); ok {
+			updatePokestopIncidentLookup(id, incident)
+		}
 	}
 
 	if dbDebugEnabled {

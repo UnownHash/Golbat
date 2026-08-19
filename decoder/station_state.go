@@ -236,8 +236,10 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		station.newRecord = false
 	}
 	if config.Config.FortInMemory {
-		genericUpdateFort(station.Id, station.Lat, station.Lon, false)
-		updateStationLookupWithBattles(station, battles)
+		if id, ok := fortIdFromLegacyString(station.Id, "station save"); ok {
+			genericUpdateFort(id, station.Lat, station.Lon, false)
+			updateStationLookupWithBattles(id, station, battles)
+		}
 	}
 }
 

@@ -650,7 +650,11 @@ func registerTier3Routes(api huma.API) {
 		if unlock != nil {
 			unlock() // release before locking incidents
 		}
-		body.Invasions = decoder.CollectPokestopIncidents(ctx, dbDetails, in.FortId, time.Now().Unix())
+		if fortId, ok := decoder.ParseFortId(in.FortId); ok {
+			body.Invasions = decoder.CollectPokestopIncidents(ctx, dbDetails, fortId, time.Now().Unix())
+		} else {
+			log.Errorf("API.GetPokestop: unparseable fort id %q, returning result without invasions", in.FortId)
+		}
 		return &pokestopByIdOutput{Body: body}, nil
 	})
 

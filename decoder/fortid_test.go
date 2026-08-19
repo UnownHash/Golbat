@@ -29,6 +29,16 @@ func genFortIdStrings(t *testing.T, n int, seed uint64) []string {
 	return out
 }
 
+// mustFortId is for tests that need a FortId from a literal.
+func mustFortId(t *testing.T, s string) FortId {
+	t.Helper()
+	f, ok := ParseFortId(s)
+	if !ok {
+		t.Fatalf("mustFortId: %q is not a valid fort id", s)
+	}
+	return f
+}
+
 func TestFortIdSize(t *testing.T) {
 	if got := unsafe.Sizeof(FortId{}); got != 17 {
 		t.Fatalf("unsafe.Sizeof(FortId{}) = %d, want 17", got)

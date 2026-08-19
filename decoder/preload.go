@@ -292,7 +292,9 @@ func preloadIncidents(dbDetails db.DbDetails, populateRtree bool) int32 {
 
 				// Update fort rtree with incident data
 				if populateRtree {
-					updatePokestopIncidentLookup(incident.PokestopId, incident)
+					if id, ok := fortIdFromLegacyString(incident.PokestopId, "incident preload"); ok {
+						updatePokestopIncidentLookup(id, incident)
+					}
 				}
 
 				c := atomic.AddInt32(&count, 1)
