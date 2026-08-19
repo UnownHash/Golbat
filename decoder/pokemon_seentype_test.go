@@ -421,16 +421,30 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 	// is always paired with Valid = false) and anything past the end of
 	// seenTypeStrings all have no string form.
 	refused := []SeenTypeCode{SeenTypeCodeUnset, SeenTypeCodeUnknown, SeenTypeCode(len(seenTypeStrings)), 200}
-	for _, c := range refused {
-		p.SetSeenType(c)
-		if p.SeenType != SeenTypeFrom(SeenTypeCodeWild) {
-			t.Fatalf("SetSeenType(%d) replaced the stored value with %+v", c, p.SeenType)
-		}
-		if p.dirty {
-			t.Fatalf("SetSeenType(%d) marked the record dirty", c)
-		}
-		if _, err := p.SeenType.Value(); err != nil {
-			t.Fatalf("SetSeenType(%d) left a value Value() rejects: %v", c, err)
+
+	// Cycle the 4 refused codes enough times to give the throttle assertion
+	// below the same headroom as its sibling TestScanUnknownSeenTypeWarnIsThrottled
+	// (500 calls, asserting < 500): with only 4 calls, a runner preempted
+	// long enough to straddle a wall-clock second boundary between each one
+	// could open up to 4 separate throttle windows and hit the upper bound
+	// exactly, flaking a passing run. Driving the same order of magnitude of
+	// calls as the sibling makes the bound proportional to what the test
+	// actually drives instead of pinned at len(refused).
+	const cycles = 125
+	calls := 0
+	for range cycles {
+		for _, c := range refused {
+			p.SetSeenType(c)
+			if p.SeenType != SeenTypeFrom(SeenTypeCodeWild) {
+				t.Fatalf("SetSeenType(%d) replaced the stored value with %+v", c, p.SeenType)
+			}
+			if p.dirty {
+				t.Fatalf("SetSeenType(%d) marked the record dirty", c)
+			}
+			if _, err := p.SeenType.Value(); err != nil {
+				t.Fatalf("SetSeenType(%d) left a value Value() rejects: %v", c, err)
+			}
+			calls++
 		}
 	}
 
@@ -440,8 +454,8 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 	// rather than exactly 1, for the same reason as
 	// TestScanUnknownSeenTypeWarnIsThrottled — the window is real wall
 	// clock, and a runner slow enough to straddle a boundary logs twice.
-	if got := strings.Count(warnings(), "refusing seen_type code"); got < 1 || got >= len(refused) {
-		t.Errorf("%d refused calls logged %d warnings, want at least 1 and fewer than %d (aggregated, not one line per call)", len(refused), got, len(refused))
+	if got := strings.Count(warnings(), "refusing seen_type code"); got < 1 || got >= calls {
+		t.Errorf("%d refused calls logged %d warnings, want at least 1 and fewer than %d (aggregated, not one line per call)", calls, got, calls)
 	}
 
 	// Every real code still stores.
