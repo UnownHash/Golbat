@@ -16,19 +16,20 @@ import (
 //
 // FIELD ORDER IS LOAD-BEARING in the sense that a careless ordering
 // (interleaving fields of different alignments) can make this bigger than
-// 256 bytes — but not smaller. The field payload sums to 251 bytes (8-byte
-// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 25 + pointer
-// group 96), and Go's struct alignment (8, driven by the uint64/float64/
-// pointer fields) rounds any total up to the next multiple of 8: 256 either
+// 248 bytes — but not smaller. The field payload sums to 244 bytes (8-byte
+// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 42 + pointer
+// group 72), and Go's struct alignment (8, driven by the uint64/float64/
+// pointer fields) rounds any total up to the next multiple of 8: 248 either
 // way. This order achieves that minimum — the pointer group's own 8-byte
-// alignment forces exactly 5 bytes of mandatory padding immediately before
-// it (offset 155->160), and every other ordering pays those same 5 bytes
+// alignment forces exactly 4 bytes of mandatory padding immediately before
+// it (offset 172->176), and every other ordering pays those same 4 bytes
 // somewhere else instead (e.g. as trailing padding at the very end), not
 // zero. See TestPokemonEntitySizes's comment for the full breakdown and the
 // history behind this number (it dropped from 280 when task 5 narrowed
-// SeenType out of the pointer group); that test guards the 256 result — if
-// it fails after you add a field, read its doc comment before touching the
-// constant.
+// SeenType out of the pointer group, then from 256 when task 8 moved
+// PokestopId — 17 inline, 1-byte-aligned bytes — out of the pointer group
+// into this one); that test guards the 248 result — if it fails after you
+// add a field, read its doc comment before touching the constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
 // sql/*.up.sql. The schema comment further down this file documents three
@@ -75,9 +76,9 @@ type PokemonData struct {
 	IsDitto                 bool              `db:"is_ditto"`
 	IsEvent                 int8              `db:"is_event"`
 	SeenType                NullSeenType      `db:"seen_type"`
+	PokestopId              FortId            `db:"pokestop_id"`
 
 	// --- pointer-carrying, last ---
-	PokestopId     null.String `db:"pokestop_id"`
 	Username       null.String `db:"username"`
 	Pvp            null.String `db:"pvp"`
 	GolbatInternal []byte      `db:"golbat_internal"`
@@ -433,10 +434,10 @@ func int64OrZero[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int64 {
 
 // --- Set methods with dirty tracking ---
 
-func (pokemon *Pokemon) SetPokestopId(v null.String) {
+func (pokemon *Pokemon) SetPokestopId(v FortId) {
 	if pokemon.PokestopId != v {
 		if dbDebugEnabled {
-			pokemon.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", FormatNull(pokemon.PokestopId), FormatNull(v)))
+			pokemon.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", pokemon.PokestopId, v))
 		}
 		pokemon.PokestopId = v
 		pokemon.dirty = true

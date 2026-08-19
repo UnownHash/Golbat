@@ -322,8 +322,8 @@ func TestScanUnknownSeenTypeIsInertInTheDecodeSwitches(t *testing.T) {
 			t.Errorf("SeenType after updateFromNearby = {Code: %d, Valid: %t}, want the unrecognised value left alone (Code %d, invalid)",
 				p.SeenType.Code, p.SeenType.Valid, SeenTypeCodeUnknown)
 		}
-		if p.PokestopId.Valid {
-			t.Errorf("PokestopId after updateFromNearby = %q, want unset", p.PokestopId.ValueOrZero())
+		if p.PokestopId.Valid() {
+			t.Errorf("PokestopId after updateFromNearby = %q, want unset", p.PokestopId.String())
 		}
 	})
 }

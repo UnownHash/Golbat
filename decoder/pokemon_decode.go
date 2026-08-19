@@ -195,7 +195,11 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon RawMapPokemonData, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) bool {
 	if pokemon.isNewRecord() {
 		pokemon.SetIsEvent(0)
-		pokemon.SetPokestopId(null.StringFrom(mapPokemon.FortId))
+		if fortId, ok := ParseFortId(mapPokemon.FortId); ok {
+			pokemon.SetPokestopId(fortId)
+		} else if mapPokemon.FortId != "" {
+			log.Errorf("[POKEMON] lure pokemon %d carried an unparseable fort id %q", pokemon.Id, mapPokemon.FortId)
+		}
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
 		pokemon.SetSeenType(SeenTypeCodeLureWild)
@@ -314,18 +318,21 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		id, ok := fortIdFromLegacyString(pokestopId, "updateFromNearby")
+		fortId, ok := ParseFortId(pokestopId)
+		if !ok {
+			log.Errorf("[POKEMON] updateFromNearby %d: unparseable fort id %q", pokemon.Id, pokestopId)
+		}
 		var pokestop *Pokestop
 		var unlock func()
 		if ok {
-			pokestop, unlock, _ = getPokestopRecordReadOnly(ctx, db, id, "updateFromNearby")
+			pokestop, unlock, _ = getPokestopRecordReadOnly(ctx, db, fortId, "updateFromNearby")
 		}
 		if pokestop == nil {
 			// Unrecognised (or unparseable) pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
 			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
-			pokemon.SetPokestopId(null.StringFrom(pokestopId))
+			pokemon.SetPokestopId(fortId)
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
 			unlock()
@@ -1206,10 +1213,14 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 
 		pokemon.SetSpawnId(null.IntFrom(spawnId))
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
-	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
+	} else if fortIdStr := request.GetLocation().GetFortId(); fortIdStr != "" {
 		pokemon.SetSeenType(SeenTypeCodeTappableLureEncounter)
 
-		pokemon.SetPokestopId(null.StringFrom(fortId))
+		if fortId, ok := ParseFortId(fortIdStr); ok {
+			pokemon.SetPokestopId(fortId)
+		} else {
+			log.Errorf("[POKEMON] tappable lure encounter %d carried an unparseable fort id %q", pokemon.Id, fortIdStr)
+		}
 		// we don't know any despawn times from lured/fort tappables
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
