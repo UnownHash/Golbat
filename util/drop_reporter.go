@@ -35,6 +35,13 @@ func (d *DropReporter) Report(report func(dropped int64)) {
 // race decoder/init_test.go documents for statsCollector. Both fields here
 // are already atomic, so resetting through them is race-free against a
 // concurrent Report, and the package variable is never written at all.
+//
+// The two stores below are not atomic as a unit, though: a Report
+// interleaved between them could still observe a cleared count paired with
+// the old lastLog, or a fresh lastLog paired with the old count. Callers
+// must ensure no concurrent Report is in flight before calling Reset — true
+// of every caller today (tests, which quiesce first), but not enforced by
+// Reset itself.
 func (d *DropReporter) Reset() {
 	d.count.Store(0)
 	d.lastLog.Store(0)
