@@ -652,6 +652,25 @@ func (pokemon *Pokemon) setUsernameIfStored(username string) {
 	pokemon.SetUsername(null.StringFrom(username))
 }
 
+// resolveUsername picks the account name for the webhook payload and the
+// stats snapshot — the two consumers of Pokemon.Username. The live account
+// (the one reporting the save in progress, from the decode context) always
+// wins when present: stored is an opt-in, first-wins value that freezes on
+// whichever account happened to see the pokemon first, so once a second
+// account touches the record, stored is stale for these purposes — using it
+// over live corrupted the shiny/duplicate-encounter dedup (a genuinely new
+// account's encounter looked like a repeat of the first account's) and
+// showed the wrong reporter in webhooks. stored is used only as a fallback,
+// when the caller has no live account to offer (weather_iv.go's proactive
+// IV re-save has no decode context and passes ""), which leaves that path's
+// behavior exactly as it was before this option existed.
+func resolveUsername(stored null.String, live string) null.String {
+	if live != "" {
+		return null.StringFrom(live)
+	}
+	return stored
+}
+
 // SetCellId stores the signed S2 cell id directly. cell_id is a signed
 // bigint whose real values are frequently negative, and CellId's type
 // (null.Value[int64]) matches the column exactly, so v.Int64 is stored as-is

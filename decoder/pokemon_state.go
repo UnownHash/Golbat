@@ -451,10 +451,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			pvp = json.RawMessage(pokemon.Pvp.ValueOrZero())
 		}
 
-		webhookUsername := pokemon.Username
-		if !webhookUsername.Valid && username != "" {
-			webhookUsername = null.StringFrom(username)
-		}
+		webhookUsername := resolveUsername(pokemon.Username, username)
 
 		pokemonHook := PokemonWebhook{
 			SpawnpointId:          spawnpointId,

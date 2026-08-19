@@ -68,16 +68,110 @@ func TestStatsSnapshotCarriesThreadedUsername(t *testing.T) {
 	}
 }
 
-// With the option on, the stored value still wins for the snapshot so the
-// existing per-account dedup semantics are unchanged for those operators.
-func TestStatsSnapshotPrefersStoredUsername(t *testing.T) {
+// Review round 1 defect: the live (reporting) account must win over the
+// stored one even with the option on. Stored is a first-wins value — it
+// freezes on whichever account happened to see the pokemon first — so once
+// a second account reports the same pokemon, preferring stored corrupts the
+// shiny/duplicate-encounter dedup: the second account's snapshot would carry
+// the *first* account's name and updateEncounterStats would treat it as a
+// repeat check by that first account, silently dropping it from the stats.
+func TestStatsSnapshotPrefersLiveUsername(t *testing.T) {
 	withStoreUsername(t, true)
 
 	pokemon := &Pokemon{}
 	pokemon.Username = null.StringFrom("StoredAccount")
 
 	snap := pokemon.statsSnapshot("LiveAccount")
+	if snap.Username.ValueOrZero() != "LiveAccount" {
+		t.Fatalf("snapshot username = %q, want LiveAccount (the live account must win over the stale stored one)", snap.Username.ValueOrZero())
+	}
+}
+
+// weather_iv.go's proactive IV re-save has no decode context and passes "".
+// That path's behavior must stay exactly what it was before this option
+// existed: fall back to whatever is stored (which, with the option off, is
+// also empty).
+func TestStatsSnapshotFallsBackToStoredUsernameWhenLiveEmpty(t *testing.T) {
+	withStoreUsername(t, true)
+
+	pokemon := &Pokemon{}
+	pokemon.Username = null.StringFrom("StoredAccount")
+
+	snap := pokemon.statsSnapshot("")
 	if snap.Username.ValueOrZero() != "StoredAccount" {
-		t.Fatalf("snapshot username = %q, want StoredAccount", snap.Username.ValueOrZero())
+		t.Fatalf("snapshot username = %q, want StoredAccount (no live account to prefer)", snap.Username.ValueOrZero())
+	}
+}
+
+// resolveUsername is shared by statsSnapshot and createPokemonWebhooks —
+// this exercises its precedence directly rather than only indirectly
+// through those two callers.
+func TestResolveUsername(t *testing.T) {
+	cases := []struct {
+		name   string
+		stored null.String
+		live   string
+		want   null.String
+	}{
+		{"live wins over stored", null.StringFrom("Stored"), "Live", null.StringFrom("Live")},
+		{"falls back to stored when live is empty", null.StringFrom("Stored"), "", null.StringFrom("Stored")},
+		{"live wins even when nothing is stored", null.String{}, "Live", null.StringFrom("Live")},
+		{"both empty resolves to invalid", null.String{}, "", null.String{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := resolveUsername(c.stored, c.live)
+			if got != c.want {
+				t.Fatalf("resolveUsername(%v, %q) = %v, want %v", c.stored, c.live, got, c.want)
+			}
+		})
+	}
+}
+
+// TestUpdateEncounterStatsCountsDistinctAccountsAcrossEncounters is the
+// regression test for the review-round-1 defect, exercised at the level
+// that actually matters: the shiny/duplicate-encounter dedup itself. Two
+// genuinely different accounts encounter the same pokemon; the first-wins
+// gate correctly freezes the stored column on the first account (that
+// governs persistence only), but the dedup must still see each account as
+// its own distinct reporter. Before the fix, preferring the stale stored
+// value made the second account's snapshot carry the first account's name,
+// so SetAccountSeen reported "already seen" and updateEncounterStats
+// returned early — the second account's shiny check silently vanished from
+// the stats instead of being counted as a new distinct check.
+func TestUpdateEncounterStatsCountsDistinctAccountsAcrossEncounters(t *testing.T) {
+	withStoreUsername(t, true)
+
+	const encId = uint64(920001) // unique across the test binary's shared caches
+	pokemon := &Pokemon{PokemonData: PokemonData{
+		Id:    Uint64Str(encId),
+		AtkIv: null.ValueFrom(uint8(10)),
+		DefIv: null.ValueFrom(uint8(10)),
+		StaIv: null.ValueFrom(uint8(10)),
+	}}
+
+	// First encounter: account A. Nothing stored yet, so it's recorded.
+	pokemon.setUsernameIfStored("AccountA")
+	pokemonStatsLock.Lock()
+	updateEncounterStats(pokemon.statsSnapshot("AccountA"))
+	pokemonStatsLock.Unlock()
+
+	// Second encounter: a genuinely different account, B. The stored
+	// column correctly stays "AccountA" (first-wins governs persistence),
+	// but the live account reporting *this* encounter is B.
+	pokemon.setUsernameIfStored("AccountB")
+	if pokemon.Username.ValueOrZero() != "AccountA" {
+		t.Fatalf("stored username = %q, want AccountA (first-wins gate must not change)", pokemon.Username.ValueOrZero())
+	}
+	pokemonStatsLock.Lock()
+	updateEncounterStats(pokemon.statsSnapshot("AccountB"))
+	pokemonStatsLock.Unlock()
+
+	cacheVal := encounterCache.Get(encId)
+	if cacheVal == nil {
+		t.Fatal("no encounter cache entry after two encounters")
+	}
+	if got := cacheVal.NumAccountsSeen(); got != 2 {
+		t.Fatalf("accounts seen for encounter %d = %d, want 2 (AccountA and AccountB both counted as distinct reporters)", encId, got)
 	}
 }

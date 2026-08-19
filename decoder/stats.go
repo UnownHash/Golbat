@@ -219,15 +219,12 @@ func (s *pokemonStatsSnapshot) encounterStatsDuration(now int64) time.Duration {
 // statsSnapshot must be called while holding the pokemon's entity lock.
 //
 // username is the account reporting *now* (from the decode context). The
-// shiny/duplicate-encounter dedup wants that account regardless of the
-// store_username option, so the snapshot prefers the stored value when
-// present and falls back to the live one — the same shape as the webhook
-// payload in createPokemonWebhooks.
+// shiny/duplicate-encounter dedup wants that account, not whatever the
+// opt-in store_username column has frozen onto Pokemon.Username, so
+// resolveUsername prefers it — see that function's doc comment for why
+// preferring the stored value corrupted the dedup.
 func (pokemon *Pokemon) statsSnapshot(username string) *pokemonStatsSnapshot {
-	snapUsername := pokemon.Username
-	if !snapUsername.Valid && username != "" {
-		snapUsername = null.StringFrom(username)
-	}
+	snapUsername := resolveUsername(pokemon.Username, username)
 	s := &pokemonStatsSnapshot{
 		Id:                      pokemon.Id,
 		PokemonId:               pokemon.PokemonId,
