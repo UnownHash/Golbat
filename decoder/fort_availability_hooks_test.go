@@ -128,6 +128,43 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 	}
 }
 
+func TestUpdatePokestopLookupHookWiresBuddyShowcaseFocus(t *testing.T) {
+	initFortAvailability()
+	initQuestConditions()
+	now := time.Now().Unix()
+
+	stop := &Pokestop{PokestopData: PokestopData{
+		Id:             "hook-stop-buddy-showcase",
+		Lat:            1,
+		Lon:            2,
+		ShowcaseFocus:  null.StringFrom(`{"type":"buddy","min_level":3}`),
+		ShowcaseExpiry: null.IntFrom(now + 1800),
+	}}
+	updatePokestopLookup(stop)
+
+	lookup, ok := fortLookupCache.Load(stop.Id)
+	if !ok || lookup.ShowcaseBuddyMinLevel != 3 {
+		t.Fatalf("FortLookup Buddy projection = %+v, want min level 3", lookup)
+	}
+
+	want, _, err := parseShowcaseFocus(stop.ShowcaseFocus.String)
+	if err != nil {
+		t.Fatalf("parse expected focus: %v", err)
+	}
+	found := false
+	for _, showcase := range GetAvailablePokestops(now).Showcases {
+		if showcase.ShowcaseFocus != nil && *showcase.ShowcaseFocus == *want {
+			found = true
+			if showcase.PokemonId != nil || showcase.Form != nil || showcase.TypeId != nil {
+				t.Fatalf("Buddy focus should not require legacy mirrors: %+v", showcase)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected Buddy focus from updatePokestopLookup to surface via availability")
+	}
+}
+
 // TestUpdatePokestopIncidentLookupHookWiresInvasionAvailability must fail if
 // updatePokestopIncidentLookup's observeInvasion(...) call is removed. The
 // pokestop's FortLookup is seeded resident first (as fort_incident_id_test.go

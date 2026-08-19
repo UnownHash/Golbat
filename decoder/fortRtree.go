@@ -52,7 +52,8 @@ type FortLookup struct {
 	ContestPokemonId        int16
 	ContestPokemonForm      int16
 	ContestPokemonType      int8
-	ShowcaseRankingStandard int8  // tiny enum; int8 fits the pad before ShowcaseExpiry — zero struct growth
+	ShowcaseRankingStandard int8  // tiny enum; int8 shares the pad before ShowcaseExpiry — zero struct growth
+	ShowcaseBuddyMinLevel   int8  // Buddy focus projection; same pad — zero struct growth
 	ShowcaseExpiry          int64 // used to check expiry at filter time
 
 	// Station
@@ -186,6 +187,16 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
+	var showcaseFocus *ApiShowcaseFocus
+	var showcaseBuddyMinLevel int8
+	if pokestop.ShowcaseFocus.Valid {
+		var err error
+		showcaseFocus, showcaseBuddyMinLevel, err = parseShowcaseFocus(pokestop.ShowcaseFocus.ValueOrZero())
+		if err != nil {
+			log.Warnf("SHOWCASE: Stop '%s' - Invalid showcase_focus: %v", pokestop.Id, err)
+		}
+	}
+
 	// Atomic per-key read-modify-write via Compute: this writer (under the
 	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
 	// INCIDENT entity lock) update the same key from different lock domains,
@@ -214,6 +225,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
 			ShowcaseRankingStandard:    int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
+			ShowcaseBuddyMinLevel:      showcaseBuddyMinLevel,
 			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
 		}
 		if loaded {
@@ -229,8 +241,9 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		ContestPokemonForm:      int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
 		ContestPokemonType:      int8(pokestop.ShowcasePokemonType.ValueOrZero()),
 		ShowcaseRankingStandard: int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
+		ShowcaseBuddyMinLevel:   showcaseBuddyMinLevel,
 		ShowcaseExpiry:          pokestop.ShowcaseExpiry.ValueOrZero(),
-	}, time.Now().Unix())
+	}, showcaseFocus, time.Now().Unix())
 
 	// This is the sole writer of a pokestop's FortLookup entry, so it is also
 	// the single place quest-condition counts are reconciled: it fires on
