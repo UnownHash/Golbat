@@ -96,15 +96,58 @@ func LoadFortsFromDB(ctx context.Context, dbDetails db.DbDetails) error {
 
 const loadBatchSize = 30000
 
+// fortRow is one row of loadFortKindFromDB's keyset-paginated query. Id
+// stays a raw string (not FortId): the query loads a whole page via
+// SelectContext rather than a rows.Next() loop, so one malformed row must
+// not fail the batch, and the keyset cursor is the database's raw
+// collation-ordered value, not our parsed representation of it.
+type fortRow struct {
+	Id      string `db:"id"`
+	CellId  int64  `db:"cell_id"`
+	Updated int64  `db:"updated"`
+}
+
+// applyFortRows registers one loaded page with the tracker and returns how
+// many rows were applied plus the keyset cursor for the next page. The
+// cursor is always the raw scanned id of the LAST row — never the last
+// successfully parsed one — so a malformed row still advances the cursor;
+// otherwise a single junk row would stall the loader forever by re-fetching
+// the same page indefinitely. Takes fortTracker.mu once for the whole page
+// (not per row); rows must be non-empty.
+func applyFortRows(table string, rows []fortRow, isGym bool, nowMs int64) (applied int, cursor string) {
+	fortTracker.mu.Lock()
+	defer fortTracker.mu.Unlock()
+
+	for _, row := range rows {
+		id, ok := ParseFortId(row.Id)
+		if !ok {
+			log.Errorf("[FORT_TRACKER] unparseable fort id %q in %s, skipping", row.Id, table)
+			continue
+		}
+		cellId := uint64(row.CellId)
+		cell := fortTracker.getOrCreateCellLocked(cellId)
+		if isGym {
+			cell.gyms[id] = struct{}{}
+		} else {
+			cell.pokestops[id] = struct{}{}
+		}
+		if nowMs > cell.lastSeen {
+			cell.lastSeen = nowMs
+		}
+		fortTracker.forts[id] = &FortTrackerLastSeen{
+			cellId:   cellId,
+			lastSeen: nowMs,
+			isGym:    isGym,
+		}
+		applied++
+	}
+
+	return applied, rows[len(rows)-1].Id
+}
+
 // loadFortKindFromDB streams non-deleted forts of a single kind into the tracker.
 // `table` is a hardcoded literal (not user input), so the Sprintf is not a SQL injection vector.
 func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table string, isGym bool) (int, error) {
-	type fortRow struct {
-		Id      string `db:"id"`
-		CellId  int64  `db:"cell_id"`
-		Updated int64  `db:"updated"`
-	}
-
 	query := fmt.Sprintf(
 		"SELECT id, cell_id, updated FROM %s WHERE deleted = 0 AND cell_id IS NOT NULL AND id > ? ORDER BY id LIMIT ?",
 		table,
@@ -127,33 +170,10 @@ func loadFortKindFromDB(ctx context.Context, dbDetails db.DbDetails, table strin
 		// "now" rather than row.Updated: load is a confirmation event.
 		// See preloadPokestops for rationale.
 		nowMs := time.Now().UnixMilli()
-		fortTracker.mu.Lock()
-		for _, row := range rows {
-			id, ok := ParseFortId(row.Id)
-			if !ok {
-				log.Errorf("[FORT_TRACKER] unparseable fort id %q in %s, skipping", row.Id, table)
-				continue
-			}
-			cellId := uint64(row.CellId)
-			cell := fortTracker.getOrCreateCellLocked(cellId)
-			if isGym {
-				cell.gyms[id] = struct{}{}
-			} else {
-				cell.pokestops[id] = struct{}{}
-			}
-			if nowMs > cell.lastSeen {
-				cell.lastSeen = nowMs
-			}
-			fortTracker.forts[id] = &FortTrackerLastSeen{
-				cellId:   cellId,
-				lastSeen: nowMs,
-				isGym:    isGym,
-			}
-		}
-		fortTracker.mu.Unlock()
+		_, cursor := applyFortRows(table, rows, isGym, nowMs)
 
 		totalCount += len(rows)
-		lastId = rows[len(rows)-1].Id
+		lastId = cursor
 
 		if len(rows) < loadBatchSize {
 			break
@@ -583,6 +603,8 @@ var gymClearOps = fortKindOps[*Gym]{
 	convertedToLabel: "pokestop",
 	statDelete:       "gym_delete",
 	statConvert:      "gym_to_pokestop",
+	// TODO(fortid task 5): collapse back to the bare getGymRecordForUpdate
+	// reference once its id parameter is a FortId.
 	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Gym, func(), error) {
 		return getGymRecordForUpdate(ctx, d, id.String(), caller)
 	},
@@ -597,6 +619,8 @@ var pokestopClearOps = fortKindOps[*Pokestop]{
 	convertedToLabel: "gym",
 	statDelete:       "pokestop_delete",
 	statConvert:      "pokestop_to_gym",
+	// TODO(fortid task 5): collapse back to the bare getPokestopRecordForUpdate
+	// reference once its id parameter is a FortId.
 	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Pokestop, func(), error) {
 		return getPokestopRecordForUpdate(ctx, d, id.String(), caller)
 	},

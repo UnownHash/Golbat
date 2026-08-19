@@ -348,15 +348,67 @@ func TestProcessCellUpdate_MissCountResetOnSighting(t *testing.T) {
 }
 
 // A junk fort id in the middle of a keyset page must not stall the loader:
-// the cursor advances on the raw string even when the id is unusable.
-func TestFortTrackerParseFailureAdvancesCursor(t *testing.T) {
-	// The empty-string id is the one nonconforming row that exists in
-	// production; it must parse-fail rather than becoming the zero FortId.
-	if _, ok := ParseFortId(""); ok {
-		t.Fatal("empty fort id must not parse")
+// the two good rows are applied, the malformed one is skipped, and the
+// cursor advances to the raw string of the LAST row regardless. "" is the
+// one nonconforming id shape known to exist in production.
+func TestApplyFortRows_SkipsMalformedRowButAdvancesCursor(t *testing.T) {
+	InitFortTracker(3600, 1)
+	defer resetTracker()
+
+	goodA := "00000000000000000000000000000001"
+	goodB := "00000000000000000000000000000002"
+	nowMs := time.Now().UnixMilli()
+
+	rows := []fortRow{
+		{Id: goodA, CellId: 111, Updated: nowMs},
+		{Id: "", CellId: 222, Updated: nowMs}, // malformed: production's one nonconforming row shape
+		{Id: goodB, CellId: 333, Updated: nowMs},
 	}
-	valid := mustFortId(t, "00000000000000000000000000000001.16")
-	if !valid.Valid() {
-		t.Fatal("valid id reported invalid")
+
+	applied, cursor := applyFortRows("pokestop", rows, false, nowMs)
+
+	if applied != 2 {
+		t.Fatalf("expected 2 rows applied (the malformed one skipped), got %d", applied)
+	}
+	if cursor != goodB {
+		t.Fatalf("expected cursor to be the last row's raw id %q, got %q", goodB, cursor)
+	}
+
+	ft := GetFortTracker()
+	idA := mustFortId(t, goodA)
+	idB := mustFortId(t, goodB)
+	ft.mu.RLock()
+	_, hasA := ft.forts[idA]
+	_, hasB := ft.forts[idB]
+	ft.mu.RUnlock()
+	if !hasA || !hasB {
+		t.Fatalf("expected both good rows registered in the tracker: hasA=%v hasB=%v", hasA, hasB)
+	}
+}
+
+// The failure mode this task guards against: if the LAST row on a page has
+// an unparseable id, the cursor must still be its raw string — not the
+// preceding good row's — otherwise the next page's `id > ?` bound would
+// refetch the same malformed row forever and the loader would never
+// terminate.
+func TestApplyFortRows_CursorAdvancesEvenWhenLastRowIsMalformed(t *testing.T) {
+	InitFortTracker(3600, 1)
+	defer resetTracker()
+
+	goodA := "00000000000000000000000000000001"
+	nowMs := time.Now().UnixMilli()
+
+	rows := []fortRow{
+		{Id: goodA, CellId: 111, Updated: nowMs},
+		{Id: "", CellId: 222, Updated: nowMs},
+	}
+
+	applied, cursor := applyFortRows("gym", rows, true, nowMs)
+
+	if applied != 1 {
+		t.Fatalf("expected 1 row applied (the malformed last row skipped), got %d", applied)
+	}
+	if cursor != "" {
+		t.Fatalf("expected cursor to be the malformed last row's raw id (empty string), got %q", cursor)
 	}
 }
