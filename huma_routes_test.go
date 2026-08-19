@@ -322,6 +322,50 @@ func TestFortScanEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("structured Buddy focus binds on pokestop scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}`
+		resp := api.Post("/api/pokestop/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("structured Buddy focus binds on combined scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"pokestops":{"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}}`
+		resp := api.Post("/api/fort/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("availability advertises showcase focus filtering", func(t *testing.T) {
+		resp := api.Get("/api/pokestop/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var pokestops map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &pokestops); err != nil {
+			t.Fatalf("decode pokestop availability: %v", err)
+		}
+		if supported, ok := pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("pokestop availability capability = %v, want true", pokestops["showcase_focus_filter"])
+		}
+
+		resp = api.Get("/api/fort/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("fort availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var forts struct {
+			Pokestops map[string]any `json:"pokestops"`
+		}
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &forts); err != nil {
+			t.Fatalf("decode fort availability: %v", err)
+		}
+		if supported, ok := forts.Pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("nested pokestop capability = %v, want true", forts.Pokestops["showcase_focus_filter"])
+		}
+	})
+
 	t.Run("503 when fort_in_memory disabled", func(t *testing.T) {
 		config.Config.FortInMemory = false
 		defer func() { config.Config.FortInMemory = true }()

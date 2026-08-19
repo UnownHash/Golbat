@@ -90,14 +90,23 @@ type ApiFortDnfFilter struct {
 	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
 
 	// Pokestop - contest
-	ContestPokemon     []ApiDnfId `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
-	ContestPokemonType []int8     `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
+	ContestPokemon     []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemonType []int8                   `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
+	ContestFocus       []ApiFortDnfContestFocus `json:"contest_focus" required:"false" doc:"Pokestop only: allowed structured contest focuses. Currently supports exact Buddy minimum levels. Omitted or null means no structured focus constraint; an empty list matches nothing."`
 
 	// Station
 	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
 	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
 	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; when false, only stations without any. Null means no constraint."`
 	StationActive *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations whose end_time is in the future (still present); when false, only expired stations. Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
+}
+
+// ApiFortDnfContestFocus is one structured contest-focus selector. The wire
+// shape mirrors showcase_focus. Buddy selectors require min_level; unknown
+// focus types and Buddy selectors without a level safely match nothing.
+type ApiFortDnfContestFocus struct {
+	Type     string `json:"type" doc:"Focus type; currently buddy is supported"`
+	MinLevel *int8  `json:"min_level" required:"false" doc:"Exact minimum Buddy level when type is buddy"`
 }
 
 type ApiDnfId struct {
@@ -146,6 +155,18 @@ type ApiFortCombinedScanResult struct {
 func matchDnfIdPair(filter []ApiDnfId, pokemonId int16, form int16) bool {
 	for _, f := range filter {
 		if f.Pokemon == pokemonId && (f.Form == nil || *f.Form == form) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchContestFocus(filter []ApiFortDnfContestFocus, buddyMinLevel int8) bool {
+	if buddyMinLevel <= 0 {
+		return false
+	}
+	for _, focus := range filter {
+		if contestFocusType(focus.Type) == focusBuddy && focus.MinLevel != nil && *focus.MinLevel == buddyMinLevel {
 			return true
 		}
 	}
@@ -223,6 +244,10 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 		if filter.ContestPokemon != nil &&
 			(fortLookup.ShowcaseExpiry <= now || !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm)) {
+			return false
+		}
+		if filter.ContestFocus != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !matchContestFocus(filter.ContestFocus, fortLookup.ShowcaseBuddyMinLevel)) {
 			return false
 		}
 
