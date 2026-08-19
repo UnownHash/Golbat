@@ -10,6 +10,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/guregu/null/v6"
+	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
 	"golbat/geo"
@@ -182,7 +183,7 @@ type ApiGymResult struct {
 
 func buildGymResult(gym *Gym) ApiGymResult {
 	return ApiGymResult{
-		Id:                     gym.Id,
+		Id:                     gym.Id.String(),
 		Lat:                    gym.Lat,
 		Lon:                    gym.Lon,
 		Name:                   gym.Name.Ptr(),
@@ -255,9 +256,9 @@ func SearchGymsAPI(
 	ctx context.Context,
 	dbDetails db.DbDetails,
 	search ApiGymSearch,
-) ([]string, error) {
+) ([]FortId, error) {
 	if len(search.Filters) == 0 {
-		return []string{}, nil
+		return []FortId{}, nil
 	}
 
 	// Build WHERE conditions - all filters use AND logic
@@ -354,11 +355,23 @@ func SearchGymsAPI(
 	args = append(args, search.Limit)
 	q := dbDetails.GeneralDb.Rebind(rawSQL)
 
-	var ids []string
-	if err := dbDetails.GeneralDb.SelectContext(ctx, &ids, q, args...); err != nil {
+	var rawIds []string
+	if err := dbDetails.GeneralDb.SelectContext(ctx, &rawIds, q, args...); err != nil {
 		getStatsCollector().IncDbQuery("search gyms api", err)
 		return nil, err
 	}
 	getStatsCollector().IncDbQuery("search gyms api", nil)
+
+	// Parsed once here, at the SQL boundary: a malformed row is logged and
+	// dropped rather than carried forward as a string.
+	ids := make([]FortId, 0, len(rawIds))
+	for _, raw := range rawIds {
+		id, ok := ParseFortId(raw)
+		if !ok {
+			log.Errorf("SearchGymsAPI: unparseable fort id %q, skipping", raw)
+			continue
+		}
+		ids = append(ids, id)
+	}
 	return ids, nil
 }

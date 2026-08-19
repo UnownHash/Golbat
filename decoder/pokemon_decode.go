@@ -314,9 +314,14 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokestopId, "updateFromNearby")
+		id, ok := fortIdFromLegacyString(pokestopId, "updateFromNearby")
+		var pokestop *Pokestop
+		var unlock func()
+		if ok {
+			pokestop, unlock, _ = getPokestopRecordReadOnly(ctx, db, id, "updateFromNearby")
+		}
 		if pokestop == nil {
-			// Unrecognised pokestop, rollback changes
+			// Unrecognised (or unparseable) pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
 			pokemon.SetSeenType(SeenTypeCodeNearbyStop)

@@ -324,8 +324,31 @@ func registerFortScanRoutes(api huma.API) {
 // maxQueryIDs caps the number of ids accepted by the by-id batch query endpoints.
 const maxQueryIDs = 500
 
-// dedupeIDs drops empty and duplicate ids while preserving order.
-func dedupeIDs(in []string) []string {
+// dedupeIDs parses each id, dropping unparseable and duplicate ids while
+// preserving order. Subsumes the previous id == "" filter — ParseFortId
+// rejects "" too.
+func dedupeIDs(in []string) []decoder.FortId {
+	seen := make(map[decoder.FortId]struct{}, len(in))
+	out := make([]decoder.FortId, 0, len(in))
+	for _, raw := range in {
+		id, ok := decoder.ParseFortId(raw)
+		if !ok {
+			log.Errorf("dedupeIDs: unparseable fort id %q, dropping", raw)
+			continue
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
+}
+
+// dedupeStationIDs drops empty and duplicate station ids while preserving
+// order. Station ids are not fort ids yet (a later task converts them), so
+// this stays string-keyed rather than reusing dedupeIDs.
+func dedupeStationIDs(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	out := make([]string, 0, len(in))
 	for _, id := range in {
@@ -438,7 +461,7 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
 	}, func(ctx context.Context, in *idsQueryInput) (*stationQueryOutput, error) {
-		ids := dedupeIDs(in.Body.IDs)
+		ids := dedupeStationIDs(in.Body.IDs)
 		if len(ids) > maxQueryIDs {
 			return nil, huma.Error413RequestEntityTooLarge("too many ids")
 		}
@@ -544,9 +567,6 @@ func registerTier3Routes(api huma.API) {
 
 		out := make([]decoder.ApiGymResult, 0, len(ids))
 		for _, id := range ids {
-			if id == "" {
-				continue
-			}
 			g, unlock, err := decoder.GetGymRecordReadOnly(tctx, dbDetails, id, "API.SearchGyms")
 			if err != nil {
 				if unlock != nil {
@@ -581,8 +601,13 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *gymByIdInput) (*gymByIdOutput, error) {
+		fortId, ok := decoder.ParseFortId(in.GymId)
+		if !ok {
+			log.Errorf("API.GetGym: unparseable fort id %q", in.GymId)
+			return nil, huma.Error404NotFound("gym not found")
+		}
 		tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		gym, unlock, err := decoder.GetGymRecordReadOnly(tctx, dbDetails, in.GymId, "API.GetGym")
+		gym, unlock, err := decoder.GetGymRecordReadOnly(tctx, dbDetails, fortId, "API.GetGym")
 		if unlock != nil {
 			defer unlock()
 		}
@@ -633,7 +658,12 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *pokestopByIdInput) (*pokestopByIdOutput, error) {
-		pokestop, unlock, err := decoder.PeekPokestopRecord(in.FortId, "API.GetPokestop")
+		fortId, ok := decoder.ParseFortId(in.FortId)
+		if !ok {
+			log.Errorf("API.GetPokestop: unparseable fort id %q", in.FortId)
+			return nil, huma.Error404NotFound("pokestop not found")
+		}
+		pokestop, unlock, err := decoder.PeekPokestopRecord(fortId, "API.GetPokestop")
 		if err != nil {
 			if unlock != nil {
 				unlock()
@@ -650,11 +680,7 @@ func registerTier3Routes(api huma.API) {
 		if unlock != nil {
 			unlock() // release before locking incidents
 		}
-		if fortId, ok := decoder.ParseFortId(in.FortId); ok {
-			body.Invasions = decoder.CollectPokestopIncidents(ctx, dbDetails, fortId, time.Now().Unix())
-		} else {
-			log.Errorf("API.GetPokestop: unparseable fort id %q, returning result without invasions", in.FortId)
-		}
+		body.Invasions = decoder.CollectPokestopIncidents(ctx, dbDetails, fortId, time.Now().Unix())
 		return &pokestopByIdOutput{Body: body}, nil
 	})
 

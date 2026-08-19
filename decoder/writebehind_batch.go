@@ -24,8 +24,8 @@ type S2CellData struct {
 
 // Typed queues for each entity type - using native key types for efficiency
 var (
-	pokestopQueue      *writebehind.TypedQueue[string, PokestopData]
-	gymQueue           *writebehind.TypedQueue[string, GymData]
+	pokestopQueue      *writebehind.TypedQueue[FortId, PokestopData]
+	gymQueue           *writebehind.TypedQueue[FortId, GymData]
 	pokemonQueue       *writebehind.TypedQueue[uint64, PokemonData]
 	spawnpointQueue    *writebehind.TypedQueue[int64, SpawnpointData]
 	routeQueue         *writebehind.TypedQueue[string, RouteData]
@@ -63,7 +63,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 	queueManager = writebehind.NewQueueManager(startupDelay)
 
 	// Create typed queues for each entity type - using native key types
-	pokestopQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, PokestopData]{
+	pokestopQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, PokestopData]{
 		Name:                "pokestop",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -72,12 +72,12 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushPokestopBatch,
-		KeyFunc:             func(d PokestopData) string { return d.Id },
-		KeyCompare:          cmp.Compare[string],
+		KeyFunc:             func(d PokestopData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(pokestopQueue)
 
-	gymQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, GymData]{
+	gymQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, GymData]{
 		Name:                "gym",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -86,8 +86,8 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushGymBatch,
-		KeyFunc:             func(d GymData) string { return d.Id },
-		KeyCompare:          cmp.Compare[string],
+		KeyFunc:             func(d GymData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(gymQueue)
 

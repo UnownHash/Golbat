@@ -14,10 +14,10 @@ import (
 // JSON blobs (as they are stored on the DB record) so the test exercises the
 // raw-JSON passthrough (the stored bytes are emitted verbatim, not decoded and
 // re-encoded), not just the null case.
-func goldenSnapshotGym() *Gym {
+func goldenSnapshotGym(t *testing.T) *Gym {
 	return &Gym{
 		GymData: GymData{
-			Id:                    "gym-abc",
+			Id:                    mustFortId(t, "0123456789abcdef0123456789abcdef"),
 			Lat:                   12.3456,
 			Lon:                   -65.4321,
 			Name:                  null.StringFrom("Test Gym"),
@@ -80,12 +80,12 @@ func goldenSnapshotGym() *Gym {
 // and doesn't gate (it does not gate huma_api.go, which serves this struct
 // through goccy/go-json unconditionally either way).
 func TestBuildGymResult_GoldenSnapshot(t *testing.T) {
-	got, err := jsonenc.Marshal(buildGymResult(goldenSnapshotGym()))
+	got, err := jsonenc.Marshal(buildGymResult(goldenSnapshotGym(t)))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":"gym-abc","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":{"form":91,"costume":0,"gender":1,"shiny":true,"temp_evolution":0,"alignment":0,"badge":0,"background":7},"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":[{"pokemon_id":143,"form":0,"costume":0,"gender":1,"shiny":false,"temp_evolution":0,"alignment":1,"badge":0,"background":null,"deployed_ms":3600000,"deployed_time":1699996400,"battles_won":4,"battles_lost":1,"times_fed":2,"motivation_now":0.6667,"cp_now":2500,"cp_when_deployed":2600}],"rsvps":[]}`
+	const want = `{"id":"0123456789abcdef0123456789abcdef","lat":12.3456,"lon":-65.4321,"name":"Test Gym","url":"https://example.com/gym.png","last_modified_timestamp":1699990000,"raid_end_timestamp":1700003600,"raid_spawn_timestamp":null,"raid_battle_timestamp":1700000000,"updated":1699999999,"raid_pokemon_id":150,"guarding_pokemon_id":143,"guarding_pokemon_display":{"form":91,"costume":0,"gender":1,"shiny":true,"temp_evolution":0,"alignment":0,"badge":0,"background":7},"available_slots":3,"team_id":2,"raid_level":5,"enabled":1,"ex_raid_eligible":0,"in_battle":0,"raid_pokemon_move_1":216,"raid_pokemon_move_2":94,"raid_pokemon_form":0,"raid_pokemon_alignment":0,"raid_pokemon_cp":3500,"raid_is_exclusive":0,"cell_id":1234567890123,"deleted":false,"total_cp":12000,"first_seen_timestamp":1699990000,"raid_pokemon_gender":1,"sponsor_id":null,"partner_id":"partner-1","raid_pokemon_costume":0,"raid_pokemon_evolution":0,"ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":null,"description":"A test gym","defenders":[{"pokemon_id":143,"form":0,"costume":0,"gender":1,"shiny":false,"temp_evolution":0,"alignment":1,"badge":0,"background":null,"deployed_ms":3600000,"deployed_time":1699996400,"battles_won":4,"battles_lost":1,"times_fed":2,"motivation_now":0.6667,"cp_now":2500,"cp_when_deployed":2600}],"rsvps":[]}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

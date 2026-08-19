@@ -92,19 +92,16 @@ func initFortRtree() {
 	// function), so callbacks can never observe a nil evictor or lookup
 	// cache. Mirrors the structure of initPokemonRtree.
 	//
-	// Cache keys are still string (entity Id fields convert in later
-	// tasks), so each callback parses through the temporary bridge before
-	// handing the id to the FortId-keyed eviction path.
+	// Pokestop/gym cache keys are FortId natively. Station's cache key is
+	// still string (its Id field converts in a later task), so that
+	// callback parses through the temporary bridge before handing the id
+	// to the FortId-keyed eviction path.
 	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ ottercache.EvictionReason) {
-			if id, ok := fortIdFromLegacyString(p.Id, "pokestop eviction"); ok {
-				deferFortEviction(POKESTOP, id, p.Lat, p.Lon)
-			}
+		pokestopCache.OnEviction(func(_ FortId, p *Pokestop, _ ottercache.EvictionReason) {
+			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
 		})
-		gymCache.OnEviction(func(_ string, g *Gym, _ ottercache.EvictionReason) {
-			if id, ok := fortIdFromLegacyString(g.Id, "gym eviction"); ok {
-				deferFortEviction(GYM, id, g.Lat, g.Lon)
-			}
+		gymCache.OnEviction(func(_ FortId, g *Gym, _ ottercache.EvictionReason) {
+			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
 		})
 	}
 
@@ -140,10 +137,7 @@ func genericUpdateFort(id FortId, lat float64, lon float64, deleted bool) {
 
 // fortRtreeUpdatePokestopOnSave updates rtree and lookup cache when a pokestop is saved
 func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
-	id, ok := fortIdFromLegacyString(pokestop.Id, "pokestop rtree update")
-	if !ok {
-		return
-	}
+	id := pokestop.Id
 	genericUpdateFort(id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
 	if !pokestop.Deleted {
 		updatePokestopLookup(id, pokestop)
@@ -157,10 +151,7 @@ func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 
 // fortRtreeUpdateGymOnSave updates rtree and lookup cache when a gym is saved
 func fortRtreeUpdateGymOnSave(gym *Gym) {
-	id, ok := fortIdFromLegacyString(gym.Id, "gym rtree update")
-	if !ok {
-		return
-	}
+	id := gym.Id
 	genericUpdateFort(id, gym.Lat, gym.Lon, gym.Deleted)
 	if !gym.Deleted {
 		updateGymLookup(id, gym)
@@ -179,10 +170,7 @@ func fortRtreeUpdateStationOnSave(station *Station) {
 
 // fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
 func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
-	id, ok := fortIdFromLegacyString(pokestop.Id, "pokestop rtree get")
-	if !ok {
-		return
-	}
+	id := pokestop.Id
 	_, inMap := fortLookupCache.Load(id)
 	if !inMap {
 		addFortToTree(id, pokestop.Lat, pokestop.Lon)
@@ -192,10 +180,7 @@ func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
 
 // fortRtreeUpdateGymOnGet updates rtree when a gym is loaded from DB (cache miss)
 func fortRtreeUpdateGymOnGet(gym *Gym) {
-	id, ok := fortIdFromLegacyString(gym.Id, "gym rtree get")
-	if !ok {
-		return
-	}
+	id := gym.Id
 	_, inMap := fortLookupCache.Load(id)
 	if !inMap {
 		addFortToTree(id, gym.Lat, gym.Lon)

@@ -27,7 +27,7 @@ const gymSelectColumns = `id, lat, lon, name, url, last_modified_timestamp, raid
 	raid_pokemon_costume, raid_pokemon_evolution, ar_scan_eligible, power_up_level, power_up_points,
 	power_up_end_timestamp, description, defenders, rsvps`
 
-func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gym *Gym) error {
+func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId FortId, gym *Gym) error {
 	return timedDbQuery("loadGymFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, gym, "SELECT "+gymSelectColumns+" FROM gym WHERE id = ?", fortId)
 		getStatsCollector().IncDbQuery("select gym", err)
@@ -37,7 +37,7 @@ func loadGymFromDatabase(ctx context.Context, db db.DbDetails, fortId string, gy
 
 // DoesGymExist checks if a gym exists in cache or database without acquiring a lock.
 // This is useful for checking if a fort was converted from a gym before doing cross-entity updates.
-func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
+func DoesGymExist(ctx context.Context, db db.DbDetails, fortId FortId) bool {
 	// Check cache first (fast path)
 	if gymCache.Has(fortId) {
 		return true
@@ -56,7 +56,7 @@ func DoesGymExist(ctx context.Context, db db.DbDetails, fortId string) bool {
 
 // PeekGymRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func PeekGymRecord(fortId string, caller string) (*Gym, func(), error) {
+func PeekGymRecord(fortId FortId, caller string) (*Gym, func(), error) {
 	if gym, ok := gymCache.Get(fortId); ok {
 		gym.Lock(caller)
 		return gym, func() { gym.Unlock() }, nil
@@ -67,7 +67,7 @@ func PeekGymRecord(fortId string, caller string) (*Gym, func(), error) {
 // GetGymRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
+func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Gym, func(), error) {
 	// Check cache first
 	if gym, ok := gymCache.Get(fortId); ok {
 		gym.Lock(caller)
@@ -102,7 +102,7 @@ func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, c
 // getGymRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Use when modifying the Gym.
 // Caller MUST call returned unlock function if non-nil.
-func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
+func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Gym, func(), error) {
 	gym, unlock, err := GetGymRecordReadOnly(ctx, db, fortId, caller)
 	if err != nil || gym == nil {
 		return nil, nil, err
@@ -113,7 +113,7 @@ func getGymRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, 
 
 // getOrCreateGymRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Gym, func(), error) {
+func getOrCreateGymRecord(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Gym, func(), error) {
 	// Create new Gym atomically - function only called if key doesn't exist
 	gym, _ := gymCache.GetOrSetFunc(fortId, func() *Gym {
 		return &Gym{GymData: GymData{Id: fortId}, newRecord: true}
@@ -202,7 +202,7 @@ func createGymFortWebhooks(gym *Gym) {
 		// Build old fort from saved old values
 		oldFort := &FortWebhook{
 			Type:        GYM.String(),
-			Id:          gym.Id,
+			Id:          gym.Id.String(),
 			Name:        gym.oldValues.Name.Ptr(),
 			ImageUrl:    gym.oldValues.Url.Ptr(),
 			Description: gym.oldValues.Description.Ptr(),
@@ -216,7 +216,7 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 	if gym.newRecord ||
 		(gym.oldValues.AvailableSlots != gym.AvailableSlots || gym.oldValues.TeamId != gym.TeamId || gym.oldValues.InBattle != gym.InBattle) {
 		gymDetails := GymDetailsWebhook{
-			Id:             gym.Id,
+			Id:             gym.Id.String(),
 			Name:           gym.Name.ValueOrZero(),
 			Url:            gym.Url.ValueOrZero(),
 			Latitude:       gym.Lat,
@@ -265,7 +265,7 @@ func createGymWebhooks(gym *Gym, areas []geo.AreaName) {
 			}
 
 			raidHook := RaidWebhook{
-				GymId:               gym.Id,
+				GymId:               gym.Id.String(),
 				GymName:             gymName,
 				GymUrl:              gym.Url.ValueOrZero(),
 				Latitude:            gym.Lat,
@@ -325,12 +325,12 @@ func saveGymRecord(ctx context.Context, db db.DbDetails, gym *Gym) {
 	if dbDebugEnabled {
 		if gym.IsDirty() {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Gym", gym.Id, gym.debug.fields())
+				dbDebugLog("INSERT", "Gym", gym.Id.String(), gym.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Gym", gym.Id, gym.debug.fields())
+				dbDebugLog("UPDATE", "Gym", gym.Id.String(), gym.debug.fields())
 			}
 		} else {
-			dbDebugLog("MEMORY", "Gym", gym.Id, gym.debug.fields())
+			dbDebugLog("MEMORY", "Gym", gym.Id.String(), gym.debug.fields())
 		}
 	}
 
@@ -441,7 +441,7 @@ type RaidLobbyWebhook struct {
 
 func buildRaidLobbyWebhook(gym *Gym) RaidLobbyWebhook {
 	return RaidLobbyWebhook{
-		Id:             gym.Id,
+		Id:             gym.Id.String(),
 		Latitude:       gym.Lat,
 		Longitude:      gym.Lon,
 		PlayerCount:    gym.RaidLobbyCount.ValueOrZero(),
@@ -454,7 +454,12 @@ func buildRaidLobbyWebhook(gym *Gym) RaidLobbyWebhook {
 // cannot geofence a webhook without lat/lon, and a lobby message implies an active
 // known fort. No DB write is performed.
 func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, playerCount int32, joinEndMs int64) {
-	gym, unlock, err := getGymRecordForUpdate(ctx, db, gymId, "RaidLobby")
+	fortId, ok := ParseFortId(gymId)
+	if !ok {
+		log.Errorf("UpdateGymRaidLobby: unparseable gym id %q, dropping", gymId)
+		return
+	}
+	gym, unlock, err := getGymRecordForUpdate(ctx, db, fortId, "RaidLobby")
 	if err != nil {
 		log.Warnf("UpdateGymRaidLobby: error loading gym %s: %v", gymId, err)
 		return
@@ -481,7 +486,7 @@ func UpdateGymRaidLobby(ctx context.Context, db db.DbDetails, gymId string, play
 func updateGymGetMapFortCache(gym *Gym, skipName bool) {
 	if getMapFort, ok := getMapFortsCache.Get(gym.Id); ok {
 		getMapFortsCache.Delete(gym.Id)
-		gym.updateGymFromGetMapFortsOutProto(getMapFort, skipName)
+		gym.updateGymFromGetMapFortsOutProto(gym.Id, getMapFort, skipName)
 		log.Debugf("Updated Gym using stored getMapFort: %s", gym.Id)
 	}
 }

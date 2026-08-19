@@ -22,7 +22,7 @@ func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
 	const idStr = "00000000000000000000000000000001"
 	id := mustFortId(t, idStr)
 	stop := &Pokestop{PokestopData: PokestopData{
-		Id: idStr, Lat: 50, Lon: 4,
+		Id: id, Lat: 50, Lon: 4,
 		QuestRewardType: null.IntFrom(7),
 	}}
 	inc := &Incident{IncidentData: IncidentData{

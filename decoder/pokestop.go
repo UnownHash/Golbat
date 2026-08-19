@@ -11,7 +11,7 @@ import (
 // PokestopData contains all database-persisted fields for Pokestop.
 // This struct is embedded in Pokestop and can be safely copied for write-behind queueing.
 type PokestopData struct {
-	Id                            string      `db:"id"`
+	Id                            FortId      `db:"id"`
 	Lat                           float64     `db:"lat"`
 	Lon                           float64     `db:"lon"`
 	Name                          null.String `db:"name"`
@@ -68,7 +68,7 @@ type PokestopData struct {
 
 // Pokestop struct.
 type Pokestop struct {
-	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[FortId] `db:"-"` // Object-level mutex with contention tracking
 
 	PokestopData // Embedded data fields - can be copied for write-behind queue
 
@@ -213,7 +213,7 @@ func (p *Pokestop) Unlock() {
 
 // --- Set methods with dirty tracking ---
 
-func (p *Pokestop) SetId(v string) {
+func (p *Pokestop) SetId(v FortId) {
 	if p.Id != v {
 		if dbDebugEnabled {
 			p.debug.recordChange(fmt.Sprintf("Id:%s->%s", p.Id, v))

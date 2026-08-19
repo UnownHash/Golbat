@@ -15,8 +15,8 @@ import (
 
 var LureTime int64 = 1800
 
-func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, cellId uint64, now int64) *Pokestop {
-	stop.SetId(fortData.FortId)
+func (stop *Pokestop) updatePokestopFromFort(fortId FortId, fortData *pogo.PokemonFortProto, cellId uint64, now int64) *Pokestop {
+	stop.SetId(fortId)
 	stop.SetLat(fortData.Latitude)
 	stop.SetLon(fortData.Longitude)
 
@@ -64,9 +64,7 @@ func (stop *Pokestop) updatePokestopFromFort(fortData *pogo.PokemonFortProto, ce
 		log.Warnf("Cleared Stop with id '%s' is found again in GMO, therefore un-deleted", stop.Id)
 		// Restore in fort tracker if enabled
 		if fortTracker != nil {
-			if id, ok := fortIdFromLegacyString(stop.Id, "pokestop tracker restore"); ok {
-				fortTracker.RestoreFort(id, cellId, false, now*1000)
-			}
+			fortTracker.RestoreFort(stop.Id, cellId, false, now*1000)
 		}
 	}
 	return stop
@@ -433,8 +431,8 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 	return questTitle
 }
 
-func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDetailsOutProto) *Pokestop {
-	stop.SetId(fortData.Id)
+func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortId FortId, fortData *pogo.FortDetailsOutProto) *Pokestop {
+	stop.SetId(fortId)
 	stop.SetLat(fortData.Latitude)
 	stop.SetLon(fortData.Longitude)
 	if len(fortData.ImageUrl) > 0 {
@@ -460,8 +458,8 @@ func (stop *Pokestop) updatePokestopFromFortDetailsProto(fortData *pogo.FortDeta
 	return stop
 }
 
-func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto) *Pokestop {
-	stop.SetId(fortData.Id)
+func (stop *Pokestop) updatePokestopFromGetMapFortsOutProto(fortId FortId, fortData *pogo.GetMapFortsOutProto_FortProto) *Pokestop {
+	stop.SetId(fortId)
 	stop.SetLat(fortData.Latitude)
 	stop.SetLon(fortData.Longitude)
 

@@ -19,7 +19,11 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	//var stopsToModify []string
 
 	for _, fort := range p {
-		fortId := fort.Data.FortId
+		fortId, ok := ParseFortId(fort.Data.FortId)
+		if !ok {
+			log.Errorf("UpdateFortBatch: unparseable fort id %q, skipping", fort.Data.FortId)
+			continue
+		}
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
 			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
@@ -27,7 +31,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
+			pokestop.updatePokestopFromFort(fortId, fort.Data, fort.Cell, fort.Timestamp/1000)
 			isNewRecord := pokestop.IsNewRecord()
 
 			savePokestopRecord(ctx, db, pokestop)
@@ -81,7 +85,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			gym.updateGymFromFort(fort.Data, fort.Cell, fort.Timestamp)
+			gym.updateGymFromFort(fortId, fort.Data, fort.Cell, fort.Timestamp)
 			isNewRecord := gym.IsNewRecord()
 
 			saveGymRecord(ctx, db, gym)

@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -234,9 +234,15 @@ func TestTier3ReadEndpoints(t *testing.T) {
 	})
 
 	t.Run("gym/query rejecting >500 ids returns 413", func(t *testing.T) {
+		// The cap applies to the deduplicated, parsed id list, so these must be
+		// well-formed (and distinct) fort ids rather than arbitrary short
+		// strings — otherwise dedupeIDs would drop every one as unparseable
+		// and the count would never reach the cap. Start at 1: an all-zero id
+		// (i=0) is FortId's reserved "no fort" sentinel and would itself be
+		// dropped as unparseable, one short of the cap.
 		ids := make([]string, 0, 501)
-		for i := 0; i < 501; i++ {
-			ids = append(ids, "id"+strconv.Itoa(i))
+		for i := 1; i <= 501; i++ {
+			ids = append(ids, fmt.Sprintf("%032x", i))
 		}
 		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
 		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))

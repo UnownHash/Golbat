@@ -14,14 +14,19 @@ import (
 )
 
 func UpdatePokestopRecordWithFortDetailsOutProto(ctx context.Context, db db.DbDetails, fort *pogo.FortDetailsOutProto) string {
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fort.Id, "UpdatePokestopFromFortDetails")
+	fortId, ok := ParseFortId(fort.Id)
+	if !ok {
+		log.Errorf("UpdatePokestopRecordWithFortDetailsOutProto: unparseable fort id %q", fort.Id)
+		return fmt.Sprintf("Error: unparseable fort id %q", fort.Id)
+	}
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdatePokestopFromFortDetails")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return fmt.Sprintf("Error %s", err)
 	}
 	defer unlock()
 
-	pokestop.updatePokestopFromFortDetailsProto(fort)
+	pokestop.updatePokestopFromFortDetailsProto(fortId, fort)
 
 	updatePokestopGetMapFortCache(pokestop)
 	savePokestopRecord(ctx, db, pokestop)
@@ -41,7 +46,13 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 
 	getStatsCollector().IncDecodeQuest("ok", haveArStr)
 
-	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId, "UpdatePokestopWithQuest")
+	fortId, ok := ParseFortId(quest.FortId)
+	if !ok {
+		log.Errorf("UpdatePokestopWithQuest: unparseable fort id %q", quest.FortId)
+		return fmt.Sprintf("%s %s unparseable fort id", quest.FortId, haveArStr)
+	}
+
+	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdatePokestopWithQuest")
 	if err != nil {
 		log.Printf("Update quest %s", err)
 		return fmt.Sprintf("error %s", err)
@@ -78,8 +89,8 @@ func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Featur
 	return res
 }
 
-func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
-	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, mapFort.Id, "UpdatePokestopFromGetMapForts")
+func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, fortId FortId, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopFromGetMapForts")
 	if err != nil {
 		log.Printf("Update pokestop %s", err)
 		return false, fmt.Sprintf("Error %s", err)
@@ -90,7 +101,7 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	}
 	defer unlock()
 
-	pokestop.updatePokestopFromGetMapFortsOutProto(mapFort)
+	pokestop.updatePokestopFromGetMapFortsOutProto(fortId, mapFort)
 	savePokestopRecord(ctx, db, pokestop)
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
@@ -104,14 +115,16 @@ func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request
 		return "No contests found"
 	}
 
-	var fortId string
+	var fortIdStr string
 	if request != nil {
-		fortId = request.FortId
+		fortIdStr = request.FortId
 	} else {
-		fortId = getFortIdFromContest(contestData.ContestIncident.Contests[0].ContestId)
+		fortIdStr = getFortIdFromContest(contestData.ContestIncident.Contests[0].ContestId)
 	}
 
-	if fortId == "" {
+	fortId, ok := ParseFortId(fortIdStr)
+	if !ok {
+		log.Errorf("UpdatePokestopWithContestData: unparseable fort id %q", fortIdStr)
 		return "No fortId found"
 	}
 
@@ -145,7 +158,13 @@ func getFortIdFromContest(id string) string {
 }
 
 func UpdatePokestopWithPokemonSizeContestEntry(ctx context.Context, db db.DbDetails, request *pogo.GetPokemonSizeLeaderboardEntryProto, contestData *pogo.GetPokemonSizeLeaderboardEntryOutProto) string {
-	fortId := getFortIdFromContest(request.GetContestId())
+	fortIdStr := getFortIdFromContest(request.GetContestId())
+
+	fortId, ok := ParseFortId(fortIdStr)
+	if !ok {
+		log.Errorf("UpdatePokestopWithPokemonSizeContestEntry: unparseable fort id %q", fortIdStr)
+		return "Error: unparseable fort id"
+	}
 
 	pokestop, unlock, err := getPokestopRecordForUpdate(ctx, db, fortId, "UpdatePokestopWithContestEntry")
 	if err != nil {

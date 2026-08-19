@@ -603,15 +603,11 @@ var gymClearOps = fortKindOps[*Gym]{
 	convertedToLabel: "pokestop",
 	statDelete:       "gym_delete",
 	statConvert:      "gym_to_pokestop",
-	// TODO(fortid task 5): collapse back to the bare getGymRecordForUpdate
-	// reference once its id parameter is a FortId.
-	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Gym, func(), error) {
-		return getGymRecordForUpdate(ctx, d, id.String(), caller)
-	},
-	saveRecord:  saveGymRecord,
-	initWebhook: InitWebHookFortFromGym,
-	setDeleted:  func(g *Gym) { g.SetDeleted(true) },
-	isNil:       func(g *Gym) bool { return g == nil },
+	loadForUpdate:    getGymRecordForUpdate,
+	saveRecord:       saveGymRecord,
+	initWebhook:      InitWebHookFortFromGym,
+	setDeleted:       func(g *Gym) { g.SetDeleted(true) },
+	isNil:            func(g *Gym) bool { return g == nil },
 }
 
 var pokestopClearOps = fortKindOps[*Pokestop]{
@@ -619,15 +615,11 @@ var pokestopClearOps = fortKindOps[*Pokestop]{
 	convertedToLabel: "gym",
 	statDelete:       "pokestop_delete",
 	statConvert:      "pokestop_to_gym",
-	// TODO(fortid task 5): collapse back to the bare getPokestopRecordForUpdate
-	// reference once its id parameter is a FortId.
-	loadForUpdate: func(ctx context.Context, d db.DbDetails, id FortId, caller string) (*Pokestop, func(), error) {
-		return getPokestopRecordForUpdate(ctx, d, id.String(), caller)
-	},
-	saveRecord:  savePokestopRecord,
-	initWebhook: InitWebHookFortFromPokestop,
-	setDeleted:  func(p *Pokestop) { p.SetDeleted(true) },
-	isNil:       func(p *Pokestop) bool { return p == nil },
+	loadForUpdate:    getPokestopRecordForUpdate,
+	saveRecord:       savePokestopRecord,
+	initWebhook:      InitWebHookFortFromPokestop,
+	setDeleted:       func(p *Pokestop) { p.SetDeleted(true) },
+	isNil:            func(p *Pokestop) bool { return p == nil },
 }
 
 // clearFortWithLock marks a fort as deleted while holding its object-level mutex.

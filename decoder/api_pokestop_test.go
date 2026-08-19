@@ -11,10 +11,10 @@ import (
 // goldenSnapshotPokestop is a representative pokestop with a mix of set and
 // unset (null) fields across every nullable column, used to pin the exact wire
 // format.
-func goldenSnapshotPokestop() *Pokestop {
+func goldenSnapshotPokestop(t *testing.T) *Pokestop {
 	return &Pokestop{
 		PokestopData: PokestopData{
-			Id:   "stop-abc",
+			Id:   mustFortId(t, "fedcba9876543210fedcba9876543210"),
 			Lat:  12.3456,
 			Lon:  -65.4321,
 			Name: null.StringFrom("Test Pokestop"),
@@ -80,12 +80,12 @@ func goldenSnapshotPokestop() *Pokestop {
 // and doesn't gate (it does not gate huma_api.go, which serves this struct
 // through goccy/go-json unconditionally either way).
 func TestBuildPokestopResult_GoldenSnapshot(t *testing.T) {
-	got, err := jsonenc.Marshal(buildPokestopResult(goldenSnapshotPokestop()))
+	got, err := jsonenc.Marshal(buildPokestopResult(goldenSnapshotPokestop(t)))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":"stop-abc","lat":12.3456,"lon":-65.4321,"name":"Test Pokestop","url":"https://example.com/stop.png","lure_expire_timestamp":null,"last_modified_timestamp":1699990000,"updated":1699999999,"enabled":true,"quest_type":7,"quest_timestamp":1699991000,"quest_target":3,"quest_reward_type":1,"quest_item_id":null,"quest_reward_amount":100,"quest_pokemon_id":null,"quest_pokemon_form_id":null,"quest_conditions":[],"quest_rewards":[{"type":1}],"quest_template":"challenge_template","quest_title":null,"quest_expiry":1700003600,"cell_id":1234567890123,"deleted":false,"lure_id":501,"first_seen_timestamp":0,"sponsor_id":null,"partner_id":"partner-1","ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":1700007200,"alternative_quest_type":7,"alternative_quest_timestamp":1699992000,"alternative_quest_target":5,"alternative_quest_reward_type":2,"alternative_quest_item_id":1,"alternative_quest_reward_amount":3,"alternative_quest_pokemon_id":null,"alternative_quest_pokemon_form_id":null,"alternative_quest_conditions":null,"alternative_quest_rewards":[{"type":2}],"alternative_quest_template":"alt_template","alternative_quest_title":"Alt Quest","alternative_quest_expiry":1700003601,"description":"A test pokestop","showcase_focus":null,"showcase_pokemon_id":150,"showcase_pokemon_form_id":0,"showcase_pokemon_type_id":1,"showcase_ranking_standard":0,"showcase_expiry":null,"showcase_rankings":[]}`
+	const want = `{"id":"fedcba9876543210fedcba9876543210","lat":12.3456,"lon":-65.4321,"name":"Test Pokestop","url":"https://example.com/stop.png","lure_expire_timestamp":null,"last_modified_timestamp":1699990000,"updated":1699999999,"enabled":true,"quest_type":7,"quest_timestamp":1699991000,"quest_target":3,"quest_reward_type":1,"quest_item_id":null,"quest_reward_amount":100,"quest_pokemon_id":null,"quest_pokemon_form_id":null,"quest_conditions":[],"quest_rewards":[{"type":1}],"quest_template":"challenge_template","quest_title":null,"quest_expiry":1700003600,"cell_id":1234567890123,"deleted":false,"lure_id":501,"first_seen_timestamp":0,"sponsor_id":null,"partner_id":"partner-1","ar_scan_eligible":1,"power_up_level":2,"power_up_points":50,"power_up_end_timestamp":1700007200,"alternative_quest_type":7,"alternative_quest_timestamp":1699992000,"alternative_quest_target":5,"alternative_quest_reward_type":2,"alternative_quest_item_id":1,"alternative_quest_reward_amount":3,"alternative_quest_pokemon_id":null,"alternative_quest_pokemon_form_id":null,"alternative_quest_conditions":null,"alternative_quest_rewards":[{"type":2}],"alternative_quest_template":"alt_template","alternative_quest_title":"Alt Quest","alternative_quest_expiry":1700003601,"description":"A test pokestop","showcase_focus":null,"showcase_pokemon_id":150,"showcase_pokemon_form_id":0,"showcase_pokemon_type_id":1,"showcase_ranking_standard":0,"showcase_expiry":null,"showcase_rankings":[]}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

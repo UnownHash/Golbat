@@ -33,7 +33,7 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	description, showcase_focus, showcase_pokemon_id, showcase_pokemon_form_id,
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
-func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {
+func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId FortId, pokestop *Pokestop) error {
 	if db.GeneralDb == nil {
 		// Zero-value test DbDetails{} has a nil GeneralDb; treat that as
 		// "not found" so tests can run without a real DB. Production always
@@ -53,7 +53,7 @@ func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId strin
 
 // PeekPokestopRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func PeekPokestopRecord(fortId string, caller string) (*Pokestop, func(), error) {
+func PeekPokestopRecord(fortId FortId, caller string) (*Pokestop, func(), error) {
 	if pokestop, ok := pokestopCache.Get(fortId); ok {
 		pokestop.Lock(caller)
 		return pokestop, func() { pokestop.Unlock() }, nil
@@ -63,7 +63,7 @@ func PeekPokestopRecord(fortId string, caller string) (*Pokestop, func(), error)
 
 // DoesPokestopExist checks if a pokestop exists in cache or database without acquiring a lock.
 // This is useful for checking if a fort was converted from a pokestop before doing cross-entity updates.
-func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool {
+func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId FortId) bool {
 	// Check cache first (fast path)
 	if pokestopCache.Has(fortId) {
 		return true
@@ -83,7 +83,7 @@ func DoesPokestopExist(ctx context.Context, db db.DbDetails, fortId string) bool
 // getPokestopRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
+func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Pokestop, func(), error) {
 	// Check cache first
 	if pokestop, ok := pokestopCache.Get(fortId); ok {
 		pokestop.Lock(caller)
@@ -119,7 +119,7 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId stri
 // getPokestopRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Use when modifying the Pokestop.
 // Caller MUST call returned unlock function if non-nil.
-func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
+func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Pokestop, func(), error) {
 	pokestop, unlock, err := getPokestopRecordReadOnly(ctx, db, fortId, caller)
 	if err != nil || pokestop == nil {
 		return nil, nil, err
@@ -130,7 +130,7 @@ func getPokestopRecordForUpdate(ctx context.Context, db db.DbDetails, fortId str
 
 // getOrCreatePokestopRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId string, caller string) (*Pokestop, func(), error) {
+func getOrCreatePokestopRecord(ctx context.Context, db db.DbDetails, fortId FortId, caller string) (*Pokestop, func(), error) {
 	// Create new Pokestop atomically - function only called if key doesn't exist
 	pokestop, _ := pokestopCache.GetOrSetFunc(fortId, func() *Pokestop {
 		return &Pokestop{PokestopData: PokestopData{Id: fortId}, newRecord: true}
@@ -209,7 +209,7 @@ func createPokestopFortWebhooks(stop *Pokestop) {
 		// Build old fort from saved old values
 		oldFort := &FortWebhook{
 			Type:        POKESTOP.String(),
-			Id:          stop.Id,
+			Id:          stop.Id.String(),
 			Name:        stop.oldValues.Name.Ptr(),
 			ImageUrl:    stop.oldValues.Url.Ptr(),
 			Description: stop.oldValues.Description.Ptr(),
@@ -230,7 +230,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 
 	if stop.AlternativeQuestType.Valid && (stop.newRecord || stop.AlternativeQuestType != stop.oldValues.AlternativeQuestType) {
 		questHook := QuestWebhook{
-			PokestopId:     stop.Id,
+			PokestopId:     stop.Id.String(),
 			Latitude:       stop.Lat,
 			Longitude:      stop.Lon,
 			PokestopName:   pokestopName,
@@ -256,7 +256,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 
 	if stop.QuestType.Valid && (stop.newRecord || stop.QuestType != stop.oldValues.QuestType) {
 		questHook := QuestWebhook{
-			PokestopId:     stop.Id,
+			PokestopId:     stop.Id.String(),
 			Latitude:       stop.Lat,
 			Longitude:      stop.Lon,
 			PokestopName:   pokestopName,
@@ -290,7 +290,7 @@ func createPokestopWebhooks(stop *Pokestop) {
 		}
 
 		pokestopHook := PokestopWebhook{
-			PokestopId:              stop.Id,
+			PokestopId:              stop.Id.String(),
 			Latitude:                stop.Lat,
 			Longitude:               stop.Lon,
 			Name:                    pokestopName,
@@ -336,12 +336,12 @@ func savePokestopRecord(ctx context.Context, db db.DbDetails, pokestop *Pokestop
 	if dbDebugEnabled {
 		if pokestop.IsDirty() {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Pokestop", pokestop.Id, pokestop.debug.fields())
+				dbDebugLog("INSERT", "Pokestop", pokestop.Id.String(), pokestop.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Pokestop", pokestop.Id, pokestop.debug.fields())
+				dbDebugLog("UPDATE", "Pokestop", pokestop.Id.String(), pokestop.debug.fields())
 			}
 		} else {
-			dbDebugLog("MEMORY", "Pokestop", pokestop.Id, pokestop.debug.fields())
+			dbDebugLog("MEMORY", "Pokestop", pokestop.Id.String(), pokestop.debug.fields())
 		}
 	}
 
@@ -484,7 +484,7 @@ func pokestopWriteDB(db db.DbDetails, pokestop *Pokestop, isNewRecord bool) erro
 func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 	if getMapFort, ok := getMapFortsCache.Get(pokestop.Id); ok {
 		getMapFortsCache.Delete(pokestop.Id)
-		pokestop.updatePokestopFromGetMapFortsOutProto(getMapFort)
+		pokestop.updatePokestopFromGetMapFortsOutProto(pokestop.Id, getMapFort)
 		log.Debugf("Updated Gym using stored getMapFort: %s", pokestop.Id)
 	}
 }
@@ -512,7 +512,12 @@ func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geo
 
 	clearedCount := 0
 
-	for _, id := range pokestopIds {
+	for _, idStr := range pokestopIds {
+		id, ok := ParseFortId(idStr)
+		if !ok {
+			log.Errorf("RemoveQuestsWithinGeofence: unparseable fort id %q, skipping", idStr)
+			continue
+		}
 		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id, "RemoveQuestsWithinGeofence")
 		if err != nil {
 			log.Errorf("RemoveQuestsWithinGeofence: failed to get pokestop %s: %v", id, err)
@@ -581,23 +586,35 @@ func ExpireQuests(ctx context.Context, dbDetails db.DbDetails) (int, error) {
 		return 0, err
 	}
 
-	// Build sets for quick lookup
-	hasExpiredQuest := make(map[string]bool, len(expiredQuestIds))
-	for _, id := range expiredQuestIds {
+	// Build sets for quick lookup. Parsed once here, at the SQL boundary;
+	// a malformed id is logged and dropped from every set rather than
+	// carried forward as a string.
+	hasExpiredQuest := make(map[FortId]bool, len(expiredQuestIds))
+	for _, idStr := range expiredQuestIds {
+		id, ok := ParseFortId(idStr)
+		if !ok {
+			log.Errorf("ExpireQuests: unparseable fort id %q, skipping", idStr)
+			continue
+		}
 		hasExpiredQuest[id] = true
 	}
 
-	hasExpiredAltQuest := make(map[string]bool, len(expiredAltQuestIds))
-	for _, id := range expiredAltQuestIds {
+	hasExpiredAltQuest := make(map[FortId]bool, len(expiredAltQuestIds))
+	for _, idStr := range expiredAltQuestIds {
+		id, ok := ParseFortId(idStr)
+		if !ok {
+			log.Errorf("ExpireQuests: unparseable fort id %q, skipping", idStr)
+			continue
+		}
 		hasExpiredAltQuest[id] = true
 	}
 
 	// Combine and deduplicate IDs
-	allIds := make(map[string]bool, len(expiredQuestIds)+len(expiredAltQuestIds))
-	for _, id := range expiredQuestIds {
+	allIds := make(map[FortId]bool, len(hasExpiredQuest)+len(hasExpiredAltQuest))
+	for id := range hasExpiredQuest {
 		allIds[id] = true
 	}
-	for _, id := range expiredAltQuestIds {
+	for id := range hasExpiredAltQuest {
 		allIds[id] = true
 	}
 

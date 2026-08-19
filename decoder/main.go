@@ -95,8 +95,8 @@ func getStatsCollector() stats_collector.StatsCollector {
 	return *statsCollector.Load()
 }
 
-var pokestopCache *ottercache.OtterCache[string, *Pokestop]
-var gymCache *ottercache.OtterCache[string, *Gym]
+var pokestopCache *ottercache.OtterCache[FortId, *Pokestop]
+var gymCache *ottercache.OtterCache[FortId, *Gym]
 var stationCache *ottercache.OtterCache[string, *Station]
 var tappableCache *ottercache.OtterCache[uint64, *Tappable]
 var weatherCache *ottercache.OtterCache[int64, *Weather]
@@ -107,7 +107,7 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
-var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
+var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
 
@@ -175,13 +175,13 @@ func initDataCache() {
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
 	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
-	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Pokestop]{
+	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Pokestop]{
 		Name:       "pokestop",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Gym]{
+	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Gym]{
 		Name:       "gym",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
@@ -252,7 +252,7 @@ func initDataCache() {
 		TouchOnHit: true,
 	})
 
-	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *pogo.GetMapFortsOutProto_FortProto]{
 		Name:       "map_forts",
 		DefaultTTL: 5 * time.Minute,
 		TouchOnHit: false,

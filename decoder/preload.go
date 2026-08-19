@@ -124,14 +124,12 @@ func preloadPokestops(dbDetails db.DbDetails, populateRtree bool) int32 {
 				// of preload time. Using DB Updated would mean partial GMOs
 				// after a long downtime would immediately stale all forts.
 				if fortTracker != nil && pokestop.CellId.Valid {
-					if id, ok := fortIdFromLegacyString(pokestop.Id, "pokestop tracker preload"); ok {
-						fortTracker.RegisterFort(
-							id,
-							uint64(pokestop.CellId.Int64),
-							false,
-							time.Now().UnixMilli(),
-						)
-					}
+					fortTracker.RegisterFort(
+						pokestop.Id,
+						uint64(pokestop.CellId.Int64),
+						false,
+						time.Now().UnixMilli(),
+					)
 				}
 
 				c := atomic.AddInt32(&count, 1)
@@ -187,14 +185,12 @@ func preloadGyms(dbDetails db.DbDetails, populateRtree bool) int32 {
 
 				// Register with fort tracker (see comment in preloadPokestops).
 				if fortTracker != nil && gym.CellId.Valid {
-					if id, ok := fortIdFromLegacyString(gym.Id, "gym tracker preload"); ok {
-						fortTracker.RegisterFort(
-							id,
-							uint64(gym.CellId.Int64),
-							true,
-							time.Now().UnixMilli(),
-						)
-					}
+					fortTracker.RegisterFort(
+						gym.Id,
+						uint64(gym.CellId.Int64),
+						true,
+						time.Now().UnixMilli(),
+					)
 				}
 
 				c := atomic.AddInt32(&count, 1)

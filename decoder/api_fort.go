@@ -413,7 +413,7 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]Fort
 func collectGymResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiGymResult {
 	results := make([]*ApiGymResult, 0, len(keys))
 	for _, key := range keys {
-		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key.String(), traceName)
+		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, traceName)
 		if err == nil && gym != nil {
 			gymCopy := buildGymResult(gym)
 			results = append(results, &gymCopy)
@@ -451,7 +451,7 @@ func collectStationResults(dbDetails db.DbDetails, keys []FortId, traceName stri
 func collectPokestopResults(dbDetails db.DbDetails, keys []FortId, withIncidents bool, now int64, traceName string) []*ApiPokestopResult {
 	results := make([]*ApiPokestopResult, 0, len(keys))
 	for _, key := range keys {
-		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key.String(), traceName)
+		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, traceName)
 		if err == nil && pokestop != nil {
 			pokestopCopy := buildPokestopResult(pokestop)
 			if unlock != nil {

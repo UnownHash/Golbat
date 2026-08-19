@@ -69,7 +69,7 @@ type ApiPokestopResult struct {
 
 func buildPokestopResult(stop *Pokestop) ApiPokestopResult {
 	return ApiPokestopResult{
-		Id:                            stop.Id,
+		Id:                            stop.Id.String(),
 		Lat:                           stop.Lat,
 		Lon:                           stop.Lon,
 		Name:                          stop.Name.Ptr(),

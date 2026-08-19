@@ -292,13 +292,14 @@ func TestScanUnknownSeenTypeIsInertInTheDecodeSwitches(t *testing.T) {
 	})
 
 	t.Run("updateFromNearby keeps precise coordinates", func(t *testing.T) {
-		const fortId = "seentype-unknown-stop"
-		pokestopCache.Set(fortId, &Pokestop{PokestopData: PokestopData{
-			Id:  fortId,
+		const fortId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		id := mustFortId(t, fortId)
+		pokestopCache.Set(id, &Pokestop{PokestopData: PokestopData{
+			Id:  id,
 			Lat: 51.5,
 			Lon: -0.12,
 		}}, time.Minute)
-		t.Cleanup(func() { pokestopCache.Delete(fortId) })
+		t.Cleanup(func() { pokestopCache.Delete(id) })
 
 		p := &Pokemon{}
 		p.Id = 43

@@ -23,7 +23,7 @@ func TestUpdateGymLookupHookWiresRaidAvailability(t *testing.T) {
 
 	const gymIdStr = "00000000000000000000000000000001"
 	gym := &Gym{GymData: GymData{
-		Id:               gymIdStr,
+		Id:               mustFortId(t, gymIdStr),
 		Lat:              1,
 		Lon:              2,
 		RaidLevel:        null.IntFrom(5),
@@ -94,7 +94,7 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 
 	const stopIdStr = "00000000000000000000000000000003"
 	stop := &Pokestop{PokestopData: PokestopData{
-		Id:                  stopIdStr,
+		Id:                  mustFortId(t, stopIdStr),
 		Lat:                 1,
 		Lon:                 2,
 		LureId:              501,
@@ -139,7 +139,7 @@ func TestUpdatePokestopLookupHookWiresBuddyShowcaseFocus(t *testing.T) {
 	const stopIdStr = "00000000000000000000000000000005"
 	stopId := mustFortId(t, stopIdStr)
 	stop := &Pokestop{PokestopData: PokestopData{
-		Id:             stopIdStr,
+		Id:             stopId,
 		Lat:            1,
 		Lon:            2,
 		ShowcaseFocus:  null.StringFrom(`{"type":"buddy","min_level":3}`),

@@ -24,7 +24,7 @@ func TestQuestConditions_Aggregate(t *testing.T) {
 
 // newQuestStop builds a pokestop carrying a no-AR quest slot (the primary
 // Quest* fields) with the given title/target.
-func newQuestStop(id, title string, target int64) *Pokestop {
+func newQuestStop(id FortId, title string, target int64) *Pokestop {
 	return &Pokestop{PokestopData: PokestopData{
 		Id:                id,
 		Lat:               1.0,
@@ -55,7 +55,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 
 	const stopIdStr = "00000000000000000000000000000001"
 	stopId := mustFortId(t, stopIdStr)
-	stop := newQuestStop(stopIdStr, "catch_x", 3)
+	stop := newQuestStop(stopId, "catch_x", 3)
 
 	// Load / first lookup -> +1.
 	updatePokestopLookup(stopId, stop)
@@ -81,7 +81,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	// A second fort offering the identical (now catch_y) option -> count 2.
 	const stop2IdStr = "00000000000000000000000000000002"
 	stop2Id := mustFortId(t, stop2IdStr)
-	stop2 := newQuestStop(stop2IdStr, "catch_y", 7)
+	stop2 := newQuestStop(stop2Id, "catch_y", 7)
 	updatePokestopLookup(stop2Id, stop2)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 2 {
@@ -115,7 +115,7 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	// Deletion path.
 	const delIdStr = "00000000000000000000000000000001"
 	delId := mustFortId(t, delIdStr)
-	del := newQuestStop(delIdStr, "spin_x", 4)
+	del := newQuestStop(delId, "spin_x", 4)
 	updatePokestopLookup(delId, del)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("delete setup: want 1 entry")
@@ -131,7 +131,7 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	// its own eviction fires (FortType mismatch), which must still drop it.
 	const convIdStr = "00000000000000000000000000000002"
 	convId := mustFortId(t, convIdStr)
-	conv := newQuestStop(convIdStr, "battle_x", 2)
+	conv := newQuestStop(convId, "battle_x", 2)
 	updatePokestopLookup(convId, conv)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("conversion setup: want 1 entry")
@@ -160,7 +160,7 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 	const iterations = 500
 	const stopIdStr = "00000000000000000000000000000001"
 	stopId := mustFortId(t, stopIdStr)
-	stop := newQuestStop(stopIdStr, "concurrent_x", 9)
+	stop := newQuestStop(stopId, "concurrent_x", 9)
 
 	var wg sync.WaitGroup
 	for g := 0; g < goroutines; g++ {
