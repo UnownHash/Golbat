@@ -11,10 +11,10 @@ import (
 // goldenSnapshotStation is a representative station with a mix of set and
 // unset (null) fields across every nullable column, used to pin the exact wire
 // format.
-func goldenSnapshotStation() *Station {
+func goldenSnapshotStation(t *testing.T) *Station {
 	return &Station{
 		StationData: StationData{
-			Id:                "station-abc",
+			Id:                mustFortId(t, "aabbccddeeff00112233445566778899"),
 			Lat:               45.6789,
 			Lon:               -120.9876,
 			Name:              "Test Station",
@@ -54,14 +54,14 @@ func goldenSnapshotStation() *Station {
 // and doesn't gate (it does not gate huma_api.go, which serves this struct
 // through goccy/go-json unconditionally either way).
 func TestBuildStationResult_GoldenSnapshot(t *testing.T) {
-	got, err := jsonenc.Marshal(BuildStationResult(goldenSnapshotStation()))
+	got, err := jsonenc.Marshal(BuildStationResult(goldenSnapshotStation(t)))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
 	// Battle flat-fields are now projected from the station battle cache
 	// (getKnownStationBattles), which is empty here, so they serialize as null.
-	const want = `{"id":"station-abc","lat":45.6789,"lon":-120.9876,"name":"Test Station","cell_id":1234567890123,"start_time":1699990000,"end_time":1700003600,"cooldown_complete":1700002000,"is_battle_available":true,"is_inactive":false,"updated":1699999999,"battle_level":null,"battle_start":null,"battle_end":null,"battle_pokemon_id":null,"battle_pokemon_form":null,"battle_pokemon_costume":null,"battle_pokemon_gender":null,"battle_pokemon_alignment":null,"battle_pokemon_bread_mode":null,"battle_pokemon_move_1":null,"battle_pokemon_move_2":null,"battle_pokemon_stamina":null,"battle_pokemon_cp_multiplier":null,"total_stationed_pokemon":6,"total_stationed_gmax":null,"stationed_pokemon":[{"pokemon_id":150}]}`
+	const want = `{"id":"aabbccddeeff00112233445566778899","lat":45.6789,"lon":-120.9876,"name":"Test Station","cell_id":1234567890123,"start_time":1699990000,"end_time":1700003600,"cooldown_complete":1700002000,"is_battle_available":true,"is_inactive":false,"updated":1699999999,"battle_level":null,"battle_start":null,"battle_end":null,"battle_pokemon_id":null,"battle_pokemon_form":null,"battle_pokemon_costume":null,"battle_pokemon_gender":null,"battle_pokemon_alignment":null,"battle_pokemon_bread_mode":null,"battle_pokemon_move_1":null,"battle_pokemon_move_2":null,"battle_pokemon_stamina":null,"battle_pokemon_cp_multiplier":null,"total_stationed_pokemon":6,"total_stationed_gmax":null,"stationed_pokemon":[{"pokemon_id":150}]}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

@@ -97,7 +97,7 @@ func getStatsCollector() stats_collector.StatsCollector {
 
 var pokestopCache *ottercache.OtterCache[FortId, *Pokestop]
 var gymCache *ottercache.OtterCache[FortId, *Gym]
-var stationCache *ottercache.OtterCache[string, *Station]
+var stationCache *ottercache.OtterCache[FortId, *Station]
 var tappableCache *ottercache.OtterCache[uint64, *Tappable]
 var weatherCache *ottercache.OtterCache[int64, *Weather]
 var weatherConsensusCache *ottercache.OtterCache[int64, *WeatherConsensusState]
@@ -187,7 +187,7 @@ func initDataCache() {
 		TouchOnHit: true,
 	})
 
-	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Station]{
+	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Station]{
 		Name:       "station",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,

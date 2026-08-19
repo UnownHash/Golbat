@@ -92,10 +92,8 @@ func initFortRtree() {
 	// function), so callbacks can never observe a nil evictor or lookup
 	// cache. Mirrors the structure of initPokemonRtree.
 	//
-	// Pokestop/gym cache keys are FortId natively. Station's cache key is
-	// still string (its Id field converts in a later task), so that
-	// callback parses through the temporary bridge before handing the id
-	// to the FortId-keyed eviction path.
+	// Pokestop/gym/station cache keys are all FortId natively, so eviction
+	// callbacks hand the key straight to the FortId-keyed eviction path.
 	if config.Config.FortInMemory {
 		pokestopCache.OnEviction(func(_ FortId, p *Pokestop, _ ottercache.EvictionReason) {
 			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
@@ -105,12 +103,10 @@ func initFortRtree() {
 		})
 	}
 
-	stationCache.OnEviction(func(stationId string, s *Station, _ ottercache.EvictionReason) {
+	stationCache.OnEviction(func(stationId FortId, s *Station, _ ottercache.EvictionReason) {
 		clearStationBattleState(stationId)
 		if config.Config.FortInMemory {
-			if id, ok := fortIdFromLegacyString(s.Id, "station eviction"); ok {
-				deferFortEviction(STATION, id, s.Lat, s.Lon)
-			}
+			deferFortEviction(STATION, stationId, s.Lat, s.Lon)
 		}
 	})
 }
@@ -158,12 +154,8 @@ func fortRtreeUpdateGymOnSave(gym *Gym) {
 
 // fortRtreeUpdateStationOnSave updates rtree and lookup cache when a station is saved
 func fortRtreeUpdateStationOnSave(station *Station) {
-	id, ok := fortIdFromLegacyString(station.Id, "station rtree update")
-	if !ok {
-		return
-	}
-	genericUpdateFort(id, station.Lat, station.Lon, false)
-	updateStationLookup(id, station)
+	genericUpdateFort(station.Id, station.Lat, station.Lon, false)
+	updateStationLookup(station.Id, station)
 }
 
 // fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
@@ -186,14 +178,10 @@ func fortRtreeUpdateGymOnGet(gym *Gym) {
 
 // fortRtreeUpdateStationOnGet updates rtree when a station is loaded from DB (cache miss)
 func fortRtreeUpdateStationOnGet(station *Station) {
-	id, ok := fortIdFromLegacyString(station.Id, "station rtree get")
-	if !ok {
-		return
-	}
-	_, inMap := fortLookupCache.Load(id)
+	_, inMap := fortLookupCache.Load(station.Id)
 	if !inMap {
-		addFortToTree(id, station.Lat, station.Lon)
-		updateStationLookup(id, station)
+		addFortToTree(station.Id, station.Lat, station.Lon)
+		updateStationLookup(station.Id, station)
 	}
 }
 

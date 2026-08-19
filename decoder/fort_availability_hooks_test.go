@@ -54,7 +54,7 @@ func TestUpdateStationLookupWithBattlesHookWiresBattleAvailability(t *testing.T)
 
 	const stationIdStr = "00000000000000000000000000000002"
 	station := &Station{StationData: StationData{
-		Id:        stationIdStr,
+		Id:        mustFortId(t, stationIdStr),
 		Lat:       1,
 		Lon:       2,
 		StartTime: now - 3600,

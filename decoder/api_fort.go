@@ -431,7 +431,7 @@ func collectGymResults(dbDetails db.DbDetails, keys []FortId, traceName string) 
 func collectStationResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiStationResult {
 	results := make([]*ApiStationResult, 0, len(keys))
 	for _, key := range keys {
-		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key.String(), traceName)
+		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, traceName)
 		if err == nil && station != nil {
 			stationCopy := BuildStationResult(station)
 			results = append(results, &stationCopy)

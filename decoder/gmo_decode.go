@@ -117,13 +117,17 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
-		stationId := stationProto.Data.Id
+		stationId, ok := ParseFortId(stationProto.Data.Id)
+		if !ok {
+			log.Errorf("UpdateStationBatch: unparseable station id %q, skipping", stationProto.Data.Id)
+			continue
+		}
 		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId, "UpdateStationBatch")
 		if err != nil {
 			log.Errorf("getOrCreateStationRecord: %s", err)
 			continue
 		}
-		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
+		station.updateFromStationProto(stationId, stationProto.Data, stationProto.Cell)
 		syncStationBattlesFromProto(station, stationProto.Data.BattleDetails)
 		saveStationRecord(ctx, db, station)
 		unlock()

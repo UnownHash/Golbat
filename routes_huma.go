@@ -356,25 +356,6 @@ func dedupeIDs(in []string) []decoder.FortId {
 	return out
 }
 
-// dedupeStationIDs drops empty and duplicate station ids while preserving
-// order. Station ids are not fort ids yet (a later task converts them), so
-// this stays string-keyed rather than reusing dedupeIDs.
-func dedupeStationIDs(in []string) []string {
-	seen := make(map[string]struct{}, len(in))
-	out := make([]string, 0, len(in))
-	for _, id := range in {
-		if id == "" {
-			continue
-		}
-		if _, ok := seen[id]; ok {
-			continue
-		}
-		seen[id] = struct{}{}
-		out = append(out, id)
-	}
-	return out
-}
-
 type idsQueryInput struct {
 	Body struct {
 		IDs []string `json:"ids" required:"false" doc:"Fort IDs to fetch (max 500). Omitted or null returns an empty result."`
@@ -474,10 +455,12 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
 	}, func(ctx context.Context, in *idsQueryInput) (*stationQueryOutput, error) {
-		ids := dedupeStationIDs(in.Body.IDs)
-		if len(ids) > maxQueryIDs {
+		// Cap check runs on the raw request size, before parsing/dedup — see
+		// dedupeIDs's doc comment for why the order matters.
+		if len(in.Body.IDs) > maxQueryIDs {
 			return nil, huma.Error413RequestEntityTooLarge("too many ids")
 		}
+		ids := dedupeIDs(in.Body.IDs)
 		if len(ids) == 0 {
 			return &stationQueryOutput{Body: []decoder.ApiStationResult{}}, nil
 		}
@@ -645,8 +628,13 @@ func registerTier3Routes(api huma.API) {
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *stationByIdInput) (*stationByIdOutput, error) {
+		fortId, ok := decoder.ParseFortId(in.StationId)
+		if !ok {
+			log.Errorf("API.GetStation: unparseable station id %q", in.StationId)
+			return nil, huma.Error404NotFound("station not found")
+		}
 		tctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		station, unlock, err := decoder.GetStationRecordReadOnly(tctx, dbDetails, in.StationId, "API.GetStation")
+		station, unlock, err := decoder.GetStationRecordReadOnly(tctx, dbDetails, fortId, "API.GetStation")
 		if unlock != nil {
 			defer unlock()
 		}

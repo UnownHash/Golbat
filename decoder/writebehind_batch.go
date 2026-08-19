@@ -30,8 +30,8 @@ var (
 	spawnpointQueue    *writebehind.TypedQueue[int64, SpawnpointData]
 	routeQueue         *writebehind.TypedQueue[string, RouteData]
 	tappableQueue      *writebehind.TypedQueue[uint64, TappableData]
-	stationQueue       *writebehind.TypedQueue[string, StationData]
-	stationBattleQueue *writebehind.TypedQueue[string, stationBattleWrite]
+	stationQueue       *writebehind.TypedQueue[FortId, StationData]
+	stationBattleQueue *writebehind.TypedQueue[FortId, stationBattleWrite]
 	incidentQueue      *writebehind.TypedQueue[string, IncidentData]
 	s2cellQueue        *writebehind.TypedQueue[uint64, S2CellData]
 
@@ -147,7 +147,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 	})
 	queueManager.Register(tappableQueue)
 
-	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, StationData]{
 		Name:                "station",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -156,12 +156,12 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushStationBatch,
-		KeyFunc:             func(d StationData) string { return d.Id },
-		KeyCompare:          cmp.Compare[string],
+		KeyFunc:             func(d StationData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(stationQueue)
 
-	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, stationBattleWrite]{
 		Name:                "station_battle",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -170,8 +170,8 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushStationBattleBatch,
-		KeyFunc:             func(d stationBattleWrite) string { return d.StationId },
-		KeyCompare:          cmp.Compare[string],
+		KeyFunc:             func(d stationBattleWrite) FortId { return d.StationId },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(stationBattleQueue)
 

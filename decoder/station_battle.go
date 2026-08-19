@@ -20,7 +20,7 @@ import (
 
 type StationBattleData struct {
 	BreadBattleSeed           int64      `db:"bread_battle_seed"`
-	StationId                 string     `db:"station_id"`
+	StationId                 FortId     `db:"station_id"`
 	BattleLevel               int16      `db:"battle_level"`
 	BattleStart               int64      `db:"battle_start"`
 	BattleEnd                 int64      `db:"battle_end"`
@@ -63,7 +63,7 @@ type FortLookupIncident struct {
 }
 
 type stationBattleWrite struct {
-	StationId string
+	StationId FortId
 	Battles   []StationBattleData
 }
 
@@ -136,16 +136,16 @@ ON DUPLICATE KEY UPDATE
 `
 
 var (
-	stationBattleCache        *xsync.Map[string, stationBattleState]
+	stationBattleCache        *xsync.Map[FortId, stationBattleState]
 	stationBattleSnapshotSeed = maphash.MakeSeed()
 )
 
 func initStationBattleCache() {
-	stationBattleCache = xsync.NewMap[string, stationBattleState]()
+	stationBattleCache = xsync.NewMap[FortId, stationBattleState]()
 }
 
-func storeStationBattles(stationId string, battles []StationBattleData) {
-	if stationId == "" {
+func storeStationBattles(stationId FortId, battles []StationBattleData) {
+	if !stationId.Valid() {
 		return
 	}
 	if len(battles) == 0 {
@@ -160,15 +160,15 @@ func storeStationBattles(stationId string, battles []StationBattleData) {
 	})
 }
 
-func clearStationBattleState(stationId string) {
-	if stationId == "" {
+func clearStationBattleState(stationId FortId) {
+	if !stationId.Valid() {
 		return
 	}
 	stationBattleCache.Delete(stationId)
 }
 
-func hasLoadedStationBattles(stationId string) bool {
-	if stationId == "" {
+func hasLoadedStationBattles(stationId FortId) bool {
+	if !stationId.Valid() {
 		return false
 	}
 	state, ok := stationBattleCache.Load(stationId)
@@ -189,8 +189,8 @@ func syncStationBattlesFromProto(station *Station, battleDetail *pogo.BreadBattl
 	}
 }
 
-func stationBattleFromProto(stationId string, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
-	if stationId == "" || battleDetail == nil {
+func stationBattleFromProto(stationId FortId, battleDetail *pogo.BreadBattleDetailProto, updated int64) *StationBattleData {
+	if !stationId.Valid() || battleDetail == nil {
 		return nil
 	}
 	battle := &StationBattleData{
@@ -274,7 +274,8 @@ func snapshotStationBattles(battles []StationBattleData) stationBattleSnapshot {
 
 func hashStationBattle(h *maphash.Hash, battle StationBattleData) {
 	writeInt64(h, battle.BreadBattleSeed)
-	writeString(h, battle.StationId)
+	_, _ = h.Write(battle.StationId.Guid[:])
+	_, _ = h.Write([]byte{battle.StationId.Suffix})
 	writeInt64(h, int64(battle.BattleLevel))
 	writeInt64(h, battle.BattleStart)
 	writeInt64(h, battle.BattleEnd)
@@ -294,11 +295,6 @@ func writeInt64(h *maphash.Hash, v int64) {
 	var buf [8]byte
 	binary.LittleEndian.PutUint64(buf[:], uint64(v))
 	_, _ = h.Write(buf[:])
-}
-
-func writeString(h *maphash.Hash, v string) {
-	writeInt64(h, int64(len(v)))
-	h.WriteString(v)
 }
 
 func writeNullInt(h *maphash.Hash, v null.Int) {
@@ -349,8 +345,8 @@ func mergeStationBattles(existing []StationBattleData, observed StationBattleDat
 
 // getKnownStationBattles returns the non-expired battle list already loaded for a station.
 // Callers that pair this with Station fields must hold that station's lock, except during preload/test setup where no live readers exist.
-func getKnownStationBattles(stationId string, now int64) []StationBattleData {
-	if stationId == "" {
+func getKnownStationBattles(stationId FortId, now int64) []StationBattleData {
+	if !stationId.Valid() {
 		return nil
 	}
 	state, ok := stationBattleCache.Load(stationId)
@@ -551,15 +547,15 @@ func buildFortLookupStationBattlesFromSlice(battles []StationBattleData) []FortL
 	return result
 }
 
-func flattenStationBattleWrites(snapshots []stationBattleWrite) ([]StationBattleData, []string) {
+func flattenStationBattleWrites(snapshots []stationBattleWrite) ([]StationBattleData, []FortId) {
 	if len(snapshots) == 0 {
 		return nil, nil
 	}
-	stationIds := make([]string, 0, len(snapshots))
-	seenStations := make(map[string]struct{}, len(snapshots))
+	stationIds := make([]FortId, 0, len(snapshots))
+	seenStations := make(map[FortId]struct{}, len(snapshots))
 	var battles []StationBattleData
 	for _, snapshot := range snapshots {
-		if snapshot.StationId == "" {
+		if !snapshot.StationId.Valid() {
 			continue
 		}
 		if _, ok := seenStations[snapshot.StationId]; !ok {
@@ -571,7 +567,7 @@ func flattenStationBattleWrites(snapshots []stationBattleWrite) ([]StationBattle
 	return battles, stationIds
 }
 
-func buildDeleteObsoleteStationBattlesQuery(stationIds []string, battles []StationBattleData) (string, []any, error) {
+func buildDeleteObsoleteStationBattlesQuery(stationIds []FortId, battles []StationBattleData) (string, []any, error) {
 	if len(stationIds) == 0 {
 		return "", nil, nil
 	}
@@ -629,7 +625,7 @@ func flushStationBattleBatch(ctx context.Context, dbDetails db.DbDetails, snapsh
 	return err
 }
 
-func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId string, now int64) ([]StationBattleData, error) {
+func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, stationId FortId, now int64) ([]StationBattleData, error) {
 	var battles []StationBattleData
 	err := timedDbQuery("loadStationBattlesForStation", dbDetails.GeneralDb, func() error {
 		err := dbDetails.GeneralDb.SelectContext(ctx, &battles, `
@@ -648,7 +644,7 @@ func loadStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, s
 }
 
 func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails, station *Station, now int64) error {
-	if station == nil || station.Id == "" {
+	if station == nil || !station.Id.Valid() {
 		return nil
 	}
 	battles, err := loadStationBattlesForStation(ctx, dbDetails, station.Id, now)
@@ -660,7 +656,7 @@ func hydrateStationBattlesForStation(ctx context.Context, dbDetails db.DbDetails
 }
 
 func finalizePreloadedStationBattles(populateRtree bool) {
-	stationCache.Range(func(stationId string, station *Station) bool {
+	stationCache.Range(func(stationId FortId, station *Station) bool {
 		if _, ok := stationBattleCache.Load(stationId); !ok {
 			storeStationBattles(stationId, nil)
 		}
@@ -687,14 +683,14 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 	defer rows.Close()
 
 	count := int32(0)
-	currentStationId := ""
+	var currentStationId FortId
 	currentBattles := make([]StationBattleData, 0)
 	flushCurrent := func() {
-		if currentStationId != "" && stationCache.Has(currentStationId) {
+		if currentStationId.Valid() && stationCache.Has(currentStationId) {
 			storeStationBattles(currentStationId, currentBattles)
 			count += int32(len(currentBattles))
 		}
-		currentStationId = ""
+		currentStationId = FortId{}
 		currentBattles = nil
 	}
 	for rows.Next() {
@@ -703,10 +699,10 @@ func preloadStationBattles(dbDetails db.DbDetails, populateRtree bool) int32 {
 			log.Errorf("Preload: station battle scan error - %s", err)
 			continue
 		}
-		if currentStationId != "" && battle.StationId != currentStationId {
+		if currentStationId.Valid() && battle.StationId != currentStationId {
 			flushCurrent()
 		}
-		if currentStationId == "" {
+		if !currentStationId.Valid() {
 			currentStationId = battle.StationId
 		}
 		currentBattles = append(currentBattles, battle)

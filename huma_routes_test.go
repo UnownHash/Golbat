@@ -281,6 +281,35 @@ func TestTier3ReadEndpoints(t *testing.T) {
 			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
 		}
 	})
+
+	t.Run("station/query rejecting >500 well-formed ids returns 413", func(t *testing.T) {
+		// Same cap-ordering contract as gym/query (see above), pinned
+		// separately for station/query since it has its own handler wiring.
+		ids := make([]string, 0, 501)
+		for i := 1; i <= 501; i++ {
+			ids = append(ids, fmt.Sprintf("%032x", i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/station/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("station/query rejecting >500 malformed ids still returns 413", func(t *testing.T) {
+		// Regression pin: an oversized request of unparseable ids must not
+		// dodge the cap by having dedupeIDs drop everything down to an
+		// under-the-limit (or empty) list first.
+		ids := make([]string, 0, 501)
+		for i := 0; i < 501; i++ {
+			ids = append(ids, "id"+strconv.Itoa(i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/station/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
 }
 
 // TestTier3RoutesRegisterInSpec asserts all eight tier-3 operations appear in

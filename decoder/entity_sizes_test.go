@@ -194,7 +194,11 @@ func TestClassMovedEntitySizes(t *testing.T) {
 	for name, tc := range map[string]struct {
 		got, want uintptr
 	}{
-		"Station":    {unsafe.Sizeof(Station{}), 472},
+		// Station grew 472->480 when StationData.Id became FortId (a 17-byte
+		// value vs. string's 16-byte header, padded to the next 8-byte
+		// boundary). Still class 480 either way — no allocator regression,
+		// the win documented above is intact.
+		"Station":    {unsafe.Sizeof(Station{}), 480},
 		"Spawnpoint": {unsafe.Sizeof(Spawnpoint{}), 104},
 		"Incident":   {unsafe.Sizeof(Incident{}), 248},
 		"Tappable":   {unsafe.Sizeof(Tappable{}), 200},
