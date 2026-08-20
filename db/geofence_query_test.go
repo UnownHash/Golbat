@@ -73,3 +73,69 @@ func TestFenceQueryArgsBoundingBoxOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestNewFenceMatcherFallsBackForNonPolygons locks the fallback that keeps
+// exotic geometries working: containment moves to Go only for polygons, and
+// anything else must still reach the SQL predicate.
+func TestNewFenceMatcherFallsBackForNonPolygons(t *testing.T) {
+	if _, ok := newFenceMatcher(geojson.NewFeature(orb.Point{1, 1})); ok {
+		t.Fatal("a Point fence must fall back to SQL containment")
+	}
+	if _, ok := newFenceMatcher(geojson.NewFeature(orb.LineString{{0, 0}, {1, 1}})); ok {
+		t.Fatal("a LineString fence must fall back to SQL containment")
+	}
+	if _, ok := newFenceMatcher(geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}})); !ok {
+		t.Fatal("a Polygon fence must be matched in Go")
+	}
+	if _, ok := newFenceMatcher(geojson.NewFeature(orb.MultiPolygon{
+		{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}},
+	})); !ok {
+		t.Fatal("a MultiPolygon fence must be matched in Go")
+	}
+}
+
+// TestFenceMatcherContains covers the lat/lon argument order, which is the easy
+// thing to get backwards: the fence is in GeoJSON lon/lat order while the rows
+// scan as lat, lon. The fence below is deliberately not square, so a swap shows.
+func TestFenceMatcherContains(t *testing.T) {
+	// lon spans 0..1, lat spans 0..8.
+	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {1, 0}, {1, 8}, {0, 8}, {0, 0}}})
+	m, ok := newFenceMatcher(fence)
+	if !ok {
+		t.Fatal("expected a polygon matcher")
+	}
+
+	cases := []struct {
+		name     string
+		lat, lon float64
+		want     bool
+	}{
+		{"inside", 4, 0.5, true},
+		{"outside in lon", 4, 5, false},
+		{"outside in lat", 9, 0.5, false},
+		{"swapped lat/lon lands outside", 0.5, 4, false},
+		{"on the boundary counts as inside", 0, 0.5, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := m.contains(c.lat, c.lon); got != c.want {
+				t.Fatalf("contains(lat=%v, lon=%v) = %v, want %v", c.lat, c.lon, got, c.want)
+			}
+		})
+	}
+}
+
+// TestFenceBoundArgsOrder locks the corner order the bounding-box queries bind.
+func TestFenceBoundArgsOrder(t *testing.T) {
+	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 4}, {0, 4}, {0, 0}}})
+	args := FenceBoundArgs(fence)
+	want := []float64{0, 0, 4, 2} // minLat, minLon, maxLat, maxLon
+	if len(args) != len(want) {
+		t.Fatalf("got %d args, want %d", len(args), len(want))
+	}
+	for i, w := range want {
+		if got := args[i].(float64); got != w {
+			t.Fatalf("arg %d = %v, want %v (minLat, minLon, maxLat, maxLon)", i, got, w)
+		}
+	}
+}
