@@ -77,12 +77,13 @@ type Pokemon struct {
 
 // PokemonOldValues holds old field values for webhook comparison, stats, and R-tree updates
 type PokemonOldValues struct {
-	PokemonId int16
-	Weather   null.Int
-	Cp        null.Int
-	SeenType  null.String
-	Lat       float64
-	Lon       float64
+	PokemonId               int16
+	Weather                 null.Int
+	Cp                      null.Int
+	SeenType                null.String
+	Lat                     float64
+	Lon                     float64
+	ExpireTimestampVerified bool
 }
 
 //
@@ -152,12 +153,13 @@ func (pokemon *Pokemon) ClearDirty() {
 // Call this after loading from cache/DB but before modifications
 func (pokemon *Pokemon) snapshotOldValues() {
 	pokemon.oldValues = PokemonOldValues{
-		PokemonId: pokemon.PokemonId,
-		Weather:   pokemon.Weather,
-		Cp:        pokemon.Cp,
-		SeenType:  pokemon.SeenType,
-		Lat:       pokemon.Lat,
-		Lon:       pokemon.Lon,
+		PokemonId:               pokemon.PokemonId,
+		Weather:                 pokemon.Weather,
+		Cp:                      pokemon.Cp,
+		SeenType:                pokemon.SeenType,
+		Lat:                     pokemon.Lat,
+		Lon:                     pokemon.Lon,
+		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
 	}
 }
 

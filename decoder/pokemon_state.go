@@ -414,11 +414,20 @@ type PokemonWebhook struct {
 	Pvp                   json.RawMessage `json:"pvp"`
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
-	if pokemon.isNewRecord() ||
+// webhookNeeded reports whether anything a consumer cares about changed.
+// ExpireTimestampVerified is included because disappear_time_verified rides in
+// the payload: without it, a pokemon gaining a verified despawn keeps its stale
+// provisional disappear_time on the wire indefinitely.
+func (pokemon *Pokemon) webhookNeeded() bool {
+	return pokemon.isNewRecord() ||
 		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
 		pokemon.oldValues.Weather != pokemon.Weather ||
-		pokemon.oldValues.Cp != pokemon.Cp {
+		pokemon.oldValues.Cp != pokemon.Cp ||
+		pokemon.oldValues.ExpireTimestampVerified != pokemon.ExpireTimestampVerified
+}
+
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
+	if pokemon.webhookNeeded() {
 
 		spawnpointId := "None"
 		if pokemon.SpawnId.Valid {
