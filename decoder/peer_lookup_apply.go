@@ -11,6 +11,21 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// localSecondOfHour converts a unix timestamp to a second-of-hour in loc,
+// matching every other producer/consumer of despawn_sec (spawnpoint.go:331,
+// pokemon_decode.go:382, tappable_decode.go:89) - never a UTC one
+// (`ts % 3600`), which only agrees with local time when the zone offset is a
+// whole number of hours. Production always calls this with time.Local; it
+// takes an explicit *time.Location, rather than relying on time.Unix's
+// implicit use of the time.Local global, so tests can inject a specific
+// offset without mutating that global - which is read, unsynchronized, by
+// the background stats worker (decoder/stats.go) and would otherwise be a
+// data race under -race.
+func localSecondOfHour(ts int64, loc *time.Location) int64 {
+	d := time.Unix(ts, 0).In(loc)
+	return int64(d.Second() + d.Minute()*60)
+}
+
 // applyPeerDespawnToSpawnpoint writes a peer's despawn second only when this
 // instance has none. Local truth comes from watching a pokemon to its end
 // state via TTH and, being a stable per-spawnpoint property, stays correct
@@ -18,12 +33,55 @@ import (
 // and unchanged: a later local TTH overwrites a peer value through
 // spawnpointUpdateFromWild.
 //
+// despawnSecond must already be a LOCAL second-of-hour (see
+// localSecondOfHour) - never a UTC one.
+//
 // Returns whether the value was taken.
 func applyPeerDespawnToSpawnpoint(spawnpoint *Spawnpoint, despawnSecond int64) bool {
 	if spawnpoint.DespawnSec.Valid {
 		return false
 	}
 	spawnpoint.SetDespawnSec(null.IntFrom(despawnSecond))
+	return true
+}
+
+// backstopSpawnpointPosition sets lat/lon on a spawnpoint that has no DB row
+// yet (newRecord true). getOrCreateSpawnpointRecord can hand back a brand
+// new record when a peer answer is the first evidence of a spawnpoint; the
+// write-behind INSERT that a subsequent spawnpointUpdate triggers would
+// otherwise persist lat=lon=0 - this would be the only create-and-persist
+// site in the tree that inserts a spawnpoint without a position. Existing
+// records (a real DB row already loaded) are left alone: their position is
+// already the fort/pokestop-derived one, not the peer's.
+func backstopSpawnpointPosition(spawnpoint *Spawnpoint, lat, lon float64) {
+	if !spawnpoint.newRecord {
+		return
+	}
+	spawnpoint.SetLat(lat)
+	spawnpoint.SetLon(lon)
+}
+
+// persistPeerDespawn locks the spawnpoint, applies the peer's despawn second
+// (local truth wins - see applyPeerDespawnToSpawnpoint), and unlocks. The
+// lock is released via defer specifically so a panic inside spawnpointUpdate
+// cannot leak it.
+func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int64, despawnSecond int64, lat, lon float64) (persisted bool) {
+	spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, dbDetails, spawnId, "applyPeerResult")
+	if err != nil {
+		log.Warnf("[PEER] spawnpoint %d unavailable: %s", spawnId, err)
+		return false
+	}
+	if spawnpoint == nil {
+		return false
+	}
+	defer unlock()
+
+	backstopSpawnpointPosition(spawnpoint, lat, lon)
+
+	if !applyPeerDespawnToSpawnpoint(spawnpoint, despawnSecond) {
+		return false
+	}
+	spawnpointUpdate(ctx, dbDetails, spawnpoint)
 	return true
 }
 
@@ -50,21 +108,17 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 		return
 	}
 
-	// --- 1. Spawnpoint, lock released before the pokemon is touched. ---
-	persistedDespawn := false
-	if res.GetExpireTimestampVerified() && res.ExpireTimestamp != nil && item.SpawnId != 0 {
-		despawnSecond := res.GetExpireTimestamp() % 3600
+	// despawnSecond is a LOCAL second-of-hour (see localSecondOfHour) -
+	// computed once, independent of SpawnId, because it is also what stamps
+	// the pokemon's own verified expiry below.
+	var despawnSecond int64
+	if res.ExpireTimestamp != nil {
+		despawnSecond = localSecondOfHour(res.GetExpireTimestamp(), time.Local)
+	}
 
-		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, dbDetails, item.SpawnId, "applyPeerResult")
-		if err != nil {
-			log.Warnf("[PEER] spawnpoint %d unavailable: %s", item.SpawnId, err)
-		} else if spawnpoint != nil {
-			if applyPeerDespawnToSpawnpoint(spawnpoint, despawnSecond) {
-				spawnpointUpdate(ctx, dbDetails, spawnpoint)
-				persistedDespawn = true
-			}
-			unlock()
-		}
+	// --- 1. Spawnpoint, lock released before the pokemon is touched. ---
+	if res.GetExpireTimestampVerified() && res.ExpireTimestamp != nil && item.SpawnId != 0 {
+		persistPeerDespawn(ctx, dbDetails, item.SpawnId, despawnSecond, res.GetLat(), res.GetLon())
 	}
 
 	// --- 2. Pokemon. ---
@@ -86,16 +140,30 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 	now := time.Now().Unix()
 
 	if res.ExpireTimestamp != nil {
-		if persistedDespawn {
-			// Verified: derive through the normal path so the wrap clamp and
-			// the verified flag are applied exactly as a TTH sighting would.
-			pokemon.applyVerifiedDespawn(int(res.GetExpireTimestamp()%3600), now*1000)
-			changed = true
+		if res.GetExpireTimestampVerified() {
+			// Trust the peer's own verification for this specific sighting
+			// regardless of whether the spawnpoint-level write above
+			// happened: rule 2 (local truth wins) governs only the shared,
+			// stable despawn_sec value, not whether this pokemon's expiry
+			// can be trusted - e.g. the local spawnpoint may have gained its
+			// despawn_sec from a real TTH between ask and answer, rejecting
+			// the write, while the peer's answer about this pokemon is
+			// still correct.
+			// An already-past verified answer is stale: applyVerifiedDespawn
+			// would derive a false next-hour expiry, and the wrap clamp is
+			// not guaranteed to catch it (it requires FirstSeenTimestamp
+			// already more than an hour old). Drop it rather than risk a
+			// fabricated verified expiry.
+			if peerExpiry := res.GetExpireTimestamp(); peerExpiry > now {
+				pokemon.applyVerifiedDespawn(int(despawnSecond), now*1000)
+				changed = true
+			}
 		} else if !pokemon.ExpireTimestampVerified {
-			// A hint. Only useful if it is in the future and better than what
-			// we hold; setUnknownTimestamp will not overwrite it later.
+			// A hint. Only useful if it is a plausible near-future value
+			// (never longer than a pokemon can live) and different from
+			// what we hold; setUnknownTimestamp will not overwrite it later.
 			peerExpiry := res.GetExpireTimestamp()
-			if peerExpiry > now && peerExpiry != pokemon.ExpireTimestamp.ValueOrZero() {
+			if peerExpiry > now && peerExpiry < now+3600 && peerExpiry != pokemon.ExpireTimestamp.ValueOrZero() {
 				pokemon.SetExpireTimestamp(null.IntFrom(peerExpiry))
 				pokemon.SetExpireTimestampVerified(false)
 				changed = true
