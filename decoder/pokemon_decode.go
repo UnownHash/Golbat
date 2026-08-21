@@ -369,6 +369,10 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 }
 
+// despawnSkewMargin absorbs clock skew between the scanner's cell timestamp and
+// the despawn second before a lifetime is judged impossible.
+const despawnSkewMargin = 5
+
 // applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
 // verified expire timestamp for this pokemon.
 func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
@@ -379,7 +383,20 @@ func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int6
 	if despawnOffset < 0 {
 		despawnOffset += 3600
 	}
-	pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+
+	expiry := timestampMs/1000 + int64(despawnOffset)
+
+	// No encounter can live longer than an hour, so a wrapped expiry is
+	// provably wrong: the pokemon despawned at the second that just passed.
+	// FirstSeenTimestamp is 0 during a new record's first decode, where there
+	// is no evidence either way.
+	if pokemon.FirstSeenTimestamp > 0 &&
+		expiry-pokemon.FirstSeenTimestamp > 3600+despawnSkewMargin {
+		expiry -= 3600
+		statsCollector.IncDespawnWrapClamped()
+	}
+
+	pokemon.SetExpireTimestamp(null.IntFrom(expiry))
 	pokemon.SetExpireTimestampVerified(true)
 }
 

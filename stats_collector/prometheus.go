@@ -261,6 +261,13 @@ var (
 		},
 		[]string{"sameacct"},
 	)
+	despawnWrapClamped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_wrap_clamped_total",
+			Help:      "Verified despawns whose +3600 wraparound implied an impossible lifetime and were clamped",
+		},
+	)
 	dbQueries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -652,6 +659,10 @@ func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
 	duplicateEncounters.WithLabelValues(v).Inc()
 }
 
+func (col *promCollector) IncDespawnWrapClamped() {
+	despawnWrapClamped.Inc()
+}
+
 func (col *promCollector) IncDbQuery(query string, err error) {
 	var status string
 
@@ -832,7 +843,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
-		duplicateEncounters, dbQueries,
+		duplicateEncounters, despawnWrapClamped, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,
 
