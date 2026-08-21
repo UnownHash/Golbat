@@ -4,27 +4,44 @@ package encounter_cache
 
 import (
 	"context"
+	"hash/maphash"
 	"time"
 
 	"golbat/ottercache"
 )
+
+// accountSeed salts the account hashes below. Generated once per process:
+// these hashes are never persisted, compared across processes, or read back,
+// so a fresh seed each start costs nothing and means the digests are not
+// stable identifiers either.
+var accountSeed = maphash.MakeSeed()
 
 // Value is the object that is inserted into the cache.
 type Value struct {
 	FirstWild      int64
 	FirstEncounter int64
 
-	accountsSeen map[string]bool
+	// accountsSeen holds hashes of the accounts that have seen this
+	// encounter, not the account names themselves. The dedup only ever
+	// asks "have I seen this one before?" and "how many distinct?" — it
+	// never reads a name back — so hashing loses nothing and keeps
+	// caller-supplied account names out of a cache that would otherwise
+	// hold them for the entry's whole TTL. That matters because storing
+	// the account on the pokemon row is opt-in and off by default
+	// (store_username); retaining the names here regardless would have
+	// undercut the point.
+	accountsSeen map[uint64]struct{}
 }
 
 // SetAccountSeen() marks an account having seen the
 // encounterId for this cache value. Returns whether
 // the account had already seen it.
 func (v *Value) SetAccountSeen(username string) bool {
-	if v.accountsSeen[username] {
+	h := maphash.String(accountSeed, username)
+	if _, seen := v.accountsSeen[h]; seen {
 		return true
 	}
-	v.accountsSeen[username] = true
+	v.accountsSeen[h] = struct{}{}
 	return false
 }
 
@@ -82,7 +99,7 @@ func (ec *EncounterCache) GetOrCreate(encounterId uint64) *Value {
 	value := ec.Get(encounterId)
 	if value == nil {
 		value = &Value{
-			accountsSeen: make(map[string]bool),
+			accountsSeen: make(map[uint64]struct{}),
 		}
 	}
 	return value

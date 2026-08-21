@@ -15,6 +15,16 @@ func withStoreUsername(t *testing.T, enabled bool) {
 	t.Cleanup(func() { config.Config.StoreUsername = previous })
 }
 
+// dirtyPokemon returns a pokemon in the state setUsernameIfStored requires
+// before it will adopt an account: one whose sighting is actually headed for
+// the write-behind queue. A zero-value Pokemon is neither new nor dirty, so
+// the gate would refuse it — see TestUsernameNotStoredOnCleanRecord.
+func dirtyPokemon() *Pokemon {
+	pokemon := &Pokemon{}
+	pokemon.dirty = true
+	return pokemon
+}
+
 // Default off: the account name never reaches the entity, so the column
 // writes NULL and the API reports no username.
 func TestUsernameNotStoredByDefault(t *testing.T) {
@@ -31,11 +41,54 @@ func TestUsernameNotStoredByDefault(t *testing.T) {
 func TestUsernameStoredWhenEnabled(t *testing.T) {
 	withStoreUsername(t, true)
 
-	var pokemon Pokemon
+	pokemon := dirtyPokemon()
 	pokemon.setUsernameIfStored("SomeAccount")
 
 	if !pokemon.Username.Valid || pokemon.Username.ValueOrZero() != "SomeAccount" {
 		t.Fatalf("username = %v, want SomeAccount", pokemon.Username)
+	}
+}
+
+// The account is adopted only when the sighting is being written anyway.
+// Without this gate a sighting that changed nothing could claim the field —
+// and, being first-wins, block the account whose update actually is
+// persisted, leaving a row whose username belongs to an account that
+// contributed none of its data.
+func TestUsernameNotStoredOnCleanRecord(t *testing.T) {
+	withStoreUsername(t, true)
+
+	var pokemon Pokemon // neither new nor dirty: nothing to write
+	pokemon.setUsernameIfStored("PassingAccount")
+
+	if pokemon.Username.Valid {
+		t.Fatalf("username stored on a clean record: %q", pokemon.Username.ValueOrZero())
+	}
+}
+
+// A brand new record is always written, so it adopts the account even though
+// nothing has marked it dirty — this mirrors savePokemonRecordAsAtTime's own
+// entry gate (!newRecord && !IsDirty()).
+func TestUsernameStoredOnNewRecord(t *testing.T) {
+	withStoreUsername(t, true)
+
+	pokemon := &Pokemon{newRecord: true}
+	pokemon.setUsernameIfStored("CreatingAccount")
+
+	if pokemon.Username.ValueOrZero() != "CreatingAccount" {
+		t.Fatalf("username = %v, want CreatingAccount", pokemon.Username)
+	}
+}
+
+// The gate decides which account is stored; it must not become a reason a
+// row gets written. SetUsername deliberately does not set the dirty flag.
+func TestUsernameDoesNotDirtyTheRecord(t *testing.T) {
+	withStoreUsername(t, true)
+
+	pokemon := &Pokemon{newRecord: true}
+	pokemon.setUsernameIfStored("CreatingAccount")
+
+	if pokemon.IsDirty() {
+		t.Fatal("storing a username marked the record dirty")
 	}
 }
 
@@ -55,7 +108,7 @@ func TestUsernameStoredWhenEnabled(t *testing.T) {
 func TestUsernameNotOverwrittenWhenEnabled(t *testing.T) {
 	withStoreUsername(t, true)
 
-	var pokemon Pokemon
+	pokemon := dirtyPokemon()
 	pokemon.setUsernameIfStored("FirstAccount")
 	pokemon.setUsernameIfStored("SecondAccount")
 
@@ -160,6 +213,9 @@ func TestUpdateEncounterStatsCountsDistinctAccountsAcrossEncounters(t *testing.T
 		DefIv: null.ValueFrom(uint8(10)),
 		StaIv: null.ValueFrom(uint8(10)),
 	}}
+	// An encounter carries IVs, so the record is dirty and headed for the
+	// queue — which is what lets setUsernameIfStored adopt an account at all.
+	pokemon.dirty = true
 
 	// First encounter: account A. Nothing stored yet, so it's recorded.
 	pokemon.setUsernameIfStored("AccountA")

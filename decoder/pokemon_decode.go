@@ -184,8 +184,8 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.setUsernameIfStored(username)
 	pokemon.SetCellId(null.IntFrom(cellId))
+	pokemon.setUsernameIfStored(username)
 }
 
 // updateFromMap applies a GMO lure sighting (fort.ActivePokemon) to this
@@ -215,7 +215,6 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		} else {
 			log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 		}
-		pokemon.setUsernameIfStored(username)
 
 		if mapPokemon.Data.ExpirationTimeMs > 0 {
 			pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.Data.ExpirationTimeMs / 1000))
@@ -305,7 +304,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokestopId := nearbyPokemon.FortId
 	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.setUsernameIfStored(username)
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -365,6 +363,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
+	pokemon.setUsernameIfStored(username)
 }
 
 // SeenTypeCode is the in-memory representation of the seen_type enum column.
@@ -1087,7 +1086,6 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.setUsernameIfStored(username)
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1159,6 +1157,8 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.scanHistory = make([]*pokemonScan, 1)
 		pokemon.scanHistory[0] = &scan
 	}
+
+	pokemon.setUsernameIfStored(username)
 }
 
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
@@ -1231,8 +1231,8 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	pokemon.setUsernameIfStored(username)
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	// addEncounterPokemon adopts the username at the end of its own updates.
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 

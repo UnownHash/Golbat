@@ -641,8 +641,24 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 // account name directly from the decode context now. Persisting it stores a
 // caller-supplied identifier on millions of rows for no functional benefit,
 // so the default is off.
+//
+// Call this LAST in an update function, after the setters that decide whether
+// this sighting changed anything. The dirty gate below is only meaningful once
+// those have run.
 func (pokemon *Pokemon) setUsernameIfStored(username string) {
 	if !config.Config.StoreUsername || username == "" {
+		return
+	}
+	if !pokemon.isNewRecord() && !pokemon.IsDirty() {
+		// This sighting is not being written, so adopting the account here
+		// would persist a name belonging to an account that contributed no
+		// data to the row — and, being first-wins, would then block the
+		// account whose update actually is written. (SetUsername does not
+		// set the dirty flag, so a username has never been able to trigger
+		// a write by itself; this gate is about which account gets stored,
+		// not about avoiding writes.) The condition mirrors
+		// savePokemonRecordAsAtTime's own entry gate, so the field is
+		// adopted exactly when the row is headed for the queue.
 		return
 	}
 	if pokemon.Username.Valid {
