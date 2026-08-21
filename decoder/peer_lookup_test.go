@@ -86,9 +86,14 @@ func TestEnqueuePeerLookupDedupes(t *testing.T) {
 // A pokemon that is both stats-less and unverified must produce one queued
 // item, not two: a single lookup answers both questions at once.
 func TestConsiderPeerLookupOneItemNotTwo(t *testing.T) {
-	oldQueue, oldPeers := peerLookupQueue, peerClients
-	defer func() { peerLookupQueue, peerClients = oldQueue, oldPeers }()
+	oldQueue, oldPeers, oldCache := peerLookupQueue, peerClients, peerLookupCache
+	defer func() { peerLookupQueue, peerClients, peerLookupCache = oldQueue, oldPeers, oldCache }()
 
+	// Nil the dedup cache: with it live, a regression that enqueues once per
+	// need (needsStats, then needsExpiry) would build a byte-identical item
+	// both times, so the second call would be silently swallowed by dedup and
+	// the queue length could not tell the two implementations apart.
+	peerLookupCache = nil
 	peerLookupQueue = make(chan peerLookupItem, 8)
 	peerClients = []peerClient{{}}
 
@@ -115,9 +120,10 @@ func TestConsiderPeerLookupOneItemNotTwo(t *testing.T) {
 // A pokemon with neither question outstanding — stats present and expiry
 // verified — has nothing worth asking.
 func TestConsiderPeerLookupNoQuestionNoEnqueue(t *testing.T) {
-	oldQueue, oldPeers := peerLookupQueue, peerClients
-	defer func() { peerLookupQueue, peerClients = oldQueue, oldPeers }()
+	oldQueue, oldPeers, oldCache := peerLookupQueue, peerClients, peerLookupCache
+	defer func() { peerLookupQueue, peerClients, peerLookupCache = oldQueue, oldPeers, oldCache }()
 
+	peerLookupCache = nil
 	peerLookupQueue = make(chan peerLookupItem, 8)
 	peerClients = []peerClient{{}}
 
@@ -140,9 +146,10 @@ func TestConsiderPeerLookupNoQuestionNoEnqueue(t *testing.T) {
 // switched TO (the weather parameter), not the state still recorded on the
 // pokemon at the moment locateScan fails to find a match.
 func TestRepopulateIvEnqueuesNewWeatherNotOld(t *testing.T) {
-	oldQueue, oldPeers := peerLookupQueue, peerClients
-	defer func() { peerLookupQueue, peerClients = oldQueue, oldPeers }()
+	oldQueue, oldPeers, oldCache := peerLookupQueue, peerClients, peerLookupCache
+	defer func() { peerLookupQueue, peerClients, peerLookupCache = oldQueue, oldPeers, oldCache }()
 
+	peerLookupCache = nil
 	peerLookupQueue = make(chan peerLookupItem, 8)
 	peerClients = []peerClient{{}}
 
