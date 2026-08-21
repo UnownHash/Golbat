@@ -175,6 +175,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
+	pokemon.considerPeerLookup()
 }
 
 // updateFromMap applies a GMO lure sighting (fort.ActivePokemon) to this
@@ -303,6 +304,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
+	pokemon.considerPeerLookup()
 }
 
 const SeenType_Cell string = "nearby_cell"                              // Pokemon was seen in a cell (without accurate location)
@@ -963,6 +965,20 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	matchingScan, isBoostedMatches := pokemon.locateScan(isStrong, isBoosted)
 	var oldAtk, oldDef, oldSta int64
 	if matchingScan == nil {
+		// Ask a peer for this pokemon's stats under the NEW boost state before
+		// discarding what we have. A peer whose scanner encountered it after
+		// the flip holds exactly the scan locateScan just failed to find. Use
+		// weather, not pokemon.Weather: the question is about the boost state
+		// being switched TO, and pokemon.Weather still holds the old one here.
+		if len(peerClients) > 0 {
+			enqueuePeerLookup(peerLookupItem{
+				EncounterId: uint64(pokemon.Id),
+				PokemonId:   int32(pokemon.PokemonId),
+				Form:        int32(pokemon.Form.ValueOrZero()),
+				Weather:     int32(weather),
+				SpawnId:     pokemon.SpawnId.ValueOrZero(),
+			})
+		}
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {

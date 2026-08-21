@@ -125,6 +125,30 @@ func InitPeerLookup() {
 	}
 }
 
+// considerPeerLookup enqueues a question if this pokemon has one worth asking:
+// missing stats, an unverified expiry on a known spawnpoint, or both. A single
+// lookup answers both, so this must produce at most one enqueue call. Callers
+// hold the pokemon lock, so this must stay allocation-light and non-blocking.
+func (pokemon *Pokemon) considerPeerLookup() {
+	if len(peerClients) == 0 {
+		return
+	}
+
+	needsStats := !pokemon.AtkIv.Valid
+	needsExpiry := !pokemon.ExpireTimestampVerified && pokemon.SpawnId.ValueOrZero() != 0
+	if !needsStats && !needsExpiry {
+		return
+	}
+
+	enqueuePeerLookup(peerLookupItem{
+		EncounterId: uint64(pokemon.Id),
+		PokemonId:   int32(pokemon.PokemonId),
+		Form:        int32(pokemon.Form.ValueOrZero()),
+		Weather:     int32(pokemon.Weather.ValueOrZero()),
+		SpawnId:     pokemon.SpawnId.ValueOrZero(),
+	})
+}
+
 // enqueuePeerLookup is called from the decode path under an entity lock. It
 // must never block and must never do I/O.
 func enqueuePeerLookup(item peerLookupItem) {
