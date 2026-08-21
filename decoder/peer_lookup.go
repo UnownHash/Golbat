@@ -32,6 +32,17 @@ const (
 	// peerLookupCacheTTL is the maximum life of a pokemon, so an entry can
 	// never outlive the thing it describes.
 	peerLookupCacheTTL = 60 * time.Minute
+
+	// peerLookupShutdownFlushTimeout bounds the flush issued when
+	// RunPeerLookup's context is cancelled. ctx is already Done at that
+	// point, so deriving a per-call deadline from it the way the
+	// steady-state path does would make every peer call fail before it
+	// started (context.WithTimeout on an already-Done parent is itself
+	// instantly Done). The shutdown flush therefore runs against
+	// context.WithoutCancel(ctx), bounded by this timeout instead, so the
+	// final batch — and anything still sitting in the queue — gets a real
+	// chance to go out rather than being silently discarded.
+	peerLookupShutdownFlushTimeout = 2 * time.Second
 )
 
 // peerLookupItem is one question: "what do you know about this sighting?"
@@ -149,26 +160,45 @@ func RunPeerLookup(ctx context.Context, dbDetails db.DbDetails) {
 	timer := time.NewTimer(peerLookupBatchWindow)
 	defer timer.Stop()
 
-	flush := func() {
+	flush := func(flushCtx context.Context) {
 		if len(batch) == 0 {
 			return
 		}
-		dispatchPeerBatch(ctx, dbDetails, batch)
+		dispatchPeerBatch(flushCtx, dbDetails, batch)
 		batch = batch[:0]
 	}
 
 	for {
 		select {
 		case <-ctx.Done():
-			flush()
+			// ctx is Done, so a flush derived from it would fail instantly.
+			// Run the shutdown flush against a bounded, uncancelled context,
+			// and drain whatever is still queued into it (chunked, like the
+			// steady-state path) rather than discarding it.
+			shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), peerLookupShutdownFlushTimeout)
+
+		drain:
+			for shutdownCtx.Err() == nil {
+				select {
+				case item := <-peerLookupQueue:
+					batch = append(batch, item)
+					if len(batch) >= peerLookupMaxBatch {
+						flush(shutdownCtx)
+					}
+				default:
+					break drain
+				}
+			}
+			flush(shutdownCtx)
+			cancel()
 			return
 		case item := <-peerLookupQueue:
 			batch = append(batch, item)
 			if len(batch) >= peerLookupMaxBatch {
-				flush()
+				flush(ctx)
 			}
 		case <-timer.C:
-			flush()
+			flush(ctx)
 			timer.Reset(peerLookupBatchWindow)
 		}
 	}
@@ -219,7 +249,10 @@ func dispatchPeerBatch(ctx context.Context, dbDetails db.DbDetails, batch []peer
 			// would have been applied so the ask/batch/dedupe/receive path is
 			// observable and testable on its own.
 			log.Debugf("[PEER] %s answered for encounter %d", peer.address, res.GetId())
-			// Answered: do not ask the next peer about it.
+			// items (built once above) is never narrowed, so a later peer is
+			// still asked about this encounter too; deleting here only stops
+			// this answer from being applied twice once Task 9 wires up
+			// applyPeerResult.
 			delete(byEncounter, res.GetId())
 		}
 	}

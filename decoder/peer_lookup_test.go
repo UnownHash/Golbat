@@ -23,12 +23,17 @@ func TestPeerLookupKeyDistinguishesEachField(t *testing.T) {
 	}
 }
 
+// A golden value rather than a self-comparison: the point is that the mixer
+// stays stable across builds and versions, which comparing a call to itself
+// cannot show.
 func TestPeerLookupKeyIsStable(t *testing.T) {
 	it := peerLookupItem{EncounterId: 7, PokemonId: 1, Form: 2, Weather: 3}
-	if peerLookupKey(it) != peerLookupKey(it) { //nolint:staticcheck // SA4000: intentional x==x, asserting the key is deterministic across calls
-		t.Fatal("key must be deterministic")
+
+	if got := peerLookupKey(it); got != 0xAE09E87BED5D1D2B {
+		t.Fatalf("key drifted: got %#016x want 0xAE09E87BED5D1D2B", got)
 	}
-	// SpawnId is context for the answer, not part of the question's identity.
+
+	// SpawnId is context for answering, not part of the question's identity.
 	withSpawn := it
 	withSpawn.SpawnId = 999
 	if peerLookupKey(withSpawn) != peerLookupKey(it) {
