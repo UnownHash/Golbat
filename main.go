@@ -217,6 +217,7 @@ func main() {
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
+	go decoder.RunPeerLookup(ctx, dbDetails)
 	initRawProcessingLimiter()
 	initSlowDbQueryLogging()
 	decoder.StartWorkerBacklogReporter()

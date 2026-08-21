@@ -75,6 +75,9 @@ type StatsCollector interface {
 
 	// S2Cell batch metrics
 	SetS2CellBatchSize(size int)
+
+	// Peer lookup metrics
+	IncPeerLookupDropped()
 }
 
 type Config interface {

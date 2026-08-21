@@ -493,6 +493,14 @@ var (
 			Help:      "Number of S2Cells written in the last batch flush",
 		},
 	)
+
+	// Peer lookup metrics
+	peerLookupDropped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Name: "golbat_peer_lookup_dropped_total",
+			Help: "Peer lookup candidates dropped because the queue was full",
+		},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -830,6 +838,10 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 	s2CellBatchSize.Set(float64(size))
 }
 
+func (col *promCollector) IncPeerLookupDropped() {
+	peerLookupDropped.Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
@@ -851,6 +863,8 @@ func initPrometheus() {
 		writeBehindErrors, writeBehindWrites, writeBehindLatency,
 		writeBehindBatches, writeBehindBatchSize, writeBehindBatchTime,
 		s2CellBatchSize,
+
+		peerLookupDropped,
 	)
 }
 

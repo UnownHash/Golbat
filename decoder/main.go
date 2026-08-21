@@ -225,6 +225,8 @@ func initDataCache() {
 		DefaultTTL: 60 * time.Minute,
 		TouchOnHit: true,
 	})
+
+	InitPeerLookup()
 }
 
 func InitialiseOhbem() {
