@@ -265,18 +265,14 @@ func dispatchPeerBatch(ctx context.Context, dbDetails db.DbDetails, batch []peer
 		}
 
 		for _, res := range resp.GetResults() {
-			if _, wanted := byEncounter[res.GetId()]; !wanted {
+			item, wanted := byEncounter[res.GetId()]
+			if !wanted {
 				continue
 			}
-			// TODO(task 9): apply the peer's answer via applyPeerResult, which
-			// does not exist yet (Task 9's deliverable). Until then, log what
-			// would have been applied so the ask/batch/dedupe/receive path is
-			// observable and testable on its own.
-			log.Debugf("[PEER] %s answered for encounter %d", peer.address, res.GetId())
+			applyPeerResult(ctx, dbDetails, res, item)
 			// items (built once above) is never narrowed, so a later peer is
-			// still asked about this encounter too; deleting here only stops
-			// this answer from being applied twice once Task 9 wires up
-			// applyPeerResult.
+			// still asked about this encounter too; deleting here stops this
+			// answer from being applied twice.
 			delete(byEncounter, res.GetId())
 		}
 	}
