@@ -42,20 +42,25 @@ type ApiPokestopLureAvailable struct {
 }
 
 // ApiPokestopShowcaseAvailable is one distinct active showcase contest
-// (pokemon/form/type) currently run by resident pokestops.
+// currently run by resident pokestops. Legacy pokemon/form/type mirrors remain
+// available while ShowcaseFocus carries every modern focus type. Entries are
+// distinct on the whole tuple, ranking standard and structured focus included.
 type ApiPokestopShowcaseAvailable struct {
-	PokemonId *int16 `json:"pokemon_id" doc:"Showcase focus pokemon id; null for a type-based showcase"`
-	Form      *int16 `json:"form" doc:"Showcase focus pokemon form (0 is a valid form); null for a type-based showcase"`
-	TypeId    *int8  `json:"type_id" doc:"Showcase focus pokemon type id (type-based showcases); null for a pokemon-based showcase"`
+	PokemonId       *int16            `json:"pokemon_id" doc:"Legacy showcase focus pokemon id; null for a type-based or non-pokemon showcase"`
+	Form            *int16            `json:"form" doc:"Legacy showcase focus pokemon form (0 is valid); null for a type-based or non-pokemon showcase"`
+	TypeId          *int8             `json:"type_id" doc:"Legacy showcase focus pokemon type id; null for a pokemon-based or other showcase"`
+	RankingStandard int8              `json:"ranking_standard" doc:"Ranking standard of the showcase contest; 0 when unknown"`
+	ShowcaseFocus   *ApiShowcaseFocus `json:"showcase_focus" nullable:"true" doc:"Structured showcase focus as a native JSON object; null for legacy rows without showcase_focus and for rows whose stored focus could not be parsed"`
 }
 
 // ApiAvailablePokestops is the whole-instance snapshot served by
 // GET /api/pokestop/available.
 type ApiAvailablePokestops struct {
-	Quests    []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
-	Invasions []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
-	Lures     []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
-	Showcases []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focus pokemon/type"`
+	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"True when contest_focus Buddy selectors are supported by fort scans before the result cap"`
+	Quests              []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
+	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
+	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
+	Showcases           []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
 }
 
 // buildAvailablePokestops assembles the pokestop availability snapshot from
@@ -66,10 +71,11 @@ type ApiAvailablePokestops struct {
 // combined log line instead of logging again here).
 func buildAvailablePokestops(now int64) *ApiAvailablePokestops {
 	res := &ApiAvailablePokestops{
-		Quests:    []ApiPokestopQuestAvailable{},
-		Invasions: readInvasions(now),
-		Lures:     readLures(now),
-		Showcases: readShowcases(now),
+		ShowcaseFocusFilter: true,
+		Quests:              []ApiPokestopQuestAvailable{},
+		Invasions:           readInvasions(now),
+		Lures:               readLures(now),
+		Showcases:           readShowcases(now),
 	}
 	for _, c := range GetAvailableQuestConditions() {
 		res.Quests = append(res.Quests, ApiPokestopQuestAvailable(c))

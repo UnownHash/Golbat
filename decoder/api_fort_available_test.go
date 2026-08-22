@@ -13,13 +13,16 @@ func TestGetAvailableForts(t *testing.T) {
 	now := int64(1_000_000)
 
 	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidEndTimestamp: now + 100}, now)
-	observePokestop(&FortLookup{LureId: 501, LureExpireTimestamp: now + 100}, now)
+	observePokestop(&FortLookup{LureId: 501, LureExpireTimestamp: now + 100}, nil, now)
 	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, ExpireTimestamp: now + 100}, now)
 	observeStationBattles(&FortLookup{StationBattles: []FortLookupStationBattle{
 		{BattleLevel: 5, BattlePokemonId: 150, BattleEndTimestamp: now + 100},
 	}}, now)
 
 	combined := GetAvailableForts(now)
+	if !combined.Pokestops.ShowcaseFocusFilter {
+		t.Fatal("combined availability must carry the nested showcase-focus filter capability")
+	}
 	if len(combined.Gyms.Raids) != 1 {
 		t.Fatalf("gyms: %+v", combined.Gyms)
 	}

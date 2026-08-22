@@ -28,9 +28,9 @@ const pokestopSelectColumns = `id, lat, lon, name, url, enabled, lure_expire_tim
 	alternative_quest_template, alternative_quest_title, alternative_quest_expiry,
 	alternative_quest_reward_type, alternative_quest_item_id, alternative_quest_reward_amount,
 	alternative_quest_pokemon_id, alternative_quest_pokemon_form_id,
-	cell_id, deleted, lure_id, sponsor_id, partner_id,
+	cell_id, deleted, lure_id, sponsor_id, partner_id, first_seen_timestamp,
 	ar_scan_eligible, power_up_points, power_up_level, power_up_end_timestamp,
-	description, showcase_pokemon_id, showcase_pokemon_form_id,
+	description, showcase_focus, showcase_pokemon_id, showcase_pokemon_form_id,
 	showcase_pokemon_type_id, showcase_ranking_standard, showcase_expiry, showcase_rankings`
 
 func loadPokestopFromDatabase(ctx context.Context, db db.DbDetails, fortId string, pokestop *Pokestop) error {

@@ -61,6 +61,25 @@ func registerHumaRoutes(api huma.API) {
 	})
 }
 
+type statusOutput struct{ Body *decoder.ApiStatusResult }
+
+// registerStatusRoutes registers the server status/capability report. Unlike
+// the fort routes it is NOT gated on fort_in_memory — it exists to report it.
+func registerStatusRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-api-status",
+		Method:        http.MethodGet,
+		Path:          "/api/status",
+		Summary:       "Server status: enabled features and scan limits",
+		Description:   "Reports which optional Golbat features are enabled (e.g. fort_in_memory) and the server's effective scan result caps, so map consumers can detect capabilities and clamp request limits without probing gated endpoints.",
+		Tags:          []string{"Status"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, _ *struct{}) (*statusOutput, error) {
+		return &statusOutput{Body: decoder.GetApiStatus()}, nil
+	})
+}
+
 type pokemonSearchInput struct{ Body decoder.ApiPokemonSearch }
 type pokemonSearchOutput struct{ Body []*decoder.ApiPokemonResult }
 

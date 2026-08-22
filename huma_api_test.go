@@ -169,7 +169,10 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	var doc struct {
 		Components struct {
 			Schemas map[string]struct {
-				Required []string `json:"required"`
+				Required   []string `json:"required"`
+				Properties map[string]struct {
+					Type any `json:"type"`
+				} `json:"properties"`
 			} `json:"schemas"`
 		} `json:"components"`
 	}
@@ -223,6 +226,15 @@ func TestScanRequestRequiredFields(t *testing.T) {
 	wantExactly("ApiPokemonDnfId", "id")
 	// Fort ranges mirror the pokemon ranges.
 	wantExactly("ApiFortDnfMinMax")
+	wantExactly("ApiFortDnfFilter")
+	// Structured focus clauses require a type; min_level remains optional so
+	// future non-Buddy focus types can reuse the object.
+	wantExactly("ApiFortDnfContestFocus", "type")
+	showcaseFocusType := doc.Components.Schemas["ApiPokestopShowcaseAvailable"].Properties["showcase_focus"].Type
+	types, ok := showcaseFocusType.([]any)
+	if !ok || len(types) != 2 || types[0] != "object" || types[1] != "null" {
+		t.Errorf("ApiPokestopShowcaseAvailable.showcase_focus type = %v, want [object null]", showcaseFocusType)
+	}
 	// Gym search: limit and every filter field are optional (each filter field is
 	// an independent alternative); the handler enforces "at least one filter".
 	wantExactly("ApiGymSearch")

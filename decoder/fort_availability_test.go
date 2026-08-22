@@ -1,6 +1,9 @@
 package decoder
 
-import "testing"
+import (
+	"encoding/json"
+	"testing"
+)
 
 func TestObserveExpiryAndReadRaids(t *testing.T) {
 	initFortAvailability()
@@ -80,11 +83,11 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	observePokestop(&FortLookup{
 		LureId: 501, LureExpireTimestamp: 2000,
 		ContestPokemonId: 25, ContestPokemonForm: 0, ContestPokemonType: 0, ShowcaseExpiry: 2000,
-	}, now)
+	}, nil, now)
 	// type-based showcase (pokemon id 0, type set) -> must also surface
-	observePokestop(&FortLookup{ContestPokemonId: 0, ContestPokemonType: 12, ShowcaseExpiry: 2000}, now)
+	observePokestop(&FortLookup{ContestPokemonId: 0, ContestPokemonType: 12, ShowcaseExpiry: 2000}, nil, now)
 	// expired lure + no showcase (all zero) -> both ignored
-	observePokestop(&FortLookup{LureId: 502, LureExpireTimestamp: 500}, now)
+	observePokestop(&FortLookup{LureId: 502, LureExpireTimestamp: 500}, nil, now)
 
 	// invasions (per incident) — confirmed lineup carries all three slots
 	observeInvasion(&FortLookupIncident{Character: 5, DisplayType: 1, Confirmed: true, Slot1PokemonId: 41, Slot2PokemonId: 42, Slot2Form: 1, Slot3PokemonId: 43, ExpireTimestamp: 2000}, now)
@@ -131,5 +134,131 @@ func TestObservePokestopAggregatesAndRead(t *testing.T) {
 	// everything expires
 	if len(readLures(3000)) != 0 || len(readShowcases(3000)) != 0 || len(readInvasions(3000)) != 0 {
 		t.Fatal("all pokestop aggregates should expire to empty")
+	}
+}
+
+func TestRaidAvailabilityCarriesTempEvolution(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	// same boss id/form, one mega (evolution 2) and one base — two distinct options
+	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidPokemonForm: 0, RaidPokemonEvolution: 2, RaidEndTimestamp: 2000}, now)
+	observeRaid(&FortLookup{RaidLevel: 5, RaidPokemonId: 150, RaidPokemonForm: 0, RaidEndTimestamp: 2000}, now)
+
+	got := readRaids(now)
+	if len(got) != 2 {
+		t.Fatalf("mega and base must be distinct options, got %d: %+v", len(got), got)
+	}
+	var mega, base bool
+	for _, r := range got {
+		switch r.TempEvolutionId {
+		case 2:
+			mega = true
+		case 0:
+			base = true
+		}
+	}
+	if !mega || !base {
+		t.Fatalf("want mega and base entries: %+v", got)
+	}
+}
+
+func TestShowcaseAvailabilityCarriesRankingStandard(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+
+	observePokestop(&FortLookup{ContestPokemonId: 25, ShowcaseRankingStandard: 3, ShowcaseExpiry: 2000}, nil, now)
+
+	s := readShowcases(now)
+	if len(s) != 1 {
+		t.Fatalf("want 1 showcase, got %d: %+v", len(s), s)
+	}
+	if s[0].RankingStandard != 3 {
+		t.Fatalf("ranking standard not carried: %+v", s[0])
+	}
+}
+
+func TestObserveBuddyShowcaseFocusAndRead(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+	good, _, err := parseShowcaseFocus(`{"type":"buddy","min_level":2}`)
+	if err != nil {
+		t.Fatalf("parse Good Buddy focus: %v", err)
+	}
+	great, _, err := parseShowcaseFocus(`{"min_level":3,"type":"buddy"}`)
+	if err != nil {
+		t.Fatalf("parse Great Buddy focus: %v", err)
+	}
+
+	// Buddy showcases have no legacy pokemon/type mirrors. Re-observing Good
+	// Buddy with a later expiry must coalesce into the same availability key.
+	observePokestop(&FortLookup{ShowcaseExpiry: 1500}, good, now)
+	observePokestop(&FortLookup{ShowcaseExpiry: 2500}, good, now)
+	observePokestop(&FortLookup{ShowcaseExpiry: 2000}, great, now)
+
+	got := readShowcases(now)
+	if len(got) != 2 {
+		t.Fatalf("want distinct Good + Great Buddy focuses, got %d: %+v", len(got), got)
+	}
+	seen := map[ApiShowcaseFocus]bool{}
+	for _, sc := range got {
+		if sc.PokemonId != nil || sc.Form != nil || sc.TypeId != nil || sc.ShowcaseFocus == nil {
+			t.Fatalf("Buddy availability should have only structured focus, got %+v", sc)
+		}
+		seen[*sc.ShowcaseFocus] = true
+	}
+	if !seen[*good] || !seen[*great] {
+		t.Fatalf("missing Good or Great Buddy focus: %+v", got)
+	}
+
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal showcases: %v", err)
+	}
+	var decoded []struct {
+		ShowcaseFocus json.RawMessage `json:"showcase_focus"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("decode showcases: %v", err)
+	}
+	for _, sc := range decoded {
+		if len(sc.ShowcaseFocus) == 0 || sc.ShowcaseFocus[0] != '{' {
+			t.Fatalf("showcase_focus must be a native object, got %s", sc.ShowcaseFocus)
+		}
+	}
+
+	// The later Good observation survives its first expiry; Great does not.
+	remaining := readShowcases(2200)
+	if len(remaining) != 1 || remaining[0].ShowcaseFocus == nil || *remaining[0].ShowcaseFocus != *good {
+		t.Fatalf("coalesced Good Buddy focus should remain after Great expires: %+v", remaining)
+	}
+	if len(readShowcases(3000)) != 0 {
+		t.Fatal("all Buddy showcases should expire")
+	}
+}
+
+func TestModernPokemonShowcasePreservesLegacyMirrors(t *testing.T) {
+	initFortAvailability()
+	now := int64(1000)
+	focus, _, err := parseShowcaseFocus(`{"type":"pokemon","pokemon_id":25,"pokemon_form":0}`)
+	if err != nil {
+		t.Fatalf("parse Pokemon focus: %v", err)
+	}
+	observePokestop(&FortLookup{
+		ContestPokemonId:   25,
+		ContestPokemonForm: 0,
+		ShowcaseExpiry:     2000,
+	}, focus, now)
+
+	got := readShowcases(now)
+	if len(got) != 1 {
+		t.Fatalf("want one Pokemon showcase, got %+v", got)
+	}
+	showcase := got[0]
+	if showcase.PokemonId == nil || *showcase.PokemonId != 25 || showcase.Form == nil || *showcase.Form != 0 || showcase.TypeId != nil {
+		t.Fatalf("legacy Pokemon/form mirrors changed: %+v", showcase)
+	}
+	if showcase.ShowcaseFocus == nil || *showcase.ShowcaseFocus != *focus {
+		t.Fatalf("structured focus missing from modern Pokemon showcase: %+v", showcase)
 	}
 }

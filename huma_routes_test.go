@@ -63,7 +63,7 @@ func TestHumaScanEndpointsE2E(t *testing.T) {
 		if err := gojson.Unmarshal([]byte(body), &m); err != nil {
 			t.Fatalf("v3 body is not a JSON object: %v; body=%s", err, body)
 		}
-		for _, key := range []string{"pokemon", "examined", "skipped", "total"} {
+		for _, key := range []string{"pokemon", "examined", "skipped", "total", "limit_reached"} {
 			if _, ok := m[key]; !ok {
 				t.Errorf("v3 body missing key %q: %s", key, body)
 			}
@@ -322,6 +322,50 @@ func TestFortScanEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("structured Buddy focus binds on pokestop scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}`
+		resp := api.Post("/api/pokestop/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("structured Buddy focus binds on combined scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"pokestops":{"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}}`
+		resp := api.Post("/api/fort/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("availability advertises showcase focus filtering", func(t *testing.T) {
+		resp := api.Get("/api/pokestop/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var pokestops map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &pokestops); err != nil {
+			t.Fatalf("decode pokestop availability: %v", err)
+		}
+		if supported, ok := pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("pokestop availability capability = %v, want true", pokestops["showcase_focus_filter"])
+		}
+
+		resp = api.Get("/api/fort/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("fort availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var forts struct {
+			Pokestops map[string]any `json:"pokestops"`
+		}
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &forts); err != nil {
+			t.Fatalf("decode fort availability: %v", err)
+		}
+		if supported, ok := forts.Pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("nested pokestop capability = %v, want true", forts.Pokestops["showcase_focus_filter"])
+		}
+	})
+
 	t.Run("503 when fort_in_memory disabled", func(t *testing.T) {
 		config.Config.FortInMemory = false
 		defer func() { config.Config.FortInMemory = true }()
@@ -570,5 +614,53 @@ func TestHumaStationAvailableRoute(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"battles":[]`) {
 		t.Errorf("body missing empty battles array: %s", resp.Body.String())
+	}
+}
+
+// TestHumaStatusRoute covers /api/status: secret-gated like every API route,
+// but NOT gated on fort_in_memory — it exists to report that flag (and the
+// server's scan caps) so consumers can detect capabilities without probing.
+func TestHumaStatusRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevFim := config.Config.FortInMemory
+	prevMaxP := config.Config.Tuning.MaxPokemonResults
+	prevMaxF := config.Config.Tuning.MaxFortResults
+	config.Config.ApiSecret = "topsecret"
+	config.Config.Tuning.MaxPokemonResults = 3000
+	config.Config.Tuning.MaxFortResults = 4000
+	defer func() {
+		config.Config.ApiSecret = prevSecret
+		config.Config.FortInMemory = prevFim
+		config.Config.Tuning.MaxPokemonResults = prevMaxP
+		config.Config.Tuning.MaxFortResults = prevMaxF
+	}()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerStatusRoutes(api)
+
+	if resp := api.Get("/api/status"); resp.Code != http.StatusUnauthorized {
+		t.Errorf("no secret: got %d, want 401", resp.Code)
+	}
+
+	config.Config.FortInMemory = false
+	resp := api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim off: got %d, want 200 (status must not be 503-gated); body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"fort_in_memory":false`) {
+		t.Errorf("fim off body: %s", resp.Body.String())
+	}
+
+	config.Config.FortInMemory = true
+	resp = api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s: %s", want, body)
+		}
 	}
 }

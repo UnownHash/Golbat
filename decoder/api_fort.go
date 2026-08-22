@@ -73,10 +73,11 @@ type ApiFortDnfFilter struct {
 	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
 
 	// Gym
-	AvailableSlots *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
-	TeamId         []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; omitted or null means no team constraint."`
-	RaidLevel      []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; omitted or null means no raid level constraint. Only matches gyms with an active raid."`
-	RaidPokemon    []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; omitted or null means no raid pokemon constraint. Only matches gyms with an active raid."`
+	AvailableSlots      *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
+	TeamId              []int8            `json:"team_id" required:"false" doc:"Gym only: allowed controlling team ids; omitted or null means no team constraint."`
+	RaidLevel           []int8            `json:"raid_level" required:"false" doc:"Gym only: allowed active raid levels; omitted or null means no raid level constraint. Only matches gyms with an active raid."`
+	RaidPokemon         []ApiDnfId        `json:"raid_pokemon_id" required:"false" doc:"Gym only: allowed active raid boss pokemon/form pairs; omitted or null means no raid pokemon constraint. Only matches gyms with an active raid."`
+	RaidTempEvolutionId []int8            `json:"raid_temp_evolution_id" required:"false" doc:"Gym only: allowed raid boss temp evolution (mega/primal) ids; 0 selects base-form bosses. Omitted or null means no temp evolution constraint. Only matches gyms with an active raid."`
 
 	// Pokestop - unified quest (matches AR or no-AR)
 	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; omitted or null means no lure constraint."`
@@ -90,14 +91,24 @@ type ApiFortDnfFilter struct {
 	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
 
 	// Pokestop - contest
-	ContestPokemon     []ApiDnfId `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
-	ContestPokemonType []int8     `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
+	ContestPokemon         []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemonType     []int8                   `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
+	ContestFocus           []ApiFortDnfContestFocus `json:"contest_focus" required:"false" doc:"Pokestop only: allowed structured contest focuses. Currently supports exact Buddy minimum levels. Omitted or null means no structured focus constraint; an empty list matches nothing."`
+	ContestRankingStandard []int8                   `json:"contest_ranking_standard" required:"false" doc:"Pokestop only: allowed showcase ranking standards; 0 selects showcases whose standard is unknown. Omitted or null means no ranking standard constraint."`
 
 	// Station
 	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
 	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
 	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; when false, only stations without any. Null means no constraint."`
 	StationActive *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations whose end_time is in the future (still present); when false, only expired stations. Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
+}
+
+// ApiFortDnfContestFocus is one structured contest-focus selector. The wire
+// shape mirrors showcase_focus. Buddy selectors require min_level; unknown
+// focus types and Buddy selectors without a level safely match nothing.
+type ApiFortDnfContestFocus struct {
+	Type     string `json:"type" doc:"Focus type; currently buddy is supported"`
+	MinLevel *int8  `json:"min_level" required:"false" doc:"Exact minimum Buddy level when type is buddy"`
 }
 
 type ApiDnfId struct {
@@ -113,39 +124,55 @@ type ApiFortDnfMinMax struct {
 }
 
 type ApiGymScanResult struct {
-	Gyms     []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
-	Examined int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped  int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total    int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Gyms         []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Examined     int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool            `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiPokestopScanResult struct {
-	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
-	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Pokestops    []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiStationScanResult struct {
-	Stations []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
-	Examined int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped  int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total    int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Stations     []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined     int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 type ApiFortCombinedScanResult struct {
-	Gyms      []*ApiGymResult      `json:"gyms" doc:"Matching gyms within the bounding box."`
-	Pokestops []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
-	Stations  []*ApiStationResult  `json:"stations" doc:"Matching stations within the bounding box."`
-	Examined  int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
-	Skipped   int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
-	Total     int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	Gyms         []*ApiGymResult      `json:"gyms" doc:"Matching gyms within the bounding box."`
+	Pokestops    []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
+	Stations     []*ApiStationResult  `json:"stations" doc:"Matching stations within the bounding box."`
+	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
+	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 // matchDnfIdPair checks if any ApiDnfId in the filter matches the given pokemon/form pair
 func matchDnfIdPair(filter []ApiDnfId, pokemonId int16, form int16) bool {
 	for _, f := range filter {
 		if f.Pokemon == pokemonId && (f.Form == nil || *f.Form == form) {
+			return true
+		}
+	}
+	return false
+}
+
+func matchContestFocus(filter []ApiFortDnfContestFocus, buddyMinLevel int8) bool {
+	if buddyMinLevel <= 0 {
+		return false
+	}
+	for _, focus := range filter {
+		if contestFocusType(focus.Type) == focusBuddy && focus.MinLevel != nil && *focus.MinLevel == buddyMinLevel {
 			return true
 		}
 	}
@@ -169,7 +196,7 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		if filter.TeamId != nil && !slices.Contains(filter.TeamId, fortLookup.TeamId) {
 			return false
 		}
-		if filter.RaidLevel != nil || filter.RaidPokemon != nil {
+		if filter.RaidLevel != nil || filter.RaidPokemon != nil || filter.RaidTempEvolutionId != nil {
 			// Check if raid has expired
 			raidActive := fortLookup.RaidBattleTimestamp > now || fortLookup.RaidEndTimestamp > now
 			if !raidActive {
@@ -179,6 +206,10 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 				return false
 			}
 			if filter.RaidPokemon != nil && !matchDnfIdPair(filter.RaidPokemon, fortLookup.RaidPokemonId, fortLookup.RaidPokemonForm) {
+				return false
+			}
+			// 0 is a real selector here (base form / unhatched egg), not a wildcard.
+			if filter.RaidTempEvolutionId != nil && !slices.Contains(filter.RaidTempEvolutionId, fortLookup.RaidPokemonEvolution) {
 				return false
 			}
 		}
@@ -223,6 +254,14 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 		}
 		if filter.ContestPokemon != nil &&
 			(fortLookup.ShowcaseExpiry <= now || !matchDnfIdPair(filter.ContestPokemon, fortLookup.ContestPokemonId, fortLookup.ContestPokemonForm)) {
+			return false
+		}
+		if filter.ContestFocus != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !matchContestFocus(filter.ContestFocus, fortLookup.ShowcaseBuddyMinLevel)) {
+			return false
+		}
+		if filter.ContestRankingStandard != nil &&
+			(fortLookup.ShowcaseExpiry <= now || !slices.Contains(filter.ContestRankingStandard, fortLookup.ShowcaseRankingStandard)) {
 			return false
 		}
 
@@ -289,16 +328,28 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 	return true
 }
 
+// fortScanLimit resolves the effective result limit for a fort scan: the
+// requested limit clamped by the server's max_fort_results tuning cap
+// (0 = server default). Mirrors pokemonScanLimit.
+func fortScanLimit(limit int) int {
+	maxForts := config.Config.Tuning.MaxFortResults
+	if limit > 0 && limit < maxForts {
+		maxForts = limit
+	}
+	return maxForts
+}
+
+func fortScanLimitReached(limit, resultCount int) bool {
+	return resultCount >= fortScanLimit(limit)
+}
+
 func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]string, int, int, int) {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxFortResults
-	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
-		maxForts = retrieveParameters.Limit
-	}
+	maxForts := fortScanLimit(retrieveParameters.Limit)
 
 	fortsExamined := 0
 	fortsSkipped := 0
@@ -427,10 +478,11 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 	log.Infof("GymScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiGymScanResult{
-		Gyms:     results,
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Gyms:         results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -442,10 +494,11 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 	log.Infof("PokestopScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiPokestopScanResult{
-		Pokestops: results,
-		Examined:  examined,
-		Skipped:   skipped,
-		Total:     total,
+		Pokestops:    results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -457,10 +510,11 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	log.Infof("StationScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiStationScanResult{
-		Stations: results,
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Stations:     results,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(returnKeys)),
 	}
 }
 
@@ -476,12 +530,13 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails 
 		time.Since(start), len(gyms), len(pokestops), len(stations))
 
 	return &ApiFortCombinedScanResult{
-		Gyms:      gyms,
-		Pokestops: pokestops,
-		Stations:  stations,
-		Examined:  examined,
-		Skipped:   skipped,
-		Total:     total,
+		Gyms:         gyms,
+		Pokestops:    pokestops,
+		Stations:     stations,
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(gymKeys)+len(pokestopKeys)+len(stationKeys)),
 	}
 }
 
@@ -491,10 +546,7 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 	minLocation := retrieveParameters.Min.Location()
 	maxLocation := retrieveParameters.Max.Location()
 
-	maxForts := config.Config.Tuning.MaxFortResults
-	if retrieveParameters.Limit > 0 && retrieveParameters.Limit < maxForts {
-		maxForts = retrieveParameters.Limit
-	}
+	maxForts := fortScanLimit(retrieveParameters.Limit)
 
 	now := time.Now().Unix()
 	totalMatched := 0

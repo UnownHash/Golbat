@@ -36,7 +36,7 @@ type PokestopData struct {
 	CellId                        null.Int    `db:"cell_id"`
 	Deleted                       bool        `db:"deleted"`
 	LureId                        int16       `db:"lure_id"`
-	FirstSeenTimestamp            int16       `db:"first_seen_timestamp"`
+	FirstSeenTimestamp            int64       `db:"first_seen_timestamp"`
 	SponsorId                     null.Int    `db:"sponsor_id"`
 	PartnerId                     null.String `db:"partner_id"`
 	ArScanEligible                null.Int    `db:"ar_scan_eligible"` // is an 8
@@ -463,7 +463,7 @@ func (p *Pokestop) SetLureId(v int16) {
 	}
 }
 
-func (p *Pokestop) SetFirstSeenTimestamp(v int16) {
+func (p *Pokestop) SetFirstSeenTimestamp(v int64) {
 	if p.FirstSeenTimestamp != v {
 		if dbDebugEnabled {
 			p.changedFields = append(p.changedFields, fmt.Sprintf("FirstSeenTimestamp:%d->%d", p.FirstSeenTimestamp, v))
