@@ -161,6 +161,14 @@ func fortRtreeUpdateStationOnSave(station *Station) {
 
 // fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
 func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
+	// A deleted row still carries its enabled flag and quest fields, and the
+	// load-by-id query has no deleted filter, so indexing one here would put a
+	// deleted fort into the lookup cache and the tree as a live fort, where
+	// fort scans would return it. The save path already skips deleted forts;
+	// match it.
+	if pokestop.Deleted {
+		return
+	}
 	_, inMap := fortLookupCache.Load(pokestop.Id)
 	if !inMap {
 		addFortToTree(pokestop.Id, pokestop.Lat, pokestop.Lon)
@@ -170,6 +178,10 @@ func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
 
 // fortRtreeUpdateGymOnGet updates rtree when a gym is loaded from DB (cache miss)
 func fortRtreeUpdateGymOnGet(gym *Gym) {
+	// See fortRtreeUpdatePokestopOnGet.
+	if gym.Deleted {
+		return
+	}
 	_, inMap := fortLookupCache.Load(gym.Id)
 	if !inMap {
 		addFortToTree(gym.Id, gym.Lat, gym.Lon)
