@@ -94,9 +94,17 @@ func TestRunDespawnCorrectionDrainsQueueAndStopsOnCancel(t *testing.T) {
 
 	despawnClearQueue <- spawnId
 
-	// Poll for the async clear rather than sleeping a fixed duration.
+	// Poll for the async clear rather than sleeping a fixed duration. Read
+	// through the lock-free atomic mirror, not sp.DespawnSec directly: the
+	// worker goroutine mutates that field under the entity lock, so a raw
+	// field read here would itself be a data race (caught by -race against
+	// this test, not against production code, which never reads the field
+	// unlocked).
 	deadline := time.Now().Add(2 * time.Second)
-	for sp.DespawnSec.Valid {
+	for {
+		if _, known, _ := sp.DespawnSecFast(); !known {
+			break
+		}
 		if time.Now().After(deadline) {
 			t.Fatal("RunDespawnCorrection did not clear the queued spawnpoint in time")
 		}
