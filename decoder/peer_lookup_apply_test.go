@@ -381,6 +381,66 @@ func TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected(t *t
 	}
 }
 
+// --- Task 10: rule 2 applied at this call site too. A peer's declared
+// despawn second can itself be contradicted by the very sighting it is being
+// applied to - most commonly the value persistPeerDespawn just wrote moments
+// earlier, since it only writes when the local despawn_sec was null. When
+// that happens the pokemon must be extended forward (not left with a
+// near-past unverified expiry) and the spawnpoint queued for despawn_correction.go's
+// async clear, exactly as setExpireTimestampFromSpawnpoint does.
+//
+// Deliberately no stubSpawnpointQueue: the spawnpoint already has an existing
+// DespawnSec, so persistPeerDespawn's write is rejected and spawnpointUpdate
+// is never reached (rule 2) - same reasoning as
+// TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected.
+func TestApplyPeerResultQueuesClearWhenPeerDespawnContradicted(t *testing.T) {
+	lureTestSetup(t)
+	const spawnId = int64(920213)
+	const encId = uint64(920210)
+
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(999)}}
+	spawnpointCache.Set(spawnId, sp, time.Minute)
+
+	oldQueue := despawnClearQueue
+	t.Cleanup(func() { despawnClearQueue = oldQueue })
+	despawnClearQueue = make(chan int64, 4)
+
+	now := time.Now()
+	// First seen long enough ago that reconstructing the peer's declared
+	// despawn second from "now" wrap-clamps to well in the past - a live
+	// pokemon whose declared phase has already elapsed.
+	p := &Pokemon{PokemonData: PokemonData{
+		Id:                 Uint64Str(encId),
+		PokemonId:          1,
+		FirstSeenTimestamp: now.Unix() - 4000,
+	}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	peerExpiry := now.Add(3000 * time.Second).Unix() // 50 minutes out - passes the "in the future" guard
+	res := &pb.PokemonResult{Id: encId, ExpireTimestamp: &peerExpiry, ExpireTimestampVerified: true}
+	item := peerLookupItem{EncounterId: encId, PokemonId: 1, SpawnId: spawnId}
+
+	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
+
+	if p.ExpireTimestampVerified {
+		t.Fatal("a contradicted peer answer must not be left verified")
+	}
+	if got := p.ExpireTimestamp.ValueOrZero(); got < now.Unix() {
+		t.Fatalf("pokemon must be extended forward like an unknown spawnpoint, not left in the past: got %d, now=%d", got, now.Unix())
+	}
+	select {
+	case gotId := <-despawnClearQueue:
+		if gotId != spawnId {
+			t.Fatalf("queued spawn id: got %d want %d", gotId, spawnId)
+		}
+	default:
+		t.Fatal("expected the contradicted spawnpoint to be queued for a clear")
+	}
+	if p.IsDirty() {
+		t.Fatal("pokemon must have been saved (dirty flag left set)")
+	}
+}
+
 // --- Minor 4 (review): an unverified hint has no upper bound today, so an
 // implausible far-future peer expiry would reach disappear_time on the wire.
 func TestApplyPeerResultHintRejectsExpiryTooFarInFuture(t *testing.T) {

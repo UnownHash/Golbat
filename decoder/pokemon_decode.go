@@ -349,7 +349,13 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	if sp, ok := spawnpointCache.Get(spawnId); ok {
 		if despawnSecond, known, synced := sp.DespawnSecFast(); synced {
 			if known {
-				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+				if pokemon.applyVerifiedDespawn(despawnSecond, timestampMs) {
+					// Extend as we would for an unknown spawnpoint, and retire the
+					// bad despawn_sec asynchronously - clearing it here would mean
+					// holding the spawnpoint lock under the pokemon lock.
+					pokemon.setUnknownTimestamp(timestampMs / 1000)
+					queueDespawnClear(spawnId)
+				}
 			} else {
 				pokemon.setUnknownTimestamp(timestampMs / 1000)
 			}
@@ -362,7 +368,13 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
 
-		pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+		if pokemon.applyVerifiedDespawn(despawnSecond, timestampMs) {
+			// Extend as we would for an unknown spawnpoint, and retire the
+			// bad despawn_sec asynchronously - clearing it here would mean
+			// holding the spawnpoint lock under the pokemon lock.
+			pokemon.setUnknownTimestamp(timestampMs / 1000)
+			queueDespawnClear(spawnId)
+		}
 	} else {
 		if unlock != nil {
 			unlock()
@@ -376,8 +388,11 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 const despawnSkewMargin = 5
 
 // applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
-// verified expire timestamp for this pokemon.
-func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
+// verified expire timestamp for this pokemon. It reports contradicted=true
+// when the resulting expiry is already in the past for a pokemon we are
+// looking at alive right now — proof that despawn_sec is wrong, whatever
+// wrote it (see decoder/despawn_correction.go, rule 2).
+func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) (contradicted bool) {
 	date := time.Unix(timestampMs/1000, 0)
 	secondOfHour := date.Second() + date.Minute()*60
 
@@ -398,8 +413,14 @@ func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int6
 		statsCollector.IncDespawnWrapClamped()
 	}
 
+	// We are looking at a live pokemon. An expiry already in the past means the
+	// spawnpoint's despawn_sec is wrong, whatever wrote it.
+	nowSec := timestampMs / 1000
+	contradicted = expiry < nowSec-despawnSkewMargin
+
 	pokemon.SetExpireTimestamp(null.IntFrom(expiry))
-	pokemon.SetExpireTimestampVerified(true)
+	pokemon.SetExpireTimestampVerified(!contradicted)
+	return contradicted
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp(now int64) {

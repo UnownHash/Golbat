@@ -155,7 +155,18 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 			// already more than an hour old). Drop it rather than risk a
 			// fabricated verified expiry.
 			if peerExpiry := res.GetExpireTimestamp(); peerExpiry > now {
-				pokemon.applyVerifiedDespawn(int(despawnSecond), now*1000)
+				if pokemon.applyVerifiedDespawn(int(despawnSecond), now*1000) {
+					// The peer's declared despawn second is contradicted by
+					// this live sighting - rule 2 applies here exactly as it
+					// does in setExpireTimestampFromSpawnpoint (see
+					// despawn_correction.go): despawnSecond is very often the
+					// value persistPeerDespawn just wrote to the spawnpoint
+					// above, since a fill of a previously-null despawn_sec is
+					// the common case. Extend as for an unknown spawnpoint and
+					// retire it asynchronously.
+					pokemon.setUnknownTimestamp(now)
+					queueDespawnClear(item.SpawnId)
+				}
 				changed = true
 			}
 		} else if !pokemon.ExpireTimestampVerified {
