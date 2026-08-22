@@ -196,7 +196,17 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 		}
 	}
 
-	if !pokemon.AtkIv.Valid && hasStats {
+	// IVs and level are rolled per boost state, so stats held under a
+	// different weather than the one asked about describe a different roll.
+	// The answering side already refuses those (PeerRecordMatches), but this
+	// is the branch that makes them permanent - adopted stats gate every
+	// later path on AtkIv.Valid, get a CP computed from them, and fire a
+	// pokemon_iv webhook - so the boost state is re-checked here rather than
+	// trusted across the wire. An answer that leaves weather unset carries no
+	// claim about boost state and so is not evidence of a mismatch.
+	statsForRequestedWeather := res.Weather == nil || int32(res.GetWeather()) == item.Weather
+
+	if !pokemon.AtkIv.Valid && hasStats && statsForRequestedWeather {
 		applyPeerStats(pokemon, res.GetAtkIv(), res.GetDefIv(), res.GetStaIv(), res.GetLevel(), res.GetCp())
 		if res.Size != nil {
 			pokemon.SetSize(null.IntFrom(res.GetSize()))

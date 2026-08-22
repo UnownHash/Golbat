@@ -100,6 +100,59 @@ func TestApplyPeerResultAdoptsStatsButNotCp(t *testing.T) {
 	}
 }
 
+// The client-side half of the boost-state rule. The weather-flip trigger asks
+// about the state the cell has just flipped TO, but a peer processing the same
+// flip has most likely not applied it yet and still answers with its pre-flip
+// roll. Adopting that is permanent: every later path gates on AtkIv.Valid, a CP
+// is computed from it, and a pokemon_iv webhook goes out.
+func TestApplyPeerResultRejectsStatsRolledUnderAnotherWeather(t *testing.T) {
+	lureTestSetup(t)
+	const encId = uint64(920230)
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encId), PokemonId: 25}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	atk, def, sta, level := int64(15), int64(14), int64(13), int64(20)
+	peerWeather := int64(3) // the pre-flip, boosted state the peer still holds
+	res := &pb.PokemonResult{
+		Id: encId, AtkIv: &atk, DefIv: &def, StaIv: &sta, Level: &level, Weather: &peerWeather,
+	}
+	item := peerLookupItem{EncounterId: encId, PokemonId: 25, Weather: 0} // asked about unboosted
+
+	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
+
+	if p.AtkIv.Valid {
+		t.Fatalf("stats rolled under weather %d must not answer a question about weather 0, got atk=%d",
+			peerWeather, p.AtkIv.ValueOrZero())
+	}
+	if p.Level.Valid {
+		t.Fatalf("level must not be adopted either, got %d", p.Level.ValueOrZero())
+	}
+}
+
+// The positive half: an answer that states the boost state we asked about is
+// adopted normally, so the check above rejects the wrong weather rather than
+// all weather-bearing answers.
+func TestApplyPeerResultAdoptsStatsForTheRequestedWeather(t *testing.T) {
+	lureTestSetup(t)
+	const encId = uint64(920231)
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encId), PokemonId: 25}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	atk, def, sta, level := int64(15), int64(14), int64(13), int64(20)
+	peerWeather := int64(3)
+	res := &pb.PokemonResult{
+		Id: encId, AtkIv: &atk, DefIv: &def, StaIv: &sta, Level: &level, Weather: &peerWeather,
+	}
+	item := peerLookupItem{EncounterId: encId, PokemonId: 25, Weather: 3}
+
+	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
+
+	if p.AtkIv.ValueOrZero() != 15 || p.DefIv.ValueOrZero() != 14 || p.StaIv.ValueOrZero() != 13 {
+		t.Fatalf("matching-weather stats must be adopted, got %d/%d/%d",
+			p.AtkIv.ValueOrZero(), p.DefIv.ValueOrZero(), p.StaIv.ValueOrZero())
+	}
+}
+
 // A pokemon that already has stats must keep them - a peer answer is not
 // allowed to overwrite a local IV read.
 func TestApplyPeerResultDoesNotOverwriteExistingStats(t *testing.T) {

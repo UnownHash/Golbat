@@ -35,10 +35,10 @@ func (s *grpcPokemonServer) Search(ctx context.Context, in *pb.PokemonScanReques
 }
 
 // GetPokemon answers a peer's batched question about pokemon this instance has
-// already seen. It reads ONLY local caches and the database via
-// decoder.GetOnePokemon: it never forwards to this instance's own peers, so a
-// lookup cannot loop between instances — loop prevention by construction,
-// not by a depth counter.
+// already seen. It reads ONLY local in-memory caches — decoder.GetOnePokemon
+// is cache-only with no database fallback — and it never forwards to this
+// instance's own peers, so a lookup cannot loop between instances: loop
+// prevention by construction, not by a depth counter.
 func (s *grpcPokemonServer) GetPokemon(ctx context.Context, in *pb.GetPokemonRequest) (*pb.GetPokemonResponse, error) {
 	// Check for authorisation
 	if config.Config.ApiSecret != "" {
@@ -58,12 +58,9 @@ func (s *grpcPokemonServer) GetPokemon(ctx context.Context, in *pb.GetPokemonReq
 
 		// Encounter ids are reused when the server mutates a spawn, so an id
 		// alone does not identify a sighting: confirm the cached record
-		// actually matches the pokemon (and form, when known) being asked
-		// about before answering with it.
-		if int32(api.PokemonId) != item.GetPokemonId() {
-			continue
-		}
-		if api.Form != nil && int32(*api.Form) != item.GetForm() {
+		// actually describes the same pokemon, form and boost state being
+		// asked about before answering with it.
+		if !decoder.PeerRecordMatches(api, item.GetPokemonId(), item.GetForm(), item.GetWeather()) {
 			continue
 		}
 
