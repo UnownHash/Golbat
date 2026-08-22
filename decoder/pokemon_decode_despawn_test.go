@@ -67,10 +67,18 @@ func TestApplyVerifiedDespawnLeavesNormalExpiryAlone(t *testing.T) {
 // requires it to stay verified. contradicted is a pure function of the same
 // three inputs as that test, so the same inputs cannot simultaneously prove
 // "still verified" and "contradicted" - the two tests need different
-// numbers. This case instead clamps to 600s in the past (well outside the
-// 5s margin): first_seen 4000s ago (already an anomaly by itself - no real
-// encounter lives that long) with a despawn second implying 3000s from now,
-// which the wrap clamp corrects to 600s ago.
+// numbers. This case instead clamps to well outside the 5s margin: first_seen
+// 4000s ago (already an anomaly by itself - no real encounter lives that
+// long) with a despawn second implying up to 3000s from now, which the wrap
+// clamp corrects back by a full hour.
+//
+// The expected expiry is derived the same way applyVerifiedDespawn computes
+// it (local second-of-hour via time.Unix), not a hardcoded offset:
+// nowSec-600 would silently assume secondOfHour(now)==0, true only in a
+// whole-hour-offset timezone (review finding: this branch's Task 9 bug was
+// exactly this UTC/local confusion - see CLAUDE.md's global constraints).
+// despawnOffset+4000 always exceeds the wrap threshold (3605) regardless of
+// timezone, so the clamp is guaranteed to fire here.
 func TestApplyVerifiedDespawnReportsContradiction(t *testing.T) {
 	now := time.Date(2026, 8, 21, 12, 0, 0, 0, time.UTC)
 	nowSec := now.Unix()
@@ -81,8 +89,16 @@ func TestApplyVerifiedDespawnReportsContradiction(t *testing.T) {
 	if !contradicted {
 		t.Fatal("an expiry in the past for a live pokemon must be reported as contradicted")
 	}
-	if got := p.ExpireTimestamp.ValueOrZero(); got != nowSec-600 {
-		t.Fatalf("expected clamped expiry %d (600s ago), got %d", nowSec-600, got)
+
+	local := time.Unix(nowSec, 0)
+	secondOfHour := int64(local.Second() + local.Minute()*60)
+	despawnOffset := int64(3000) - secondOfHour
+	if despawnOffset < 0 {
+		despawnOffset += 3600
+	}
+	wantExpiry := nowSec + despawnOffset - 3600 // the wrap clamp always fires for this scenario
+	if got := p.ExpireTimestamp.ValueOrZero(); got != wantExpiry {
+		t.Fatalf("expected clamped expiry %d, got %d", wantExpiry, got)
 	}
 	if p.ExpireTimestampVerified {
 		t.Fatal("a contradicted despawn must not be left verified")

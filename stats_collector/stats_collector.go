@@ -78,6 +78,10 @@ type StatsCollector interface {
 
 	// Peer lookup metrics
 	IncPeerLookupDropped()
+
+	// Despawn correction metrics
+	IncDespawnRetired()
+	IncDespawnClearDropped()
 }
 
 type Config interface {

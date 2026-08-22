@@ -117,8 +117,16 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 	}
 
 	// --- 1. Spawnpoint, lock released before the pokemon is touched. ---
+	// persisted is remembered for step 2: applyVerifiedDespawn below tests
+	// despawnSecond (the peer's claim), not necessarily what is actually
+	// stored - persistPeerDespawn only accepts the write when the local
+	// value was NULL (rule 2, local truth wins). Only when persisted is true
+	// did the tested value actually reach the spawnpoint, so only then is a
+	// contradiction proof about the stored value rather than a stale peer
+	// claim that was already correctly rejected.
+	var persisted bool
 	if res.GetExpireTimestampVerified() && res.ExpireTimestamp != nil && item.SpawnId != 0 {
-		persistPeerDespawn(ctx, dbDetails, item.SpawnId, despawnSecond, res.GetLat(), res.GetLon())
+		persisted = persistPeerDespawn(ctx, dbDetails, item.SpawnId, despawnSecond, res.GetLat(), res.GetLon())
 	}
 
 	// --- 2. Pokemon. ---
@@ -157,15 +165,21 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 			if peerExpiry := res.GetExpireTimestamp(); peerExpiry > now {
 				if pokemon.applyVerifiedDespawn(int(despawnSecond), now*1000) {
 					// The peer's declared despawn second is contradicted by
-					// this live sighting - rule 2 applies here exactly as it
-					// does in setExpireTimestampFromSpawnpoint (see
-					// despawn_correction.go): despawnSecond is very often the
-					// value persistPeerDespawn just wrote to the spawnpoint
-					// above, since a fill of a previously-null despawn_sec is
-					// the common case. Extend as for an unknown spawnpoint and
-					// retire it asynchronously.
+					// this live sighting. Extend as for an unknown spawnpoint
+					// unconditionally - that part is right regardless of
+					// what got persisted. But only retire the spawnpoint's
+					// despawn_sec when persisted is true: only then is
+					// despawnSecond (the value just tested) actually the
+					// value in the spawnpoint. When the write was rejected
+					// (local truth already had a different value - rule 2),
+					// the untested local value must not be cleared on the
+					// strength of a contradiction about the peer's claim;
+					// setExpireTimestampFromSpawnpoint already tests the
+					// real stored value on the next sighting regardless.
 					pokemon.setUnknownTimestamp(now)
-					queueDespawnClear(item.SpawnId)
+					if persisted && item.SpawnId != 0 {
+						queueDespawnClear(item.SpawnId)
+					}
 				}
 				changed = true
 			}

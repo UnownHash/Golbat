@@ -381,24 +381,24 @@ func TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected(t *t
 	}
 }
 
-// --- Task 10: rule 2 applied at this call site too. A peer's declared
-// despawn second can itself be contradicted by the very sighting it is being
-// applied to - most commonly the value persistPeerDespawn just wrote moments
-// earlier, since it only writes when the local despawn_sec was null. When
-// that happens the pokemon must be extended forward (not left with a
-// near-past unverified expiry) and the spawnpoint queued for despawn_correction.go's
-// async clear, exactly as setExpireTimestampFromSpawnpoint does.
+// --- Task 10 (review fix, Important 1): rule 2 applied at this call site
+// too, but the clear is gated on persisted - applyVerifiedDespawn tests
+// despawnSecond (the peer's claim), which is only known to be the actual
+// stored value when persistPeerDespawn's write succeeded (local was NULL).
 //
-// Deliberately no stubSpawnpointQueue: the spawnpoint already has an existing
-// DespawnSec, so persistPeerDespawn's write is rejected and spawnpointUpdate
-// is never reached (rule 2) - same reasoning as
-// TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected.
+// The true-positive case: the local despawn_sec was NULL, so
+// persistPeerDespawn's write actually reaches the spawnpoint - despawnSecond
+// is now genuinely the stored value, so a contradiction proves it wrong and
+// the clear must be queued. stubSpawnpointQueue is required here (unlike the
+// false-positive test below) because this is the one case where the write
+// actually happens.
 func TestApplyPeerResultQueuesClearWhenPeerDespawnContradicted(t *testing.T) {
 	lureTestSetup(t)
+	stubQueue := stubSpawnpointQueue(t)
 	const spawnId = int64(920213)
 	const encId = uint64(920210)
 
-	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(999)}}
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId}} // NULL: the write below must succeed
 	spawnpointCache.Set(spawnId, sp, time.Minute)
 
 	oldQueue := despawnClearQueue
@@ -422,6 +422,12 @@ func TestApplyPeerResultQueuesClearWhenPeerDespawnContradicted(t *testing.T) {
 
 	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
 
+	if !sp.DespawnSec.Valid {
+		t.Fatal("expected the peer's despawn to have been persisted (local value was NULL)")
+	}
+	if stubQueue.Size() != 1 {
+		t.Fatalf("expected the spawnpoint write to reach the write-behind queue, size=%d", stubQueue.Size())
+	}
 	if p.ExpireTimestampVerified {
 		t.Fatal("a contradicted peer answer must not be left verified")
 	}
@@ -434,10 +440,63 @@ func TestApplyPeerResultQueuesClearWhenPeerDespawnContradicted(t *testing.T) {
 			t.Fatalf("queued spawn id: got %d want %d", gotId, spawnId)
 		}
 	default:
-		t.Fatal("expected the contradicted spawnpoint to be queued for a clear")
+		t.Fatal("expected the just-persisted, now-contradicted spawnpoint to be queued for a clear")
 	}
 	if p.IsDirty() {
 		t.Fatal("pokemon must have been saved (dirty flag left set)")
+	}
+}
+
+// The false-positive case (Important 1, review): the local despawn_sec was
+// already known, so persistPeerDespawn's write is rejected (rule 2, local
+// truth wins) - despawnSecond is the peer's claim, never actually stored.
+// A contradiction here says nothing provable about the untested local value,
+// so no clear may be queued for it: doing so would let a wrong peer answer
+// retire a spawnpoint's independently-correct, TTH-derived despawn_sec.
+// Deliberately no stubSpawnpointQueue: the write must be rejected and never
+// reach spawnpointUpdate, so the nil queue and nil GeneralDb in this test
+// binary are never exercised - reaching the assertions without panicking is
+// itself proof the write was skipped.
+func TestApplyPeerResultDoesNotQueueClearWhenSpawnpointWriteRejected(t *testing.T) {
+	lureTestSetup(t)
+	const spawnId = int64(920214)
+	const encId = uint64(920215)
+
+	// An existing local value distinct from the peer's claim - the case the
+	// review's numerical proof used (a locally-correct value the peer
+	// contradicts must survive).
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1800)}}
+	spawnpointCache.Set(spawnId, sp, time.Minute)
+
+	oldQueue := despawnClearQueue
+	t.Cleanup(func() { despawnClearQueue = oldQueue })
+	despawnClearQueue = make(chan int64, 4)
+
+	now := time.Now()
+	p := &Pokemon{PokemonData: PokemonData{
+		Id:                 Uint64Str(encId),
+		PokemonId:          1,
+		FirstSeenTimestamp: now.Unix() - 4000,
+	}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	peerExpiry := now.Add(3000 * time.Second).Unix() // same contradiction-inducing shape as above
+	res := &pb.PokemonResult{Id: encId, ExpireTimestamp: &peerExpiry, ExpireTimestampVerified: true}
+	item := peerLookupItem{EncounterId: encId, PokemonId: 1, SpawnId: spawnId}
+
+	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
+
+	if got := sp.DespawnSec.ValueOrZero(); got != 1800 {
+		t.Fatalf("local despawn_sec must survive the rejected write, got %d", got)
+	}
+	// The pokemon-side extension is still unconditional - only the clear is gated.
+	if p.ExpireTimestampVerified {
+		t.Fatal("a contradicted peer answer must not be left verified")
+	}
+	select {
+	case gotId := <-despawnClearQueue:
+		t.Fatalf("expected no clear queued for an untested local value, got spawn id %d", gotId)
+	default:
 	}
 }
 

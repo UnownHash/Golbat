@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"golbat/db"
+	"golbat/util"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
@@ -15,8 +16,15 @@ import (
 // locks simultaneously. Loss-tolerant - a dropped clear is retried by the
 // next contradicted sighting, so a non-blocking send is correct (see the
 // decode-path worker table in CLAUDE.md: this follows the drop+count shape,
-// not the tree writer's must-not-lose shape).
+// not the tree writer's must-not-lose shape) - drops are aggregated and
+// reported via despawnClearDrops/IncDespawnClearDropped, per CLAUDE.md's
+// requirement that loss-tolerant decode-path queues drop *and count*.
 var despawnClearQueue = make(chan int64, 4096)
+
+// despawnClearDrops aggregates queueDespawnClear's drops into at most one
+// log line per second (the same pattern peerLookupDrops uses in
+// peer_lookup.go), so a drop storm doesn't itself become a logging storm.
+var despawnClearDrops util.DropReporter
 
 // queueDespawnClear enqueues a spawnpoint for its despawn_sec to be cleared.
 // Never blocks: the decode path holds the pokemon lock when this is called,
@@ -27,6 +35,10 @@ func queueDespawnClear(spawnId int64) {
 	case despawnClearQueue <- spawnId:
 	default:
 		// Dropped: the next contradicted sighting queues it again.
+		despawnClearDrops.Report(func(dropped int64) {
+			log.Warnf("[DESPAWN] dropped %d despawn_sec clears: queue full", dropped)
+		})
+		statsCollector.IncDespawnClearDropped()
 	}
 }
 
@@ -72,6 +84,7 @@ func clearContradictedDespawn(ctx context.Context, dbDetails db.DbDetails, spawn
 	if spawnpoint.DespawnSec.Valid {
 		spawnpoint.SetDespawnSec(null.NewInt(0, false))
 		spawnpointUpdate(ctx, dbDetails, spawnpoint)
+		statsCollector.IncDespawnRetired()
 		log.Debugf("[DESPAWN] cleared contradicted despawn_sec for spawnpoint %d", spawnId)
 	}
 }

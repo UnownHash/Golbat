@@ -278,6 +278,7 @@ func StartWorkerBacklogReporter() {
 			if fortTreeEvictor != nil {
 				statsCollector.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
 			}
+			statsCollector.SetWorkerBacklog("despawn_correction", float64(len(despawnClearQueue)))
 		}
 	}()
 }

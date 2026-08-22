@@ -35,7 +35,7 @@ func TestQueueDespawnClearDropsWhenQueueFull(t *testing.T) {
 // have its despawn_sec cleared - and written through, not just mutated
 // in-memory - so the next sighting re-derives it.
 func TestClearContradictedDespawnClearsKnownDespawnSec(t *testing.T) {
-	stubSpawnpointQueue(t)
+	stubQueue := stubSpawnpointQueue(t)
 
 	const spawnId = int64(920301)
 	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1234)}}
@@ -50,6 +50,11 @@ func TestClearContradictedDespawnClearsKnownDespawnSec(t *testing.T) {
 	if _, known, synced := sp.DespawnSecFast(); !synced || known {
 		t.Fatalf("lock-free mirror must also report unknown after the clear: known=%v synced=%v", known, synced)
 	}
+	// Written through, not just mutated in memory: prove the clear actually
+	// reached the write-behind queue, not just spawnpoint.DespawnSec.
+	if stubQueue.Size() != 1 {
+		t.Fatalf("expected the clear to reach the write-behind queue, size=%d", stubQueue.Size())
+	}
 }
 
 // A spawnpoint with no despawn_sec (already null, or gone from the cache
@@ -57,7 +62,7 @@ func TestClearContradictedDespawnClearsKnownDespawnSec(t *testing.T) {
 // no-change short-circuit means clearContradictedDespawn's Valid guard keeps
 // this a no-op, not a spurious write.
 func TestClearContradictedDespawnNoopsWhenAlreadyNull(t *testing.T) {
-	stubSpawnpointQueue(t)
+	stubQueue := stubSpawnpointQueue(t)
 
 	const spawnId = int64(920302)
 	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId}}
@@ -67,6 +72,13 @@ func TestClearContradictedDespawnNoopsWhenAlreadyNull(t *testing.T) {
 
 	if sp.DespawnSec.Valid {
 		t.Fatal("expected despawn_sec to remain null")
+	}
+	// Proves this is a genuine no-op, not a write that happens to leave the
+	// field looking null (e.g. a bug that always wrote null.NewInt(0, false)
+	// unconditionally instead of guarding on DespawnSec.Valid): nothing may
+	// reach the write-behind queue for an already-null spawnpoint.
+	if stubQueue.Size() != 0 {
+		t.Fatalf("expected no write for an already-null despawn_sec, queue size=%d", stubQueue.Size())
 	}
 }
 

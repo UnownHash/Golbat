@@ -501,6 +501,22 @@ var (
 			Help: "Peer lookup candidates dropped because the queue was full",
 		},
 	)
+
+	// Despawn correction metrics
+	despawnRetired = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_retired_total",
+			Help:      "Spawnpoint despawn_sec values cleared because a live sighting contradicted them",
+		},
+	)
+	despawnClearDropped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_clear_dropped_total",
+			Help:      "Contradicted-despawn clears dropped because despawnClearQueue was full",
+		},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -842,6 +858,14 @@ func (col *promCollector) IncPeerLookupDropped() {
 	peerLookupDropped.Inc()
 }
 
+func (col *promCollector) IncDespawnRetired() {
+	despawnRetired.Inc()
+}
+
+func (col *promCollector) IncDespawnClearDropped() {
+	despawnClearDropped.Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
@@ -865,6 +889,8 @@ func initPrometheus() {
 		s2CellBatchSize,
 
 		peerLookupDropped,
+
+		despawnRetired, despawnClearDropped,
 	)
 }
 
