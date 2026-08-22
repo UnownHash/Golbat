@@ -840,9 +840,21 @@ weather-boost transition found no matching buffered scan — in that last case
 the question is about the boost state being switched *to*, asked just before
 the stale IVs are cleared.
 
-A peer answers only from pokemon it already holds in its own in-memory
-cache — never from its database, and never by forwarding the question to its
-own peers, so a lookup cannot loop between instances.
+A peer answers only from what it already holds in memory — never from its
+database, and never by forwarding the question to its own peers, so a lookup
+cannot loop between instances. Before answering from a cached pokemon it
+confirms that record still describes the same species, form and weather the
+question named: encounter IDs are reused when the game server mutates a
+spawn, and IVs are rolled per weather-boost state, so a record held under a
+different boost state describes a different roll and is not a valid answer to
+a question about this one.
+
+A peer that has never seen the pokemon can still answer the expiry half of
+the question from its own spawnpoint table, when the question carries a spawn
+point ID and that peer knows its despawn second — overlapping instances
+routinely differ in which pokemon they have seen while sharing which spawn
+points they know. Such an answer carries a verified expiry and nothing else;
+the asking side does not need stats to act on it.
 
 ### Answers are advisory
 

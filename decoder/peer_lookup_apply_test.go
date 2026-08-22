@@ -308,29 +308,6 @@ func TestLocalSecondOfHourDiffersFromUtcModAtHalfHourOffset(t *testing.T) {
 	}
 }
 
-// --- Minor 7 (review): a spawnpoint this peer answer is the first evidence
-// of must not be inserted with lat=lon=0.
-
-func TestBackstopSpawnpointPositionSetsLatLonForNewRecord(t *testing.T) {
-	s := &Spawnpoint{SpawnpointData: SpawnpointData{Id: 920220}, newRecord: true}
-
-	backstopSpawnpointPosition(s, 51.5, -0.12)
-
-	if s.Lat != 51.5 || s.Lon != -0.12 {
-		t.Fatalf("new spawnpoint must adopt the peer's lat/lon, got %v/%v", s.Lat, s.Lon)
-	}
-}
-
-func TestBackstopSpawnpointPositionLeavesExistingRecordAlone(t *testing.T) {
-	s := &Spawnpoint{SpawnpointData: SpawnpointData{Id: 920221, Lat: 10, Lon: 20}} // newRecord: false
-
-	backstopSpawnpointPosition(s, 51.5, -0.12)
-
-	if s.Lat != 10 || s.Lon != 20 {
-		t.Fatalf("an existing spawnpoint's position must not change, got %v/%v", s.Lat, s.Lon)
-	}
-}
-
 // stubSpawnpointQueue installs a real (but disconnected) write-behind queue
 // so spawnpointUpdate takes the Enqueue branch instead of the nil-DB
 // fallback (mirrors the pattern in station_battle_test.go). Enqueue only
@@ -394,6 +371,38 @@ func TestApplyPeerResultFillsNullDespawnAndVerifiesPokemon(t *testing.T) {
 	msgs := sink.drain()
 	if len(msgs) == 0 {
 		t.Fatal("expected a webhook once verification flipped from false to true")
+	}
+}
+
+// A peer answering out of its spawnpoint table alone holds no pokemon record,
+// so its answer carries lat=lon=0 - non-optional doubles on the wire, where an
+// omitted value is indistinguishable from a real zero. Those zeroes are the
+// absence of a position, not a position, and must never reach a spawnpoint.
+func TestApplyPeerResultNeverWritesPeerPositionToSpawnpoint(t *testing.T) {
+	lureTestSetup(t)
+	stubSpawnpointQueue(t)
+	const spawnId = int64(920240)
+	const encId = uint64(920241)
+
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, Lat: 51.5, Lon: -0.12}}
+	spawnpointCache.Set(spawnId, sp, time.Minute)
+
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encId), PokemonId: 1}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	peerExpiry := time.Now().Add(10 * time.Minute).Unix()
+	// Lat/Lon deliberately left at their zero values, as a spawnpoint-only
+	// answer sends them.
+	res := &pb.PokemonResult{Id: encId, ExpireTimestamp: &peerExpiry, ExpireTimestampVerified: true}
+	item := peerLookupItem{EncounterId: encId, PokemonId: 1, SpawnId: spawnId}
+
+	applyPeerResult(context.Background(), db.DbDetails{}, res, item)
+
+	if !sp.DespawnSec.Valid {
+		t.Fatal("the despawn second should still have been taken")
+	}
+	if sp.Lat != 51.5 || sp.Lon != -0.12 {
+		t.Fatalf("the spawnpoint's position must be untouched, got %v/%v", sp.Lat, sp.Lon)
 	}
 }
 
@@ -587,7 +596,7 @@ func TestPersistPeerDespawnReleasesLockOnPanic(t *testing.T) {
 
 	func() {
 		defer func() { _ = recover() }()
-		persistPeerDespawn(context.Background(), db.DbDetails{}, spawnId, 1234, 1, 2)
+		persistPeerDespawn(context.Background(), db.DbDetails{}, spawnId, 1234)
 	}()
 
 	// If the lock had leaked, this would deadlock the test instead of

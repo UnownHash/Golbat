@@ -45,28 +45,27 @@ func applyPeerDespawnToSpawnpoint(spawnpoint *Spawnpoint, despawnSecond int64) b
 	return true
 }
 
-// backstopSpawnpointPosition sets lat/lon on a spawnpoint that has no DB row
-// yet (newRecord true). getOrCreateSpawnpointRecord can hand back a brand
-// new record when a peer answer is the first evidence of a spawnpoint; the
-// write-behind INSERT that a subsequent spawnpointUpdate triggers would
-// otherwise persist lat=lon=0 - this would be the only create-and-persist
-// site in the tree that inserts a spawnpoint without a position. Existing
-// records (a real DB row already loaded) are left alone: their position is
-// already the fort/pokestop-derived one, not the peer's.
-func backstopSpawnpointPosition(spawnpoint *Spawnpoint, lat, lon float64) {
-	if !spawnpoint.newRecord {
-		return
-	}
-	spawnpoint.SetLat(lat)
-	spawnpoint.SetLon(lon)
-}
-
 // persistPeerDespawn locks the spawnpoint, applies the peer's despawn second
 // (local truth wins - see applyPeerDespawnToSpawnpoint), and unlocks. The
 // lock is released via defer specifically so a panic inside spawnpointUpdate
 // cannot leak it.
-func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int64, despawnSecond int64, lat, lon float64) (persisted bool) {
-	spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, dbDetails, spawnId, "applyPeerResult")
+//
+// It deliberately does NOT create a spawnpoint this instance has no record
+// of. The asker always already holds the spawnpoint: it only asks about an
+// expiry when the pokemon carries a spawn id, which comes from a wild
+// sighting, and spawnpointUpdateFromWild resolves the spawnpoint before the
+// pokemon within the same GMO. So the question is always "fill a despawn_sec
+// that is NULL", never "invent a spawnpoint".
+//
+// Creating one would also be actively unsafe. A peer answering out of its own
+// spawnpoint table holds no pokemon record, so it sends lat=lon=0 - they are
+// non-optional doubles on the wire and an omitted value is indistinguishable
+// from a real zero - and a newly created record is INSERTed by the following
+// spawnpointUpdate, which would put a spawnpoint at Null Island. Skipping the
+// write instead leaves the despawn second to be learned from a local TTH, or
+// from a later lookup once the spawnpoint exists.
+func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int64, despawnSecond int64) (persisted bool) {
+	spawnpoint, unlock, err := getSpawnpointRecord(ctx, dbDetails, spawnId, "applyPeerResult")
 	if err != nil {
 		log.Warnf("[PEER] spawnpoint %d unavailable: %s", spawnId, err)
 		return false
@@ -75,8 +74,6 @@ func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int
 		return false
 	}
 	defer unlock()
-
-	backstopSpawnpointPosition(spawnpoint, lat, lon)
 
 	if !applyPeerDespawnToSpawnpoint(spawnpoint, despawnSecond) {
 		return false
@@ -126,7 +123,7 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 	// claim that was already correctly rejected.
 	var persisted bool
 	if res.GetExpireTimestampVerified() && res.ExpireTimestamp != nil && item.SpawnId != 0 {
-		persisted = persistPeerDespawn(ctx, dbDetails, item.SpawnId, despawnSecond, res.GetLat(), res.GetLon())
+		persisted = persistPeerDespawn(ctx, dbDetails, item.SpawnId, despawnSecond)
 	}
 
 	// --- 2. Pokemon. ---
