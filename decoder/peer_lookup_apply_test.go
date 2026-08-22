@@ -61,6 +61,46 @@ func TestApplyPeerStatsIgnoresPeerCp(t *testing.T) {
 	}
 }
 
+// Every other path that gives a record IVs upgrades seen_type, and clearIv
+// downgrades it on the way out. Without the upgrade, updateEncounterStats
+// never counts a peer-sourced IV (monsIv, verified/unverified encounters and
+// the TTH histogram all key off the transition into "encounter") and webhook
+// consumers get a pokemon_iv payload labelled "wild".
+func TestApplyPeerStatsUpgradesSeenType(t *testing.T) {
+	tests := []struct{ from, want string }{
+		{SeenType_Wild, SeenType_Encounter},
+		{SeenType_LureWild, SeenType_LureEncounter},
+	}
+	for _, tt := range tests {
+		t.Run(tt.from, func(t *testing.T) {
+			p := &Pokemon{PokemonData: PokemonData{SeenType: null.StringFrom(tt.from)}}
+
+			applyPeerStats(p, 15, 14, 13, 20, 0)
+
+			if got := p.SeenType.ValueOrZero(); got != tt.want {
+				t.Fatalf("seen_type: got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// The transition is an upgrade, never a rewrite: a record already at
+// "encounter", or one seen only in a cell, keeps what it has. This is
+// repopulateIv's mapping exactly - the same two cases and no others.
+func TestApplyPeerStatsLeavesOtherSeenTypesAlone(t *testing.T) {
+	for _, seenType := range []string{SeenType_Encounter, SeenType_LureEncounter, SeenType_Cell, SeenType_NearbyStop} {
+		t.Run(seenType, func(t *testing.T) {
+			p := &Pokemon{PokemonData: PokemonData{SeenType: null.StringFrom(seenType)}}
+
+			applyPeerStats(p, 15, 14, 13, 20, 0)
+
+			if got := p.SeenType.ValueOrZero(); got != seenType {
+				t.Fatalf("seen_type must not change: got %q want %q", got, seenType)
+			}
+		})
+	}
+}
+
 // --- applyPeerResult: the orchestration function itself. ---
 //
 // lureTestSetup (pokemon_lure_test.go) puts the package in PokemonMemoryOnly
@@ -77,7 +117,11 @@ func TestApplyPeerStatsIgnoresPeerCp(t *testing.T) {
 func TestApplyPeerResultAdoptsStatsButNotCp(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(920201)
-	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encId), PokemonId: 25}}
+	// "wild" is the state a weather flip leaves a record in after clearIv
+	// downgrades it, and the state a never-encountered sighting starts in.
+	p := &Pokemon{PokemonData: PokemonData{
+		Id: Uint64Str(encId), PokemonId: 25, SeenType: null.StringFrom(SeenType_Wild),
+	}}
 	pokemonCache.Set(encId, p, time.Minute)
 
 	atk, def, sta, level, cp, size := int64(15), int64(14), int64(13), int64(20), int64(9999), int64(3)
@@ -97,6 +141,12 @@ func TestApplyPeerResultAdoptsStatsButNotCp(t *testing.T) {
 	}
 	if p.Cp.Valid {
 		t.Fatalf("peer cp must not be adopted, got %d", p.Cp.ValueOrZero())
+	}
+	// End to end, not just in applyPeerStats: this is what makes a
+	// peer-sourced IV visible to updateEncounterStats and to webhook
+	// consumers.
+	if got := p.SeenType.ValueOrZero(); got != SeenType_Encounter {
+		t.Fatalf("seen_type: got %q want %q", got, SeenType_Encounter)
 	}
 }
 

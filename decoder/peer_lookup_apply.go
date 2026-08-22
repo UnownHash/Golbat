@@ -87,11 +87,27 @@ func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int
 // would suppress the local computation and pin a value derived from the
 // peer's masterfile version rather than ours. peerCp is accepted only to
 // make the discard explicit at the call site.
+//
+// Gaining IVs upgrades seen_type, exactly as repopulateIv's restore branch
+// does - and mirroring clearIv, which performs the same transition in reverse
+// on the way out. A record with IVs and seen_type "wild" is a state no other
+// path produces, and it is not cosmetic: updateEncounterStats drives monsIv,
+// the verified/unverified encounter counters and the TTH histogram entirely
+// off the transition into "encounter", so without this the operator's
+// dashboard never sees a peer-sourced IV, and webhook consumers receive
+// pokemon_iv payloads labelled seen_type "wild".
 func applyPeerStats(pokemon *Pokemon, atk, def, sta, level, peerCp int64) {
 	_ = peerCp // never adopted; see doc comment
 
 	pokemon.calculateIv(atk, def, sta)
 	pokemon.SetLevel(null.IntFrom(level))
+
+	switch pokemon.SeenType.ValueOrZero() {
+	case SeenType_LureWild:
+		pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
+	case SeenType_Wild:
+		pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
+	}
 }
 
 // applyPeerResult applies one peer answer. Locks are taken ONE AT A TIME:
