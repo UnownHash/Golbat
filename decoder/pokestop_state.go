@@ -492,20 +492,7 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 // RemoveQuestsWithinGeofence clears all quest fields for pokestops within a geofence
 // Uses cache and write-behind queue for consistency
 func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) (int, error) {
-	bbox := geofence.Geometry.Bound()
-	bytes, err := geofence.MarshalJSON()
-	if err != nil {
-		return 0, err
-	}
-
-	// Query for pokestop IDs within the geofence
-	var pokestopIds []string
-	err = dbDetails.GeneralDb.SelectContext(ctx, &pokestopIds,
-		"SELECT id FROM pokestop "+
-			"WHERE lat >= ? AND lon >= ? AND lat <= ? AND lon <= ? AND enabled = 1 "+
-			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
-	statsCollector.IncDbQuery("select pokestops for quest removal", err)
+	pokestopIds, err := db.PokestopIdsWithinFence(ctx, dbDetails, geofence)
 	if err != nil {
 		return 0, err
 	}
