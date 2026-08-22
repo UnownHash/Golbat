@@ -64,3 +64,27 @@ func TestPokemonResultFromApiLeavesMissingFieldsUnset(t *testing.T) {
 		t.Fatal("absent expire_timestamp must stay unset")
 	}
 }
+
+// pvp is deliberately never populated, so this asserts a decision rather than
+// a mapping - and nothing else protects it. The proto's optional pvp mirrors
+// the raw stored decoder.Pokemon.Pvp (a null.String), not
+// ApiPokemonResult.Pvp, which is a computed ApiPvpRankings struct built by a
+// live ohbem query. Rankings depend on the answering instance's league and
+// level-cap configuration, so they are not transportable, and the client
+// recomputes them locally in any case. Without this, a later edit
+// "completing" the field mapping would silently undo that reasoning.
+func TestPokemonResultFromApiNeverCarriesPvp(t *testing.T) {
+	api := &ApiPokemonResult{
+		Id:        "1",
+		PokemonId: 25,
+		Pvp: ApiPvpRankings{
+			Great: []ApiPvpEntry{{Pokemon: 25, Rank: 1}},
+		},
+	}
+
+	got := PokemonResultFromApi(api, 1)
+
+	if got.Pvp != nil {
+		t.Fatalf("pvp must never be populated, got %q", got.GetPvp())
+	}
+}

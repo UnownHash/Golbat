@@ -43,10 +43,9 @@ func queueDespawnClear(spawnId int64) {
 }
 
 // RunDespawnCorrection retires despawn_sec values proven wrong by a live
-// sighting - the contradiction rule below. It runs as a single dedicated
-// worker so the clear
-// can take the spawnpoint lock without the caller ever holding the pokemon
-// lock at the same time.
+// sighting - the contradiction rule described below. It runs as a single
+// dedicated worker so the clear can take the spawnpoint lock without the
+// caller ever holding the pokemon lock at the same time.
 //
 // Rule 2 is applied to every despawn_sec reaching this worker, not only
 // peer-written ones: a TTH-derived value can only trigger a contradiction

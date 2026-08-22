@@ -211,7 +211,7 @@ func applyPeerResult(ctx context.Context, dbDetails db.DbDetails, res *pb.Pokemo
 
 	// IVs and level are rolled per boost state, so stats held under a
 	// different weather than the one asked about describe a different roll.
-	// The answering side already refuses those (PeerRecordMatches), but this
+	// The answering side already refuses those (peerRecordMatches), but this
 	// is the branch that makes them permanent - adopted stats gate every
 	// later path on AtkIv.Valid, get a CP computed from them, and fire a
 	// pokemon_iv webhook - so the boost state is re-checked here rather than

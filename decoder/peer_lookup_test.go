@@ -62,12 +62,20 @@ func TestEnqueuePeerLookupDropsWhenQueueFull(t *testing.T) {
 	peerLookupQueue = make(chan peerLookupItem, 1)
 	peerClients = []peerClient{{}} // non-empty so enqueue is active
 
-	enqueuePeerLookup(peerLookupItem{EncounterId: 1, PokemonId: 1})
-	enqueuePeerLookup(peerLookupItem{EncounterId: 2, PokemonId: 1})
+	before := testStatsCollector.peerLookupDropped.Load()
+
+	enqueuePeerLookup(peerLookupItem{EncounterId: 1, PokemonId: 1}) // fills the slot
+	enqueuePeerLookup(peerLookupItem{EncounterId: 2, PokemonId: 1}) // dropped
 	enqueuePeerLookup(peerLookupItem{EncounterId: 3, PokemonId: 1}) // dropped
 
 	if len(peerLookupQueue) != 1 {
 		t.Fatalf("queue should hold its single slot, got %d", len(peerLookupQueue))
+	}
+	// CLAUDE.md requires a loss-tolerant decode-path queue to drop *and
+	// count*: silent loss is the failure mode an operator cannot diagnose.
+	// Queue length alone cannot tell a counted drop from an uncounted one.
+	if got := testStatsCollector.peerLookupDropped.Load() - before; got != 2 {
+		t.Fatalf("IncPeerLookupDropped fired %d times, want 2 (both rejected sends)", got)
 	}
 }
 
