@@ -62,10 +62,10 @@ func TestApplyPeerStatsIgnoresPeerCp(t *testing.T) {
 }
 
 // Every other path that gives a record IVs upgrades seen_type, and clearIv
-// downgrades it on the way out. Without the upgrade, updateEncounterStats
-// never counts a peer-sourced IV (monsIv, verified/unverified encounters and
-// the TTH histogram all key off the transition into "encounter") and webhook
-// consumers get a pokemon_iv payload labelled "wild".
+// downgrades it on the way out. Without the upgrade, updatePokemonStats never
+// counts a peer-sourced IV (monsIv, verified/unverified encounters and the TTH
+// histogram all key off seen_type becoming "encounter") and webhook consumers
+// get a pokemon_iv payload labelled "wild".
 func TestApplyPeerStatsUpgradesSeenType(t *testing.T) {
 	tests := []struct{ from, want string }{
 		{SeenType_Wild, SeenType_Encounter},
@@ -143,7 +143,7 @@ func TestApplyPeerResultAdoptsStatsButNotCp(t *testing.T) {
 		t.Fatalf("peer cp must not be adopted, got %d", p.Cp.ValueOrZero())
 	}
 	// End to end, not just in applyPeerStats: this is what makes a
-	// peer-sourced IV visible to updateEncounterStats and to webhook
+	// peer-sourced IV visible to updatePokemonStats and to webhook
 	// consumers.
 	if got := p.SeenType.ValueOrZero(); got != SeenType_Encounter {
 		t.Fatalf("seen_type: got %q want %q", got, SeenType_Encounter)

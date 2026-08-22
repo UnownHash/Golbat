@@ -91,11 +91,16 @@ func persistPeerDespawn(ctx context.Context, dbDetails db.DbDetails, spawnId int
 // Gaining IVs upgrades seen_type, exactly as repopulateIv's restore branch
 // does - and mirroring clearIv, which performs the same transition in reverse
 // on the way out. A record with IVs and seen_type "wild" is a state no other
-// path produces, and it is not cosmetic: updateEncounterStats drives monsIv,
-// the verified/unverified encounter counters and the TTH histogram entirely
-// off the transition into "encounter", so without this the operator's
+// path produces, and it is not cosmetic: updatePokemonStats (decoder/stats.go)
+// drives monsIv, the verified/unverified encounter counters and the TTH
+// histogram entirely off seen_type becoming "encounter", comparing the saved
+// record against its pre-mutation snapshot. Without this the operator's
 // dashboard never sees a peer-sourced IV, and webhook consumers receive
 // pokemon_iv payloads labelled seen_type "wild".
+//
+// updatePokemonStats, not updateEncounterStats: the aggregation worker routes
+// to the latter only for events flagged encounter, which
+// savePokemonRecordAsAtTime does not emit on this path.
 func applyPeerStats(pokemon *Pokemon, atk, def, sta, level, peerCp int64) {
 	_ = peerCp // never adopted; see doc comment
 

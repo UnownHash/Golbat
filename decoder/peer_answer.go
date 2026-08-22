@@ -23,17 +23,23 @@ import (
 // now is passed in rather than read here so the spawnpoint answer, which is a
 // pure function of the spawnpoint and the clock, is testable.
 func AnswerPeerLookup(item *pb.GetPokemonItem, now time.Time) *pb.PokemonResult {
-	if record := GetOnePokemon(item.GetEncounterId()); record != nil {
-		if !peerRecordMatches(record, item.GetPokemonId(), item.GetForm(), item.GetWeather()) {
-			return nil
-		}
+	record := GetOnePokemon(item.GetEncounterId())
+	if record != nil && peerRecordMatches(record, item.GetPokemonId(), item.GetForm(), item.GetWeather()) {
 		return PokemonResultFromApi(record, item.GetEncounterId())
 	}
 
-	// Never saw this pokemon - but it may sit on a spawnpoint whose despawn
-	// second this instance does know, in which case the expiry half of the
-	// question is still answerable. That is what spawn_id is in the request
-	// for.
+	// Either this instance never saw the pokemon, or the record it holds
+	// describes a different sighting. Both fall through: the expiry is a
+	// property of the spawnpoint the ASKER named, not of our pokemon record,
+	// so a species/form/weather mismatch says nothing about it.
+	//
+	// Falling through matters most in the case that produces the most
+	// mismatches. A weather flip changes the boost state a question is asked
+	// about, so a peer that has not yet processed the same flip mismatches on
+	// weather - and returning nil there would drop the despawn answer at
+	// exactly the moment the asker is most likely to be asking. Stats are
+	// boost-state-specific; expiry is not, and conflating them is the same
+	// mistake in the opposite direction.
 	if item.SpawnId == nil {
 		return nil
 	}
@@ -72,7 +78,8 @@ func peerRecordMatches(record *ApiPokemonResult, pokemonId, form, weather int32)
 }
 
 // spawnpointOnlyAnswer builds the minimal answer for a pokemon this instance
-// has never seen but whose spawnpoint it knows: an expiry, and nothing else.
+// cannot describe - never seen, or held under a different sighting - but
+// whose spawnpoint it knows: an expiry, and nothing else.
 //
 // Two overlapping instances routinely have different pokemon coverage but
 // overlapping spawnpoint coverage - a spawnpoint's despawn second is learned
@@ -80,8 +87,9 @@ func peerRecordMatches(record *ApiPokemonResult, pokemonId, form, weather int32)
 // pokemon on it - so this is a common case, not an edge one.
 //
 // The result is sparse on purpose. Only the fields the asker can act on are
-// filled: id to match it back to its question, pokemon_id echoed so the
-// answer names the same sighting that was asked about, spawn_id so it is
+// filled: id to match it back to its question, pokemon_id echoed from the
+// question rather than taken from any local record - so the answer can never
+// assert a species this instance merely happens to hold - spawn_id so it is
 // clear which spawnpoint the expiry came from, and the verified expiry
 // itself. Stats are absent because this instance holds none, and the asking
 // side does not require stats to act on an expiry.

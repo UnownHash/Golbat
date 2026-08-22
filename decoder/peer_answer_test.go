@@ -234,3 +234,113 @@ func TestAnswerPeerLookupMissesWithoutSpawnId(t *testing.T) {
 		t.Fatalf("no spawn_id and no pokemon means no answer, got %+v", got)
 	}
 }
+
+// A preloaded spawnpoint must be answerable. preloadSpawnpoints StructScans
+// rows straight into a Spawnpoint and caches it, so DespawnSec is populated
+// while the lock-free mirrors have never been published - a state every other
+// test here creates artificially by calling syncDespawnFast, and therefore the
+// one state none of them exercises.
+//
+// This matters far beyond a corner case: it is the state of the entire 48-hour
+// preload set immediately after every restart. peerSpawnpointExpiry reads the
+// mirror with no locked fallback (deliberately - it runs inline in the gRPC
+// handler, where blocking behind a spawnpoint lock held across a DB load would
+// be exactly what the mirror exists to prevent), so an unpublished mirror
+// makes the spawnpoint answer nothing at all. The spawnpoints worth the most
+// to a peer - long-known, no longer densely scanned - are the ones least
+// likely to get a fresh TTH sighting to republish it.
+func TestPreloadedSpawnpointIsAnswerable(t *testing.T) {
+	const spawnId = int64(920420)
+	const encId = uint64(920421) // never in the pokemon cache
+
+	// Exactly what rows.StructScan produces: fields set, mirrors untouched.
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{
+		Id:         spawnId,
+		Lat:        51.5,
+		Lon:        -0.12,
+		DespawnSec: null.IntFrom(900),
+		LastSeen:   time.Now().Unix(),
+	}}
+	if _, _, synced := sp.DespawnSecFast(); synced {
+		t.Fatal("test setup is wrong: a freshly scanned row must start unsynced")
+	}
+
+	cachePreloadedSpawnpoint(sp)
+
+	askedSpawnId := spawnId
+	got := AnswerPeerLookup(&pb.GetPokemonItem{
+		EncounterId: encId, PokemonId: 25, SpawnId: &askedSpawnId,
+	}, time.Now())
+
+	if got == nil {
+		t.Fatal("a preloaded spawnpoint must be answerable - otherwise the capability answers nothing across the whole preload set after a restart")
+	}
+	if second := localSecondOfHour(got.GetExpireTimestamp(), time.Local); second != 900 {
+		t.Fatalf("expiry second-of-hour: got %d want 900", second)
+	}
+}
+
+// A record that describes a different sighting must not suppress the expiry
+// answer. The expiry belongs to the spawnpoint the asker named; a
+// species/form/weather mismatch on our pokemon record is no evidence about
+// it, and the two halves of a lookup are independent.
+//
+// The weather case is the one that bites. A flip is precisely when a peer's
+// record mismatches - it has not processed the same flip yet - so returning
+// nothing there would drop the despawn half at exactly the moment the asker
+// is most likely to be asking.
+func TestAnswerPeerLookupStillAnswersExpiryWhenRecordMismatches(t *testing.T) {
+	const spawnId = int64(920430)
+	const encId = uint64(920431)
+
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1500)}}
+	sp.syncDespawnFast()
+	spawnpointCache.Set(spawnId, sp, time.Minute)
+
+	// Held under the pre-flip boosted state, with stats for that roll.
+	p := &Pokemon{PokemonData: PokemonData{
+		Id: Uint64Str(encId), PokemonId: 25,
+		Form:    null.IntFrom(0),
+		Weather: null.IntFrom(3),
+		AtkIv:   null.IntFrom(15), DefIv: null.IntFrom(14), StaIv: null.IntFrom(13),
+		Level: null.IntFrom(20),
+	}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	askedSpawnId := spawnId
+	got := AnswerPeerLookup(&pb.GetPokemonItem{
+		EncounterId: encId, PokemonId: 25, Form: 0, Weather: 0, SpawnId: &askedSpawnId,
+	}, time.Now())
+
+	if got == nil {
+		t.Fatal("a boost-state mismatch must not suppress the expiry, which does not depend on boost state")
+	}
+	if second := localSecondOfHour(got.GetExpireTimestamp(), time.Local); second != 1500 {
+		t.Fatalf("expiry second-of-hour: got %d want 1500", second)
+	}
+	if !got.GetExpireTimestampVerified() {
+		t.Fatal("the spawnpoint's despawn second is still TTH-grade")
+	}
+	// The stats half must still be withheld: that is what the mismatch proves.
+	if got.AtkIv != nil || got.DefIv != nil || got.StaIv != nil || got.Level != nil {
+		t.Fatalf("stats rolled under another boost state must not be answered with: got atk=%v level=%v", got.AtkIv, got.Level)
+	}
+}
+
+// Without a spawn id there is nothing to fall through to, so a mismatched
+// record is still a plain miss - the fall-through adds an expiry answer, it
+// does not weaken the verification.
+func TestAnswerPeerLookupMismatchWithoutSpawnIdIsStillAMiss(t *testing.T) {
+	const encId = uint64(920432)
+	p := &Pokemon{PokemonData: PokemonData{
+		Id: Uint64Str(encId), PokemonId: 25, Form: null.IntFrom(1),
+		AtkIv: null.IntFrom(15), DefIv: null.IntFrom(14), StaIv: null.IntFrom(13),
+	}}
+	pokemonCache.Set(encId, p, time.Minute)
+
+	got := AnswerPeerLookup(&pb.GetPokemonItem{EncounterId: encId, PokemonId: 99}, time.Now())
+
+	if got != nil {
+		t.Fatalf("a mismatched record with no spawnpoint to fall back on must answer nothing, got %+v", got)
+	}
+}
