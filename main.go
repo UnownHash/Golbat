@@ -228,8 +228,8 @@ func main() {
 		decoder.RunPeerLookup(ctx, dbDetails)
 	}()
 
-	// Retires a despawn_sec that a live sighting has contradicted (spec rule
-	// 2). Loss-tolerant like the stats/fort-tracker workers, so no wg
+	// Retires a despawn_sec that a live sighting has contradicted.
+	// Loss-tolerant like the stats/fort-tracker workers, so no wg
 	// tracking: a clear still queued at shutdown is simply retried by the
 	// next contradicted sighting after restart.
 	go decoder.RunDespawnCorrection(ctx, dbDetails)

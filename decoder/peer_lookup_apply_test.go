@@ -110,7 +110,7 @@ func TestApplyPeerStatsLeavesOtherSeenTypesAlone(t *testing.T) {
 // escape hatch (confirmed: no existing test anywhere in decoder/ calls
 // spawnpointUpdate), so spawnpoint-touching cases here are restricted to the
 // path where the local value already exists and spawnpointUpdate is never
-// reached - which is exactly rule 2, the one this task must prove.
+// reached - which is exactly rule 2, local truth winning over a peer answer.
 
 // A peer that supplies IVs/level fills a pokemon that has none; its cp is
 // dropped, not adopted.
@@ -321,8 +321,8 @@ func TestApplyPeerResultSpawnpointLocalDespawnWins(t *testing.T) {
 	p.Unlock()
 }
 
-// --- Important 1 (review): despawn_sec must be a LOCAL second-of-hour, not
-// a UTC one (`ts % 3600`). The two only agree when the zone offset is a
+// despawn_sec must be a LOCAL second-of-hour, not a UTC one
+// (`ts % 3600`). The two only agree when the zone offset is a
 // whole number of hours - proven here with a +5:30 fixed zone, chosen
 // because it is a real timezone offset (India, etc.) and diverges from UTC
 // by exactly the 1800s that separates the two despawn half-hour buckets, so
@@ -378,10 +378,9 @@ func stubSpawnpointQueue(t *testing.T) *writebehind.TypedQueue[int64, Spawnpoint
 	return q
 }
 
-// --- Important 2 (review): the positive half of rule 2 - a peer filling a
-// genuinely NULL despawn_sec - reaching spawnpointUpdate and
-// applyVerifiedDespawn. Also Important 3: the pokemon save and its webhook
-// actually fire, not just the in-memory mutation.
+// The positive half of rule 2 - a peer filling a genuinely NULL despawn_sec -
+// reaching spawnpointUpdate and applyVerifiedDespawn, and the pokemon save
+// and its webhook actually firing rather than only the in-memory mutation.
 func TestApplyPeerResultFillsNullDespawnAndVerifiesPokemon(t *testing.T) {
 	sink := lureTestSetup(t)
 	stubQueue := stubSpawnpointQueue(t)
@@ -456,7 +455,7 @@ func TestApplyPeerResultNeverWritesPeerPositionToSpawnpoint(t *testing.T) {
 	}
 }
 
-// --- Minor 3 (review): a genuinely verified peer answer must still stamp
+// A genuinely verified peer answer must still stamp
 // this pokemon verified even when the spawnpoint-level write is rejected
 // (rule 2 governs the shared despawn_sec, not this specific sighting).
 func TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected(t *testing.T) {
@@ -493,8 +492,8 @@ func TestApplyPeerResultTrustsVerifiedAnswerEvenWhenSpawnpointWriteRejected(t *t
 	}
 }
 
-// --- Task 10 (review fix, Important 1): rule 2 applied at this call site
-// too, but the clear is gated on persisted - applyVerifiedDespawn tests
+// Rule 2 applies at this call site too, but the clear is gated on
+// persisted - applyVerifiedDespawn tests
 // despawnSecond (the peer's claim), which is only known to be the actual
 // stored value when persistPeerDespawn's write succeeded (local was NULL).
 //
@@ -559,7 +558,7 @@ func TestApplyPeerResultQueuesClearWhenPeerDespawnContradicted(t *testing.T) {
 	}
 }
 
-// The false-positive case (Important 1, review): the local despawn_sec was
+// The false-positive case: the local despawn_sec was
 // already known, so persistPeerDespawn's write is rejected (rule 2, local
 // truth wins) - despawnSecond is the peer's claim, never actually stored.
 // A contradiction here says nothing provable about the untested local value,
@@ -574,9 +573,8 @@ func TestApplyPeerResultDoesNotQueueClearWhenSpawnpointWriteRejected(t *testing.
 	const spawnId = int64(920214)
 	const encId = uint64(920215)
 
-	// An existing local value distinct from the peer's claim - the case the
-	// review's numerical proof used (a locally-correct value the peer
-	// contradicts must survive).
+	// An existing local value distinct from the peer's claim: a
+	// locally-correct value that the peer contradicts must survive.
 	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1800)}}
 	spawnpointCache.Set(spawnId, sp, time.Minute)
 
@@ -612,8 +610,8 @@ func TestApplyPeerResultDoesNotQueueClearWhenSpawnpointWriteRejected(t *testing.
 	}
 }
 
-// --- Minor 4 (review): an unverified hint has no upper bound today, so an
-// implausible far-future peer expiry would reach disappear_time on the wire.
+// Without an upper bound on an unverified hint, an implausible far-future
+// peer expiry would reach disappear_time on the wire.
 func TestApplyPeerResultHintRejectsExpiryTooFarInFuture(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(920209)
@@ -631,7 +629,7 @@ func TestApplyPeerResultHintRejectsExpiryTooFarInFuture(t *testing.T) {
 	}
 }
 
-// --- Minor 1 (review): a panic inside spawnpointUpdate must not leak the
+// A panic inside spawnpointUpdate must not leak the
 // spawnpoint lock - persistPeerDespawn releases it via defer specifically so
 // this survives.
 func TestPersistPeerDespawnReleasesLockOnPanic(t *testing.T) {

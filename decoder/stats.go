@@ -279,6 +279,11 @@ func StartWorkerBacklogReporter() {
 				statsCollector.SetWorkerBacklog("tree_evictor_fort", float64(fortTreeEvictor.QueueLen()))
 			}
 			statsCollector.SetWorkerBacklog("despawn_correction", float64(len(despawnClearQueue)))
+			// nil unless at least one peer is configured, so this series
+			// simply does not appear on an instance without peers.
+			if peerLookupQueue != nil {
+				statsCollector.SetWorkerBacklog("peer_lookup", float64(len(peerLookupQueue)))
+			}
 		}
 	}()
 }

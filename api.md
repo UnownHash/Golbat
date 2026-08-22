@@ -899,3 +899,4 @@ proven wrong.
 | `golbat_despawn_clear_dropped_total` | Counter | Contradicted-`despawn_sec` clears dropped because the correction queue was full. |
 | `golbat_despawn_retired_total` | Counter | `despawn_sec` values cleared because a live sighting contradicted them. |
 | `golbat_worker_backlog{worker="despawn_correction"}` | Gauge | Depth of the queue feeding the despawn-retirement worker. One series of the pre-existing `golbat_worker_backlog` gauge, which also tracks other background queues. |
+| `golbat_worker_backlog{worker="peer_lookup"}` | Gauge | Depth of the outbound lookup queue. Watch alongside `golbat_peer_lookup_dropped_total`: sustained backlog is what precedes drops. Absent unless a peer is configured. |

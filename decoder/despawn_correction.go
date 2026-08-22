@@ -43,7 +43,8 @@ func queueDespawnClear(spawnId int64) {
 }
 
 // RunDespawnCorrection retires despawn_sec values proven wrong by a live
-// sighting (spec rule 2). It runs as a single dedicated worker so the clear
+// sighting - the contradiction rule below. It runs as a single dedicated
+// worker so the clear
 // can take the spawnpoint lock without the caller ever holding the pokemon
 // lock at the same time.
 //

@@ -75,8 +75,9 @@ func TestApplyVerifiedDespawnLeavesNormalExpiryAlone(t *testing.T) {
 // The expected expiry is derived the same way applyVerifiedDespawn computes
 // it (local second-of-hour via time.Unix), not a hardcoded offset:
 // nowSec-600 would silently assume secondOfHour(now)==0, true only in a
-// whole-hour-offset timezone (review finding: this branch's Task 9 bug was
-// exactly this UTC/local confusion - see CLAUDE.md's global constraints).
+// whole-hour-offset timezone. That UTC/local confusion is a live hazard
+// throughout this code, not a hypothetical one - see CLAUDE.md's global
+// constraints.
 // despawnOffset+4000 always exceeds the wrap threshold (3605) regardless of
 // timezone, so the clamp is guaranteed to fire here.
 func TestApplyVerifiedDespawnReportsContradiction(t *testing.T) {

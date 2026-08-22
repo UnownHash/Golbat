@@ -497,8 +497,9 @@ var (
 	// Peer lookup metrics
 	peerLookupDropped = prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Name: "golbat_peer_lookup_dropped_total",
-			Help: "Peer lookup candidates dropped because the queue was full",
+			Namespace: ns,
+			Name:      "peer_lookup_dropped_total",
+			Help:      "Peer lookup candidates dropped because the queue was full",
 		},
 	)
 
