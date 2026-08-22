@@ -1,10 +1,15 @@
 package decoder
 
 import (
+	"context"
+	"strconv"
 	"testing"
+	"time"
 
+	"golbat/db"
 	"golbat/pogo"
 
+	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
 )
 
@@ -139,6 +144,103 @@ func TestConsiderPeerLookupNoQuestionNoEnqueue(t *testing.T) {
 
 	if len(peerLookupQueue) != 0 {
 		t.Fatalf("nothing worth asking should not enqueue, got %d items", len(peerLookupQueue))
+	}
+}
+
+// peerLookupTestQueue isolates the lookup globals for one test and hands back
+// the queue. The dedup cache is nilled deliberately: with it live, a
+// regression that enqueues more than once builds a byte-identical item each
+// time, so dedup would swallow the extra and the queue length could not tell
+// the implementations apart. enqueuePeerLookup nil-guards the cache.
+func peerLookupTestQueue(t *testing.T) chan peerLookupItem {
+	t.Helper()
+	oldQueue, oldPeers, oldCache := peerLookupQueue, peerClients, peerLookupCache
+	t.Cleanup(func() { peerLookupQueue, peerClients, peerLookupCache = oldQueue, oldPeers, oldCache })
+
+	peerLookupCache = nil
+	peerLookupQueue = make(chan peerLookupItem, 8)
+	peerClients = []peerClient{{}} // non-empty so enqueue is active
+	return peerLookupQueue
+}
+
+// The wild trigger, at its call site rather than through considerPeerLookup
+// directly: deleting the call from updateFromWild left the suite green.
+// The lookup fires after addWildPokemon, which is what supplies the spawn id
+// and the provisional expiry, so the enqueued question carries both.
+func TestUpdateFromWildEnqueuesLookup(t *testing.T) {
+	queue := peerLookupTestQueue(t)
+
+	const encId = uint64(920501)
+	const spawnId = int64(0x920502)
+
+	// A known spawnpoint with no despawn second yet: the fast path in
+	// setExpireTimestampFromSpawnpoint reads the atomic mirror and never
+	// touches the database.
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId}}
+	sp.syncDespawnFast()
+	spawnpointCache.Set(spawnId, sp, time.Minute)
+
+	pokemon := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(encId)}}
+	wild := &pogo.WildPokemonProto{
+		EncounterId:  encId,
+		SpawnPointId: strconv.FormatInt(spawnId, 16),
+		Latitude:     51.5,
+		Longitude:    -0.12,
+		Pokemon: &pogo.PokemonProto{
+			PokemonId:      pogo.HoloPokemonId(25),
+			PokemonDisplay: &pogo.PokemonDisplayProto{},
+		},
+	}
+
+	pokemon.updateFromWild(context.Background(), db.DbDetails{}, wild, 1234, nil, time.Now().UnixMilli(), "tester")
+
+	if len(queue) != 1 {
+		t.Fatalf("a wild sighting with no IVs must enqueue one lookup, got %d", len(queue))
+	}
+	got := <-queue
+	if got.EncounterId != encId {
+		t.Fatalf("encounter id: got %d want %d", got.EncounterId, encId)
+	}
+	if got.SpawnId != spawnId {
+		t.Fatalf("spawn id: got %d want %d - the question must carry it so a peer can answer expiry", got.SpawnId, spawnId)
+	}
+	if got.PokemonId != 25 {
+		t.Fatalf("pokemon id: got %d want 25", got.PokemonId)
+	}
+}
+
+// The nearby trigger, at its call site. A nearby/cell sighting has no spawn
+// id, so only the stats half of the question applies - which is exactly why
+// the trigger is not conditional on having one.
+func TestUpdateFromNearbyEnqueuesLookup(t *testing.T) {
+	queue := peerLookupTestQueue(t)
+
+	const encId = uint64(920503)
+	cellId := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.5, -0.12)).Parent(15))
+
+	// Already seen in a cell: updateFromNearby returns early rather than
+	// downgrading a better sighting, and that early return is before the
+	// trigger.
+	pokemon := &Pokemon{PokemonData: PokemonData{
+		Id:       Uint64Str(encId),
+		SeenType: null.StringFrom(SeenType_Cell),
+	}}
+	nearby := &pogo.NearbyPokemonProto{
+		PokedexNumber:  25,
+		PokemonDisplay: &pogo.PokemonDisplayProto{},
+	}
+
+	pokemon.updateFromNearby(context.Background(), db.DbDetails{}, nearby, cellId, nil, time.Now().UnixMilli(), "tester")
+
+	if len(queue) != 1 {
+		t.Fatalf("a nearby sighting with no IVs must enqueue one lookup, got %d", len(queue))
+	}
+	got := <-queue
+	if got.EncounterId != encId {
+		t.Fatalf("encounter id: got %d want %d", got.EncounterId, encId)
+	}
+	if got.SpawnId != 0 {
+		t.Fatalf("a nearby sighting has no spawn id, got %d", got.SpawnId)
 	}
 }
 
