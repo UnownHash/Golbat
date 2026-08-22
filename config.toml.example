@@ -73,6 +73,21 @@ url = "http://localhost:4201"
 # area appears in both areas and exclude_areas, the exclusion wins.
 #exclude_areas = ["London/Westminster", "*/Wembley"]
 
+# Other Golbat instances this one may ask about pokemon it has seen but cannot
+# fully describe: missing IVs, an unverified despawn time, or IVs about to be
+# discarded by a weather change. Useful where instances overlap - it saves
+# spending a duplicate encounter and propagates verified despawn timing.
+# Include the section once per peer. Configuring a peer is what enables the
+# lookup; there is no separate feature flag. Answers are advisory: a peer can
+# never overwrite a despawn time this instance learned itself, and its CP and
+# PVP are always recomputed locally. See api.md, "Cross-Golbat Lookup".
+
+#[[golbat_peer]]
+#address = "10.0.0.2:50051"      # host:port of that instance's grpc_port
+#api_secret = "shared-secret"    # sent as gRPC authorization; must match that instance's api_secret
+#timeout_ms = 500                # default 500. Peers are expected on a LAN, and a lookup is an
+                                 # optimisation, so timing out costs nothing but today's behaviour.
+
 [tuning]
 max_pokemon_distance = 100  # Maximum distance in kilometers for searching pokemon
 max_pokemon_results = 3000  # Maximum number of pokemon to return
