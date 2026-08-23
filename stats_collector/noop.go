@@ -50,6 +50,7 @@ func (col *noopCollector) IncPokemons(bool, null.String)                        
 func (col *noopCollector) DecPokemons(bool, null.String)                         {}
 func (col *noopCollector) UpdateMaxBattleCount([]geo.AreaName, int64)            {}
 func (col *noopCollector) IncFortChange(string)                                  {}
+func (col *noopCollector) IncFieldClamped(string)                                {}
 
 // Write-behind queue metrics (noop)
 func (col *noopCollector) SetWorkerBacklog(string, float64)            {}

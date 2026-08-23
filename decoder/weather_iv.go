@@ -81,22 +81,53 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if boostedWeathers == 0 {
 			return true
 		}
-		var newWeather int32
+		// Narrowed once, here, and used by both comparisons below. The
+		// weather column is a tinyint, so a stored weather has been through
+		// narrowUint8 already; comparing the raw proto value against it would
+		// be two different equivalence relations on the same value in
+		// adjacent lines, and the cheap lookup-cache skip would then disagree
+		// with the entity comparison about what "unchanged" means.
+		var newWeather int64
 		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
-			newWeather = weatherUpdate.NewWeather
+			newWeather = narrowUint8(int64(weatherUpdate.NewWeather))
 		}
-		if int8(newWeather) == pokemonLookup.PokemonLookup.Weather {
+		// The lookup and the entity spell "no weather" differently: the
+		// lookup carries lookupInt8's absence marker, -1, while the entity
+		// guard below reads the same absence through int64OrZero as 0.
+		// Compare in the entity's encoding, because the entity guard is the
+		// one that decides — this skip exists only to avoid reaching it, so
+		// the two have to agree on what "unchanged" means or the skip stops
+		// skipping anything. Left at -1, a NULL-weather pokemon never
+		// matches a no-boost update (0 == -1 is false), so every weather
+		// flip in its cell takes the entity lock for a guard that then
+		// compares 0 != 0 and does nothing.
+		storedWeather := int64(pokemonLookup.PokemonLookup.Weather)
+		if storedWeather < 0 {
+			storedWeather = 0
+		}
+		if newWeather == storedWeather {
 			return true
 		}
 
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(pokemonId, "ProactiveIVSwitch")
 		if pokemon != nil {
 			pokemonLocked++
-			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == pokemon.Form.ValueOrZero()) && int64(newWeather) != pokemon.Weather.ValueOrZero() && pokemon.ExpireTimestamp.ValueOrZero() >= startUnix && pokemon.Updated.ValueOrZero() < timestamp {
+			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == int64OrZero(pokemon.Form)) && newWeather != int64OrZero(pokemon.Weather) && int64OrZero(pokemon.ExpireTimestamp) >= startUnix && int64OrZero(pokemon.Updated) < timestamp {
 				pokemon.snapshotOldValues()
-				pokemon.repopulateIv(int64(newWeather), pokemon.IsStrong.ValueOrZero())
+				pokemon.repopulateIv(newWeather, pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
-					pokemon.Weather = null.IntFrom(int64(newWeather))
+					// Deliberately SetWeather, not a bare pokemon.Weather = ...
+					// field assignment: SetWeather marks the entity dirty, which
+					// matters here specifically because savePokemonRecordAsAtTime
+					// below early-returns when `!newRecord && !IsDirty()` (see its
+					// first lines). A bare assignment updates only the in-memory
+					// struct; if nothing else in this branch happened to dirty the
+					// pokemon, the save call would no-op and updatePokemonLookup
+					// inside it would never run, leaving the R-tree scan lookup
+					// (PokemonLookup.Weather) stale while the entity's own field
+					// had already changed. Going through the setter closes that
+					// gap. Confirmed intentional in review.
+					pokemon.SetWeather(null.IntFrom(newWeather))
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
 						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
 					})

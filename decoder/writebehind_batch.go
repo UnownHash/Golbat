@@ -268,7 +268,7 @@ func flushS2CellBatch(ctx context.Context, dbDetails db.DbDetails, cells []S2Cel
 	if err != nil {
 		log.Errorf("flushS2CellBatch: %s", err)
 	}
-	statsCollector.IncDbQuery("insert s2cell", err)
+	getStatsCollector().IncDbQuery("insert s2cell", err)
 	return err
 }
 
@@ -425,6 +425,15 @@ ON DUPLICATE KEY UPDATE
 	defenders = VALUES(defenders)
 `
 
+// seen_type is COALESCEd rather than assigned (as pvp already was): a NULL
+// leaves the stored value alone instead of erasing it. NullSeenType.Scan
+// degrades a seen_type this binary does not recognise — a newer binary's
+// value, read during a rollback or from a lagging replica — to NULL, and
+// without the COALESCE this statement would write that NULL straight over
+// the newer value. Nothing is lost the other way: seen_type is only ever
+// set forwards, so a NULL reaching here means "we do not know", never
+// "clear it". The explanation lives here rather than as a SQL comment so
+// the statement on the wire stays exactly as short as it was.
 const pokemonBatchUpsertQuery = `
 INSERT INTO pokemon (
 	id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv,
@@ -476,7 +485,7 @@ ON DUPLICATE KEY UPDATE
 	username = VALUES(username),
 	pvp = COALESCE(VALUES(pvp), pvp),
 	is_event = VALUES(is_event),
-	seen_type = VALUES(seen_type)
+	seen_type = COALESCE(VALUES(seen_type), seen_type)
 `
 
 const spawnpointBatchUpsertQuery = `

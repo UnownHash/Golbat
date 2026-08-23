@@ -1,13 +1,43 @@
 name: publish
 
-on: [push]
+on:
+  push:
+  pull_request:
 
 env:
   GO_VERSION: '1.26.x'
 
 jobs:
   test:
+    # Runs on every push (as before) plus pull_request, but only when the PR
+    # is the one case push doesn't already cover: a fork PR (push never
+    # fires on a fork's commits). A same-repo PR's pull_request event is
+    # skipped here since its push event already runs this job — without
+    # this guard every same-repo PR push would run the suite twice.
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
+    services:
+      # Schema-complete MariaDB for the pokemon round-trip tests
+      # (decoder/pokemon_nullscan_test.go), which otherwise skip whenever
+      # GOLBAT_TEST_DSN is unset. Migrated from sql/ below, the same
+      # source main.go applies at boot.
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: golbat_test
+          MARIADB_USER: golbat
+          MARIADB_PASSWORD: golbat
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h127.0.0.1 -uroot -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    env:
+      # go-sql-driver DSN form, consumed by the round-trip tests themselves.
+      GOLBAT_TEST_DSN: golbat:golbat@tcp(127.0.0.1:3306)/golbat_test?parseTime=true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -18,10 +48,43 @@ jobs:
           cache: true
       - name: Install dependencies
         run: go get .
+      - name: Vet the untagged build
+        # Every other Go step in this repo passes -tags go_json, and
+        # golangci-lint sets build-tags: [go_json] too, so nothing else in CI
+        # ever compiles the !go_json half of the tree — jsonenc.go and
+        # jsonenc_test.go most of all, which exist only in that
+        # configuration. Nothing ships untagged, but `go build ./...` and
+        # `go test ./...` are what a contributor types, so it has to compile.
+        # go vet type-checks packages and their tests, which is the cheap way
+        # to cover that without a second full test run.
+        run: go vet ./...
+      - name: Apply database migrations
+        # golang-migrate's own DSN form (mysql://...), distinct from the
+        # go-sql-driver form GOLBAT_TEST_DSN uses above. -tags mysql pulls in
+        # the mysql database driver; the CLI's default build only registers
+        # a stub driver.
+        run: |
+          go run -tags mysql github.com/golang-migrate/migrate/v4/cmd/migrate \
+            -path sql \
+            -database "mysql://golbat:golbat@tcp(127.0.0.1:3306)/golbat_test?multiStatements=true" \
+            up
       - name: Test with the Go CLI
-        run: go test -v ./...
+        # -tags go_json matches the Dockerfile's production build
+        # (CGO_ENABLED=0 go build -tags go_json) — without it this suite
+        # verifies a binary nothing ships.
+        run: go test -v -tags go_json ./...
+      - name: Test with the Go CLI (dbdebug build)
+        # dbdebug swaps in a real debugChangeAccumulator (see db_debug.go);
+        # nothing else in CI exercises that build, and this PR touches it.
+        run: go test -v -tags "go_json dbdebug" ./...
 
   build:
+    # Registry push only follows a real push (branch or tag), never a PR —
+    # including same-repo PRs, to avoid publishing an image per PR sync.
+    # A fork PR wouldn't have write access to secrets.GITHUB_TOKEN's
+    # elevated permissions anyway; this keeps the behavior explicit rather
+    # than relying on that.
+    if: github.event_name == 'push'
     needs: [test]
     permissions:
       contents: read

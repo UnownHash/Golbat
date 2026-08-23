@@ -16,7 +16,7 @@ func loadRouteFromDatabase(ctx context.Context, db db.DbDetails, routeId string,
 	return timedDbQuery("loadRouteFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, route,
 			`SELECT * FROM route WHERE route.id = ?`, routeId)
-		statsCollector.IncDbQuery("select route", err)
+		getStatsCollector().IncDbQuery("select route", err)
 		return err
 	})
 }
@@ -116,9 +116,9 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	// Debug logging before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Route", route.Id, route.changedFields)
+			dbDebugLog("INSERT", "Route", route.Id, route.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Route", route.Id, route.changedFields)
+			dbDebugLog("UPDATE", "Route", route.Id, route.debug.fields())
 		}
 	}
 
@@ -133,7 +133,7 @@ func saveRouteRecord(ctx context.Context, db db.DbDetails, route *Route) error {
 	}
 
 	if dbDebugEnabled {
-		route.changedFields = route.changedFields[:0]
+		route.debug.reset()
 	}
 	route.ClearDirty()
 	if isNewRecord {
@@ -173,7 +173,7 @@ func routeWriteDB(db db.DbDetails, route *Route, isNewRecord bool) error {
 			route,
 		)
 
-		statsCollector.IncDbQuery("insert route", err)
+		getStatsCollector().IncDbQuery("insert route", err)
 		if err != nil {
 			return fmt.Errorf("insert route error: %w", err)
 		}
@@ -206,7 +206,7 @@ func routeWriteDB(db db.DbDetails, route *Route, isNewRecord bool) error {
 			route,
 		)
 
-		statsCollector.IncDbQuery("update route", err)
+		getStatsCollector().IncDbQuery("update route", err)
 		if err != nil {
 			return fmt.Errorf("update route error %w", err)
 		}

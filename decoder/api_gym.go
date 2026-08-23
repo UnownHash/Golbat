@@ -356,9 +356,9 @@ func SearchGymsAPI(
 
 	var ids []string
 	if err := dbDetails.GeneralDb.SelectContext(ctx, &ids, q, args...); err != nil {
-		statsCollector.IncDbQuery("search gyms api", err)
+		getStatsCollector().IncDbQuery("search gyms api", err)
 		return nil, err
 	}
-	statsCollector.IncDbQuery("search gyms api", nil)
+	getStatsCollector().IncDbQuery("search gyms api", nil)
 	return ids, nil
 }

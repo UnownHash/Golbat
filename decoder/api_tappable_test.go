@@ -1,10 +1,11 @@
 package decoder
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/jsonenc"
 )
 
 // goldenSnapshotTappable is a representative tappable with a mix of set and
@@ -33,8 +34,14 @@ func goldenSnapshotTappable() *Tappable {
 // ApiTappableResult. Any accidental change to a json tag, field type,
 // pointer/null handling, or field order will fail this test. Unset nullable
 // fields serialize as null (pointers are nil, no omitempty).
+//
+// Marshals through jsonenc, not encoding/json directly, so this test tracks
+// whichever codec the current build selects instead of always pinning
+// stdlib's output — see jsonenc's package doc for what -tags go_json does
+// and doesn't gate (it does not gate huma_api.go, which serves this struct
+// through goccy/go-json unconditionally either way).
 func TestBuildTappableResult_GoldenSnapshot(t *testing.T) {
-	got, err := json.Marshal(BuildTappableResult(goldenSnapshotTappable()))
+	got, err := jsonenc.Marshal(BuildTappableResult(goldenSnapshotTappable()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

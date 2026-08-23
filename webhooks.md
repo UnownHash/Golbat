@@ -130,10 +130,13 @@ Unless otherwise noted, every timestamp is **Unix seconds** (since 1970-01-01
 UTC). The sole exception is the `weather` webhook's internal `UpdatedMs` field,
 which is stored in milliseconds and divided by 1000 before being emitted.
 
-### Nullable fields (`null.Int`, `null.String`, `null.Bool`, `null.Float`)
+### Nullable fields (`null.Int`, `null.String`, `null.Bool`, `null.Float`, `null.Value[T]`)
 
-Golbat uses `github.com/guregu/null/v6` for nullable values. These fields
-serialize as:
+Golbat uses `github.com/guregu/null/v6` for nullable values. Most payloads use
+its fixed-width types (`null.Int`, `null.String`, `null.Bool`, `null.Float`);
+the `pokemon` payload's numeric/bool fields use the package's generic
+`null.Value[T]` instead (e.g. `null.Value[uint8]`), storage-width-narrowed to
+match their database column. Both forms serialize identically:
 
 - **Valid**: the underlying value (number, string, boolean, float).
 - **Invalid / not set**: the JSON literal `null`.
@@ -278,30 +281,30 @@ encountered.
 | `disappear_time`          | int64             | Unix seconds when the Pokémon despawns. `0` if unknown. |
 | `disappear_time_verified` | bool              | `true` if the despawn time comes from a trusted source (spawnpoint history, encounter). |
 | `first_seen`              | int64             | Unix seconds when Golbat first saw this encounter. |
-| `last_modified_time`      | null.Int          | Unix seconds of Golbat's most recent update to the record. |
-| `gender`                  | null.Int          | Gender enum: 1=male, 2=female, 3=genderless. Source: `pogo.PokemonDisplayProto_Gender`. |
-| `cp`                      | null.Int          | Combat Power at trainer level 30 / weather-boosted level. |
-| `form`                    | null.Int          | Form ID. |
-| `costume`                 | null.Int          | Costume ID. |
-| `individual_attack`       | null.Int          | Attack IV 0–15. |
-| `individual_defense`      | null.Int          | Defense IV 0–15. |
-| `individual_stamina`      | null.Int          | Stamina IV 0–15. |
-| `pokemon_level`           | null.Int          | Pokémon level 1–50. |
-| `move_1`                  | null.Int          | Fast-move ID. |
-| `move_2`                  | null.Int          | Charged-move ID. |
-| `weight`                  | null.Float        | Weight in kg. **Observer-specific and unreliable** — see note below. |
-| `size`                    | null.Int          | Size bucket enum. Observer-specific; same caveats as `weight`. |
-| `height`                  | null.Float        | Height in m. **Observer-specific and unreliable** — see note below. |
-| `weather`                 | null.Int          | Weather boost enum at this spawn. |
+| `last_modified_time`      | null.Value[uint32]  | Unix seconds of Golbat's most recent update to the record. |
+| `gender`                  | null.Value[uint8]   | Gender enum: 1=male, 2=female, 3=genderless. Source: `pogo.PokemonDisplayProto_Gender`. |
+| `cp`                      | null.Value[uint16]  | Combat Power at trainer level 30 / weather-boosted level. |
+| `form`                    | null.Value[uint16]  | Form ID. |
+| `costume`                 | null.Value[uint8]   | Costume ID. |
+| `individual_attack`       | null.Value[uint8]   | Attack IV 0–15. |
+| `individual_defense`      | null.Value[uint8]   | Defense IV 0–15. |
+| `individual_stamina`      | null.Value[uint8]   | Stamina IV 0–15. |
+| `pokemon_level`           | null.Value[uint8]   | Pokémon level 1–50. |
+| `move_1`                  | null.Value[uint16]  | Fast-move ID. |
+| `move_2`                  | null.Value[uint16]  | Charged-move ID. |
+| `weight`                  | null.Value[float32] | Weight in kg. **Observer-specific and unreliable** — see note below. |
+| `size`                    | null.Value[uint8]   | Size bucket enum. Observer-specific; same caveats as `weight`. |
+| `height`                  | null.Value[float32] | Height in m. **Observer-specific and unreliable** — see note below. |
+| `weather`                 | null.Value[uint8]   | Weather boost enum at this spawn. |
 | `capture_1`               | float64           | **Currently always `0.0`.** No code path populates the underlying `Capture1` field; the setter is unused. Emitted for legacy compatibility. |
 | `capture_2`               | float64           | **Currently always `0.0`.** Same caveat as `capture_1`. |
 | `capture_3`               | float64           | **Currently always `0.0`.** Same caveat as `capture_1`. |
-| `shiny`                   | null.Bool         | Shiny flag. |
+| `shiny`                   | null.Value[bool]    | Shiny flag. |
 | `username`                | null.String       | Trainer username of the scanner. |
-| `display_pokemon_id`      | null.Int          | Apparent Pokédex ID for disguised Pokémon (Ditto). |
-| `display_pokemon_form`    | null.Int          | Apparent form for disguised Pokémon. |
+| `display_pokemon_id`      | null.Value[uint16]  | Apparent Pokédex ID for disguised Pokémon (Ditto). |
+| `display_pokemon_form`    | null.Value[uint16]  | Apparent form for disguised Pokémon. |
 | `is_event`                | int8              | Event flag (part of the composite primary key with `encounter_id`). |
-| `seen_type`               | null.String       | How Golbat learned about this Pokémon. See [seen_type values](#seen_type-values). |
+| `seen_type`               | NullSeenType      | How Golbat learned about this Pokémon. See [seen_type values](#seen_type-values). |
 | `pvp`                     | json.RawMessage   | PvP league rankings produced by gohbem's `QueryPvPRank`. See [pvp structure](#pvp-structure). `null` when IVs are not yet known. |
 
 #### height / weight / size caveats
@@ -330,7 +333,15 @@ Two reasons these fields are unreliable:
 #### seen_type values
 
 The `seen_type` field is an enum tracking the source of the most recent
-update. Full set (defined in `decoder/pokemon_decode.go`, database enum in
+update. `NullSeenType` holds it as a one-byte code in memory and serializes
+it the way the `null.String` it replaced did: one of the quoted strings
+below, or `null` when unset. `null` is also emitted for a *degraded* value:
+if this binary reads a `seen_type` string it does not recognise (e.g. a
+value a newer binary wrote after a migration widened the enum, seen during
+a rollback or from a lagging replica in a mixed deployment), it stores the
+inert `SeenTypeCodeUnknown` sentinel rather than failing the row load, and
+that sentinel also serializes to `null`. Full set (defined in
+`decoder/pokemon_decode.go`, database enum in
 `sql/45_tappables_seen_type_lure.up.sql`):
 
 | Value                       | Meaning |

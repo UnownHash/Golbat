@@ -2,6 +2,8 @@ package decoder
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -13,6 +15,7 @@ import (
 	"golbat/db"
 	"golbat/grpc"
 	"golbat/pogo"
+	"golbat/util"
 
 	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
@@ -20,21 +23,26 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// populateInternal hydrates the in-memory scan history from the protobuf bytes
+// held in the golbat_internal column. This is the read boundary: the only place
+// grpc.PokemonInternal is unmarshaled.
 func (pokemon *Pokemon) populateInternal() {
-	if len(pokemon.GolbatInternal) == 0 || len(pokemon.internal.ScanHistory) != 0 {
+	if len(pokemon.GolbatInternal) == 0 || len(pokemon.scanHistory) != 0 {
 		return
 	}
-	err := proto.Unmarshal(pokemon.GolbatInternal, &pokemon.internal)
-	if err != nil {
+	var internal grpc.PokemonInternal
+	if err := proto.Unmarshal(pokemon.GolbatInternal, &internal); err != nil {
 		log.Warnf("Failed to parse internal data for %d: %s", pokemon.Id, err)
-		pokemon.internal.Reset()
+		pokemon.scanHistory = nil
+		return
 	}
+	pokemon.scanHistory = scanHistoryFromProto(&internal)
 }
 
-func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*grpc.PokemonScan, bool) {
+func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*pokemonScan, bool) {
 	pokemon.populateInternal()
-	var bestMatching *grpc.PokemonScan
-	for _, entry := range pokemon.internal.ScanHistory {
+	var bestMatching *pokemonScan
+	for _, entry := range pokemon.scanHistory {
 		if entry.Strong != isStrong {
 			continue
 		}
@@ -47,9 +55,9 @@ func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*grpc.Pokemon
 	return bestMatching, false
 }
 
-func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *grpc.PokemonScan) {
+func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *pokemonScan) {
 	pokemon.populateInternal()
-	for _, entry := range pokemon.internal.ScanHistory {
+	for _, entry := range pokemon.scanHistory {
 		if entry.Strong {
 			strong = entry
 		} else if entry.Weather != int32(pogo.GameplayWeatherProto_NONE) {
@@ -78,7 +86,7 @@ const (
 
 func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 	if pokemon.ExpireTimestampVerified {
-		timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now
+		timeLeft := 60 + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now
 		if timeLeft > 60 {
 			return time.Duration(timeLeft) * time.Second
 		}
@@ -95,7 +103,7 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 // deduplicate instead of inflating per-area encounter/shiny stats.
 func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
 	if pokemon.ExpireTimestampVerified {
-		if timeLeft := 60 + pokemon.ExpireTimestamp.ValueOrZero() - now; timeLeft > 60 {
+		if timeLeft := 60 + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now; timeLeft > 60 {
 			return time.Duration(timeLeft) * time.Second
 		}
 	}
@@ -125,14 +133,16 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 	pokemonDisplay := wildPokemon.Pokemon.PokemonDisplay
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
-	return pokemon.SeenType.ValueOrZero() == SeenType_Cell ||
-		pokemon.SeenType.ValueOrZero() == SeenType_NearbyStop ||
+	// The display fields are stored narrowed, so the incoming readings are
+	// narrowed too before they are compared — see narrowUint8's doc comment.
+	return pokemon.SeenType.Code == SeenTypeCodeCell ||
+		pokemon.SeenType.Code == SeenTypeCodeNearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender) ||
-		(!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
+		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender)) ||
+		(!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time)
 }
 
 // nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -141,23 +151,24 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 	pokemonDisplay := wildPokemon.PokemonDisplay
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
+	// Narrowed on both sides, as in wildSignificantUpdate above.
 	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
-		pokemon.Form.ValueOrZero() != int64(pokemonDisplay.Form) ||
-		pokemon.Weather.ValueOrZero() != int64(pokemonDisplay.WeatherBoostedCondition) ||
-		pokemon.Costume.ValueOrZero() != int64(pokemonDisplay.Costume) ||
-		pokemon.Gender.ValueOrZero() != int64(pokemonDisplay.Gender)
+		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
+		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
+		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender))
 
 	if pokemonChanged {
 		return true
 	}
 
-	hasExpired := (!pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.ValueOrZero() < time)
+	hasExpired := (!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time)
 
 	if hasExpired {
 		return true
 	}
 
-	if pokemon.SeenType.ValueOrZero() == SeenType_Cell {
+	if pokemon.SeenType.Code == SeenTypeCodeCell {
 		return true
 	}
 
@@ -167,9 +178,9 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
-	switch pokemon.SeenType.ValueOrZero() {
-	case "", SeenType_Cell, SeenType_NearbyStop:
-		pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
+	switch pokemon.SeenType.Code {
+	case SeenTypeCodeUnset, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
+		pokemon.SetSeenType(SeenTypeCodeWild)
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
@@ -187,7 +198,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetPokestopId(null.StringFrom(mapPokemon.FortId))
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
-		pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
+		pokemon.SetSeenType(SeenTypeCodeLureWild)
 
 		if mapPokemon.Data.PokemonDisplay != nil {
 			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
@@ -214,8 +225,8 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	// Existing record: the GMO contributes only what it alone knows — the
 	// verified despawn time. Never touch encounter data and never downgrade
 	// lure_encounter to lure_wild.
-	switch pokemon.SeenType.ValueOrZero() {
-	case SeenType_LureWild, SeenType_LureEncounter:
+	switch pokemon.SeenType.Code {
+	case SeenTypeCodeLureWild, SeenTypeCodeLureEncounter:
 	default:
 		return false
 	}
@@ -238,13 +249,49 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	return changed
 }
 
+// calculateIv is the sole entry point that mutates AtkIv/DefIv/StaIv — they
+// have no exported setters (see the Pokemon doc comment) so that all three
+// stay consistent with each other and with Iv. Clamped directly here rather
+// than through Set*Iv methods that don't exist.
+//
+// The clamp happens once, up front, and the three clamped values are the
+// only thing read afterwards: the comparison, the stores and the Iv sum all
+// come from them, so they cannot disagree. Two earlier shapes of this
+// function could. Comparing the stored (clamped) IVs against the raw a/d/s
+// never converged, so an out-of-range encounter re-wrote and re-dirtied the
+// record forever. Fixing only that half left the other: Iv was still the
+// raw sum divided by .45 while the columns held the clamped values, and the
+// convergence fix made the mismatch permanent by reporting "unchanged"
+// from then on.
+//
+// The clamp is clampIv, not clampUint8: 15 rather than the tinyint's 255.
+// That is what bounds Iv. iv is float(5,2) unsigned and tops out at 999.99,
+// and under MariaDB's default STRICT_TRANS_TABLES an out-of-range value
+// fails the entire multi-row batch upsert rather than the one row — so a
+// bound that holds only for most inputs is not a bound. Clamping at the
+// column's 255 leaves a sum of up to 765 and a quotient of up to 1700; two
+// out-of-range IVs alone reach 1133. Clamping at the game's 15 caps the sum
+// at 45 and Iv at exactly 100, for every possible input, with no arithmetic
+// in the argument. See clampIv's doc comment for the two other invariants
+// that ride on the same ceiling.
+//
+// Clamping above the comparison also moves atk_iv/def_iv/sta_iv onto the
+// same golbat_field_clamped_total rate as every other field — one count per
+// call rather than one per value that reached the record. See clampUint's
+// doc comment, which used to describe the two rates separately.
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
-	if pokemon.AtkIv.ValueOrZero() != a || pokemon.DefIv.ValueOrZero() != d || pokemon.StaIv.ValueOrZero() != s ||
-		!pokemon.AtkIv.Valid || !pokemon.DefIv.Valid || !pokemon.StaIv.Valid {
-		pokemon.AtkIv = null.IntFrom(a)
-		pokemon.DefIv = null.IntFrom(d)
-		pokemon.StaIv = null.IntFrom(s)
-		pokemon.Iv = null.FloatFrom(float64(a+d+s) / .45)
+	atk := clampIv(null.IntFrom(a), "atk_iv")
+	def := clampIv(null.IntFrom(d), "def_iv")
+	sta := clampIv(null.IntFrom(s), "sta_iv")
+
+	// Comparing the whole null.Value covers the previously separate
+	// !Valid checks: an unset field never equals a clamped one.
+	if pokemon.AtkIv != atk || pokemon.DefIv != def || pokemon.StaIv != sta {
+		pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv = atk, def, sta
+		// .45 is 45/100, and 45 is 3 * maxIvPerStat — the same ceiling the
+		// clamp above uses, and the one the iv column's own generated
+		// definition used before migration 11 made it a plain column.
+		pokemon.SetIv(null.FloatFrom(float64(int64OrZero(atk)+int64OrZero(def)+int64OrZero(sta)) / .45))
 		pokemon.dirty = true
 	}
 }
@@ -260,10 +307,10 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	overrideLatLon := pokemon.isNewRecord()
 	useCellLatLon := true
 	if pokestopId != "" {
-		switch pokemon.SeenType.ValueOrZero() {
-		case "", SeenType_Cell:
+		switch pokemon.SeenType.Code {
+		case SeenTypeCodeUnset, SeenTypeCodeCell:
 			overrideLatLon = true // a better estimate is available
-		case SeenType_NearbyStop:
+		case SeenTypeCodeNearbyStop:
 		default:
 			return
 		}
@@ -272,7 +319,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			// Unrecognised pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
-			pokemon.SetSeenType(null.StringFrom(SeenType_NearbyStop))
+			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
 			pokemon.SetPokestopId(null.StringFrom(pokestopId))
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
@@ -281,7 +328,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	if useCellLatLon {
 		// Cell Pokemon
-		if !overrideLatLon && pokemon.SeenType.ValueOrZero() != SeenType_Cell {
+		if !overrideLatLon && pokemon.SeenType.Code != SeenTypeCodeCell {
 			// do not downgrade to nearby cell
 			return
 		}
@@ -290,7 +337,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 
-		pokemon.SetSeenType(null.StringFrom(SeenType_Cell))
+		pokemon.SetSeenType(SeenTypeCodeCell)
 	}
 	if overrideLatLon {
 		pokemon.SetLat(lat)
@@ -305,14 +352,298 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 }
 
-const SeenType_Cell string = "nearby_cell"                              // Pokemon was seen in a cell (without accurate location)
-const SeenType_NearbyStop string = "nearby_stop"                        // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
-const SeenType_Wild string = "wild"                                     // Pokemon was seen in the wild, accurate location but with no IV details
-const SeenType_Encounter string = "encounter"                           // Pokemon has been encountered giving exact details of current IV
-const SeenType_LureWild string = "lure_wild"                            // Pokemon was seen at a lure
-const SeenType_LureEncounter string = "lure_encounter"                  // Pokemon has been encountered at a lure
-const SeenType_TappableEncounter string = "tappable_encounter"          // Pokemon has been encountered from tappable
-const SeenType_TappableLureEncounter string = "tappable_lure_encounter" // Pokemon has been encountered from a lured tappable
+// SeenTypeCode is the in-memory representation of the seen_type enum column.
+//
+// The column holds one of eight strings; storing it as a null.String costs a
+// 24-byte header plus a heap pointer per cached pokemon. The code is one byte.
+// NullSeenType converts at the database and JSON boundaries so both wire
+// formats are unchanged.
+//
+// Code 0 is reserved as SeenTypeCodeUnset, not a real seen type. Without
+// this, `SeenTypeCodeWild = iota` would make Wild — the enum's most common
+// real value — indistinguishable from a NullSeenType's Go zero value, so any
+// code that read .Code without checking .Valid would silently treat a NULL
+// seen_type as Wild. Reserving 0 makes that misread produce Unset instead,
+// which has no string form and which Value() refuses to write.
+//
+// These are the only named constants for the enum — the decode path works
+// entirely in SeenTypeCode (SetSeenType takes one directly), so a typo'd
+// name fails to compile instead of silently no-opping the way a runtime
+// string-to-code lookup would. A string form only exists at seenTypeStrings
+// below and at the output boundaries (Value, MarshalJSON) that read it.
+type SeenTypeCode uint8
+
+const (
+	SeenTypeCodeUnset                 SeenTypeCode = iota // zero value: not a real seen type
+	SeenTypeCodeWild                                      // Pokemon was seen in the wild, accurate location but with no IV details
+	SeenTypeCodeEncounter                                 // Pokemon has been encountered giving exact details of current IV
+	SeenTypeCodeNearbyStop                                // Pokemon was seen at a nearby Pokestop, location set to lon, lat of pokestop
+	SeenTypeCodeCell                                      // Pokemon was seen in a cell (without accurate location)
+	SeenTypeCodeLureWild                                  // Pokemon was seen at a lure
+	SeenTypeCodeLureEncounter                             // Pokemon has been encountered at a lure
+	SeenTypeCodeTappableEncounter                         // Pokemon has been encountered from tappable
+	SeenTypeCodeTappableLureEncounter                     // Pokemon has been encountered from a lured tappable
+)
+
+// SeenTypeCodeUnknown is the code for a seen_type this binary does not
+// recognise: a value a newer binary wrote after a migration widened the
+// enum, read back by this one during a rollback or from a lagging replica.
+// Scan degrades to it (see Scan's doc comment for why it must not error).
+//
+// It is deliberately not Unset. Unset means "never set", and two decode
+// switches act on that: updateFromWild's `case Unset, Cell, NearbyStop`
+// rewrites the record to wild, and updateFromNearby's `case Unset, Cell`
+// replaces precise coordinates with a pokestop's or a cell centre's — then
+// the save persists the downgrade over the value the newer binary wrote. An
+// unrecognised value must instead behave the way the opaque null.String it
+// replaced behaved: equal to none of the eight real codes, so every switch
+// falls through to default and the record round-trips unharmed.
+//
+// 255 rather than the next iota so a future enum member (there have been
+// three widenings already: migrations 3, 43, 45) can be appended above
+// without colliding with it, and so no seenTypeStrings index can ever reach
+// it. String() therefore reports "" for it, and it never reaches the column:
+// Scan leaves Valid false so Value returns NULL, and both pokemon write
+// paths spell seen_type as COALESCE(<incoming>, seen_type) so that NULL
+// leaves the stored value alone instead of erasing it.
+const SeenTypeCodeUnknown SeenTypeCode = 255
+
+// seenTypeStrings maps codes to the exact strings in the enum column. The
+// order must match the constants above, including the leading "" at index 0
+// for SeenTypeCodeUnset — it is never a value the enum column holds, and
+// String() relies on it to make Unset (and any other out-of-range code)
+// report as "". Adding a real value here requires a migration widening the
+// enum — see sql/45_tappables_seen_type_lure.up.sql.
+var seenTypeStrings = [...]string{
+	"",                        // SeenTypeCodeUnset
+	"wild",                    // SeenTypeCodeWild
+	"encounter",               // SeenTypeCodeEncounter
+	"nearby_stop",             // SeenTypeCodeNearbyStop
+	"nearby_cell",             // SeenTypeCodeCell
+	"lure_wild",               // SeenTypeCodeLureWild
+	"lure_encounter",          // SeenTypeCodeLureEncounter
+	"tappable_encounter",      // SeenTypeCodeTappableEncounter
+	"tappable_lure_encounter", // SeenTypeCodeTappableLureEncounter
+}
+
+// seenTypeCodes maps the eight real enum strings to their codes. The empty
+// string at seenTypeStrings[0] is deliberately excluded — SeenTypeCodeUnset
+// must never be reachable by parsing a string, only by the Go zero value.
+var seenTypeCodes = func() map[string]SeenTypeCode {
+	m := make(map[string]SeenTypeCode, len(seenTypeStrings)-1)
+	for i, s := range seenTypeStrings {
+		if s == "" {
+			continue
+		}
+		m[s] = SeenTypeCode(i)
+	}
+	return m
+}()
+
+// String returns the database representation of the code.
+func (c SeenTypeCode) String() string {
+	if int(c) >= len(seenTypeStrings) {
+		return ""
+	}
+	return seenTypeStrings[c]
+}
+
+// NullSeenType is a nullable seen_type, stored as a code and presented as a
+// string at every boundary.
+type NullSeenType struct {
+	Code  SeenTypeCode
+	Valid bool
+}
+
+// SeenTypeFrom builds a valid NullSeenType from a known code.
+func SeenTypeFrom(c SeenTypeCode) NullSeenType {
+	return NullSeenType{Code: c, Valid: true}
+}
+
+// ParseSeenType converts a database or proto string into a NullSeenType. An
+// empty string is treated as NULL; an unrecognised value is an error. What
+// happens to that error is the caller's call — Scan below degrades it to a
+// warning because the read path must tolerate an enum value this binary
+// doesn't know yet, while Value and UnmarshalJSON stay strict. See Scan's
+// doc comment for why.
+func ParseSeenType(s string) (NullSeenType, error) {
+	if s == "" {
+		return NullSeenType{}, nil
+	}
+	c, ok := seenTypeCodes[s]
+	if !ok {
+		return NullSeenType{}, fmt.Errorf("unknown seen_type %q", s)
+	}
+	return SeenTypeFrom(c), nil
+}
+
+// ValueOrZero returns the string form, or "" if null.
+func (n NullSeenType) ValueOrZero() string {
+	if !n.Valid {
+		return ""
+	}
+	return n.Code.String()
+}
+
+// Ptr returns a pointer to the string form, or nil if null. The API response
+// type is *string and stays that way.
+func (n NullSeenType) Ptr() *string {
+	if !n.Valid {
+		return nil
+	}
+	s := n.Code.String()
+	return &s
+}
+
+func (n NullSeenType) IsZero() bool { return !n.Valid }
+
+// Scan degrades on an unrecognised enum value instead of failing: it sets
+// Code = SeenTypeCodeUnknown and Valid = false, and logs a throttled
+// warning, rather than returning an error.
+//
+// Both halves of that matter. Valid = false keeps every existing null check
+// working and keeps the value out of the column (Value returns NULL, and
+// the write paths COALESCE a NULL into "leave the stored value alone").
+// Code = Unknown rather than Unset is what stops the degrade from being
+// destructive: Unset means "never set" and two decode switches rewrite the
+// record on it — see SeenTypeCodeUnknown's doc comment.
+//
+// This is deliberately asymmetric with Value below. The seen_type enum has
+// been widened three times (migrations 3, 43, 45); a newer binary can write
+// a value this one's ParseSeenType doesn't recognise yet — a rollback or a
+// lagging replica during a mixed deployment, both routine. An earlier round
+// of this PR made Scan error on that case, reasoning that silently storing
+// a wrong code would corrupt scan statistics. That reasoning weighs the
+// write side correctly but not the read side: an error here fails the row
+// load, which leaves getOrCreatePokemonRecord's cache entry stuck marked
+// newRecord — every subsequent sighting retries and fails the same load, so
+// that pokemon silently stops being processed for as long as the
+// deployment is mixed. Degrading avoids that: the row loads with seen_type
+// unknown and the pokemon keeps being processed.
+//
+// The in-memory value then stays unknown until an encounter arrives.
+// updatePokemonFromEncounterProto and its disk and tappable siblings are the
+// only paths that set a seen type without first asking what the current one
+// is; wild, lure and nearby sightings all check, and their switches list
+// Unset, Cell and NearbyStop, so Unknown reaches no case. That is not an
+// oversight to fix — adding `case SeenTypeCodeUnknown:` to updateFromWild to
+// make it heal there is exactly the downgrade the sentinel exists to
+// prevent, and TestScanUnknownSeenTypeIsInertInTheDecodeSwitches is what
+// fails if someone does. Waiting costs nothing: the stored column is never
+// overwritten while the value is unrecognised, so the record also comes back
+// whole on the next load once this binary understands the enum again.
+//
+// Value stays strict on purpose, not by oversight: writing an out-of-enum
+// string to the seen_type ENUM column is silently stored as "" by MariaDB,
+// invisible data loss with no read-side self-heal to fall back on — the
+// write side has no equivalent of "try again next sighting." Read
+// permissive, write strict. Do not "fix" this back to symmetric; see
+// TestNullSeenTypeScanUnknownValueDegrades.
+func (n *NullSeenType) Scan(value any) error {
+	if value == nil {
+		n.Code, n.Valid = 0, false
+		return nil
+	}
+	var s string
+	switch v := value.(type) {
+	case string:
+		s = v
+	case []byte:
+		s = string(v)
+	default:
+		return fmt.Errorf("cannot scan %T into NullSeenType", value)
+	}
+	parsed, err := ParseSeenType(s)
+	if err != nil {
+		n.Code, n.Valid = SeenTypeCodeUnknown, false
+		seenTypeScanWarns.Report(func(rows int64) {
+			log.Warnf("[POKEMON] NullSeenType.Scan: %s; %d row(s) in the last second held a seen_type this binary does not recognise. "+
+				"Their records are left with seen_type unknown and the stored value is not overwritten", err, rows)
+		})
+		return nil
+	}
+	*n = parsed
+	return nil
+}
+
+// seenTypeScanWarns aggregates Scan's unrecognised-value warning to one
+// line a second. Scan runs once per row loaded — millions during preload,
+// and under the entity lock at runtime — so a warning per row would be log
+// I/O proportional to the pokemon table for a condition that is one fact
+// repeated, not many. util.DropReporter is the codebase's aggregator for
+// exactly this (raw_limiter.go, fort_tracker.go, stats.go).
+//
+// Value-typed, like every other reporter in the codebase. A test that needs
+// a fresh window calls Reset on it rather than swapping the variable, which
+// would be an unsynchronised write to a global this decode path reads.
+var seenTypeScanWarns util.DropReporter
+
+// Value rejects any code with no string form — that includes
+// SeenTypeCodeUnset and any code past the end of the table. It is never
+// reached for SeenTypeCodeUnknown, which Scan pairs with Valid = false, so
+// the unrecognised case returns NULL above and the write paths' COALESCE
+// turns that into "leave the stored value alone". Writing "" to
+// the seen_type ENUM column is accepted silently by MariaDB, so this must
+// fail loudly instead of writing it. Kept strict on purpose even though
+// Scan (above) degrades instead of erroring on the mirror-image read
+// failure — see Scan's doc comment for why the two are not symmetric.
+func (n NullSeenType) Value() (driver.Value, error) {
+	if !n.Valid {
+		return nil, nil
+	}
+	s := n.Code.String()
+	if s == "" {
+		return nil, fmt.Errorf("seen_type code %d has no string representation", n.Code)
+	}
+	return s, nil
+}
+
+func (n NullSeenType) MarshalJSON() ([]byte, error) {
+	if !n.Valid {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.Code.String())
+}
+
+// UnmarshalJSON decodes a JSON null to SeenTypeCodeUnknown, not to the Go
+// zero value, and the difference matters. MarshalJSON is lossy in one
+// direction: it emits null for any invalid NullSeenType, so both Unset
+// ("never set") and Unknown ("set to something this binary cannot name")
+// come back as the same three characters. A decoder cannot tell them apart
+// and has to pick one, so it picks the one that cannot do damage — Unknown
+// matches no case in either decode switch, while Unset is what licenses
+// updateFromWild's rewrite to "wild" and updateFromNearby's replacement of
+// precise coordinates. Round-tripping a degraded record through the webhook
+// payload (decoder/pokemon_state.go's PokemonWebhook) must not turn the
+// inert sentinel into the destructive one.
+//
+// Deliberately not symmetric with Scan(nil), which does yield Unset. A SQL
+// NULL is unambiguous — the column has never held a value — so a wild or
+// nearby sighting filling it in is the correct behaviour there, and
+// degrading it to Unknown would strand rows that are simply new.
+//
+// Also deliberately not symmetric with Scan on an unrecognised string, which
+// degrades and warns where this returns an error. Scan must not fail, because
+// a failed row load leaves getOrCreatePokemonRecord's cache entry marked
+// newRecord and that pokemon stops being processed (see Scan's doc comment).
+// A JSON decode has no such cache entry to strand: the error goes back to
+// whatever is reading the payload, loudly and recoverably.
+func (n *NullSeenType) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		n.Code, n.Valid = SeenTypeCodeUnknown, false
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	parsed, err := ParseSeenType(s)
+	if err != nil {
+		return err
+	}
+	*n = parsed
+	return nil
+}
 
 // A lure spits out a new pokemon every 3 minutes, and each lasts 3 minutes.
 // Worst-case remaining life when a lure pokemon is first seen via a disk
@@ -387,36 +718,36 @@ func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
 	if !pokemon.ExpireTimestamp.Valid {
 		pokemon.SetExpireTimestamp(null.IntFrom(now + 20*60)) // should be configurable, add on 20min
 	} else {
-		if pokemon.ExpireTimestamp.Int64 < now {
+		if int64OrZero(pokemon.ExpireTimestamp) < now {
 			pokemon.SetExpireTimestamp(null.IntFrom(now + 10*60)) // should be configurable, add on 10min
 		}
 	}
 }
 
-func checkScans(old *grpc.PokemonScan, new *grpc.PokemonScan) error {
+func checkScans(old *pokemonScan, new *pokemonScan) error {
 	if old == nil || old.CompressedIv() == new.CompressedIv() {
 		return nil
 	}
 	return fmt.Errorf("unexpected IV mismatch %s != %s", old, new)
 }
 
-func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *grpc.PokemonScan) {
+func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *pokemonScan) {
 	if isDitto {
 		log.Debugf("[POKEMON] %d: %s Ditto found %s -> %s", pokemon.Id, mode, old, new)
 		pokemon.SetIsDitto(true)
 		pokemon.SetDisplayPokemonId(null.IntFrom(int64(pokemon.PokemonId)))
-		pokemon.SetDisplayPokemonForm(pokemon.Form)
+		pokemon.SetDisplayPokemonForm(nullIntFromUint(pokemon.Form))
 		pokemon.SetPokemonId(int16(pogo.HoloPokemonId_DITTO))
 		pokemon.SetForm(null.IntFrom(0))
 	} else {
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
-func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.PokemonScan) (*grpc.PokemonScan, error) {
+func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *pokemonScan) (*pokemonScan, error) {
 	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.SetIsDitto(false)
-	pokemon.SetPokemonId(int16(pokemon.DisplayPokemonId.Int64))
-	pokemon.SetForm(pokemon.DisplayPokemonForm)
+	pokemon.SetPokemonId(int16(pokemon.DisplayPokemonId.ValueOrZero()))
+	pokemon.SetForm(nullIntFromUint(pokemon.DisplayPokemonForm))
 	pokemon.SetDisplayPokemonId(null.NewInt(0, false))
 	pokemon.SetDisplayPokemonForm(null.NewInt(0, false))
 	return new, checkScans(old, new)
@@ -425,7 +756,7 @@ func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *grpc.Po
 // As far as I'm concerned, wild Ditto only depends on species but not costume/gender/form
 var dittoDisguises sync.Map
 
-func confirmDitto(scan *grpc.PokemonScan) {
+func confirmDitto(scan *pokemonScan) {
 	now := time.Now()
 	lastSeen, exists := dittoDisguises.Swap(scan.Pokemon, now)
 	if exists {
@@ -448,7 +779,7 @@ func confirmDitto(scan *grpc.PokemonScan) {
 
 // detectDitto returns the IV/level set that should be used for persisting to db/seen if caught.
 // error is set if something unexpected happened and the scan history should be cleared.
-func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, error) {
+func (pokemon *Pokemon) detectDitto(scan *pokemonScan) (*pokemonScan, error) {
 	unboostedScan, boostedScan, strongScan := pokemon.locateAllScans()
 	if scan.Strong {
 		if strongScan != nil {
@@ -521,7 +852,7 @@ func (pokemon *Pokemon) detectDitto(scan *grpc.PokemonScan) (*grpc.PokemonScan, 
 	}
 
 	isBoosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
-	var matchingScan *grpc.PokemonScan
+	var matchingScan *pokemonScan
 	if unboostedScan != nil || boostedScan != nil {
 		if unboostedScan != nil && boostedScan != nil { // if we have both IVs then they must be correct
 			if unboostedScan.Level == scan.Level {
@@ -723,16 +1054,16 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	if pokemon.AtkIv.Valid || pokemon.DefIv.Valid || pokemon.StaIv.Valid || pokemon.Iv.Valid {
 		pokemon.dirty = true
 	}
-	pokemon.AtkIv = null.NewInt(0, false)
-	pokemon.DefIv = null.NewInt(0, false)
-	pokemon.StaIv = null.NewInt(0, false)
-	pokemon.Iv = null.NewFloat(0, false)
+	pokemon.AtkIv = null.Value[uint8]{}
+	pokemon.DefIv = null.Value[uint8]{}
+	pokemon.StaIv = null.Value[uint8]{}
+	pokemon.SetIv(null.Float{})
 	if cp {
-		switch pokemon.SeenType.ValueOrZero() {
-		case SeenType_LureEncounter:
-			pokemon.SetSeenType(null.StringFrom(SeenType_LureWild))
-		case SeenType_Encounter:
-			pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
+		switch pokemon.SeenType.Code {
+		case SeenTypeCodeLureEncounter:
+			pokemon.SetSeenType(SeenTypeCodeLureWild)
+		case SeenTypeCodeEncounter:
+			pokemon.SetSeenType(SeenTypeCodeWild)
 		}
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
@@ -750,13 +1081,13 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	pokemon.SetSize(null.IntFrom(int64(proto.Size)))
 	pokemon.SetWeight(null.FloatFrom(float64(proto.WeightKg)))
 
-	scan := grpc.PokemonScan{
-		Weather:     int32(pokemon.Weather.Int64),
-		Strong:      pokemon.IsStrong.Bool,
+	scan := pokemonScan{
+		Weather:     int32(pokemon.Weather.ValueOrZero()),
+		Strong:      pokemon.IsStrong.ValueOrZero(),
 		Attack:      proto.IndividualAttack,
 		Defense:     proto.IndividualDefense,
 		Stamina:     proto.IndividualStamina,
-		CellWeather: int32(pokemon.Weather.Int64),
+		CellWeather: int32(pokemon.Weather.ValueOrZero()),
 		Pokemon:     int32(proto.PokemonId),
 		Costume:     int32(proto.PokemonDisplay.Costume),
 		Gender:      int32(proto.PokemonDisplay.Gender),
@@ -794,9 +1125,9 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
 	}
 	if err == nil {
-		newScans := make([]*grpc.PokemonScan, len(pokemon.internal.ScanHistory)+1)
+		newScans := make([]*pokemonScan, len(pokemon.scanHistory)+1)
 		entriesCount := 0
-		for _, oldEntry := range pokemon.internal.ScanHistory {
+		for _, oldEntry := range pokemon.scanHistory {
 			if oldEntry.Strong != scan.Strong || !oldEntry.Strong &&
 				oldEntry.Weather == int32(pogo.GameplayWeatherProto_NONE) !=
 					(scan.Weather == int32(pogo.GameplayWeatherProto_NONE)) {
@@ -805,22 +1136,25 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 			}
 		}
 		newScans[entriesCount] = &scan
-		pokemon.internal.ScanHistory = newScans[:entriesCount+1]
+		pokemon.scanHistory = newScans[:entriesCount+1]
 	} else {
 		// undo possible changes
 		scan.Confirmed = false
-		scan.Weather = int32(pokemon.Weather.Int64)
-		pokemon.internal.ScanHistory = make([]*grpc.PokemonScan, 1)
-		pokemon.internal.ScanHistory[0] = &scan
+		scan.Weather = int32(pokemon.Weather.ValueOrZero())
+		pokemon.scanHistory = make([]*pokemonScan, 1)
+		pokemon.scanHistory[0] = &scan
 	}
 }
 
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
 	pokemon.SetIsEvent(0)
 	pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false)
-	// tappable encounter can also be available in seen as normal encounter once tapped
-	if pokemon.isSeenFromTappable() {
-		pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
+	// A tappable encounter also shows up as a normal encounter once tapped.
+	// Downgrading its seen type to a plain encounter would lose the tappable
+	// attribution, so only a pokemon that was NOT seen from a tappable is
+	// rewritten here.
+	if !pokemon.isSeenFromTappable() {
+		pokemon.SetSeenType(SeenTypeCodeEncounter)
 	}
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
@@ -831,14 +1165,24 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	}
 }
 
+// isSeenFromTappable reports whether the pokemon's seen type is one of the
+// two tappable ones.
+//
+// It used to return the negation of that under this same name, with its only
+// call site reading `if pokemon.isSeenFromTappable() { SetSeenType(Encounter) }`
+// — which is to say, overwriting the tappable seen type exactly when the
+// pokemon was not seen from a tappable. The behavior was right and the name
+// was backwards, so a reader who trusted the name and "fixed" the call site
+// would have destroyed tappable attribution. Both were inverted together; the
+// behavior is unchanged.
 func (pokemon *Pokemon) isSeenFromTappable() bool {
-	return pokemon.SeenType.ValueOrZero() != SeenType_TappableEncounter && pokemon.SeenType.ValueOrZero() != SeenType_TappableLureEncounter
+	return pokemon.SeenType.Code == SeenTypeCodeTappableEncounter || pokemon.SeenType.Code == SeenTypeCodeTappableLureEncounter
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
 	pokemon.SetIsEvent(0)
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
-	pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
+	pokemon.SetSeenType(SeenTypeCodeLureEncounter)
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
@@ -848,7 +1192,7 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 	pokemon.SetLon(request.LocationHintLng)
 
 	if spawnpointId := request.GetLocation().GetSpawnpointId(); spawnpointId != "" {
-		pokemon.SetSeenType(null.StringFrom(SeenType_TappableEncounter))
+		pokemon.SetSeenType(SeenTypeCodeTappableEncounter)
 
 		spawnId, err := strconv.ParseInt(spawnpointId, 16, 64)
 		if err != nil {
@@ -858,7 +1202,7 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetSpawnId(null.IntFrom(spawnId))
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
 	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
-		pokemon.SetSeenType(null.StringFrom(SeenType_TappableLureEncounter))
+		pokemon.SetSeenType(SeenTypeCodeTappableLureEncounter)
 
 		pokemon.SetPokestopId(null.StringFrom(fortId))
 		// we don't know any despawn times from lured/fort tappables
@@ -876,7 +1220,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
-		var oldForm null.Int
+		var oldForm null.Value[uint16]
 		if pokemon.IsDitto {
 			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
 			oldForm = pokemon.DisplayPokemonForm
@@ -884,9 +1228,19 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			oldId = pokemon.PokemonId
 			oldForm = pokemon.Form
 		}
-		if oldId != pokemonId || oldForm != null.IntFrom(int64(display.Form)) ||
-			pokemon.Costume != null.IntFrom(int64(display.Costume)) ||
-			pokemon.Gender != null.IntFrom(int64(display.Gender)) ||
+		// Narrow the incoming display.* readings the same way the stored
+		// fields were narrowed, so the two sides can actually converge: a
+		// costume of 300 is stored as 255, and comparing 255 against a raw
+		// 300 would report a change on every sighting forever — wiping the
+		// encounter data below each time. narrowUint8/16 saturate without
+		// counting, so SetForm/SetCostume/SetGender below stay the only
+		// place golbat_field_clamped_total is incremented.
+		formChanged := !oldForm.Valid || int64OrZero(oldForm) != narrowUint16(int64(display.Form))
+		costumeChanged := !pokemon.Costume.Valid || int64OrZero(pokemon.Costume) != narrowUint8(int64(display.Costume))
+		genderChanged := !pokemon.Gender.Valid || int64OrZero(pokemon.Gender) != narrowUint8(int64(display.Gender))
+		if oldId != pokemonId || formChanged ||
+			costumeChanged ||
+			genderChanged ||
 			pokemon.IsStrong.ValueOrZero() != display.IsStrongPokemon {
 			log.Debugf("Pokemon %d changed from (%d,%d,%d,%d,%t) to (%d,%d,%d,%d,%t)", pokemon.Id, oldId,
 				pokemon.Form.ValueOrZero(), pokemon.Costume.ValueOrZero(), pokemon.Gender.ValueOrZero(),
@@ -924,11 +1278,16 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
+	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
+	// before deriving isBoosted from it (see narrowUint8). Out of range, the
+	// raw reading and the value that actually gets stored can classify
+	// differently, and the two would then disagree on every sighting.
+	weather = narrowUint8(weather)
 	var isBoosted bool
 	if !pokemon.IsDitto {
 		isBoosted = weather != int64(pogo.GameplayWeatherProto_NONE)
 		if isStrong == pokemon.IsStrong.ValueOrZero() &&
-			pokemon.Weather.ValueOrZero() != int64(pogo.GameplayWeatherProto_NONE) == isBoosted {
+			int64OrZero(pokemon.Weather) != int64(pogo.GameplayWeatherProto_NONE) == isBoosted {
 			return
 		}
 	} else if isStrong {
@@ -939,7 +1298,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
 		// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
 		// or both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
-		if pokemon.Weather.ValueOrZero() == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) == isBoosted {
+		if int64OrZero(pokemon.Weather) == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) == isBoosted {
 			return
 		}
 	}
@@ -949,11 +1308,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {
-		oldLevel := pokemon.Level.ValueOrZero()
+		oldLevel := int64OrZero(pokemon.Level)
 		if pokemon.AtkIv.Valid {
-			oldAtk = pokemon.AtkIv.Int64
-			oldDef = pokemon.DefIv.Int64
-			oldSta = pokemon.StaIv.Int64
+			oldAtk = int64OrZero(pokemon.AtkIv)
+			oldDef = int64OrZero(pokemon.DefIv)
+			oldSta = int64OrZero(pokemon.StaIv)
 		} else {
 			oldAtk = -1
 			oldDef = -1
@@ -962,11 +1321,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		newLevel := int64(matchingScan.Level)
 		if isBoostedMatches || isStrong { // strong Pokemon IV is unaffected by weather
 			pokemon.calculateIv(int64(matchingScan.Attack), int64(matchingScan.Defense), int64(matchingScan.Stamina))
-			switch pokemon.SeenType.ValueOrZero() {
-			case SeenType_LureWild:
-				pokemon.SetSeenType(null.StringFrom(SeenType_LureEncounter))
-			case SeenType_Wild:
-				pokemon.SetSeenType(null.StringFrom(SeenType_Encounter))
+			switch pokemon.SeenType.Code {
+			case SeenTypeCodeLureWild:
+				pokemon.SetSeenType(SeenTypeCodeLureEncounter)
+			case SeenTypeCodeWild:
+				pokemon.SetSeenType(SeenTypeCodeEncounter)
 			}
 		} else {
 			pokemon.clearIv(true)
@@ -979,8 +1338,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 			}
 		}
 		pokemon.SetLevel(null.IntFrom(newLevel))
-		if newLevel != oldLevel || pokemon.AtkIv.Valid &&
-			(pokemon.AtkIv.Int64 != oldAtk || pokemon.DefIv.Int64 != oldDef || pokemon.StaIv.Int64 != oldSta) {
+		// oldLevel was read from the narrowed field, so narrow newLevel too
+		// (see narrowUint8) — otherwise a level pushed out of range by the
+		// boost adjustment would clear CP and PVP on every sighting.
+		if narrowUint8(newLevel) != oldLevel || pokemon.AtkIv.Valid &&
+			(int64OrZero(pokemon.AtkIv) != oldAtk || int64OrZero(pokemon.DefIv) != oldDef || int64OrZero(pokemon.StaIv) != oldSta) {
 			pokemon.SetCp(null.NewInt(0, false))
 			pokemon.SetPvp(null.NewString("", false))
 		}
@@ -994,11 +1356,11 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 	var displayPokemon int
 	var displayPokemonForm int
 	shouldOverrideIv := false
-	var overrideIv *grpc.PokemonScan
+	var overrideIv *pokemonScan
 	if pokemon.IsDitto {
-		displayPokemon = int(pokemon.DisplayPokemonId.Int64)
-		displayPokemonForm = int(pokemon.DisplayPokemonForm.Int64)
-		if pokemon.Weather.Int64 == int64(pogo.GameplayWeatherProto_NONE) {
+		displayPokemon = int(pokemon.DisplayPokemonId.ValueOrZero())
+		displayPokemonForm = int(pokemon.DisplayPokemonForm.ValueOrZero())
+		if int64OrZero(pokemon.Weather) == int64(pogo.GameplayWeatherProto_NONE) {
 			cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
 			cellWeather, found := weather[cellId]
 			if !found {
@@ -1040,8 +1402,8 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			return
 		}
 		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
-			int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
-			float64(pokemon.Level.Int64))
+			int(pokemon.AtkIv.ValueOrZero()), int(pokemon.DefIv.ValueOrZero()), int(pokemon.StaIv.ValueOrZero()),
+			float64(pokemon.Level.ValueOrZero()))
 	}
 	if err == nil {
 		pokemon.SetCp(null.IntFrom(int64(cp)))

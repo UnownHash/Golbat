@@ -33,9 +33,15 @@ type Incident struct {
 
 	IncidentData // Embedded data fields - can be copied for write-behind queue
 
-	dirty         bool     `db:"-"` // Not persisted - tracks if object needs saving
-	newRecord     bool     `db:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty     bool `db:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
+
+	// debug accumulates per-field change descriptions for dbDebugLog (see
+	// debugChangeAccumulator in db_debug.go). Placed before oldValues, not
+	// last: a zero-sized field placed last forces Go to add a word of
+	// padding to keep a past-the-end pointer valid, which would cancel the
+	// saving this type exists for.
+	debug debugChangeAccumulator `db:"-"`
 
 	oldValues IncidentOldValues `db:"-"` // Old values for webhook comparison
 }
@@ -143,7 +149,7 @@ func (incident *Incident) snapshotOldValues() {
 func (incident *Incident) SetId(v string) {
 	if incident.Id != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Id:%s->%s", incident.Id, v))
+			incident.debug.recordChange(fmt.Sprintf("Id:%s->%s", incident.Id, v))
 		}
 		incident.Id = v
 		incident.dirty = true
@@ -153,7 +159,7 @@ func (incident *Incident) SetId(v string) {
 func (incident *Incident) SetPokestopId(v string) {
 	if incident.PokestopId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("PokestopId:%s->%s", incident.PokestopId, v))
+			incident.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", incident.PokestopId, v))
 		}
 		incident.PokestopId = v
 		incident.dirty = true
@@ -163,7 +169,7 @@ func (incident *Incident) SetPokestopId(v string) {
 func (incident *Incident) SetStartTime(v int64) {
 	if incident.StartTime != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("StartTime:%d->%d", incident.StartTime, v))
+			incident.debug.recordChange(fmt.Sprintf("StartTime:%d->%d", incident.StartTime, v))
 		}
 		incident.StartTime = v
 		incident.dirty = true
@@ -173,7 +179,7 @@ func (incident *Incident) SetStartTime(v int64) {
 func (incident *Incident) SetExpirationTime(v int64) {
 	if incident.ExpirationTime != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("ExpirationTime:%d->%d", incident.ExpirationTime, v))
+			incident.debug.recordChange(fmt.Sprintf("ExpirationTime:%d->%d", incident.ExpirationTime, v))
 		}
 		incident.ExpirationTime = v
 		incident.dirty = true
@@ -183,7 +189,7 @@ func (incident *Incident) SetExpirationTime(v int64) {
 func (incident *Incident) SetDisplayType(v int16) {
 	if incident.DisplayType != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("DisplayType:%d->%d", incident.DisplayType, v))
+			incident.debug.recordChange(fmt.Sprintf("DisplayType:%d->%d", incident.DisplayType, v))
 		}
 		incident.DisplayType = v
 		incident.dirty = true
@@ -193,7 +199,7 @@ func (incident *Incident) SetDisplayType(v int16) {
 func (incident *Incident) SetStyle(v int16) {
 	if incident.Style != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Style:%d->%d", incident.Style, v))
+			incident.debug.recordChange(fmt.Sprintf("Style:%d->%d", incident.Style, v))
 		}
 		incident.Style = v
 		incident.dirty = true
@@ -203,7 +209,7 @@ func (incident *Incident) SetStyle(v int16) {
 func (incident *Incident) SetCharacter(v int16) {
 	if incident.Character != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Character:%d->%d", incident.Character, v))
+			incident.debug.recordChange(fmt.Sprintf("Character:%d->%d", incident.Character, v))
 		}
 		incident.Character = v
 		incident.dirty = true
@@ -213,7 +219,7 @@ func (incident *Incident) SetCharacter(v int16) {
 func (incident *Incident) SetConfirmed(v bool) {
 	if incident.Confirmed != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Confirmed:%t->%t", incident.Confirmed, v))
+			incident.debug.recordChange(fmt.Sprintf("Confirmed:%t->%t", incident.Confirmed, v))
 		}
 		incident.Confirmed = v
 		incident.dirty = true
@@ -223,7 +229,7 @@ func (incident *Incident) SetConfirmed(v bool) {
 func (incident *Incident) SetSlot1PokemonId(v null.Int) {
 	if incident.Slot1PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1PokemonId:%s->%s", FormatNull(incident.Slot1PokemonId), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot1PokemonId:%s->%s", FormatNull(incident.Slot1PokemonId), FormatNull(v)))
 		}
 		incident.Slot1PokemonId = v
 		incident.dirty = true
@@ -233,7 +239,7 @@ func (incident *Incident) SetSlot1PokemonId(v null.Int) {
 func (incident *Incident) SetSlot1Form(v null.Int) {
 	if incident.Slot1Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot1Form:%s->%s", FormatNull(incident.Slot1Form), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot1Form:%s->%s", FormatNull(incident.Slot1Form), FormatNull(v)))
 		}
 		incident.Slot1Form = v
 		incident.dirty = true
@@ -243,7 +249,7 @@ func (incident *Incident) SetSlot1Form(v null.Int) {
 func (incident *Incident) SetSlot2PokemonId(v null.Int) {
 	if incident.Slot2PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2PokemonId:%s->%s", FormatNull(incident.Slot2PokemonId), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot2PokemonId:%s->%s", FormatNull(incident.Slot2PokemonId), FormatNull(v)))
 		}
 		incident.Slot2PokemonId = v
 		incident.dirty = true
@@ -253,7 +259,7 @@ func (incident *Incident) SetSlot2PokemonId(v null.Int) {
 func (incident *Incident) SetSlot2Form(v null.Int) {
 	if incident.Slot2Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot2Form:%s->%s", FormatNull(incident.Slot2Form), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot2Form:%s->%s", FormatNull(incident.Slot2Form), FormatNull(v)))
 		}
 		incident.Slot2Form = v
 		incident.dirty = true
@@ -263,7 +269,7 @@ func (incident *Incident) SetSlot2Form(v null.Int) {
 func (incident *Incident) SetSlot3PokemonId(v null.Int) {
 	if incident.Slot3PokemonId != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3PokemonId:%s->%s", FormatNull(incident.Slot3PokemonId), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot3PokemonId:%s->%s", FormatNull(incident.Slot3PokemonId), FormatNull(v)))
 		}
 		incident.Slot3PokemonId = v
 		incident.dirty = true
@@ -273,7 +279,7 @@ func (incident *Incident) SetSlot3PokemonId(v null.Int) {
 func (incident *Incident) SetSlot3Form(v null.Int) {
 	if incident.Slot3Form != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Slot3Form:%s->%s", FormatNull(incident.Slot3Form), FormatNull(v)))
+			incident.debug.recordChange(fmt.Sprintf("Slot3Form:%s->%s", FormatNull(incident.Slot3Form), FormatNull(v)))
 		}
 		incident.Slot3Form = v
 		incident.dirty = true
@@ -283,7 +289,7 @@ func (incident *Incident) SetSlot3Form(v null.Int) {
 func (incident *Incident) SetUpdated(v int64) {
 	if incident.Updated != v {
 		if dbDebugEnabled {
-			incident.changedFields = append(incident.changedFields, fmt.Sprintf("Updated:%d->%d", incident.Updated, v))
+			incident.debug.recordChange(fmt.Sprintf("Updated:%d->%d", incident.Updated, v))
 		}
 		incident.Updated = v
 		incident.dirty = true

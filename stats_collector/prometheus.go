@@ -335,6 +335,11 @@ var (
 		},
 		[]string{"change_type"},
 	)
+	fieldClamped = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Namespace: ns,
+		Name:      "field_clamped_total",
+		Help:      "Values clamped to the range of their database column during decode",
+	}, []string{"field"})
 
 	// Hot-path health metrics
 	workerBacklog = prometheus.NewGaugeVec(
@@ -747,6 +752,10 @@ func (col *promCollector) IncFortChange(changeType string) {
 	fortChange.WithLabelValues(changeType).Inc()
 }
 
+func (col *promCollector) IncFieldClamped(field string) {
+	fieldClamped.WithLabelValues(field).Inc()
+}
+
 func (col *promCollector) SetWorkerBacklog(worker string, depth float64) {
 	workerBacklog.WithLabelValues(worker).Set(depth)
 }
@@ -832,6 +841,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
+		fieldClamped,
 		duplicateEncounters, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,

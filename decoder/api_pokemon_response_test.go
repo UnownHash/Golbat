@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/jsonenc"
 )
 
 func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
@@ -14,8 +16,8 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 			Lat:                51.5,
 			Lon:                -0.1,
 			PokemonId:          25,
-			Cp:                 null.IntFrom(500),
-			AtkIv:              null.IntFrom(15),
+			Cp:                 null.ValueFrom(uint16(500)),
+			AtkIv:              null.ValueFrom(uint8(15)),
 			FirstSeenTimestamp: 1000,
 			Changed:            2000,
 			// Level intentionally left unset -> should be a nil pointer (null)
@@ -43,7 +45,10 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 		t.Errorf("PVP leagues should be nil when ohbem is nil, got %+v", got.Pvp)
 	}
 
-	b, err := json.Marshal(got)
+	// Marshals through jsonenc, not encoding/json directly, so this test
+	// tracks whichever codec the current build selects — see jsonenc's
+	// package doc for what -tags go_json does and doesn't gate.
+	b, err := jsonenc.Marshal(got)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -66,35 +71,35 @@ func goldenSnapshotPokemon() *Pokemon {
 		PokemonData: PokemonData{
 			Id:                      9876543210,
 			PokestopId:              null.StringFrom("stop-abc"),
-			SpawnId:                 null.IntFrom(7777),
+			SpawnId:                 null.ValueFrom(int64(7777)),
 			Lat:                     12.3456,
 			Lon:                     -65.4321,
-			Weight:                  null.FloatFrom(3.14),
-			Size:                    null.IntFrom(2),
-			Height:                  null.FloatFrom(0.5),
-			ExpireTimestamp:         null.IntFrom(1700000000),
-			Updated:                 null.IntFrom(1699999999),
+			Weight:                  null.ValueFrom(float32(3.14)),
+			Size:                    null.ValueFrom(uint8(2)),
+			Height:                  null.ValueFrom(float32(0.5)),
+			ExpireTimestamp:         null.ValueFrom(uint32(1700000000)),
+			Updated:                 null.ValueFrom(uint32(1699999999)),
 			PokemonId:               150,
-			Move1:                   null.IntFrom(216),
-			Move2:                   null.IntFrom(94),
-			Gender:                  null.IntFrom(1),
-			Cp:                      null.IntFrom(3500),
-			AtkIv:                   null.IntFrom(15),
-			DefIv:                   null.IntFrom(14),
-			StaIv:                   null.IntFrom(13),
-			Iv:                      null.FloatFrom(93.33),
-			Form:                    null.IntFrom(0),
-			Level:                   null.IntFrom(35),
-			Weather:                 null.IntFrom(1),
-			Costume:                 null.IntFrom(0),
+			Move1:                   null.ValueFrom(uint16(216)),
+			Move2:                   null.ValueFrom(uint16(94)),
+			Gender:                  null.ValueFrom(uint8(1)),
+			Cp:                      null.ValueFrom(uint16(3500)),
+			AtkIv:                   null.ValueFrom(uint8(15)),
+			DefIv:                   null.ValueFrom(uint8(14)),
+			StaIv:                   null.ValueFrom(uint8(13)),
+			Iv:                      null.ValueFrom(float32(93.33)),
+			Form:                    null.ValueFrom(uint16(0)),
+			Level:                   null.ValueFrom(uint8(35)),
+			Weather:                 null.ValueFrom(uint8(1)),
+			Costume:                 null.ValueFrom(uint8(0)),
 			FirstSeenTimestamp:      1699990000,
 			Changed:                 1699995000,
-			CellId:                  null.IntFrom(1234567890123),
+			CellId:                  null.ValueFrom(int64(1234567890123)),
 			ExpireTimestampVerified: true,
 			// DisplayPokemonId / DisplayPokemonForm intentionally left null
 			IsDitto:  false,
-			SeenType: null.StringFrom("encounter"),
-			Shiny:    null.BoolFrom(true),
+			SeenType: SeenTypeFrom(SeenTypeCodeEncounter),
+			Shiny:    null.ValueFrom(true),
 			// Username intentionally left null
 		},
 	}
@@ -104,12 +109,18 @@ func goldenSnapshotPokemon() *Pokemon {
 // ApiPokemonResult (with ohbem disabled so pvp is {}). This struct is now shared
 // by every pokemon endpoint (v1/v2/v3/search), so any accidental change to a json
 // tag, field type, pointer/null handling, or field order will fail this test.
+//
+// Marshals through jsonenc, not encoding/json directly, so this test tracks
+// whichever codec the current build selects instead of always pinning
+// stdlib's output — see jsonenc's package doc for what -tags go_json does
+// and doesn't gate (it does not gate huma_api.go, which serves this struct
+// through goccy/go-json unconditionally either way).
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
 	if ohbem != nil {
 		t.Fatalf("expected ohbem to be nil in tests")
 	}
 
-	got, err := json.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
+	got, err := jsonenc.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -127,7 +138,7 @@ func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
 func TestApiPvpRankings_OmitsEmptyLeagues(t *testing.T) {
 	// Only Great populated; Little and Ultra empty.
 	pvp := ApiPvpRankings{Great: []ApiPvpEntry{{Pokemon: 99, Rank: 1}}}
-	b, err := json.Marshal(pvp)
+	b, err := jsonenc.Marshal(pvp)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -154,7 +165,7 @@ func TestApiPokemonScanResultV3_WireShape(t *testing.T) {
 		Total:        6,
 		LimitReached: true,
 	}
-	b, err := json.Marshal(res)
+	b, err := jsonenc.Marshal(res)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
@@ -174,7 +185,7 @@ func TestApiPokemonScanResultV3_WireShape(t *testing.T) {
 
 func TestApiPokemonV2_BareArrayShape(t *testing.T) {
 	res := []ApiPokemonResult{{Id: "1", PokemonId: 25}}
-	b, err := json.Marshal(res)
+	b, err := jsonenc.Marshal(res)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}

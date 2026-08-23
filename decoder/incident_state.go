@@ -23,7 +23,7 @@ func loadIncidentFromDatabase(ctx context.Context, db db.DbDetails, incidentId s
 	return timedDbQuery("loadIncidentFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, incident,
 			"SELECT "+incidentSelectColumns+" FROM incident WHERE id = ?", incidentId)
-		statsCollector.IncDbQuery("select incident", err)
+		getStatsCollector().IncDbQuery("select incident", err)
 		return err
 	})
 }
@@ -126,9 +126,9 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	// Debug logging before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Incident", incident.Id, incident.changedFields)
+			dbDebugLog("INSERT", "Incident", incident.Id, incident.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Incident", incident.Id, incident.changedFields)
+			dbDebugLog("UPDATE", "Incident", incident.Id, incident.debug.fields())
 		}
 	}
 
@@ -159,7 +159,7 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 	}
 
 	if dbDebugEnabled {
-		incident.changedFields = incident.changedFields[:0]
+		incident.debug.reset()
 	}
 	incident.ClearDirty()
 	if isNewRecord {
@@ -175,7 +175,7 @@ func incidentWriteDB(db db.DbDetails, incident *Incident, isNewRecord bool) erro
 		res, err := db.GeneralDb.NamedExec("INSERT INTO incident (id, pokestop_id, start, expiration, display_type, style, `character`, updated, confirmed, slot_1_pokemon_id, slot_1_form, slot_2_pokemon_id, slot_2_form, slot_3_pokemon_id, slot_3_form) "+
 			"VALUES (:id, :pokestop_id, :start, :expiration, :display_type, :style, :character, :updated, :confirmed, :slot_1_pokemon_id, :slot_1_form, :slot_2_pokemon_id, :slot_2_form, :slot_3_pokemon_id, :slot_3_form)", incident)
 
-		statsCollector.IncDbQuery("insert incident", err)
+		getStatsCollector().IncDbQuery("insert incident", err)
 		if err != nil {
 			log.Errorf("insert incident: %s", err)
 			return err
@@ -198,7 +198,7 @@ func incidentWriteDB(db db.DbDetails, incident *Incident, isNewRecord bool) erro
 			"slot_3_form = :slot_3_form "+
 			"WHERE id = :id", incident,
 		)
-		statsCollector.IncDbQuery("update incident", err)
+		getStatsCollector().IncDbQuery("update incident", err)
 		if err != nil {
 			log.Errorf("Update incident %s", err)
 			return err
@@ -254,6 +254,6 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 
 		areas := MatchStatsGeofenceWithCell(stopLat, stopLon, stopCellId)
 		webhooksSender.AddMessage(webhooks.Invasion, incidentHook, areas)
-		statsCollector.UpdateIncidentCount(areas)
+		getStatsCollector().UpdateIncidentCount(areas)
 	}
 }

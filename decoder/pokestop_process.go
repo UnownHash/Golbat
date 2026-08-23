@@ -35,11 +35,11 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	}
 
 	if quest.ChallengeQuest == nil {
-		statsCollector.IncDecodeQuest("error", "no_quest")
+		getStatsCollector().IncDecodeQuest("error", "no_quest")
 		return fmt.Sprintf("%s %s Blank quest", quest.FortId, haveArStr)
 	}
 
-	statsCollector.IncDecodeQuest("ok", haveArStr)
+	getStatsCollector().IncDecodeQuest("ok", haveArStr)
 
 	pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, quest.FortId, "UpdatePokestopWithQuest")
 	if err != nil {

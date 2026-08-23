@@ -78,9 +78,9 @@ func initRawProcessingLimiter() {
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
 		for range ticker.C {
-			if statsCollector != nil {
-				statsCollector.SetRawProcessingWaiting(float64(rawProcessingWaiting.Load()))
-			}
+			// statsCollector is never nil (see its doc comment) — no guard
+			// needed.
+			statsCollector.SetRawProcessingWaiting(float64(rawProcessingWaiting.Load()))
 		}
 	}()
 }
@@ -101,9 +101,7 @@ func acquireRawProcessingSlot() (func(), bool) {
 		// can see backpressure instead of inferring it from throughput.
 		if waiting := rawProcessingWaiting.Add(1); waiting > rawQueueCap {
 			rawProcessingWaiting.Add(-1)
-			if statsCollector != nil {
-				statsCollector.IncRawPacketsShed()
-			}
+			statsCollector.IncRawPacketsShed()
 			rawShedDrops.Report(func(dropped int64) {
 				log.Warnf("[RAW_LIMITER] shed %d packets in the last second (%d goroutines waiting for %d slots)",
 					dropped, waiting-1, cap(sem))

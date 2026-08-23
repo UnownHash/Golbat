@@ -44,7 +44,7 @@ func TestHandlePokemonEvictionCleansUncachedPokemon(t *testing.T) {
 // path can restore the tree point an eviction removed mid-update.
 func TestUpdatePokemonLookupReportsExisted(t *testing.T) {
 	const id = uint64(920003)
-	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(id), Lat: 1, Lon: 1, PokemonId: 1, Form: null.IntFrom(0)}}
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(id), Lat: 1, Lon: 1, PokemonId: 1, Form: null.ValueFrom(uint16(0))}}
 	defer pokemonLookupCache.Delete(id)
 
 	if existed := updatePokemonLookup(p, false, nil); existed {

@@ -69,16 +69,12 @@ func TimedOn(pool *sqlx.DB, caller string, fn func() error) error {
 	// Every call feeds the duration histogram (averages/percentiles per
 	// caller in Grafana); the threshold only gates the slow-query log line
 	// and counter. threshold <= 0 disables slow logging, not measurement.
-	if statsCollector != nil {
-		statsCollector.ObserveDbQuery(callerTag(caller), took.Seconds())
-	}
+	statsCollector.ObserveDbQuery(callerTag(caller), took.Seconds())
 	if threshold <= 0 || took <= time.Duration(threshold) {
 		return err
 	}
 
-	if statsCollector != nil {
-		statsCollector.IncSlowDbQuery(callerTag(caller))
-	}
+	statsCollector.IncSlowDbQuery(callerTag(caller))
 	if pool != nil {
 		s := pool.Stats()
 		log.Warnf("[DB_SLOW] %s took %s (err: %v) pool[inUse=%d idle=%d max=%d waits+%d poolWait+%s]",

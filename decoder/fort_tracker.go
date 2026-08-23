@@ -627,10 +627,10 @@ func clearFortWithLock[T comparable](ctx context.Context, dbDetails db.DbDetails
 		fortTracker.RemoveFort(fortId)
 		log.Infof("FortTracker: removed %s in cell %d: %s", ops.kindLabel, cellId, fortId)
 		CreateFortChangeWebhooks(fort, REMOVAL)
-		statsCollector.IncFortChange(ops.statDelete)
+		getStatsCollector().IncFortChange(ops.statDelete)
 	} else {
 		log.Infof("FortTracker: marked %s as deleted (converted to %s) in cell %d: %s", ops.kindLabel, ops.convertedToLabel, cellId, fortId)
-		statsCollector.IncFortChange(ops.statConvert)
+		getStatsCollector().IncFortChange(ops.statConvert)
 	}
 }
 

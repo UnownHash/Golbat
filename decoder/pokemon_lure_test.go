@@ -11,8 +11,6 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
-
-	"github.com/guregu/null/v6"
 )
 
 type recordedWebhook struct {
@@ -95,13 +93,13 @@ func TestUpdateFromMapPlacesNewRecordFromCapturedFort(t *testing.T) {
 	if pokemon.Lat != 51.5007 || pokemon.Lon != -0.1246 {
 		t.Errorf("Lat/Lon = %v/%v, want 51.5007/-0.1246", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureWild {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureWild)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureWild.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureWild.String())
 	}
 	if !pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = false, want true (GMO supplied ExpirationTimeMs)")
 	}
-	if got := pokemon.ExpireTimestamp.ValueOrZero(); got != expireMs/1000 {
+	if got := int64(pokemon.ExpireTimestamp.ValueOrZero()); got != expireMs/1000 {
 		t.Errorf("ExpireTimestamp = %d, want %d", got, expireMs/1000)
 	}
 	unlock()
@@ -136,9 +134,9 @@ func TestUpdateFromMapMergeAddsVerifiedExpiryOnce(t *testing.T) {
 	if !pokemon.updateFromMap(context.Background(), db.DbDetails{}, withExpiry, nil, "tester") {
 		t.Errorf("merge updateFromMap = false, want true (expiry contributed)")
 	}
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
 
 	// Identical replay: nothing left to contribute.
@@ -157,7 +155,7 @@ func TestUpdateFromMapLeavesNonLureRecordsAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getOrCreatePokemonRecord: %v", err)
 	}
-	pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
+	pokemon.SetSeenType(SeenTypeCodeWild)
 	pokemon.newRecord = false
 
 	raw := testRawMapPokemon(encId, "lure-fort-910103", 51.5, -0.12, time.Now().UnixMilli()+90_000)
@@ -252,13 +250,13 @@ func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
 	if pokemon.Lat != 40.7580 || pokemon.Lon != -73.9855 {
 		t.Errorf("Lat/Lon = %v/%v, want request coords 40.7580/-73.9855", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = true, want false (estimate)")
 	}
-	exp := pokemon.ExpireTimestamp.ValueOrZero()
+	exp := int64(pokemon.ExpireTimestamp.ValueOrZero())
 	if exp < before+lureSpawnLifetimeSeconds || exp > after+lureSpawnLifetimeSeconds {
 		t.Errorf("ExpireTimestamp = %d, want now+%ds (in [%d, %d])",
 			exp, lureSpawnLifetimeSeconds, before+lureSpawnLifetimeSeconds, after+lureSpawnLifetimeSeconds)
@@ -301,12 +299,12 @@ func TestGmoAfterDiskEncounterContributesVerifiedExpiry(t *testing.T) {
 	if pokemon == nil {
 		t.Fatalf("pokemon %d missing", encId)
 	}
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15 (encounter data must survive the GMO merge)", got)
@@ -331,16 +329,16 @@ func TestDiskEncounterAfterGmoUpgradesRecord(t *testing.T) {
 	if pokemon == nil {
 		t.Fatalf("pokemon %d missing", encId)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15", got)
 	}
 	// GMO-verified expiry must survive: the estimate is only for new records.
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true (estimate must not overwrite)",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
 	unlock()
 }

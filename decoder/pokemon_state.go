@@ -17,7 +17,6 @@ import (
 	"github.com/UnownHash/gohbem"
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/protobuf/proto"
 )
 
 // wildPokemonDelay is how long wild Pokemon wait for encounter data before writing
@@ -47,7 +46,7 @@ func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId u
 		err := db.PokemonDb.GetContext(ctx, pokemon,
 			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
 			strconv.FormatUint(encounterId, 10))
-		statsCollector.IncDbQuery("select pokemon", err)
+		getStatsCollector().IncDbQuery("select pokemon", err)
 		return err
 	})
 }
@@ -149,7 +148,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	}
 
 	if pokemon.FirstSeenTimestamp == 0 {
-		pokemon.FirstSeenTimestamp = now
+		pokemon.FirstSeenTimestamp = uint32(now)
 	}
 
 	pokemon.SetUpdated(null.IntFrom(now))
@@ -201,28 +200,15 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	if writeDB && !config.Config.PokemonMemoryOnly {
 		// Prepare internal data if needed (must happen before queueing)
 		if isEncounter && config.Config.PokemonInternalToDb {
-			unboosted, boosted, strong := pokemon.locateAllScans()
-			if unboosted != nil && boosted != nil {
-				unboosted.RemoveDittoAuxInfo()
-				boosted.RemoveDittoAuxInfo()
-			}
-			if strong != nil {
-				strong.RemoveDittoAuxInfo()
-			}
-			marshaled, err := proto.Marshal(&pokemon.internal)
-			if err == nil {
-				pokemon.GolbatInternal = marshaled
-			} else {
-				log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
-			}
+			pokemon.rewriteGolbatInternal()
 		}
 
 		// Debug logging happens here, before queueing
 		if dbDebugEnabled {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+				dbDebugLog("INSERT", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+				dbDebugLog("UPDATE", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 			}
 		}
 
@@ -231,10 +217,16 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 			// Determine delay based on seen type
 			// Wild/nearby Pokemon wait for potential encounter data, encounter writes immediately
 			delay := time.Duration(0)
-			seenType := pokemon.SeenType.ValueOrZero()
-			if seenType == SeenType_Wild || seenType == SeenType_LureWild ||
-				seenType == SeenType_Cell || seenType == SeenType_NearbyStop {
-				delay = wildPokemonDelay
+			// pokemon.SeenType.Valid guards the switch even though
+			// SeenTypeCode's zero value is now SeenTypeCodeUnset (matches no
+			// case below, so an unguarded read is harmless): belt and
+			// braces, kept so the intent — an unset SeenType never delays a
+			// write — stays explicit rather than relying on the sentinel.
+			if pokemon.SeenType.Valid {
+				switch pokemon.SeenType.Code {
+				case SeenTypeCodeWild, SeenTypeCodeLureWild, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
+					delay = wildPokemonDelay
+				}
 			}
 			pokemonQueue.Enqueue(pokemon.PokemonData, isNewRecord, delay)
 		} else {
@@ -243,7 +235,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		}
 	} else {
 		if dbDebugEnabled {
-			dbDebugLog("MEMORY", "Pokemon", pokemon.Id.String(), pokemon.changedFields)
+			dbDebugLog("MEMORY", "Pokemon", pokemon.Id.String(), pokemon.debug.fields())
 		}
 	}
 
@@ -281,7 +273,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
 
 	if dbDebugEnabled {
-		pokemon.changedFields = pokemon.changedFields[:0]
+		pokemon.debug.reset()
 	}
 	pokemon.newRecord = false // After saving, it's no longer a new record
 	pokemon.ClearDirty()
@@ -315,7 +307,7 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			":first_seen_timestamp, :changed, :cell_id, :expire_timestamp_verified, :shiny, :username, %s :is_event,"+
 			":seen_type)", pvpField, pokemon.Id, pvpValue), pokemon)
 
-		statsCollector.IncDbQuery("insert pokemon", err)
+		getStatsCollector().IncDbQuery("insert pokemon", err)
 		if err != nil {
 			log.Errorf("insert pokemon: [%d] %s", pokemon.Id, err)
 			pokemonCache.Delete(uint64(pokemon.Id))
@@ -359,14 +351,17 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			"display_pokemon_id = :display_pokemon_id, "+
 			"display_pokemon_form = :display_pokemon_form, "+
 			"is_ditto = :is_ditto, "+
-			"seen_type = :seen_type, "+
+			// COALESCE for the same reason as the batch upsert's seen_type
+			// (writebehind_batch.go): a NULL means "this binary does not
+			// recognise the stored value", not "clear it".
+			"seen_type = COALESCE(:seen_type, seen_type), "+
 			"shiny = :shiny, "+
 			"username = :username, "+
 			"%s"+
 			"is_event = :is_event "+
 			"WHERE id = \"%d\"", pvpUpdate, pokemon.Id), pokemon,
 		)
-		statsCollector.IncDbQuery("update pokemon", err)
+		getStatsCollector().IncDbQuery("update pokemon", err)
 		if err != nil {
 			log.Errorf("Update pokemon [%d] %s", pokemon.Id, err)
 			pokemonCache.Delete(uint64(pokemon.Id))
@@ -376,42 +371,52 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 	return nil
 }
 
+// PokemonWebhook's IV/stat fields hold the same narrowed types as
+// PokemonData rather than widening back to guregu/null's int64/float64. The
+// widening used to happen at the payload boundary (nullIntFromUint /
+// nullFloatFromFloat32) to keep webhook bytes identical to before the
+// struct-packing PR; the maintainer judged that requirement misattributed —
+// webhook consumers are this project's call, not a wire contract this code
+// owes byte-identity to. Once the float fields were narrowed for that
+// reason, narrowing the int fields alongside them keeps the struct
+// consistent: every field mirrors its storage width, and none goes through
+// a widen-for-no-reason step the others don't.
 type PokemonWebhook struct {
-	SpawnpointId          string          `json:"spawnpoint_id"`
-	PokestopId            string          `json:"pokestop_id"`
-	PokestopName          *string         `json:"pokestop_name"`
-	EncounterId           string          `json:"encounter_id"`
-	PokemonId             int16           `json:"pokemon_id"`
-	Latitude              float64         `json:"latitude"`
-	Longitude             float64         `json:"longitude"`
-	DisappearTime         int64           `json:"disappear_time"`
-	DisappearTimeVerified bool            `json:"disappear_time_verified"`
-	FirstSeen             int64           `json:"first_seen"`
-	LastModifiedTime      null.Int        `json:"last_modified_time"`
-	Gender                null.Int        `json:"gender"`
-	Cp                    null.Int        `json:"cp"`
-	Form                  null.Int        `json:"form"`
-	Costume               null.Int        `json:"costume"`
-	IndividualAttack      null.Int        `json:"individual_attack"`
-	IndividualDefense     null.Int        `json:"individual_defense"`
-	IndividualStamina     null.Int        `json:"individual_stamina"`
-	PokemonLevel          null.Int        `json:"pokemon_level"`
-	Move1                 null.Int        `json:"move_1"`
-	Move2                 null.Int        `json:"move_2"`
-	Weight                null.Float      `json:"weight"`
-	Size                  null.Int        `json:"size"`
-	Height                null.Float      `json:"height"`
-	Weather               null.Int        `json:"weather"`
-	Capture1              float64         `json:"capture_1"`
-	Capture2              float64         `json:"capture_2"`
-	Capture3              float64         `json:"capture_3"`
-	Shiny                 null.Bool       `json:"shiny"`
-	Username              null.String     `json:"username"`
-	DisplayPokemonId      null.Int        `json:"display_pokemon_id"`
-	DisplayPokemonForm    null.Int        `json:"display_pokemon_form"`
-	IsEvent               int8            `json:"is_event"`
-	SeenType              null.String     `json:"seen_type"`
-	Pvp                   json.RawMessage `json:"pvp"`
+	SpawnpointId          string              `json:"spawnpoint_id"`
+	PokestopId            string              `json:"pokestop_id"`
+	PokestopName          *string             `json:"pokestop_name"`
+	EncounterId           string              `json:"encounter_id"`
+	PokemonId             int16               `json:"pokemon_id"`
+	Latitude              float64             `json:"latitude"`
+	Longitude             float64             `json:"longitude"`
+	DisappearTime         int64               `json:"disappear_time"`
+	DisappearTimeVerified bool                `json:"disappear_time_verified"`
+	FirstSeen             int64               `json:"first_seen"`
+	LastModifiedTime      null.Value[uint32]  `json:"last_modified_time"`
+	Gender                null.Value[uint8]   `json:"gender"`
+	Cp                    null.Value[uint16]  `json:"cp"`
+	Form                  null.Value[uint16]  `json:"form"`
+	Costume               null.Value[uint8]   `json:"costume"`
+	IndividualAttack      null.Value[uint8]   `json:"individual_attack"`
+	IndividualDefense     null.Value[uint8]   `json:"individual_defense"`
+	IndividualStamina     null.Value[uint8]   `json:"individual_stamina"`
+	PokemonLevel          null.Value[uint8]   `json:"pokemon_level"`
+	Move1                 null.Value[uint16]  `json:"move_1"`
+	Move2                 null.Value[uint16]  `json:"move_2"`
+	Weight                null.Value[float32] `json:"weight"`
+	Size                  null.Value[uint8]   `json:"size"`
+	Height                null.Value[float32] `json:"height"`
+	Weather               null.Value[uint8]   `json:"weather"`
+	Capture1              float64             `json:"capture_1"`
+	Capture2              float64             `json:"capture_2"`
+	Capture3              float64             `json:"capture_3"`
+	Shiny                 null.Value[bool]    `json:"shiny"`
+	Username              null.String         `json:"username"`
+	DisplayPokemonId      null.Value[uint16]  `json:"display_pokemon_id"`
+	DisplayPokemonForm    null.Value[uint16]  `json:"display_pokemon_form"`
+	IsEvent               int8                `json:"is_event"`
+	SeenType              NullSeenType        `json:"seen_type"` // MarshalJSON matches null.String: a quoted string, or null
+	Pvp                   json.RawMessage     `json:"pvp"`
 }
 
 func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
@@ -422,7 +427,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 
 		spawnpointId := "None"
 		if pokemon.SpawnId.Valid {
-			spawnpointId = strconv.FormatInt(pokemon.SpawnId.ValueOrZero(), 16)
+			spawnpointId = strconv.FormatUint(uint64(pokemon.SpawnId.ValueOrZero()), 16)
 		}
 
 		pokestopId := "None"
@@ -454,9 +459,9 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			PokemonId:             pokemon.PokemonId,
 			Latitude:              pokemon.Lat,
 			Longitude:             pokemon.Lon,
-			DisappearTime:         pokemon.ExpireTimestamp.ValueOrZero(),
+			DisappearTime:         int64OrZero(pokemon.ExpireTimestamp),
 			DisappearTimeVerified: pokemon.ExpireTimestampVerified,
-			FirstSeen:             pokemon.FirstSeenTimestamp,
+			FirstSeen:             int64(pokemon.FirstSeenTimestamp),
 			LastModifiedTime:      pokemon.Updated,
 			Gender:                pokemon.Gender,
 			Cp:                    pokemon.Cp,
@@ -472,16 +477,21 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Size:                  pokemon.Size,
 			Height:                pokemon.Height,
 			Weather:               pokemon.Weather,
-			Capture1:              pokemon.Capture1.ValueOrZero(),
-			Capture2:              pokemon.Capture2.ValueOrZero(),
-			Capture3:              pokemon.Capture3.ValueOrZero(),
-			Shiny:                 pokemon.Shiny,
-			Username:              pokemon.Username,
-			DisplayPokemonId:      pokemon.DisplayPokemonId,
-			DisplayPokemonForm:    pokemon.DisplayPokemonForm,
-			IsEvent:               pokemon.IsEvent,
-			SeenType:              pokemon.SeenType,
-			Pvp:                   pvp,
+			// capture_1/2/3 have never been populated by any code path — the
+			// setters existed but had no callers, and the columns were in
+			// neither pokemonSelectColumns nor pokemonBatchUpsertQuery. The
+			// payload keeps the fields at their long-standing value so
+			// consumers see no change.
+			Capture1:           0,
+			Capture2:           0,
+			Capture3:           0,
+			Shiny:              pokemon.Shiny,
+			Username:           pokemon.Username,
+			DisplayPokemonId:   pokemon.DisplayPokemonId,
+			DisplayPokemonForm: pokemon.DisplayPokemonForm,
+			IsEvent:            pokemon.IsEvent,
+			SeenType:           pokemon.SeenType,
+			Pvp:                pvp,
 		}
 
 		if pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid {
