@@ -988,7 +988,8 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 }
 
 func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition) {
-	if pokemon.Cp.Valid || ohbem == nil {
+	o := ohbem.Load()
+	if pokemon.Cp.Valid || o == nil {
 		return
 	}
 	var displayPokemon int
@@ -1033,13 +1034,13 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			return
 		}
 		// You should see boosted IV for 0P Ditto
-		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
+		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
 	} else {
 		if !pokemon.AtkIv.Valid || !pokemon.Level.Valid {
 			return
 		}
-		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
+		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(pokemon.AtkIv.Int64), int(pokemon.DefIv.Int64), int(pokemon.StaIv.Int64),
 			float64(pokemon.Level.Int64))
 	}

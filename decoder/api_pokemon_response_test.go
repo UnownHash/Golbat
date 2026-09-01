@@ -105,7 +105,7 @@ func goldenSnapshotPokemon() *Pokemon {
 // by every pokemon endpoint (v1/v2/v3/search), so any accidental change to a json
 // tag, field type, pointer/null handling, or field order will fail this test.
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
-	if ohbem != nil {
+	if ohbem.Load() != nil {
 		t.Fatalf("expected ohbem to be nil in tests")
 	}
 
