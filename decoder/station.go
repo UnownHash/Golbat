@@ -10,7 +10,7 @@ import (
 // StationData contains all database-persisted fields for Station.
 // This struct is embedded in Station and can be safely copied for write-behind queueing.
 type StationData struct {
-	Id                string  `db:"id"`
+	Id                FortId  `db:"id"`
 	Lat               float64 `db:"lat"`
 	Lon               float64 `db:"lon"`
 	Name              string  `db:"name"`
@@ -44,7 +44,7 @@ type StationData struct {
 // Station struct.
 // REMINDER! Dirty flag pattern - use setter methods to modify fields
 type Station struct {
-	mu TrackedMutex[string] `db:"-" json:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[FortId] `db:"-" json:"-"` // Object-level mutex with contention tracking
 
 	StationData // Embedded data fields - can be copied for write-behind queue
 
@@ -114,7 +114,7 @@ func (station *Station) snapshotOldValues() {
 
 // --- Set methods with dirty tracking ---
 
-func (station *Station) SetId(v string) {
+func (station *Station) SetId(v FortId) {
 	if station.Id != v {
 		if dbDebugEnabled {
 			station.debug.recordChange(fmt.Sprintf("Id:%s->%s", station.Id, v))

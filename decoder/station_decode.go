@@ -10,8 +10,8 @@ import (
 	"golbat/util"
 )
 
-func (station *Station) updateFromStationProto(stationProto *pogo.StationProto, cellId uint64) *Station {
-	station.SetId(stationProto.Id)
+func (station *Station) updateFromStationProto(stationId FortId, stationProto *pogo.StationProto, cellId uint64) *Station {
+	station.SetId(stationId)
 	name := stationProto.Name
 	// NOTE: Some names have more than 255 runes, which won't fit in our
 	// varchar(255).

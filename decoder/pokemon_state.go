@@ -142,7 +142,7 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 	return pokemon, func() { pokemon.Unlock() }, nil
 }
 
-func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64) {
+func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64, username string) {
 	if !pokemon.newRecord && !pokemon.IsDirty() {
 		return
 	}
@@ -158,12 +158,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	changePvpField := false
 	var pvpResults map[string][]gohbem.PokemonEntry
-	if ohbem != nil {
+	if o := ohbem.Load(); o != nil {
 		// Calculating PVP data - check for changes in pokemon properties that affect PVP rankings
 		// For new records, always calculate; for existing, check if relevant fields changed
 		shouldCalculatePvp := pokemon.AtkIv.Valid && (pokemon.isNewRecord() || pokemon.IsDirty())
 		if shouldCalculatePvp {
-			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+			pvp, err := o.QueryPvPRank(int(pokemon.PokemonId),
 				int(pokemon.Form.ValueOrZero()),
 				int(pokemon.Costume.ValueOrZero()),
 				int(pokemon.Gender.ValueOrZero()),
@@ -268,9 +268,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
-		createPokemonWebhooks(ctx, db, pokemon, areas)
+		createPokemonWebhooks(ctx, db, pokemon, areas, username)
 	}
-	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), areas: areas, now: now})
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), areas: areas, now: now})
 
 	if dbDebugEnabled {
 		pokemon.debug.reset()
@@ -419,7 +419,7 @@ type PokemonWebhook struct {
 	Pvp                   json.RawMessage     `json:"pvp"`
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName) {
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName, username string) {
 	if pokemon.isNewRecord() ||
 		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
 		pokemon.oldValues.Weather != pokemon.Weather ||
@@ -431,13 +431,13 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 		}
 
 		pokestopId := "None"
-		if pokemon.PokestopId.Valid {
-			pokestopId = pokemon.PokestopId.ValueOrZero()
+		if pokemon.PokestopId.Valid() {
+			pokestopId = pokemon.PokestopId.String()
 		}
 
 		var pokestopName *string
-		if pokemon.PokestopId.Valid {
-			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId.String, "createPokemonWebhooks")
+		if pokemon.PokestopId.Valid() {
+			pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokemon.PokestopId, "createPokemonWebhooks")
 			name := "Unknown"
 			if pokestop != nil {
 				name = pokestop.Name.ValueOrZero()
@@ -450,6 +450,8 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 		if pokemon.Pvp.Valid {
 			pvp = json.RawMessage(pokemon.Pvp.ValueOrZero())
 		}
+
+		webhookUsername := resolveUsername(pokemon.Username, username)
 
 		pokemonHook := PokemonWebhook{
 			SpawnpointId:          spawnpointId,
@@ -486,7 +488,7 @@ func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemo
 			Capture2:           0,
 			Capture3:           0,
 			Shiny:              pokemon.Shiny,
-			Username:           pokemon.Username,
+			Username:           webhookUsername,
 			DisplayPokemonId:   pokemon.DisplayPokemonId,
 			DisplayPokemonForm: pokemon.DisplayPokemonForm,
 			IsEvent:            pokemon.IsEvent,

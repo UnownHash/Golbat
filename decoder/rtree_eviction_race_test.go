@@ -58,7 +58,7 @@ func TestUpdatePokemonLookupReportsExisted(t *testing.T) {
 // deferFortEviction must not touch lookup/tree state when the entry is
 // already gone (deleted fort) or owned by a converted counterpart.
 func TestDeferFortEvictionGuards(t *testing.T) {
-	const id = "fort-race-1"
+	id := mustFortId(t, "00000000000000000000000000000001")
 
 	// Absent lookup: no-op (and no panic / unpaired enqueue).
 	fortLookupCache.Delete(id)

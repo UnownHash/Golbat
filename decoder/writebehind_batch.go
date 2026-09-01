@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"cmp"
 	"context"
 	"time"
 
@@ -23,14 +24,14 @@ type S2CellData struct {
 
 // Typed queues for each entity type - using native key types for efficiency
 var (
-	pokestopQueue      *writebehind.TypedQueue[string, PokestopData]
-	gymQueue           *writebehind.TypedQueue[string, GymData]
+	pokestopQueue      *writebehind.TypedQueue[FortId, PokestopData]
+	gymQueue           *writebehind.TypedQueue[FortId, GymData]
 	pokemonQueue       *writebehind.TypedQueue[uint64, PokemonData]
 	spawnpointQueue    *writebehind.TypedQueue[int64, SpawnpointData]
 	routeQueue         *writebehind.TypedQueue[string, RouteData]
 	tappableQueue      *writebehind.TypedQueue[uint64, TappableData]
-	stationQueue       *writebehind.TypedQueue[string, StationData]
-	stationBattleQueue *writebehind.TypedQueue[string, stationBattleWrite]
+	stationQueue       *writebehind.TypedQueue[FortId, StationData]
+	stationBattleQueue *writebehind.TypedQueue[FortId, stationBattleWrite]
 	incidentQueue      *writebehind.TypedQueue[string, IncidentData]
 	s2cellQueue        *writebehind.TypedQueue[uint64, S2CellData]
 
@@ -62,7 +63,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 	queueManager = writebehind.NewQueueManager(startupDelay)
 
 	// Create typed queues for each entity type - using native key types
-	pokestopQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, PokestopData]{
+	pokestopQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, PokestopData]{
 		Name:                "pokestop",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -71,11 +72,12 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushPokestopBatch,
-		KeyFunc:             func(d PokestopData) string { return d.Id },
+		KeyFunc:             func(d PokestopData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(pokestopQueue)
 
-	gymQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, GymData]{
+	gymQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, GymData]{
 		Name:                "gym",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -84,7 +86,8 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushGymBatch,
-		KeyFunc:             func(d GymData) string { return d.Id },
+		KeyFunc:             func(d GymData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(gymQueue)
 
@@ -98,6 +101,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushPokemonBatchTyped,
 		KeyFunc:             func(d PokemonData) uint64 { return uint64(d.Id) },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(pokemonQueue)
 
@@ -111,6 +115,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushSpawnpointBatch,
 		KeyFunc:             func(d SpawnpointData) int64 { return d.Id },
+		KeyCompare:          cmp.Compare[int64],
 	})
 	queueManager.Register(spawnpointQueue)
 
@@ -124,6 +129,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushRouteBatch,
 		KeyFunc:             func(d RouteData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(routeQueue)
 
@@ -137,10 +143,11 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushTappableBatch,
 		KeyFunc:             func(d TappableData) uint64 { return d.Id },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(tappableQueue)
 
-	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, StationData]{
 		Name:                "station",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -149,11 +156,12 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushStationBatch,
-		KeyFunc:             func(d StationData) string { return d.Id },
+		KeyFunc:             func(d StationData) FortId { return d.Id },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(stationQueue)
 
-	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, stationBattleWrite]{
 		Name:                "station_battle",
 		BatchSize:           batchSize,
 		BatchTimeout:        batchTimeout,
@@ -162,7 +170,8 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Db:                  dbDetails,
 		Stats:               stats,
 		FlushFunc:           flushStationBattleBatch,
-		KeyFunc:             func(d stationBattleWrite) string { return d.StationId },
+		KeyFunc:             func(d stationBattleWrite) FortId { return d.StationId },
+		KeyCompare:          FortId.Compare,
 	})
 	queueManager.Register(stationBattleQueue)
 
@@ -176,6 +185,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushIncidentBatch,
 		KeyFunc:             func(d IncidentData) string { return d.Id },
+		KeyCompare:          cmp.Compare[string],
 	})
 	queueManager.Register(incidentQueue)
 
@@ -189,6 +199,7 @@ func InitTypedQueues(ctx context.Context, dbDetails db.DbDetails, stats stats_co
 		Stats:               stats,
 		FlushFunc:           flushS2CellBatch,
 		KeyFunc:             func(d S2CellData) uint64 { return d.Id },
+		KeyCompare:          cmp.Compare[uint64],
 	})
 	queueManager.Register(s2cellQueue)
 

@@ -35,6 +35,9 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 	if got.Level != nil {
 		t.Errorf("Level = %v, want nil (null)", got.Level)
 	}
+	if got.PokestopId != nil {
+		t.Errorf("PokestopId = %v, want nil (null)", got.PokestopId)
+	}
 	if got.PokemonId != 25 {
 		t.Errorf("PokemonId = %d, want 25", got.PokemonId)
 	}
@@ -59,6 +62,9 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 	if string(m["level"]) != "null" {
 		t.Errorf("level should serialize as null, got %s", m["level"])
 	}
+	if string(m["pokestop_id"]) != "null" {
+		t.Errorf("pokestop_id should serialize as null, got %s", m["pokestop_id"])
+	}
 	if _, ok := m["pvp"]; !ok {
 		t.Errorf("pvp key missing from output")
 	}
@@ -66,11 +72,11 @@ func TestBuildApiPokemonResult_NullablesAndDefaults(t *testing.T) {
 
 // goldenSnapshotPokemon is a representative pokemon with a mix of set and unset
 // (null) fields across every type, used to pin the exact wire format.
-func goldenSnapshotPokemon() *Pokemon {
+func goldenSnapshotPokemon(t *testing.T) *Pokemon {
 	return &Pokemon{
 		PokemonData: PokemonData{
 			Id:                      9876543210,
-			PokestopId:              null.StringFrom("stop-abc"),
+			PokestopId:              mustFortId(t, "00000000000000000000000000000abc"),
 			SpawnId:                 null.ValueFrom(int64(7777)),
 			Lat:                     12.3456,
 			Lon:                     -65.4321,
@@ -116,16 +122,16 @@ func goldenSnapshotPokemon() *Pokemon {
 // and doesn't gate (it does not gate huma_api.go, which serves this struct
 // through goccy/go-json unconditionally either way).
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
-	if ohbem != nil {
+	if ohbem.Load() != nil {
 		t.Fatalf("expected ohbem to be nil in tests")
 	}
 
-	got, err := jsonenc.Marshal(buildApiPokemonResult(goldenSnapshotPokemon()))
+	got, err := jsonenc.Marshal(buildApiPokemonResult(goldenSnapshotPokemon(t)))
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":"9876543210","pokestop_id":"stop-abc","spawn_id":7777,"lat":12.3456,"lon":-65.4321,"weight":3.14,"size":2,"height":0.5,"expire_timestamp":1700000000,"updated":1699999999,"pokemon_id":150,"move_1":216,"move_2":94,"gender":1,"cp":3500,"atk_iv":15,"def_iv":14,"sta_iv":13,"iv":93.33,"form":0,"level":35,"weather":1,"costume":0,"first_seen_timestamp":1699990000,"changed":1699995000,"cell_id":1234567890123,"expire_timestamp_verified":true,"display_pokemon_id":null,"display_pokemon_form":null,"is_ditto":false,"seen_type":"encounter","shiny":true,"username":null,"capture_1":null,"capture_2":null,"capture_3":null,"pvp":{},"is_event":0}`
+	const want = `{"id":"9876543210","pokestop_id":"00000000000000000000000000000abc","spawn_id":7777,"lat":12.3456,"lon":-65.4321,"weight":3.14,"size":2,"height":0.5,"expire_timestamp":1700000000,"updated":1699999999,"pokemon_id":150,"move_1":216,"move_2":94,"gender":1,"cp":3500,"atk_iv":15,"def_iv":14,"sta_iv":13,"iv":93.33,"form":0,"level":35,"weather":1,"costume":0,"first_seen_timestamp":1699990000,"changed":1699995000,"cell_id":1234567890123,"expire_timestamp_verified":true,"display_pokemon_id":null,"display_pokemon_form":null,"is_ditto":false,"seen_type":"encounter","shiny":true,"username":null,"capture_1":null,"capture_2":null,"capture_3":null,"pvp":{},"is_event":0}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

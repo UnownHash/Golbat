@@ -39,7 +39,7 @@ func TestIncidentLineup_OmitsNullSlots(t *testing.T) {
 }
 
 func TestUpdateFromBattleState_SetsSlot1(t *testing.T) {
-	incident := &Incident{IncidentData: IncidentData{Id: "-9", PokestopId: "F"}, newRecord: true}
+	incident := &Incident{IncidentData: IncidentData{Id: "-9", PokestopId: mustFortId(t, "00000000000000000000000000000ff0")}, newRecord: true}
 
 	out := &pogo.BattleStateOutProto{
 		BattleState: &pogo.BattleStateProto{
@@ -73,7 +73,7 @@ func TestUpdateFromBattleState_SetsSlot1(t *testing.T) {
 // At the opening state the opponent's reserves carry PokedexId 0 (species hidden):
 // those slots must stay NULL, not be written as pokemon id 0.
 func TestUpdateFromBattleState_HiddenReserveLeftNull(t *testing.T) {
-	incident := &Incident{IncidentData: IncidentData{Id: "-9", PokestopId: "F"}, newRecord: true}
+	incident := &Incident{IncidentData: IncidentData{Id: "-9", PokestopId: mustFortId(t, "00000000000000000000000000000ff0")}, newRecord: true}
 
 	out := &pogo.BattleStateOutProto{
 		BattleState: &pogo.BattleStateProto{

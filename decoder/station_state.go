@@ -65,7 +65,7 @@ type StationBattleWebhook struct {
 	BattlePokemonCpMultiplier null.Float `json:"battle_pokemon_cp_multiplier"`
 }
 
-func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId string, station *Station) error {
+func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId FortId, station *Station) error {
 	return timedDbQuery("loadStationFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, station,
 			`SELECT `+stationSelectColumns+` FROM station WHERE id = ?`, stationId)
@@ -76,7 +76,7 @@ func loadStationFromDatabase(ctx context.Context, db db.DbDetails, stationId str
 
 // peekStationRecord - cache-only lookup, no DB fallback, returns locked.
 // Caller MUST call returned unlock function if non-nil.
-func peekStationRecord(stationId string, caller string) (*Station, func(), error) {
+func peekStationRecord(stationId FortId, caller string) (*Station, func(), error) {
 	if station, ok := stationCache.Get(stationId); ok {
 		station.Lock(caller)
 		return station, func() { station.Unlock() }, nil
@@ -87,7 +87,7 @@ func peekStationRecord(stationId string, caller string) (*Station, func(), error
 // GetStationRecordReadOnly acquires lock but does NOT take snapshot.
 // Use for read-only checks. Will cause a backing database lookup.
 // Caller MUST call returned unlock function if non-nil.
-func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
+func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId FortId, caller string) (*Station, func(), error) {
 	// Check cache first
 	if station, ok := stationCache.Get(stationId); ok {
 		station.Lock(caller)
@@ -134,7 +134,7 @@ func GetStationRecordReadOnly(ctx context.Context, db db.DbDetails, stationId st
 
 // getStationRecordForUpdate acquires lock AND takes snapshot for webhook comparison.
 // Caller MUST call returned unlock function if non-nil.
-func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
+func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId FortId, caller string) (*Station, func(), error) {
 	station, unlock, err := GetStationRecordReadOnly(ctx, db, stationId, caller)
 	if err != nil || station == nil {
 		return nil, nil, err
@@ -145,7 +145,7 @@ func getStationRecordForUpdate(ctx context.Context, db db.DbDetails, stationId s
 
 // getOrCreateStationRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId string, caller string) (*Station, func(), error) {
+func getOrCreateStationRecord(ctx context.Context, db db.DbDetails, stationId FortId, caller string) (*Station, func(), error) {
 	// Create new Station atomically - function only called if key doesn't exist
 	station, _ := stationCache.GetOrSetFunc(stationId, func() *Station {
 		return &Station{StationData: StationData{Id: stationId}, newRecord: true}
@@ -201,9 +201,9 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 		// Debug logging before queueing
 		if dbDebugEnabled {
 			if isNewRecord {
-				dbDebugLog("INSERT", "Station", station.Id, station.debug.fields())
+				dbDebugLog("INSERT", "Station", station.Id.String(), station.debug.fields())
 			} else {
-				dbDebugLog("UPDATE", "Station", station.Id, station.debug.fields())
+				dbDebugLog("UPDATE", "Station", station.Id.String(), station.debug.fields())
 			}
 		}
 
@@ -237,7 +237,7 @@ func saveStationRecord(ctx context.Context, db db.DbDetails, station *Station) {
 	}
 	if config.Config.FortInMemory {
 		genericUpdateFort(station.Id, station.Lat, station.Lon, false)
-		updateStationLookupWithBattles(station, battles)
+		updateStationLookupWithBattles(station.Id, station, battles)
 	}
 }
 
@@ -313,7 +313,7 @@ type MaxBattleLobbyWebhook struct {
 
 func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
 	return MaxBattleLobbyWebhook{
-		Id:             station.Id,
+		Id:             station.Id.String(),
 		Latitude:       station.Lat,
 		Longitude:      station.Lon,
 		PlayerCount:    station.BattleLobbyCount.ValueOrZero(),
@@ -326,7 +326,12 @@ func buildMaxBattleLobbyWebhook(station *Station) MaxBattleLobbyWebhook {
 // cannot geofence a webhook without lat/lon, and a lobby message implies an active
 // known station. No DB write is performed.
 func UpdateStationBattleLobby(ctx context.Context, db db.DbDetails, stationId string, playerCount int32, joinEndMs int64) {
-	station, unlock, err := getStationRecordForUpdate(ctx, db, stationId, "BattleLobby")
+	fortId, ok := ParseFortId(stationId)
+	if !ok {
+		log.Errorf("UpdateStationBattleLobby: unparseable station id %q, dropping", stationId)
+		return
+	}
+	station, unlock, err := getStationRecordForUpdate(ctx, db, fortId, "BattleLobby")
 	if err != nil {
 		log.Warnf("UpdateStationBattleLobby: error loading station %s: %v", stationId, err)
 		return
@@ -359,7 +364,7 @@ func createStationWebhooksWithBattles(station *Station, battles []StationBattleD
 
 	if isNew || old.EndTime != station.EndTime || old.BattleSnapshot != battleSnapshot {
 		stationHook := StationWebhook{
-			Id:                    station.Id,
+			Id:                    station.Id.String(),
 			Latitude:              station.Lat,
 			Longitude:             station.Lon,
 			Name:                  station.Name,

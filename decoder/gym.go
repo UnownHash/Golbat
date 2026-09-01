@@ -11,7 +11,7 @@ import (
 // GymData contains all database-persisted fields for a Gym.
 // This struct is copyable and used for write-behind queue snapshots.
 type GymData struct {
-	Id                     string      `db:"id"`
+	Id                     FortId      `db:"id"`
 	Lat                    float64     `db:"lat"`
 	Lon                    float64     `db:"lon"`
 	Name                   null.String `db:"name"`
@@ -57,7 +57,7 @@ type GymData struct {
 // Gym struct.
 // REMINDER! Keep hasChangesGym updated after making changes
 type Gym struct {
-	mu TrackedMutex[string] `db:"-"` // Object-level mutex with contention tracking
+	mu TrackedMutex[FortId] `db:"-"` // Object-level mutex with contention tracking
 
 	GymData // Embedded data fields (all db columns)
 
@@ -148,7 +148,7 @@ func (gym *Gym) Unlock() {
 
 // --- Set methods with dirty tracking ---
 
-func (gym *Gym) SetId(v string) {
+func (gym *Gym) SetId(v FortId) {
 	if gym.Id != v {
 		if dbDebugEnabled {
 			gym.debug.recordChange(fmt.Sprintf("Id:%s->%s", gym.Id, v))

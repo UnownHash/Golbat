@@ -2,6 +2,8 @@ package decoder
 
 import (
 	"context"
+	"database/sql/driver"
+	"fmt"
 	"testing"
 	"time"
 
@@ -25,7 +27,15 @@ func (sender *recordingWebhooksSender) AddMessage(whType webhooks.WebhookType, p
 	sender.payloads = append(sender.payloads, payload)
 }
 
-func testStationBattle(stationId string, seed int64, level int16, start, end int64, pokemon int64) StationBattleData {
+// testStationId returns a deterministic, valid FortId derived from n, so
+// tests that need distinct station identities (or the same identity reused
+// across several battle rows) can name them cheaply and unambiguously.
+func testStationId(t *testing.T, n int) FortId {
+	t.Helper()
+	return mustFortId(t, fmt.Sprintf("%032x", n))
+}
+
+func testStationBattle(stationId FortId, seed int64, level int16, start, end int64, pokemon int64) StationBattleData {
 	return StationBattleData{
 		BreadBattleSeed: seed,
 		StationId:       stationId,
@@ -37,12 +47,15 @@ func testStationBattle(stationId string, seed int64, level int16, start, end int
 }
 
 func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
+	id1 := testStationId(t, 1)
+	id2 := testStationId(t, 2)
+	id3 := testStationId(t, 3)
 	query, args, err := buildDeleteObsoleteStationBattlesQuery(
-		[]string{"station-1", "station-2", "station-3"},
+		[]FortId{id1, id2, id3},
 		[]StationBattleData{
-			{StationId: "station-1", BreadBattleSeed: 1},
-			{StationId: "station-1", BreadBattleSeed: 2},
-			{StationId: "station-3", BreadBattleSeed: 3},
+			{StationId: id1, BreadBattleSeed: 1},
+			{StationId: id1, BreadBattleSeed: 2},
+			{StationId: id3, BreadBattleSeed: 3},
 		},
 	)
 	if err != nil {
@@ -54,8 +67,13 @@ func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
 		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
 	}
 
+	// sqlx.In does not itself call driver.Valuer on slice elements (only the
+	// database/sql machinery does, at Exec time) — see
+	// TestDeleteObsoleteStationBattlesBindsVarcharIds for the assertion that
+	// covers that later conversion. Here the bind args are still raw FortId
+	// values.
 	expectedArgs := []any{
-		"station-1", "station-2", "station-3",
+		id1, id2, id3,
 		int64(1), int64(2), int64(3),
 	}
 	if len(args) != len(expectedArgs) {
@@ -69,7 +87,9 @@ func TestBuildDeleteObsoleteStationBattlesQuery(t *testing.T) {
 }
 
 func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
-	query, args, err := buildDeleteObsoleteStationBattlesQuery([]string{"station-1", "station-2"}, nil)
+	id1 := testStationId(t, 1)
+	id2 := testStationId(t, 2)
+	query, args, err := buildDeleteObsoleteStationBattlesQuery([]FortId{id1, id2}, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -78,7 +98,7 @@ func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
 	if query != expectedQuery {
 		t.Fatalf("unexpected delete query:\nexpected: %s\ngot:      %s", expectedQuery, query)
 	}
-	expectedArgs := []any{"station-1", "station-2"}
+	expectedArgs := []any{id1, id2}
 	if len(args) != len(expectedArgs) {
 		t.Fatalf("expected %d args, got %d: %+v", len(expectedArgs), len(args), args)
 	}
@@ -89,8 +109,38 @@ func TestBuildDeleteObsoleteStationBattlesQueryWithNoKeepRows(t *testing.T) {
 	}
 }
 
+// sqlx.In expands []FortId through driver.Valuer. If that ever regressed,
+// this DELETE would bind the wrong values and quietly remove the wrong rows.
+func TestDeleteObsoleteStationBattlesBindsVarcharIds(t *testing.T) {
+	ids := []FortId{
+		mustFortId(t, "a1b2c3d4e5f60718293a4b5c6d7e8f90.23"),
+		mustFortId(t, "00000000000000000000000000000001.16"),
+	}
+	query, args, err := buildDeleteObsoleteStationBattlesQuery(ids, nil)
+	if err != nil {
+		t.Fatalf("buildDeleteObsoleteStationBattlesQuery error: %v", err)
+	}
+	if len(args) != len(ids) {
+		t.Fatalf("got %d bind args, want %d (query: %s)", len(args), len(ids), query)
+	}
+	for i, arg := range args {
+		v, err := driver.DefaultParameterConverter.ConvertValue(arg)
+		if err != nil {
+			t.Fatalf("arg %d is not a valid driver value: %v", i, err)
+		}
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("arg %d converted to %T (%v), want the varchar string", i, v, v)
+		}
+		if s != ids[i].String() {
+			t.Fatalf("arg %d = %q, want %q", i, s, ids[i].String())
+		}
+	}
+}
+
 func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 	now := time.Now().Unix()
+	stationId := testStationId(t, 1)
 	cases := []struct {
 		name     string
 		inserted []StationBattleData
@@ -99,32 +149,32 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 		{
 			name: "observed earlier-ending active battle keeps later-ending cached battle",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
-				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+				testStationBattle(stationId, 2, 2, now-60, now+3600, 133),
+				testStationBattle(stationId, 1, 1, now-60, now+1800, 527),
 			},
 			expected: []int64{1, 2},
 		},
 		{
 			name: "observed later-ending future battle evicts earlier-ending active battle",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 1, 3, now-120, now+7200, 374),
-				testStationBattle("station-1", 2, 1, now+600, now+9000, 527),
+				testStationBattle(stationId, 1, 3, now-120, now+7200, 374),
+				testStationBattle(stationId, 2, 1, now+600, now+9000, 527),
 			},
 			expected: []int64{2},
 		},
 		{
 			name: "observed active battle keeps later-ending future cached battle",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 2, 2, now+600, now+7200, 133),
-				testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
+				testStationBattle(stationId, 2, 2, now+600, now+7200, 133),
+				testStationBattle(stationId, 1, 1, now-60, now+1800, 527),
 			},
 			expected: []int64{1, 2},
 		},
 		{
 			name: "keeps future-only battles sorted by earliest end",
 			inserted: []StationBattleData{
-				testStationBattle("station-1", 2, 2, now+1800, now+7200, 527),
-				testStationBattle("station-1", 1, 3, now+600, now+3600, 374),
+				testStationBattle(stationId, 2, 2, now+1800, now+7200, 527),
+				testStationBattle(stationId, 1, 3, now+600, now+3600, 374),
 			},
 			expected: []int64{1, 2},
 		},
@@ -137,7 +187,7 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 				upsertCachedStationBattle(battle, now)
 			}
 
-			battles := getKnownStationBattles("station-1", now)
+			battles := getKnownStationBattles(stationId, now)
 			if len(battles) != len(tc.expected) {
 				t.Fatalf("expected %d battles, got %d (%+v)", len(tc.expected), len(battles), battles)
 			}
@@ -156,6 +206,7 @@ func TestUpsertCachedStationBattleOrdering(t *testing.T) {
 
 func TestObservedStationBattleEvictsCachedBattlesEndingNoLater(t *testing.T) {
 	now := time.Now().Unix()
+	stationId := testStationId(t, 1)
 	cases := []struct {
 		name          string
 		cachedStart   int64
@@ -182,10 +233,10 @@ func TestObservedStationBattleEvictsCachedBattlesEndingNoLater(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			initStationBattleCache()
-			upsertCachedStationBattle(testStationBattle("station-1", 1, 1, tc.cachedStart, tc.cachedEnd, 527), now)
-			upsertCachedStationBattle(testStationBattle("station-1", 2, 2, tc.observedStart, tc.observedEnd, 133), now)
+			upsertCachedStationBattle(testStationBattle(stationId, 1, 1, tc.cachedStart, tc.cachedEnd, 527), now)
+			upsertCachedStationBattle(testStationBattle(stationId, 2, 2, tc.observedStart, tc.observedEnd, 133), now)
 
-			battles := getKnownStationBattles("station-1", now)
+			battles := getKnownStationBattles(stationId, now)
 			if len(battles) != 1 {
 				t.Fatalf("expected observed battle to evict cached battle ending no later, got %+v", battles)
 			}
@@ -202,7 +253,7 @@ func TestBuildStationResultUsesTopBattleForFlatFields(t *testing.T) {
 
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
+			Id:              testStationId(t, 1),
 			Name:            "Station",
 			Lat:             1,
 			Lon:             2,
@@ -265,7 +316,7 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:                "station-1",
+			Id:                testStationId(t, 1),
 			Name:              "Station",
 			Lat:               1,
 			Lon:               2,
@@ -304,15 +355,16 @@ func TestBuildStationResultProjectsFutureBattleFromCache(t *testing.T) {
 func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 	initStationBattleCache()
 	now := time.Now().Unix()
-	station := &Station{StationData: StationData{Id: "station-1", Lat: 1, Lon: 2}}
+	stationId := testStationId(t, 1)
+	station := &Station{StationData: StationData{Id: stationId, Lat: 1, Lon: 2}}
 
 	storeStationBattles(station.Id, []StationBattleData{
 		testStationBattle(station.Id, 1, 1, now-60, now+1800, 527),
 		testStationBattle(station.Id, 2, 2, now-60, now+3600, 133),
 	})
-	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, now))
+	updateStationLookupWithBattles(stationId, station, getKnownStationBattles(station.Id, now))
 
-	lookup, ok := fortLookupCache.Load(station.Id)
+	lookup, ok := fortLookupCache.Load(stationId)
 	if !ok {
 		t.Fatal("expected station lookup")
 	}
@@ -334,7 +386,7 @@ func TestCreateStationWebhooksEmitsFutureBattle(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:                "station-1",
+			Id:                testStationId(t, 1),
 			Name:              "Station",
 			Lat:               1,
 			Lon:               2,
@@ -376,7 +428,7 @@ func TestCreateStationWebhooksUsesTopBattleForFlatFields(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
+			Id:              testStationId(t, 1),
 			Name:            "Station",
 			Lat:             1,
 			Lon:             2,
@@ -411,7 +463,7 @@ func TestSyncStationBattlesFromProtoClearsCachedBattlesWhenDetailsMissing(t *tes
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:        "station-1",
+			Id:        testStationId(t, 1),
 			Name:      "Station",
 			Lat:       1,
 			Lon:       2,
@@ -449,7 +501,7 @@ func TestBuildStationResultSuppressesStaleBattleAfterExpiredHydratedCache(t *tes
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
+			Id:              testStationId(t, 1),
 			Name:            "Station",
 			Lat:             1,
 			Lon:             2,
@@ -462,7 +514,7 @@ func TestBuildStationResultSuppressesStaleBattleAfterExpiredHydratedCache(t *tes
 			BattlePokemonId: null.IntFrom(527),
 		},
 	}
-	storeStationBattles("station-1", []StationBattleData{{
+	storeStationBattles(station.Id, []StationBattleData{{
 		BreadBattleSeed: 1,
 		StationId:       station.Id,
 		BattleLevel:     1,
@@ -487,17 +539,19 @@ func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T
 	previousStationBattleQueue := stationBattleQueue
 	previousSender := webhooksSender
 	stats := stats_collector.NewNoopStatsCollector()
-	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, StationData]{
-		Name:      "station",
-		Stats:     stats,
-		FlushFunc: func(context.Context, db.DbDetails, []StationData) error { return nil },
-		KeyFunc:   func(d StationData) string { return d.Id },
+	stationQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, StationData]{
+		Name:       "station",
+		Stats:      stats,
+		FlushFunc:  func(context.Context, db.DbDetails, []StationData) error { return nil },
+		KeyFunc:    func(d StationData) FortId { return d.Id },
+		KeyCompare: FortId.Compare,
 	})
-	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[string, stationBattleWrite]{
-		Name:      "station_battle",
-		Stats:     stats,
-		FlushFunc: func(context.Context, db.DbDetails, []stationBattleWrite) error { return nil },
-		KeyFunc:   func(d stationBattleWrite) string { return d.StationId },
+	stationBattleQueue = writebehind.NewTypedQueue(writebehind.TypedQueueConfig[FortId, stationBattleWrite]{
+		Name:       "station_battle",
+		Stats:      stats,
+		FlushFunc:  func(context.Context, db.DbDetails, []stationBattleWrite) error { return nil },
+		KeyFunc:    func(d stationBattleWrite) FortId { return d.StationId },
+		KeyCompare: FortId.Compare,
 	})
 	webhooksSender = &recordingWebhooksSender{}
 	setStatsCollectorForTest(t, stats)
@@ -508,18 +562,19 @@ func TestSaveStationRecordRefreshesStationWhenOnlyBattleListChanges(t *testing.T
 	}()
 
 	now := time.Now().Unix()
+	stationId := testStationId(t, 1)
 	oldBattles := []StationBattleData{
-		testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
-		testStationBattle("station-1", 2, 2, now-60, now+3600, 133),
+		testStationBattle(stationId, 1, 1, now-60, now+1800, 527),
+		testStationBattle(stationId, 2, 2, now-60, now+3600, 133),
 	}
 	newBattles := []StationBattleData{
-		testStationBattle("station-1", 1, 1, now-60, now+1800, 527),
-		testStationBattle("station-1", 3, 2, now-60, now+3600, 133),
+		testStationBattle(stationId, 1, 1, now-60, now+1800, 527),
+		testStationBattle(stationId, 3, 2, now-60, now+3600, 133),
 	}
-	storeStationBattles("station-1", newBattles)
+	storeStationBattles(stationId, newBattles)
 	station := &Station{
 		StationData: StationData{
-			Id:              "station-1",
+			Id:              stationId,
 			Name:            "Station",
 			Lat:             1,
 			Lon:             2,
@@ -553,7 +608,7 @@ func TestApplyTopStationBattleToStationUsesCpMultiplierTolerance(t *testing.T) {
 	now := time.Now().Unix()
 	station := &Station{
 		StationData: StationData{
-			Id:                        "station-1",
+			Id:                        testStationId(t, 1),
 			BattleLevel:               null.IntFrom(1),
 			BattleStart:               null.IntFrom(now - 60),
 			BattleEnd:                 null.IntFrom(now + 1800),

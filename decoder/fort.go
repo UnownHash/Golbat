@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -80,7 +81,7 @@ func InitWebHookFortFromGym(gym *Gym) *FortWebhook {
 		return nil
 	}
 	fort.Type = GYM.String()
-	fort.Id = gym.Id
+	fort.Id = gym.Id.String()
 	fort.Name = gym.Name.Ptr()
 	fort.ImageUrl = gym.Url.Ptr()
 	fort.Description = gym.Description.Ptr()
@@ -95,7 +96,7 @@ func InitWebHookFortFromPokestop(stop *Pokestop) *FortWebhook {
 		return nil
 	}
 	fort.Type = POKESTOP.String()
-	fort.Id = stop.Id
+	fort.Id = stop.Id.String()
 	fort.Name = stop.Name.Ptr()
 	fort.ImageUrl = stop.Url.Ptr()
 	fort.Description = stop.Description.Ptr()
@@ -189,15 +190,21 @@ func getPathFromURL(u string) string {
 	return strings.TrimPrefix(parsedURL.Path, "/")
 }
 func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails, mapFort *pogo.GetMapFortsOutProto_FortProto) (bool, string) {
+	fortId, ok := ParseFortId(mapFort.Id)
+	if !ok {
+		log.Errorf("UpdateFortRecordWithGetMapFortsOutProto: unparseable fort id %q", mapFort.Id)
+		return false, fmt.Sprintf("Error: unparseable fort id %q", mapFort.Id)
+	}
+
 	// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
-	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, mapFort)
+	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, fortId, mapFort)
 	if !status {
-		status, output = UpdateGymRecordWithGetMapFortsOutProto(ctx, db, mapFort)
+		status, output = UpdateGymRecordWithGetMapFortsOutProto(ctx, db, fortId, mapFort)
 	}
 
 	if !status {
-		getMapFortsCache.Set(mapFort.Id, mapFort, ottercache.DefaultTTL)
-		log.Debugf("Saved getMapFort in cache: %s", mapFort.Id)
+		getMapFortsCache.Set(fortId, mapFort, ottercache.DefaultTTL)
+		log.Debugf("Saved getMapFort in cache: %s", fortId)
 	}
 	return status, output
 }

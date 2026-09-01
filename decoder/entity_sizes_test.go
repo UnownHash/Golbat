@@ -92,11 +92,39 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// exactly, against 416.0 for a 392-byte control struct. Each history
 	// entry also shrank, 88 -> 44 bytes (allocator 96 -> 48).
 	//
+	// Task 8 moved PokestopId out of the pointer group entirely: it was
+	// null.String (24 bytes, 8-byte aligned — a 16-byte string header plus
+	// a bool, padded), and is now FortId (17 bytes, 1-byte aligned),
+	// relocated into the 1-byte group after SeenType per PokemonData's own
+	// field-order comment. That is a net -7 to the raw payload (-24 in the
+	// pointer group, +17 in the 1-byte group) — 251 -> 244 — and the
+	// mandatory pre-pointer-group padding shrinks from 5 bytes (155->160)
+	// to 4 (172->176), landing PokemonData at 248, eight bytes SMALLER than
+	// before, not larger. The task brief's own arithmetic ("the struct
+	// grows by 1 byte") assumed FortId's 17 bytes would simply be added to
+	// PokemonData's existing total rather than netted against the pointer
+	// group member it displaced — another instance of this file's running
+	// theme that a hand-computed estimate is not to be trusted over
+	// actually running this test. Pokemon itself drops the same 8 bytes,
+	// 352 -> 344 (unsafe.Sizeof; no other field changed). 344 is not itself
+	// a Go size class, so the allocator still rounds it up to 352 — the
+	// SAME class Pokemon already occupied (confirmed empirically the same
+	// way as the 352/416 numbers above: n=200000 live *Pokemon,
+	// runtime.MemStats.TotalAlloc delta / n = 352.0000 exactly, both before
+	// and after this change). So there is no allocator-class trade to
+	// record here, contrary to what this task's brief anticipated: the
+	// struct got smaller, and the class stayed put. The real win this task
+	// exists for is invisible to unsafe.Sizeof entirely — every cached
+	// pokemon that had a non-empty PokestopId used to hold a second heap
+	// object (the string's backing bytes) that FortId's inline [16]byte+
+	// uint8 has no equivalent of; that object and its GC scan cost are what
+	// go away, not bytes inside the Pokemon struct itself.
+	//
 	// A dbdebug build (`-tags dbdebug`) keeps debugChangeAccumulator's real
 	// `[]string` accumulator (24 bytes, see db_debug.go) so it can still
 	// aggregate per-field change descriptions into one dbDebugLog line per
-	// save, matching the original behavior. Pokemon is therefore 376 bytes
-	// under dbdebug, not the 352 pinned here for production; that's expected
+	// save, matching the original behavior. Pokemon is therefore 368 bytes
+	// under dbdebug, not the 344 pinned here for production; that's expected
 	// instrumentation overhead in a build that's never deployed at scale, so
 	// this test only enforces the production number.
 	//
@@ -105,8 +133,8 @@ func TestPokemonEntitySizes(t *testing.T) {
 	// write-behind batches — so no size class applies to it directly; the
 	// class boundary only matters for Pokemon.
 	const (
-		wantPokemonData = 256
-		wantPokemon     = 352
+		wantPokemonData = 248
+		wantPokemon     = 344
 	)
 
 	if got := unsafe.Sizeof(PokemonData{}); got != wantPokemonData {
@@ -114,7 +142,7 @@ func TestPokemonEntitySizes(t *testing.T) {
 	}
 	if dbDebugEnabled {
 		// dbdebug build: debugChangeAccumulator carries a real 24-byte slice
-		// header, so Pokemon is 24 bytes larger (376). See the comment above
+		// header, so Pokemon is 24 bytes larger (368). See the comment above
 		// wantPokemon for why this test doesn't pin the production number
 		// here.
 		if got := unsafe.Sizeof(Pokemon{}); got != wantPokemon+24 {
@@ -194,10 +222,18 @@ func TestClassMovedEntitySizes(t *testing.T) {
 	for name, tc := range map[string]struct {
 		got, want uintptr
 	}{
-		"Station":    {unsafe.Sizeof(Station{}), 472},
+		// Station grew 472->480 when StationData.Id became FortId (a 17-byte
+		// value vs. string's 16-byte header, padded to the next 8-byte
+		// boundary). Still class 480 either way — no allocator regression,
+		// the win documented above is intact.
+		"Station":    {unsafe.Sizeof(Station{}), 480},
 		"Spawnpoint": {unsafe.Sizeof(Spawnpoint{}), 104},
-		"Incident":   {unsafe.Sizeof(Incident{}), 248},
-		"Tappable":   {unsafe.Sizeof(Tappable{}), 200},
+		// Incident grew 248->256 when IncidentData.PokestopId became FortId
+		// (same 17-vs-16-byte story as Station above). 256 is itself an
+		// exact Go size class, so both 248 and 256 round up to class 256 —
+		// still no allocator regression.
+		"Incident": {unsafe.Sizeof(Incident{}), 256},
+		"Tappable": {unsafe.Sizeof(Tappable{}), 200},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)

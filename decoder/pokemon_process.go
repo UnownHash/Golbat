@@ -28,10 +28,10 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	defer unlock()
 
 	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000)
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000, username)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), encounter: true})
 
 	return fmt.Sprintf("%d %d Pokemon %d CP%d", encounter.Pokemon.EncounterId, encounterId, pokemon.PokemonId, encounter.Pokemon.Pokemon.Cp)
 }
@@ -64,7 +64,11 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 		// Placement happens exactly once, at record creation, by whichever
 		// proto arrives first — here from the disk encounter request. A
 		// later GMO contributes the verified despawn time.
-		pokemon.SetPokestopId(null.StringFrom(request.FortId))
+		if fortId, ok := ParseFortId(request.FortId); ok {
+			pokemon.SetPokestopId(fortId)
+		} else if request.FortId != "" {
+			log.Errorf("[POKEMON] disk encounter %d carried an unparseable fort id %q", encounterId, request.FortId)
+		}
 		pokemon.SetLat(request.GymLatDegrees)
 		pokemon.SetLon(request.GymLngDegrees)
 		pokemon.SetExpireTimestamp(null.IntFrom(time.Now().Unix() + lureSpawnLifetimeSeconds))
@@ -72,10 +76,10 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	}
 
 	pokemon.updatePokemonFromDiskEncounterProto(ctx, db, encounter, username)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix(), username)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), encounter: true})
 
 	return fmt.Sprintf("%d Disk Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }
@@ -91,10 +95,10 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 	defer unlock()
 
 	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username, timestampMs)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix())
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix(), username)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
-	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(), encounter: true})
+	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), encounter: true})
 
 	return fmt.Sprintf("%d Tappable Pokemon %d CP%d", encounterId, pokemon.PokemonId, encounter.Pokemon.Cp)
 }

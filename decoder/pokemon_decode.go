@@ -184,8 +184,8 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	}
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
+	pokemon.setUsernameIfStored(username)
 }
 
 // updateFromMap applies a GMO lure sighting (fort.ActivePokemon) to this
@@ -195,7 +195,14 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapPokemon RawMapPokemonData, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, username string) bool {
 	if pokemon.isNewRecord() {
 		pokemon.SetIsEvent(0)
-		pokemon.SetPokestopId(null.StringFrom(mapPokemon.FortId))
+		if fortId, ok := ParseFortId(mapPokemon.FortId); ok {
+			pokemon.SetPokestopId(fortId)
+		} else if mapPokemon.FortId != "" {
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable lure-pokemon fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, mapPokemon.FortId)
+			})
+		}
 		pokemon.SetLat(mapPokemon.Lat)
 		pokemon.SetLon(mapPokemon.Lon)
 		pokemon.SetSeenType(SeenTypeCodeLureWild)
@@ -208,7 +215,6 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		} else {
 			log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 		}
-		pokemon.SetUsername(null.StringFrom(username))
 
 		if mapPokemon.Data.ExpirationTimeMs > 0 {
 			pokemon.SetExpireTimestamp(null.IntFrom(mapPokemon.Data.ExpirationTimeMs / 1000))
@@ -242,10 +248,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetCellId(null.IntFrom(int64(mapPokemon.Cell)))
 		changed = true
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
-		changed = true
-	}
+	pokemon.setUsernameIfStored(username)
 	return changed
 }
 
@@ -301,7 +304,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokestopId := nearbyPokemon.FortId
 	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
-	pokemon.SetUsername(null.StringFrom(username))
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
@@ -314,13 +316,24 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		default:
 			return
 		}
-		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, pokestopId, "updateFromNearby")
+		fortId, ok := ParseFortId(pokestopId)
+		if !ok {
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable updateFromNearby fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, pokestopId)
+			})
+		}
+		var pokestop *Pokestop
+		var unlock func()
+		if ok {
+			pokestop, unlock, _ = getPokestopRecordReadOnly(ctx, db, fortId, "updateFromNearby")
+		}
 		if pokestop == nil {
-			// Unrecognised pokestop, rollback changes
+			// Unrecognised (or unparseable) pokestop, rollback changes
 			overrideLatLon = pokemon.isNewRecord()
 		} else {
 			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
-			pokemon.SetPokestopId(null.StringFrom(pokestopId))
+			pokemon.SetPokestopId(fortId)
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
 			unlock()
@@ -350,6 +363,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
+	pokemon.setUsernameIfStored(username)
 }
 
 // SeenTypeCode is the in-memory representation of the seen_type enum column.
@@ -1072,7 +1086,6 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1144,6 +1157,8 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.scanHistory = make([]*pokemonScan, 1)
 		pokemon.scanHistory[0] = &scan
 	}
+
+	pokemon.setUsernameIfStored(username)
 }
 
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) {
@@ -1201,18 +1216,23 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 
 		pokemon.SetSpawnId(null.IntFrom(spawnId))
 		pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, false)
-	} else if fortId := request.GetLocation().GetFortId(); fortId != "" {
+	} else if fortIdStr := request.GetLocation().GetFortId(); fortIdStr != "" {
 		pokemon.SetSeenType(SeenTypeCodeTappableLureEncounter)
 
-		pokemon.SetPokestopId(null.StringFrom(fortId))
+		if fortId, ok := ParseFortId(fortIdStr); ok {
+			pokemon.SetPokestopId(fortId)
+		} else {
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("[POKEMON] dropped %d unparseable tappable-lure-encounter fort id(s) in the last second (most recently pokemon %d, id %q)",
+					dropped, pokemon.Id, fortIdStr)
+			})
+		}
 		// we don't know any despawn times from lured/fort tappables
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	if !pokemon.Username.Valid {
-		pokemon.SetUsername(null.StringFrom(username))
-	}
 	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	// addEncounterPokemon adopts the username at the end of its own updates.
 	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
@@ -1350,7 +1370,8 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 }
 
 func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition) {
-	if pokemon.Cp.Valid || ohbem == nil {
+	o := ohbem.Load()
+	if pokemon.Cp.Valid || o == nil {
 		return
 	}
 	var displayPokemon int
@@ -1395,13 +1416,13 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			return
 		}
 		// You should see boosted IV for 0P Ditto
-		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
+		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
 	} else {
 		if !pokemon.AtkIv.Valid || !pokemon.Level.Valid {
 			return
 		}
-		cp, err = ohbem.CalculateCp(displayPokemon, displayPokemonForm, 0,
+		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
 			int(pokemon.AtkIv.ValueOrZero()), int(pokemon.DefIv.ValueOrZero()), int(pokemon.StaIv.ValueOrZero()),
 			float64(pokemon.Level.ValueOrZero()))
 	}

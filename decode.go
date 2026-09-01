@@ -565,8 +565,8 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	for _, mapCell := range decodedGmo.MapCell {
 		cellForts[mapCell.S2CellId] = &decoder.FortTrackerGMOContents{
-			Pokestops: make([]string, 0),
-			Gyms:      make([]string, 0),
+			Pokestops: make([]decoder.FortId, 0),
+			Gyms:      make([]decoder.FortId, 0),
 			Timestamp: mapCell.AsOfTimeMs,
 		}
 
@@ -579,11 +579,18 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 
 			// track fort by type for memory-based cleanup (only if tracker enabled)
 			if cf, ok := cellForts[mapCell.S2CellId]; ok {
-				switch fort.FortType {
-				case pogo.FortType_GYM:
-					cf.Gyms = append(cf.Gyms, fort.FortId)
-				case pogo.FortType_CHECKPOINT:
-					cf.Pokestops = append(cf.Pokestops, fort.FortId)
+				if fortId, parsed := decoder.ParseFortId(fort.FortId); !parsed {
+					decoder.FortIdParseDrops.Report(func(dropped int64) {
+						log.Errorf("[FORT_TRACKER] dropped %d unparseable fort id(s) in the last second on GMO cell tracking (most recently cell %d, id %q)",
+							dropped, mapCell.S2CellId, fort.FortId)
+					})
+				} else {
+					switch fort.FortType {
+					case pogo.FortType_GYM:
+						cf.Gyms = append(cf.Gyms, fortId)
+					case pogo.FortType_CHECKPOINT:
+						cf.Pokestops = append(cf.Pokestops, fortId)
+					}
 				}
 			}
 

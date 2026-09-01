@@ -291,7 +291,7 @@ func preloadIncidents(dbDetails db.DbDetails, populateRtree bool) int32 {
 				incidentCache.Set(incident.Id, incident, 0) // 0 = use default TTL
 
 				// Update fort rtree with incident data
-				if populateRtree {
+				if populateRtree && incident.PokestopId.Valid() {
 					updatePokestopIncidentLookup(incident.PokestopId, incident)
 				}
 

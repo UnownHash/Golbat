@@ -61,7 +61,7 @@ func getIncidentRecordReadOnly(ctx context.Context, db db.DbDetails, incidentId 
 	// Atomically cache the loaded Incident - if another goroutine raced us,
 	// we'll get their Incident and use that instead (ensuring same mutex)
 	incident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
-		if config.Config.FortInMemory {
+		if config.Config.FortInMemory && dbIncident.PokestopId.Valid() {
 			updatePokestopIncidentLookup(dbIncident.PokestopId, &dbIncident)
 		}
 		return &dbIncident
@@ -83,7 +83,7 @@ func getIncidentRecordForUpdate(ctx context.Context, db db.DbDetails, incidentId
 
 // getOrCreateIncidentRecord gets existing or creates new, locked with snapshot.
 // Caller MUST call returned unlock function.
-func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string, pokestopId string, caller string) (*Incident, func(), error) {
+func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId string, pokestopId FortId, caller string) (*Incident, func(), error) {
 	// Create new Incident atomically - function only called if key doesn't exist
 	incident, _ := incidentCache.GetOrSetFunc(incidentId, func() *Incident {
 		return &Incident{IncidentData: IncidentData{Id: incidentId, PokestopId: pokestopId}, newRecord: true}
@@ -102,7 +102,7 @@ func getOrCreateIncidentRecord(ctx context.Context, db db.DbDetails, incidentId 
 			// We loaded from DB
 			incident.newRecord = false
 			incident.ClearDirty()
-			if config.Config.FortInMemory {
+			if config.Config.FortInMemory && incident.PokestopId.Valid() {
 				updatePokestopIncidentLookup(incident.PokestopId, incident)
 			}
 		}
@@ -144,17 +144,19 @@ func saveIncidentRecord(ctx context.Context, db db.DbDetails, incident *Incident
 
 	var stopLat, stopLon float64
 	var stopCellId uint64
-	stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId, "saveIncidentRecord")
-	if stop != nil {
-		stopLat, stopLon = stop.Lat, stop.Lon
-		stopCellId = uint64(stop.CellId.ValueOrZero())
-		unlock()
+	if incident.PokestopId.Valid() {
+		stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId, "saveIncidentRecord")
+		if stop != nil {
+			stopLat, stopLon = stop.Lat, stop.Lon
+			stopCellId = uint64(stop.CellId.ValueOrZero())
+			unlock()
+		}
 	}
 
 	areas := MatchStatsGeofenceWithCell(stopLat, stopLon, stopCellId)
 	updateIncidentStats(incident, areas)
 
-	if config.Config.FortInMemory {
+	if config.Config.FortInMemory && incident.PokestopId.Valid() {
 		updatePokestopIncidentLookup(incident.PokestopId, incident)
 	}
 
@@ -217,14 +219,16 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 		var stopLat, stopLon float64
 		var stopEnabled bool
 		var stopCellId uint64
-		stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId, "createIncidentWebhooks")
-		if stop != nil {
-			pokestopName = stop.Name.ValueOrZero()
-			stopLat, stopLon = stop.Lat, stop.Lon
-			stopUrl = stop.Url.ValueOrZero()
-			stopEnabled = stop.Enabled.ValueOrZero()
-			stopCellId = uint64(stop.CellId.ValueOrZero())
-			unlock()
+		if incident.PokestopId.Valid() {
+			stop, unlock, _ := getPokestopRecordReadOnly(ctx, db, incident.PokestopId, "createIncidentWebhooks")
+			if stop != nil {
+				pokestopName = stop.Name.ValueOrZero()
+				stopLat, stopLon = stop.Lat, stop.Lon
+				stopUrl = stop.Url.ValueOrZero()
+				stopEnabled = stop.Enabled.ValueOrZero()
+				stopCellId = uint64(stop.CellId.ValueOrZero())
+				unlock()
+			}
 		}
 		if pokestopName == "" {
 			pokestopName = "Unknown"
@@ -234,7 +238,7 @@ func createIncidentWebhooks(ctx context.Context, db db.DbDetails, incident *Inci
 
 		incidentHook := IncidentWebhook{
 			Id:                      incident.Id,
-			PokestopId:              incident.PokestopId,
+			PokestopId:              incident.PokestopId.String(),
 			Latitude:                stopLat,
 			Longitude:               stopLon,
 			PokestopName:            pokestopName,

@@ -3,17 +3,20 @@ package decoder
 import "testing"
 
 func TestFlushFortTreeEvictionsRemovesPoints(t *testing.T) {
-	ids := []string{"fort-evict-a", "fort-evict-b"}
+	ids := []FortId{
+		mustFortId(t, "00000000000000000000000000000001"),
+		mustFortId(t, "00000000000000000000000000000002"),
+	}
 	fortTreeMutex.Lock()
 	for _, id := range ids {
 		fortTree.Insert([2]float64{9.5, 8.5}, [2]float64{9.5, 8.5}, id)
 	}
 	fortTreeMutex.Unlock()
 
-	inTree := func(id string) bool {
+	inTree := func(id FortId) bool {
 		found := false
 		fortTreeMutex.RLock()
-		fortTree.Search([2]float64{9.5, 8.5}, [2]float64{9.5, 8.5}, func(_, _ [2]float64, v string) bool {
+		fortTree.Search([2]float64{9.5, 8.5}, [2]float64{9.5, 8.5}, func(_, _ [2]float64, v FortId) bool {
 			if v == id {
 				found = true
 				return false
@@ -30,9 +33,9 @@ func TestFlushFortTreeEvictionsRemovesPoints(t *testing.T) {
 		}
 	}
 
-	flushFortTreeEvictions([]treeEvictionEntry[string]{
-		{id: "fort-evict-a", lat: 8.5, lon: 9.5},
-		{id: "fort-evict-b", lat: 8.5, lon: 9.5},
+	flushFortTreeEvictions([]treeEvictionEntry[FortId]{
+		{id: ids[0], lat: 8.5, lon: 9.5},
+		{id: ids[1], lat: 8.5, lon: 9.5},
 	})
 
 	for _, id := range ids {

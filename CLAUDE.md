@@ -103,13 +103,13 @@ Every entity follows the same pattern:
 
 ```go
 type PokestopData struct {    // Copyable data fields with db tags
-    Id   string  `db:"id"`
+    Id   FortId  `db:"id"`
     Name null.String `db:"name"`
     // ... all persisted columns
 }
 
 type Pokestop struct {
-    mu TrackedMutex[string] `db:"-"`  // Entity-level mutex
+    mu TrackedMutex[FortId] `db:"-"`  // Entity-level mutex
     PokestopData                       // Embedded — copied for queue snapshots
     dirty     bool     `db:"-"`        // Needs DB write
     newRecord bool     `db:"-"`        // INSERT vs UPDATE
@@ -125,10 +125,10 @@ type Pokestop struct {
 
 | Entity | Cache Key | Cache Type | Queue Key | ID Type |
 |--------|-----------|------------|-----------|---------|
-| Pokestop | string (fort ID) | Sharded | string | string |
-| Gym | string (fort ID) | Sharded | string | string |
+| Pokestop | FortId | Sharded | FortId | FortId |
+| Gym | FortId | Sharded | FortId | FortId |
 | Pokemon | uint64 (encounter ID) | Sharded | uint64 | uint64 |
-| Station | string (station ID) | Sharded | string | string |
+| Station | FortId | Sharded | FortId | FortId |
 | Spawnpoint | int64 (spawn ID) | Sharded | int64 | int64 |
 | Incident | string (incident ID) | TTL | string | string |
 | Weather | int64 (S2 cell ID) | TTL | — | int64 |
@@ -215,7 +215,7 @@ Each entity type has a `TypedQueue[K, T]` that batches and coalesces writes:
 
 2. **Dispatch**: A processing loop checks for entries whose `ReadyAt` time has passed, moves them to a batch buffer.
 
-3. **Flush**: When the batch reaches `BatchSize` (default 50) or `BatchTimeout` (default 100ms) elapses, the batch is flushed via a bulk `INSERT ... ON DUPLICATE KEY UPDATE` SQL statement.
+3. **Flush**: When the batch reaches `BatchSize` (default 50) or `BatchTimeout` (default 100ms) elapses, the batch is flushed via a bulk `INSERT ... ON DUPLICATE KEY UPDATE` SQL statement. Before flushing, entries are sorted by key for deterministic lock ordering, which avoids deadlocks when two batches touch overlapping rows. Queue keys are `comparable`, not `cmp.Ordered` (`FortId` is a fixed-width struct, which no ordered constraint admits), so each queue supplies an explicit `KeyCompare func(a, b K) int` — `cmp.Compare` for scalar keys, `FortId.Compare` for fort ids. `FortId.Compare` orders identically to the varchar column, so this sort — and the deadlock avoidance it gives — is unchanged from when fort ids were strings.
 
 4. **Concurrency**: All queues share a `SharedLimiter` that caps total concurrent DB writers (default 50). This prevents overwhelming the database connection pool.
 
@@ -308,7 +308,7 @@ The fort tracker detects when forts are removed from the game or converted betwe
 ```
 FortTracker
   ├── cells: map[uint64]*FortTrackerCellState    // S2 cell → {lastSeen, pokestops set, gyms set}
-  └── forts: map[string]*FortTrackerLastSeen      // fort ID → {cellId, lastSeen, isGym}
+  └── forts: map[FortId]*FortTrackerLastSeen      // fort ID → {cellId, lastSeen, isGym}
 ```
 
 ### Detection Flow
@@ -357,7 +357,7 @@ Enabled by `config.Config.FortInMemory`. Fort cache TTL is extended to 25 hours 
 
 **Incident data** on FortLookup is updated separately via `updatePokestopIncidentLookup()` because incidents load after pokestops during preload, and incident updates come through a different code path than pokestop updates.
 
-**Scaling caveat (fort scans are low-traffic today; this is the pre-scoped lever if that changes):** FortLookup's value layout is already right — flat scalars by value, one fetch per candidate, no pointer chain (the design the pokemon lookup converged to in the de-pointer change). The weakness at pokemon-like scan volumes would be **string keys**: ~35-byte fort IDs are hashed per Load, key-compared per bucket walk, and stored as entries in the R-tree itself (pointer-laden tree nodes; ~2M string objects in every GC mark). The fix, when a profile demands it: intern fort IDs to dense integers at save/delete and key both the tree and the lookup map by the intern ID — one change removes the hashing, the compares, and the tree/GC pointer load together.
+**Scaling caveat (fort scans are low-traffic today):** this section used to pre-scope interning fort IDs to dense integers as the lever for pokemon-like scan volumes — the weakness being ~35-byte string keys hashed per Load, key-compared per bucket walk, and stored as entries in the R-tree itself (pointer-laden tree nodes; ~2M string objects in every GC mark). That lever was evaluated and a different one taken instead: fort IDs are now `decoder.FortId`, a 17-byte `comparable` value type (`struct{ Guid [16]byte; Suffix uint8 }`) used directly as the cache key, map key, and R-tree payload, with string conversion pushed to the DB/JSON/webhook boundaries. That removes the string hashing, the per-bucket key compares, and the GC-visible key pointers this caveat described, without a global intern table. Interning fort IDs to dense integers on top of the value type remains available if fort scans ever do become hot enough to matter. See `docs/superpowers/specs/2026-08-18-fortid-value-type-design.md` for the full design record.
 
 ### Scanning and DNF Filters
 

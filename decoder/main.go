@@ -95,9 +95,9 @@ func getStatsCollector() stats_collector.StatsCollector {
 	return *statsCollector.Load()
 }
 
-var pokestopCache *ottercache.OtterCache[string, *Pokestop]
-var gymCache *ottercache.OtterCache[string, *Gym]
-var stationCache *ottercache.OtterCache[string, *Station]
+var pokestopCache *ottercache.OtterCache[FortId, *Pokestop]
+var gymCache *ottercache.OtterCache[FortId, *Gym]
+var stationCache *ottercache.OtterCache[FortId, *Station]
 var tappableCache *ottercache.OtterCache[uint64, *Tappable]
 var weatherCache *ottercache.OtterCache[int64, *Weather]
 var weatherConsensusCache *ottercache.OtterCache[int64, *WeatherConsensusState]
@@ -107,11 +107,16 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
-var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
+var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
 
-var ohbem *gohbem.Ohbem
+// ohbem readers Load() once per operation and take no lock, so the instance
+// behind the pointer must never be mutated once published — gohbem's
+// LoadPokemonData unmarshals into the live masterfile maps in place, which
+// raced with QueryPvPRank as a fatal concurrent map read/write in production.
+// Reloads build a fresh instance and Store() it instead.
+var ohbem atomic.Pointer[gohbem.Ohbem]
 
 func init() {
 	// The statsCollector noop seed is NOT here — it is in that variable's own
@@ -175,19 +180,19 @@ func initDataCache() {
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
 	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
-	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Pokestop]{
+	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Pokestop]{
 		Name:       "pokestop",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Gym]{
+	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Gym]{
 		Name:       "gym",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Station]{
+	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Station]{
 		Name:       "station",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
@@ -252,7 +257,7 @@ func initDataCache() {
 		TouchOnHit: true,
 	})
 
-	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *pogo.GetMapFortsOutProto_FortProto]{
 		Name:       "map_forts",
 		DefaultTTL: 5 * time.Minute,
 		TouchOnHit: false,
@@ -272,34 +277,8 @@ func InitialiseOhbem() {
 			log.Errorf("PVP level caps not configured")
 			return
 		}
-		leagues := map[string]gohbem.League{
-			"little": {
-				Cap:            500,
-				LittleCupRules: false,
-			},
-			"great": {
-				Cap:            1500,
-				LittleCupRules: false,
-			},
-			"ultra": {
-				Cap:            2500,
-				LittleCupRules: false,
-			},
-		}
-
-		gohbemLogger := &gohbemLogger{}
 		cacheFileLocation := masterFileCachePath
-		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
-			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
-			MasterFileCachePath:   cacheFileLocation, Logger: gohbemLogger}
-		switch config.Config.Pvp.RankingComparator {
-		case "prefer_higher_cp":
-			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
-		case "prefer_lower_cp":
-			o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
-		default:
-			o.RankingComparator = gohbem.RankingComparatorDefault
-		}
+		o := newOhbemInstance()
 
 		if err := o.LoadPokemonData(cacheFileLocation); err != nil {
 			log.Warnf("ohbem.LoadPokemonData from cache failed: %v", err)
@@ -315,19 +294,52 @@ func InitialiseOhbem() {
 			}
 		}
 
-		ohbem = o
+		ohbem.Store(o)
 	}
 }
 
+// newOhbemInstance builds a configured Ohbem with no masterfile data loaded.
+func newOhbemInstance() *gohbem.Ohbem {
+	leagues := map[string]gohbem.League{
+		"little": {
+			Cap:            500,
+			LittleCupRules: false,
+		},
+		"great": {
+			Cap:            1500,
+			LittleCupRules: false,
+		},
+		"ultra": {
+			Cap:            2500,
+			LittleCupRules: false,
+		},
+	}
+
+	o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
+		IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
+		MasterFileCachePath:   masterFileCachePath, Logger: &gohbemLogger{}}
+	switch config.Config.Pvp.RankingComparator {
+	case "prefer_higher_cp":
+		o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
+	case "prefer_lower_cp":
+		o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
+	default:
+		o.RankingComparator = gohbem.RankingComparatorDefault
+	}
+	return o
+}
+
 func reloadOhbemFromMasterFile() {
-	if ohbem == nil {
+	if ohbem.Load() == nil {
 		return
 	}
-	if err := ohbem.LoadPokemonData(masterFileCachePath); err != nil {
+	o := newOhbemInstance()
+	if err := o.LoadPokemonData(masterFileCachePath); err != nil {
 		log.Warnf("ohbem reload from MasterFile failed: %v", err)
-	} else {
-		log.Infof("ohbem reloaded from MasterFile cache")
+		return
 	}
+	ohbem.Store(o)
+	log.Infof("ohbem reloaded from MasterFile cache")
 }
 
 const floatTolerance = 0.000001

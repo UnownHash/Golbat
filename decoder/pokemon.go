@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"golbat/config"
 	"golbat/util"
 
 	"github.com/guregu/null/v6"
@@ -16,19 +17,20 @@ import (
 //
 // FIELD ORDER IS LOAD-BEARING in the sense that a careless ordering
 // (interleaving fields of different alignments) can make this bigger than
-// 256 bytes — but not smaller. The field payload sums to 251 bytes (8-byte
-// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 25 + pointer
-// group 96), and Go's struct alignment (8, driven by the uint64/float64/
-// pointer fields) rounds any total up to the next multiple of 8: 256 either
+// 248 bytes — but not smaller. The field payload sums to 244 bytes (8-byte
+// group 56 + 4-byte group 48 + 2-byte group 26 + 1-byte group 42 + pointer
+// group 72), and Go's struct alignment (8, driven by the uint64/float64/
+// pointer fields) rounds any total up to the next multiple of 8: 248 either
 // way. This order achieves that minimum — the pointer group's own 8-byte
-// alignment forces exactly 5 bytes of mandatory padding immediately before
-// it (offset 155->160), and every other ordering pays those same 5 bytes
+// alignment forces exactly 4 bytes of mandatory padding immediately before
+// it (offset 172->176), and every other ordering pays those same 4 bytes
 // somewhere else instead (e.g. as trailing padding at the very end), not
 // zero. See TestPokemonEntitySizes's comment for the full breakdown and the
 // history behind this number (it dropped from 280 when task 5 narrowed
-// SeenType out of the pointer group); that test guards the 256 result — if
-// it fails after you add a field, read its doc comment before touching the
-// constant.
+// SeenType out of the pointer group, then from 256 when task 8 moved
+// PokestopId — 17 inline, 1-byte-aligned bytes — out of the pointer group
+// into this one); that test guards the 248 result — if it fails after you
+// add a field, read its doc comment before touching the constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
 // sql/*.up.sql. The schema comment further down this file documents three
@@ -75,9 +77,9 @@ type PokemonData struct {
 	IsDitto                 bool              `db:"is_ditto"`
 	IsEvent                 int8              `db:"is_event"`
 	SeenType                NullSeenType      `db:"seen_type"`
+	PokestopId              FortId            `db:"pokestop_id"`
 
 	// --- pointer-carrying, last ---
-	PokestopId     null.String `db:"pokestop_id"`
 	Username       null.String `db:"username"`
 	Pvp            null.String `db:"pvp"`
 	GolbatInternal []byte      `db:"golbat_internal"`
@@ -433,10 +435,10 @@ func int64OrZero[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int64 {
 
 // --- Set methods with dirty tracking ---
 
-func (pokemon *Pokemon) SetPokestopId(v null.String) {
+func (pokemon *Pokemon) SetPokestopId(v FortId) {
 	if pokemon.PokestopId != v {
 		if dbDebugEnabled {
-			pokemon.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", FormatNull(pokemon.PokestopId), FormatNull(v)))
+			pokemon.debug.recordChange(fmt.Sprintf("PokestopId:%s->%s", pokemon.PokestopId, v))
 		}
 		pokemon.PokestopId = v
 		pokemon.dirty = true
@@ -629,6 +631,60 @@ func (pokemon *Pokemon) SetUsername(v null.String) {
 		pokemon.Username = v
 		//pokemon.dirty = true
 	}
+}
+
+// setUsernameIfStored records the reporting account only when the operator
+// has opted in via store_username.
+//
+// The field is not load-bearing: its only consumers are the webhook payload
+// and the shiny/duplicate-encounter dedup, both of which are supplied the
+// account name directly from the decode context now. Persisting it stores a
+// caller-supplied identifier on millions of rows for no functional benefit,
+// so the default is off.
+//
+// Call this LAST in an update function, after the setters that decide whether
+// this sighting changed anything. The dirty gate below is only meaningful once
+// those have run.
+func (pokemon *Pokemon) setUsernameIfStored(username string) {
+	if !config.Config.StoreUsername || username == "" {
+		return
+	}
+	if !pokemon.isNewRecord() && !pokemon.IsDirty() {
+		// This sighting is not being written, so adopting the account here
+		// would persist a name belonging to an account that contributed no
+		// data to the row — and, being first-wins, would then block the
+		// account whose update actually is written. (SetUsername does not
+		// set the dirty flag, so a username has never been able to trigger
+		// a write by itself; this gate is about which account gets stored,
+		// not about avoiding writes.) The condition mirrors
+		// savePokemonRecordAsAtTime's own entry gate, so the field is
+		// adopted exactly when the row is headed for the queue.
+		return
+	}
+	if pokemon.Username.Valid {
+		// First account to see the pokemon keeps the field.
+		return
+	}
+	pokemon.SetUsername(null.StringFrom(username))
+}
+
+// resolveUsername picks the account name for the webhook payload and the
+// stats snapshot — the two consumers of Pokemon.Username. The live account
+// (the one reporting the save in progress, from the decode context) always
+// wins when present: stored is an opt-in, first-wins value that freezes on
+// whichever account happened to see the pokemon first, so once a second
+// account touches the record, stored is stale for these purposes — using it
+// over live corrupted the shiny/duplicate-encounter dedup (a genuinely new
+// account's encounter looked like a repeat of the first account's) and
+// showed the wrong reporter in webhooks. stored is used only as a fallback,
+// when the caller has no live account to offer (weather_iv.go's proactive
+// IV re-save has no decode context and passes ""), which leaves that path's
+// behavior exactly as it was before this option existed.
+func resolveUsername(stored null.String, live string) null.String {
+	if live != "" {
+		return null.StringFrom(live)
+	}
+	return stored
 }
 
 // SetCellId stores the signed S2 cell id directly. cell_id is a signed

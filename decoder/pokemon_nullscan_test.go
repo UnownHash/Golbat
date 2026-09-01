@@ -134,6 +134,38 @@ func TestPokemonNullColumnRoundTrip(t *testing.T) {
 	}
 }
 
+// PokestopId must round-trip as a varchar, and an absent fort must write
+// SQL NULL rather than an empty string — the column is nullable and
+// consumers distinguish the two.
+func TestPokemonPokestopIdSqlRoundTrip(t *testing.T) {
+	id := mustFortId(t, "a1b2c3d4e5f60718293a4b5c6d7e8f90.16")
+
+	v, err := id.Value()
+	if err != nil {
+		t.Fatalf("Value() error: %v", err)
+	}
+	if s, ok := v.(string); !ok || s != "a1b2c3d4e5f60718293a4b5c6d7e8f90.16" {
+		t.Fatalf("Value() = %#v, want the varchar string", v)
+	}
+
+	var absent FortId
+	v, err = absent.Value()
+	if err != nil {
+		t.Fatalf("Value() on absent error: %v", err)
+	}
+	if v != nil {
+		t.Fatalf("absent PokestopId Value() = %#v, want nil (SQL NULL)", v)
+	}
+
+	var scanned FortId
+	if err := scanned.Scan("a1b2c3d4e5f60718293a4b5c6d7e8f90.16"); err != nil {
+		t.Fatalf("Scan error: %v", err)
+	}
+	if scanned != id {
+		t.Fatalf("Scan = %v, want %v", scanned, id)
+	}
+}
+
 // TestPokemonFullRowRoundTrip writes a fully-populated row through the same
 // upsert the write-behind queue uses, then reads it back, proving driver.Valuer
 // binds correctly for every narrowed type.
@@ -180,6 +212,12 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		Weight:   null.ValueFrom(float32(3.5)),
 		Iv:       null.ValueFrom(float32(93.33)),
 		SeenType: SeenTypeFrom(SeenTypeCodeLureEncounter),
+		// PokestopId is FortId's Valuer/Scanner path exercised against the
+		// real column rather than in isolation (see
+		// TestPokemonPokestopIdSqlRoundTrip for that). The suffixed form is
+		// chosen deliberately: a Valuer regression that dropped the suffix
+		// would round-trip a bare-form id undetected.
+		PokestopId: mustFortId(t, "a1b2c3d4e5f60718293a4b5c6d7e8f90.16"),
 	}
 
 	if _, err := db.NamedExecContext(ctx, pokemonBatchUpsertQuery, []PokemonData{want}); err != nil {
@@ -227,6 +265,23 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 	}
 	if got.SeenType.ValueOrZero() != SeenTypeCodeLureEncounter.String() {
 		t.Errorf("SeenType.ValueOrZero() = %q, want %q (the enum column must store this exact string)", got.SeenType.ValueOrZero(), SeenTypeCodeLureEncounter.String())
+	}
+	if got.PokestopId != want.PokestopId {
+		t.Errorf("PokestopId = %v, want %v", got.PokestopId, want.PokestopId)
+	}
+
+	// Reading pokestop_id back as a raw string (rather than through
+	// FortId.Scan) is the one check that catches a Valuer regression that
+	// writes something other than the plain varchar text — e.g. a %v-
+	// formatted struct, or a driver fallback to []byte — since Scan itself
+	// tolerates more source kinds than the column is supposed to hold.
+	var rawPokestopId string
+	if err := db.GetContext(ctx, &rawPokestopId,
+		"SELECT pokestop_id FROM pokemon WHERE id = ?", testID); err != nil {
+		t.Fatalf("select raw pokestop_id: %v", err)
+	}
+	if rawPokestopId != want.PokestopId.String() {
+		t.Errorf("raw pokestop_id column = %q, want %q", rawPokestopId, want.PokestopId.String())
 	}
 }
 
