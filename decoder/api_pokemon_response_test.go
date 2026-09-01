@@ -122,7 +122,7 @@ func goldenSnapshotPokemon(t *testing.T) *Pokemon {
 // and doesn't gate (it does not gate huma_api.go, which serves this struct
 // through goccy/go-json unconditionally either way).
 func TestBuildApiPokemonResult_GoldenSnapshot(t *testing.T) {
-	if ohbem != nil {
+	if ohbem.Load() != nil {
 		t.Fatalf("expected ohbem to be nil in tests")
 	}
 

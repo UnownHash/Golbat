@@ -158,12 +158,12 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	changePvpField := false
 	var pvpResults map[string][]gohbem.PokemonEntry
-	if ohbem != nil {
+	if o := ohbem.Load(); o != nil {
 		// Calculating PVP data - check for changes in pokemon properties that affect PVP rankings
 		// For new records, always calculate; for existing, check if relevant fields changed
 		shouldCalculatePvp := pokemon.AtkIv.Valid && (pokemon.isNewRecord() || pokemon.IsDirty())
 		if shouldCalculatePvp {
-			pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+			pvp, err := o.QueryPvPRank(int(pokemon.PokemonId),
 				int(pokemon.Form.ValueOrZero()),
 				int(pokemon.Costume.ValueOrZero()),
 				int(pokemon.Gender.ValueOrZero()),

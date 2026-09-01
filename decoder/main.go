@@ -111,7 +111,12 @@ var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_Fo
 
 var ProactiveIVSwitchSem chan bool
 
-var ohbem *gohbem.Ohbem
+// ohbem readers Load() once per operation and take no lock, so the instance
+// behind the pointer must never be mutated once published — gohbem's
+// LoadPokemonData unmarshals into the live masterfile maps in place, which
+// raced with QueryPvPRank as a fatal concurrent map read/write in production.
+// Reloads build a fresh instance and Store() it instead.
+var ohbem atomic.Pointer[gohbem.Ohbem]
 
 func init() {
 	// The statsCollector noop seed is NOT here — it is in that variable's own
@@ -272,34 +277,8 @@ func InitialiseOhbem() {
 			log.Errorf("PVP level caps not configured")
 			return
 		}
-		leagues := map[string]gohbem.League{
-			"little": {
-				Cap:            500,
-				LittleCupRules: false,
-			},
-			"great": {
-				Cap:            1500,
-				LittleCupRules: false,
-			},
-			"ultra": {
-				Cap:            2500,
-				LittleCupRules: false,
-			},
-		}
-
-		gohbemLogger := &gohbemLogger{}
 		cacheFileLocation := masterFileCachePath
-		o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
-			IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
-			MasterFileCachePath:   cacheFileLocation, Logger: gohbemLogger}
-		switch config.Config.Pvp.RankingComparator {
-		case "prefer_higher_cp":
-			o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
-		case "prefer_lower_cp":
-			o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
-		default:
-			o.RankingComparator = gohbem.RankingComparatorDefault
-		}
+		o := newOhbemInstance()
 
 		if err := o.LoadPokemonData(cacheFileLocation); err != nil {
 			log.Warnf("ohbem.LoadPokemonData from cache failed: %v", err)
@@ -315,19 +294,52 @@ func InitialiseOhbem() {
 			}
 		}
 
-		ohbem = o
+		ohbem.Store(o)
 	}
 }
 
+// newOhbemInstance builds a configured Ohbem with no masterfile data loaded.
+func newOhbemInstance() *gohbem.Ohbem {
+	leagues := map[string]gohbem.League{
+		"little": {
+			Cap:            500,
+			LittleCupRules: false,
+		},
+		"great": {
+			Cap:            1500,
+			LittleCupRules: false,
+		},
+		"ultra": {
+			Cap:            2500,
+			LittleCupRules: false,
+		},
+	}
+
+	o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
+		IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
+		MasterFileCachePath:   masterFileCachePath, Logger: &gohbemLogger{}}
+	switch config.Config.Pvp.RankingComparator {
+	case "prefer_higher_cp":
+		o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
+	case "prefer_lower_cp":
+		o.RankingComparator = gohbem.RankingComparatorPreferLowerCp
+	default:
+		o.RankingComparator = gohbem.RankingComparatorDefault
+	}
+	return o
+}
+
 func reloadOhbemFromMasterFile() {
-	if ohbem == nil {
+	if ohbem.Load() == nil {
 		return
 	}
-	if err := ohbem.LoadPokemonData(masterFileCachePath); err != nil {
+	o := newOhbemInstance()
+	if err := o.LoadPokemonData(masterFileCachePath); err != nil {
 		log.Warnf("ohbem reload from MasterFile failed: %v", err)
-	} else {
-		log.Infof("ohbem reloaded from MasterFile cache")
+		return
 	}
+	ohbem.Store(o)
+	log.Infof("ohbem reloaded from MasterFile cache")
 }
 
 const floatTolerance = 0.000001
