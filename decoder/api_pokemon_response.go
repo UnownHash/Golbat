@@ -130,12 +130,13 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 }
 
 // buildApiPvpRankings queries ohbem for PVP rankings. Returns a zero value when
-// PVP is disabled (ohbem == nil) or on query error.
+// PVP is disabled (no ohbem instance) or on query error.
 func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
-	if ohbem == nil {
+	o := ohbem.Load()
+	if o == nil {
 		return ApiPvpRankings{}
 	}
-	pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+	pvp, err := o.QueryPvPRank(int(pokemon.PokemonId),
 		int(pokemon.Form.ValueOrZero()),
 		int(pokemon.Costume.ValueOrZero()),
 		int(pokemon.Gender.ValueOrZero()),
@@ -147,7 +148,7 @@ func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 		return ApiPvpRankings{}
 	}
 	// The hardcoded little/great/ultra keys correspond to the leagues configured
-	// in the ohbem init in decoder/main.go (~line 209). Adding a league there must
+	// in newOhbemInstance in decoder/main.go. Adding a league there must
 	// also be reflected here (and in the ApiPvpRankings struct).
 	return ApiPvpRankings{
 		Little: convertApiPvpEntries(pvp["little"]),
