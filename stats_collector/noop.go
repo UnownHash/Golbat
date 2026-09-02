@@ -40,6 +40,7 @@ func (col *noopCollector) UpdateRaidCount([]geo.AreaName, int64)                
 func (col *noopCollector) UpdateFortCount([]geo.AreaName, string, string)        {}
 func (col *noopCollector) UpdateIncidentCount([]geo.AreaName)                    {}
 func (col *noopCollector) IncDuplicateEncounters(bool)                           {}
+func (col *noopCollector) IncDespawnWrapClamped()                                {}
 func (col *noopCollector) IncDbQuery(string, error)                              {}
 func (col *noopCollector) SetGyms(int8, bool, float64)                           {}
 func (col *noopCollector) SetRaids(int64, float64)                               {}
@@ -70,6 +71,9 @@ func (col *noopCollector) IncWriteBehindBatches(string)                {}
 func (col *noopCollector) ObserveWriteBehindBatchSize(string, float64) {}
 func (col *noopCollector) ObserveWriteBehindBatchTime(string, float64) {}
 func (col *noopCollector) SetS2CellBatchSize(int)                      {}
+func (col *noopCollector) IncPeerLookupDropped()                       {}
+func (col *noopCollector) IncDespawnRetired()                          {}
+func (col *noopCollector) IncDespawnClearDropped()                     {}
 
 func NewNoopStatsCollector() StatsCollector {
 	return &noopCollector{}

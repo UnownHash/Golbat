@@ -10,6 +10,7 @@ type configDefinition struct {
 	Port                    int            `koanf:"port"`
 	GrpcPort                int            `koanf:"grpc_port"`
 	Webhooks                []Webhook      `koanf:"webhooks"`
+	GolbatPeers             []GolbatPeer   `koanf:"golbat_peer"`
 	Database                database       `koanf:"database"`
 	Logging                 logging        `koanf:"logging"`
 	Sentry                  sentry         `koanf:"sentry"`
@@ -72,6 +73,19 @@ type Webhook struct {
 	HeaderMap        map[string]string `koanf:"-"`
 	AreaNames        []geo.AreaName    `koanf:"-"`
 	ExcludeAreaNames []geo.AreaName    `koanf:"-"`
+}
+
+// defaultPeerTimeoutMs is deliberately short. Peers are expected on a LAN, and
+// a lookup is an optimisation: timing out costs today's behaviour, not an error.
+const defaultPeerTimeoutMs = 500
+
+// GolbatPeer is another Golbat instance this one may ask about pokemon it has
+// seen but cannot fully describe. Configuring one enables the lookup; there is
+// no separate feature flag.
+type GolbatPeer struct {
+	Address   string `koanf:"address"`
+	ApiSecret string `koanf:"api_secret"`
+	TimeoutMs int    `koanf:"timeout_ms"`
 }
 
 type pvp struct {

@@ -258,11 +258,21 @@ Configuration type strings:
 
 Consumers must idempotently process each envelope: the same `encounter_id`
 typically fires multiple times in flight order `nearby_cell` → `wild` →
-`encounter`, and refires whenever `pokemon_id`, `weather`, or `cp` changes.
-The recommended deduplication key is `encounter_id` plus a stat fingerprint
-(`cp`, `weather`, `pokemon_id`); using `encounter_id` alone will mute
-legitimate re-notifications when a previously-no-IV spawn becomes
-encountered.
+`encounter`, and refires whenever `pokemon_id`, `weather`, `cp`, or
+`disappear_time_verified` changes.
+
+The recommended deduplication key is `encounter_id` plus a fingerprint of
+exactly those four fields (`pokemon_id`, `weather`, `cp`,
+`disappear_time_verified`). Using `encounter_id` alone will mute legitimate
+re-notifications when a previously-no-IV spawn becomes encountered.
+
+`disappear_time_verified` matters as much as the other three and is easy to
+leave out: a pokemon gaining (or losing) a trusted despawn time changes no
+other field in the fingerprint, so a consumer keyed on the stat fields alone
+silently discards every corrected `disappear_time`. Note that
+`disappear_time` itself is deliberately *not* a trigger — it moves on
+ordinary unverified extensions, which would be noise — so it must not be part
+of the key either.
 
 #### Payload
 

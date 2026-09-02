@@ -16,6 +16,8 @@ Golbat provides both HTTP REST and gRPC APIs for querying Pokemon GO data.
 - [Debug Endpoints](#debug-endpoints)
 - [gRPC API](#grpc-api)
 - [Data Structures](#data-structures)
+- [Despawn Timing Fixes](#despawn-timing-fixes)
+- [Cross-Golbat Lookup](#cross-golbat-lookup)
 
 ---
 
@@ -554,10 +556,17 @@ Use the `authorization` metadata header with the API secret.
 service Pokemon {
   rpc Search(PokemonScanRequest) returns (PokemonScanResponse);
   rpc SearchV3(PokemonScanRequestV3) returns (PokemonScanResponseV3);
+  rpc GetPokemon(GetPokemonRequest) returns (GetPokemonResponse);
 }
 ```
 
-The gRPC endpoints mirror the HTTP v2/v3 scan endpoints.
+`Search` and `SearchV3` mirror the HTTP v2/v3 scan endpoints. `GetPokemon` is
+the batched gRPC counterpart of `GET /api/pokemon/id/{encounter_id}`: it is
+how one Golbat instance asks another about pokemon by encounter id, used by
+[Cross-Golbat Lookup](#cross-golbat-lookup) below. It answers only from
+pokemon the receiving instance already holds in its own in-memory cache — a
+miss returns nothing, there is no database fallback — and authenticates the
+same way as `Search`.
 
 ---
 
@@ -758,3 +767,136 @@ The gRPC endpoints mirror the HTTP v2/v3 scan endpoints.
 | `tuning.profile_routes` | Enable pprof debug endpoints |
 | `tuning.max_pokemon_results` | Max pokemon returned per query |
 | `tuning.max_pokemon_distance` | Max distance between min/max points in searches |
+
+---
+
+## Despawn Timing Fixes
+
+Two fixes to despawn-timing and webhook delivery. Both are independent of the
+peer-lookup feature below and apply to every instance — there is nothing to
+configure and no `[[golbat_peer]]` entry is required to get them.
+
+### Despawn wraparound clamp
+
+A verified expiry is derived from a spawnpoint's `despawn_sec` (a
+second-of-hour) plus the current second-of-hour, wrapping forward into the
+next hour when that second has already passed within this one. For a pokemon
+whose first-seen time is already known, Golbat now checks whether that wrap
+would give it more than an hour of total lifetime — a spawn's maximum. If so,
+the wrap was spurious and the phantom hour is subtracted back out. Clamped
+wraps increment the `golbat_despawn_wrap_clamped_total` counter (see
+[Metrics](#metrics) below).
+
+### Webhook fires on expiry verification change
+
+`createPokemonWebhooks` now also fires when a pokemon's
+`expire_timestamp_verified` flips, in addition to its existing triggers (new
+record, species, weather, CP). Previously a pokemon that gained or lost a
+TTH-verified despawn time without also changing species/weather/CP emitted no
+webhook, so `disappear_time_verified` and `disappear_time` could go stale on
+the receiving end. This fires from ordinary local TTH verification and from
+the despawn retirement described below — it does not require a peer.
+
+---
+
+## Cross-Golbat Lookup
+
+An instance may ask configured peers about pokemon it has seen but cannot
+fully describe — missing IVs, an unverified expiry, or IVs about to be
+discarded by a weather-boost change. This is useful where instances overlap:
+it avoids spending a duplicate Encounter and propagates TTH-verified despawn
+timing between them.
+
+### Configuration
+
+Configure one entry per peer:
+
+```toml
+[[golbat_peer]]
+address = "10.0.0.2:50051"
+api_secret = "shared-secret"
+timeout_ms = 500
+```
+
+Configuring a peer is what enables the feature; there is no separate flag.
+`address` is required. `api_secret` should match that peer's own `api_secret`
+— it is sent as the `authorization` gRPC metadata value, checked the same way
+`GetPokemon` checks any other caller. `timeout_ms` defaults to 500ms if
+omitted or zero; peers are expected on the same LAN, and a lookup is an
+optimisation, so timing out costs nothing but today's behaviour.
+
+### How it works
+
+Lookups are best-effort. Enqueueing never blocks the decode path. Queued
+questions are dispatched in batches — a 50ms window or 500 questions per
+peer, whichever comes first — and each distinct `(encounter_id, pokemon_id,
+form, weather)` question is asked at most once per hour, via a dedup cache.
+A timeout or a negative answer costs nothing: the instance falls back to its
+normal behaviour.
+
+A question is asked when a sighting is missing IVs, has an unverified expiry
+on a known spawn point, or is about to have its IVs discarded because a
+weather-boost transition found no matching buffered scan — in that last case
+the question is about the boost state being switched *to*, asked just before
+the stale IVs are cleared.
+
+A peer answers only from what it already holds in memory — never from its
+database, and never by forwarding the question to its own peers, so a lookup
+cannot loop between instances. Before answering from a cached pokemon it
+confirms that record still describes the same species, form and weather the
+question named: encounter IDs are reused when the game server mutates a
+spawn, and IVs are rolled per weather-boost state, so a record held under a
+different boost state describes a different roll and is not a valid answer to
+a question about this one.
+
+A peer that has never seen the pokemon can still answer the expiry half of
+the question from its own spawnpoint table, when the question carries a spawn
+point ID and that peer knows its despawn second — overlapping instances
+routinely differ in which pokemon they have seen while sharing which spawn
+points they know. Such an answer carries a verified expiry and nothing else;
+the asking side does not need stats to act on it.
+
+### Answers are advisory
+
+A peer's `despawn_sec` is written to the shared spawnpoint record only when
+this instance has none — local TTH always wins, and a later local TTH
+observation can still overwrite a peer-sourced value. A peer's IVs and level
+are adopted; its CP is not — CP is always recomputed locally, since it also
+depends on this instance's own game master and weather data. PVP rankings are
+never exchanged at all: each instance computes its own from IVs and level,
+since rankings depend on the answering instance's own league configuration.
+
+The accuracy of a peer's despawn answers is only as good as that peer's own
+TTH data; Golbat has no way to assess a given peer's accuracy.
+
+### Contradicted despawn_sec is retired
+
+Whenever a verified expiry is derived from a spawnpoint's `despawn_sec` and
+the pokemon being looked at is still alive past that computed expiry, the
+`despawn_sec` is proven wrong — no encounter lives longer than about an hour,
+so a live sighting mapping to an already-past expiry cannot be explained by a
+correct value. Golbat clears (retires) the spawnpoint's `despawn_sec` in the
+background so the next sighting re-derives it from a fresh TTH; the
+pokemon's own expiry reverts to an unverified estimate, the same as for an
+unknown spawnpoint.
+
+This check runs for every `despawn_sec` reaching it, not only ones a peer
+wrote — a locally-learned value can also be contradicted, typically by clock
+skew beyond its small tolerance margin. **This behaviour applies whether or
+not any peer is configured.**
+
+A peer's despawn answer that local-truth-wins rejects outright (because this
+instance already had its own `despawn_sec`) is never tested and can never
+trigger a retire — only a value that actually reached storage can later be
+proven wrong.
+
+### Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `golbat_peer_lookup_dropped_total` | Counter | Peer lookup candidates dropped because the outbound queue was full. |
+| `golbat_despawn_wrap_clamped_total` | Counter | Verified despawns whose wraparound implied an impossible (>1 hour) lifetime and were clamped. Independent of peer configuration — see [Despawn Timing Fixes](#despawn-timing-fixes). |
+| `golbat_despawn_clear_dropped_total` | Counter | Contradicted-`despawn_sec` clears dropped because the correction queue was full. |
+| `golbat_despawn_retired_total` | Counter | `despawn_sec` values cleared because a live sighting contradicted them. |
+| `golbat_worker_backlog{worker="despawn_correction"}` | Gauge | Depth of the queue feeding the despawn-retirement worker. One series of the pre-existing `golbat_worker_backlog` gauge, which also tracks other background queues. |
+| `golbat_worker_backlog{worker="peer_lookup"}` | Gauge | Depth of the outbound lookup queue. Watch alongside `golbat_peer_lookup_dropped_total`: sustained backlog is what precedes drops. Absent unless a peer is configured. |

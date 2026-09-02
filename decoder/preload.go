@@ -318,6 +318,22 @@ func preloadIncidents(dbDetails db.DbDetails, populateRtree bool) int32 {
 	return count
 }
 
+// cachePreloadedSpawnpoint publishes one spawnpoint read from the database
+// into the cache, mirrors included.
+//
+// The syncFastFields call matches what getSpawnpointRecord and
+// getOrCreateSpawnpointRecord already do after their own DB loads: a row read
+// from the database is authoritative, so its despawn second and last-seen
+// belong in the lock-free mirrors immediately. Without it every preloaded
+// spawnpoint reports synced=false from DespawnSecFast until a fresh TTH
+// sighting republishes it, which forces the readers that can fall back to the
+// locked path onto it, and makes the spawnpoint invisible to any reader that
+// cannot - covering the entire 48-hour preload set after every restart.
+func cachePreloadedSpawnpoint(spawnpoint *Spawnpoint) {
+	spawnpoint.syncFastFields()
+	spawnpointCache.Set(spawnpoint.Id, spawnpoint, 0) // 0 = use default TTL
+}
+
 func preloadSpawnpoints(dbDetails db.DbDetails) int32 {
 	// Load spawnpoints seen in the last 48 hours
 	cutoff := time.Now().Unix() - 48*60*60
@@ -339,8 +355,7 @@ func preloadSpawnpoints(dbDetails db.DbDetails) int32 {
 		go func() {
 			defer wg.Done()
 			for spawnpoint := range jobs {
-				// Add to cache
-				spawnpointCache.Set(spawnpoint.Id, spawnpoint, 0) // 0 = use default TTL
+				cachePreloadedSpawnpoint(spawnpoint)
 
 				c := atomic.AddInt32(&count, 1)
 				if c%10000 == 0 {

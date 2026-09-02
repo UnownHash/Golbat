@@ -175,6 +175,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetUsername(null.StringFrom(username))
 	pokemon.SetCellId(null.IntFrom(cellId))
+	pokemon.considerPeerLookup()
 }
 
 // updateFromMap applies a GMO lure sighting (fort.ActivePokemon) to this
@@ -303,6 +304,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	}
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
+	pokemon.considerPeerLookup()
 }
 
 const SeenType_Cell string = "nearby_cell"                              // Pokemon was seen in a cell (without accurate location)
@@ -347,7 +349,13 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	if sp, ok := spawnpointCache.Get(spawnId); ok {
 		if despawnSecond, known, synced := sp.DespawnSecFast(); synced {
 			if known {
-				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+				if pokemon.applyVerifiedDespawn(despawnSecond, timestampMs) {
+					// Extend as we would for an unknown spawnpoint, and retire the
+					// bad despawn_sec asynchronously - clearing it here would mean
+					// holding the spawnpoint lock under the pokemon lock.
+					pokemon.setUnknownTimestamp(timestampMs / 1000)
+					queueDespawnClear(spawnId)
+				}
 			} else {
 				pokemon.setUnknownTimestamp(timestampMs / 1000)
 			}
@@ -360,7 +368,13 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
 
-		pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
+		if pokemon.applyVerifiedDespawn(despawnSecond, timestampMs) {
+			// Extend as we would for an unknown spawnpoint, and retire the
+			// bad despawn_sec asynchronously - clearing it here would mean
+			// holding the spawnpoint lock under the pokemon lock.
+			pokemon.setUnknownTimestamp(timestampMs / 1000)
+			queueDespawnClear(spawnId)
+		}
 	} else {
 		if unlock != nil {
 			unlock()
@@ -369,9 +383,16 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 	}
 }
 
+// despawnSkewMargin absorbs clock skew between the scanner's cell timestamp and
+// the despawn second before a lifetime is judged impossible.
+const despawnSkewMargin = 5
+
 // applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
-// verified expire timestamp for this pokemon.
-func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
+// verified expire timestamp for this pokemon. It reports contradicted=true
+// when the resulting expiry is already in the past for a pokemon we are
+// looking at alive right now — proof that despawn_sec is wrong, whatever
+// wrote it (see decoder/despawn_correction.go, rule 2).
+func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) (contradicted bool) {
 	date := time.Unix(timestampMs/1000, 0)
 	secondOfHour := date.Second() + date.Minute()*60
 
@@ -379,8 +400,27 @@ func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int6
 	if despawnOffset < 0 {
 		despawnOffset += 3600
 	}
-	pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
-	pokemon.SetExpireTimestampVerified(true)
+
+	expiry := timestampMs/1000 + int64(despawnOffset)
+
+	// No encounter can live longer than an hour, so a wrapped expiry is
+	// provably wrong: the pokemon despawned at the second that just passed.
+	// FirstSeenTimestamp is 0 during a new record's first decode, where there
+	// is no evidence either way.
+	if pokemon.FirstSeenTimestamp > 0 &&
+		expiry-pokemon.FirstSeenTimestamp > 3600+despawnSkewMargin {
+		expiry -= 3600
+		statsCollector.IncDespawnWrapClamped()
+	}
+
+	// We are looking at a live pokemon. An expiry already in the past means the
+	// spawnpoint's despawn_sec is wrong, whatever wrote it.
+	nowSec := timestampMs / 1000
+	contradicted = expiry < nowSec-despawnSkewMargin
+
+	pokemon.SetExpireTimestamp(null.IntFrom(expiry))
+	pokemon.SetExpireTimestampVerified(!contradicted)
+	return contradicted
 }
 
 func (pokemon *Pokemon) setUnknownTimestamp(now int64) {
@@ -946,6 +986,20 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	matchingScan, isBoostedMatches := pokemon.locateScan(isStrong, isBoosted)
 	var oldAtk, oldDef, oldSta int64
 	if matchingScan == nil {
+		// Ask a peer for this pokemon's stats under the NEW boost state before
+		// discarding what we have. A peer whose scanner encountered it after
+		// the flip holds exactly the scan locateScan just failed to find. Use
+		// weather, not pokemon.Weather: the question is about the boost state
+		// being switched TO, and pokemon.Weather still holds the old one here.
+		if len(peerClients) > 0 {
+			enqueuePeerLookup(peerLookupItem{
+				EncounterId: uint64(pokemon.Id),
+				PokemonId:   int32(pokemon.PokemonId),
+				Form:        int32(pokemon.Form.ValueOrZero()),
+				Weather:     int32(weather),
+				SpawnId:     pokemon.SpawnId.ValueOrZero(),
+			})
+		}
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {

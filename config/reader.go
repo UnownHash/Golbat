@@ -113,6 +113,10 @@ func ReadConfig() (configDefinition, error) {
 		return Config, fmt.Errorf("failed to Unmarshal config: %w", unmarshalError)
 	}
 
+	if err := validateGolbatPeers(Config.GolbatPeers); err != nil {
+		return Config, err
+	}
+
 	// translate webhook areas to array of geo.AreaName struct
 	for i := 0; i < len(Config.Webhooks); i++ {
 		hook := &Config.Webhooks[i]
@@ -128,6 +132,22 @@ func ReadConfig() (configDefinition, error) {
 	}
 
 	return Config, nil
+}
+
+// validateGolbatPeers checks each configured peer and applies the default
+// timeout in place. It mutates peers via index (not a value-receiver range
+// loop), because a copy of the struct would not persist the default back to
+// Config.GolbatPeers.
+func validateGolbatPeers(peers []GolbatPeer) error {
+	for i := range peers {
+		if peers[i].Address == "" {
+			return fmt.Errorf("golbat_peer[%d]: address is required", i)
+		}
+		if peers[i].TimeoutMs <= 0 {
+			peers[i].TimeoutMs = defaultPeerTimeoutMs
+		}
+	}
+	return nil
 }
 
 func parseEnvVarToSlice(sliceName string, key string, value string, currentMap map[string]interface{}) {

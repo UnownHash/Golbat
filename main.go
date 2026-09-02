@@ -217,6 +217,23 @@ func main() {
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
+
+	// Unlike the webhook sender and http server goroutines below, this one
+	// does not defer cancelFn(): RunPeerLookup returning early (no peers
+	// configured) is normal, not a failure that should tear down the
+	// process. wg.Add still applies so shutdown waits for its final flush.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		decoder.RunPeerLookup(ctx, dbDetails)
+	}()
+
+	// Retires a despawn_sec that a live sighting has contradicted.
+	// Loss-tolerant like the stats/fort-tracker workers, so no wg
+	// tracking: a clear still queued at shutdown is simply retried by the
+	// next contradicted sighting after restart.
+	go decoder.RunDespawnCorrection(ctx, dbDetails)
+
 	initRawProcessingLimiter()
 	initSlowDbQueryLogging()
 	decoder.StartWorkerBacklogReporter()

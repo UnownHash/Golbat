@@ -8,6 +8,11 @@ package pokemon_api;
 service Pokemon {
   rpc Search (PokemonScanRequest) returns (PokemonScanResponse) {}
   rpc SearchV3 (PokemonScanRequestV3) returns (PokemonScanResponseV3) {}
+  // GetPokemon is the gRPC counterpart of GET /api/pokemon/id/{encounter_id},
+  // batched, letting an instance ask a peer about pokemon it has seen but
+  // cannot fully describe. Answers are advisory: the caller decides what to
+  // adopt.
+  rpc GetPokemon (GetPokemonRequest) returns (GetPokemonResponse) {}
 }
 
 message PokemonScanRequest {
@@ -129,4 +134,76 @@ message PokemonDetails {
   optional string pvp = 37;
   optional float distance = 38;
   optional int32 display_pokemon_form = 39;
+}
+
+message GetPokemonItem {
+  uint64 encounter_id = 1;
+  // pokemon_id and form let the peer confirm its cached record describes the
+  // same sighting. Encounter ids are reused when the server mutates a spawn,
+  // so this is a correctness requirement, not just staleness hygiene.
+  int32 pokemon_id = 2;
+  int32 form = 3;
+  // The boost state being asked about.
+  int32 weather = 4;
+  // Lets a peer answer expiry from its spawnpoint table for a pokemon it
+  // never saw itself.
+  optional int64 spawn_id = 5;
+}
+
+message GetPokemonRequest {
+  repeated GetPokemonItem items = 1;
+}
+
+// Only hits are returned; match them to requests by PokemonResult.id.
+message GetPokemonResponse {
+  repeated PokemonResult results = 1;
+}
+
+// PokemonResult mirrors decoder.ApiPokemonResult field for field. Like that
+// struct, nearly everything is optional: a peer fills what it holds and leaves
+// the rest unset.
+message PokemonResult {
+  // The encounter id. ApiPokemonResult renders this as a string only because
+  // JSON cannot carry a 64-bit integer; the underlying Go type is
+  // decoder.Uint64Str, i.e. uint64. Protobuf has no such limit, so it stays
+  // numeric here and matches GetPokemonItem.encounter_id.
+  uint64 id = 1;
+  optional string pokestop_id = 2;
+  optional int64 spawn_id = 3;
+  double lat = 4;
+  double lon = 5;
+  optional double weight = 6;
+  optional int64 size = 7;
+  optional double height = 8;
+  optional int64 expire_timestamp = 9;
+  optional int64 updated = 10;
+  int32 pokemon_id = 11;
+  optional int64 move_1 = 12;
+  optional int64 move_2 = 13;
+  optional int64 gender = 14;
+  optional int64 cp = 15;
+  optional int64 atk_iv = 16;
+  optional int64 def_iv = 17;
+  optional int64 sta_iv = 18;
+  optional double iv = 19;
+  optional int64 form = 20;
+  optional int64 level = 21;
+  optional int64 weather = 22;
+  optional int64 costume = 23;
+  int64 first_seen_timestamp = 24;
+  int64 changed = 25;
+  optional int64 cell_id = 26;
+  bool expire_timestamp_verified = 27;
+  optional int64 display_pokemon_id = 28;
+  optional int64 display_pokemon_form = 29;
+  bool is_ditto = 30;
+  optional string seen_type = 31;
+  optional bool shiny = 32;
+  optional string username = 33;
+  optional double capture_1 = 34;
+  optional double capture_2 = 35;
+  optional double capture_3 = 36;
+  // PVP rankings as stored: a JSON document.
+  optional string pvp = 37;
+  int32 is_event = 38;
 }

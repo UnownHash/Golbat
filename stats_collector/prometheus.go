@@ -261,6 +261,13 @@ var (
 		},
 		[]string{"sameacct"},
 	)
+	despawnWrapClamped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_wrap_clamped_total",
+			Help:      "Verified despawns whose +3600 wraparound implied an impossible lifetime and were clamped",
+		},
+	)
 	dbQueries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -486,6 +493,31 @@ var (
 			Help:      "Number of S2Cells written in the last batch flush",
 		},
 	)
+
+	// Peer lookup metrics
+	peerLookupDropped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "peer_lookup_dropped_total",
+			Help:      "Peer lookup candidates dropped because the queue was full",
+		},
+	)
+
+	// Despawn correction metrics
+	despawnRetired = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_retired_total",
+			Help:      "Spawnpoint despawn_sec values cleared because a live sighting contradicted them",
+		},
+	)
+	despawnClearDropped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_clear_dropped_total",
+			Help:      "Contradicted-despawn clears dropped because despawnClearQueue was full",
+		},
+	)
 )
 
 var _ StatsCollector = (*promCollector)(nil)
@@ -650,6 +682,10 @@ func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
 		v = "0"
 	}
 	duplicateEncounters.WithLabelValues(v).Inc()
+}
+
+func (col *promCollector) IncDespawnWrapClamped() {
+	despawnWrapClamped.Inc()
 }
 
 func (col *promCollector) IncDbQuery(query string, err error) {
@@ -819,6 +855,18 @@ func (col *promCollector) SetS2CellBatchSize(size int) {
 	s2CellBatchSize.Set(float64(size))
 }
 
+func (col *promCollector) IncPeerLookupDropped() {
+	peerLookupDropped.Inc()
+}
+
+func (col *promCollector) IncDespawnRetired() {
+	despawnRetired.Inc()
+}
+
+func (col *promCollector) IncDespawnClearDropped() {
+	despawnClearDropped.Inc()
+}
+
 func initPrometheus() {
 	prometheus.MustRegister(workerBacklog, rawProcessingWaitingGauge, rawPacketsShed, slowDbQueries, statsEventsDroppedCounter, dbQueryDuration, apiScanDuration, cacheEvictionsDropped)
 	prometheus.MustRegister(
@@ -832,7 +880,7 @@ func initPrometheus() {
 		pokemonCountShiny, pokemonCountNonShiny, pokemonCountShundo, pokemonCountSnundo,
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
-		duplicateEncounters, dbQueries,
+		duplicateEncounters, despawnWrapClamped, dbQueries,
 
 		gyms, incidents, pokemons, lures, quests, raids,
 
@@ -840,6 +888,10 @@ func initPrometheus() {
 		writeBehindErrors, writeBehindWrites, writeBehindLatency,
 		writeBehindBatches, writeBehindBatchSize, writeBehindBatchTime,
 		s2CellBatchSize,
+
+		peerLookupDropped,
+
+		despawnRetired, despawnClearDropped,
 	)
 }
 

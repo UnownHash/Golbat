@@ -40,6 +40,7 @@ type StatsCollector interface {
 	UpdateFortCount(areas []geo.AreaName, fortType string, changeType string)
 	UpdateIncidentCount(areas []geo.AreaName)
 	IncDuplicateEncounters(sameAccount bool)
+	IncDespawnWrapClamped()
 	IncDbQuery(query string, err error)
 	SetGyms(teamId int8, inBattle bool, count float64)
 	SetRaids(level int64, count float64)
@@ -74,6 +75,13 @@ type StatsCollector interface {
 
 	// S2Cell batch metrics
 	SetS2CellBatchSize(size int)
+
+	// Peer lookup metrics
+	IncPeerLookupDropped()
+
+	// Despawn correction metrics
+	IncDespawnRetired()
+	IncDespawnClearDropped()
 }
 
 type Config interface {
