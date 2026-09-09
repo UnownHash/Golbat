@@ -7,10 +7,33 @@ import (
 	"time"
 
 	"github.com/guregu/null/v6"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 
 	"golbat/db"
 	pb "golbat/grpc"
 )
+
+// assertNoPresentOptionals fails the test for every populated field in msg
+// that has explicit presence (an "optional" scalar, a message field, or a
+// oneof member — see protoreflect.FieldDescriptor.HasPresence) and whose
+// name is not in allow. Implicit-presence fields (plain proto3 scalars,
+// repeated fields) are never flagged since a conversion has no way to leave
+// them "unset" as opposed to zero-valued.
+func assertNoPresentOptionals(t *testing.T, msg proto.Message, allow ...string) {
+	t.Helper()
+	allowed := make(map[string]bool, len(allow))
+	for _, a := range allow {
+		allowed[a] = true
+	}
+	msg.ProtoReflect().Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		name := string(fd.Name())
+		if fd.HasPresence() && !allowed[name] {
+			t.Errorf("%s.%s unexpectedly present: %v", msg.ProtoReflect().Descriptor().Name(), name, v.Interface())
+		}
+		return true
+	})
+}
 
 func TestFortScanRequestFromProto(t *testing.T) {
 	req := &pb.FortScanRequest{
@@ -137,11 +160,15 @@ func TestGymToProto(t *testing.T) {
 	if got.GetDescription() != "desc" || got.GetPartnerId() != "p" || got.GetSponsorId() != 7 || got.GetCellId() != 99 || got.Deleted {
 		t.Errorf("misc = %+v", got)
 	}
+	if got.GetEnabled() != 1 || got.GetRaidPokemonForm() != 1 || got.GetRaidPokemonGender() != 1 || got.GetRaidPokemonEvolution() != 1 || got.GetArScanEligible() != 1 || got.GetPowerUpLevel() != 2 || got.GetPowerUpPoints() != 50 {
+		t.Errorf("enabled/raid form/gender/evolution/ar/power-up = %+v", got)
+	}
 
 	empty := gymToProto(&ApiGymResult{Id: "x"})
 	if empty.Name != nil || empty.GuardingPokemonDisplayJson != nil || empty.DefendersJson != nil || empty.RsvpsJson != nil || empty.RaidPokemonId != nil {
 		t.Errorf("nil API fields must be unset: %+v", empty)
 	}
+	assertNoPresentOptionals(t, empty, "id")
 }
 
 func rawMsg(s string) *json.RawMessage {
@@ -207,6 +234,7 @@ func TestPokestopToProto(t *testing.T) {
 	if empty.Name != nil || empty.QuestConditionsJson != nil || empty.ShowcaseRankingsJson != nil || empty.Enabled != nil || len(empty.Invasions) != 0 {
 		t.Errorf("nil API fields must be unset: %+v", empty)
 	}
+	assertNoPresentOptionals(t, empty, "id")
 }
 
 func TestStationToProto(t *testing.T) {
@@ -239,6 +267,7 @@ func TestStationToProto(t *testing.T) {
 	if empty.BattleLevel != nil || empty.StationedPokemonJson != nil || len(empty.Battles) != 0 {
 		t.Errorf("nil API fields must be unset: %+v", empty)
 	}
+	assertNoPresentOptionals(t, empty, "id")
 }
 
 // A gym present in the tree, lookup cache and record cache comes back over

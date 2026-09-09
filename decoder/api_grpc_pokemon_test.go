@@ -179,6 +179,7 @@ func TestPokemonToProtoNilOptionalsStayUnset(t *testing.T) {
 	if got.GetPvp() == nil {
 		t.Error("pvp must always be present (an empty rankings message), matching the JSON {} envelope")
 	}
+	assertNoPresentOptionals(t, got, "id", "lat", "lon", "pokemon_id", "first_seen_timestamp", "changed", "pvp")
 }
 
 // withScanLimits gives the decoder test binary the production result caps so
