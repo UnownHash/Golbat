@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -22,6 +23,9 @@ import (
 // The gap between total here and the caller's own stopwatch is transport,
 // client-side decode, and connection setup — none of which the server can
 // measure.
+//
+// Only GolbatApi methods are logged: raw ingest runs at hundreds of RPCs a
+// second and is not what the line is for.
 type grpcRPCLogger struct{}
 
 type rpcTimingKey struct{}
@@ -36,6 +40,9 @@ type rpcTiming struct {
 }
 
 func (grpcRPCLogger) TagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
+	if !strings.HasPrefix(info.FullMethodName, grpcApiServicePrefix) {
+		return ctx // no timing attached: HandleRPC ignores this RPC
+	}
 	return context.WithValue(ctx, rpcTimingKey{}, &rpcTiming{method: info.FullMethodName})
 }
 

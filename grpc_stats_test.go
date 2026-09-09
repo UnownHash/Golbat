@@ -19,8 +19,13 @@ func TestGrpcRPCLoggerLogsOneLinePerRPC(t *testing.T) {
 	hook := logtest.NewGlobal()
 	defer hook.Reset()
 
-	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
+	conn := startGrpcTestServer(t, nil)
+	client := pb.NewGolbatApiClient(conn)
 	if _, err := client.ScanPokemon(context.Background(), &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max}); err != nil {
+		t.Fatal(err)
+	}
+	// Raw ingest is high-volume and must not produce a line.
+	if _, err := pb.NewRawProtoClient(conn).SubmitRawProto(context.Background(), &pb.RawProtoRequest{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -30,6 +35,9 @@ func TestGrpcRPCLoggerLogsOneLinePerRPC(t *testing.T) {
 	for {
 		matches := 0
 		for _, e := range hook.AllEntries() {
+			if strings.Contains(e.Message, "[GRPC_RPC] /raw_receiver.RawProto/") {
+				t.Fatalf("raw ingest must not be logged: %s", e.Message)
+			}
 			if strings.HasPrefix(e.Message, "[GRPC_RPC] /golbat_api.GolbatApi/ScanPokemon ") {
 				matches++
 				for _, want := range []string{"total=", "handler+marshal=", "resp_bytes=", "resp_wire=", `compression=""`, "err=<nil>"} {
@@ -40,6 +48,13 @@ func TestGrpcRPCLoggerLogsOneLinePerRPC(t *testing.T) {
 			}
 		}
 		if matches == 1 {
+			// Give a stray raw line a moment to appear before declaring victory.
+			time.Sleep(50 * time.Millisecond)
+			for _, e := range hook.AllEntries() {
+				if strings.Contains(e.Message, "[GRPC_RPC] /raw_receiver.RawProto/") {
+					t.Fatalf("raw ingest must not be logged: %s", e.Message)
+				}
+			}
 			return
 		}
 		if matches > 1 {
