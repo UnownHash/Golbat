@@ -3313,9 +3313,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\bexamined\x18\x02 \x01(\x05R\bexamined\x12\x18\n" +
 	"\askipped\x18\x03 \x01(\x05R\askipped\x12\x14\n" +
 	"\x05total\x18\x04 \x01(\x05R\x05total\x12#\n" +
-	"\rlimit_reached\x18\x05 \x01(\bR\flimitReached\"8\n" +
-	"\x11GetPokemonRequest\x12#\n" +
-	"\rencounter_ids\x18\x01 \x03(\x04R\fencounterIds\"C\n" +
+	"\rlimit_reached\x18\x05 \x01(\bR\flimitReached\"<\n" +
+	"\x11GetPokemonRequest\x12'\n" +
+	"\rencounter_ids\x18\x01 \x03(\x04B\x020\x01R\fencounterIds\"C\n" +
 	"\x12GetPokemonResponse\x12-\n" +
 	"\apokemon\x18\x01 \x03(\v2\x13.golbat_api.PokemonR\apokemon\"\xf0\x01\n" +
 	"\bPvpEntry\x12\x18\n" +
@@ -3335,12 +3335,12 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\vPvpRankings\x12,\n" +
 	"\x06little\x18\x01 \x03(\v2\x14.golbat_api.PvpEntryR\x06little\x12*\n" +
 	"\x05great\x18\x02 \x03(\v2\x14.golbat_api.PvpEntryR\x05great\x12*\n" +
-	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\xa1\f\n" +
-	"\aPokemon\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12$\n" +
+	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\xad\f\n" +
+	"\aPokemon\x12\x12\n" +
+	"\x02id\x18\x01 \x01(\x04B\x020\x01R\x02id\x12$\n" +
 	"\vpokestop_id\x18\x02 \x01(\tH\x00R\n" +
-	"pokestopId\x88\x01\x01\x12\x1e\n" +
-	"\bspawn_id\x18\x03 \x01(\x03H\x01R\aspawnId\x88\x01\x01\x12\x10\n" +
+	"pokestopId\x88\x01\x01\x12\"\n" +
+	"\bspawn_id\x18\x03 \x01(\x03B\x020\x01H\x01R\aspawnId\x88\x01\x01\x12\x10\n" +
 	"\x03lat\x18\x04 \x01(\x01R\x03lat\x12\x10\n" +
 	"\x03lon\x18\x05 \x01(\x01R\x03lon\x12\x1b\n" +
 	"\x06weight\x18\x06 \x01(\x02H\x02R\x06weight\x88\x01\x01\x12\x17\n" +
@@ -3365,8 +3365,8 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\aweather\x18\x16 \x01(\rH\x11R\aweather\x88\x01\x01\x12\x1d\n" +
 	"\acostume\x18\x17 \x01(\rH\x12R\acostume\x88\x01\x01\x120\n" +
 	"\x14first_seen_timestamp\x18\x18 \x01(\x03R\x12firstSeenTimestamp\x12\x18\n" +
-	"\achanged\x18\x19 \x01(\x03R\achanged\x12\x1c\n" +
-	"\acell_id\x18\x1a \x01(\x03H\x13R\x06cellId\x88\x01\x01\x12:\n" +
+	"\achanged\x18\x19 \x01(\x03R\achanged\x12 \n" +
+	"\acell_id\x18\x1a \x01(\x03B\x020\x01H\x13R\x06cellId\x88\x01\x01\x12:\n" +
 	"\x19expire_timestamp_verified\x18\x1b \x01(\bR\x17expireTimestampVerified\x121\n" +
 	"\x12display_pokemon_id\x18\x1c \x01(\rH\x14R\x10displayPokemonId\x88\x01\x01\x125\n" +
 	"\x14display_pokemon_form\x18\x1d \x01(\rH\x15R\x12displayPokemonForm\x88\x01\x01\x12\x19\n" +
@@ -3488,9 +3488,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x12_slot_2_pokemon_idB\x0e\n" +
 	"\f_slot_2_formB\x14\n" +
 	"\x12_slot_3_pokemon_idB\x0e\n" +
-	"\f_slot_3_form\"\x92\b\n" +
-	"\rStationBattle\x12*\n" +
-	"\x11bread_battle_seed\x18\x01 \x01(\x03R\x0fbreadBattleSeed\x12!\n" +
+	"\f_slot_3_form\"\x96\b\n" +
+	"\rStationBattle\x12.\n" +
+	"\x11bread_battle_seed\x18\x01 \x01(\x03B\x020\x01R\x0fbreadBattleSeed\x12!\n" +
 	"\fbattle_level\x18\x02 \x01(\x05R\vbattleLevel\x12!\n" +
 	"\fbattle_start\x18\x03 \x01(\x03R\vbattleStart\x12\x1d\n" +
 	"\n" +
@@ -3516,7 +3516,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x16_battle_pokemon_move_1B\x18\n" +
 	"\x16_battle_pokemon_move_2B\x19\n" +
 	"\x17_battle_pokemon_staminaB\x1f\n" +
-	"\x1d_battle_pokemon_cp_multiplier\"\x8a\x13\n" +
+	"\x1d_battle_pokemon_cp_multiplier\"\x8e\x13\n" +
 	"\x03Gym\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
@@ -3545,8 +3545,8 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x11raid_pokemon_form\x18\x16 \x01(\x03H\x11R\x0fraidPokemonForm\x88\x01\x01\x129\n" +
 	"\x16raid_pokemon_alignment\x18\x17 \x01(\x03H\x12R\x14raidPokemonAlignment\x88\x01\x01\x12+\n" +
 	"\x0fraid_pokemon_cp\x18\x18 \x01(\x03H\x13R\rraidPokemonCp\x88\x01\x01\x12/\n" +
-	"\x11raid_is_exclusive\x18\x19 \x01(\x03H\x14R\x0fraidIsExclusive\x88\x01\x01\x12\x1c\n" +
-	"\acell_id\x18\x1a \x01(\x03H\x15R\x06cellId\x88\x01\x01\x12\x18\n" +
+	"\x11raid_is_exclusive\x18\x19 \x01(\x03H\x14R\x0fraidIsExclusive\x88\x01\x01\x12 \n" +
+	"\acell_id\x18\x1a \x01(\x03B\x020\x01H\x15R\x06cellId\x88\x01\x01\x12\x18\n" +
 	"\adeleted\x18\x1b \x01(\bR\adeleted\x12\x1e\n" +
 	"\btotal_cp\x18\x1c \x01(\x03H\x16R\atotalCp\x88\x01\x01\x120\n" +
 	"\x14first_seen_timestamp\x18\x1d \x01(\x03R\x12firstSeenTimestamp\x123\n" +
@@ -3603,7 +3603,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x17_power_up_end_timestampB\x0e\n" +
 	"\f_descriptionB\x11\n" +
 	"\x0f_defenders_jsonB\r\n" +
-	"\v_rsvps_json\"\xb2\x1d\n" +
+	"\v_rsvps_json\"\xb6\x1d\n" +
 	"\bPokestop\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
@@ -3630,8 +3630,8 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x0equest_template\x18\x14 \x01(\tH\x0fR\rquestTemplate\x88\x01\x01\x12$\n" +
 	"\vquest_title\x18\x15 \x01(\tH\x10R\n" +
 	"questTitle\x88\x01\x01\x12&\n" +
-	"\fquest_expiry\x18\x16 \x01(\x03H\x11R\vquestExpiry\x88\x01\x01\x12\x1c\n" +
-	"\acell_id\x18\x17 \x01(\x03H\x12R\x06cellId\x88\x01\x01\x12\x18\n" +
+	"\fquest_expiry\x18\x16 \x01(\x03H\x11R\vquestExpiry\x88\x01\x01\x12 \n" +
+	"\acell_id\x18\x17 \x01(\x03B\x020\x01H\x12R\x06cellId\x88\x01\x01\x12\x18\n" +
 	"\adeleted\x18\x18 \x01(\bR\adeleted\x12\x17\n" +
 	"\alure_id\x18\x19 \x01(\x05R\x06lureId\x120\n" +
 	"\x14first_seen_timestamp\x18\x1a \x01(\x03R\x12firstSeenTimestamp\x12\"\n" +
@@ -3712,13 +3712,13 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x19_showcase_pokemon_type_idB\x1c\n" +
 	"\x1a_showcase_ranking_standardB\x12\n" +
 	"\x10_showcase_expiryB\x19\n" +
-	"\x17_showcase_rankings_json\"\xed\f\n" +
+	"\x17_showcase_rankings_json\"\xf1\f\n" +
 	"\aStation\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x10\n" +
 	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
 	"\x03lon\x18\x03 \x01(\x01R\x03lon\x12\x12\n" +
-	"\x04name\x18\x04 \x01(\tR\x04name\x12\x17\n" +
-	"\acell_id\x18\x05 \x01(\x03R\x06cellId\x12\x1d\n" +
+	"\x04name\x18\x04 \x01(\tR\x04name\x12\x1b\n" +
+	"\acell_id\x18\x05 \x01(\x03B\x020\x01R\x06cellId\x12\x1d\n" +
 	"\n" +
 	"start_time\x18\x06 \x01(\x03R\tstartTime\x12\x19\n" +
 	"\bend_time\x18\a \x01(\x03R\aendTime\x12+\n" +

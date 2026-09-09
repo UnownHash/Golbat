@@ -78,7 +78,7 @@ message PokemonScanResponse {
 }
 
 message GetPokemonRequest {
-  repeated uint64 encounter_ids = 1;
+  repeated uint64 encounter_ids = 1 [jstype = JS_STRING];
 }
 
 message GetPokemonResponse {
@@ -106,9 +106,9 @@ message PvpRankings {
 
 // Mirrors decoder.ApiPokemonResult.
 message Pokemon {
-  uint64 id = 1;
+  uint64 id = 1 [jstype = JS_STRING];
   optional string pokestop_id = 2;
-  optional int64 spawn_id = 3;
+  optional int64 spawn_id = 3 [jstype = JS_STRING];
   double lat = 4;
   double lon = 5;
   optional float weight = 6;
@@ -131,7 +131,7 @@ message Pokemon {
   optional uint32 costume = 23;
   int64 first_seen_timestamp = 24;
   int64 changed = 25;
-  optional int64 cell_id = 26;
+  optional int64 cell_id = 26 [jstype = JS_STRING];
   bool expire_timestamp_verified = 27;
   optional uint32 display_pokemon_id = 28;
   optional uint32 display_pokemon_form = 29;
@@ -227,7 +227,7 @@ message Incident {
 
 // Mirrors decoder.ApiStationBattleResult.
 message StationBattle {
-  int64 bread_battle_seed = 1;
+  int64 bread_battle_seed = 1 [jstype = JS_STRING];
   int32 battle_level = 2;
   int64 battle_start = 3;
   int64 battle_end = 4;
@@ -272,7 +272,7 @@ message Gym {
   optional int64 raid_pokemon_alignment = 23;
   optional int64 raid_pokemon_cp = 24;
   optional int64 raid_is_exclusive = 25;
-  optional int64 cell_id = 26;
+  optional int64 cell_id = 26 [jstype = JS_STRING];
   bool deleted = 27;
   optional int64 total_cp = 28;
   int64 first_seen_timestamp = 29;
@@ -314,7 +314,7 @@ message Pokestop {
   optional string quest_template = 20;
   optional string quest_title = 21;
   optional int64 quest_expiry = 22;
-  optional int64 cell_id = 23;
+  optional int64 cell_id = 23 [jstype = JS_STRING];
   bool deleted = 24;
   int32 lure_id = 25;
   int64 first_seen_timestamp = 26;
@@ -354,7 +354,7 @@ message Station {
   double lat = 2;
   double lon = 3;
   string name = 4;
-  int64 cell_id = 5;
+  int64 cell_id = 5 [jstype = JS_STRING];
   int64 start_time = 6;
   int64 end_time = 7;
   int64 cooldown_complete = 8;

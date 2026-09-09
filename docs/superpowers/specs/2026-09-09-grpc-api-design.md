@@ -152,6 +152,12 @@ result; that work is shared, and the gRPC path then avoids any JSON encoding of 
 `capture_1..3` and `is_event` are carried for parity with the HTTP struct and are always unset,
 exactly as `buildApiPokemonResult` leaves them.
 
+**64-bit ids carry `[jstype = JS_STRING]`** so JavaScript/TypeScript generators emit strings
+instead of lossy numbers: `Pokemon.id`, `Pokemon.spawn_id`, `Pokemon.cell_id`,
+`GetPokemonRequest.encounter_ids`, `Gym.cell_id`, `Pokestop.cell_id`, `Station.cell_id`,
+`StationBattle.bread_battle_seed`. Timestamps and the small `int64` columns stay numeric; the
+option changes nothing on the wire or in the Go code.
+
 ### 2.3 Forts
 
 ```protobuf
