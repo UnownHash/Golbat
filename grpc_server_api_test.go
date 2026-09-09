@@ -8,6 +8,7 @@ import (
 	"golbat/config"
 	pb "golbat/grpc"
 
+	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,10 +20,12 @@ import (
 // startGrpcTestServer serves the production server construction
 // (newGrpcServer) over an in-memory listener and returns a connected client
 // connection. No database: every scan hits an empty in-memory index.
-func startGrpcTestServer(t *testing.T) *grpc.ClientConn {
+// srvMetrics is passed straight through to newGrpcServer; nil (as every
+// caller but the Prometheus-chain test passes) means Prometheus is disabled.
+func startGrpcTestServer(t *testing.T, srvMetrics *grpcprom.ServerMetrics) *grpc.ClientConn {
 	t.Helper()
 	lis := bufconn.Listen(1 << 20)
-	srv := newGrpcServer(nil)
+	srv := newGrpcServer(srvMetrics)
 	go func() { _ = srv.Serve(lis) }()
 	conn, err := grpc.NewClient("passthrough:///bufconn",
 		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return lis.DialContext(ctx) }),
@@ -55,7 +58,7 @@ var testBox = struct{ min, max *pb.LatLon }{&pb.LatLon{Lat: 0, Lon: 0}, &pb.LatL
 
 func TestGrpcApiAuthEndToEnd(t *testing.T) {
 	withTestConfig(t, "topsecret", true)
-	client := pb.NewGolbatApiClient(startGrpcTestServer(t))
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
 	req := &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max}
 
 	cases := []struct {
@@ -83,7 +86,7 @@ func TestGrpcApiAuthEndToEnd(t *testing.T) {
 	}
 
 	t.Run("raw service is not gated by the api secret", func(t *testing.T) {
-		raw := pb.NewRawProtoClient(startGrpcTestServer(t))
+		raw := pb.NewRawProtoClient(startGrpcTestServer(t, nil))
 		resp, err := raw.SubmitRawProto(context.Background(), &pb.RawProtoRequest{})
 		if err != nil {
 			t.Fatalf("SubmitRawProto without api secret must reach the handler, got %v", err)
@@ -92,11 +95,19 @@ func TestGrpcApiAuthEndToEnd(t *testing.T) {
 			t.Errorf("raw response = %q, want Processed (raw_bearer is empty)", resp.GetMessage())
 		}
 	})
+
+	t.Run("auth still applies with the prometheus interceptor in the chain", func(t *testing.T) {
+		promClient := pb.NewGolbatApiClient(startGrpcTestServer(t, grpcprom.NewServerMetrics()))
+		_, err := promClient.ScanPokemon(context.Background(), req)
+		if got := status.Code(err); got != codes.Unauthenticated {
+			t.Errorf("code = %v (%v), want Unauthenticated", got, err)
+		}
+	})
 }
 
 func TestGrpcApiScansWithoutSecret(t *testing.T) {
 	withTestConfig(t, "", true)
-	client := pb.NewGolbatApiClient(startGrpcTestServer(t))
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
 	ctx := context.Background()
 
 	t.Run("pokemon scan on an empty index", func(t *testing.T) {
@@ -170,7 +181,7 @@ func TestGrpcApiScansWithoutSecret(t *testing.T) {
 
 func TestGrpcApiFortScansRequireFortInMemory(t *testing.T) {
 	withTestConfig(t, "", false)
-	client := pb.NewGolbatApiClient(startGrpcTestServer(t))
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
 	ctx := context.Background()
 	fortReq := &pb.FortScanRequest{Min: testBox.min, Max: testBox.max}
 
