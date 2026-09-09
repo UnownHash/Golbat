@@ -351,31 +351,12 @@ func stationToProto(s *ApiStationResult) *pb.Station {
 	}
 }
 
-func gymsToProto(in []*ApiGymResult) []*pb.Gym {
-	out := make([]*pb.Gym, 0, len(in))
-	for _, g := range in {
-		if g != nil {
-			out = append(out, gymToProto(g))
-		}
-	}
-	return out
-}
-
-func pokestopsToProto(in []*ApiPokestopResult) []*pb.Pokestop {
-	out := make([]*pb.Pokestop, 0, len(in))
-	for _, p := range in {
-		if p != nil {
-			out = append(out, pokestopToProto(p))
-		}
-	}
-	return out
-}
-
-func stationsToProto(in []*ApiStationResult) []*pb.Station {
-	out := make([]*pb.Station, 0, len(in))
-	for _, s := range in {
-		if s != nil {
-			out = append(out, stationToProto(s))
+// mapNonNil converts each non-nil element of in with f, preserving order.
+func mapNonNil[I, O any](in []*I, f func(*I) *O) []*O {
+	out := make([]*O, 0, len(in))
+	for _, v := range in {
+		if v != nil {
+			out = append(out, f(v))
 		}
 	}
 	return out
@@ -385,7 +366,7 @@ func stationsToProto(in []*ApiStationResult) []*pb.Station {
 func GrpcScanGyms(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.GymScanResponse {
 	res := GymScanEndpoint(fortScanRequestFromProto(req), dbDetails)
 	return &pb.GymScanResponse{
-		Gyms:         gymsToProto(res.Gyms),
+		Gyms:         mapNonNil(res.Gyms, gymToProto),
 		Examined:     int32(res.Examined),
 		Skipped:      int32(res.Skipped),
 		Total:        int32(res.Total),
@@ -397,7 +378,7 @@ func GrpcScanGyms(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.GymScanRe
 func GrpcScanPokestops(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.PokestopScanResponse {
 	res := PokestopScanEndpoint(fortScanRequestFromProto(req), dbDetails)
 	return &pb.PokestopScanResponse{
-		Pokestops:    pokestopsToProto(res.Pokestops),
+		Pokestops:    mapNonNil(res.Pokestops, pokestopToProto),
 		Examined:     int32(res.Examined),
 		Skipped:      int32(res.Skipped),
 		Total:        int32(res.Total),
@@ -409,7 +390,7 @@ func GrpcScanPokestops(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.Poke
 func GrpcScanStations(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.StationScanResponse {
 	res := StationScanEndpoint(fortScanRequestFromProto(req), dbDetails)
 	return &pb.StationScanResponse{
-		Stations:     stationsToProto(res.Stations),
+		Stations:     mapNonNil(res.Stations, stationToProto),
 		Examined:     int32(res.Examined),
 		Skipped:      int32(res.Skipped),
 		Total:        int32(res.Total),
@@ -421,9 +402,9 @@ func GrpcScanStations(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.Stati
 func GrpcScanForts(req *pb.FortCombinedScanRequest, dbDetails db.DbDetails) *pb.FortScanResponse {
 	res := FortCombinedScanEndpoint(fortCombinedScanRequestFromProto(req), dbDetails)
 	return &pb.FortScanResponse{
-		Gyms:         gymsToProto(res.Gyms),
-		Pokestops:    pokestopsToProto(res.Pokestops),
-		Stations:     stationsToProto(res.Stations),
+		Gyms:         mapNonNil(res.Gyms, gymToProto),
+		Pokestops:    mapNonNil(res.Pokestops, pokestopToProto),
+		Stations:     mapNonNil(res.Stations, stationToProto),
 		Examined:     int32(res.Examined),
 		Skipped:      int32(res.Skipped),
 		Total:        int32(res.Total),
