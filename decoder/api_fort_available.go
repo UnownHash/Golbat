@@ -22,7 +22,7 @@ func GetAvailableForts(now int64) *ApiAvailableForts {
 	res := &ApiAvailableForts{
 		Pokestops: buildAvailablePokestops(now),
 		Gyms:      &ApiAvailableGyms{Raids: readRaids(now)},
-		Stations:  &ApiAvailableStations{Battles: readBattles(now)},
+		Stations:  newAvailableStations(now),
 	}
 	log.Infof("available-forts: %d quest, %d raid, %d lure, %d invasion, %d showcase, %d battle options (maintained)",
 		len(res.Pokestops.Quests), len(res.Gyms.Raids), len(res.Pokestops.Lures),

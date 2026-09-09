@@ -182,6 +182,9 @@ message FortDnfFilter {
   repeated DnfId battle_pokemon = 19;
   optional bool stationed_gmax = 20;
   optional bool station_active = 21;
+  // The station's is_battle_available flag as last decoded; implies nothing
+  // about the station window (station_active) or a scheduled battle.
+  optional bool battle_available = 22;
 }
 
 message FortScanRequest {

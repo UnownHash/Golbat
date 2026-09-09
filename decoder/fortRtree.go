@@ -64,6 +64,12 @@ type FortLookup struct {
 	BattlePokemonForm   int16
 	StationBattles      []FortLookupStationBattle
 	TotalStationedGmax  int16
+	// The three fields below occupy the struct's tail padding (offsets
+	// 178–183 after TotalStationedGmax), so they add no bytes per fort;
+	// TestFortLookupSizeUnchangedByStationAvailability pins that.
+	BattleAvailable       bool   // is_battle_available as last decoded (battle_available filter; says nothing about liveness)
+	StationInactive       bool   // is_inactive as last decoded (part of station_active)
+	StationStartTimestamp uint32 // station start_time, unix seconds (part of station_active)
 }
 
 var fortLookupCache *xsync.Map[FortId, FortLookup]
@@ -282,12 +288,15 @@ func updateStationLookup(station *Station) {
 func updateStationLookupWithBattles(id FortId, station *Station, stationBattles []StationBattleData) {
 	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
-		FortType:            STATION,
-		Lat:                 station.Lat,
-		Lon:                 station.Lon,
-		StationBattles:      battles,
-		TotalStationedGmax:  int16(station.TotalStationedGmax.ValueOrZero()),
-		StationEndTimestamp: station.EndTime,
+		FortType:              STATION,
+		Lat:                   station.Lat,
+		Lon:                   station.Lon,
+		StationBattles:        battles,
+		TotalStationedGmax:    int16(station.TotalStationedGmax.ValueOrZero()),
+		StationEndTimestamp:   station.EndTime,
+		BattleAvailable:       station.IsBattleAvailable,
+		StationInactive:       station.IsInactive,
+		StationStartTimestamp: uint32(max(station.StartTime, 0)),
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
 	fortLookupCache.Store(id, lookup)

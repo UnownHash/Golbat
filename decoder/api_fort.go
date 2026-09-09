@@ -97,10 +97,11 @@ type ApiFortDnfFilter struct {
 	ContestRankingStandard []int8                   `json:"contest_ranking_standard" required:"false" doc:"Pokestop only: allowed showcase ranking standards; 0 selects showcases whose standard is unknown. Omitted or null means no ranking standard constraint."`
 
 	// Station
-	BattleLevel   []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
-	BattlePokemon []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
-	StationedGmax *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; when false, only stations without any. Null means no constraint."`
-	StationActive *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations whose end_time is in the future (still present); when false, only expired stations. Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
+	BattleLevel     []int8     `json:"battle_level" required:"false" doc:"Station only: allowed active max battle levels; omitted or null means no battle level constraint. Only matches stations with an active battle."`
+	BattlePokemon   []ApiDnfId `json:"battle_pokemon" required:"false" doc:"Station only: allowed active max battle pokemon/form pairs; omitted or null means no battle pokemon constraint. Only matches stations with an active battle."`
+	StationedGmax   *bool      `json:"stationed_gmax" required:"false" doc:"Station only: when true, only match stations with at least one stationed Gigantamax pokemon; when false, only stations without any. Null means no constraint."`
+	StationActive   *bool      `json:"station_active" required:"false" doc:"Station only: when true, only match stations that are currently active: not inactive, and inside their start_time/end_time window at filter time (is_inactive = 0 AND start_time < now AND end_time > now); when false, only stations that are not (not yet started, ended, or inactive). Stations are the one ephemeral fort type — expired ones accumulate in the index. Null means no constraint."`
+	BattleAvailable *bool      `json:"battle_available" required:"false" doc:"Station only: matches the station's is_battle_available flag as last decoded — true for stations whose flag is set, false for those whose flag is clear. It does not imply the station is present or that a battle is running; combine with station_active for the station window and battle_level / battle_pokemon for a scheduled battle. Null means no constraint."`
 }
 
 // ApiFortDnfContestFocus is one structured contest-focus selector. The wire
@@ -177,6 +178,13 @@ func matchContestFocus(filter []ApiFortDnfContestFocus, buddyMinLevel int8) bool
 		}
 	}
 	return false
+}
+
+// stationActiveAt is the station_active predicate: the SQL
+// is_inactive = 0 AND start_time < now AND end_time > now, with strict bounds
+// and now evaluated at filter time exactly as UNIX_TIMESTAMP() is.
+func stationActiveAt(fl *FortLookup, now int64) bool {
+	return !fl.StationInactive && int64(fl.StationStartTimestamp) < now && fl.StationEndTimestamp > now
 }
 
 func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDnfFilter, now int64) bool {
@@ -286,7 +294,10 @@ func isFortDnfMatch(fortType FortType, fortLookup *FortLookup, filter *ApiFortDn
 			}
 		}
 	case STATION:
-		if filter.StationActive != nil && *filter.StationActive != (fortLookup.StationEndTimestamp > now) {
+		if filter.StationActive != nil && *filter.StationActive != stationActiveAt(fortLookup, now) {
+			return false
+		}
+		if filter.BattleAvailable != nil && *filter.BattleAvailable != fortLookup.BattleAvailable {
 			return false
 		}
 		if filter.StationedGmax != nil && *filter.StationedGmax != (fortLookup.TotalStationedGmax > 0) {

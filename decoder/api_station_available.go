@@ -15,12 +15,19 @@ type ApiStationBattleAvailable struct {
 // ApiAvailableStations is the whole-instance station filter snapshot served by
 // GET /api/station/available.
 type ApiAvailableStations struct {
-	Battles []ApiStationBattleAvailable `json:"battles" doc:"Distinct active battle level/pokemon options on resident stations"`
+	BattleAvailableFilter bool                        `json:"battle_available_filter" doc:"True when the battle_available DNF filter (station is_battle_available flag) is supported by station scans"`
+	Battles               []ApiStationBattleAvailable `json:"battles" doc:"Distinct active battle level/pokemon options on resident stations"`
+}
+
+// newAvailableStations builds the station snapshot shared by
+// /api/station/available and the stations group of /api/fort/available.
+func newAvailableStations(now int64) *ApiAvailableStations {
+	return &ApiAvailableStations{BattleAvailableFilter: true, Battles: readBattles(now)}
 }
 
 // GetAvailableStations reads the maintained battle index (no fort scan).
 func GetAvailableStations(now int64) *ApiAvailableStations {
-	res := &ApiAvailableStations{Battles: readBattles(now)}
+	res := newAvailableStations(now)
 	log.Infof("available-stations: %d battle options (maintained)", len(res.Battles))
 	return res
 }

@@ -406,7 +406,11 @@ This avoids iterating all filters for every pokemon.
 4. Apply `isFortDnfMatch()` which checks fort type, then type-specific fields:
    - **Gym**: raid level, raid pokemon, raid expiry timestamp
    - **Pokestop**: quest rewards (unified AR/non-AR matching), incidents, lures, contests
-   - **Station**: battle level, battle pokemon, battle expiry
+   - **Station**: battle level, battle pokemon, battle expiry, `station_active`
+     (not inactive and inside the start/end window at filter time),
+     `battle_available` (the `is_battle_available` flag only). The three
+     lookup fields behind these sit in `FortLookup`'s tail padding — zero
+     growth, pinned by `TestFortLookupSizeUnchangedByStationAvailability`.
 5. Lock and load full entity records for matched IDs
 
 The `FortCombinedScanEndpoint` scans all three fort types in one pass and splits results by type.

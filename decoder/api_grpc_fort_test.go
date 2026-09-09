@@ -54,6 +54,7 @@ func TestFortScanRequestFromProto(t *testing.T) {
 			ContestFocus:      []*pb.ContestFocus{{Type: "buddy", MinLevel: ptr(int32(3))}, {Type: "other"}},
 			BattleLevel:       []int32{6},
 			StationedGmax:     ptr(false),
+			BattleAvailable:   ptr(true),
 		}},
 	}
 	got := fortScanRequestFromProto(req)
@@ -91,6 +92,9 @@ func TestFortScanRequestFromProto(t *testing.T) {
 	}
 	if len(f.BattleLevel) != 1 || f.BattleLevel[0] != 6 || f.StationedGmax == nil || *f.StationedGmax || f.StationActive != nil {
 		t.Errorf("battle level / gmax / active = %v %v %v", f.BattleLevel, f.StationedGmax, f.StationActive)
+	}
+	if f.BattleAvailable == nil || !*f.BattleAvailable {
+		t.Errorf("battle_available = %v, want true", f.BattleAvailable)
 	}
 	// Unsent lists are nil (no constraint), never empty non-nil slices.
 	if f.RaidTempEvolutionId != nil || f.QuestRewardItemId != nil || f.QuestRewardPokemon != nil || f.IncidentDisplayType != nil ||

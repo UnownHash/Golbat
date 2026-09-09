@@ -1146,8 +1146,11 @@ type FortDnfFilter struct {
 	BattlePokemon []*DnfId `protobuf:"bytes,19,rep,name=battle_pokemon,json=battlePokemon,proto3" json:"battle_pokemon,omitempty"`
 	StationedGmax *bool    `protobuf:"varint,20,opt,name=stationed_gmax,json=stationedGmax,proto3,oneof" json:"stationed_gmax,omitempty"`
 	StationActive *bool    `protobuf:"varint,21,opt,name=station_active,json=stationActive,proto3,oneof" json:"station_active,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// The station's is_battle_available flag as last decoded; implies nothing
+	// about the station window (station_active) or a scheduled battle.
+	BattleAvailable *bool `protobuf:"varint,22,opt,name=battle_available,json=battleAvailable,proto3,oneof" json:"battle_available,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *FortDnfFilter) Reset() {
@@ -1323,6 +1326,13 @@ func (x *FortDnfFilter) GetStationedGmax() bool {
 func (x *FortDnfFilter) GetStationActive() bool {
 	if x != nil && x.StationActive != nil {
 		return *x.StationActive
+	}
+	return false
+}
+
+func (x *FortDnfFilter) GetBattleAvailable() bool {
+	if x != nil && x.BattleAvailable != nil {
+		return *x.BattleAvailable
 	}
 	return false
 }
@@ -3419,7 +3429,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12 \n" +
 	"\tmin_level\x18\x02 \x01(\x05H\x00R\bminLevel\x88\x01\x01B\f\n" +
 	"\n" +
-	"_min_level\"\xe8\b\n" +
+	"_min_level\"\xad\t\n" +
 	"\rFortDnfFilter\x122\n" +
 	"\x13is_ar_scan_eligible\x18\x01 \x01(\bH\x00R\x10isArScanEligible\x88\x01\x01\x12=\n" +
 	"\x0favailable_slots\x18\x02 \x01(\v2\x14.golbat_api.IntRangeR\x0eavailableSlots\x12\x17\n" +
@@ -3443,10 +3453,12 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\fbattle_level\x18\x12 \x03(\x05R\vbattleLevel\x128\n" +
 	"\x0ebattle_pokemon\x18\x13 \x03(\v2\x11.golbat_api.DnfIdR\rbattlePokemon\x12*\n" +
 	"\x0estationed_gmax\x18\x14 \x01(\bH\x01R\rstationedGmax\x88\x01\x01\x12*\n" +
-	"\x0estation_active\x18\x15 \x01(\bH\x02R\rstationActive\x88\x01\x01B\x16\n" +
+	"\x0estation_active\x18\x15 \x01(\bH\x02R\rstationActive\x88\x01\x01\x12.\n" +
+	"\x10battle_available\x18\x16 \x01(\bH\x03R\x0fbattleAvailable\x88\x01\x01B\x16\n" +
 	"\x14_is_ar_scan_eligibleB\x11\n" +
 	"\x0f_stationed_gmaxB\x11\n" +
-	"\x0f_station_active\"\xcf\x01\n" +
+	"\x0f_station_activeB\x13\n" +
+	"\x11_battle_available\"\xcf\x01\n" +
 	"\x0fFortScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +

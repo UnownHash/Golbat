@@ -81,6 +81,7 @@ func fortDnfFilterFromProto(f *pb.FortDnfFilter) ApiFortDnfFilter {
 		BattlePokemon:          dnfIdsToFort(f.GetBattlePokemon()),
 		StationedGmax:          f.StationedGmax,
 		StationActive:          f.StationActive,
+		BattleAvailable:        f.BattleAvailable,
 	}
 }
 
