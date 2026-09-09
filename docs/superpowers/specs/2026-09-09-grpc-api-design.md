@@ -82,7 +82,10 @@ omitted `max` is 0 and a range with only `min` never matches. The JSON behaviour
 a wart; the proto does not reproduce it.
 
 `DnfId.pokemon_id` of 0 in a pokemon filter matches any pokemon (as in JSON). `form` unset
-matches any form.
+matches any form. A pokemon scan with an empty `filters` list matches nothing, exactly as the
+JSON v3 scan does (the DNF lookup map has no catch-all entry); one clause with no conditions is
+the catch-all. Fort scans are the other way round, also as in JSON: no clauses means every fort
+of the requested type.
 
 ### 2.2 Pokemon
 
@@ -106,7 +109,7 @@ message PokemonScanRequest {
   LatLon min = 1;
   LatLon max = 2;
   int32 limit = 3;                          // 0 = server default (tuning.max_pokemon_results)
-  repeated PokemonDnfFilter filters = 4;    // OR'd clauses; empty = match every pokemon
+  repeated PokemonDnfFilter filters = 4;    // OR'd clauses; empty matches NOTHING (JSON parity), {} matches all
 }
 
 message PokemonScanResponse {
