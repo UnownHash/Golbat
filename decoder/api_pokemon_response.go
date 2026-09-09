@@ -223,20 +223,34 @@ func GetPokemonInArea3Clean(req ApiPokemonScan3) *ApiPokemonScanResultV3 {
 	}
 }
 
-// collectApiPokemonResults peeks each pokemon by encounter ID and builds
-// ApiPokemonResult values, filtering out expired pokemon.
-func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
-	results := make([]ApiPokemonResult, 0, len(keys))
+// forEachLivePokemonResult peeks each pokemon by encounter id, skips expired
+// or uncached ones, builds its ApiPokemonResult under the record lock, then
+// releases the lock before handing the result (and the numeric id) to visit.
+// Both the JSON collector and the gRPC collector run this one loop.
+func forEachLivePokemonResult(keys []uint64, caller string, visit func(id uint64, r *ApiPokemonResult)) {
 	nowUnix := time.Now().Unix()
 	for _, key := range keys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
-		if pokemon != nil {
-			if int64OrZero(pokemon.ExpireTimestamp) > nowUnix {
-				results = append(results, buildApiPokemonResult(pokemon))
-			}
-			unlock()
+		if pokemon == nil {
+			continue
 		}
+		if int64OrZero(pokemon.ExpireTimestamp) <= nowUnix {
+			unlock()
+			continue
+		}
+		r := buildApiPokemonResult(pokemon)
+		unlock()
+		visit(key, &r)
 	}
+}
+
+// collectApiPokemonResults builds ApiPokemonResult values for the live
+// pokemon among keys, in key order.
+func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
+	results := make([]ApiPokemonResult, 0, len(keys))
+	forEachLivePokemonResult(keys, caller, func(_ uint64, r *ApiPokemonResult) {
+		results = append(results, *r)
+	})
 	return results
 }
 
