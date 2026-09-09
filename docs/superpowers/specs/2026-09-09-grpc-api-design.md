@@ -25,8 +25,9 @@ for cross-instance verification. Those parameters make no sense for an API calle
    available over gRPC with complete results, plus pokemon by encounter id.
 2. The gRPC path does the same server-side work as the HTTP path apart from serialisation, so a
    timing comparison isolates the encoding cost.
-3. gRPC API calls authenticate with `api_secret`, not `raw_bearer`. Auth failures are gRPC
-   status errors, not empty responses.
+3. gRPC API calls authenticate with the existing `api_secret` config value, the same one the
+   HTTP `X-Golbat-Secret` header carries, not `raw_bearer`. No new secret or config key. Auth
+   failures are gRPC status errors, not empty responses.
 4. The HTTP result structs and the proto messages cannot drift silently: a field added to one
    without the other fails a test.
 
@@ -248,7 +249,7 @@ one; it duplicated the transport's own status).
 
 | Condition | Code |
 |---|---|
-| `api_secret` configured and `authorization` metadata missing or wrong | `Unauthenticated` |
+| `api_secret` configured and the secret metadata missing or wrong | `Unauthenticated` |
 | Fort RPC called with `fort_in_memory` disabled (HTTP returns 503) | `FailedPrecondition` |
 | `min` or `max` unset on a scan request | `InvalidArgument` |
 
@@ -257,13 +258,19 @@ state, not a transient fault; `Unavailable` tells generated clients to retry.
 
 ## 3. Authentication
 
+The gRPC API uses the existing API secret: the `api_secret` value in the config file, which is
+the same value the HTTP API checks in the `X-Golbat-Secret` header (`golbatSecretMiddleware`).
+There is no new secret, no new config key, and `raw_bearer` plays no part.
+
 A unary server interceptor in a new `grpc_auth.go` (package main):
 
 - Applies only to methods whose full name starts with `/golbat_api.GolbatApi/`. Raw ingest
   (`/raw_receiver.RawProto/`) keeps its existing in-handler `raw_bearer` check unchanged, and the
   reflection service is unauthenticated (it exposes only the schema).
-- Reads the `authorization` metadata key. Accepts either the bare secret or `Bearer <secret>`.
-  Compares with `crypto/subtle.ConstantTimeCompare`.
+- Reads the secret from incoming metadata. The canonical key is `x-golbat-secret`, the same name
+  as the HTTP header, carrying the bare secret. The `authorization` key is also accepted, as a
+  bare secret or `Bearer <secret>`, because the stub service and its docs used it. Any one match
+  passes. Compares with `crypto/subtle.ConstantTimeCompare`.
 - An empty `config.Config.ApiSecret` disables the check, mirroring `golbatSecretMiddleware`.
 - Failure returns `status.Error(codes.Unauthenticated, "invalid or missing api secret")`.
 
@@ -325,7 +332,8 @@ twin returning `*ApiFortDnfMinMax`; `dnfIdsToApi([]*pb.DnfId)` for both `ApiPoke
 **main (end to end over bufconn):**
 
 - Auth: no secret configured → `ScanPokemon` succeeds without metadata; secret configured →
-  missing → `Unauthenticated`, wrong → `Unauthenticated`, bare secret → OK, `Bearer` form → OK.
+  missing → `Unauthenticated`, wrong value under either key → `Unauthenticated`,
+  `x-golbat-secret` → OK, `authorization` bare → OK, `authorization: Bearer <secret>` → OK.
 - Raw service: with `api_secret` set and no metadata, `SubmitRawProto` is not rejected by the
   interceptor (its own check governs).
 - Fort gate: `fort_in_memory` off → `FailedPrecondition`; on → empty scan returns zero results
@@ -339,8 +347,8 @@ versions v1.36.11 / v1.6.1 are pinned).
 
 ## 6. Documentation
 
-- `api.md`: replace the gRPC section: port, `authorization` metadata (both forms), the service
-  listing, the semantic differences from JSON (§2.1 ranges, §2.3 lists, numeric encounter ids,
+- `api.md`: replace the gRPC section: port, that the secret is the same `api_secret` as HTTP,
+  the `x-golbat-secret` metadata key (and the accepted `authorization` forms), the service listing, the semantic differences from JSON (§2.1 ranges, §2.3 lists, numeric encounter ids,
   `_json` fields, status codes), and a `grpcurl` example using reflection.
 - `CLAUDE.md`: layout entries for the new files and a short gRPC API paragraph after the ingest
   section.
