@@ -584,7 +584,7 @@ methods themselves are always gated by `api_secret`.
 | `ScanGyms(FortScanRequest) → GymScanResponse` | `POST /api/gym/scan` |
 | `ScanPokestops(FortScanRequest) → PokestopScanResponse` | `POST /api/pokestop/scan` |
 | `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
-| `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` |
+| `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` — each type group takes its own `limit` (0 = server default); the response carries `gyms_stats` / `pokestops_stats` / `stations_stats` (`examined`, `limit_reached`) per type, and the top-level `limit_reached` is true when any type or the overall `limit` was reached |
 
 Every message mirrors the JSON request or response it is named after, field
 for field, with proto field names equal to the JSON keys. The scans run the

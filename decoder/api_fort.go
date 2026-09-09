@@ -25,6 +25,14 @@ type ApiFortScan struct {
 // are all wildcards for other types).
 type ApiFortTypeScanGroup struct {
 	DnfFilters []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd clauses for this fort type; omit, null or empty to match every fort of the type."`
+	Limit      int                `json:"limit" required:"false" doc:"Max results for this fort type; 0 uses the server default. Clamped by tuning.max_fort_results. A type stops accepting matches at its limit while the scan keeps filling the other types; the top-level limit still caps the total across types."`
+}
+
+// ApiFortTypeScanStats is one fort type's share of a combined scan's
+// counters, so a caller can rate-limit, paginate and fall back per type.
+type ApiFortTypeScanStats struct {
+	Examined     int  `json:"examined" doc:"Forts of this type examined during the spatial scan (lookup loaded), whether or not they matched or were accepted. Zero for a type the request excluded."`
+	LimitReached bool `json:"limit_reached" doc:"Whether this type's accepted results reached its effective limit. Always false for a type the request excluded."`
 }
 
 // ApiFortCombinedScan is the request body for the combined /api/fort/scan.
@@ -155,7 +163,11 @@ type ApiFortCombinedScanResult struct {
 	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
 	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
 	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
-	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether any fort type reached its per-type limit or the overall top-level limit was reached"`
+
+	GymsStats      ApiFortTypeScanStats `json:"gyms_stats" doc:"Per-type counters for gyms."`
+	PokestopsStats ApiFortTypeScanStats `json:"pokestops_stats" doc:"Per-type counters for pokestops."`
+	StationsStats  ApiFortTypeScanStats `json:"stations_stats" doc:"Per-type counters for stations."`
 }
 
 // matchDnfIdPair checks if any ApiDnfId in the filter matches the given pokemon/form pair
@@ -530,28 +542,86 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 }
 
 func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails db.DbDetails) *ApiFortCombinedScanResult {
-	gymKeys, pokestopKeys, stationKeys, examined, skipped, total := internalGetFortsCombined(retrieveParameters)
+	scan := internalGetFortsCombined(retrieveParameters)
 	start := time.Now()
 
-	gyms := collectGymResults(dbDetails, gymKeys, "API.GetScanGymPokemon")
-	pokestops := collectPokestopResults(dbDetails, pokestopKeys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemonPokemon")
-	stations := collectStationResults(dbDetails, stationKeys, "API.GetScanStationPokemon")
+	gyms := collectGymResults(dbDetails, scan.gyms.keys, "API.GetScanGymPokemon")
+	pokestops := collectPokestopResults(dbDetails, scan.pokestops.keys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemonPokemon")
+	stations := collectStationResults(dbDetails, scan.stations.keys, "API.GetScanStationPokemon")
 
 	log.Infof("FortCombinedScan - result buffer time %s, %d+%d+%d added",
 		time.Since(start), len(gyms), len(pokestops), len(stations))
 
 	return &ApiFortCombinedScanResult{
-		Gyms:         gyms,
-		Pokestops:    pokestops,
-		Stations:     stations,
-		Examined:     examined,
-		Skipped:      skipped,
-		Total:        total,
-		LimitReached: fortScanLimitReached(retrieveParameters.Limit, len(gymKeys)+len(pokestopKeys)+len(stationKeys)),
+		Gyms:           gyms,
+		Pokestops:      pokestops,
+		Stations:       stations,
+		Examined:       scan.examined,
+		Skipped:        scan.skipped,
+		Total:          scan.total,
+		LimitReached:   scan.anyLimitReached(),
+		GymsStats:      scan.gyms.stats(),
+		PokestopsStats: scan.pokestops.stats(),
+		StationsStats:  scan.stations.stats(),
 	}
 }
 
-func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, pokestopKeys, stationKeys []FortId, examined, skipped, total int) {
+// combinedTypeScan is one fort type's slice of a combined scan: whether the
+// request asked for the type, its effective per-type limit, how many forts of
+// the type were examined (lookup loaded; matched or not, accepted or not),
+// and the accepted keys.
+type combinedTypeScan struct {
+	requested bool
+	limit     int
+	examined  int
+	keys      []FortId
+}
+
+// newCombinedTypeScan resolves a request group: an omitted group excludes the
+// type unless the whole request is a bare probe (every group omitted), which
+// requests every type at the server default.
+func newCombinedTypeScan(g *ApiFortTypeScanGroup, bareProbe bool) combinedTypeScan {
+	if g == nil {
+		return combinedTypeScan{requested: bareProbe, limit: fortScanLimit(0)}
+	}
+	return combinedTypeScan{requested: true, limit: fortScanLimit(g.Limit)}
+}
+
+// capped reports whether the type has accepted as many matches as its limit allows.
+func (c *combinedTypeScan) capped() bool {
+	return c.requested && len(c.keys) >= c.limit
+}
+
+func (c *combinedTypeScan) stats() ApiFortTypeScanStats {
+	return ApiFortTypeScanStats{Examined: c.examined, LimitReached: c.capped()}
+}
+
+// combinedScanResult is what one tree walk of the combined scan produced.
+type combinedScanResult struct {
+	gyms, pokestops, stations combinedTypeScan
+	examined, skipped, total  int
+	overallCapReached         bool // the top-level limit ended the walk
+}
+
+func (r *combinedScanResult) byType(t FortType) *combinedTypeScan {
+	switch t {
+	case GYM:
+		return &r.gyms
+	case POKESTOP:
+		return &r.pokestops
+	case STATION:
+		return &r.stations
+	}
+	return nil
+}
+
+// anyLimitReached is the top-level limit_reached: any type hit its own limit,
+// or the overall cap ended the walk.
+func (r *combinedScanResult) anyLimitReached() bool {
+	return r.overallCapReached || r.gyms.capped() || r.pokestops.capped() || r.stations.capped()
+}
+
+func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) combinedScanResult {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
@@ -560,6 +630,19 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 	maxForts := fortScanLimit(retrieveParameters.Limit)
 
 	now := time.Now().Unix()
+	bareProbe := retrieveParameters.Gyms == nil && retrieveParameters.Pokestops == nil && retrieveParameters.Stations == nil
+	res := combinedScanResult{
+		gyms:      newCombinedTypeScan(retrieveParameters.Gyms, bareProbe),
+		pokestops: newCombinedTypeScan(retrieveParameters.Pokestops, bareProbe),
+		stations:  newCombinedTypeScan(retrieveParameters.Stations, bareProbe),
+	}
+	// The walk ends once every requested type is full, or the overall cap hits.
+	uncapped := 0
+	for _, ts := range []*combinedTypeScan{&res.gyms, &res.pokestops, &res.stations} {
+		if ts.requested && !ts.capped() {
+			uncapped++
+		}
+	}
 	totalMatched := 0
 	// Dedupe: see internalGetForts.
 	seenCombined := make(map[FortId]struct{})
@@ -568,42 +651,53 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 
 	lockedTime := time.Since(start)
 
-	fortTreeCopy.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
-		func(min, max [2]float64, fortId FortId) bool {
-			examined++
+	if uncapped > 0 {
+		fortTreeCopy.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
+			func(min, max [2]float64, fortId FortId) bool {
+				res.examined++
 
-			fortLookup, found := fortLookupCache.Load(fortId)
-			if !found {
-				skipped++
-				return true
-			}
+				fortLookup, found := fortLookupCache.Load(fortId)
+				if !found {
+					res.skipped++
+					return true
+				}
+				ts := res.byType(fortLookup.FortType)
+				if ts == nil || !ts.requested {
+					return true // excluded type: not examined-counted
+				}
+				ts.examined++
 
-			if combinedFortMatches(&retrieveParameters, &fortLookup, now) {
+				if !combinedFortMatches(&retrieveParameters, &fortLookup, now) {
+					return true
+				}
 				if _, dup := seenCombined[fortId]; dup {
 					return true
 				}
 				seenCombined[fortId] = struct{}{}
-				switch fortLookup.FortType {
-				case GYM:
-					gymKeys = append(gymKeys, fortId)
-				case POKESTOP:
-					pokestopKeys = append(pokestopKeys, fortId)
-				case STATION:
-					stationKeys = append(stationKeys, fortId)
+				if ts.capped() {
+					return true // this type is full; keep walking for the others
 				}
+				ts.keys = append(ts.keys, fortId)
 				totalMatched++
+				if ts.capped() {
+					uncapped--
+					if uncapped == 0 {
+						log.Infof("GetFortsInArea (combined) - every requested type reached its limit, stopping scan")
+						return false
+					}
+				}
 				if totalMatched >= maxForts {
+					res.overallCapReached = true
 					log.Infof("GetFortsInArea - result would exceed maximum size (%d), stopping scan", maxForts)
 					return false
 				}
-			}
-
-			return true
-		})
+				return true
+			})
+	}
 
 	log.Infof("GetFortsInArea (combined) - scan time %s (locked time %s), %d scanned, %d skipped, %d+%d+%d returned, tree size %d",
-		time.Since(start), lockedTime, examined, skipped, len(gymKeys), len(pokestopKeys), len(stationKeys), fortTreeCopy.Len())
+		time.Since(start), lockedTime, res.examined, res.skipped, len(res.gyms.keys), len(res.pokestops.keys), len(res.stations.keys), fortTreeCopy.Len())
 
-	total = fortTreeCopy.Len()
-	return
+	res.total = fortTreeCopy.Len()
+	return res
 }

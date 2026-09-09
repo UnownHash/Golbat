@@ -413,7 +413,7 @@ This avoids iterating all filters for every pokemon.
      growth, pinned by `TestFortLookupSizeUnchangedByStationAvailability`.
 5. Lock and load full entity records for matched IDs
 
-The `FortCombinedScanEndpoint` scans all three fort types in one pass and splits results by type.
+The `FortCombinedScanEndpoint` scans all three fort types in one pass and splits results by type. Each type group carries its own `limit` (clamped by `max_fort_results`); a type stops accepting matches at its limit while the walk keeps filling the others, and the walk ends when every requested type is full or the top-level `limit` (an overall cap) is hit. The response reports `examined` and `limit_reached` per type (`gyms_stats` etc.; zero for an excluded type) alongside the unchanged top-level counters; top-level `limit_reached` means any type or the overall cap was reached.
 
 #### Fort Availability (maintained, not scanned)
 

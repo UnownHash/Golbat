@@ -1416,6 +1416,7 @@ func (x *FortScanRequest) GetWithIncidents() bool {
 type FortTypeScanGroup struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Filters       []*FortDnfFilter       `protobuf:"bytes,1,rep,name=filters,proto3" json:"filters,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"` // per-type cap; 0 = server default (tuning.max_fort_results)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1457,6 +1458,66 @@ func (x *FortTypeScanGroup) GetFilters() []*FortDnfFilter {
 	return nil
 }
 
+func (x *FortTypeScanGroup) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// One fort type's share of a combined scan's counters.
+type FortTypeScanStats struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Examined      int32                  `protobuf:"varint,1,opt,name=examined,proto3" json:"examined,omitempty"`                             // forts of this type examined (lookup loaded); 0 for an excluded type
+	LimitReached  bool                   `protobuf:"varint,2,opt,name=limit_reached,json=limitReached,proto3" json:"limit_reached,omitempty"` // this type's accepted results reached its per-type limit
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FortTypeScanStats) Reset() {
+	*x = FortTypeScanStats{}
+	mi := &file_grpc_api_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FortTypeScanStats) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FortTypeScanStats) ProtoMessage() {}
+
+func (x *FortTypeScanStats) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FortTypeScanStats.ProtoReflect.Descriptor instead.
+func (*FortTypeScanStats) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FortTypeScanStats) GetExamined() int32 {
+	if x != nil {
+		return x.Examined
+	}
+	return 0
+}
+
+func (x *FortTypeScanStats) GetLimitReached() bool {
+	if x != nil {
+		return x.LimitReached
+	}
+	return false
+}
+
 type FortCombinedScanRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Min           *LatLon                `protobuf:"bytes,1,opt,name=min,proto3" json:"min,omitempty"`
@@ -1472,7 +1533,7 @@ type FortCombinedScanRequest struct {
 
 func (x *FortCombinedScanRequest) Reset() {
 	*x = FortCombinedScanRequest{}
-	mi := &file_grpc_api_proto_msgTypes[15]
+	mi := &file_grpc_api_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1484,7 +1545,7 @@ func (x *FortCombinedScanRequest) String() string {
 func (*FortCombinedScanRequest) ProtoMessage() {}
 
 func (x *FortCombinedScanRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[15]
+	mi := &file_grpc_api_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1497,7 +1558,7 @@ func (x *FortCombinedScanRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FortCombinedScanRequest.ProtoReflect.Descriptor instead.
 func (*FortCombinedScanRequest) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{15}
+	return file_grpc_api_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *FortCombinedScanRequest) GetMin() *LatLon {
@@ -1573,7 +1634,7 @@ type Incident struct {
 
 func (x *Incident) Reset() {
 	*x = Incident{}
-	mi := &file_grpc_api_proto_msgTypes[16]
+	mi := &file_grpc_api_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1585,7 +1646,7 @@ func (x *Incident) String() string {
 func (*Incident) ProtoMessage() {}
 
 func (x *Incident) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[16]
+	mi := &file_grpc_api_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1598,7 +1659,7 @@ func (x *Incident) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Incident.ProtoReflect.Descriptor instead.
 func (*Incident) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{16}
+	return file_grpc_api_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Incident) GetId() string {
@@ -1730,7 +1791,7 @@ type StationBattle struct {
 
 func (x *StationBattle) Reset() {
 	*x = StationBattle{}
-	mi := &file_grpc_api_proto_msgTypes[17]
+	mi := &file_grpc_api_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1742,7 +1803,7 @@ func (x *StationBattle) String() string {
 func (*StationBattle) ProtoMessage() {}
 
 func (x *StationBattle) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[17]
+	mi := &file_grpc_api_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1755,7 +1816,7 @@ func (x *StationBattle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StationBattle.ProtoReflect.Descriptor instead.
 func (*StationBattle) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{17}
+	return file_grpc_api_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *StationBattle) GetBreadBattleSeed() int64 {
@@ -1914,7 +1975,7 @@ type Gym struct {
 
 func (x *Gym) Reset() {
 	*x = Gym{}
-	mi := &file_grpc_api_proto_msgTypes[18]
+	mi := &file_grpc_api_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1926,7 +1987,7 @@ func (x *Gym) String() string {
 func (*Gym) ProtoMessage() {}
 
 func (x *Gym) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[18]
+	mi := &file_grpc_api_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1939,7 +2000,7 @@ func (x *Gym) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Gym.ProtoReflect.Descriptor instead.
 func (*Gym) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{18}
+	return file_grpc_api_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *Gym) GetId() string {
@@ -2292,7 +2353,7 @@ type Pokestop struct {
 
 func (x *Pokestop) Reset() {
 	*x = Pokestop{}
-	mi := &file_grpc_api_proto_msgTypes[19]
+	mi := &file_grpc_api_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2304,7 +2365,7 @@ func (x *Pokestop) String() string {
 func (*Pokestop) ProtoMessage() {}
 
 func (x *Pokestop) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[19]
+	mi := &file_grpc_api_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2317,7 +2378,7 @@ func (x *Pokestop) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Pokestop.ProtoReflect.Descriptor instead.
 func (*Pokestop) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{19}
+	return file_grpc_api_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Pokestop) GetId() string {
@@ -2735,7 +2796,7 @@ type Station struct {
 
 func (x *Station) Reset() {
 	*x = Station{}
-	mi := &file_grpc_api_proto_msgTypes[20]
+	mi := &file_grpc_api_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2747,7 +2808,7 @@ func (x *Station) String() string {
 func (*Station) ProtoMessage() {}
 
 func (x *Station) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[20]
+	mi := &file_grpc_api_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2760,7 +2821,7 @@ func (x *Station) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Station.ProtoReflect.Descriptor instead.
 func (*Station) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{20}
+	return file_grpc_api_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *Station) GetId() string {
@@ -2972,7 +3033,7 @@ type GymScanResponse struct {
 
 func (x *GymScanResponse) Reset() {
 	*x = GymScanResponse{}
-	mi := &file_grpc_api_proto_msgTypes[21]
+	mi := &file_grpc_api_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2984,7 +3045,7 @@ func (x *GymScanResponse) String() string {
 func (*GymScanResponse) ProtoMessage() {}
 
 func (x *GymScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[21]
+	mi := &file_grpc_api_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2997,7 +3058,7 @@ func (x *GymScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GymScanResponse.ProtoReflect.Descriptor instead.
 func (*GymScanResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{21}
+	return file_grpc_api_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GymScanResponse) GetGyms() []*Gym {
@@ -3048,7 +3109,7 @@ type PokestopScanResponse struct {
 
 func (x *PokestopScanResponse) Reset() {
 	*x = PokestopScanResponse{}
-	mi := &file_grpc_api_proto_msgTypes[22]
+	mi := &file_grpc_api_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3060,7 +3121,7 @@ func (x *PokestopScanResponse) String() string {
 func (*PokestopScanResponse) ProtoMessage() {}
 
 func (x *PokestopScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[22]
+	mi := &file_grpc_api_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3073,7 +3134,7 @@ func (x *PokestopScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PokestopScanResponse.ProtoReflect.Descriptor instead.
 func (*PokestopScanResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{22}
+	return file_grpc_api_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *PokestopScanResponse) GetPokestops() []*Pokestop {
@@ -3124,7 +3185,7 @@ type StationScanResponse struct {
 
 func (x *StationScanResponse) Reset() {
 	*x = StationScanResponse{}
-	mi := &file_grpc_api_proto_msgTypes[23]
+	mi := &file_grpc_api_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3136,7 +3197,7 @@ func (x *StationScanResponse) String() string {
 func (*StationScanResponse) ProtoMessage() {}
 
 func (x *StationScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[23]
+	mi := &file_grpc_api_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3149,7 +3210,7 @@ func (x *StationScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StationScanResponse.ProtoReflect.Descriptor instead.
 func (*StationScanResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{23}
+	return file_grpc_api_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *StationScanResponse) GetStations() []*Station {
@@ -3188,21 +3249,24 @@ func (x *StationScanResponse) GetLimitReached() bool {
 }
 
 type FortScanResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Gyms          []*Gym                 `protobuf:"bytes,1,rep,name=gyms,proto3" json:"gyms,omitempty"`
-	Pokestops     []*Pokestop            `protobuf:"bytes,2,rep,name=pokestops,proto3" json:"pokestops,omitempty"`
-	Stations      []*Station             `protobuf:"bytes,3,rep,name=stations,proto3" json:"stations,omitempty"`
-	Examined      int32                  `protobuf:"varint,4,opt,name=examined,proto3" json:"examined,omitempty"`
-	Skipped       int32                  `protobuf:"varint,5,opt,name=skipped,proto3" json:"skipped,omitempty"`
-	Total         int32                  `protobuf:"varint,6,opt,name=total,proto3" json:"total,omitempty"`
-	LimitReached  bool                   `protobuf:"varint,7,opt,name=limit_reached,json=limitReached,proto3" json:"limit_reached,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Gyms           []*Gym                 `protobuf:"bytes,1,rep,name=gyms,proto3" json:"gyms,omitempty"`
+	Pokestops      []*Pokestop            `protobuf:"bytes,2,rep,name=pokestops,proto3" json:"pokestops,omitempty"`
+	Stations       []*Station             `protobuf:"bytes,3,rep,name=stations,proto3" json:"stations,omitempty"`
+	Examined       int32                  `protobuf:"varint,4,opt,name=examined,proto3" json:"examined,omitempty"`
+	Skipped        int32                  `protobuf:"varint,5,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	Total          int32                  `protobuf:"varint,6,opt,name=total,proto3" json:"total,omitempty"`
+	LimitReached   bool                   `protobuf:"varint,7,opt,name=limit_reached,json=limitReached,proto3" json:"limit_reached,omitempty"` // any type reached its limit, or the overall cap
+	GymsStats      *FortTypeScanStats     `protobuf:"bytes,8,opt,name=gyms_stats,json=gymsStats,proto3" json:"gyms_stats,omitempty"`
+	PokestopsStats *FortTypeScanStats     `protobuf:"bytes,9,opt,name=pokestops_stats,json=pokestopsStats,proto3" json:"pokestops_stats,omitempty"`
+	StationsStats  *FortTypeScanStats     `protobuf:"bytes,10,opt,name=stations_stats,json=stationsStats,proto3" json:"stations_stats,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *FortScanResponse) Reset() {
 	*x = FortScanResponse{}
-	mi := &file_grpc_api_proto_msgTypes[24]
+	mi := &file_grpc_api_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3214,7 +3278,7 @@ func (x *FortScanResponse) String() string {
 func (*FortScanResponse) ProtoMessage() {}
 
 func (x *FortScanResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_api_proto_msgTypes[24]
+	mi := &file_grpc_api_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3227,7 +3291,7 @@ func (x *FortScanResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FortScanResponse.ProtoReflect.Descriptor instead.
 func (*FortScanResponse) Descriptor() ([]byte, []int) {
-	return file_grpc_api_proto_rawDescGZIP(), []int{24}
+	return file_grpc_api_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *FortScanResponse) GetGyms() []*Gym {
@@ -3277,6 +3341,27 @@ func (x *FortScanResponse) GetLimitReached() bool {
 		return x.LimitReached
 	}
 	return false
+}
+
+func (x *FortScanResponse) GetGymsStats() *FortTypeScanStats {
+	if x != nil {
+		return x.GymsStats
+	}
+	return nil
+}
+
+func (x *FortScanResponse) GetPokestopsStats() *FortTypeScanStats {
+	if x != nil {
+		return x.PokestopsStats
+	}
+	return nil
+}
+
+func (x *FortScanResponse) GetStationsStats() *FortTypeScanStats {
+	if x != nil {
+		return x.StationsStats
+	}
+	return nil
 }
 
 var File_grpc_api_proto protoreflect.FileDescriptor
@@ -3464,9 +3549,13 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\x123\n" +
 	"\afilters\x18\x04 \x03(\v2\x19.golbat_api.FortDnfFilterR\afilters\x12%\n" +
-	"\x0ewith_incidents\x18\x05 \x01(\bR\rwithIncidents\"H\n" +
+	"\x0ewith_incidents\x18\x05 \x01(\bR\rwithIncidents\"^\n" +
 	"\x11FortTypeScanGroup\x123\n" +
-	"\afilters\x18\x01 \x03(\v2\x19.golbat_api.FortDnfFilterR\afilters\"\xcd\x02\n" +
+	"\afilters\x18\x01 \x03(\v2\x19.golbat_api.FortDnfFilterR\afilters\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"T\n" +
+	"\x11FortTypeScanStats\x12\x1a\n" +
+	"\bexamined\x18\x01 \x01(\x05R\bexamined\x12#\n" +
+	"\rlimit_reached\x18\x02 \x01(\bR\flimitReached\"\xcd\x02\n" +
 	"\x17FortCombinedScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
@@ -3792,7 +3881,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\bexamined\x18\x02 \x01(\x05R\bexamined\x12\x18\n" +
 	"\askipped\x18\x03 \x01(\x05R\askipped\x12\x14\n" +
 	"\x05total\x18\x04 \x01(\x05R\x05total\x12#\n" +
-	"\rlimit_reached\x18\x05 \x01(\bR\flimitReached\"\x8d\x02\n" +
+	"\rlimit_reached\x18\x05 \x01(\bR\flimitReached\"\xd9\x03\n" +
 	"\x10FortScanResponse\x12#\n" +
 	"\x04gyms\x18\x01 \x03(\v2\x0f.golbat_api.GymR\x04gyms\x122\n" +
 	"\tpokestops\x18\x02 \x03(\v2\x14.golbat_api.PokestopR\tpokestops\x12/\n" +
@@ -3800,7 +3889,12 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\bexamined\x18\x04 \x01(\x05R\bexamined\x12\x18\n" +
 	"\askipped\x18\x05 \x01(\x05R\askipped\x12\x14\n" +
 	"\x05total\x18\x06 \x01(\x05R\x05total\x12#\n" +
-	"\rlimit_reached\x18\a \x01(\bR\flimitReached2\xe8\x03\n" +
+	"\rlimit_reached\x18\a \x01(\bR\flimitReached\x12<\n" +
+	"\n" +
+	"gyms_stats\x18\b \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\tgymsStats\x12F\n" +
+	"\x0fpokestops_stats\x18\t \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\x0epokestopsStats\x12D\n" +
+	"\x0estations_stats\x18\n" +
+	" \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\rstationsStats2\xe8\x03\n" +
 	"\tGolbatApi\x12P\n" +
 	"\vScanPokemon\x12\x1e.golbat_api.PokemonScanRequest\x1a\x1f.golbat_api.PokemonScanResponse\"\x00\x12M\n" +
 	"\n" +
@@ -3822,7 +3916,7 @@ func file_grpc_api_proto_rawDescGZIP() []byte {
 	return file_grpc_api_proto_rawDescData
 }
 
-var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_grpc_api_proto_goTypes = []any{
 	(*LatLon)(nil),                  // 0: golbat_api.LatLon
 	(*IntRange)(nil),                // 1: golbat_api.IntRange
@@ -3839,16 +3933,17 @@ var file_grpc_api_proto_goTypes = []any{
 	(*FortDnfFilter)(nil),           // 12: golbat_api.FortDnfFilter
 	(*FortScanRequest)(nil),         // 13: golbat_api.FortScanRequest
 	(*FortTypeScanGroup)(nil),       // 14: golbat_api.FortTypeScanGroup
-	(*FortCombinedScanRequest)(nil), // 15: golbat_api.FortCombinedScanRequest
-	(*Incident)(nil),                // 16: golbat_api.Incident
-	(*StationBattle)(nil),           // 17: golbat_api.StationBattle
-	(*Gym)(nil),                     // 18: golbat_api.Gym
-	(*Pokestop)(nil),                // 19: golbat_api.Pokestop
-	(*Station)(nil),                 // 20: golbat_api.Station
-	(*GymScanResponse)(nil),         // 21: golbat_api.GymScanResponse
-	(*PokestopScanResponse)(nil),    // 22: golbat_api.PokestopScanResponse
-	(*StationScanResponse)(nil),     // 23: golbat_api.StationScanResponse
-	(*FortScanResponse)(nil),        // 24: golbat_api.FortScanResponse
+	(*FortTypeScanStats)(nil),       // 15: golbat_api.FortTypeScanStats
+	(*FortCombinedScanRequest)(nil), // 16: golbat_api.FortCombinedScanRequest
+	(*Incident)(nil),                // 17: golbat_api.Incident
+	(*StationBattle)(nil),           // 18: golbat_api.StationBattle
+	(*Gym)(nil),                     // 19: golbat_api.Gym
+	(*Pokestop)(nil),                // 20: golbat_api.Pokestop
+	(*Station)(nil),                 // 21: golbat_api.Station
+	(*GymScanResponse)(nil),         // 22: golbat_api.GymScanResponse
+	(*PokestopScanResponse)(nil),    // 23: golbat_api.PokestopScanResponse
+	(*StationScanResponse)(nil),     // 24: golbat_api.StationScanResponse
+	(*FortScanResponse)(nil),        // 25: golbat_api.FortScanResponse
 }
 var file_grpc_api_proto_depIdxs = []int32{
 	2,  // 0: golbat_api.PokemonDnfFilter.pokemon:type_name -> golbat_api.DnfId
@@ -3887,31 +3982,34 @@ var file_grpc_api_proto_depIdxs = []int32{
 	14, // 33: golbat_api.FortCombinedScanRequest.gyms:type_name -> golbat_api.FortTypeScanGroup
 	14, // 34: golbat_api.FortCombinedScanRequest.pokestops:type_name -> golbat_api.FortTypeScanGroup
 	14, // 35: golbat_api.FortCombinedScanRequest.stations:type_name -> golbat_api.FortTypeScanGroup
-	16, // 36: golbat_api.Pokestop.invasions:type_name -> golbat_api.Incident
-	17, // 37: golbat_api.Station.battles:type_name -> golbat_api.StationBattle
-	18, // 38: golbat_api.GymScanResponse.gyms:type_name -> golbat_api.Gym
-	19, // 39: golbat_api.PokestopScanResponse.pokestops:type_name -> golbat_api.Pokestop
-	20, // 40: golbat_api.StationScanResponse.stations:type_name -> golbat_api.Station
-	18, // 41: golbat_api.FortScanResponse.gyms:type_name -> golbat_api.Gym
-	19, // 42: golbat_api.FortScanResponse.pokestops:type_name -> golbat_api.Pokestop
-	20, // 43: golbat_api.FortScanResponse.stations:type_name -> golbat_api.Station
-	4,  // 44: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
-	6,  // 45: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
-	13, // 46: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
-	13, // 47: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
-	13, // 48: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
-	15, // 49: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
-	5,  // 50: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
-	7,  // 51: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
-	21, // 52: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
-	22, // 53: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
-	23, // 54: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
-	24, // 55: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
-	50, // [50:56] is the sub-list for method output_type
-	44, // [44:50] is the sub-list for method input_type
-	44, // [44:44] is the sub-list for extension type_name
-	44, // [44:44] is the sub-list for extension extendee
-	0,  // [0:44] is the sub-list for field type_name
+	17, // 36: golbat_api.Pokestop.invasions:type_name -> golbat_api.Incident
+	18, // 37: golbat_api.Station.battles:type_name -> golbat_api.StationBattle
+	19, // 38: golbat_api.GymScanResponse.gyms:type_name -> golbat_api.Gym
+	20, // 39: golbat_api.PokestopScanResponse.pokestops:type_name -> golbat_api.Pokestop
+	21, // 40: golbat_api.StationScanResponse.stations:type_name -> golbat_api.Station
+	19, // 41: golbat_api.FortScanResponse.gyms:type_name -> golbat_api.Gym
+	20, // 42: golbat_api.FortScanResponse.pokestops:type_name -> golbat_api.Pokestop
+	21, // 43: golbat_api.FortScanResponse.stations:type_name -> golbat_api.Station
+	15, // 44: golbat_api.FortScanResponse.gyms_stats:type_name -> golbat_api.FortTypeScanStats
+	15, // 45: golbat_api.FortScanResponse.pokestops_stats:type_name -> golbat_api.FortTypeScanStats
+	15, // 46: golbat_api.FortScanResponse.stations_stats:type_name -> golbat_api.FortTypeScanStats
+	4,  // 47: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
+	6,  // 48: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
+	13, // 49: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
+	13, // 50: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
+	13, // 51: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
+	16, // 52: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
+	5,  // 53: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
+	7,  // 54: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
+	22, // 55: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
+	23, // 56: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
+	24, // 57: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
+	25, // 58: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
+	53, // [53:59] is the sub-list for method output_type
+	47, // [47:53] is the sub-list for method input_type
+	47, // [47:47] is the sub-list for extension type_name
+	47, // [47:47] is the sub-list for extension extendee
+	0,  // [0:47] is the sub-list for field type_name
 }
 
 func init() { file_grpc_api_proto_init() }
@@ -3924,18 +4022,18 @@ func file_grpc_api_proto_init() {
 	file_grpc_api_proto_msgTypes[10].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[11].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[12].OneofWrappers = []any{}
-	file_grpc_api_proto_msgTypes[16].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[17].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[18].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[19].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[20].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[21].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_api_proto_rawDesc), len(file_grpc_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   25,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

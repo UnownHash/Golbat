@@ -114,10 +114,13 @@ func TestFortCombinedScanRequestFromProto(t *testing.T) {
 		Max:           &pb.LatLon{Lat: 3, Lon: 4},
 		Limit:         10,
 		WithIncidents: true,
-		Gyms:          &pb.FortTypeScanGroup{Filters: []*pb.FortDnfFilter{{RaidLevel: []int32{5}}}},
+		Gyms:          &pb.FortTypeScanGroup{Filters: []*pb.FortDnfFilter{{RaidLevel: []int32{5}}}, Limit: 7},
 		Pokestops:     &pb.FortTypeScanGroup{},
 	}
 	got := fortCombinedScanRequestFromProto(req)
+	if got.Gyms == nil || got.Gyms.Limit != 7 || got.Pokestops == nil || got.Pokestops.Limit != 0 {
+		t.Errorf("per-type limits = gyms %+v pokestops %+v, want 7 and 0", got.Gyms, got.Pokestops)
+	}
 	if got.Limit != 10 || !got.WithIncidents || got.Min.Lat != 1 || got.Max.Lon != 4 {
 		t.Fatalf("header = %+v", got)
 	}
@@ -317,6 +320,12 @@ func TestGrpcScanGymsReturnsLiveGym(t *testing.T) {
 	combined := GrpcScanForts(&pb.FortCombinedScanRequest{Min: req.Min, Max: req.Max, Gyms: &pb.FortTypeScanGroup{}}, db.DbDetails{})
 	if len(combined.Gyms) != 1 || len(combined.Pokestops) != 0 || len(combined.Stations) != 0 {
 		t.Errorf("combined = %d gyms, %d pokestops, %d stations; want 1/0/0", len(combined.Gyms), len(combined.Pokestops), len(combined.Stations))
+	}
+	if combined.GetGymsStats().GetExamined() < 1 || combined.GetGymsStats().GetLimitReached() {
+		t.Errorf("gyms_stats = %+v, want examined >= 1 and limit_reached false", combined.GetGymsStats())
+	}
+	if combined.GetPokestopsStats().GetExamined() != 0 || combined.GetStationsStats().GetExamined() != 0 {
+		t.Errorf("excluded types must report zero examined: pokestops %+v stations %+v", combined.GetPokestopsStats(), combined.GetStationsStats())
 	}
 	// Pokestop and station scans of the same box see nothing.
 	if r := GrpcScanPokestops(req, db.DbDetails{}); len(r.Pokestops) != 0 {

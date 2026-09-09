@@ -117,7 +117,7 @@ func fortTypeGroupFromProto(g *pb.FortTypeScanGroup) *ApiFortTypeScanGroup {
 	if g == nil {
 		return nil
 	}
-	return &ApiFortTypeScanGroup{DnfFilters: fortDnfFiltersFromProto(g.GetFilters())}
+	return &ApiFortTypeScanGroup{DnfFilters: fortDnfFiltersFromProto(g.GetFilters()), Limit: int(g.GetLimit())}
 }
 
 func fortCombinedScanRequestFromProto(req *pb.FortCombinedScanRequest) ApiFortCombinedScan {
@@ -399,16 +399,23 @@ func GrpcScanStations(req *pb.FortScanRequest, dbDetails db.DbDetails) *pb.Stati
 	}
 }
 
+func fortTypeStatsToProto(s ApiFortTypeScanStats) *pb.FortTypeScanStats {
+	return &pb.FortTypeScanStats{Examined: int32(s.Examined), LimitReached: s.LimitReached}
+}
+
 // GrpcScanForts is the gRPC counterpart of FortCombinedScanEndpoint.
 func GrpcScanForts(req *pb.FortCombinedScanRequest, dbDetails db.DbDetails) *pb.FortScanResponse {
 	res := FortCombinedScanEndpoint(fortCombinedScanRequestFromProto(req), dbDetails)
 	return &pb.FortScanResponse{
-		Gyms:         mapNonNil(res.Gyms, gymToProto),
-		Pokestops:    mapNonNil(res.Pokestops, pokestopToProto),
-		Stations:     mapNonNil(res.Stations, stationToProto),
-		Examined:     int32(res.Examined),
-		Skipped:      int32(res.Skipped),
-		Total:        int32(res.Total),
-		LimitReached: res.LimitReached,
+		Gyms:           mapNonNil(res.Gyms, gymToProto),
+		Pokestops:      mapNonNil(res.Pokestops, pokestopToProto),
+		Stations:       mapNonNil(res.Stations, stationToProto),
+		Examined:       int32(res.Examined),
+		Skipped:        int32(res.Skipped),
+		Total:          int32(res.Total),
+		LimitReached:   res.LimitReached,
+		GymsStats:      fortTypeStatsToProto(res.GymsStats),
+		PokestopsStats: fortTypeStatsToProto(res.PokestopsStats),
+		StationsStats:  fortTypeStatsToProto(res.StationsStats),
 	}
 }

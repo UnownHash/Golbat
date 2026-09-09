@@ -197,6 +197,13 @@ message FortScanRequest {
 
 message FortTypeScanGroup {
   repeated FortDnfFilter filters = 1;
+  int32 limit = 2;                       // per-type cap; 0 = server default (tuning.max_fort_results)
+}
+
+// One fort type's share of a combined scan's counters.
+message FortTypeScanStats {
+  int32 examined = 1;                    // forts of this type examined (lookup loaded); 0 for an excluded type
+  bool limit_reached = 2;                // this type's accepted results reached its per-type limit
 }
 
 message FortCombinedScanRequest {
@@ -414,5 +421,8 @@ message FortScanResponse {
   int32 examined = 4;
   int32 skipped = 5;
   int32 total = 6;
-  bool limit_reached = 7;
+  bool limit_reached = 7;                // any type reached its limit, or the overall cap
+  FortTypeScanStats gyms_stats = 8;
+  FortTypeScanStats pokestops_stats = 9;
+  FortTypeScanStats stations_stats = 10;
 }
