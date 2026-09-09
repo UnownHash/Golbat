@@ -119,6 +119,22 @@ func TestGrpcApiScansWithoutSecret(t *testing.T) {
 		}
 	})
 
+	t.Run("get pokemon is capped at max_pokemon_results", func(t *testing.T) {
+		tooMany := make([]uint64, config.Config.Tuning.MaxPokemonResults+1)
+		if _, err := client.GetPokemon(ctx, &pb.GetPokemonRequest{EncounterIds: tooMany}); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%d ids: code = %v, want InvalidArgument", len(tooMany), status.Code(err))
+		}
+
+		atCap := make([]uint64, config.Config.Tuning.MaxPokemonResults)
+		resp, err := client.GetPokemon(ctx, &pb.GetPokemonRequest{EncounterIds: atCap})
+		if err != nil {
+			t.Fatalf("%d ids (at cap): unexpected error %v", len(atCap), err)
+		}
+		if len(resp.Pokemon) != 0 {
+			t.Errorf("got %d pokemon for unknown ids at cap", len(resp.Pokemon))
+		}
+	})
+
 	t.Run("fort scans on an empty index", func(t *testing.T) {
 		fortReq := &pb.FortScanRequest{Min: testBox.min, Max: testBox.max}
 		if resp, err := client.ScanGyms(ctx, fortReq); err != nil || len(resp.Gyms) != 0 || resp.LimitReached {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 
 	"golbat/config"
 	"golbat/decoder"
@@ -10,7 +11,6 @@ import (
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/status"
 )
@@ -49,7 +49,17 @@ func (s *grpcApiServer) ScanPokemon(ctx context.Context, in *pb.PokemonScanReque
 	return decoder.GrpcScanPokemon(in), nil
 }
 
+// GetPokemon batches what the HTTP API serves one id at a time
+// (GET /api/pokemon/id/{pokemon_id}), so unlike the scan RPCs it has no
+// per-request result cap to inherit from the HTTP handler — the request
+// itself, one id at a time, was the HTTP API's bound. Enforce
+// tuning.max_pokemon_results directly on the id count instead.
 func (s *grpcApiServer) GetPokemon(ctx context.Context, in *pb.GetPokemonRequest) (*pb.GetPokemonResponse, error) {
+	if cap := config.Config.Tuning.MaxPokemonResults; cap > 0 {
+		if n := len(in.GetEncounterIds()); n > cap {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("too many encounter_ids: %d > %d", n, cap))
+		}
+	}
 	return &pb.GetPokemonResponse{Pokemon: decoder.GrpcGetPokemon(in.GetEncounterIds())}, nil
 }
 
