@@ -10,7 +10,7 @@ package golbat_api;
 service GolbatApi {
   // POST /api/pokemon/v3/scan
   rpc ScanPokemon (PokemonScanRequest) returns (PokemonScanResponse) {}
-  // GET /api/pokemon/id/{id}, batched. Misses are omitted; match by id.
+  // GET /api/pokemon/id/{pokemon_id}, batched. Misses are omitted; match by id.
   rpc GetPokemon (GetPokemonRequest) returns (GetPokemonResponse) {}
   // POST /api/gym/scan
   rpc ScanGyms (FortScanRequest) returns (GymScanResponse) {}

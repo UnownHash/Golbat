@@ -37,7 +37,7 @@ const (
 type GolbatApiClient interface {
 	// POST /api/pokemon/v3/scan
 	ScanPokemon(ctx context.Context, in *PokemonScanRequest, opts ...grpc.CallOption) (*PokemonScanResponse, error)
-	// GET /api/pokemon/id/{id}, batched. Misses are omitted; match by id.
+	// GET /api/pokemon/id/{pokemon_id}, batched. Misses are omitted; match by id.
 	GetPokemon(ctx context.Context, in *GetPokemonRequest, opts ...grpc.CallOption) (*GetPokemonResponse, error)
 	// POST /api/gym/scan
 	ScanGyms(ctx context.Context, in *FortScanRequest, opts ...grpc.CallOption) (*GymScanResponse, error)
@@ -127,7 +127,7 @@ func (c *golbatApiClient) ScanForts(ctx context.Context, in *FortCombinedScanReq
 type GolbatApiServer interface {
 	// POST /api/pokemon/v3/scan
 	ScanPokemon(context.Context, *PokemonScanRequest) (*PokemonScanResponse, error)
-	// GET /api/pokemon/id/{id}, batched. Misses are omitted; match by id.
+	// GET /api/pokemon/id/{pokemon_id}, batched. Misses are omitted; match by id.
 	GetPokemon(context.Context, *GetPokemonRequest) (*GetPokemonResponse, error)
 	// POST /api/gym/scan
 	ScanGyms(context.Context, *FortScanRequest) (*GymScanResponse, error)

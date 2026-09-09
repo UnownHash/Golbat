@@ -261,6 +261,7 @@ one; it duplicated the transport's own status).
 | `api_secret` configured and the secret metadata missing or wrong | `Unauthenticated` |
 | Fort RPC called with `fort_in_memory` disabled (HTTP returns 503) | `FailedPrecondition` |
 | `min` or `max` unset on a scan request | `InvalidArgument` |
+| `GetPokemon` called with more `encounter_ids` than `tuning.max_pokemon_results` (cap > 0) | `InvalidArgument` |
 
 `FailedPrecondition` is chosen over `Unavailable` because the condition is a configuration
 state, not a transient fault; `Unavailable` tells generated clients to retry.
@@ -283,10 +284,15 @@ A unary server interceptor in a new `grpc_auth.go` (package main):
 - An empty `config.Config.ApiSecret` disables the check, mirroring `golbatSecretMiddleware`.
 - Failure returns `status.Error(codes.Unauthenticated, "invalid or missing api secret")`.
 
+The same rule is also applied as a stream interceptor (`apiAuthStreamInterceptor`), so a future
+streaming RPC on `GolbatApi` cannot be unauthenticated by omission; both interceptors share the
+check via `apiSecretAllows(ctx, fullMethod)`.
+
 `main.go` builds the server with `grpc.ChainUnaryInterceptor(<prometheus>, apiAuthUnaryInterceptor)`
 when Prometheus is enabled and `grpc.ChainUnaryInterceptor(apiAuthUnaryInterceptor)` otherwise,
 registers `GolbatApi` next to `RawProto`, and registers `reflection.Register(s)`
-(`google.golang.org/grpc/reflection`, already in the grpc module).
+(`google.golang.org/grpc/reflection`, already in the grpc module). The stream chain
+(`grpc.ChainStreamInterceptor`) is built the same way, in the same order.
 
 ## 4. Code layout
 
@@ -349,6 +355,14 @@ twin returning `*ApiFortDnfMinMax`; `dnfIdsToApi([]*pb.DnfId)` for both `ApiPoke
   with `total` equal to the (empty) tree size.
 - Validation: missing `min` → `InvalidArgument`.
 - Empty pokemon scan returns zero results and counts.
+- `GetPokemon` cap: `encounter_ids` one over `tuning.max_pokemon_results` → `InvalidArgument`;
+  exactly at the cap → OK.
+- Stream interceptor (`apiAuthStreamInterceptor`, via a stub `grpc.ServerStream`): secret
+  configured, `GolbatApi` method, no metadata → `Unauthenticated` and the handler does not run;
+  `x-golbat-secret` right → handler runs; a raw (non-`GolbatApi`) method with no metadata →
+  handler runs.
+- Prometheus chain: a server built with a real `*grpcprom.ServerMetrics` still rejects an
+  unauthenticated `ScanPokemon` call, proving interceptor order survives the metrics wrapper.
 
 **Regeneration:** `update_grpc.sh` output must match the committed files (checked by running it
 before the final commit; the tree already mixes `protoc` version comments, so only the plugin

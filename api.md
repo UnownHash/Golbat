@@ -542,9 +542,20 @@ These endpoints are only available if `tuning.profile_routes` is enabled in conf
 
 ## gRPC API
 
+The previous `Pokemon` gRPC service (`Search`, `SearchV3`) has been removed;
+`GolbatApi` replaces it.
+
 Golbat serves a gRPC API on `grpc_port` (the same listener as raw ingest). The
 schema is `grpc/api.proto`, package `golbat_api`, service `GolbatApi`. Server
 reflection is enabled, so `grpcurl` and `ghz` work without the proto files.
+
+**Message sizes:** fort scans can return up to `tuning.max_fort_results`
+results (default 9000) with JSON passthrough blobs attached, and easily
+exceed 4 MB. grpc-go clients default `MaxCallRecvMsgSize` to 4 MB and fail
+with `RESOURCE_EXHAUSTED` on a large response — raise it
+(`grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(64<<20))`, `grpcurl
+-max-msg-sz 67108864`, ghz `--max-recv-message-size`), or lower `limit`. The
+server imposes no send-side cap.
 
 ### Authentication
 
@@ -560,12 +571,16 @@ are also accepted. A missing or wrong secret fails with `UNAUTHENTICATED`. An
 empty `api_secret` disables the check, as for HTTP. `raw_bearer` is only ever
 checked by `RawProto.SubmitRawProto`.
 
+Server reflection is unauthenticated (it exposes only the schema, not data),
+so `grpc_port` should not be reachable from the public internet; the API
+methods themselves are always gated by `api_secret`.
+
 ### Service
 
 | RPC | HTTP counterpart |
 |-----|------------------|
 | `ScanPokemon(PokemonScanRequest) → PokemonScanResponse` | `POST /api/pokemon/v3/scan` |
-| `GetPokemon(GetPokemonRequest) → GetPokemonResponse` | `GET /api/pokemon/id/{id}`, batched; misses are omitted |
+| `GetPokemon(GetPokemonRequest) → GetPokemonResponse` | `GET /api/pokemon/id/{pokemon_id}`, batched; misses are omitted; capped at `tuning.max_pokemon_results` ids per call (`INVALID_ARGUMENT` above it) |
 | `ScanGyms(FortScanRequest) → GymScanResponse` | `POST /api/gym/scan` |
 | `ScanPokestops(FortScanRequest) → PokestopScanResponse` | `POST /api/pokestop/scan` |
 | `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
@@ -587,7 +602,10 @@ the serialisation differs.
   one clause with no conditions (`{}`) matches every pokemon. Fort scans
   differ (as in JSON): an empty `filters` list matches every fort of the type.
 - **`IntRange`**: an unset `min` is 0 and an unset `max` is 32767 (no upper
-  bound). In JSON an omitted `max` is 0.
+  bound). In JSON an omitted `max` is 0. When timing gRPC against HTTP, send
+  both bounds (or neither) — a filter with only `min` selects `min..32767`
+  over gRPC but matches nothing over HTTP, so the two responses would differ
+  in size.
 - **Repeated list filters** (team ids, raid levels, quest reward types, ...):
   an empty list means no constraint. proto3 cannot distinguish an empty list
   from an absent one, so the JSON "explicitly empty list matches nothing" case
@@ -603,7 +621,8 @@ the serialisation differs.
   league) rather than a JSON object.
 - **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
   `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, HTTP 503),
-  `INVALID_ARGUMENT` (`min` or `max` missing).
+  `INVALID_ARGUMENT` (`min` or `max` missing, or more than
+  `max_pokemon_results` ids in `GetPokemon`).
 
 ### Example
 
@@ -614,6 +633,11 @@ grpcurl -plaintext \
        "filters":[{"iv":{"min":90}}]}' \
   localhost:50001 golbat_api.GolbatApi/ScanPokemon
 ```
+
+**Benchmarking:** the gzip compressor is installed server-side; a client that
+negotiates gzip receives compressed protobuf, so comparing it against an
+uncompressed HTTP response overstates the gRPC win. Compare like with like —
+disable compression on the client, or compress both paths.
 
 ---
 
