@@ -1,12 +1,10 @@
 package decoder
 
 import (
-	"math"
 	"time"
 
 	"golbat/config"
 	"golbat/geo"
-	pb "golbat/grpc"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -31,25 +29,6 @@ func contains(s []int8, e int8) bool {
 		}
 	}
 	return false
-}
-
-func convertToMinMax(minmax *pb.RangeMinMax) *ApiPokemonDnfMinMax {
-	if minmax == nil {
-		return nil
-	}
-	var minV int16 = 0
-	var maxV int16 = math.MaxInt16
-	if minmax.Min != nil {
-		minV = int16(*minmax.Min)
-	}
-	if minmax.Max != nil {
-		maxV = int16(*minmax.Max)
-	}
-
-	return &ApiPokemonDnfMinMax{
-		Min: minV,
-		Max: maxV,
-	}
 }
 
 type dnfFilterLookup struct {
