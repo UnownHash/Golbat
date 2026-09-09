@@ -18,6 +18,8 @@ routes.go            — HTTP route handlers (raw ingest, API endpoints)
 raw_limiter.go       — Bounded raw-processing concurrency (semaphore + shed)
 decode.go            — Proto method dispatcher, GMO decoder
 grpc_server_raw.go   — gRPC raw proto receiver
+grpc_server_api.go   — GolbatApi gRPC service (pokemon + fort scans) and newGrpcServer()
+grpc_auth.go         — api_secret unary interceptor for GolbatApi methods
 decoder/
   main.go            — Cache/queue initialization, raw data types
   sharded_cache.go   — Generic sharded TTL cache
@@ -28,6 +30,7 @@ decoder/
   <entity>_decode.go — Proto → entity field mapping
   <entity>_process.go — High-level proto processing (FortDetails, encounters, etc.)
   api_<entity>.go    — API result structs, scan endpoints, DNF filters
+  api_grpc_<entity>.go — proto ⇄ Api struct converters and Grpc* entry points
   pokemonRtree.go    — Pokemon spatial index + lookup cache
   fortRtree.go       — Fort spatial index + lookup cache
   fort_tracker.go    — In-memory fort lifecycle tracking via S2 cells (async worker)
@@ -67,6 +70,18 @@ bounded parked queue (`raw_processing_queue_factor` × slots, default 32×).
 When the queue is full, packets are shed with aggregated once-per-second
 logging and a `golbat_raw_packets_shed_total` counter — bounded loss under
 overload instead of unbounded goroutine pileup on internal locks.
+
+### gRPC API
+
+The same listener also serves `GolbatApi` (`grpc/api.proto`): `ScanPokemon`,
+`GetPokemon`, `ScanGyms`, `ScanPokestops`, `ScanStations`, `ScanForts`. Each
+request converts to the HTTP request struct (`decoder/api_grpc_*.go`) and runs
+the same scan code as the Huma endpoint; results mirror the `Api*Result`
+structs field for field (`decoder/api_grpc_parity_test.go` fails if either
+side gains a field the other lacks). Auth is `api_secret` via the
+`x-golbat-secret` metadata key (`grpc_auth.go`), never `raw_bearer`. Fort
+scans return `FailedPrecondition` without `fort_in_memory`. Server reflection
+is registered so `grpcurl`/`ghz` work without proto files.
 
 ### Dispatch (`decode.go`)
 

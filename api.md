@@ -542,22 +542,78 @@ These endpoints are only available if `tuning.profile_routes` is enabled in conf
 
 ## gRPC API
 
-Golbat also provides a gRPC API running on a separate port (configured via `grpc_port`).
+Golbat serves a gRPC API on `grpc_port` (the same listener as raw ingest). The
+schema is `grpc/api.proto`, package `golbat_api`, service `GolbatApi`. Server
+reflection is enabled, so `grpcurl` and `ghz` work without the proto files.
 
 ### Authentication
 
-Use the `authorization` metadata header with the API secret.
+The API uses the existing `api_secret` from the config file — the same value
+the HTTP `X-Golbat-Secret` header carries. Send it as gRPC metadata:
 
-### Pokemon Service
-
-```protobuf
-service Pokemon {
-  rpc Search(PokemonScanRequest) returns (PokemonScanResponse);
-  rpc SearchV3(PokemonScanRequestV3) returns (PokemonScanResponseV3);
-}
+```
+x-golbat-secret: your_api_secret
 ```
 
-The gRPC endpoints mirror the HTTP v2/v3 scan endpoints.
+`authorization: your_api_secret` and `authorization: Bearer your_api_secret`
+are also accepted. A missing or wrong secret fails with `UNAUTHENTICATED`. An
+empty `api_secret` disables the check, as for HTTP. `raw_bearer` is only ever
+checked by `RawProto.SubmitRawProto`.
+
+### Service
+
+| RPC | HTTP counterpart |
+|-----|------------------|
+| `ScanPokemon(PokemonScanRequest) → PokemonScanResponse` | `POST /api/pokemon/v3/scan` |
+| `GetPokemon(GetPokemonRequest) → GetPokemonResponse` | `GET /api/pokemon/id/{id}`, batched; misses are omitted |
+| `ScanGyms(FortScanRequest) → GymScanResponse` | `POST /api/gym/scan` |
+| `ScanPokestops(FortScanRequest) → PokestopScanResponse` | `POST /api/pokestop/scan` |
+| `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
+| `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` |
+
+Every message mirrors the JSON request or response it is named after, field
+for field, with proto field names equal to the JSON keys. The scans run the
+same spatial index, DNF matching and record build as the HTTP endpoints; only
+the serialisation differs.
+
+### Differences from the JSON API
+
+- **Encounter ids are numeric** (`uint64`), not decimal strings.
+- **64-bit ids are `jstype = JS_STRING`** (`Pokemon.id`, `spawn_id`, `cell_id`,
+  `GetPokemonRequest.encounter_ids`, the fort `cell_id`s and
+  `StationBattle.bread_battle_seed`), so JavaScript/TypeScript generators emit
+  them as strings. Other languages are unaffected.
+- **Pokemon `filters`** keep JSON semantics: an empty list matches nothing;
+  one clause with no conditions (`{}`) matches every pokemon. Fort scans
+  differ (as in JSON): an empty `filters` list matches every fort of the type.
+- **`IntRange`**: an unset `min` is 0 and an unset `max` is 32767 (no upper
+  bound). In JSON an omitted `max` is 0.
+- **Repeated list filters** (team ids, raid levels, quest reward types, ...):
+  an empty list means no constraint. proto3 cannot distinguish an empty list
+  from an absent one, so the JSON "explicitly empty list matches nothing" case
+  does not exist here.
+- **`DnfId.pokemon_id`** is the field name in both pokemon and fort filters
+  (JSON pokemon filters use `id`).
+- **Stored JSON blobs** (`defenders_json`, `guarding_pokemon_display_json`,
+  `rsvps_json`, `quest_conditions_json`, `quest_rewards_json`,
+  `alternative_quest_*_json`, `showcase_focus_json`, `showcase_rankings_json`,
+  `stationed_pokemon_json`) are the stored JSON text verbatim, exactly as the
+  HTTP API emits them. Unset means JSON `null`.
+- **PVP rankings** are structured (`PvpRankings` with `PvpEntry` lists per
+  league) rather than a JSON object.
+- **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
+  `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, HTTP 503),
+  `INVALID_ARGUMENT` (`min` or `max` missing).
+
+### Example
+
+```bash
+grpcurl -plaintext \
+  -H 'x-golbat-secret: your_api_secret' \
+  -d '{"min":{"lat":51.4,"lon":-0.2},"max":{"lat":51.6,"lon":0.0},"limit":100,
+       "filters":[{"iv":{"min":90}}]}' \
+  localhost:50001 golbat_api.GolbatApi/ScanPokemon
+```
 
 ---
 
