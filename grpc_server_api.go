@@ -106,17 +106,19 @@ func (s *grpcApiServer) ScanForts(ctx context.Context, in *pb.FortCombinedScanRe
 // newGrpcServer builds the one gRPC server Golbat listens on: raw ingest,
 // the GolbatApi service, and server reflection (so grpcurl/ghz work without
 // the proto files). srvMetrics is nil when Prometheus is disabled. The
-// api_secret interceptor runs after the metrics one so rejected calls are
-// still counted.
+// api_secret interceptor runs after the metrics one, on both the unary and
+// stream chains, so rejected calls are still counted.
 func newGrpcServer(srvMetrics *grpcprom.ServerMetrics) *grpc.Server {
 	var opts []grpc.ServerOption
 	var unary []grpc.UnaryServerInterceptor
+	var stream []grpc.StreamServerInterceptor
 	if srvMetrics != nil {
 		unary = append(unary, srvMetrics.UnaryServerInterceptor())
-		opts = append(opts, grpc.StreamInterceptor(srvMetrics.StreamServerInterceptor()))
+		stream = append(stream, srvMetrics.StreamServerInterceptor())
 	}
 	unary = append(unary, apiAuthUnaryInterceptor)
-	opts = append(opts, grpc.ChainUnaryInterceptor(unary...))
+	stream = append(stream, apiAuthStreamInterceptor)
+	opts = append(opts, grpc.ChainUnaryInterceptor(unary...), grpc.ChainStreamInterceptor(stream...))
 
 	s := grpc.NewServer(opts...)
 	pb.RegisterRawProtoServer(s, &grpcRawServer{})

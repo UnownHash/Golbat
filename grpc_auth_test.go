@@ -73,3 +73,50 @@ func TestApiAuthInterceptor(t *testing.T) {
 		})
 	}
 }
+
+// stubServerStream is a minimal grpc.ServerStream whose Context() is
+// overridden to return a fixed test context; every other method is
+// inherited (unimplemented, nil) from the embedded interface since the
+// interceptor under test never calls them.
+type stubServerStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *stubServerStream) Context() context.Context { return s.ctx }
+
+func TestApiAuthStreamInterceptor(t *testing.T) {
+	prev := config.Config.ApiSecret
+	t.Cleanup(func() { config.Config.ApiSecret = prev })
+
+	callStreamInterceptor := func(t *testing.T, ctx context.Context, method string) (handled bool, code codes.Code) {
+		t.Helper()
+		info := &grpc.StreamServerInfo{FullMethod: method}
+		handler := func(srv any, ss grpc.ServerStream) error {
+			handled = true
+			return nil
+		}
+		err := apiAuthStreamInterceptor(nil, &stubServerStream{ctx: ctx}, info, handler)
+		return handled, status.Code(err)
+	}
+
+	config.Config.ApiSecret = "topsecret"
+
+	t.Run("secret configured, GolbatApi method, no metadata is Unauthenticated and handler not run", func(t *testing.T) {
+		if handled, code := callStreamInterceptor(t, context.Background(), apiMethod); handled || code != codes.Unauthenticated {
+			t.Errorf("handled=%v code=%v, want handled=false code=Unauthenticated", handled, code)
+		}
+	})
+
+	t.Run("secret configured, x-golbat-secret right, handler runs", func(t *testing.T) {
+		if handled, code := callStreamInterceptor(t, withMetadata("x-golbat-secret", "topsecret"), apiMethod); !handled || code != codes.OK {
+			t.Errorf("handled=%v code=%v, want handled=true code=OK", handled, code)
+		}
+	})
+
+	t.Run("raw method without metadata, handler runs", func(t *testing.T) {
+		if handled, code := callStreamInterceptor(t, context.Background(), rawMethod); !handled || code != codes.OK {
+			t.Errorf("handled=%v code=%v, want handled=true code=OK", handled, code)
+		}
+	})
+}
