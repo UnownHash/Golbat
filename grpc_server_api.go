@@ -120,6 +120,8 @@ func newGrpcServer(srvMetrics *grpcprom.ServerMetrics) *grpc.Server {
 	stream = append(stream, apiAuthStreamInterceptor)
 	opts = append(opts, grpc.ChainUnaryInterceptor(unary...), grpc.ChainStreamInterceptor(stream...))
 
+	opts = append(opts, grpc.StatsHandler(grpcRPCLogger{}))
+
 	s := grpc.NewServer(opts...)
 	pb.RegisterRawProtoServer(s, &grpcRawServer{})
 	pb.RegisterGolbatApiServer(s, &grpcApiServer{})
