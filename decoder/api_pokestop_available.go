@@ -56,10 +56,15 @@ type ApiPokestopShowcaseAvailable struct {
 // ApiAvailablePokestops is the whole-instance snapshot served by
 // GET /api/pokestop/available.
 type ApiAvailablePokestops struct {
-	Quests    []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
-	Invasions []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
-	Lures     []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
-	Showcases []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
+	// ShowcaseFocusFilter is kept for ReactMap, which treats its absence as a
+	// hard error (server/src/models/Pokestop.js: "Golbat lacks the required
+	// showcase_focus_filter capability"). Capabilities live on /api/status
+	// filters; do not add new ones here.
+	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"Deprecated: read filters.showcase_focus on /api/status instead. Kept for consumers that require it on this response."`
+	Quests              []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
+	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
+	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
+	Showcases           []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
 }
 
 // buildAvailablePokestops assembles the pokestop availability snapshot from
@@ -70,10 +75,11 @@ type ApiAvailablePokestops struct {
 // combined log line instead of logging again here).
 func buildAvailablePokestops(now int64) *ApiAvailablePokestops {
 	res := &ApiAvailablePokestops{
-		Quests:    []ApiPokestopQuestAvailable{},
-		Invasions: readInvasions(now),
-		Lures:     readLures(now),
-		Showcases: readShowcases(now),
+		ShowcaseFocusFilter: true,
+		Quests:              []ApiPokestopQuestAvailable{},
+		Invasions:           readInvasions(now),
+		Lures:               readLures(now),
+		Showcases:           readShowcases(now),
 	}
 	for _, c := range GetAvailableQuestConditions() {
 		res.Quests = append(res.Quests, ApiPokestopQuestAvailable(c))

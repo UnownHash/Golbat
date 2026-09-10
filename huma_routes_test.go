@@ -404,7 +404,10 @@ func TestFortScanEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("availability responses carry no capability flags", func(t *testing.T) {
+	t.Run("pokestop availability keeps showcase_focus_filter for ReactMap", func(t *testing.T) {
+		// ReactMap throws when this key is missing or false
+		// (server/src/models/Pokestop.js), so it stays on this response even
+		// though capabilities now live on /api/status filters.
 		resp := api.Get("/api/pokestop/available")
 		if resp.Code != http.StatusOK {
 			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
@@ -413,8 +416,8 @@ func TestFortScanEndpoints(t *testing.T) {
 		if err := gojson.Unmarshal(resp.Body.Bytes(), &pokestops); err != nil {
 			t.Fatalf("decode pokestop availability: %v", err)
 		}
-		if _, present := pokestops["showcase_focus_filter"]; present {
-			t.Fatal("showcase_focus_filter moved to /api/status; it must not appear on pokestop availability")
+		if supported, ok := pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("pokestop availability showcase_focus_filter = %v, want true", pokestops["showcase_focus_filter"])
 		}
 
 		resp = api.Get("/api/fort/available")
@@ -427,8 +430,8 @@ func TestFortScanEndpoints(t *testing.T) {
 		if err := gojson.Unmarshal(resp.Body.Bytes(), &forts); err != nil {
 			t.Fatalf("decode fort availability: %v", err)
 		}
-		if _, present := forts.Pokestops["showcase_focus_filter"]; present {
-			t.Fatal("showcase_focus_filter must not appear on the nested pokestop availability either")
+		if supported, ok := forts.Pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("nested showcase_focus_filter = %v, want true", forts.Pokestops["showcase_focus_filter"])
 		}
 	})
 
