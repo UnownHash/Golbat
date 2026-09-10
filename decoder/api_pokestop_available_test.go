@@ -23,9 +23,6 @@ func TestGetAvailablePokestops(t *testing.T) {
 	observeInvasion(&FortLookupIncident{DisplayType: 1, Character: 5, Confirmed: true, Slot1PokemonId: 41, ExpireTimestamp: now + 100}, now)
 
 	res := GetAvailablePokestops(now)
-	if !res.ShowcaseFocusFilter {
-		t.Fatal("showcase_focus_filter capability must be true even when no showcases are active")
-	}
 	if len(res.Lures) != 1 || res.Lures[0].LureId != 501 {
 		t.Fatalf("lure: %+v", res.Lures)
 	}
@@ -47,7 +44,7 @@ func TestGetAvailablePokestops(t *testing.T) {
 	if err := json.Unmarshal(raw, &body); err != nil {
 		t.Fatalf("decode availability: %v", err)
 	}
-	if got := string(body["showcase_focus_filter"]); got != "true" {
-		t.Fatalf("showcase_focus_filter wire value = %s, want true", got)
+	if _, present := body["showcase_focus_filter"]; present {
+		t.Fatal("showcase_focus_filter moved to /api/status filters; it must not appear on the availability response")
 	}
 }

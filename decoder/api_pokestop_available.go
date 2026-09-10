@@ -56,11 +56,10 @@ type ApiPokestopShowcaseAvailable struct {
 // ApiAvailablePokestops is the whole-instance snapshot served by
 // GET /api/pokestop/available.
 type ApiAvailablePokestops struct {
-	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"True when contest_focus Buddy selectors are supported by fort scans before the result cap"`
-	Quests              []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
-	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
-	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
-	Showcases           []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
+	Quests    []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
+	Invasions []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
+	Lures     []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
+	Showcases []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
 }
 
 // buildAvailablePokestops assembles the pokestop availability snapshot from
@@ -71,11 +70,10 @@ type ApiAvailablePokestops struct {
 // combined log line instead of logging again here).
 func buildAvailablePokestops(now int64) *ApiAvailablePokestops {
 	res := &ApiAvailablePokestops{
-		ShowcaseFocusFilter: true,
-		Quests:              []ApiPokestopQuestAvailable{},
-		Invasions:           readInvasions(now),
-		Lures:               readLures(now),
-		Showcases:           readShowcases(now),
+		Quests:    []ApiPokestopQuestAvailable{},
+		Invasions: readInvasions(now),
+		Lures:     readLures(now),
+		Showcases: readShowcases(now),
 	}
 	for _, c := range GetAvailableQuestConditions() {
 		res.Quests = append(res.Quests, ApiPokestopQuestAvailable(c))
