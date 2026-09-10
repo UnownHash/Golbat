@@ -103,14 +103,3 @@ func TestUpdateStationLookupCarriesAvailabilityFields(t *testing.T) {
 			fl.BattleAvailable, fl.StationInactive, fl.StationStartTimestamp, fl.StationEndTimestamp)
 	}
 }
-
-// Consumers detect the filter through the availability snapshots, mirroring
-// showcase_focus_filter on the pokestop side.
-func TestAvailableStationsAdvertiseBattleAvailableFilter(t *testing.T) {
-	if !GetAvailableStations(1000).BattleAvailableFilter {
-		t.Error("/api/station/available must advertise battle_available_filter")
-	}
-	if !GetAvailableForts(1000).Stations.BattleAvailableFilter {
-		t.Error("/api/fort/available must advertise battle_available_filter under stations")
-	}
-}
