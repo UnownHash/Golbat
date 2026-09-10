@@ -619,6 +619,18 @@ the serialisation differs.
   HTTP API emits them. Unset means JSON `null`.
 - **PVP rankings** are structured (`PvpRankings` with `PvpEntry` lists per
   league) rather than a JSON object.
+- **`updated_after`** (unix seconds) on the pokemon scan and every fort scan
+  returns only entities with `updated > updated_after`. It is applied when the
+  response is built, after the spatial scan, DNF matching and the result
+  limit, so `examined`, `skipped`, `total` and `limit_reached` describe the
+  scan and a page may come back short or empty with `limit_reached` true.
+  Entities that expire, are deleted, or stop matching the filters simply
+  disappear from later responses; poll with a broad filter and reconcile
+  locally, and refresh fully now and then. `updated` has one-second
+  resolution, so pass `max(updated) - 1` from the previous response and
+  expect the boundary second to be re-delivered. Same semantics on the JSON
+  v3 pokemon scan and the fort scans; advertised as `filters.updated_after`
+  on `/api/status`.
 - **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
   `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, HTTP 503),
   `INVALID_ARGUMENT` (`min` or `max` missing, or more than

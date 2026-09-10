@@ -99,9 +99,10 @@ func pokemonDnfFilterFromProto(f *pb.PokemonDnfFilter) ApiPokemonDnfFilter3 {
 
 func pokemonScanRequestFromProto(req *pb.PokemonScanRequest) ApiPokemonScan3 {
 	out := ApiPokemonScan3{
-		Min:   latLonFromProto(req.GetMin()),
-		Max:   latLonFromProto(req.GetMax()),
-		Limit: int(req.GetLimit()),
+		Min:          latLonFromProto(req.GetMin()),
+		Max:          latLonFromProto(req.GetMax()),
+		Limit:        int(req.GetLimit()),
+		UpdatedAfter: req.GetUpdatedAfter(),
 	}
 	if filters := req.GetFilters(); len(filters) > 0 {
 		out.DnfFilters = make([]ApiPokemonDnfFilter3, 0, len(filters))
@@ -207,7 +208,7 @@ func GrpcScanPokemon(req *pb.PokemonScanRequest) *pb.PokemonScanResponse {
 	keys, examined, skipped, total := internalGetPokemonInArea3(apiReq)
 
 	results := make([]*pb.Pokemon, 0, len(keys))
-	forEachLivePokemonResult(keys, "API.ScanPokemon.v3.grpc", func(id uint64, r *ApiPokemonResult) {
+	forEachLivePokemonResult(keys, "API.ScanPokemon.v3.grpc", apiReq.UpdatedAfter, func(id uint64, r *ApiPokemonResult) {
 		results = append(results, pokemonToProto(r, id))
 	})
 

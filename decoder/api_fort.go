@@ -17,6 +17,7 @@ type ApiFortScan struct {
 	Limit         int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
 	DnfFilters    []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. Omitting this array (or sending it empty/null) matches ALL forts of the requested type. Within a clause, a list-typed condition applies only when present: omit or send null for no constraint — an explicitly empty inner list matches nothing."`
 	WithIncidents bool               `json:"with_incidents" required:"false" doc:"Pokestop only: when true, each pokestop result includes its active incidents (invasions). Ignored for gym/station."`
+	UpdatedAfter  int64              `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
 // ApiFortTypeScanGroup scopes DNF clauses to ONE fort type within a combined
@@ -47,6 +48,7 @@ type ApiFortCombinedScan struct {
 	Gyms          *ApiFortTypeScanGroup `json:"gyms" required:"false" doc:"Include gyms, filtered by this group's clauses. Omitted or null excludes gyms (unless all three groups are omitted)."`
 	Pokestops     *ApiFortTypeScanGroup `json:"pokestops" required:"false" doc:"Include pokestops, filtered by this group's clauses. Omitted or null excludes pokestops (unless all three groups are omitted)."`
 	Stations      *ApiFortTypeScanGroup `json:"stations" required:"false" doc:"Include stations, filtered by this group's clauses. Omitted or null excludes stations (unless all three groups are omitted)."`
+	UpdatedAfter  int64                 `json:"updated_after" required:"false" minimum:"0" doc:"Applies to every type group. Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
 // combinedFortMatches applies the typed clause groups to one fort: the fort's
@@ -433,11 +435,11 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]Fort
 // collectGymResults loads each key's gym record read-only and builds its API
 // result, always releasing the per-record lock. Shared by the single-type and
 // combined scan endpoints; traceName distinguishes the caller in lock traces.
-func collectGymResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiGymResult {
+func collectGymResults(dbDetails db.DbDetails, keys []FortId, updatedAfter int64, traceName string) []*ApiGymResult {
 	results := make([]*ApiGymResult, 0, len(keys))
 	for _, key := range keys {
 		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, traceName)
-		if err == nil && gym != nil {
+		if err == nil && gym != nil && updatedStrictlyAfter(gym.Updated, updatedAfter) {
 			gymCopy := buildGymResult(gym)
 			results = append(results, &gymCopy)
 		}
@@ -451,11 +453,11 @@ func collectGymResults(dbDetails db.DbDetails, keys []FortId, traceName string) 
 // collectStationResults loads each key's station record read-only and builds
 // its API result, always releasing the per-record lock. Shared by the
 // single-type and combined scan endpoints; traceName distinguishes the caller.
-func collectStationResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiStationResult {
+func collectStationResults(dbDetails db.DbDetails, keys []FortId, updatedAfter int64, traceName string) []*ApiStationResult {
 	results := make([]*ApiStationResult, 0, len(keys))
 	for _, key := range keys {
 		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, traceName)
-		if err == nil && station != nil {
+		if err == nil && station != nil && updatedStrictlyAfter(station.Updated, updatedAfter) {
 			stationCopy := BuildStationResult(station)
 			results = append(results, &stationCopy)
 		}
@@ -471,11 +473,11 @@ func collectStationResults(dbDetails db.DbDetails, keys []FortId, traceName stri
 // preserve lock-order (pokestop then incidents), then optionally attaches
 // invasions. Shared by the single-type and combined scan endpoints; traceName
 // distinguishes the caller in lock traces.
-func collectPokestopResults(dbDetails db.DbDetails, keys []FortId, withIncidents bool, now int64, traceName string) []*ApiPokestopResult {
+func collectPokestopResults(dbDetails db.DbDetails, keys []FortId, withIncidents bool, now int64, updatedAfter int64, traceName string) []*ApiPokestopResult {
 	results := make([]*ApiPokestopResult, 0, len(keys))
 	for _, key := range keys {
 		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, traceName)
-		if err == nil && pokestop != nil {
+		if err == nil && pokestop != nil && updatedStrictlyAfter(pokestop.Updated, updatedAfter) {
 			pokestopCopy := buildPokestopResult(pokestop)
 			if unlock != nil {
 				unlock() // release pokestop lock BEFORE locking incidents (lock-order)
@@ -497,7 +499,7 @@ func GymScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails) *Ap
 	returnKeys, examined, skipped, total := internalGetForts(GYM, retrieveParameters)
 	start := time.Now()
 
-	results := collectGymResults(dbDetails, returnKeys, "API.GetScanGym")
+	results := collectGymResults(dbDetails, returnKeys, retrieveParameters.UpdatedAfter, "API.GetScanGym")
 	log.Infof("GymScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiGymScanResult{
@@ -513,7 +515,7 @@ func PokestopScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails
 	returnKeys, examined, skipped, total := internalGetForts(POKESTOP, retrieveParameters)
 	start := time.Now()
 
-	results := collectPokestopResults(dbDetails, returnKeys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemon")
+	results := collectPokestopResults(dbDetails, returnKeys, retrieveParameters.WithIncidents, time.Now().Unix(), retrieveParameters.UpdatedAfter, "API.GetScanpokemon")
 	log.Infof("PokestopScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiPokestopScanResult{
@@ -529,7 +531,7 @@ func StationScanEndpoint(retrieveParameters ApiFortScan, dbDetails db.DbDetails)
 	returnKeys, examined, skipped, total := internalGetForts(STATION, retrieveParameters)
 	start := time.Now()
 
-	results := collectStationResults(dbDetails, returnKeys, "API.GetScanStation")
+	results := collectStationResults(dbDetails, returnKeys, retrieveParameters.UpdatedAfter, "API.GetScanStation")
 	log.Infof("StationScan - result buffer time %s, %d added", time.Since(start), len(results))
 
 	return &ApiStationScanResult{
@@ -545,9 +547,9 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails 
 	scan := internalGetFortsCombined(retrieveParameters)
 	start := time.Now()
 
-	gyms := collectGymResults(dbDetails, scan.gyms.keys, "API.GetScanGymPokemon")
-	pokestops := collectPokestopResults(dbDetails, scan.pokestops.keys, retrieveParameters.WithIncidents, time.Now().Unix(), "API.GetScanpokemonPokemon")
-	stations := collectStationResults(dbDetails, scan.stations.keys, "API.GetScanStationPokemon")
+	gyms := collectGymResults(dbDetails, scan.gyms.keys, retrieveParameters.UpdatedAfter, "API.GetScanGymPokemon")
+	pokestops := collectPokestopResults(dbDetails, scan.pokestops.keys, retrieveParameters.WithIncidents, time.Now().Unix(), retrieveParameters.UpdatedAfter, "API.GetScanpokemonPokemon")
+	stations := collectStationResults(dbDetails, scan.stations.keys, retrieveParameters.UpdatedAfter, "API.GetScanStationPokemon")
 
 	log.Infof("FortCombinedScan - result buffer time %s, %d+%d+%d added",
 		time.Since(start), len(gyms), len(pokestops), len(stations))

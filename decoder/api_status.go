@@ -27,6 +27,7 @@ type ApiStatusResult struct {
 type ApiStatusFilters struct {
 	ShowcaseFocus   bool `json:"showcase_focus" doc:"contest_focus Buddy selectors are honoured by pokestop scans before the result cap"`
 	BattleAvailable bool `json:"battle_available" doc:"battle_available (the station is_battle_available flag) is honoured by station scans"`
+	UpdatedAfter    bool `json:"updated_after" doc:"updated_after (return only entities updated strictly after a unix time) is honoured by the pokemon v3 scan and every fort scan"`
 }
 
 func GetApiStatus() *ApiStatusResult {
@@ -34,6 +35,6 @@ func GetApiStatus() *ApiStatusResult {
 	status.Features.FortInMemory = config.Config.FortInMemory
 	status.Limits.MaxPokemonResults = config.Config.Tuning.MaxPokemonResults
 	status.Limits.MaxFortResults = config.Config.Tuning.MaxFortResults
-	status.Filters = ApiStatusFilters{ShowcaseFocus: true, BattleAvailable: true}
+	status.Filters = ApiStatusFilters{ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
 	return status
 }

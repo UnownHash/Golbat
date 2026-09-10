@@ -320,7 +320,13 @@ type PokemonScanRequest struct {
 	Limit int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"` // 0 = server default (tuning.max_pokemon_results)
 	// OR'd clauses. As in the JSON API an EMPTY list matches nothing; send one
 	// clause with no conditions ({}) to match every pokemon.
-	Filters       []*PokemonDnfFilter `protobuf:"bytes,4,rep,name=filters,proto3" json:"filters,omitempty"`
+	Filters []*PokemonDnfFilter `protobuf:"bytes,4,rep,name=filters,proto3" json:"filters,omitempty"`
+	// Only pokemon with updated > updated_after (unix seconds); unset = all.
+	// Applied at response build, after the scan and limit: counters and
+	// limit_reached describe the scan, so a page may come back short. Entities
+	// that expire or stop matching disappear silently; pass max(updated)-1
+	// from the previous response and expect the boundary second again.
+	UpdatedAfter  *int64 `protobuf:"varint,5,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -381,6 +387,13 @@ func (x *PokemonScanRequest) GetFilters() []*PokemonDnfFilter {
 		return x.Filters
 	}
 	return nil
+}
+
+func (x *PokemonScanRequest) GetUpdatedAfter() int64 {
+	if x != nil && x.UpdatedAfter != nil {
+		return *x.UpdatedAfter
+	}
+	return 0
 }
 
 type PokemonScanResponse struct {
@@ -1341,9 +1354,10 @@ type FortScanRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Min           *LatLon                `protobuf:"bytes,1,opt,name=min,proto3" json:"min,omitempty"`
 	Max           *LatLon                `protobuf:"bytes,2,opt,name=max,proto3" json:"max,omitempty"`
-	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                      // 0 = server default (tuning.max_fort_results)
-	Filters       []*FortDnfFilter       `protobuf:"bytes,4,rep,name=filters,proto3" json:"filters,omitempty"`                                   // empty = every fort of the requested type
-	WithIncidents bool                   `protobuf:"varint,5,opt,name=with_incidents,json=withIncidents,proto3" json:"with_incidents,omitempty"` // pokestop scans only
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                         // 0 = server default (tuning.max_fort_results)
+	Filters       []*FortDnfFilter       `protobuf:"bytes,4,rep,name=filters,proto3" json:"filters,omitempty"`                                      // empty = every fort of the requested type
+	WithIncidents bool                   `protobuf:"varint,5,opt,name=with_incidents,json=withIncidents,proto3" json:"with_incidents,omitempty"`    // pokestop scans only
+	UpdatedAfter  *int64                 `protobuf:"varint,6,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"` // see PokemonScanRequest.updated_after
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1411,6 +1425,13 @@ func (x *FortScanRequest) GetWithIncidents() bool {
 		return x.WithIncidents
 	}
 	return false
+}
+
+func (x *FortScanRequest) GetUpdatedAfter() int64 {
+	if x != nil && x.UpdatedAfter != nil {
+		return *x.UpdatedAfter
+	}
+	return 0
 }
 
 type FortTypeScanGroup struct {
@@ -1527,6 +1548,7 @@ type FortCombinedScanRequest struct {
 	Gyms          *FortTypeScanGroup     `protobuf:"bytes,5,opt,name=gyms,proto3" json:"gyms,omitempty"` // unset = exclude gyms (unless all three unset)
 	Pokestops     *FortTypeScanGroup     `protobuf:"bytes,6,opt,name=pokestops,proto3" json:"pokestops,omitempty"`
 	Stations      *FortTypeScanGroup     `protobuf:"bytes,7,opt,name=stations,proto3" json:"stations,omitempty"`
+	UpdatedAfter  *int64                 `protobuf:"varint,8,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"` // applies to every group; see PokemonScanRequest.updated_after
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1608,6 +1630,13 @@ func (x *FortCombinedScanRequest) GetStations() *FortTypeScanGroup {
 		return x.Stations
 	}
 	return nil
+}
+
+func (x *FortCombinedScanRequest) GetUpdatedAfter() int64 {
+	if x != nil && x.UpdatedAfter != nil {
+		return *x.UpdatedAfter
+	}
+	return 0
 }
 
 // Mirrors decoder.ApiPokestopIncident.
@@ -3397,12 +3426,14 @@ const file_grpc_api_proto_rawDesc = "" +
 	"pvp_little\x18\n" +
 	" \x01(\v2\x14.golbat_api.IntRangeR\tpvpLittle\x121\n" +
 	"\tpvp_great\x18\v \x01(\v2\x14.golbat_api.IntRangeR\bpvpGreat\x121\n" +
-	"\tpvp_ultra\x18\f \x01(\v2\x14.golbat_api.IntRangeR\bpvpUltra\"\xae\x01\n" +
+	"\tpvp_ultra\x18\f \x01(\v2\x14.golbat_api.IntRangeR\bpvpUltra\"\xea\x01\n" +
 	"\x12PokemonScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\x126\n" +
-	"\afilters\x18\x04 \x03(\v2\x1c.golbat_api.PokemonDnfFilterR\afilters\"\xb5\x01\n" +
+	"\afilters\x18\x04 \x03(\v2\x1c.golbat_api.PokemonDnfFilterR\afilters\x12(\n" +
+	"\rupdated_after\x18\x05 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01B\x10\n" +
+	"\x0e_updated_after\"\xb5\x01\n" +
 	"\x13PokemonScanResponse\x12-\n" +
 	"\apokemon\x18\x01 \x03(\v2\x13.golbat_api.PokemonR\apokemon\x12\x1a\n" +
 	"\bexamined\x18\x02 \x01(\x05R\bexamined\x12\x18\n" +
@@ -3543,19 +3574,21 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x14_is_ar_scan_eligibleB\x11\n" +
 	"\x0f_stationed_gmaxB\x11\n" +
 	"\x0f_station_activeB\x13\n" +
-	"\x11_battle_available\"\xcf\x01\n" +
+	"\x11_battle_available\"\x8b\x02\n" +
 	"\x0fFortScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\x123\n" +
 	"\afilters\x18\x04 \x03(\v2\x19.golbat_api.FortDnfFilterR\afilters\x12%\n" +
-	"\x0ewith_incidents\x18\x05 \x01(\bR\rwithIncidents\"^\n" +
+	"\x0ewith_incidents\x18\x05 \x01(\bR\rwithIncidents\x12(\n" +
+	"\rupdated_after\x18\x06 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01B\x10\n" +
+	"\x0e_updated_after\"^\n" +
 	"\x11FortTypeScanGroup\x123\n" +
 	"\afilters\x18\x01 \x03(\v2\x19.golbat_api.FortDnfFilterR\afilters\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\"T\n" +
 	"\x11FortTypeScanStats\x12\x1a\n" +
 	"\bexamined\x18\x01 \x01(\x05R\bexamined\x12#\n" +
-	"\rlimit_reached\x18\x02 \x01(\bR\flimitReached\"\xcd\x02\n" +
+	"\rlimit_reached\x18\x02 \x01(\bR\flimitReached\"\x89\x03\n" +
 	"\x17FortCombinedScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
@@ -3563,7 +3596,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x0ewith_incidents\x18\x04 \x01(\bR\rwithIncidents\x121\n" +
 	"\x04gyms\x18\x05 \x01(\v2\x1d.golbat_api.FortTypeScanGroupR\x04gyms\x12;\n" +
 	"\tpokestops\x18\x06 \x01(\v2\x1d.golbat_api.FortTypeScanGroupR\tpokestops\x129\n" +
-	"\bstations\x18\a \x01(\v2\x1d.golbat_api.FortTypeScanGroupR\bstations\"\xf1\x04\n" +
+	"\bstations\x18\a \x01(\v2\x1d.golbat_api.FortTypeScanGroupR\bstations\x12(\n" +
+	"\rupdated_after\x18\b \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01B\x10\n" +
+	"\x0e_updated_after\"\xf1\x04\n" +
 	"\bIncident\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
 	"\vpokestop_id\x18\x02 \x01(\tR\n" +
@@ -4019,9 +4054,12 @@ func file_grpc_api_proto_init() {
 	}
 	file_grpc_api_proto_msgTypes[1].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[2].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[4].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[10].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[11].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[12].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[13].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[16].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[17].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[18].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[19].OneofWrappers = []any{}

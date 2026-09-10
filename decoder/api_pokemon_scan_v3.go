@@ -5,10 +5,11 @@ import (
 )
 
 type ApiPokemonScan3 struct {
-	Min        ApiLatLon              `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
-	Max        ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
-	Limit      int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
-	DnfFilters []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	Min          ApiLatLon              `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
+	Max          ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
+	Limit        int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
+	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	UpdatedAfter int64                  `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
 func (r ApiPokemonScan3) GetMin() geo.Location {

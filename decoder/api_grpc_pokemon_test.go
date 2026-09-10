@@ -33,9 +33,10 @@ func TestIntRangeToPokemonMinMax(t *testing.T) {
 
 func TestPokemonScanRequestFromProto(t *testing.T) {
 	req := &pb.PokemonScanRequest{
-		Min:   &pb.LatLon{Lat: 1, Lon: 2},
-		Max:   &pb.LatLon{Lat: 3, Lon: 4},
-		Limit: 50,
+		Min:          &pb.LatLon{Lat: 1, Lon: 2},
+		Max:          &pb.LatLon{Lat: 3, Lon: 4},
+		Limit:        50,
+		UpdatedAfter: ptr(int64(1700000000)),
 		Filters: []*pb.PokemonDnfFilter{{
 			Pokemon:  []*pb.DnfId{{PokemonId: 25}, {PokemonId: 26, Form: ptr(int32(2))}},
 			Iv:       &pb.IntRange{Min: ptr(int32(100))},
@@ -44,8 +45,8 @@ func TestPokemonScanRequestFromProto(t *testing.T) {
 		}},
 	}
 	got := pokemonScanRequestFromProto(req)
-	if got.Min != (ApiLatLon{Lat: 1, Lon: 2}) || got.Max != (ApiLatLon{Lat: 3, Lon: 4}) || got.Limit != 50 {
-		t.Fatalf("bbox/limit = %+v", got)
+	if got.Min != (ApiLatLon{Lat: 1, Lon: 2}) || got.Max != (ApiLatLon{Lat: 3, Lon: 4}) || got.Limit != 50 || got.UpdatedAfter != 1700000000 {
+		t.Fatalf("bbox/limit/updated_after = %+v", got)
 	}
 	if len(got.DnfFilters) != 1 {
 		t.Fatalf("filters = %d, want 1", len(got.DnfFilters))

@@ -107,6 +107,7 @@ func fortScanRequestFromProto(req *pb.FortScanRequest) ApiFortScan {
 		Limit:         int(req.GetLimit()),
 		DnfFilters:    fortDnfFiltersFromProto(req.GetFilters()),
 		WithIncidents: req.GetWithIncidents(),
+		UpdatedAfter:  req.GetUpdatedAfter(),
 	}
 }
 
@@ -129,6 +130,7 @@ func fortCombinedScanRequestFromProto(req *pb.FortCombinedScanRequest) ApiFortCo
 		Gyms:          fortTypeGroupFromProto(req.GetGyms()),
 		Pokestops:     fortTypeGroupFromProto(req.GetPokestops()),
 		Stations:      fortTypeGroupFromProto(req.GetStations()),
+		UpdatedAfter:  req.GetUpdatedAfter(),
 	}
 }
 

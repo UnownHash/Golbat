@@ -41,6 +41,7 @@ func TestFortScanRequestFromProto(t *testing.T) {
 		Max:           &pb.LatLon{Lat: 3, Lon: 4},
 		Limit:         25,
 		WithIncidents: true,
+		UpdatedAfter:  ptr(int64(1700000000)),
 		Filters: []*pb.FortDnfFilter{{
 			IsArScanEligible:  ptr(true),
 			AvailableSlots:    &pb.IntRange{Min: ptr(int32(1))},
@@ -58,8 +59,8 @@ func TestFortScanRequestFromProto(t *testing.T) {
 		}},
 	}
 	got := fortScanRequestFromProto(req)
-	if got.Min != (ApiLatLon{Lat: 1, Lon: 2}) || got.Max != (ApiLatLon{Lat: 3, Lon: 4}) || got.Limit != 25 || !got.WithIncidents {
-		t.Fatalf("bbox/limit/with_incidents = %+v", got)
+	if got.Min != (ApiLatLon{Lat: 1, Lon: 2}) || got.Max != (ApiLatLon{Lat: 3, Lon: 4}) || got.Limit != 25 || !got.WithIncidents || got.UpdatedAfter != 1700000000 {
+		t.Fatalf("bbox/limit/with_incidents/updated_after = %+v", got)
 	}
 	if len(got.DnfFilters) != 1 {
 		t.Fatalf("filters = %d, want 1", len(got.DnfFilters))
@@ -114,6 +115,7 @@ func TestFortCombinedScanRequestFromProto(t *testing.T) {
 		Max:           &pb.LatLon{Lat: 3, Lon: 4},
 		Limit:         10,
 		WithIncidents: true,
+		UpdatedAfter:  ptr(int64(42)),
 		Gyms:          &pb.FortTypeScanGroup{Filters: []*pb.FortDnfFilter{{RaidLevel: []int32{5}}}, Limit: 7},
 		Pokestops:     &pb.FortTypeScanGroup{},
 	}
@@ -121,7 +123,7 @@ func TestFortCombinedScanRequestFromProto(t *testing.T) {
 	if got.Gyms == nil || got.Gyms.Limit != 7 || got.Pokestops == nil || got.Pokestops.Limit != 0 {
 		t.Errorf("per-type limits = gyms %+v pokestops %+v, want 7 and 0", got.Gyms, got.Pokestops)
 	}
-	if got.Limit != 10 || !got.WithIncidents || got.Min.Lat != 1 || got.Max.Lon != 4 {
+	if got.Limit != 10 || !got.WithIncidents || got.Min.Lat != 1 || got.Max.Lon != 4 || got.UpdatedAfter != 42 {
 		t.Fatalf("header = %+v", got)
 	}
 	if got.Gyms == nil || len(got.Gyms.DnfFilters) != 1 || len(got.Gyms.DnfFilters[0].RaidLevel) != 1 {

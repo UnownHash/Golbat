@@ -67,6 +67,12 @@ message PokemonScanRequest {
   // OR'd clauses. As in the JSON API an EMPTY list matches nothing; send one
   // clause with no conditions ({}) to match every pokemon.
   repeated PokemonDnfFilter filters = 4;
+  // Only pokemon with updated > updated_after (unix seconds); unset = all.
+  // Applied at response build, after the scan and limit: counters and
+  // limit_reached describe the scan, so a page may come back short. Entities
+  // that expire or stop matching disappear silently; pass max(updated)-1
+  // from the previous response and expect the boundary second again.
+  optional int64 updated_after = 5;
 }
 
 message PokemonScanResponse {
@@ -193,6 +199,7 @@ message FortScanRequest {
   int32 limit = 3;                       // 0 = server default (tuning.max_fort_results)
   repeated FortDnfFilter filters = 4;    // empty = every fort of the requested type
   bool with_incidents = 5;               // pokestop scans only
+  optional int64 updated_after = 6;      // see PokemonScanRequest.updated_after
 }
 
 message FortTypeScanGroup {
@@ -214,6 +221,7 @@ message FortCombinedScanRequest {
   FortTypeScanGroup gyms = 5;            // unset = exclude gyms (unless all three unset)
   FortTypeScanGroup pokestops = 6;
   FortTypeScanGroup stations = 7;
+  optional int64 updated_after = 8;      // applies to every group; see PokemonScanRequest.updated_after
 }
 
 // Mirrors decoder.ApiPokestopIncident.

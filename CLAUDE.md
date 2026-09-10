@@ -385,7 +385,7 @@ Three API versions exist (V1/V2/V3), all following the same pattern:
 3. For each ID, load `PokemonLookup` + `PokemonPvpLookup` from lookup cache
 4. Apply DNF filter matching
 5. Collect matching IDs up to a configurable limit
-6. For matched IDs, call `peekPokemonRecordReadOnly()` to lock and build full API results
+6. For matched IDs, call `peekPokemonRecordReadOnly()` to lock and build full API results. The optional `updated_after` request field is applied here, on the locked record (`forEachLivePokemonResult`), never in the tree walk: it costs no lookup-cache bytes, and in exchange `examined`/`skipped`/`limit_reached` describe the pre-gate set. The fort collectors (`collect*Results`) apply the same gate.
 
 **DNF (Disjunctive Normal Form) Filters**: An array of filter clauses OR'd together. Each clause has AND'd conditions (IV range, level range, CP range, pokemon ID + form, PVP ranking, gender, size). A pokemon matches if ANY clause fully matches.
 

@@ -741,7 +741,7 @@ func TestHumaStatusRoute(t *testing.T) {
 	if err := gojson.Unmarshal(resp.Body.Bytes(), &parsed); err != nil {
 		t.Fatalf("decode status: %v", err)
 	}
-	for _, name := range []string{"showcase_focus", "battle_available"} {
+	for _, name := range []string{"showcase_focus", "battle_available", "updated_after"} {
 		if !parsed.Filters[name] {
 			t.Errorf("status filters.%s = %v, want true; body=%s", name, parsed.Filters[name], body)
 		}
