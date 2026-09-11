@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// grpcRPCLogger is a stats.Handler that logs one INFO line per RPC when the
+// grpcRPCLogger is a stats.Handler that logs one DEBUG line per RPC when the
 // RPC completes, carrying the timings the scan logs cannot see:
 //
 //   - total: the RPC as the server observed it, from request headers in to
@@ -25,8 +25,16 @@ import (
 // measure.
 //
 // Only GolbatApi methods are logged: raw ingest runs at hundreds of RPCs a
-// second and is not what the line is for.
+// second and is not what the line is for. The handler is installed only
+// when the logger is at debug level (grpcRPCLoggingEnabled), so at the
+// default level the server carries no per-RPC bookkeeping at all.
 type grpcRPCLogger struct{}
+
+// grpcRPCLoggingEnabled reports whether the per-RPC timing handler should
+// be installed: only at debug level, decided once when the server is built.
+func grpcRPCLoggingEnabled() bool {
+	return log.IsLevelEnabled(log.DebugLevel)
+}
 
 type rpcTimingKey struct{}
 
@@ -66,7 +74,7 @@ func (grpcRPCLogger) HandleRPC(ctx context.Context, s stats.RPCStats) {
 		if !t.sentAt.IsZero() {
 			toSend = t.sentAt.Sub(e.BeginTime)
 		}
-		log.Infof("[GRPC_RPC] %s total=%s handler+marshal=%s req_wire=%d resp_bytes=%d resp_wire=%d compression=%q err=%v",
+		log.Debugf("[GRPC_RPC] %s total=%s handler+marshal=%s req_wire=%d resp_bytes=%d resp_wire=%d compression=%q err=%v",
 			t.method, total, toSend, t.reqWire, t.respBytes, t.respWire, t.compression, e.Error)
 	}
 }
