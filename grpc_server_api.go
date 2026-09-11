@@ -42,6 +42,15 @@ func requireFortInMemory() error {
 	return nil
 }
 
+// requireFortScan is the precondition every fort scan RPC shares: a bounding
+// box (validation first, as Huma does), then the fort_in_memory gate.
+func requireFortScan(minLoc, maxLoc *pb.LatLon) error {
+	if err := requireBoundingBox(minLoc, maxLoc); err != nil {
+		return err
+	}
+	return requireFortInMemory()
+}
+
 func (s *grpcApiServer) ScanPokemon(ctx context.Context, in *pb.PokemonScanRequest) (*pb.PokemonScanResponse, error) {
 	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
@@ -64,40 +73,28 @@ func (s *grpcApiServer) GetPokemon(ctx context.Context, in *pb.GetPokemonRequest
 }
 
 func (s *grpcApiServer) ScanGyms(ctx context.Context, in *pb.FortScanRequest) (*pb.GymScanResponse, error) {
-	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
-		return nil, err
-	}
-	if err := requireFortInMemory(); err != nil {
+	if err := requireFortScan(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
 	}
 	return decoder.GrpcScanGyms(in, dbDetails), nil
 }
 
 func (s *grpcApiServer) ScanPokestops(ctx context.Context, in *pb.FortScanRequest) (*pb.PokestopScanResponse, error) {
-	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
-		return nil, err
-	}
-	if err := requireFortInMemory(); err != nil {
+	if err := requireFortScan(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
 	}
 	return decoder.GrpcScanPokestops(in, dbDetails), nil
 }
 
 func (s *grpcApiServer) ScanStations(ctx context.Context, in *pb.FortScanRequest) (*pb.StationScanResponse, error) {
-	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
-		return nil, err
-	}
-	if err := requireFortInMemory(); err != nil {
+	if err := requireFortScan(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
 	}
 	return decoder.GrpcScanStations(in, dbDetails), nil
 }
 
 func (s *grpcApiServer) ScanForts(ctx context.Context, in *pb.FortCombinedScanRequest) (*pb.FortScanResponse, error) {
-	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
-		return nil, err
-	}
-	if err := requireFortInMemory(); err != nil {
+	if err := requireFortScan(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
 	}
 	return decoder.GrpcScanForts(in, dbDetails), nil

@@ -8,6 +8,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
+	"google.golang.org/grpc/stats"
 
 	pb "golbat/grpc"
 )
@@ -43,9 +44,42 @@ func TestGrpcRPCLoggerNotInstalledBelowDebug(t *testing.T) {
 	}
 }
 
-// At debug level every completed API RPC produces exactly one [GRPC_RPC]
-// debug line naming the method and carrying the response size, so an
-// operator can line it up with the scan logs and the caller's own timing.
+// The logger is a pure function of the stats events it receives: fed one
+// RPC's events directly it emits exactly one debug line with the method,
+// both timings and the sizes, and ignores RPCs outside the API service.
+func TestGrpcRPCLoggerFormatsOneLineFromEvents(t *testing.T) {
+	withLogLevel(t, log.DebugLevel)
+	hook := logtest.NewGlobal()
+	defer hook.Reset()
+
+	begin := time.Date(2026, 9, 11, 12, 0, 0, 0, time.UTC)
+	var h grpcRPCLogger
+	ctx := h.TagRPC(context.Background(), &stats.RPCTagInfo{FullMethodName: "/golbat_api.GolbatApi/ScanGyms"})
+	h.HandleRPC(ctx, &stats.InHeader{Compression: "gzip"})
+	h.HandleRPC(ctx, &stats.InPayload{WireLength: 27})
+	h.HandleRPC(ctx, &stats.OutPayload{Length: 1000, WireLength: 405, SentTime: begin.Add(3 * time.Millisecond)})
+	h.HandleRPC(ctx, &stats.End{BeginTime: begin, EndTime: begin.Add(5 * time.Millisecond)})
+
+	// A non-API RPC gets no timing state and therefore no line.
+	raw := h.TagRPC(context.Background(), &stats.RPCTagInfo{FullMethodName: "/raw_receiver.RawProto/SubmitRawProto"})
+	h.HandleRPC(raw, &stats.End{BeginTime: begin, EndTime: begin.Add(time.Millisecond)})
+
+	entries := hook.AllEntries()
+	if len(entries) != 1 {
+		t.Fatalf("got %d log entries, want exactly 1: %+v", len(entries), entries)
+	}
+	e := entries[0]
+	if e.Level != log.DebugLevel {
+		t.Errorf("level = %s, want debug", e.Level)
+	}
+	want := `[GRPC_RPC] /golbat_api.GolbatApi/ScanGyms total=5ms handler+marshal=3ms req_wire=27 resp_bytes=1000 resp_wire=405 compression="gzip" err=<nil>`
+	if e.Message != want {
+		t.Errorf("line = %q\nwant   %q", e.Message, want)
+	}
+}
+
+// At debug level the handler is installed on the real server: one line per
+// completed API RPC, none for raw ingest.
 func TestGrpcRPCLoggerLogsOneLinePerRPC(t *testing.T) {
 	withTestConfig(t, "", false)
 	withLogLevel(t, log.DebugLevel)
@@ -75,11 +109,6 @@ func TestGrpcRPCLoggerLogsOneLinePerRPC(t *testing.T) {
 				matches++
 				if e.Level != log.DebugLevel {
 					t.Errorf("[GRPC_RPC] must log at debug, got %s", e.Level)
-				}
-				for _, want := range []string{"total=", "handler+marshal=", "resp_bytes=", "resp_wire=", `compression=""`, "err=<nil>"} {
-					if !strings.Contains(e.Message, want) {
-						t.Errorf("log line lacks %q: %s", want, e.Message)
-					}
 				}
 			}
 		}

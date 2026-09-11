@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/puzpuzpuz/xsync/v4"
-	"github.com/tidwall/rtree"
-
 	"golbat/config"
 )
 
@@ -15,24 +12,10 @@ import (
 // invariant: unrelated showcases must never consume max_fort_results before
 // the exact structured-focus predicate runs.
 func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
-	oldLookup := fortLookupCache
-	oldSnapshot := fortTreeSnapshot.Load()
+	swapFortIndex(t)
 	oldMax := config.Config.Tuning.MaxFortResults
-	fortTreeMutex.Lock()
-	oldTree := fortTree
-	fortTree = rtree.RTreeG[FortId]{}
-	fortTreeMutex.Unlock()
-	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
-	fortTreeSnapshot.Store(nil)
 	config.Config.Tuning.MaxFortResults = 1
-	t.Cleanup(func() {
-		config.Config.Tuning.MaxFortResults = oldMax
-		fortLookupCache = oldLookup
-		fortTreeMutex.Lock()
-		fortTree = oldTree
-		fortTreeMutex.Unlock()
-		fortTreeSnapshot.Store(oldSnapshot)
-	})
+	t.Cleanup(func() { config.Config.Tuning.MaxFortResults = oldMax })
 
 	now := time.Now().Unix()
 	const count = 8

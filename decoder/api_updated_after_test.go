@@ -51,15 +51,6 @@ func TestForEachLivePokemonResultUpdatedAfter(t *testing.T) {
 	}
 }
 
-// The JSON v3 scan and the gRPC scan both pass the request's updated_after
-// through to the visitor.
-func TestPokemonScanRequestsCarryUpdatedAfter(t *testing.T) {
-	req := ApiPokemonScan3{UpdatedAfter: 1234}
-	if req.UpdatedAfter != 1234 {
-		t.Fatal("ApiPokemonScan3 must carry updated_after")
-	}
-}
-
 // plantGymRecord caches a gym record (no tree insert) with the given updated.
 func plantGymRecord(t *testing.T, hex string, updated int64) FortId {
 	t.Helper()

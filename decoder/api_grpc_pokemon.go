@@ -40,12 +40,20 @@ func intRangeBounds(r *pb.IntRange) (minV, maxV int16, ok bool) {
 	return minV, maxV, true
 }
 
-func intRangeToPokemonMinMax(r *pb.IntRange) *ApiPokemonDnfMinMax {
+// intRangeTo resolves a proto IntRange into the filter's own range type via
+// mk; nil (no constraint) stays nil. The pokemon and fort filters carry
+// field-identical but distinct range types, hence the constructor.
+func intRangeTo[T any](r *pb.IntRange, mk func(minV, maxV int16) T) *T {
 	minV, maxV, ok := intRangeBounds(r)
 	if !ok {
 		return nil
 	}
-	return &ApiPokemonDnfMinMax{Min: minV, Max: maxV}
+	out := mk(minV, maxV)
+	return &out
+}
+
+func intRangeToPokemonMinMax(r *pb.IntRange) *ApiPokemonDnfMinMax {
+	return intRangeTo(r, func(minV, maxV int16) ApiPokemonDnfMinMax { return ApiPokemonDnfMinMax{Min: minV, Max: maxV} })
 }
 
 // int32sTo narrows a repeated int32 to the filter's slice type. Empty input
@@ -61,21 +69,41 @@ func int32sTo[T ~int8 | ~int16](in []int32) []T {
 	return out
 }
 
-func dnfIdsToPokemon(ids []*pb.DnfId) []ApiPokemonDnfId {
+// dnfIdsTo converts a repeated DnfId into the filter's own id/form entry type
+// via mk (nil entries skipped; empty input yields nil, the JSON "omitted"
+// representation). An unset form stays nil, meaning any form.
+func dnfIdsTo[T any](ids []*pb.DnfId, mk func(pokemon int16, form *int16) T) []T {
 	if len(ids) == 0 {
 		return nil
 	}
-	out := make([]ApiPokemonDnfId, 0, len(ids))
+	out := make([]T, 0, len(ids))
 	for _, id := range ids {
 		if id == nil {
 			continue
 		}
-		entry := ApiPokemonDnfId{Pokemon: clampInt16(id.GetPokemonId())}
+		var form *int16
 		if id.Form != nil {
-			form := clampInt16(id.GetForm())
-			entry.Form = &form
+			f := clampInt16(id.GetForm())
+			form = &f
 		}
-		out = append(out, entry)
+		out = append(out, mk(clampInt16(id.GetPokemonId()), form))
+	}
+	return out
+}
+
+func dnfIdsToPokemon(ids []*pb.DnfId) []ApiPokemonDnfId {
+	return dnfIdsTo(ids, func(pokemon int16, form *int16) ApiPokemonDnfId { return ApiPokemonDnfId{Pokemon: pokemon, Form: form} })
+}
+
+// mapValues converts each element of a value slice with f, preserving order;
+// empty input yields nil so an absent list stays absent on the wire.
+func mapValues[I, O any](in []I, f func(*I) *O) []*O {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*O, len(in))
+	for i := range in {
+		out[i] = f(&in[i])
 	}
 	return out
 }
@@ -124,26 +152,23 @@ func optU32[T ~uint8 | ~uint16](p *T) *uint32 {
 	return &v
 }
 
+func pvpEntryToProto(e *ApiPvpEntry) *pb.PvpEntry {
+	return &pb.PvpEntry{
+		Pokemon:    int32(e.Pokemon),
+		Form:       int32(e.Form),
+		Cap:        e.Cap,
+		Value:      e.Value,
+		Level:      e.Level,
+		Cp:         int32(e.Cp),
+		Percentage: e.Percentage,
+		Rank:       int32(e.Rank),
+		Capped:     e.Capped,
+		Evolution:  int32(e.Evolution),
+	}
+}
+
 func pvpEntriesToProto(entries []ApiPvpEntry) []*pb.PvpEntry {
-	if len(entries) == 0 {
-		return nil
-	}
-	out := make([]*pb.PvpEntry, len(entries))
-	for i, e := range entries {
-		out[i] = &pb.PvpEntry{
-			Pokemon:    int32(e.Pokemon),
-			Form:       int32(e.Form),
-			Cap:        e.Cap,
-			Value:      e.Value,
-			Level:      e.Level,
-			Cp:         int32(e.Cp),
-			Percentage: e.Percentage,
-			Rank:       int32(e.Rank),
-			Capped:     e.Capped,
-			Evolution:  int32(e.Evolution),
-		}
-	}
-	return out
+	return mapValues(entries, pvpEntryToProto)
 }
 
 func pvpRankingsToProto(r ApiPvpRankings) *pb.PvpRankings {

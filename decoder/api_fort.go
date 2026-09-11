@@ -638,10 +638,11 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) combinedSc
 		pokestops: newCombinedTypeScan(retrieveParameters.Pokestops, bareProbe),
 		stations:  newCombinedTypeScan(retrieveParameters.Stations, bareProbe),
 	}
-	// The walk ends once every requested type is full, or the overall cap hits.
+	// The walk ends once every requested type is full, or the overall cap
+	// hits. Every requested type starts uncapped (limits are always > 0).
 	uncapped := 0
 	for _, ts := range []*combinedTypeScan{&res.gyms, &res.pokestops, &res.stations} {
-		if ts.requested && !ts.capped() {
+		if ts.requested {
 			uncapped++
 		}
 	}

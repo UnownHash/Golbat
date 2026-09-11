@@ -8,10 +8,9 @@ import (
 	"github.com/tidwall/rtree"
 )
 
-// plantCombinedForts swaps in a fresh fort tree and lookup cache holding the
-// given number of gyms, pokestops and stations inside one bounding box, and
-// restores the originals on cleanup. Returns the box.
-func plantCombinedForts(t *testing.T, gyms, pokestops, stations int) (minLoc, maxLoc ApiLatLon) {
+// swapFortIndex installs an empty fort tree and lookup cache for one test
+// and restores the originals (and the tree snapshot) on cleanup.
+func swapFortIndex(t *testing.T) {
 	t.Helper()
 	oldLookup := fortLookupCache
 	oldSnapshot := fortTreeSnapshot.Load()
@@ -28,6 +27,13 @@ func plantCombinedForts(t *testing.T, gyms, pokestops, stations int) (minLoc, ma
 		fortTreeMutex.Unlock()
 		fortTreeSnapshot.Store(oldSnapshot)
 	})
+}
+
+// plantCombinedForts swaps in a fresh fort index holding the given number of
+// gyms, pokestops and stations inside one bounding box. Returns the box.
+func plantCombinedForts(t *testing.T, gyms, pokestops, stations int) (minLoc, maxLoc ApiLatLon) {
+	t.Helper()
+	swapFortIndex(t)
 
 	n := 0
 	plant := func(count int, fortType FortType) {

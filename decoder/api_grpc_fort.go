@@ -13,30 +13,11 @@ import (
 // Stored JSON blobs pass through as text exactly as the HTTP API emits them.
 
 func intRangeToFortMinMax(r *pb.IntRange) *ApiFortDnfMinMax {
-	minV, maxV, ok := intRangeBounds(r)
-	if !ok {
-		return nil
-	}
-	return &ApiFortDnfMinMax{Min: minV, Max: maxV}
+	return intRangeTo(r, func(minV, maxV int16) ApiFortDnfMinMax { return ApiFortDnfMinMax{Min: minV, Max: maxV} })
 }
 
 func dnfIdsToFort(ids []*pb.DnfId) []ApiDnfId {
-	if len(ids) == 0 {
-		return nil
-	}
-	out := make([]ApiDnfId, 0, len(ids))
-	for _, id := range ids {
-		if id == nil {
-			continue
-		}
-		entry := ApiDnfId{Pokemon: clampInt16(id.GetPokemonId())}
-		if id.Form != nil {
-			form := clampInt16(id.GetForm())
-			entry.Form = &form
-		}
-		out = append(out, entry)
-	}
-	return out
+	return dnfIdsTo(ids, func(pokemon int16, form *int16) ApiDnfId { return ApiDnfId{Pokemon: pokemon, Form: form} })
 }
 
 func contestFocusFromProto(in []*pb.ContestFocus) []ApiFortDnfContestFocus {
@@ -221,14 +202,7 @@ func incidentToProto(i *ApiPokestopIncident) *pb.Incident {
 }
 
 func incidentsToProto(in []ApiPokestopIncident) []*pb.Incident {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]*pb.Incident, len(in))
-	for i := range in {
-		out[i] = incidentToProto(&in[i])
-	}
-	return out
+	return mapValues(in, incidentToProto)
 }
 
 func pokestopToProto(p *ApiPokestopResult) *pb.Pokestop {
@@ -311,14 +285,7 @@ func stationBattleToProto(b *ApiStationBattleResult) *pb.StationBattle {
 }
 
 func stationBattlesToProto(in []ApiStationBattleResult) []*pb.StationBattle {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make([]*pb.StationBattle, len(in))
-	for i := range in {
-		out[i] = stationBattleToProto(&in[i])
-	}
-	return out
+	return mapValues(in, stationBattleToProto)
 }
 
 func stationToProto(s *ApiStationResult) *pb.Station {
