@@ -42,17 +42,13 @@ type fenceQuery struct {
 	label string
 	cols  []string
 	row   []driver.Value
-	// fbCols/fbRow are the column shape the SQL-containment fallback scans.
-	fbCols []string
-	fbRow  []driver.Value
-	run    func(ctx context.Context, dbd DbDetails, f *geojson.Feature) error
+	run   func(ctx context.Context, dbd DbDetails, f *geojson.Feature) error
 }
 
 var fenceQueries = []fenceQuery{
 	{
 		name: "positions", label: "select pokestop-positions",
 		cols: []string{"id", "lat", "lon"}, row: []driver.Value{"a", 22.0, 11.0},
-		fbCols: []string{"id", "lat", "lon"},
 		run: func(ctx context.Context, dbd DbDetails, f *geojson.Feature) error {
 			_, err := GetPokestopPositions(ctx, dbd, f)
 			return err
@@ -61,7 +57,6 @@ var fenceQueries = []fenceQuery{
 	{
 		name: "quest-status", label: "select quest-status",
 		cols: []string{"lat", "lon", "q", "aq"}, row: []driver.Value{22.0, 11.0, int64(1), int64(0)},
-		fbCols: []string{"total", "ar_quests", "no_ar_quests"}, fbRow: []driver.Value{int64(0), int64(0), int64(0)},
 		run: func(ctx context.Context, dbd DbDetails, f *geojson.Feature) error {
 			_, err := GetQuestStatus(ctx, dbd, f)
 			return err
@@ -70,7 +65,6 @@ var fenceQueries = []fenceQuery{
 	{
 		name: "ids", label: "select pokestops for quest removal",
 		cols: []string{"id", "lat", "lon"}, row: []driver.Value{"a", 22.0, 11.0},
-		fbCols: []string{"id"},
 		run: func(ctx context.Context, dbd DbDetails, f *geojson.Feature) error {
 			_, err := PokestopIdsWithinFence(ctx, dbd, f)
 			return err
@@ -123,47 +117,9 @@ func TestFenceQueriesUseInclusiveBoundingBox(t *testing.T) {
 	}
 }
 
-// TestFenceQueriesBindFenceAsArgument is the end-to-end injection guard: for a
-// fence that takes the SQL containment fallback, the fence JSON must reach the
-// driver as a bound argument and never appear in the statement text.
-func TestFenceQueriesBindFenceAsArgument(t *testing.T) {
-	const payload = `x' OR 1=1 -- `
-	for _, q := range fenceQueries {
-		t.Run(q.name, func(t *testing.T) {
-			var fbRows [][]driver.Value
-			if q.fbRow != nil {
-				fbRows = [][]driver.Value{q.fbRow}
-			}
-			sdb, cap := newFakeDb(q.fbCols, fbRows, nil)
-			fence := geojson.NewFeature(orb.Point{11, 22}) // not a polygon: SQL fallback
-			fence.Properties["name"] = payload
-
-			if err := q.run(context.Background(), DbDetails{GeneralDb: sdb}, fence); err != nil {
-				t.Fatal(err)
-			}
-			query, args := cap.last()
-			if !strings.Contains(query, FenceContainsPredicate) {
-				t.Fatalf("fallback query %q does not use the bound predicate", query)
-			}
-			if strings.Contains(query, payload) {
-				t.Fatalf("hostile property reached the statement text: %q", query)
-			}
-			if len(args) != 5 {
-				t.Fatalf("bound %d args, want 4 corners + fence", len(args))
-			}
-			if s, ok := args[4].(string); !ok || !strings.Contains(s, payload) {
-				t.Fatalf("fence argument %v does not carry the property payload", args[4])
-			}
-		})
-	}
-}
-
 // TestFenceQueriesRejectNilGeometry: a feature whose geometry is nil must be
 // answered with an error, not a nil-pointer panic in the fallback branch.
 func TestFenceQueriesRejectNilGeometry(t *testing.T) {
-	if _, err := FenceQueryArgs(geojson.NewFeature(nil)); err == nil {
-		t.Error("FenceQueryArgs accepted a nil geometry")
-	}
 	for _, q := range fenceQueries {
 		t.Run(q.name, func(t *testing.T) {
 			sdb, _ := newFakeDb(q.cols, nil, nil)
@@ -179,7 +135,24 @@ func TestFenceQueriesRejectNilGeometry(t *testing.T) {
 func TestNewFenceMatcherToleratesNonStringNameProperty(t *testing.T) {
 	fence := squareFence()
 	fence.Properties["name"] = 123
-	if _, ok := newFenceMatcher(fence); !ok {
-		t.Fatal("polygon fence with a numeric name did not compile")
+	if _, err := newFenceMatcher(fence); err != nil {
+		t.Fatalf("polygon fence with a numeric name did not compile: %v", err)
+	}
+}
+
+// TestFenceQueriesRejectNonPolygonFence: there is no SQL fallback. A fence
+// that is not an area is an error before any query is issued.
+func TestFenceQueriesRejectNonPolygonFence(t *testing.T) {
+	for _, q := range fenceQueries {
+		t.Run(q.name, func(t *testing.T) {
+			sdb, cap := newFakeDb(q.cols, nil, nil)
+			err := q.run(context.Background(), DbDetails{GeneralDb: sdb}, geojson.NewFeature(orb.Point{11, 22}))
+			if err == nil {
+				t.Fatal("point fence accepted")
+			}
+			if query, _ := cap.last(); query != "" {
+				t.Fatalf("point fence reached the database: %q", query)
+			}
+		})
 	}
 }

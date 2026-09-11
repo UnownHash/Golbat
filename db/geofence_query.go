@@ -12,40 +12,16 @@ import (
 	"golbat/geo"
 )
 
-// FenceContainsPredicate is the SQL fragment testing that a row's (lon, lat)
-// lies inside a geofence.
-//
-// The fence is a bind parameter, never interpolated into the statement text.
-// It arrives as a request body, and a geojson.Feature round-trips its whole
-// properties map through MarshalJSON, so a property value containing a single
-// quote would otherwise close the string literal it was concatenated into.
-const FenceContainsPredicate = "ST_CONTAINS(ST_GeomFromGeoJSON(?, 2, 0), POINT(lon, lat))"
-
 // fenceBBoxWhere selects the candidate rows for every geofence query: enabled
 // pokestops inside the fence's bounding box, edges included. The Go matcher
 // counts the fence boundary as inside, so the pre-filter must not drop a stop
 // sitting exactly on the box edge. Its four placeholders bind FenceBoundArgs.
 const fenceBBoxWhere = "WHERE lat >= ? AND lon >= ? AND lat <= ? AND lon <= ? AND enabled = 1 "
 
-var errFenceNoGeometry = errors.New("geofence has no geometry")
-
-// FenceQueryArgs returns the bind arguments for a geofence query: the bounding
-// box corners as min-lat, min-lon, max-lat, max-lon, then the fence JSON for
-// FenceContainsPredicate.
-//
-// Every geofence query places its bounding-box comparisons before the fence
-// predicate, so this order matches all of them. A query that departs from that
-// layout must not use this helper.
-func FenceQueryArgs(fence *geojson.Feature) ([]any, error) {
-	if fence == nil || fence.Geometry == nil {
-		return nil, errFenceNoGeometry
-	}
-	fenceJSON, err := fence.MarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return append(FenceBoundArgs(fence), string(fenceJSON)), nil
-}
+// errFenceNotArea is returned for a fence whose geometry is missing or is not
+// a polygon. NormaliseFenceFromBytes already rejects such request bodies with
+// a 400; this guards direct callers.
+var errFenceNotArea = errors.New("geofence must be a Polygon or MultiPolygon")
 
 // FenceBoundArgs returns just the bounding-box corners, as min-lat, min-lon,
 // max-lat, max-lon, for the queries that select candidates by bounding box and
@@ -55,7 +31,9 @@ func FenceBoundArgs(fence *geojson.Feature) []any {
 	return []any{bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon()}
 }
 
-// fenceMatcher tests candidate rows against a fence in Go rather than in SQL.
+// fenceMatcher tests candidate rows against a fence in Go. There is no SQL
+// containment path: the only geometries that are meaningful fences are
+// polygons, and those always compile.
 //
 // Asking MariaDB to evaluate ST_CONTAINS per candidate row is what made large
 // geofences time out. Measured on 1M rows against a 2000-vertex fence whose
@@ -66,15 +44,18 @@ func FenceBoundArgs(fence *geojson.Feature) []any {
 // what identifies per-row containment rather than repeated parsing as the cost.
 type fenceMatcher struct{ compiled *geo.CompiledFence }
 
-// newFenceMatcher returns a matcher for fence, or ok=false when the fence is
-// not a Polygon or MultiPolygon. Callers fall back to SQL containment in that
-// case, so exotic geometries keep working exactly as before.
-func newFenceMatcher(fence *geojson.Feature) (fenceMatcher, bool) {
+// newFenceMatcher compiles fence, or returns errFenceNotArea when its
+// geometry is missing or not an area (a Polygon, a MultiPolygon, or a
+// GeometryCollection holding polygons).
+func newFenceMatcher(fence *geojson.Feature) (fenceMatcher, error) {
+	if fence == nil {
+		return fenceMatcher{}, errFenceNotArea
+	}
 	compiled := geo.CompileFence(fence)
 	if compiled == nil {
-		return fenceMatcher{}, false
+		return fenceMatcher{}, errFenceNotArea
 	}
-	return fenceMatcher{compiled: compiled}, true
+	return fenceMatcher{compiled: compiled}, nil
 }
 
 // contains reports whether (lat, lon) is inside the fence, boundary included.
@@ -118,32 +99,18 @@ func (m fenceMatcher) forEachCandidate(ctx context.Context, sdb *sqlx.DB, label,
 }
 
 // PokestopIdsWithinFence returns the ids of enabled pokestops inside fence.
-//
-// Containment runs in Go whenever the fence is a polygon, for the reason on
-// fenceMatcher; other geometries fall back to SQL containment.
 func PokestopIdsWithinFence(ctx context.Context, dbDetails DbDetails, fence *geojson.Feature) ([]string, error) {
 	const label = "select pokestops for quest removal"
 
-	var pokestopIds []string
-
-	matcher, ok := newFenceMatcher(fence)
-	if !ok {
-		args, err := FenceQueryArgs(fence)
-		if err != nil {
-			return nil, err
-		}
-		err = dbDetails.GeneralDb.SelectContext(ctx, &pokestopIds,
-			"SELECT id FROM pokestop "+fenceBBoxWhere+"AND "+FenceContainsPredicate, args...)
-		statsCollector.IncDbQuery(label, err)
-		if err != nil {
-			return nil, err
-		}
-		return pokestopIds, nil
+	matcher, err := newFenceMatcher(fence)
+	if err != nil {
+		return nil, err
 	}
 
+	var pokestopIds []string
 	var id string
 	var lat, lon float64
-	err := matcher.forEachCandidate(ctx, dbDetails.GeneralDb, label,
+	err = matcher.forEachCandidate(ctx, dbDetails.GeneralDb, label,
 		"SELECT id, lat, lon FROM pokestop "+fenceBBoxWhere, FenceBoundArgs(fence),
 		func(rows *sql.Rows) (float64, float64, error) {
 			err := rows.Scan(&id, &lat, &lon)

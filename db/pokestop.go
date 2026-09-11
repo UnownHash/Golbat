@@ -26,28 +26,15 @@ type QuestStatus struct {
 func GetPokestopPositions(ctx context.Context, db DbDetails, fence *geojson.Feature) ([]QuestLocation, error) {
 	const label = "select pokestop-positions"
 
-	matcher, ok := newFenceMatcher(fence)
-	if !ok {
-		// Not a polygon: let the database do containment, as before.
-		args, err := FenceQueryArgs(fence)
-		if err != nil {
-			return nil, err
-		}
-		areas := []QuestLocation{}
-		err = db.GeneralDb.SelectContext(ctx, &areas, "SELECT id, lat, lon FROM pokestop "+
-			fenceBBoxWhere+"AND "+FenceContainsPredicate,
-			args...)
-		statsCollector.IncDbQuery(label, err)
-		if err != nil {
-			return nil, err
-		}
-		return areas, nil
+	matcher, err := newFenceMatcher(fence)
+	if err != nil {
+		return nil, err
 	}
 
 	// Only matches are retained; the candidate rows stream past.
 	areas := []QuestLocation{}
 	var area QuestLocation
-	err := matcher.forEachCandidate(ctx, db.GeneralDb, label,
+	err = matcher.forEachCandidate(ctx, db.GeneralDb, label,
 		"SELECT id, lat, lon FROM pokestop "+fenceBBoxWhere, FenceBoundArgs(fence),
 		func(rows *sql.Rows) (float64, float64, error) {
 			err := rows.Scan(&area.Id, &area.Latitude, &area.Longitude)
@@ -66,32 +53,16 @@ func GetQuestStatus(ctx context.Context, db DbDetails, fence *geojson.Feature) (
 
 	status := QuestStatus{}
 
-	matcher, ok := newFenceMatcher(fence)
-	if !ok {
-		// Not a polygon: let the database do containment, as before.
-		args, err := FenceQueryArgs(fence)
-		if err != nil {
-			return status, err
-		}
-		err = db.GeneralDb.GetContext(ctx, &status,
-			"SELECT COUNT(*) AS total, "+
-				"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS ar_quests, "+
-				"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS no_ar_quests FROM pokestop "+
-				bboxWhere+"AND "+FenceContainsPredicate,
-			args...,
-		)
-		statsCollector.IncDbQuery(label, err)
-		if err != nil {
-			return QuestStatus{}, err
-		}
-		return status, nil
+	matcher, err := newFenceMatcher(fence)
+	if err != nil {
+		return QuestStatus{}, err
 	}
 
 	// Counting in Go keeps the aggregate identical while the per-row polygon
 	// test moves out of the database.
 	var lat, lon float64
 	var hasQuest, hasAltQuest bool
-	err := matcher.forEachCandidate(ctx, db.GeneralDb, label,
+	err = matcher.forEachCandidate(ctx, db.GeneralDb, label,
 		"SELECT lat, lon, quest_type IS NOT NULL, alternative_quest_type IS NOT NULL FROM pokestop "+bboxWhere,
 		FenceBoundArgs(fence),
 		func(rows *sql.Rows) (float64, float64, error) {

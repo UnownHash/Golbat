@@ -1,95 +1,30 @@
 package db
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 )
 
-// TestFenceContainsPredicateBindsTheFence is the regression test for geofence
-// SQL injection. The predicate must be a constant with a bind placeholder: a
-// geojson.Feature round-trips its whole properties map through MarshalJSON, so
-// any fence content spliced into the statement text carries whatever quoting
-// the caller sent.
-func TestFenceContainsPredicateBindsTheFence(t *testing.T) {
-	if !strings.Contains(FenceContainsPredicate, "?") {
-		t.Fatalf("predicate has no bind placeholder: %s", FenceContainsPredicate)
-	}
-	if strings.Contains(FenceContainsPredicate, "'") {
-		t.Fatalf("predicate still quotes a literal, so fence content could escape it: %s", FenceContainsPredicate)
-	}
-}
-
-// TestFenceQueryArgsCarriesHostilePropertiesAsData feeds the payload that used
-// to break out of the statement and checks it survives only as an argument.
-func TestFenceQueryArgsCarriesHostilePropertiesAsData(t *testing.T) {
-	const payload = `x' OR 1=1 -- `
-
-	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 4}, {0, 4}, {0, 0}}})
-	fence.Properties["name"] = payload
-
-	args, err := FenceQueryArgs(fence)
-	if err != nil {
-		t.Fatalf("FenceQueryArgs: %v", err)
-	}
-	if len(args) != 5 {
-		t.Fatalf("got %d args, want 4 bbox corners plus the fence", len(args))
-	}
-
-	fenceJSON, ok := args[4].(string)
-	if !ok {
-		t.Fatalf("fence arg is %T, want string", args[4])
-	}
-	if !strings.Contains(fenceJSON, payload) {
-		t.Fatal("fence argument lost the properties payload, so this test proves nothing")
-	}
-	// The statement text itself is covered end to end by
-	// TestFenceQueriesBindFenceAsArgument, which captures what the driver
-	// receives.
-}
-
-// TestFenceQueryArgsBoundingBoxOrder locks the corner order every geofence
-// query binds: min lat, min lon, max lat, max lon.
-func TestFenceQueryArgsBoundingBoxOrder(t *testing.T) {
-	// lon spans 10..12, lat spans 20..24: every corner is distinct, so a
-	// swapped min pair is as visible as a swapped max pair.
-	fence := geojson.NewFeature(orb.Polygon{{{10, 20}, {12, 20}, {12, 24}, {10, 24}, {10, 20}}})
-
-	args, err := FenceQueryArgs(fence)
-	if err != nil {
-		t.Fatalf("FenceQueryArgs: %v", err)
-	}
-	want := []float64{20, 10, 24, 12} // minLat, minLon, maxLat, maxLon
-	for i, w := range want {
-		got, ok := args[i].(float64)
-		if !ok {
-			t.Fatalf("arg %d is %T, want float64", i, args[i])
-		}
-		if got != w {
-			t.Fatalf("arg %d = %v, want %v (order is minLat, minLon, maxLat, maxLon)", i, got, w)
+// TestNewFenceMatcherRejectsNonAreas: a fence is an area. Points and lines
+// are errors, not fences that match nothing; polygons compile.
+func TestNewFenceMatcherRejectsNonAreas(t *testing.T) {
+	for _, g := range []orb.Geometry{orb.Point{1, 1}, orb.LineString{{0, 0}, {1, 1}}, nil} {
+		if _, err := newFenceMatcher(geojson.NewFeature(g)); err == nil {
+			t.Errorf("%T fence accepted, want an error", g)
 		}
 	}
-}
-
-// TestNewFenceMatcherFallsBackForNonPolygons locks the fallback that keeps
-// exotic geometries working: containment moves to Go only for polygons, and
-// anything else must still reach the SQL predicate.
-func TestNewFenceMatcherFallsBackForNonPolygons(t *testing.T) {
-	if _, ok := newFenceMatcher(geojson.NewFeature(orb.Point{1, 1})); ok {
-		t.Fatal("a Point fence must fall back to SQL containment")
+	if _, err := newFenceMatcher(nil); err == nil {
+		t.Error("nil feature accepted, want an error")
 	}
-	if _, ok := newFenceMatcher(geojson.NewFeature(orb.LineString{{0, 0}, {1, 1}})); ok {
-		t.Fatal("a LineString fence must fall back to SQL containment")
-	}
-	if _, ok := newFenceMatcher(geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}})); !ok {
-		t.Fatal("a Polygon fence must be matched in Go")
-	}
-	if _, ok := newFenceMatcher(geojson.NewFeature(orb.MultiPolygon{
-		{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}},
-	})); !ok {
-		t.Fatal("a MultiPolygon fence must be matched in Go")
+	for _, g := range []orb.Geometry{
+		orb.Polygon{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}},
+		orb.MultiPolygon{{{{0, 0}, {2, 0}, {2, 2}, {0, 2}, {0, 0}}}},
+	} {
+		if _, err := newFenceMatcher(geojson.NewFeature(g)); err != nil {
+			t.Errorf("%T fence rejected: %v", g, err)
+		}
 	}
 }
 
@@ -99,9 +34,9 @@ func TestNewFenceMatcherFallsBackForNonPolygons(t *testing.T) {
 func TestFenceMatcherContains(t *testing.T) {
 	// lon spans 0..1, lat spans 0..8.
 	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {1, 0}, {1, 8}, {0, 8}, {0, 0}}})
-	m, ok := newFenceMatcher(fence)
-	if !ok {
-		t.Fatal("expected a polygon matcher")
+	m, err := newFenceMatcher(fence)
+	if err != nil {
+		t.Fatalf("expected a polygon matcher: %v", err)
 	}
 
 	cases := []struct {
@@ -124,7 +59,9 @@ func TestFenceMatcherContains(t *testing.T) {
 	}
 }
 
-// TestFenceBoundArgsOrder locks the corner order the bounding-box queries bind.
+// TestFenceBoundArgsOrder locks the corner order the bounding-box query binds:
+// min lat, min lon, max lat, max lon. Every corner is distinct, so a swapped
+// min pair is as visible as a swapped max pair.
 func TestFenceBoundArgsOrder(t *testing.T) {
 	fence := geojson.NewFeature(orb.Polygon{{{10, 20}, {12, 20}, {12, 24}, {10, 24}, {10, 20}}})
 	args := FenceBoundArgs(fence)

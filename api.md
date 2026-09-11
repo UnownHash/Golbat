@@ -303,7 +303,7 @@ Get coordinates of all pokestops within a geofence.
 
 **Authentication:** Required
 
-**Request Body:** GeoJSON Feature, Geometry, or Golbat Geofence format
+**Request Body:** GeoJSON Feature or Geometry (Polygon, MultiPolygon, or a GeometryCollection of polygons), or Golbat Geofence format
 ```json
 {
   "fence": [
@@ -429,7 +429,7 @@ Get quest statistics for a geofence area.
 
 **Authentication:** Required
 
-**Request Body:** GeoJSON Feature, Geometry, or Golbat Geofence format
+**Request Body:** GeoJSON Feature or Geometry (Polygon, MultiPolygon, or a GeometryCollection of polygons), or Golbat Geofence format
 
 **Response:**
 ```json
@@ -449,7 +449,7 @@ Clear all quests within a geofence area.
 
 **Authentication:** Required
 
-**Request Body:** GeoJSON Feature, Geometry, or Golbat Geofence format
+**Request Body:** GeoJSON Feature or Geometry (Polygon, MultiPolygon, or a GeometryCollection of polygons), or Golbat Geofence format
 
 **Response:**
 ```json

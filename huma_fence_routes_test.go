@@ -61,3 +61,18 @@ func TestFenceEndpointsRejectNilGeometry(t *testing.T) {
 		})
 	}
 }
+
+// TestFenceEndpointsRejectNonAreaGeometry: a Point body is not a fence and
+// must be a 400 on every fence endpoint rather than an empty success.
+func TestFenceEndpointsRejectNonAreaGeometry(t *testing.T) {
+	api := newFenceTestApi(t)
+	const body = `{"type":"Point","coordinates":[11,22]}`
+	for _, path := range []string{"/api/pokestop-positions", "/api/quest-status", "/api/clear-quests"} {
+		t.Run(path, func(t *testing.T) {
+			resp := api.Post(path, strings.NewReader(body))
+			if resp.Code != http.StatusBadRequest {
+				t.Fatalf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
+			}
+		})
+	}
+}

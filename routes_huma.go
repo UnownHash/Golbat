@@ -355,8 +355,9 @@ type tappableByIdInput struct {
 type tappableByIdOutput struct{ Body decoder.ApiTappableResult }
 
 type pokestopPositionsInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type pokestopPositionsOutput struct{ Body []db2.QuestLocation }
@@ -665,7 +666,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokestop-positions",
 		Summary:       "List pokestop positions within a geofence",
-		Description:   "Returns the positions of pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Returns the positions of pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -683,15 +684,17 @@ func registerTier3Routes(api huma.API) {
 }
 
 type questStatusInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type questStatusOutput struct{ Body db2.QuestStatus }
 
 type clearQuestsInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type clearQuestsOutput struct{ Body StatusResponse }
@@ -705,7 +708,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/quest-status",
 		Summary:       "Quest status within a geofence",
-		Description:   "Returns quest completion status for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Returns quest completion status for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -724,7 +727,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/clear-quests",
 		Summary:       "Clear quests within a geofence",
-		Description:   "Deletes quests for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Deletes quests for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
