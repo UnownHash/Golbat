@@ -31,6 +31,16 @@ type PokemonLookupCacheItem struct {
 	HasPvp           bool
 }
 
+// PokemonLookup is the scan-filter view of a pokemon. Its nullable fields are
+// signed and use -1 for "no value" rather than carrying a validity flag each,
+// which is what keeps the whole struct inside PokemonLookupCacheItem above.
+//
+// Every field here is built by lookupInt8/lookupInt16/lookupForm/lookupIv,
+// never by a bare conversion: the stored fields are clamped at their column's
+// ceiling, and converting that ceiling into one of these slots lands on -1 or
+// on some other negative number. See lookupInt8's doc comment. Form's -1 is
+// not even an absence marker — it is the wildcard key in the DNF filter index
+// — so it has its own helper.
 type PokemonLookup struct {
 	PokemonId          int16
 	Form               int16
@@ -42,8 +52,6 @@ type PokemonLookup struct {
 	Level              int8
 	Cp                 int16
 	Gender             int8
-	Xxs                bool
-	Xxl                bool
 	Iv                 int8
 	Size               int8
 }
@@ -220,11 +228,92 @@ func pokemonRtreePreloadInsert(pokemon *Pokemon) {
 	}
 }
 
-func valueOrMinus1(n null.Int) int {
-	if n.Valid {
-		return int(n.Int64)
+// lookupInt8 and lookupInt16 read a narrowed nullable field into
+// PokemonLookup's signed slot, which uses -1 as its own "no value" sentinel
+// (see PokemonLookup's fields) instead of a separate validity flag.
+//
+// They saturate at the slot's own maximum instead of converting, and that is
+// the whole point of them. The stored fields are clamped at their *column's*
+// ceiling — 255 for a tinyint, 65535 for a smallint — so a bare int8(255) or
+// int16(65535) is exactly -1: a value that is present becomes one every scan
+// filter reads as absent, silently dropping the pokemon from filtered scans.
+// The hazard is wider than that one collision, too. Every stored value from
+// 128 (or 32768) up converts to some negative number and so fails every
+// `>= Min` comparison in the DNF filters, not just the ceiling.
+//
+// Saturating keeps the value on the correct side of every range comparison —
+// a garbage level reads as "very high" rather than "absent" or "negative" —
+// and cannot reach the sentinel. The int8/int16 ceilings sit far above every
+// real reading (levels top out near 51, genders at 3, sizes at 5, CP near
+// 6000), so the saturation is only reachable on the same out-of-range inputs
+// the storage clamp already exists for.
+//
+// Deliberately no metric here. golbat_field_clamped_total's home is the
+// setter that stores the value (see clampUint's doc comment): this is a
+// representation choice in a derived cache, not a second storage event, and
+// counting it would add a second count per sighting for the same fact.
+func lookupInt8[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int8 {
+	if !n.Valid {
+		return -1
 	}
-	return -1
+	if uint64(n.V) > math.MaxInt8 {
+		return math.MaxInt8
+	}
+	return int8(n.V)
+}
+
+func lookupInt16[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int16 {
+	if !n.Valid {
+		return -1
+	}
+	if uint64(n.V) > math.MaxInt16 {
+		return math.MaxInt16
+	}
+	return int16(n.V)
+}
+
+// lookupForm reads the stored form into PokemonLookup.Form. Unlike the two
+// helpers above it has no absent sentinel — an absent form is 0, matching the
+// column — but it must still never produce -1, for a different reason: -1 is
+// the *wildcard-form* key in the DNF filter index (api_pokemon_common.go
+// falls back to {pokemonId, -1} and then {-1, -1}). A stored 65535 converted
+// to -1 would therefore not read as "no form"; it would match the catch-all
+// filter set for that pokemon id, and adjustPokemonFormCount would file it
+// under the wildcard key. Saturating at MaxInt16 gives it a form key of its
+// own that no filter fallback and no real form id can collide with.
+func lookupForm(n null.Value[uint16]) int16 {
+	if !n.Valid {
+		return 0
+	}
+	if n.V > math.MaxInt16 {
+		return math.MaxInt16
+	}
+	return int16(n.V)
+}
+
+// lookupIv reads the stored IV percentage into PokemonLookup.Iv. iv is
+// float(5,2) unsigned, so the column holds up to 999.99: rows written before
+// clampIv capped the per-stat IVs at 15 can carry a percentage well above
+// 127 (a single stat stored at the tinyint's 255 gives iv = 566.67), and a
+// bare int8 of that is negative — 384 converts to -128, the sentinel's
+// neighbourhood, and 200 to -56. Floor first, then saturate, so the DNF
+// filters read "very high" rather than "absent".
+func lookupIv(n null.Value[float32]) int8 {
+	if !n.Valid {
+		return -1
+	}
+	switch v := math.Floor(float64(n.V)); {
+	case v > math.MaxInt8:
+		return math.MaxInt8
+	case v > 0:
+		return int8(v)
+	default:
+		// Zero, negative, or NaN. None are reachable from an unsigned
+		// float(5,2) column, but a float-to-int conversion is undefined in
+		// the Go spec when the value is out of the target's range, so
+		// nothing is converted unless it is known to be in range.
+		return 0
+	}
 }
 
 // updatePokemonLookup refreshes the scan lookup entry and reports whether
@@ -245,24 +334,19 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	pokemonLookupCacheItem.HasLookup = true
 	pokemonLookupCacheItem.PokemonLookup = PokemonLookup{
 		PokemonId:          pokemon.PokemonId,
-		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.internal.ScanHistory) > 0,
-		Weather:            int8(valueOrMinus1(pokemon.Weather)),
-		Atk:                int8(valueOrMinus1(pokemon.AtkIv)),
-		Def:                int8(valueOrMinus1(pokemon.DefIv)),
-		Sta:                int8(valueOrMinus1(pokemon.StaIv)),
-		Level:              int8(valueOrMinus1(pokemon.Level)),
-		Gender:             int8(valueOrMinus1(pokemon.Gender)),
-		Cp:                 int16(valueOrMinus1(pokemon.Cp)),
-		Iv: func() int8 {
-			if pokemon.Iv.Valid {
-				return int8(math.Floor(pokemon.Iv.Float64))
-			}
-			return -1
-		}(),
-		Size: int8(valueOrMinus1(pokemon.Size)),
+		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.scanHistory) > 0,
+		Weather:            lookupInt8(pokemon.Weather),
+		Atk:                lookupInt8(pokemon.AtkIv),
+		Def:                lookupInt8(pokemon.DefIv),
+		Sta:                lookupInt8(pokemon.StaIv),
+		Level:              lookupInt8(pokemon.Level),
+		Gender:             lookupInt8(pokemon.Gender),
+		Cp:                 lookupInt16(pokemon.Cp),
+		Iv:                 lookupIv(pokemon.Iv),
+		Size:               lookupInt8(pokemon.Size),
 	}
 	if !pokemon.IsDitto {
-		pokemonLookupCacheItem.PokemonLookup.Form = int16(pokemon.Form.ValueOrZero())
+		pokemonLookupCacheItem.PokemonLookup.Form = lookupForm(pokemon.Form)
 	}
 
 	if changePvp {

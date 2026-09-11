@@ -21,8 +21,9 @@ func TestUpdateGymLookupHookWiresRaidAvailability(t *testing.T) {
 	initFortAvailability()
 	now := time.Now().Unix()
 
+	const gymIdStr = "00000000000000000000000000000001"
 	gym := &Gym{GymData: GymData{
-		Id:               "hook-gym-raid",
+		Id:               mustFortId(t, gymIdStr),
 		Lat:              1,
 		Lon:              2,
 		RaidLevel:        null.IntFrom(5),
@@ -51,8 +52,9 @@ func TestUpdateStationLookupWithBattlesHookWiresBattleAvailability(t *testing.T)
 	initFortAvailability()
 	now := time.Now().Unix()
 
+	const stationIdStr = "00000000000000000000000000000002"
 	station := &Station{StationData: StationData{
-		Id:        "hook-station-battle",
+		Id:        mustFortId(t, stationIdStr),
 		Lat:       1,
 		Lon:       2,
 		StartTime: now - 3600,
@@ -68,7 +70,7 @@ func TestUpdateStationLookupWithBattlesHookWiresBattleAvailability(t *testing.T)
 			BattlePokemonId: null.IntFrom(527),
 		},
 	}
-	updateStationLookupWithBattles(station, battles)
+	updateStationLookupWithBattles(mustFortId(t, stationIdStr), station, battles)
 
 	got := GetAvailableStations(now)
 	found := false
@@ -90,8 +92,9 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 	initQuestConditions() // updatePokestopLookup also reconciles quest conditions
 	now := time.Now().Unix()
 
+	const stopIdStr = "00000000000000000000000000000003"
 	stop := &Pokestop{PokestopData: PokestopData{
-		Id:                  "hook-stop-lure-showcase",
+		Id:                  mustFortId(t, stopIdStr),
 		Lat:                 1,
 		Lon:                 2,
 		LureId:              501,
@@ -128,6 +131,45 @@ func TestUpdatePokestopLookupHookWiresLureAndShowcaseAvailability(t *testing.T) 
 	}
 }
 
+func TestUpdatePokestopLookupHookWiresBuddyShowcaseFocus(t *testing.T) {
+	initFortAvailability()
+	initQuestConditions()
+	now := time.Now().Unix()
+
+	const stopIdStr = "00000000000000000000000000000005"
+	stopId := mustFortId(t, stopIdStr)
+	stop := &Pokestop{PokestopData: PokestopData{
+		Id:             stopId,
+		Lat:            1,
+		Lon:            2,
+		ShowcaseFocus:  null.StringFrom(`{"type":"buddy","min_level":3}`),
+		ShowcaseExpiry: null.IntFrom(now + 1800),
+	}}
+	updatePokestopLookup(stop)
+
+	lookup, ok := fortLookupCache.Load(stopId)
+	if !ok || lookup.ShowcaseBuddyMinLevel != 3 {
+		t.Fatalf("FortLookup Buddy projection = %+v, want min level 3", lookup)
+	}
+
+	want, _, err := parseShowcaseFocus(stop.ShowcaseFocus.String)
+	if err != nil {
+		t.Fatalf("parse expected focus: %v", err)
+	}
+	found := false
+	for _, showcase := range GetAvailablePokestops(now).Showcases {
+		if showcase.ShowcaseFocus != nil && *showcase.ShowcaseFocus == *want {
+			found = true
+			if showcase.PokemonId != nil || showcase.Form != nil || showcase.TypeId != nil {
+				t.Fatalf("Buddy focus should not require legacy mirrors: %+v", showcase)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected Buddy focus from updatePokestopLookup to surface via availability")
+	}
+}
+
 // TestUpdatePokestopIncidentLookupHookWiresInvasionAvailability must fail if
 // updatePokestopIncidentLookup's observeInvasion(...) call is removed. The
 // pokestop's FortLookup is seeded resident first (as fort_incident_id_test.go
@@ -136,7 +178,7 @@ func TestUpdatePokestopIncidentLookupHookWiresInvasionAvailability(t *testing.T)
 	initFortAvailability()
 	now := time.Now().Unix()
 
-	const id = "hook-stop-invasion"
+	id := mustFortId(t, "00000000000000000000000000000004")
 	fortLookupCache.Store(id, FortLookup{FortType: POKESTOP, Lat: 1, Lon: 2})
 
 	inc := &Incident{IncidentData: IncidentData{

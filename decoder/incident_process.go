@@ -11,7 +11,12 @@ import (
 )
 
 func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.OpenInvasionCombatSessionProto, protoRes *pogo.OpenInvasionCombatSessionOutProto) string {
-	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId, protoReq.IncidentLookup.FortId, "UpdateIncidentWithConfirmation")
+	fortId, ok := ParseFortId(protoReq.IncidentLookup.FortId)
+	if !ok {
+		log.Errorf("UpdateIncidentLineup: unparseable fort id %q", protoReq.IncidentLookup.FortId)
+		return fmt.Sprintf("unparseable fort id %q", protoReq.IncidentLookup.FortId)
+	}
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, protoReq.IncidentLookup.IncidentId, fortId, "UpdateIncidentWithConfirmation")
 	if err != nil {
 		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
 	}
@@ -27,7 +32,12 @@ func UpdateIncidentLineup(ctx context.Context, db db.DbDetails, protoReq *pogo.O
 }
 
 func UpdateIncidentLineupFromBattleState(ctx context.Context, db db.DbDetails, fortId, incidentId string, out *pogo.BattleStateOutProto) string {
-	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentId, fortId, "UpdateIncidentLineupFromBattleState")
+	parsedFortId, ok := ParseFortId(fortId)
+	if !ok {
+		log.Errorf("UpdateIncidentLineupFromBattleState: unparseable fort id %q", fortId)
+		return fmt.Sprintf("unparseable fort id %q", fortId)
+	}
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, incidentId, parsedFortId, "UpdateIncidentLineupFromBattleState")
 	if err != nil {
 		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
 	}
@@ -39,7 +49,12 @@ func UpdateIncidentLineupFromBattleState(ctx context.Context, db db.DbDetails, f
 }
 
 func ConfirmIncident(ctx context.Context, db db.DbDetails, proto *pogo.StartIncidentOutProto) string {
-	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, proto.Incident.IncidentId, proto.Incident.FortId, "UpdateIncidentFromInvasion")
+	fortId, ok := ParseFortId(proto.Incident.FortId)
+	if !ok {
+		log.Errorf("ConfirmIncident: unparseable fort id %q", proto.Incident.FortId)
+		return fmt.Sprintf("unparseable fort id %q", proto.Incident.FortId)
+	}
+	incident, unlock, err := getOrCreateIncidentRecord(ctx, db, proto.Incident.IncidentId, fortId, "UpdateIncidentFromInvasion")
 	if err != nil {
 		return fmt.Sprintf("getOrCreateIncidentRecord: %s", err)
 	}

@@ -10,7 +10,7 @@ func TestFlushPokemonTreeEvictionsRemovesPoints(t *testing.T) {
 	// pokemonTree is a package global; count only the ids we add.
 	ids := []uint64{910001, 910002, 910003}
 	for _, id := range ids {
-		p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(id), Lat: 1.5, Lon: 2.5, PokemonId: 1, Form: null.IntFrom(0)}}
+		p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(id), Lat: 1.5, Lon: 2.5, PokemonId: 1, Form: null.ValueFrom(uint16(0))}}
 		addPokemonToTree(p)
 	}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -63,7 +64,7 @@ func TestHumaScanEndpointsE2E(t *testing.T) {
 		if err := gojson.Unmarshal([]byte(body), &m); err != nil {
 			t.Fatalf("v3 body is not a JSON object: %v; body=%s", err, body)
 		}
-		for _, key := range []string{"pokemon", "examined", "skipped", "total"} {
+		for _, key := range []string{"pokemon", "examined", "skipped", "total", "limit_reached"} {
 			if _, ok := m[key]; !ok {
 				t.Errorf("v3 body missing key %q: %s", key, body)
 			}
@@ -199,9 +200,21 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("pokestop/id for unknown id is 404", func(t *testing.T) {
+	t.Run("pokestop/id for unknown (but well-formed) id is 404", func(t *testing.T) {
 		// PeekPokestopRecord is cache-only (no DB fallback), so a missing id is
-		// a clean 404 with no database.
+		// a clean 404 with no database. The id must parse — a well-formed,
+		// simply-absent id — so this actually reaches PeekPokestopRecord and
+		// exercises the cache-miss path, rather than 404ing out of ParseFortId
+		// before the handler ever calls it.
+		resp := api.Get("/api/pokestop/id/00000000000000000000000000000009")
+		if resp.Code != http.StatusNotFound {
+			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("pokestop/id for malformed id is 404", func(t *testing.T) {
+		// A structurally invalid id 404s out of ParseFortId, before
+		// PeekPokestopRecord is ever called.
 		resp := api.Get("/api/pokestop/id/does-not-exist")
 		if resp.Code != http.StatusNotFound {
 			t.Errorf("got %d, want 404; body=%s", resp.Code, resp.Body.String())
@@ -233,13 +246,66 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("gym/query rejecting >500 ids returns 413", func(t *testing.T) {
+	t.Run("gym/query rejecting >500 well-formed ids returns 413", func(t *testing.T) {
+		// The cap check runs on the raw request size, before dedupeIDs parses
+		// anything, so well-formed vs malformed shouldn't matter here — but
+		// exercise the well-formed case too since it's the realistic one.
+		// Start at 1: an all-zero id (i=0) is FortId's reserved "no fort"
+		// sentinel and ParseFortId would reject it, which is irrelevant to
+		// this path but avoided anyway for clarity.
+		ids := make([]string, 0, 501)
+		for i := 1; i <= 501; i++ {
+			ids = append(ids, fmt.Sprintf("%032x", i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("gym/query rejecting >500 malformed ids still returns 413", func(t *testing.T) {
+		// Regression pin: the cap must apply to the raw request size, not to
+		// dedupeIDs's parsed-and-deduplicated output. Before that ordering
+		// fix, 501 unparseable ids would all get dropped, the deduplicated
+		// list would come back empty (well under the cap), and the request
+		// would wrongly succeed with an empty 200 instead of 413 — and log
+		// one error line per dropped id along the way.
 		ids := make([]string, 0, 501)
 		for i := 0; i < 501; i++ {
 			ids = append(ids, "id"+strconv.Itoa(i))
 		}
 		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
 		resp := api.Post("/api/gym/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("station/query rejecting >500 well-formed ids returns 413", func(t *testing.T) {
+		// Same cap-ordering contract as gym/query (see above), pinned
+		// separately for station/query since it has its own handler wiring.
+		ids := make([]string, 0, 501)
+		for i := 1; i <= 501; i++ {
+			ids = append(ids, fmt.Sprintf("%032x", i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/station/query", strings.NewReader(string(raw)))
+		if resp.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("station/query rejecting >500 malformed ids still returns 413", func(t *testing.T) {
+		// Regression pin: an oversized request of unparseable ids must not
+		// dodge the cap by having dedupeIDs drop everything down to an
+		// under-the-limit (or empty) list first.
+		ids := make([]string, 0, 501)
+		for i := 0; i < 501; i++ {
+			ids = append(ids, "id"+strconv.Itoa(i))
+		}
+		raw, _ := gojson.Marshal(map[string][]string{"ids": ids})
+		resp := api.Post("/api/station/query", strings.NewReader(string(raw)))
 		if resp.Code != http.StatusRequestEntityTooLarge {
 			t.Errorf("got %d, want 413; body=%s", resp.Code, resp.Body.String())
 		}
@@ -319,6 +385,50 @@ func TestFortScanEndpoints(t *testing.T) {
 			if _, ok := m[key]; !ok {
 				t.Errorf("body missing key %q: %s", key, resp.Body.String())
 			}
+		}
+	})
+
+	t.Run("structured Buddy focus binds on pokestop scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}`
+		resp := api.Post("/api/pokestop/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("structured Buddy focus binds on combined scan", func(t *testing.T) {
+		body := `{"min":{"lat":0,"lon":0},"max":{"lat":1,"lon":1},"pokestops":{"filters":[{"contest_focus":[{"type":"buddy","min_level":3}]}]}}`
+		resp := api.Post("/api/fort/scan", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("availability advertises showcase focus filtering", func(t *testing.T) {
+		resp := api.Get("/api/pokestop/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var pokestops map[string]any
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &pokestops); err != nil {
+			t.Fatalf("decode pokestop availability: %v", err)
+		}
+		if supported, ok := pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("pokestop availability capability = %v, want true", pokestops["showcase_focus_filter"])
+		}
+
+		resp = api.Get("/api/fort/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("fort availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var forts struct {
+			Pokestops map[string]any `json:"pokestops"`
+		}
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &forts); err != nil {
+			t.Fatalf("decode fort availability: %v", err)
+		}
+		if supported, ok := forts.Pokestops["showcase_focus_filter"].(bool); !ok || !supported {
+			t.Fatalf("nested pokestop capability = %v, want true", forts.Pokestops["showcase_focus_filter"])
 		}
 	})
 
@@ -570,5 +680,53 @@ func TestHumaStationAvailableRoute(t *testing.T) {
 	}
 	if !strings.Contains(resp.Body.String(), `"battles":[]`) {
 		t.Errorf("body missing empty battles array: %s", resp.Body.String())
+	}
+}
+
+// TestHumaStatusRoute covers /api/status: secret-gated like every API route,
+// but NOT gated on fort_in_memory — it exists to report that flag (and the
+// server's scan caps) so consumers can detect capabilities without probing.
+func TestHumaStatusRoute(t *testing.T) {
+	prevSecret := config.Config.ApiSecret
+	prevFim := config.Config.FortInMemory
+	prevMaxP := config.Config.Tuning.MaxPokemonResults
+	prevMaxF := config.Config.Tuning.MaxFortResults
+	config.Config.ApiSecret = "topsecret"
+	config.Config.Tuning.MaxPokemonResults = 3000
+	config.Config.Tuning.MaxFortResults = 4000
+	defer func() {
+		config.Config.ApiSecret = prevSecret
+		config.Config.FortInMemory = prevFim
+		config.Config.Tuning.MaxPokemonResults = prevMaxP
+		config.Config.Tuning.MaxFortResults = prevMaxF
+	}()
+
+	_, api := humatest.New(t, newHumaConfig("test"))
+	api.UseMiddleware(golbatSecretMiddleware(api))
+	registerStatusRoutes(api)
+
+	if resp := api.Get("/api/status"); resp.Code != http.StatusUnauthorized {
+		t.Errorf("no secret: got %d, want 401", resp.Code)
+	}
+
+	config.Config.FortInMemory = false
+	resp := api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim off: got %d, want 200 (status must not be 503-gated); body=%s", resp.Code, resp.Body.String())
+	}
+	if !strings.Contains(resp.Body.String(), `"fort_in_memory":false`) {
+		t.Errorf("fim off body: %s", resp.Body.String())
+	}
+
+	config.Config.FortInMemory = true
+	resp = api.Get("/api/status", "X-Golbat-Secret: topsecret")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
+	}
+	body := resp.Body.String()
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("body missing %s: %s", want, body)
+		}
 	}
 }

@@ -12,9 +12,11 @@ import "github.com/puzpuzpuz/xsync/v4"
 // aggregate (questConditionCount).
 
 type showcaseKey struct {
-	PokemonId int16
-	Form      int16
-	TypeId    int8
+	PokemonId       int16
+	Form            int16
+	TypeId          int8
+	RankingStandard int8
+	Focus           ApiShowcaseFocus
 }
 
 type invasionKey struct {
@@ -30,9 +32,10 @@ type invasionKey struct {
 }
 
 type raidKey struct {
-	RaidLevel int8
-	PokemonId int16
-	Form      int16
+	RaidLevel     int8
+	PokemonId     int16
+	Form          int16
+	TempEvolution int8
 }
 
 type battleKey struct {
@@ -118,14 +121,19 @@ func nullablePokemonForm(id, form int16) (*int16, *int16) {
 
 func observeRaid(fl *FortLookup, now int64) {
 	if fl.RaidLevel > 0 {
-		observeExpiry(raidExpiry, raidKey{fl.RaidLevel, fl.RaidPokemonId, fl.RaidPokemonForm}, fl.RaidEndTimestamp, now)
+		observeExpiry(raidExpiry, raidKey{
+			RaidLevel:     fl.RaidLevel,
+			PokemonId:     fl.RaidPokemonId,
+			Form:          fl.RaidPokemonForm,
+			TempEvolution: fl.RaidPokemonEvolution,
+		}, fl.RaidEndTimestamp, now)
 	}
 }
 
 func readRaids(now int64) []ApiGymRaidAvailable {
 	return readAvailable(raidExpiry, now, func(k raidKey) ApiGymRaidAvailable {
 		id, form := nullablePokemonForm(k.PokemonId, k.Form)
-		return ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: id, Form: form}
+		return ApiGymRaidAvailable{RaidLevel: k.RaidLevel, PokemonId: id, Form: form, TempEvolutionId: k.TempEvolution}
 	})
 }
 
@@ -157,16 +165,28 @@ func readBattles(now int64) []ApiStationBattleAvailable {
 }
 
 // observePokestop records the lure and showcase options active on a pokestop.
-// LureId 0 means no lure; ContestPokemonId 0 means no active showcase — both
-// are gated here since observeExpiry only gates on expiry, not these sentinels.
-func observePokestop(fl *FortLookup, now int64) {
+// LureId 0 means no lure. A showcase requires either a structured focus or one
+// of the legacy pokemon/type mirrors; those sentinels are gated here because
+// observeExpiry itself only checks expiry.
+func observePokestop(fl *FortLookup, focus *ApiShowcaseFocus, now int64) {
 	if fl.LureId != 0 {
 		observeExpiry(lureExpiry, fl.LureId, fl.LureExpireTimestamp, now)
 	}
-	// A showcase is either pokemon-based (ContestPokemonId) or type-based
-	// (ContestPokemonType, pokemon id 0 -> consumer key `h<type>`); surface both.
-	if fl.ContestPokemonId != 0 || fl.ContestPokemonType != 0 {
-		observeExpiry(showcaseExpiry, showcaseKey{fl.ContestPokemonId, fl.ContestPokemonForm, fl.ContestPokemonType}, fl.ShowcaseExpiry, now)
+	// Modern focuses are indexed directly. Keep the legacy pokemon/type mirrors
+	// for old rows and consumers (type-based showcases carry pokemon id 0 ->
+	// consumer key `h<type>`); Buddy focuses intentionally have all three legacy
+	// values unset.
+	if focus != nil || fl.ContestPokemonId != 0 || fl.ContestPokemonType != 0 {
+		key := showcaseKey{
+			PokemonId:       fl.ContestPokemonId,
+			Form:            fl.ContestPokemonForm,
+			TypeId:          fl.ContestPokemonType,
+			RankingStandard: fl.ShowcaseRankingStandard,
+		}
+		if focus != nil {
+			key.Focus = *focus
+		}
+		observeExpiry(showcaseExpiry, key, fl.ShowcaseExpiry, now)
 	}
 }
 
@@ -186,17 +206,26 @@ func readLures(now int64) []ApiPokestopLureAvailable {
 
 func readShowcases(now int64) []ApiPokestopShowcaseAvailable {
 	return readAvailable(showcaseExpiry, now, func(k showcaseKey) ApiPokestopShowcaseAvailable {
-		// A showcase is exactly one of pokemon-based or type-based (observePokestop
-		// gates on ContestPokemonId != 0 || ContestPokemonType != 0). Mirror the DB:
-		// pokemon-based -> pokemon/form set, type null; type-based -> pokemon/form
-		// null, type set.
+		// Reverse the nullable legacy tuple while also returning the structured
+		// focus when the source row carried one.
 		id, form := nullablePokemonForm(k.PokemonId, k.Form)
 		var typeId *int8
 		if k.TypeId != 0 {
 			t := k.TypeId
 			typeId = &t
 		}
-		return ApiPokestopShowcaseAvailable{PokemonId: id, Form: form, TypeId: typeId}
+		var focus *ApiShowcaseFocus
+		if k.Focus != "" {
+			f := k.Focus
+			focus = &f
+		}
+		return ApiPokestopShowcaseAvailable{
+			PokemonId:       id,
+			Form:            form,
+			TypeId:          typeId,
+			RankingStandard: k.RankingStandard,
+			ShowcaseFocus:   focus,
+		}
 	})
 }
 

@@ -19,6 +19,17 @@ At this time this is likely to be mostly development discussion.
 1. copy `config.toml.example` to `config.toml`
 2. `go run .`
 
+Golbat reads `config.toml` from the working directory by default. To load a
+different file, pass `-c` or `--config`:
+
+```
+go run . --config /etc/golbat/config.toml
+```
+
+The default `config.toml` is optional - without it Golbat starts on built-in
+defaults plus any `GOLBAT_*` environment variables. A file passed with
+`-c`/`--config` must exist, otherwise startup fails.
+
 ## Run in pm2
 
 1. `make` 

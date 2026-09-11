@@ -41,36 +41,71 @@ type ApiPvpRankings struct {
 // pokemon scan/search endpoint (v1/v2/v3 and search). Nullable database columns
 // are represented as pointers (nil => JSON null) without omitempty so every key is
 // always present.
+//
+// Field widths match PokemonData's storage widths exactly (e.g. *uint8, *float32),
+// so pokemon.Field.Ptr() assigns directly — no widen/convert step. encoding/json
+// (and the goccy/go-json encoder Huma is configured with) render an integer or a
+// float32 identically regardless of the surrounding Go type's width, so this is a
+// pure type narrowing with no wire-format change (see TestBuildApiPokemonResult_GoldenSnapshot).
+//
+// The timestamps sit outside that rule. ExpireTimestamp, Updated,
+// FirstSeenTimestamp and Changed are all uint32 in storage but int64 here,
+// because Huma derives the OpenAPI format from the Go type and advertises a
+// uint32 as format: int32. A generated client's int32 overflows in January
+// 2038, well inside what the uint32 columns can hold, and the four fields did
+// not even agree with each other about it — first_seen_timestamp was already
+// int64 while expire_timestamp and updated were int32. int64 is the one width
+// that describes all four honestly, and the JSON is unaffected either way: an
+// integer renders the same regardless of the surrounding Go type's width.
+//
+// Widening the Go type is what drops the `minimum: 0` huma used to infer from
+// uint32, so all four carry an explicit `minimum:"0"` tag instead. The bound
+// is real — every one of them is backed by an unsigned column — and losing it
+// was a side effect of the widening rather than part of the point, so the tag
+// puts it back and gets first_seen_timestamp and changed a floor they never
+// advertised in the first place.
+//
+// FirstSeenTimestamp and Changed are assigned via a bare int64(...) cast in
+// buildApiPokemonResult below; ExpireTimestamp and Updated are nullable, so
+// they go through int64PtrFromUint.
+//
+// Two more fields are wide for their own reasons. SpawnId and CellId are wide
+// by storage (both are already null.Value[int64], not a narrowed uint type —
+// see SetSpawnId's and SetCellId's doc comments for why) and so match this
+// response type exactly without narrowing anything; and
+// Capture1/Capture2/Capture3 are wide by design — they don't map to a
+// PokemonData field at all and are always left unset (see
+// buildApiPokemonResult's PARITY comment).
 type ApiPokemonResult struct {
 	Id                      string         `json:"id" doc:"Encounter ID of the pokemon"`
 	PokestopId              *string        `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
 	SpawnId                 *int64         `json:"spawn_id" doc:"Spawnpoint ID for this pokemon, if known"`
 	Lat                     float64        `json:"lat" doc:"Latitude of the pokemon"`
 	Lon                     float64        `json:"lon" doc:"Longitude of the pokemon"`
-	Weight                  *float64       `json:"weight" doc:"Weight of the pokemon"`
-	Size                    *int64         `json:"size" doc:"Size value of the pokemon"`
-	Height                  *float64       `json:"height" doc:"Height of the pokemon"`
-	ExpireTimestamp         *int64         `json:"expire_timestamp" doc:"Unix timestamp when the pokemon despawns"`
-	Updated                 *int64         `json:"updated" doc:"Unix timestamp when the record was last updated"`
+	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
+	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
+	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
+	ExpireTimestamp         *int64         `json:"expire_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon despawns"`
+	Updated                 *int64         `json:"updated" minimum:"0" doc:"Unix timestamp when the record was last updated"`
 	PokemonId               int16          `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
-	Move1                   *int64         `json:"move_1" doc:"Fast move ID"`
-	Move2                   *int64         `json:"move_2" doc:"Charge move ID"`
-	Gender                  *int64         `json:"gender" doc:"Gender of the pokemon"`
-	Cp                      *int64         `json:"cp" doc:"Combat power of the pokemon"`
-	AtkIv                   *int64         `json:"atk_iv" doc:"Attack individual value"`
-	DefIv                   *int64         `json:"def_iv" doc:"Defense individual value"`
-	StaIv                   *int64         `json:"sta_iv" doc:"Stamina individual value"`
-	Iv                      *float64       `json:"iv" doc:"Overall IV percentage"`
-	Form                    *int64         `json:"form" doc:"Form ID of the pokemon"`
-	Level                   *int64         `json:"level" doc:"Level of the pokemon"`
-	Weather                 *int64         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
-	Costume                 *int64         `json:"costume" doc:"Costume ID of the pokemon"`
-	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" doc:"Unix timestamp when the pokemon was first seen"`
-	Changed                 int64          `json:"changed" doc:"Unix timestamp when the pokemon last changed"`
+	Move1                   *uint16        `json:"move_1" doc:"Fast move ID"`
+	Move2                   *uint16        `json:"move_2" doc:"Charge move ID"`
+	Gender                  *uint8         `json:"gender" doc:"Gender of the pokemon"`
+	Cp                      *uint16        `json:"cp" doc:"Combat power of the pokemon"`
+	AtkIv                   *uint8         `json:"atk_iv" doc:"Attack individual value"`
+	DefIv                   *uint8         `json:"def_iv" doc:"Defense individual value"`
+	StaIv                   *uint8         `json:"sta_iv" doc:"Stamina individual value"`
+	Iv                      *float32       `json:"iv" doc:"Overall IV percentage"`
+	Form                    *uint16        `json:"form" doc:"Form ID of the pokemon"`
+	Level                   *uint8         `json:"level" doc:"Level of the pokemon"`
+	Weather                 *uint8         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
+	Costume                 *uint8         `json:"costume" doc:"Costume ID of the pokemon"`
+	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon was first seen"`
+	Changed                 int64          `json:"changed" minimum:"0" doc:"Unix timestamp when the pokemon last changed"`
 	CellId                  *int64         `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
 	ExpireTimestampVerified bool           `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
-	DisplayPokemonId        *int64         `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
-	DisplayPokemonForm      *int64         `json:"display_pokemon_form" doc:"Displayed pokemon form"`
+	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
+	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
 	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
 	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
 	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
@@ -89,17 +124,18 @@ type ApiPokemonResult struct {
 // null and is_event: 0. Replicating that preserves wire compatibility — do not
 // populate them without coordinating a wire change.
 func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
+	pokestopId := pokemon.PokestopId.Ptr()
 	return ApiPokemonResult{
 		Id:                      pokemon.Id.String(),
-		PokestopId:              pokemon.PokestopId.Ptr(),
+		PokestopId:              pokestopId,
 		SpawnId:                 pokemon.SpawnId.Ptr(),
 		Lat:                     pokemon.Lat,
 		Lon:                     pokemon.Lon,
 		Weight:                  pokemon.Weight.Ptr(),
 		Size:                    pokemon.Size.Ptr(),
 		Height:                  pokemon.Height.Ptr(),
-		ExpireTimestamp:         pokemon.ExpireTimestamp.Ptr(),
-		Updated:                 pokemon.Updated.Ptr(),
+		ExpireTimestamp:         int64PtrFromUint(pokemon.ExpireTimestamp),
+		Updated:                 int64PtrFromUint(pokemon.Updated),
 		PokemonId:               pokemon.PokemonId,
 		Move1:                   pokemon.Move1.Ptr(),
 		Move2:                   pokemon.Move2.Ptr(),
@@ -113,8 +149,8 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 		Level:                   pokemon.Level.Ptr(),
 		Weather:                 pokemon.Weather.Ptr(),
 		Costume:                 pokemon.Costume.Ptr(),
-		FirstSeenTimestamp:      pokemon.FirstSeenTimestamp,
-		Changed:                 pokemon.Changed,
+		FirstSeenTimestamp:      int64(pokemon.FirstSeenTimestamp),
+		Changed:                 int64(pokemon.Changed),
 		CellId:                  pokemon.CellId.Ptr(),
 		ExpireTimestampVerified: pokemon.ExpireTimestampVerified,
 		DisplayPokemonId:        pokemon.DisplayPokemonId.Ptr(),
@@ -130,12 +166,13 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 }
 
 // buildApiPvpRankings queries ohbem for PVP rankings. Returns a zero value when
-// PVP is disabled (ohbem == nil) or on query error.
+// PVP is disabled (no ohbem instance) or on query error.
 func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
-	if ohbem == nil {
+	o := ohbem.Load()
+	if o == nil {
 		return ApiPvpRankings{}
 	}
-	pvp, err := ohbem.QueryPvPRank(int(pokemon.PokemonId),
+	pvp, err := o.QueryPvPRank(int(pokemon.PokemonId),
 		int(pokemon.Form.ValueOrZero()),
 		int(pokemon.Costume.ValueOrZero()),
 		int(pokemon.Gender.ValueOrZero()),
@@ -147,7 +184,7 @@ func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 		return ApiPvpRankings{}
 	}
 	// The hardcoded little/great/ultra keys correspond to the leagues configured
-	// in the ohbem init in decoder/main.go (~line 209). Adding a league there must
+	// in newOhbemInstance in decoder/main.go. Adding a league there must
 	// also be reflected here (and in the ApiPvpRankings struct).
 	return ApiPvpRankings{
 		Little: convertApiPvpEntries(pvp["little"]),
@@ -159,10 +196,11 @@ func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 // ApiPokemonScanResultV3 is the v3-only response envelope wrapping the matched
 // pokemon together with the spatial-index candidate counts.
 type ApiPokemonScanResultV3 struct {
-	Pokemon  []ApiPokemonResult `json:"pokemon" doc:"Matched pokemon"`
-	Examined int                `json:"examined" doc:"Candidates examined from the spatial index"`
-	Skipped  int                `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
-	Total    int                `json:"total" doc:"Total candidates in the bounding box"`
+	Pokemon      []ApiPokemonResult `json:"pokemon" doc:"Matched pokemon"`
+	Examined     int                `json:"examined" doc:"Candidates examined from the spatial index"`
+	Skipped      int                `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
+	Total        int                `json:"total" doc:"Total candidates in the bounding box"`
+	LimitReached bool               `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
 }
 
 // GetPokemonInArea2Clean runs the v2 rtree/DNF search and returns a bare array of
@@ -177,10 +215,11 @@ func GetPokemonInArea2Clean(req ApiPokemonScan2) []ApiPokemonResult {
 func GetPokemonInArea3Clean(req ApiPokemonScan3) *ApiPokemonScanResultV3 {
 	keys, examined, skipped, total := internalGetPokemonInArea3(req)
 	return &ApiPokemonScanResultV3{
-		Pokemon:  collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean"),
-		Examined: examined,
-		Skipped:  skipped,
-		Total:    total,
+		Pokemon:      collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean"),
+		Examined:     examined,
+		Skipped:      skipped,
+		Total:        total,
+		LimitReached: pokemonScanLimitReached(req, len(keys)),
 	}
 }
 
@@ -192,7 +231,7 @@ func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
 	for _, key := range keys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
 		if pokemon != nil {
-			if pokemon.ExpireTimestamp.ValueOrZero() > nowUnix {
+			if int64OrZero(pokemon.ExpireTimestamp) > nowUnix {
 				results = append(results, buildApiPokemonResult(pokemon))
 			}
 			unlock()

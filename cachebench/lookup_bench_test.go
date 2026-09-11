@@ -40,7 +40,6 @@ type lkPokemon struct {
 	Level              int8
 	Cp                 int16
 	Gender             int8
-	Xxs, Xxl           bool
 	Iv                 int8
 	Size               int8
 }
