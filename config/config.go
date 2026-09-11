@@ -18,6 +18,7 @@ type configDefinition struct {
 	PokemonMemoryOnly       bool           `koanf:"pokemon_memory_only"`
 	PokemonInternalToDb     bool           `koanf:"pokemon_internal_to_db"`
 	PreserveInMemoryPokemon bool           `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
+	StoreUsername           bool           `koanf:"store_username"`   // Persist the reporting account on the pokemon row (default off)
 	Preload                 bool           `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
 	FortInMemory            bool           `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
 	Cleanup                 cleanup        `koanf:"cleanup"`

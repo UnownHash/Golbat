@@ -16,10 +16,11 @@ import (
 // read-modify-write atomic per key: after any concurrent pair, BOTH
 // halves' latest writes must be present.
 func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
-	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
 	initQuestConditions() // updatePokestopLookup reconciles quest conditions
 
-	const id = "compute-race-stop"
+	const idStr = "00000000000000000000000000000001"
+	id := mustFortId(t, idStr)
 	stop := &Pokestop{PokestopData: PokestopData{
 		Id: id, Lat: 50, Lon: 4,
 		QuestRewardType: null.IntFrom(7),

@@ -51,6 +51,11 @@ type StatsCollector interface {
 	UpdateMaxBattleCount(areas []geo.AreaName, level int64)
 	IncFortChange(changeType string)
 
+	// IncFieldClamped counts a value that arrived outside the range of the
+	// column it is stored in, and was clamped to the boundary. Non-zero means
+	// either the game protocol changed or a decode path is wrong.
+	IncFieldClamped(field string)
+
 	// Hot-path health metrics
 	SetWorkerBacklog(worker string, depth float64)
 	SetRawProcessingWaiting(waiting float64)

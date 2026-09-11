@@ -34,7 +34,15 @@ import (
 
 var db *sqlx.DB
 var dbDetails db2.DbDetails
-var statsCollector stats_collector.StatsCollector
+
+// statsCollector is seeded with a noop in its own initializer, matching
+// decoder's and db's: decode.go, routes.go and grpc_server_raw.go all call
+// straight through with no nil check. Nothing reaches those before main()
+// assigns the real collector below — the HTTP/gRPC listeners that would
+// drive them start well after this line runs — but the guarantee is
+// cheaper to hold than to keep re-deriving that reachability argument by
+// hand every time one of those call sites gets a new caller.
+var statsCollector stats_collector.StatsCollector = stats_collector.NewNoopStatsCollector()
 
 func main() {
 	var wg sync.WaitGroup

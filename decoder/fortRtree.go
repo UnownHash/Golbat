@@ -66,14 +66,14 @@ type FortLookup struct {
 	TotalStationedGmax  int16
 }
 
-var fortLookupCache *xsync.Map[string, FortLookup]
+var fortLookupCache *xsync.Map[FortId, FortLookup]
 var fortTreeMutex sync.RWMutex
-var fortTree rtree.RTreeG[string]
+var fortTree rtree.RTreeG[FortId]
 
-var fortTreeSnapshot atomic.Pointer[treeSnapshot[string]]
+var fortTreeSnapshot atomic.Pointer[treeSnapshot[FortId]]
 
 // getFortTreeSnapshot: see refreshTreeSnapshot.
-func getFortTreeSnapshot() *rtree.RTreeG[string] {
+func getFortTreeSnapshot() *rtree.RTreeG[FortId] {
 	return refreshTreeSnapshot(&fortTreeSnapshot, &fortTreeMutex, &fortTree)
 }
 
@@ -81,8 +81,8 @@ func initFortRtree() {
 	// Fort tree churn is a fraction of pokemon's, and this evictor's only
 	// producer drops on full (deferFortEviction) — 64k of headroom is
 	// plenty and saves ~7.5 MiB vs sharing the pokemon constant.
-	fortTreeEvictor = newTreeEvictor[string]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
-	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	fortTreeEvictor = newTreeEvictor[FortId]("fort", 65536, treeEvictorBatchSize, flushFortTreeEvictions)
+	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
 	initQuestConditions()
 	initFortAvailability()
 
@@ -91,29 +91,28 @@ func initFortRtree() {
 	// stationCache are created by initDataCache before calling this
 	// function), so callbacks can never observe a nil evictor or lookup
 	// cache. Mirrors the structure of initPokemonRtree.
+	//
+	// Pokestop/gym/station cache keys are all FortId natively, so eviction
+	// callbacks hand the key straight to the FortId-keyed eviction path.
 	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(_ string, p *Pokestop, _ ottercache.EvictionReason) {
+		pokestopCache.OnEviction(func(_ FortId, p *Pokestop, _ ottercache.EvictionReason) {
 			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
 		})
-		gymCache.OnEviction(func(_ string, g *Gym, _ ottercache.EvictionReason) {
+		gymCache.OnEviction(func(_ FortId, g *Gym, _ ottercache.EvictionReason) {
 			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
 		})
 	}
 
-	stationCache.OnEviction(func(stationId string, s *Station, _ ottercache.EvictionReason) {
+	stationCache.OnEviction(func(stationId FortId, s *Station, _ ottercache.EvictionReason) {
 		clearStationBattleState(stationId)
 		if config.Config.FortInMemory {
-			deferFortEviction(STATION, s.Id, s.Lat, s.Lon)
+			deferFortEviction(STATION, stationId, s.Lat, s.Lon)
 		}
 	})
 }
 
-type IdRecord struct {
-	Id string `db:"id"`
-}
-
 // genericUpdateFort handles rtree updates for fort location changes and deletions.
-func genericUpdateFort(id string, lat float64, lon float64, deleted bool) {
+func genericUpdateFort(id FortId, lat float64, lon float64, deleted bool) {
 	oldFort, inMap := fortLookupCache.Load(id)
 
 	if deleted {
@@ -187,6 +186,8 @@ func fortRtreeUpdateStationOnGet(station *Station) {
 }
 
 func updatePokestopLookup(pokestop *Pokestop) {
+	id := pokestop.Id
+
 	var showcaseFocus *ApiShowcaseFocus
 	var showcaseBuddyMinLevel int8
 	if pokestop.ShowcaseFocus.Valid {
@@ -203,7 +204,7 @@ func updatePokestopLookup(pokestop *Pokestop) {
 	// each preserving the other's fields. A plain Load->Store pair can
 	// interleave and clobber. Keep the callback to field copies — the
 	// showcase-rankings JSON parse is hoisted out.
-	fortLookupCache.Compute(pokestop.Id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+	fortLookupCache.Compute(id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
 		nl := FortLookup{
 			FortType:                   POKESTOP,
 			Lat:                        pokestop.Lat,
@@ -250,10 +251,11 @@ func updatePokestopLookup(pokestop *Pokestop) {
 	// cache-miss load, every save (incl. quest change), and startup preload.
 	// FortLookup omits quest title/target, so the previous keys are recovered
 	// from questFortKeys rather than the overwritten FortLookup.
-	reconcileFortQuestConditions(pokestop.Id, questConditionKeysFromPokestop(pokestop))
+	reconcileFortQuestConditions(id, questConditionKeysFromPokestop(pokestop))
 }
 
 func updateGymLookup(gym *Gym) {
+	id := gym.Id
 	now := time.Now().Unix()
 	fl := FortLookup{
 		FortType:             GYM,
@@ -269,15 +271,15 @@ func updateGymLookup(gym *Gym) {
 		RaidPokemonForm:      int16(gym.RaidPokemonForm.ValueOrZero()),
 		RaidPokemonEvolution: int8(gym.RaidPokemonEvolution.ValueOrZero()),
 	}
-	fortLookupCache.Store(gym.Id, fl)
+	fortLookupCache.Store(id, fl)
 	observeRaid(&fl, now)
 }
 
 func updateStationLookup(station *Station) {
-	updateStationLookupWithBattles(station, getKnownStationBattles(station.Id, time.Now().Unix()))
+	updateStationLookupWithBattles(station.Id, station, getKnownStationBattles(station.Id, time.Now().Unix()))
 }
 
-func updateStationLookupWithBattles(station *Station, stationBattles []StationBattleData) {
+func updateStationLookupWithBattles(id FortId, station *Station, stationBattles []StationBattleData) {
 	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
 		FortType:            STATION,
@@ -288,14 +290,14 @@ func updateStationLookupWithBattles(station *Station, stationBattles []StationBa
 		StationEndTimestamp: station.EndTime,
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
-	fortLookupCache.Store(station.Id, lookup)
+	fortLookupCache.Store(id, lookup)
 	observeStationBattles(&lookup, time.Now().Unix())
 }
 
 // updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup
 // incidents slice (keyed by DisplayType+Character, unique per active incident on a stop),
 // pruning any expired entries in the same pass.
-func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
+func updatePokestopIncidentLookup(pokestopId FortId, incident *Incident) {
 	now := time.Now().Unix()
 	updated := FortLookupIncident{
 		Id:              incident.Id,
@@ -338,16 +340,16 @@ func updatePokestopIncidentLookup(pokestopId string, incident *Incident) {
 	})
 }
 
-func addFortToTree(id string, lat float64, lon float64) {
+func addFortToTree(id FortId, lat float64, lon float64) {
 	fortTreeMutex.Lock()
 	fortTree.Insert([2]float64{lon, lat}, [2]float64{lon, lat}, id)
 	fortTreeMutex.Unlock()
 }
 
-var fortTreeEvictor *treeEvictor[string]
+var fortTreeEvictor *treeEvictor[FortId]
 
 // flushFortTreeEvictions: see flushTreeEvictions.
-func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
+func flushFortTreeEvictions(entries []treeEvictionEntry[FortId]) {
 	flushTreeEvictions(&fortTreeMutex, &fortTree, entries)
 }
 
@@ -362,7 +364,7 @@ func flushFortTreeEvictions(entries []treeEvictionEntry[string]) {
 //   - lookup entry belongs to a different fort type → the fort converted
 //     (pokestop↔gym) and this is the stale counterpart's cache entry
 //     expiring; the live counterpart owns the lookup and tree point now.
-func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
+func deferFortEviction(expected FortType, fortId FortId, lat, lon float64) {
 	// A pokestop leaving the cache must drop its quest-condition contribution
 	// whether its FortLookup entry is still the resident pokestop one (matched,
 	// deleted just below), was overwritten by a converted gym/station
@@ -385,7 +387,7 @@ func deferFortEviction(expected FortType, fortId string, lat, lon float64) {
 	fortTreeEvictor.TryEnqueue(fortId, lat, lon)
 }
 
-func removeFortFromTree(fortId string, lat, lon float64) {
+func removeFortFromTree(fortId FortId, lat, lon float64) {
 	fortTreeMutex.Lock()
 	beforeLen := fortTree.Len()
 	fortTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, fortId)
@@ -398,15 +400,15 @@ func removeFortFromTree(fortId string, lat, lon float64) {
 }
 
 // GetFortLookup returns the FortLookup for the given fort ID, if it exists
-func GetFortLookup(fortId string) (FortLookup, bool) {
+func GetFortLookup(fortId FortId) (FortLookup, bool) {
 	return fortLookupCache.Load(fortId)
 }
 
 // GetFortsInBounds returns all fort IDs within the given bounding box
-func GetFortsInBounds(minLat, minLon, maxLat, maxLon float64) []string {
-	var results []string
+func GetFortsInBounds(minLat, minLon, maxLat, maxLon float64) []FortId {
+	var results []FortId
 	fortTreeMutex.RLock()
-	fortTree.Search([2]float64{minLon, minLat}, [2]float64{maxLon, maxLat}, func(min, max [2]float64, data string) bool {
+	fortTree.Search([2]float64{minLon, minLat}, [2]float64{maxLon, maxLat}, func(min, max [2]float64, data FortId) bool {
 		results = append(results, data)
 		return true
 	})

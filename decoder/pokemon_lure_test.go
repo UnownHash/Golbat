@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -11,8 +12,6 @@ import (
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/webhooks"
-
-	"github.com/guregu/null/v6"
 )
 
 type recordedWebhook struct {
@@ -55,6 +54,14 @@ func lureTestSetup(t *testing.T) *testWebhookSink {
 	return sink
 }
 
+// testFortIdStr returns a deterministic, valid FortId string derived from n
+// (the canonical 32-hex-digit form), so lure tests that thread a fort id
+// string through the raw proto ingest boundary can name distinct forts
+// cheaply without tripping ParseFortId's structural validation.
+func testFortIdStr(n uint64) string {
+	return fmt.Sprintf("%032x", n)
+}
+
 func testRawMapPokemon(encId uint64, fortId string, lat, lon float64, expireMs int64) RawMapPokemonData {
 	return RawMapPokemonData{
 		Cell:      5000000000000000000,
@@ -78,7 +85,7 @@ func TestUpdateFromMapPlacesNewRecordFromCapturedFort(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(910101)
 	expireMs := time.Now().UnixMilli() + 120_000
-	raw := testRawMapPokemon(encId, "lure-fort-910101", 51.5007, -0.1246, expireMs)
+	raw := testRawMapPokemon(encId, testFortIdStr(910101), 51.5007, -0.1246, expireMs)
 
 	pokemon, unlock, err := getOrCreatePokemonRecord(context.Background(), db.DbDetails{}, encId, "test")
 	if err != nil {
@@ -89,19 +96,19 @@ func TestUpdateFromMapPlacesNewRecordFromCapturedFort(t *testing.T) {
 	if !saveNeeded {
 		t.Errorf("updateFromMap on new record = false, want true")
 	}
-	if got := pokemon.PokestopId.ValueOrZero(); got != "lure-fort-910101" {
-		t.Errorf("PokestopId = %q, want lure-fort-910101", got)
+	if got := pokemon.PokestopId.String(); got != testFortIdStr(910101) {
+		t.Errorf("PokestopId = %q, want %q", got, testFortIdStr(910101))
 	}
 	if pokemon.Lat != 51.5007 || pokemon.Lon != -0.1246 {
 		t.Errorf("Lat/Lon = %v/%v, want 51.5007/-0.1246", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureWild {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureWild)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureWild.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureWild.String())
 	}
 	if !pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = false, want true (GMO supplied ExpirationTimeMs)")
 	}
-	if got := pokemon.ExpireTimestamp.ValueOrZero(); got != expireMs/1000 {
+	if got := int64(pokemon.ExpireTimestamp.ValueOrZero()); got != expireMs/1000 {
 		t.Errorf("ExpireTimestamp = %d, want %d", got, expireMs/1000)
 	}
 	unlock()
@@ -114,7 +121,7 @@ func TestUpdateFromMapMergeAddsVerifiedExpiryOnce(t *testing.T) {
 	const encId = uint64(910102)
 
 	// First sighting carries no expiry -> unverified record.
-	noExpiry := testRawMapPokemon(encId, "lure-fort-910102", 51.5, -0.12, 0)
+	noExpiry := testRawMapPokemon(encId, testFortIdStr(910102), 51.5, -0.12, 0)
 	pokemon, unlock, err := getOrCreatePokemonRecord(context.Background(), db.DbDetails{}, encId, "test")
 	if err != nil {
 		t.Fatalf("getOrCreatePokemonRecord: %v", err)
@@ -132,13 +139,13 @@ func TestUpdateFromMapMergeAddsVerifiedExpiryOnce(t *testing.T) {
 
 	// Second sighting supplies the despawn time.
 	expireMs := time.Now().UnixMilli() + 90_000
-	withExpiry := testRawMapPokemon(encId, "lure-fort-910102", 51.5, -0.12, expireMs)
+	withExpiry := testRawMapPokemon(encId, testFortIdStr(910102), 51.5, -0.12, expireMs)
 	if !pokemon.updateFromMap(context.Background(), db.DbDetails{}, withExpiry, nil, "tester") {
 		t.Errorf("merge updateFromMap = false, want true (expiry contributed)")
 	}
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
 
 	// Identical replay: nothing left to contribute.
@@ -157,14 +164,14 @@ func TestUpdateFromMapLeavesNonLureRecordsAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("getOrCreatePokemonRecord: %v", err)
 	}
-	pokemon.SetSeenType(null.StringFrom(SeenType_Wild))
+	pokemon.SetSeenType(SeenTypeCodeWild)
 	pokemon.newRecord = false
 
-	raw := testRawMapPokemon(encId, "lure-fort-910103", 51.5, -0.12, time.Now().UnixMilli()+90_000)
+	raw := testRawMapPokemon(encId, testFortIdStr(910103), 51.5, -0.12, time.Now().UnixMilli()+90_000)
 	if pokemon.updateFromMap(context.Background(), db.DbDetails{}, raw, nil, "tester") {
 		t.Errorf("updateFromMap on wild record = true, want false")
 	}
-	if pokemon.PokestopId.Valid {
+	if pokemon.PokestopId.Valid() {
 		t.Errorf("PokestopId set on wild record, want untouched")
 	}
 	unlock()
@@ -176,7 +183,7 @@ func TestUpdatePokemonBatchPlacesLureWithUnknownFort(t *testing.T) {
 	sink := lureTestSetup(t)
 	const encId = uint64(910104)
 	expireMs := time.Now().UnixMilli() + 120_000
-	raw := testRawMapPokemon(encId, "lure-fort-910104", 48.8584, 2.2945, expireMs)
+	raw := testRawMapPokemon(encId, testFortIdStr(910104), 48.8584, 2.2945, expireMs)
 
 	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{}, nil, nil,
 		[]RawMapPokemonData{raw}, nil, "tester")
@@ -207,6 +214,15 @@ func TestUpdatePokemonBatchPlacesLureWithUnknownFort(t *testing.T) {
 	if hook.DisappearTime != expireMs/1000 {
 		t.Errorf("webhook DisappearTime = %d, want %d", hook.DisappearTime, expireMs/1000)
 	}
+	// The fort is real (parses) but has no cached/DB pokestop record, so the
+	// webhook must carry the canonical id string with a placeholder name —
+	// not the "None"/nil absent-fort shape TestCreatePokemonWebhooksPokestopIdSentinelForAbsentFort covers.
+	if want := testFortIdStr(910104); hook.PokestopId != want {
+		t.Errorf("webhook PokestopId = %q, want %q", hook.PokestopId, want)
+	}
+	if hook.PokestopName == nil || *hook.PokestopName != "Unknown" {
+		t.Errorf("webhook PokestopName = %v, want \"Unknown\"", hook.PokestopName)
+	}
 }
 
 func testDiskEncounterProtos(encId uint64, fortId string, lat, lon float64) (*pogo.DiskEncounterProto, *pogo.DiskEncounterOutProto) {
@@ -236,7 +252,7 @@ func testDiskEncounterProtos(encId uint64, fortId string, lat, lon float64) (*po
 func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
 	sink := lureTestSetup(t)
 	const encId = uint64(910105)
-	request, response := testDiskEncounterProtos(encId, "lure-fort-910105", 40.7580, -73.9855)
+	request, response := testDiskEncounterProtos(encId, testFortIdStr(910105), 40.7580, -73.9855)
 
 	before := time.Now().Unix()
 	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
@@ -246,19 +262,19 @@ func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
 	if pokemon == nil {
 		t.Fatalf("pokemon %d not in cache after disk encounter", encId)
 	}
-	if got := pokemon.PokestopId.ValueOrZero(); got != "lure-fort-910105" {
-		t.Errorf("PokestopId = %q, want lure-fort-910105", got)
+	if got := pokemon.PokestopId.String(); got != testFortIdStr(910105) {
+		t.Errorf("PokestopId = %q, want %q", got, testFortIdStr(910105))
 	}
 	if pokemon.Lat != 40.7580 || pokemon.Lon != -73.9855 {
 		t.Errorf("Lat/Lon = %v/%v, want request coords 40.7580/-73.9855", pokemon.Lat, pokemon.Lon)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if pokemon.ExpireTimestampVerified {
 		t.Errorf("ExpireTimestampVerified = true, want false (estimate)")
 	}
-	exp := pokemon.ExpireTimestamp.ValueOrZero()
+	exp := int64(pokemon.ExpireTimestamp.ValueOrZero())
 	if exp < before+lureSpawnLifetimeSeconds || exp > after+lureSpawnLifetimeSeconds {
 		t.Errorf("ExpireTimestamp = %d, want now+%ds (in [%d, %d])",
 			exp, lureSpawnLifetimeSeconds, before+lureSpawnLifetimeSeconds, after+lureSpawnLifetimeSeconds)
@@ -289,11 +305,11 @@ func TestDiskEncounterFirstCreatesPlacedRecord(t *testing.T) {
 func TestGmoAfterDiskEncounterContributesVerifiedExpiry(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(910106)
-	request, response := testDiskEncounterProtos(encId, "lure-fort-910106", 40.0, -73.0)
+	request, response := testDiskEncounterProtos(encId, testFortIdStr(910106), 40.0, -73.0)
 	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
 
 	expireMs := time.Now().UnixMilli() + 100_000
-	raw := testRawMapPokemon(encId, "lure-fort-910106", 40.0, -73.0, expireMs)
+	raw := testRawMapPokemon(encId, testFortIdStr(910106), 40.0, -73.0, expireMs)
 	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{}, nil, nil,
 		[]RawMapPokemonData{raw}, nil, "tester")
 
@@ -301,12 +317,12 @@ func TestGmoAfterDiskEncounterContributesVerifiedExpiry(t *testing.T) {
 	if pokemon == nil {
 		t.Fatalf("pokemon %d missing", encId)
 	}
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q (must not downgrade)", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15 (encounter data must survive the GMO merge)", got)
@@ -320,27 +336,27 @@ func TestDiskEncounterAfterGmoUpgradesRecord(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(910107)
 	expireMs := time.Now().UnixMilli() + 110_000
-	raw := testRawMapPokemon(encId, "lure-fort-910107", 35.6595, 139.7005, expireMs)
+	raw := testRawMapPokemon(encId, testFortIdStr(910107), 35.6595, 139.7005, expireMs)
 	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{}, nil, nil,
 		[]RawMapPokemonData{raw}, nil, "tester")
 
-	request, response := testDiskEncounterProtos(encId, "lure-fort-910107", 35.6595, 139.7005)
+	request, response := testDiskEncounterProtos(encId, testFortIdStr(910107), 35.6595, 139.7005)
 	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
 
 	pokemon, unlock, _ := peekPokemonRecordReadOnly(encId, "test")
 	if pokemon == nil {
 		t.Fatalf("pokemon %d missing", encId)
 	}
-	if got := pokemon.SeenType.ValueOrZero(); got != SeenType_LureEncounter {
-		t.Errorf("SeenType = %q, want %q", got, SeenType_LureEncounter)
+	if got := pokemon.SeenType.ValueOrZero(); got != SeenTypeCodeLureEncounter.String() {
+		t.Errorf("SeenType = %q, want %q", got, SeenTypeCodeLureEncounter.String())
 	}
 	if got := pokemon.AtkIv.ValueOrZero(); got != 15 {
 		t.Errorf("AtkIv = %d, want 15", got)
 	}
 	// GMO-verified expiry must survive: the estimate is only for new records.
-	if !pokemon.ExpireTimestampVerified || pokemon.ExpireTimestamp.ValueOrZero() != expireMs/1000 {
+	if !pokemon.ExpireTimestampVerified || int64(pokemon.ExpireTimestamp.ValueOrZero()) != expireMs/1000 {
 		t.Errorf("expiry = %d verified=%v, want %d verified=true (estimate must not overwrite)",
-			pokemon.ExpireTimestamp.ValueOrZero(), pokemon.ExpireTimestampVerified, expireMs/1000)
+			int64(pokemon.ExpireTimestamp.ValueOrZero()), pokemon.ExpireTimestampVerified, expireMs/1000)
 	}
 	unlock()
 }
@@ -350,11 +366,50 @@ func TestDiskEncounterAfterGmoUpgradesRecord(t *testing.T) {
 func TestCollectApiPokemonResultsIncludesEstimatedExpiry(t *testing.T) {
 	lureTestSetup(t)
 	const encId = uint64(910108)
-	request, response := testDiskEncounterProtos(encId, "lure-fort-910108", 40.1, -73.1)
+	request, response := testDiskEncounterProtos(encId, testFortIdStr(910108), 40.1, -73.1)
 	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
 
 	results := collectApiPokemonResults([]uint64{encId}, "test")
 	if len(results) != 1 {
 		t.Fatalf("collectApiPokemonResults returned %d results, want 1", len(results))
+	}
+}
+
+// createPokemonWebhooks must keep emitting the literal "None" sentinel (not
+// "", not the FortId zero value's own empty String()) for a pokemon with no
+// associated fort, and leave PokestopName nil rather than "Unknown" — that
+// wire format predates the FortId conversion and is a hard constraint on it.
+func TestCreatePokemonWebhooksPokestopIdSentinelForAbsentFort(t *testing.T) {
+	sink := lureTestSetup(t)
+	const encId = uint64(910109)
+
+	pokemon, unlock, err := getOrCreatePokemonRecord(context.Background(), db.DbDetails{}, encId, "test")
+	if err != nil {
+		t.Fatalf("getOrCreatePokemonRecord: %v", err)
+	}
+	pokemon.SetPokemonId(25)
+	pokemon.SetLat(10)
+	pokemon.SetLon(20)
+	pokemon.SetSeenType(SeenTypeCodeWild)
+
+	// Matches production usage in savePokemonRecordAsAtTime: the entity
+	// lock is held across the call, since createPokemonWebhooks reads
+	// pokemon fields without locking internally.
+	createPokemonWebhooks(context.Background(), db.DbDetails{}, pokemon, nil, "")
+	unlock()
+
+	hooks := sink.drain()
+	if len(hooks) == 0 {
+		t.Fatalf("no webhook emitted for new pokemon record")
+	}
+	hook, ok := hooks[0].message.(PokemonWebhook)
+	if !ok {
+		t.Fatalf("webhook message type %T, want PokemonWebhook", hooks[0].message)
+	}
+	if hook.PokestopId != "None" {
+		t.Errorf("PokestopId = %q, want %q (no fort associated)", hook.PokestopId, "None")
+	}
+	if hook.PokestopName != nil {
+		t.Errorf("PokestopName = %q, want nil", *hook.PokestopName)
 	}
 }

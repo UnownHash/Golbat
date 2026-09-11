@@ -10,8 +10,8 @@ import (
 // updatePokestopIncidentLookup must carry the incident Id onto the FortLookup
 // projection so the scan can fetch the whole incident row from incidentCache.
 func TestUpdatePokestopIncidentLookupCarriesId(t *testing.T) {
-	fortLookupCache = xsync.NewMap[string, FortLookup]()
-	const id = "stop-1"
+	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
+	id := mustFortId(t, "00000000000000000000000000000001")
 	fortLookupCache.Store(id, FortLookup{FortType: POKESTOP, Lat: 1, Lon: 2})
 
 	inc := &Incident{IncidentData: IncidentData{

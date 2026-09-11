@@ -20,9 +20,9 @@ func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
 	oldMax := config.Config.Tuning.MaxFortResults
 	fortTreeMutex.Lock()
 	oldTree := fortTree
-	fortTree = rtree.RTreeG[string]{}
+	fortTree = rtree.RTreeG[FortId]{}
 	fortTreeMutex.Unlock()
-	fortLookupCache = xsync.NewMap[string, FortLookup]()
+	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
 	fortTreeSnapshot.Store(nil)
 	config.Config.Tuning.MaxFortResults = 1
 	t.Cleanup(func() {
@@ -38,7 +38,7 @@ func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
 	const count = 8
 	fortTreeMutex.Lock()
 	for i := 0; i < count; i++ {
-		id := fmt.Sprintf("buddy-cap-%d", i)
+		id := mustFortId(t, fmt.Sprintf("%032x", i+1))
 		lon := -70.0 + float64(i)/1000
 		lat := 40.0
 		fortTree.Insert([2]float64{lon, lat}, [2]float64{lon, lat}, id)
@@ -56,8 +56,8 @@ func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
 	// Discover the snapshot's actual traversal order, then put the sole exact
 	// match last. The production calls below reuse this same snapshot.
 	snapshot := getFortTreeSnapshot()
-	order := make([]string, 0, count)
-	snapshot.Search([2]float64{-71, 39}, [2]float64{-69, 41}, func(_, _ [2]float64, id string) bool {
+	order := make([]FortId, 0, count)
+	snapshot.Search([2]float64{-71, 39}, [2]float64{-69, 41}, func(_, _ [2]float64, id FortId) bool {
 		order = append(order, id)
 		return true
 	})

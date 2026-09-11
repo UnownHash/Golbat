@@ -45,7 +45,7 @@ func calculatePowerUpPoints(fortData *pogo.PokemonFortProto) (null.Int, null.Int
 	return powerUpLevel, powerUpEndTimestamp
 }
 
-func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64, timestampMs int64) *Gym {
+func (gym *Gym) updateGymFromFort(fortId FortId, fortData *pogo.PokemonFortProto, cellId uint64, timestampMs int64) *Gym {
 	type pokemonDisplay struct {
 		Form                  int    `json:"form,omitempty"`
 		Costume               int    `json:"costume,omitempty"`
@@ -57,7 +57,7 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 		Badge                 int    `json:"badge,omitempty"`
 		Background            *int64 `json:"background,omitempty"`
 	}
-	gym.SetId(fortData.FortId)
+	gym.SetId(fortId)
 	gym.SetLat(fortData.Latitude)
 	gym.SetLon(fortData.Longitude)
 	gym.SetEnabled(null.IntFrom(util.BoolToInt[int64](fortData.Enabled)))
@@ -174,8 +174,8 @@ func (gym *Gym) updateGymFromFort(fortData *pogo.PokemonFortProto, cellId uint64
 	return gym
 }
 
-func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym {
-	gym.SetId(fortData.Id)
+func (gym *Gym) updateGymFromFortProto(fortId FortId, fortData *pogo.FortDetailsOutProto) *Gym {
+	gym.SetId(fortId)
 	gym.SetLat(fortData.Latitude)
 	gym.SetLon(fortData.Longitude)
 	if len(fortData.ImageUrl) > 0 {
@@ -186,8 +186,8 @@ func (gym *Gym) updateGymFromFortProto(fortData *pogo.FortDetailsOutProto) *Gym 
 	return gym
 }
 
-func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *Gym {
-	gym.SetId(gymData.GymStatusAndDefenders.PokemonFortProto.FortId)
+func (gym *Gym) updateGymFromGymInfoOutProto(fortId FortId, gymData *pogo.GymGetInfoOutProto) *Gym {
+	gym.SetId(fortId)
 	gym.SetLat(gymData.GymStatusAndDefenders.PokemonFortProto.Latitude)
 	gym.SetLon(gymData.GymStatusAndDefenders.PokemonFortProto.Longitude)
 
@@ -259,15 +259,15 @@ func (gym *Gym) updateGymFromGymInfoOutProto(gymData *pogo.GymGetInfoOutProto) *
 		gym.SetDefenders(null.StringFrom(string(bDefenders)))
 
 		if fortProto := status.PokemonFortProto; fortProto != nil {
-			gym.updateGymFromFort(fortProto, 0, 0)
+			gym.updateGymFromFort(fortId, fortProto, 0, 0)
 		}
 	}
 
 	return gym
 }
 
-func (gym *Gym) updateGymFromGetMapFortsOutProto(fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Gym {
-	gym.SetId(fortData.Id)
+func (gym *Gym) updateGymFromGetMapFortsOutProto(fortId FortId, fortData *pogo.GetMapFortsOutProto_FortProto, skipName bool) *Gym {
+	gym.SetId(fortId)
 	gym.SetLat(fortData.Latitude)
 	gym.SetLon(fortData.Longitude)
 

@@ -60,10 +60,44 @@ type webhooksSenderInterface interface {
 }
 
 var webhooksSender webhooksSenderInterface
-var statsCollector stats_collector.StatsCollector
-var pokestopCache *ottercache.OtterCache[string, *Pokestop]
-var gymCache *ottercache.OtterCache[string, *Gym]
-var stationCache *ottercache.OtterCache[string, *Station]
+
+// statsCollector is read on hot decode/save paths and swapped by a handful
+// of tests (see setStatsCollectorForTest in init_test.go); atomic.Pointer
+// keeps concurrent Store/Load race-free without a mutex.
+//
+// It is a *atomic.Pointer rather than a plain one so the noop seed can live
+// in this variable's own initializer. That is what makes the seeding actually
+// ordered: Go initializes package-level variables in dependency order, and
+// dependency analysis follows function calls, so any other variable in this
+// package whose initializer reaches getStatsCollector is ordered after this
+// one. Seeding from init() would not give that — package-level variable
+// initializers all run before init() does — which is what the comment here
+// used to claim it did.
+var statsCollector = newSeededStatsCollector()
+
+func newSeededStatsCollector() *atomic.Pointer[stats_collector.StatsCollector] {
+	var p atomic.Pointer[stats_collector.StatsCollector]
+	noop := stats_collector.NewNoopStatsCollector()
+	p.Store(&noop)
+	return &p
+}
+
+// getStatsCollector returns the current StatsCollector. Never nil:
+// statsCollector is seeded with a noop collector in its own initializer at
+// package load, and SetStatsCollector later swaps in the real one once main()
+// has read config. Before that seeding was added, callers on paths that could
+// run before SetStatsCollector (e.g. the eviction-drop hook InitDataCache
+// wires up, which main() calls well before SetStatsCollector — see main.go)
+// had to nil-check or risk a nil-interface panic; StartWorkerBacklogReporter's
+// ticker did, DroppedEvictionsHook did not. Seeding closes that window for
+// both, so nothing here needs to treat nil as a meaningful state anymore.
+func getStatsCollector() stats_collector.StatsCollector {
+	return *statsCollector.Load()
+}
+
+var pokestopCache *ottercache.OtterCache[FortId, *Pokestop]
+var gymCache *ottercache.OtterCache[FortId, *Gym]
+var stationCache *ottercache.OtterCache[FortId, *Station]
 var tappableCache *ottercache.OtterCache[uint64, *Tappable]
 var weatherCache *ottercache.OtterCache[int64, *Weather]
 var weatherConsensusCache *ottercache.OtterCache[int64, *WeatherConsensusState]
@@ -73,7 +107,7 @@ var pokemonCache *ottercache.OtterCache[uint64, *Pokemon]
 var incidentCache *ottercache.OtterCache[string, *Incident]
 var playerCache *ottercache.OtterCache[string, *Player]
 var routeCache *ottercache.OtterCache[string, *Route]
-var getMapFortsCache *ottercache.OtterCache[string, *pogo.GetMapFortsOutProto_FortProto]
+var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_FortProto]
 
 var ProactiveIVSwitchSem chan bool
 
@@ -85,6 +119,9 @@ var ProactiveIVSwitchSem chan bool
 var ohbem atomic.Pointer[gohbem.Ohbem]
 
 func init() {
+	// The statsCollector noop seed is NOT here — it is in that variable's own
+	// initializer, which runs strictly earlier. See its doc comment.
+
 	// initLiveStats is config-independent, so package-init timing is fine.
 	// Entity caches are NOT — they must be built after config load via
 	// InitDataCache (see below).
@@ -137,25 +174,25 @@ func initDataCache() {
 	// Cache eviction-event drops are the one non-self-healing loss; feed
 	// them to prometheus alongside the [CACHE_EVICT] log line.
 	ottercache.DroppedEvictionsHook = func(cacheName string, dropped int64) {
-		statsCollector.AddCacheEvictionsDropped(cacheName, float64(dropped))
+		getStatsCollector().AddCacheEvictionsDropped(cacheName, float64(dropped))
 	}
 
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
 	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
-	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Pokestop]{
+	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Pokestop]{
 		Name:       "pokestop",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Gym]{
+	gymCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Gym]{
 		Name:       "gym",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
 	})
 
-	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Station]{
+	stationCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Station]{
 		Name:       "station",
 		DefaultTTL: fortCacheTTL,
 		TouchOnHit: true,
@@ -220,7 +257,7 @@ func initDataCache() {
 		TouchOnHit: true,
 	})
 
-	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *pogo.GetMapFortsOutProto_FortProto]{
+	getMapFortsCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *pogo.GetMapFortsOutProto_FortProto]{
 		Name:       "map_forts",
 		DefaultTTL: 5 * time.Minute,
 		TouchOnHit: false,
@@ -337,15 +374,50 @@ func SetWebhooksSender(whSender webhooksSenderInterface) {
 	webhooksSender = whSender
 }
 
+// SetStatsCollector swaps in the real collector once main() has read config.
+//
+// A nil collector is refused here rather than stored. Storing one would put a
+// nil interface behind an atomic.Pointer that every caller dereferences
+// without checking (see getStatsCollector), so the failure would surface as a
+// nil-interface panic on whichever decode goroutine happened to record a stat
+// first — arbitrarily far from the mistake. Panicking in the setter puts it
+// at the call site, at boot.
 func SetStatsCollector(collector stats_collector.StatsCollector) {
-	statsCollector = collector
+	if collector == nil {
+		log.Panic("decoder.SetStatsCollector: nil collector. Pass stats_collector.NewNoopStatsCollector() to disable stats")
+	}
+	statsCollector.Store(&collector)
+	statsCollectorSet.Store(true)
 }
 
-// InitWriteBehindQueue initializes the typed write-behind queues
-// Should be called after SetStatsCollector
+// statsCollectorSet records whether SetStatsCollector has run, purely so
+// InitWriteBehindQueue below can enforce its ordering requirement.
+var statsCollectorSet atomic.Bool
+
+// InitWriteBehindQueue initializes the typed write-behind queues. It must be
+// called after SetStatsCollector, and now says so rather than only documenting
+// it.
+//
+// The requirement is real because the collector is passed by value: the queues
+// keep whatever InitTypedQueues was handed, so calling this first hands them
+// the noop seed permanently and every write-behind metric silently reads zero
+// for the life of the process. That used to fail loudly instead — the
+// pre-seeding collector was nil, so the first batch flush panicked — and
+// trading a panic for silence is a bad trade for a boot-ordering mistake that
+// is always a programming error. Check it where the ordering is required.
+//
+// Note for anyone maintaining a fork with its own main(): this is a new crash
+// mode. golbat's main() calls SetStatsCollector before this (see main.go), so
+// the panic is unreachable here, but a main() that ordered the two the other
+// way round used to boot with silently dead write-behind metrics and now
+// fails at startup instead. Swapping the two calls is the fix, not removing
+// this check.
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
+	if !statsCollectorSet.Load() {
+		log.Panic("decoder.InitWriteBehindQueue called before decoder.SetStatsCollector: the write-behind queues would keep the noop collector for the life of the process")
+	}
 	// Use the new typed queue system
-	InitTypedQueues(ctx, dbDetails, statsCollector)
+	InitTypedQueues(ctx, dbDetails, getStatsCollector())
 }
 
 // FlushWriteBehindQueue flushes all pending writes (for shutdown)

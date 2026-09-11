@@ -343,7 +343,7 @@ func fortScanLimitReached(limit, resultCount int) bool {
 	return resultCount >= fortScanLimit(limit)
 }
 
-func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]string, int, int, int) {
+func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]FortId, int, int, int) {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
@@ -359,13 +359,13 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 
 	lockedTime := time.Since(start)
 
-	var returnKeys []string
+	var returnKeys []FortId
 	// Dedupe: the shared snapshot can briefly hold duplicate points for one
 	// id (eviction delete still queued while a save re-added the point).
-	seen := make(map[string]struct{})
+	seen := make(map[FortId]struct{})
 
 	fortTreeCopy.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
-		func(min, max [2]float64, fortId string) bool {
+		func(min, max [2]float64, fortId FortId) bool {
 			fortsExamined++
 
 			fortLookup, found := fortLookupCache.Load(fortId)
@@ -410,7 +410,7 @@ func internalGetForts(fortType FortType, retrieveParameters ApiFortScan) ([]stri
 // collectGymResults loads each key's gym record read-only and builds its API
 // result, always releasing the per-record lock. Shared by the single-type and
 // combined scan endpoints; traceName distinguishes the caller in lock traces.
-func collectGymResults(dbDetails db.DbDetails, keys []string, traceName string) []*ApiGymResult {
+func collectGymResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiGymResult {
 	results := make([]*ApiGymResult, 0, len(keys))
 	for _, key := range keys {
 		gym, unlock, err := GetGymRecordReadOnly(context.Background(), dbDetails, key, traceName)
@@ -428,7 +428,7 @@ func collectGymResults(dbDetails db.DbDetails, keys []string, traceName string) 
 // collectStationResults loads each key's station record read-only and builds
 // its API result, always releasing the per-record lock. Shared by the
 // single-type and combined scan endpoints; traceName distinguishes the caller.
-func collectStationResults(dbDetails db.DbDetails, keys []string, traceName string) []*ApiStationResult {
+func collectStationResults(dbDetails db.DbDetails, keys []FortId, traceName string) []*ApiStationResult {
 	results := make([]*ApiStationResult, 0, len(keys))
 	for _, key := range keys {
 		station, unlock, err := GetStationRecordReadOnly(context.Background(), dbDetails, key, traceName)
@@ -448,7 +448,7 @@ func collectStationResults(dbDetails db.DbDetails, keys []string, traceName stri
 // preserve lock-order (pokestop then incidents), then optionally attaches
 // invasions. Shared by the single-type and combined scan endpoints; traceName
 // distinguishes the caller in lock traces.
-func collectPokestopResults(dbDetails db.DbDetails, keys []string, withIncidents bool, now int64, traceName string) []*ApiPokestopResult {
+func collectPokestopResults(dbDetails db.DbDetails, keys []FortId, withIncidents bool, now int64, traceName string) []*ApiPokestopResult {
 	results := make([]*ApiPokestopResult, 0, len(keys))
 	for _, key := range keys {
 		pokestop, unlock, err := getPokestopRecordReadOnly(context.Background(), dbDetails, key, traceName)
@@ -540,7 +540,7 @@ func FortCombinedScanEndpoint(retrieveParameters ApiFortCombinedScan, dbDetails 
 	}
 }
 
-func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, pokestopKeys, stationKeys []string, examined, skipped, total int) {
+func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, pokestopKeys, stationKeys []FortId, examined, skipped, total int) {
 	start := time.Now()
 
 	minLocation := retrieveParameters.Min.Location()
@@ -551,14 +551,14 @@ func internalGetFortsCombined(retrieveParameters ApiFortCombinedScan) (gymKeys, 
 	now := time.Now().Unix()
 	totalMatched := 0
 	// Dedupe: see internalGetForts.
-	seenCombined := make(map[string]struct{})
+	seenCombined := make(map[FortId]struct{})
 
 	fortTreeCopy := getFortTreeSnapshot()
 
 	lockedTime := time.Since(start)
 
 	fortTreeCopy.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
-		func(min, max [2]float64, fortId string) bool {
+		func(min, max [2]float64, fortId FortId) bool {
 			examined++
 
 			fortLookup, found := fortLookupCache.Load(fortId)

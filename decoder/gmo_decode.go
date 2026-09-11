@@ -19,7 +19,13 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 	//var stopsToModify []string
 
 	for _, fort := range p {
-		fortId := fort.Data.FortId
+		fortId, ok := ParseFortId(fort.Data.FortId)
+		if !ok {
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("UpdateFortBatch: dropped %d unparseable fort id(s) in the last second (most recently %q)", dropped, fort.Data.FortId)
+			})
+			continue
+		}
 		if fort.Data.FortType == pogo.FortType_CHECKPOINT && scanParameters.ProcessPokestops {
 			pokestop, unlock, err := getOrCreatePokestopRecord(ctx, db, fortId, "UpdateFortBatch")
 			if err != nil {
@@ -27,7 +33,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			pokestop.updatePokestopFromFort(fort.Data, fort.Cell, fort.Timestamp/1000)
+			pokestop.updatePokestopFromFort(fortId, fort.Data, fort.Cell, fort.Timestamp/1000)
 			isNewRecord := pokestop.IsNewRecord()
 
 			savePokestopRecord(ctx, db, pokestop)
@@ -81,7 +87,7 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 				continue
 			}
 
-			gym.updateGymFromFort(fort.Data, fort.Cell, fort.Timestamp)
+			gym.updateGymFromFort(fortId, fort.Data, fort.Cell, fort.Timestamp)
 			isNewRecord := gym.IsNewRecord()
 
 			saveGymRecord(ctx, db, gym)
@@ -113,13 +119,19 @@ func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanPa
 
 func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawStationData) {
 	for _, stationProto := range p {
-		stationId := stationProto.Data.Id
+		stationId, ok := ParseFortId(stationProto.Data.Id)
+		if !ok {
+			FortIdParseDrops.Report(func(dropped int64) {
+				log.Errorf("UpdateStationBatch: dropped %d unparseable station id(s) in the last second (most recently %q)", dropped, stationProto.Data.Id)
+			})
+			continue
+		}
 		station, unlock, err := getOrCreateStationRecord(ctx, db, stationId, "UpdateStationBatch")
 		if err != nil {
 			log.Errorf("getOrCreateStationRecord: %s", err)
 			continue
 		}
-		station.updateFromStationProto(stationProto.Data, stationProto.Cell)
+		station.updateFromStationProto(stationId, stationProto.Data, stationProto.Cell)
 		syncStationBattlesFromProto(station, stationProto.Data.BattleDetails)
 		saveStationRecord(ctx, db, station)
 		unlock()
@@ -148,7 +160,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 			updateTime := wild.Timestamp / 1000
 			if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
 				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
 			}
 			unlock()
 		}
@@ -168,7 +180,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				updateTime := nearby.Timestamp / 1000
 				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
 					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000)
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
 				}
 
 				unlock()
@@ -184,7 +196,7 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		}
 
 		if pokemon.updateFromMap(ctx, db, mapPokemon, weatherLookup, username) {
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, mapPokemon.Timestamp/1000, username)
 		}
 		unlock()
 	}

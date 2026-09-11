@@ -40,9 +40,17 @@ type Spawnpoint struct {
 
 	SpawnpointData // Embedded data fields - can be copied for write-behind queue
 
-	dirty         bool     `db:"-" json:"-"` // Not persisted - tracks if object needs saving
-	newRecord     bool     `db:"-" json:"-"` // Not persisted - tracks if this is a new record
-	changedFields []string `db:"-" json:"-"` // Track which fields changed (only when dbDebugEnabled)
+	dirty     bool `db:"-" json:"-"` // Not persisted - tracks if object needs saving
+	newRecord bool `db:"-" json:"-"` // Not persisted - tracks if this is a new record
+
+	// debug accumulates per-field change descriptions for dbDebugLog (see
+	// debugChangeAccumulator in db_debug.go). Placed before the fast-path
+	// atomics below, not last: a zero-sized field placed last forces Go to
+	// add a word of padding to keep a past-the-end pointer valid, which
+	// would cancel the saving this type exists for — and Spawnpoint is
+	// cached in the millions, so that saving matters here more than
+	// anywhere but Pokemon.
+	debug debugChangeAccumulator `db:"-" json:"-"`
 
 	// despawnSecFast mirrors DespawnSec for the lock-free read path
 	// (setExpireTimestampFromSpawnpoint runs once per wild/nearby pokemon
@@ -142,7 +150,7 @@ func (s *Spawnpoint) Unlock() {
 func (s *Spawnpoint) SetLat(v float64) {
 	if !floatAlmostEqual(s.Lat, v, floatTolerance) {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("Lat:%f->%f", s.Lat, v))
+			s.debug.recordChange(fmt.Sprintf("Lat:%f->%f", s.Lat, v))
 		}
 		s.Lat = v
 		s.dirty = true
@@ -152,7 +160,7 @@ func (s *Spawnpoint) SetLat(v float64) {
 func (s *Spawnpoint) SetLon(v float64) {
 	if !floatAlmostEqual(s.Lon, v, floatTolerance) {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("Lon:%f->%f", s.Lon, v))
+			s.debug.recordChange(fmt.Sprintf("Lon:%f->%f", s.Lon, v))
 		}
 		s.Lon = v
 		s.dirty = true
@@ -169,7 +177,7 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 	// Handle validity changes
 	if (s.DespawnSec.Valid && !v.Valid) || (!s.DespawnSec.Valid && v.Valid) {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
+			s.debug.recordChange(fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
 		}
 		s.DespawnSec = v
 		s.dirty = true
@@ -188,7 +196,7 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 
 	{
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
+			s.debug.recordChange(fmt.Sprintf("DespawnSec:%s->%s", FormatNull(s.DespawnSec), FormatNull(v)))
 		}
 		s.DespawnSec = v
 		s.dirty = true
@@ -197,7 +205,7 @@ func (s *Spawnpoint) SetDespawnSec(v null.Int) {
 func (s *Spawnpoint) SetUpdated(v int64) {
 	if s.Updated != v {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("Updated:%d->%d", s.Updated, v))
+			s.debug.recordChange(fmt.Sprintf("Updated:%d->%d", s.Updated, v))
 		}
 		s.Updated = v
 		s.dirty = true
@@ -210,7 +218,7 @@ func (s *Spawnpoint) SetLastSeen(v int64) {
 	defer func() { s.lastSeenFast.Store(s.LastSeen) }()
 	if s.LastSeen != v {
 		if dbDebugEnabled {
-			s.changedFields = append(s.changedFields, fmt.Sprintf("LastSeen:%d->%d", s.LastSeen, v))
+			s.debug.recordChange(fmt.Sprintf("LastSeen:%d->%d", s.LastSeen, v))
 		}
 		s.LastSeen = v
 		s.dirty = true
@@ -220,7 +228,7 @@ func loadSpawnpointFromDatabase(ctx context.Context, db db.DbDetails, spawnpoint
 	return timedDbQuery("loadSpawnpointFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, spawnpoint,
 			"SELECT "+spawnpointSelectColumns+" FROM spawnpoint WHERE id = ?", spawnpointId)
-		statsCollector.IncDbQuery("select spawnpoint", err)
+		getStatsCollector().IncDbQuery("select spawnpoint", err)
 		return err
 	})
 }
@@ -396,9 +404,9 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	// Debug logging happens here, before queueing
 	if dbDebugEnabled {
 		if isNewRecord {
-			dbDebugLog("INSERT", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+			dbDebugLog("INSERT", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.debug.fields())
 		} else {
-			dbDebugLog("UPDATE", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.changedFields)
+			dbDebugLog("UPDATE", "Spawnpoint", strconv.FormatInt(spawnpoint.Id, 10), spawnpoint.debug.fields())
 		}
 	}
 
@@ -411,7 +419,7 @@ func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoi
 	}
 
 	if dbDebugEnabled {
-		spawnpoint.changedFields = spawnpoint.changedFields[:0]
+		spawnpoint.debug.reset()
 	}
 	spawnpoint.ClearDirty()
 	if isNewRecord {
@@ -435,7 +443,7 @@ func spawnpointWriteDB(db db.DbDetails, spawnpoint *Spawnpoint) error {
 		"last_seen=VALUES(last_seen),"+
 		"despawn_sec=VALUES(despawn_sec)", spawnpoint)
 
-	statsCollector.IncDbQuery("insert spawnpoint", err)
+	getStatsCollector().IncDbQuery("insert spawnpoint", err)
 	if err != nil {
 		log.Errorf("Error updating spawnpoint %s", err)
 		return err
@@ -454,7 +462,7 @@ func spawnpointSeen(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint
 		//_, err := db.GeneralDb.ExecContext(ctx, "UPDATE spawnpoint "+
 		//	"SET last_seen=? "+
 		//	"WHERE id = ? ", now, spawnpoint.Id)
-		//statsCollector.IncDbQuery("update spawnpoint", err)
+		//getStatsCollector().IncDbQuery("update spawnpoint", err)
 		//if err != nil {
 		//	log.Printf("Error updating spawnpoint last seen %s", err)
 		//	return

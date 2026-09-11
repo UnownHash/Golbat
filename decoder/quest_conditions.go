@@ -48,11 +48,11 @@ var questConditionCount *xsync.Map[questConditionKey, int64]
 // *Pokestop's (possibly since-changed) quest fields. Only forts that currently
 // carry a quest hold an entry, so its footprint tracks the number of active
 // quests, not the whole fort population.
-var questFortKeys *xsync.Map[string, []questConditionKey]
+var questFortKeys *xsync.Map[FortId, []questConditionKey]
 
 func initQuestConditions() {
 	questConditionCount = xsync.NewMap[questConditionKey, int64]()
-	questFortKeys = xsync.NewMap[string, []questConditionKey]()
+	questFortKeys = xsync.NewMap[FortId, []questConditionKey]()
 }
 
 // adjustQuestConditions applies delta to the aggregate count of each key,
@@ -136,7 +136,7 @@ func questKeysEqual(a, b []questConditionKey) bool {
 // the reverse (GetAvailableQuestConditions only reads questConditionCount), so
 // there is no deadlock. Callers of updatePokestopLookup hold the pokestop entity
 // lock, but this primitive is self-contained and correct without it.
-func reconcileFortQuestConditions(fortId string, newKeys []questConditionKey) {
+func reconcileFortQuestConditions(fortId FortId, newKeys []questConditionKey) {
 	questFortKeys.Compute(fortId, func(old []questConditionKey, loaded bool) ([]questConditionKey, xsync.ComputeOp) {
 		if questKeysEqual(old, newKeys) {
 			return old, xsync.CancelOp // unchanged (covers the common no-quest and re-save cases)
@@ -156,7 +156,7 @@ func reconcileFortQuestConditions(fortId string, newKeys []questConditionKey) {
 // and per-fort serialization as reconcileFortQuestConditions), so the amount
 // removed is exactly what this fort last contributed; a fort with no quest (or
 // already removed) is a cheap no-op.
-func removeFortQuestConditions(fortId string) {
+func removeFortQuestConditions(fortId FortId) {
 	questFortKeys.Compute(fortId, func(old []questConditionKey, loaded bool) ([]questConditionKey, xsync.ComputeOp) {
 		if !loaded {
 			return old, xsync.CancelOp

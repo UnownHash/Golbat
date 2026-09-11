@@ -63,7 +63,7 @@ func TestApplyVerifiedDespawn(t *testing.T) {
 		if !p.ExpireTimestampVerified {
 			t.Fatalf("despawn %d: expiry not verified", c.despawnSec)
 		}
-		got := p.ExpireTimestamp.Int64 - ts/1000
+		got := int64(p.ExpireTimestamp.ValueOrZero()) - ts/1000
 		if got != c.wantOffset {
 			t.Fatalf("despawn %d: offset=%d want %d", c.despawnSec, got, c.wantOffset)
 		}

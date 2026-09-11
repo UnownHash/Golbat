@@ -63,7 +63,7 @@ func BuildStationResult(station *Station) ApiStationResult {
 	battles := getKnownStationBattles(station.Id, now)
 
 	result := ApiStationResult{
-		Id:                    station.Id,
+		Id:                    station.Id.String(),
 		Lat:                   station.Lat,
 		Lon:                   station.Lon,
 		Name:                  station.Name,

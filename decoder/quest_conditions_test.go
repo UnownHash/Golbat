@@ -24,7 +24,7 @@ func TestQuestConditions_Aggregate(t *testing.T) {
 
 // newQuestStop builds a pokestop carrying a no-AR quest slot (the primary
 // Quest* fields) with the given title/target.
-func newQuestStop(id, title string, target int64) *Pokestop {
+func newQuestStop(id FortId, title string, target int64) *Pokestop {
 	return &Pokestop{PokestopData: PokestopData{
 		Id:                id,
 		Lat:               1.0,
@@ -53,7 +53,9 @@ func findCondition(results []ApiQuestConditionResult, title string, target int32
 func TestQuestConditions_Lifecycle(t *testing.T) {
 	initQuestConditions()
 
-	stop := newQuestStop("quest-life-1", "catch_x", 3)
+	const stopIdStr = "00000000000000000000000000000001"
+	stopId := mustFortId(t, stopIdStr)
+	stop := newQuestStop(stopId, "catch_x", 3)
 
 	// Load / first lookup -> +1.
 	updatePokestopLookup(stop)
@@ -77,7 +79,9 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	}
 
 	// A second fort offering the identical (now catch_y) option -> count 2.
-	stop2 := newQuestStop("quest-life-2", "catch_y", 7)
+	const stop2IdStr = "00000000000000000000000000000002"
+	stop2Id := mustFortId(t, stop2IdStr)
+	stop2 := newQuestStop(stop2Id, "catch_y", 7)
 	updatePokestopLookup(stop2)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 2 {
@@ -85,18 +89,18 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	}
 
 	// Evict fort 1 -> back to count 1.
-	deferFortEviction(POKESTOP, stop.Id, stop.Lat, stop.Lon)
+	deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 1 {
 		t.Fatalf("after evict fort1: want catch_y/target=7 count=1, got %+v", got)
 	}
 
 	// Evict fort 2 -> empty, and its tracker entry gone.
-	deferFortEviction(POKESTOP, stop2.Id, stop2.Lat, stop2.Lon)
+	deferFortEviction(POKESTOP, stop2Id, stop2.Lat, stop2.Lon)
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
 		t.Fatalf("after evict fort2: want 0 entries, got %+v", got)
 	}
-	if _, ok := questFortKeys.Load(stop2.Id); ok {
+	if _, ok := questFortKeys.Load(stop2Id); ok {
 		t.Fatalf("after evict fort2: tracker entry should be gone")
 	}
 }
@@ -109,7 +113,9 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	initQuestConditions()
 
 	// Deletion path.
-	del := newQuestStop("quest-del-1", "spin_x", 4)
+	const delIdStr = "00000000000000000000000000000001"
+	delId := mustFortId(t, delIdStr)
+	del := newQuestStop(delId, "spin_x", 4)
 	updatePokestopLookup(del)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("delete setup: want 1 entry")
@@ -123,7 +129,9 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	// Conversion path: fort is a pokestop with a quest, then its FortLookup
 	// entry is overwritten by a gym. The pokestop's contribution lingers until
 	// its own eviction fires (FortType mismatch), which must still drop it.
-	conv := newQuestStop("quest-conv-1", "battle_x", 2)
+	const convIdStr = "00000000000000000000000000000002"
+	convId := mustFortId(t, convIdStr)
+	conv := newQuestStop(convId, "battle_x", 2)
 	updatePokestopLookup(conv)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("conversion setup: want 1 entry")
@@ -132,11 +140,11 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	updateGymLookup(gym) // overwrites FortLookup[id] to GYM; count still stale here
 	// Stale pokestop eviction: FortLookup is now GYM (mismatch) but the quest
 	// contribution must still be removed.
-	deferFortEviction(POKESTOP, conv.Id, conv.Lat, conv.Lon)
+	deferFortEviction(POKESTOP, convId, conv.Lat, conv.Lon)
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
 		t.Fatalf("after conversion+evict: want 0 entries, got %+v", got)
 	}
-	if _, ok := questFortKeys.Load(conv.Id); ok {
+	if _, ok := questFortKeys.Load(convId); ok {
 		t.Fatalf("after conversion+evict: tracker entry should be gone")
 	}
 }
@@ -150,7 +158,9 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 
 	const goroutines = 16
 	const iterations = 500
-	stop := newQuestStop("quest-concurrent-1", "concurrent_x", 9)
+	const stopIdStr = "00000000000000000000000000000001"
+	stopId := mustFortId(t, stopIdStr)
+	stop := newQuestStop(stopId, "concurrent_x", 9)
 
 	var wg sync.WaitGroup
 	for g := 0; g < goroutines; g++ {
@@ -159,7 +169,7 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
 				updatePokestopLookup(stop)
-				deferFortEviction(POKESTOP, stop.Id, stop.Lat, stop.Lon)
+				deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
 			}
 		}()
 	}
@@ -167,12 +177,12 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 
 	// Quiesce: the last operation on the fort is an eviction, so it must net to
 	// empty regardless of the interleavings above.
-	deferFortEviction(POKESTOP, stop.Id, stop.Lat, stop.Lon)
+	deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
 
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
 		t.Fatalf("after concurrent storm + final evict: want 0 entries, got %+v", got)
 	}
-	if _, ok := questFortKeys.Load(stop.Id); ok {
+	if _, ok := questFortKeys.Load(stopId); ok {
 		t.Fatalf("after concurrent storm + final evict: tracker entry should be gone")
 	}
 
