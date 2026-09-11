@@ -45,24 +45,23 @@ func TestFenceQueryArgsCarriesHostilePropertiesAsData(t *testing.T) {
 	if !strings.Contains(fenceJSON, payload) {
 		t.Fatal("fence argument lost the properties payload, so this test proves nothing")
 	}
-	// The payload rides in the argument. The statement it is bound into is a
-	// constant, so there is nothing for the quote to terminate.
-	if strings.Contains(FenceContainsPredicate, payload) {
-		t.Fatal("payload reached the statement text")
-	}
+	// The statement text itself is covered end to end by
+	// TestFenceQueriesBindFenceAsArgument, which captures what the driver
+	// receives.
 }
 
 // TestFenceQueryArgsBoundingBoxOrder locks the corner order every geofence
 // query binds: min lat, min lon, max lat, max lon.
 func TestFenceQueryArgsBoundingBoxOrder(t *testing.T) {
-	// lon spans 0..2, lat spans 0..4, so a swapped pair is visible.
-	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 4}, {0, 4}, {0, 0}}})
+	// lon spans 10..12, lat spans 20..24: every corner is distinct, so a
+	// swapped min pair is as visible as a swapped max pair.
+	fence := geojson.NewFeature(orb.Polygon{{{10, 20}, {12, 20}, {12, 24}, {10, 24}, {10, 20}}})
 
 	args, err := FenceQueryArgs(fence)
 	if err != nil {
 		t.Fatalf("FenceQueryArgs: %v", err)
 	}
-	want := []float64{0, 0, 4, 2} // minLat, minLon, maxLat, maxLon
+	want := []float64{20, 10, 24, 12} // minLat, minLon, maxLat, maxLon
 	for i, w := range want {
 		got, ok := args[i].(float64)
 		if !ok {
@@ -127,9 +126,9 @@ func TestFenceMatcherContains(t *testing.T) {
 
 // TestFenceBoundArgsOrder locks the corner order the bounding-box queries bind.
 func TestFenceBoundArgsOrder(t *testing.T) {
-	fence := geojson.NewFeature(orb.Polygon{{{0, 0}, {2, 0}, {2, 4}, {0, 4}, {0, 0}}})
+	fence := geojson.NewFeature(orb.Polygon{{{10, 20}, {12, 20}, {12, 24}, {10, 24}, {10, 20}}})
 	args := FenceBoundArgs(fence)
-	want := []float64{0, 0, 4, 2} // minLat, minLon, maxLat, maxLon
+	want := []float64{20, 10, 24, 12} // minLat, minLon, maxLat, maxLon
 	if len(args) != len(want) {
 		t.Fatalf("got %d args, want %d", len(args), len(want))
 	}

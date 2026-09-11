@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -312,6 +313,12 @@ func normaliseFenceFromBytes(bodyBytes []byte, logContext string) (*geojson.Feat
 
 	feature, err := geojson.UnmarshalFeature(bodyBytes)
 	if err == nil {
+		if feature.Geometry == nil {
+			// A Feature with a null or missing geometry parses, but every
+			// consumer dereferences fence.Geometry; reject it here so the
+			// caller answers with a 400 rather than a panic.
+			return nil, errors.New("geofence feature has no geometry")
+		}
 		log.Debugf("%s - received a feature", logContext)
 		return feature, nil
 	}

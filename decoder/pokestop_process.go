@@ -59,18 +59,23 @@ func UpdatePokestopWithQuest(ctx context.Context, db db.DbDetails, quest *pogo.F
 	return fmt.Sprintf("%s %s %s", quest.FortId, haveArStr, questTitle)
 }
 
-func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) {
+// ClearQuestsWithinGeofence clears quests for every pokestop inside geofence.
+// It returns the error when the clear did not complete, including a context
+// deadline that stopped it part-way, so the caller can report a failure
+// rather than a partial clear as success.
+func ClearQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) error {
 	started := time.Now()
 	count, err := RemoveQuestsWithinGeofence(ctx, dbDetails, geofence)
 	if err != nil {
-		log.Errorf("ClearQuest: Error removing quests: %s", err)
-		return
+		log.Errorf("ClearQuest: Error removing quests after clearing %d pokestops: %s", count, err)
+		return err
 	}
 	log.Infof("ClearQuest: Removed quests from %d pokestops in %s", count, time.Since(started))
+	return nil
 }
 
-func GetQuestStatusWithGeofence(dbDetails db.DbDetails, geofence *geojson.Feature) db.QuestStatus {
-	res, err := db.GetQuestStatus(dbDetails, geofence)
+func GetQuestStatusWithGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) db.QuestStatus {
+	res, err := db.GetQuestStatus(ctx, dbDetails, geofence)
 	if err != nil {
 		log.Errorf("QuestStatus: Error retrieving quests: %s", err)
 		return db.QuestStatus{}
@@ -95,8 +100,8 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 	return true, fmt.Sprintf("%s %s", mapFort.Id, mapFort.Name)
 }
 
-func GetPokestopPositions(details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
-	return db.GetPokestopPositions(details, geofence)
+func GetPokestopPositions(ctx context.Context, details db.DbDetails, geofence *geojson.Feature) ([]db.QuestLocation, error) {
+	return db.GetPokestopPositions(ctx, details, geofence)
 }
 
 func UpdatePokestopWithContestData(ctx context.Context, db db.DbDetails, request *pogo.GetContestDataProto, contestData *pogo.GetContestDataOutProto) string {

@@ -496,12 +496,28 @@ func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geo
 	if err != nil {
 		return 0, err
 	}
+	return clearQuestsForPokestops(ctx, dbDetails, pokestopIds)
+}
 
+// clearQuestsForPokestops clears the quest fields of each listed pokestop and
+// returns how many it cleared.
+//
+// It stops at the first context error and returns it alongside the count so
+// far. Without that check a deadline expiring mid-loop would fail every
+// remaining load, log each one, leave a zeroed placeholder per id in the
+// cache, and still report the partial count as success.
+func clearQuestsForPokestops(ctx context.Context, dbDetails db.DbDetails, pokestopIds []string) (int, error) {
 	clearedCount := 0
 
 	for _, id := range pokestopIds {
+		if err := ctx.Err(); err != nil {
+			return clearedCount, err
+		}
 		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id, "RemoveQuestsWithinGeofence")
 		if err != nil {
+			if ctx.Err() != nil {
+				return clearedCount, ctx.Err()
+			}
 			log.Errorf("RemoveQuestsWithinGeofence: failed to get pokestop %s: %v", id, err)
 			continue
 		}

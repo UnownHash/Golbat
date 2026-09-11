@@ -674,7 +674,7 @@ func registerTier3Routes(api huma.API) {
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		response, err := decoder.GetPokestopPositions(dbDetails, fence)
+		response, err := decoder.GetPokestopPositions(ctx, dbDetails, fence)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("error retrieving pokestop positions")
 		}
@@ -714,7 +714,7 @@ func registerTier4Routes(api huma.API) {
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		status := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
+		status := decoder.GetQuestStatusWithGeofence(ctx, dbDetails, fence)
 		return &questStatusOutput{Body: status}, nil
 	})
 
@@ -739,8 +739,11 @@ func registerTier4Routes(api huma.API) {
 
 		log.Debugf("Clear quests %+v", fence)
 		startTime := time.Now()
-		decoder.ClearQuestsWithinGeofence(tctx, dbDetails, fence)
+		err = decoder.ClearQuestsWithinGeofence(tctx, dbDetails, fence)
 		log.Infof("Clear quest took %s", time.Since(startTime))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("error clearing quests")
+		}
 
 		return &clearQuestsOutput{Body: StatusResponse{Status: "ok"}}, nil
 	})

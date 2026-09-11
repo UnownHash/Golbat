@@ -36,8 +36,8 @@ func CompileFence(f *geojson.Feature) *CompiledFence {
 		return nil
 	}
 
-	name := f.Properties.MustString("name", "unknown")
-	parent := f.Properties.MustString("parent", name)
+	name := propertyString(f.Properties, "name", "unknown")
+	parent := propertyString(f.Properties, "parent", name)
 	cf := &CompiledFence{Area: AreaName{Parent: parent, Name: name}}
 	for _, poly := range mp {
 		cp := compiledPolygon{
@@ -50,6 +50,17 @@ func CompileFence(f *geojson.Feature) *CompiledFence {
 		cf.polygons = append(cf.polygons, cp)
 	}
 	return cf
+}
+
+// propertyString reads a string property, returning def when the key is absent
+// or holds a non-string value. A fence can arrive from a request body, so the
+// properties map is caller-controlled, and orb's Properties.MustString panics
+// on a present non-string value even when a default is supplied.
+func propertyString(p geojson.Properties, key, def string) string {
+	if s, ok := p[key].(string); ok {
+		return s
+	}
+	return def
 }
 
 // Contains reports whether the point is inside the fence (boundary counts as
