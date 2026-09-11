@@ -23,21 +23,17 @@ type compiledPolygon struct {
 	bounds []orb.Bound // cached ring.Bound(), same index as rings
 }
 
-// CompileFence preprocesses a geojson feature (Polygon or MultiPolygon).
-// Returns nil for other geometry types.
+// CompileFence preprocesses a geojson feature whose geometry is an area: a
+// Polygon, a MultiPolygon, or a GeometryCollection holding polygons (see
+// areaGeometry). Returns nil for anything else.
 func CompileFence(f *geojson.Feature) *CompiledFence {
-	var mp orb.MultiPolygon
-	switch g := f.Geometry.(type) {
-	case orb.Polygon:
-		mp = orb.MultiPolygon{g}
-	case orb.MultiPolygon:
-		mp = g
-	default:
+	mp, ok := areaGeometry(f.Geometry)
+	if !ok {
 		return nil
 	}
 
-	name := f.Properties.MustString("name", "unknown")
-	parent := f.Properties.MustString("parent", name)
+	name := propertyString(f.Properties, "name", "unknown")
+	parent := propertyString(f.Properties, "parent", name)
 	cf := &CompiledFence{Area: AreaName{Parent: parent, Name: name}}
 	for _, poly := range mp {
 		cp := compiledPolygon{
@@ -50,6 +46,41 @@ func CompileFence(f *geojson.Feature) *CompiledFence {
 		cf.polygons = append(cf.polygons, cp)
 	}
 	return cf
+}
+
+// areaGeometry returns the polygonal content of g as a MultiPolygon: a
+// Polygon or MultiPolygon as is, and a GeometryCollection flattened to its
+// polygon members (nested collections included), with any point or line
+// members ignored. ok is false when g holds no polygon at all, which is what
+// makes a Point or LineString "fence" invalid rather than a fence that
+// matches nothing.
+func areaGeometry(g orb.Geometry) (mp orb.MultiPolygon, ok bool) {
+	switch g := g.(type) {
+	case orb.Polygon:
+		return orb.MultiPolygon{g}, true
+	case orb.MultiPolygon:
+		return g, true
+	case orb.Collection:
+		for _, member := range g {
+			if part, ok := areaGeometry(member); ok {
+				mp = append(mp, part...)
+			}
+		}
+		return mp, len(mp) > 0
+	default:
+		return nil, false
+	}
+}
+
+// propertyString reads a string property, returning def when the key is absent
+// or holds a non-string value. A fence can arrive from a request body, so the
+// properties map is caller-controlled, and orb's Properties.MustString panics
+// on a present non-string value even when a default is supplied.
+func propertyString(p geojson.Properties, key, def string) string {
+	if s, ok := p[key].(string); ok {
+		return s
+	}
+	return def
 }
 
 // Contains reports whether the point is inside the fence (boundary counts as

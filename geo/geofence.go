@@ -1,6 +1,7 @@
 package geo
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -295,10 +296,36 @@ func NormaliseFenceRequest(c *gin.Context) (*geojson.Feature, error) {
 }
 
 // NormaliseFenceFromBytes parses a request body (geometry, feature, or Golbat
-// fence JSON) into a geojson.Feature. This is the body-parsing path shared by
-// the gin handler NormaliseFenceRequest and the Huma POST endpoints.
+// fence JSON) into a geojson.Feature whose geometry is an area. This is the
+// body-parsing path shared by the gin handler NormaliseFenceRequest and the
+// Huma POST endpoints.
+//
+// The geometry must be a Polygon, a MultiPolygon, or a GeometryCollection
+// holding polygons (which is flattened to a MultiPolygon). A point or line
+// body is an error: as a "fence" it could only ever match a stop sitting on
+// the exact coordinate, so answering it with an empty result hid a caller
+// mistake.
 func NormaliseFenceFromBytes(body []byte) (*geojson.Feature, error) {
 	return normaliseFenceFromBytes(body, "fence request")
+}
+
+// asAreaFence rejects a feature whose geometry is missing or not an area, and
+// flattens a GeometryCollection to the MultiPolygon of its polygons.
+func asAreaFence(feature *geojson.Feature) (*geojson.Feature, error) {
+	if feature.Geometry == nil {
+		// A Feature with a null or missing geometry parses, but every
+		// consumer dereferences fence.Geometry; reject it here so the
+		// caller answers with a 400 rather than a panic.
+		return nil, errors.New("geofence feature has no geometry")
+	}
+	mp, ok := areaGeometry(feature.Geometry)
+	if !ok {
+		return nil, fmt.Errorf("geofence must be a Polygon or MultiPolygon, got %s", feature.Geometry.GeoJSONType())
+	}
+	if _, isCollection := feature.Geometry.(orb.Collection); isCollection {
+		feature.Geometry = mp
+	}
+	return feature, nil
 }
 
 // normaliseFenceFromBytes contains the actual parse logic. logContext is used
@@ -307,13 +334,13 @@ func normaliseFenceFromBytes(bodyBytes []byte, logContext string) (*geojson.Feat
 	geometry, err := geojson.UnmarshalGeometry(bodyBytes)
 	if err == nil {
 		log.Debugf("%s - received a geometry", logContext)
-		return geojson.NewFeature(geometry.Geometry()), nil
+		return asAreaFence(geojson.NewFeature(geometry.Geometry()))
 	}
 
 	feature, err := geojson.UnmarshalFeature(bodyBytes)
 	if err == nil {
 		log.Debugf("%s - received a feature", logContext)
-		return feature, nil
+		return asAreaFence(feature)
 	}
 
 	var golbatFance *GeofenceApi

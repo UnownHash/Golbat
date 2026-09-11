@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 
 	"github.com/paulmach/orb/geojson"
@@ -22,56 +23,63 @@ type QuestStatus struct {
 	TotalStops uint32 `db:"total" json:"total"`
 }
 
-func GetPokestopPositions(db DbDetails, fence *geojson.Feature) ([]QuestLocation, error) {
-	bbox := fence.Geometry.Bound()
-	bytes, err := fence.MarshalJSON()
+func GetPokestopPositions(ctx context.Context, db DbDetails, fence *geojson.Feature) ([]QuestLocation, error) {
+	const label = "select pokestop-positions"
+
+	matcher, err := newFenceMatcher(fence)
 	if err != nil {
 		return nil, err
 	}
+
+	// Only matches are retained; the candidate rows stream past.
 	areas := []QuestLocation{}
-	err = db.GeneralDb.Select(&areas, "SELECT id, lat, lon FROM pokestop "+
-		"WHERE lat > ? and lon > ? and lat < ? and lon < ? and enabled = 1 "+
-		"and ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
-
-	statsCollector.IncDbQuery("select pokestop-positions", err)
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-
+	var area QuestLocation
+	err = matcher.forEachCandidate(ctx, db.GeneralDb, label,
+		"SELECT id, lat, lon FROM pokestop "+fenceBBoxWhere, FenceBoundArgs(fence),
+		func(rows *sql.Rows) (float64, float64, error) {
+			err := rows.Scan(&area.Id, &area.Latitude, &area.Longitude)
+			return area.Latitude, area.Longitude, err
+		},
+		func() { areas = append(areas, area) })
 	if err != nil {
 		return nil, err
 	}
-
 	return areas, nil
 }
 
-func GetQuestStatus(db DbDetails, fence *geojson.Feature) (QuestStatus, error) {
-	bbox := fence.Geometry.Bound()
+func GetQuestStatus(ctx context.Context, db DbDetails, fence *geojson.Feature) (QuestStatus, error) {
+	const label = "select quest-status"
+	const bboxWhere = fenceBBoxWhere + "AND deleted = 0 "
+
 	status := QuestStatus{}
 
-	bytes, err := fence.MarshalJSON()
+	matcher, err := newFenceMatcher(fence)
 	if err != nil {
-		return status, err
+		return QuestStatus{}, err
 	}
 
-	err = db.GeneralDb.Get(&status,
-		"SELECT COUNT(*) AS total, "+
-			"COUNT(CASE WHEN quest_type IS NOT NULL THEN 1 END) AS ar_quests, "+
-			"COUNT(CASE WHEN alternative_quest_type IS NOT NULL THEN 1 END) AS no_ar_quests FROM pokestop "+
-			"WHERE lat > ? AND lon > ? AND lat < ? AND lon < ? AND enabled = 1 AND deleted = 0 "+
-			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat)) ",
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon(),
-	)
-
-	statsCollector.IncDbQuery("select quest-status", err)
-	if err == sql.ErrNoRows {
-		return status, nil
-	}
-
+	// Counting in Go keeps the aggregate identical while the per-row polygon
+	// test moves out of the database.
+	var lat, lon float64
+	var hasQuest, hasAltQuest bool
+	err = matcher.forEachCandidate(ctx, db.GeneralDb, label,
+		"SELECT lat, lon, quest_type IS NOT NULL, alternative_quest_type IS NOT NULL FROM pokestop "+bboxWhere,
+		FenceBoundArgs(fence),
+		func(rows *sql.Rows) (float64, float64, error) {
+			err := rows.Scan(&lat, &lon, &hasQuest, &hasAltQuest)
+			return lat, lon, err
+		},
+		func() {
+			status.TotalStops++
+			if hasQuest {
+				status.ArQuests++
+			}
+			if hasAltQuest {
+				status.NoArQuests++
+			}
+		})
 	if err != nil {
-		return status, err
+		return QuestStatus{}, err
 	}
-
 	return status, nil
 }

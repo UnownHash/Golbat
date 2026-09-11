@@ -389,8 +389,9 @@ type tappableByIdInput struct {
 type tappableByIdOutput struct{ Body decoder.ApiTappableResult }
 
 type pokestopPositionsInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type pokestopPositionsOutput struct{ Body []db2.QuestLocation }
@@ -715,7 +716,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokestop-positions",
 		Summary:       "List pokestop positions within a geofence",
-		Description:   "Returns the positions of pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Returns the positions of pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -724,7 +725,7 @@ func registerTier3Routes(api huma.API) {
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		response, err := decoder.GetPokestopPositions(dbDetails, fence)
+		response, err := decoder.GetPokestopPositions(ctx, dbDetails, fence)
 		if err != nil {
 			return nil, huma.Error500InternalServerError("error retrieving pokestop positions")
 		}
@@ -733,15 +734,17 @@ func registerTier3Routes(api huma.API) {
 }
 
 type questStatusInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type questStatusOutput struct{ Body db2.QuestStatus }
 
 type clearQuestsInput struct {
-	// Body is the geofence: a GeoJSON geometry, a GeoJSON feature, or a Golbat
-	// fence object. Captured as raw JSON and parsed by NormaliseFenceFromBytes.
+	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
+	// one, or a Golbat fence object. Captured as raw JSON and parsed by
+	// NormaliseFenceFromBytes, which rejects non-area geometries.
 	Body json.RawMessage
 }
 type clearQuestsOutput struct{ Body StatusResponse }
@@ -755,7 +758,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/quest-status",
 		Summary:       "Quest status within a geofence",
-		Description:   "Returns quest completion status for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Returns quest completion status for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -764,7 +767,7 @@ func registerTier4Routes(api huma.API) {
 		if err != nil {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
-		status := decoder.GetQuestStatusWithGeofence(dbDetails, fence)
+		status := decoder.GetQuestStatusWithGeofence(ctx, dbDetails, fence)
 		return &questStatusOutput{Body: status}, nil
 	})
 
@@ -774,7 +777,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/clear-quests",
 		Summary:       "Clear quests within a geofence",
-		Description:   "Deletes quests for pokestops within the supplied geofence (geometry, feature, or Golbat fence).",
+		Description:   "Deletes quests for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -789,8 +792,11 @@ func registerTier4Routes(api huma.API) {
 
 		log.Debugf("Clear quests %+v", fence)
 		startTime := time.Now()
-		decoder.ClearQuestsWithinGeofence(tctx, dbDetails, fence)
+		err = decoder.ClearQuestsWithinGeofence(tctx, dbDetails, fence)
 		log.Infof("Clear quest took %s", time.Since(startTime))
+		if err != nil {
+			return nil, huma.Error500InternalServerError("error clearing quests")
+		}
 
 		return &clearQuestsOutput{Body: StatusResponse{Status: "ok"}}, nil
 	})

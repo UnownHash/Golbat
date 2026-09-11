@@ -492,27 +492,27 @@ func updatePokestopGetMapFortCache(pokestop *Pokestop) {
 // RemoveQuestsWithinGeofence clears all quest fields for pokestops within a geofence
 // Uses cache and write-behind queue for consistency
 func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geofence *geojson.Feature) (int, error) {
-	bbox := geofence.Geometry.Bound()
-	bytes, err := geofence.MarshalJSON()
+	pokestopIds, err := db.PokestopIdsWithinFence(ctx, dbDetails, geofence)
 	if err != nil {
 		return 0, err
 	}
+	return clearQuestsForPokestops(ctx, dbDetails, pokestopIds)
+}
 
-	// Query for pokestop IDs within the geofence
-	var pokestopIds []string
-	err = dbDetails.GeneralDb.SelectContext(ctx, &pokestopIds,
-		"SELECT id FROM pokestop "+
-			"WHERE lat >= ? AND lon >= ? AND lat <= ? AND lon <= ? AND enabled = 1 "+
-			"AND ST_CONTAINS(ST_GeomFromGeoJSON('"+string(bytes)+"', 2, 0), POINT(lon, lat))",
-		bbox.Min.Lat(), bbox.Min.Lon(), bbox.Max.Lat(), bbox.Max.Lon())
-	getStatsCollector().IncDbQuery("select pokestops for quest removal", err)
-	if err != nil {
-		return 0, err
-	}
-
+// clearQuestsForPokestops clears the quest fields of each listed pokestop and
+// returns how many it cleared.
+//
+// It stops at the first context error and returns it alongside the count so
+// far. Without that check a deadline expiring mid-loop would fail every
+// remaining load, log each one, leave a zeroed placeholder per id in the
+// cache, and still report the partial count as success.
+func clearQuestsForPokestops(ctx context.Context, dbDetails db.DbDetails, pokestopIds []string) (int, error) {
 	clearedCount := 0
 
 	for _, idStr := range pokestopIds {
+		if err := ctx.Err(); err != nil {
+			return clearedCount, err
+		}
 		id, ok := ParseFortId(idStr)
 		if !ok {
 			log.Errorf("RemoveQuestsWithinGeofence: unparseable fort id %q, skipping", idStr)
@@ -520,6 +520,9 @@ func RemoveQuestsWithinGeofence(ctx context.Context, dbDetails db.DbDetails, geo
 		}
 		pokestop, unlock, err := getOrCreatePokestopRecord(ctx, dbDetails, id, "RemoveQuestsWithinGeofence")
 		if err != nil {
+			if ctx.Err() != nil {
+				return clearedCount, ctx.Err()
+			}
 			log.Errorf("RemoveQuestsWithinGeofence: failed to get pokestop %s: %v", id, err)
 			continue
 		}
