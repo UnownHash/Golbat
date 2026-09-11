@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"strconv"
 	"strings"
 
@@ -15,7 +17,15 @@ import (
 
 var k = koanf.New(".")
 
-func ReadConfig() (configDefinition, error) {
+// DefaultConfigPath is used when no config file is given on the command line.
+// A missing file at this path is not an error: the whole config can be supplied
+// through GOLBAT_* environment variables instead.
+const DefaultConfigPath = "config.toml"
+
+// ReadConfig loads configuration from defaults, then the TOML file at
+// configPath, then GOLBAT_* environment variables, each layer overriding the
+// previous one. Pass DefaultConfigPath for the standard location.
+func ReadConfig(configPath string) (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
 		ApiDocs: true,
@@ -83,9 +93,15 @@ func ReadConfig() (configDefinition, error) {
 		fmt.Println(fmt.Errorf("failed to load default config: %w", defaultErr))
 	}
 
-	readConfigErr := k.Load(file.Provider("config.toml"), toml.Parser())
-	if readConfigErr != nil && readConfigErr.Error() != "open config.toml: no such file or directory" {
-		fmt.Println(fmt.Errorf("failed to read config file: %w", readConfigErr))
+	readConfigErr := k.Load(file.Provider(configPath), toml.Parser())
+	if readConfigErr != nil {
+		if !errors.Is(readConfigErr, fs.ErrNotExist) {
+			fmt.Println(fmt.Errorf("failed to read config file %s: %w", configPath, readConfigErr))
+		} else if configPath != DefaultConfigPath {
+			// The default file is optional, but a file the user explicitly asked
+			// for must exist - otherwise we would silently start on defaults.
+			return Config, fmt.Errorf("config file %s not found", configPath)
+		}
 	}
 
 	envLoadingErr := k.Load(ProviderWithValue("GOLBAT.", ".", func(rawKey string, value string, currentMap map[string]interface{}) (string, interface{}) {
