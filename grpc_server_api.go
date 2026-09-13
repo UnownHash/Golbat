@@ -58,11 +58,10 @@ func (s *grpcApiServer) ScanPokemon(ctx context.Context, in *pb.PokemonScanReque
 	return decoder.GrpcScanPokemon(in), nil
 }
 
-// GetPokemon batches what the HTTP API serves one id at a time
-// (GET /api/pokemon/id/{pokemon_id}), so unlike the scan RPCs it has no
-// per-request result cap to inherit from the HTTP handler — the request
-// itself, one id at a time, was the HTTP API's bound. Enforce
-// tuning.max_pokemon_results directly on the id count instead.
+// GetPokemon is the batched form of GET /api/pokemon/id/{pokemon_id}. The
+// HTTP route takes one id per request and so needs no result cap; here the
+// id count is capped at tuning.max_pokemon_results, the same bound the
+// scans apply to their results.
 func (s *grpcApiServer) GetPokemon(ctx context.Context, in *pb.GetPokemonRequest) (*pb.GetPokemonResponse, error) {
 	if cap := config.Config.Tuning.MaxPokemonResults; cap > 0 {
 		if n := len(in.GetEncounterIds()); n > cap {

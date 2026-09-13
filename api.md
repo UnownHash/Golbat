@@ -542,9 +542,6 @@ These endpoints are only available if `tuning.profile_routes` is enabled in conf
 
 ## gRPC API
 
-The previous `Pokemon` gRPC service (`Search`, `SearchV3`) has been removed;
-`GolbatApi` replaces it.
-
 Golbat serves a gRPC API on `grpc_port` (the same listener as raw ingest). The
 schema is `grpc/api.proto`, package `golbat_api`, service `GolbatApi`. Server
 reflection is enabled, so `grpcurl` and `ghz` work without the proto files.

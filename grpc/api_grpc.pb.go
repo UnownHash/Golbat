@@ -33,7 +33,9 @@ const (
 //
 // GolbatApi is the gRPC counterpart of the HTTP /api scan endpoints. Every
 // message mirrors the JSON request/response struct it is named after, field
-// for field (see docs/superpowers/specs/2026-09-09-grpc-api-design.md).
+// for field; decoder/api_grpc_parity_test.go enforces that. Semantics,
+// auth and the differences from the JSON API are documented in api.md
+// under "gRPC API".
 type GolbatApiClient interface {
 	// POST /api/pokemon/v3/scan
 	ScanPokemon(ctx context.Context, in *PokemonScanRequest, opts ...grpc.CallOption) (*PokemonScanResponse, error)
@@ -123,7 +125,9 @@ func (c *golbatApiClient) ScanForts(ctx context.Context, in *FortCombinedScanReq
 //
 // GolbatApi is the gRPC counterpart of the HTTP /api scan endpoints. Every
 // message mirrors the JSON request/response struct it is named after, field
-// for field (see docs/superpowers/specs/2026-09-09-grpc-api-design.md).
+// for field; decoder/api_grpc_parity_test.go enforces that. Semantics,
+// auth and the differences from the JSON API are documented in api.md
+// under "gRPC API".
 type GolbatApiServer interface {
 	// POST /api/pokemon/v3/scan
 	ScanPokemon(context.Context, *PokemonScanRequest) (*PokemonScanResponse, error)

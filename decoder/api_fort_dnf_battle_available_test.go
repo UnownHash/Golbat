@@ -69,7 +69,7 @@ func TestIsFortDnfMatch_StationActiveWindow(t *testing.T) {
 		})
 	}
 
-	// Diadem's "battle available now" is the two predicates AND'd in one clause.
+	// "Battle available now" is the two predicates AND'd in one clause.
 	live := FortLookup{FortType: STATION, BattleAvailable: true, StationStartTimestamp: 500, StationEndTimestamp: 2000}
 	notStarted := FortLookup{FortType: STATION, BattleAvailable: true, StationStartTimestamp: 1500, StationEndTimestamp: 2000}
 	both := ApiFortDnfFilter{BattleAvailable: &yes, StationActive: &yes}

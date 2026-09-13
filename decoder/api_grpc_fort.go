@@ -7,10 +7,10 @@ import (
 	pb "golbat/grpc"
 )
 
-// gRPC adapter for the fort scan API. Requests convert to the same
-// ApiFortScan / ApiFortCombinedScan the HTTP endpoints bind, the scan
-// endpoints run unchanged, and the Api result structs mirror into proto.
-// Stored JSON blobs pass through as text exactly as the HTTP API emits them.
+// gRPC adapter for the fort scan API. A request converts to the
+// ApiFortScan / ApiFortCombinedScan the HTTP handlers bind, runs through the
+// same scan endpoint, and the Api result structs mirror into proto. Stored
+// JSON blobs pass through as text exactly as the HTTP API emits them.
 
 func intRangeToFortMinMax(r *pb.IntRange) *ApiFortDnfMinMax {
 	return intRangeTo(r, func(minV, maxV int16) ApiFortDnfMinMax { return ApiFortDnfMinMax{Min: minV, Max: maxV} })

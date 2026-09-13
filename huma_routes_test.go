@@ -404,10 +404,10 @@ func TestFortScanEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("pokestop availability keeps showcase_focus_filter for ReactMap", func(t *testing.T) {
-		// ReactMap throws when this key is missing or false
-		// (server/src/models/Pokestop.js), so it stays on this response even
-		// though capabilities now live on /api/status filters.
+	t.Run("pokestop availability carries showcase_focus_filter for ReactMap", func(t *testing.T) {
+		// ReactMap requires this key and errors when it is missing or false
+		// (server/src/models/Pokestop.js). Capabilities are advertised on
+		// /api/status filters; this one is served here as well.
 		resp := api.Get("/api/pokestop/available")
 		if resp.Code != http.StatusOK {
 			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
