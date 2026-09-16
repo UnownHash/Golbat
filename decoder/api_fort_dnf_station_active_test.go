@@ -4,7 +4,9 @@ import "testing"
 
 // TestIsFortDnfMatch_StationActive locks the station liveness gate: stations
 // are the one ephemeral fort type, and expired ones accumulate in the index —
-// station_active:true matches only stations whose end_time is in the future.
+// station_active:true never matches a station whose end_time has passed.
+// (The full predicate, including start_time and is_inactive, is covered by
+// TestIsFortDnfMatch_StationActiveWindow.)
 func TestIsFortDnfMatch_StationActive(t *testing.T) {
 	active := true
 	inactive := false

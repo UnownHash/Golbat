@@ -1,19 +1,15 @@
 package decoder
 
 import (
-	"time"
-
 	"golbat/geo"
-	pb "golbat/grpc"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type ApiPokemonScan3 struct {
-	Min        ApiLatLon              `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
-	Max        ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
-	Limit      int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
-	DnfFilters []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	Min          ApiLatLon              `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
+	Max          ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
+	Limit        int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
+	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	UpdatedAfter int64                  `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
 func (r ApiPokemonScan3) GetMin() geo.Location {
@@ -93,97 +89,4 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 	}
 
 	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch)
-}
-
-func GrpcGetPokemonInArea3(retrieveParameters *pb.PokemonScanRequestV3) ([]*pb.PokemonDetails, int, int, int) {
-	// Build consistent api request
-
-	apiRequest := ApiPokemonScan3{
-		Min: ApiLatLon{
-			Lat: float64(retrieveParameters.MinLat),
-			Lon: float64(retrieveParameters.MinLon),
-		},
-		Max: ApiLatLon{
-			Lat: float64(retrieveParameters.MaxLat),
-			Lon: float64(retrieveParameters.MaxLon),
-		},
-		Limit: int(retrieveParameters.Limit),
-	}
-	var dnfFilters []ApiPokemonDnfFilter3
-
-	for _, filter := range retrieveParameters.Filters {
-		dnfFilter := ApiPokemonDnfFilter3{
-			Pokemon: func() []ApiPokemonDnfId {
-				var pokemonRes []ApiPokemonDnfId
-				for _, pokemon := range filter.Pokemon {
-					pokemonRes = append(pokemonRes, ApiPokemonDnfId{
-						Pokemon: func() int16 {
-							if pokemon.Id == nil {
-								return 0
-							}
-							return int16(*pokemon.Id)
-						}(),
-						Form: func() *int16 {
-							if pokemon.Form != nil {
-								form := int16(*pokemon.Form)
-								return &form
-							}
-							return nil
-						}(),
-					})
-				}
-
-				return pokemonRes
-			}(),
-			Iv:    convertToMinMax(filter.Iv),
-			AtkIv: convertToMinMax(filter.AtkIv),
-			DefIv: convertToMinMax(filter.DefIv),
-			StaIv: convertToMinMax(filter.StaIv),
-			Level: convertToMinMax(filter.Level),
-			Cp:    convertToMinMax(filter.Cp),
-			Size:  convertToMinMax(filter.Size),
-			Gender: func() []int8 {
-				var genders []int8
-				for _, gender := range filter.Gender {
-					genders = append(genders, int8(gender))
-				}
-				return genders
-			}(),
-			Little: convertToMinMax(filter.PvpLittleRanking),
-			Great:  convertToMinMax(filter.PvpGreatRanking),
-			Ultra:  convertToMinMax(filter.PvpUltraRanking),
-		}
-
-		dnfFilters = append(dnfFilters, dnfFilter)
-	}
-	apiRequest.DnfFilters = dnfFilters
-
-	returnKeys, examined, skipped, total := internalGetPokemonInArea3(apiRequest)
-	results := make([]*pb.PokemonDetails, 0, len(returnKeys))
-
-	start := time.Now()
-	startUnix := start.Unix()
-
-	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v3.pokemon")
-		if pokemon != nil {
-			if int64OrZero(pokemon.ExpireTimestamp) > startUnix {
-				pokestopId := pokemon.PokestopId.Ptr()
-				apiPokemon := pb.PokemonDetails{
-					Id:         uint64(pokemon.Id),
-					PokestopId: pokestopId,
-					SpawnId:    pokemon.SpawnId.Ptr(),
-					Lat:        pokemon.Lat,
-					Lon:        pokemon.Lon,
-				}
-				results = append(results, &apiPokemon)
-			}
-
-			unlock()
-		}
-	}
-
-	log.Infof("GetPokemonInAreaV3 - result buffer time %s, %d added", time.Since(start), len(results))
-
-	return results, examined, skipped, total
 }

@@ -1,0 +1,438 @@
+syntax = "proto3";
+
+option go_package = "github.com/unownhash/golbat/grpc";
+
+package golbat_api;
+
+// GolbatApi is the gRPC counterpart of the HTTP /api scan endpoints. Every
+// message mirrors the JSON request/response struct it is named after, field
+// for field; decoder/api_grpc_parity_test.go enforces that. Semantics,
+// auth and the differences from the JSON API are documented in api.md
+// under "gRPC API".
+service GolbatApi {
+  // POST /api/pokemon/v3/scan
+  rpc ScanPokemon (PokemonScanRequest) returns (PokemonScanResponse) {}
+  // GET /api/pokemon/id/{pokemon_id}, batched. Misses are omitted; match by id.
+  rpc GetPokemon (GetPokemonRequest) returns (GetPokemonResponse) {}
+  // POST /api/gym/scan
+  rpc ScanGyms (FortScanRequest) returns (GymScanResponse) {}
+  // POST /api/pokestop/scan
+  rpc ScanPokestops (FortScanRequest) returns (PokestopScanResponse) {}
+  // POST /api/station/scan
+  rpc ScanStations (FortScanRequest) returns (StationScanResponse) {}
+  // POST /api/fort/scan
+  rpc ScanForts (FortCombinedScanRequest) returns (FortScanResponse) {}
+}
+
+// ---- shared request pieces ----
+
+message LatLon {
+  double lat = 1;
+  double lon = 2;
+}
+
+// Inclusive integer range. Unset min is 0; unset max is 32767 (no upper
+// bound). This differs from the JSON API, where an omitted max is 0.
+message IntRange {
+  optional int32 min = 1;
+  optional int32 max = 2;
+}
+
+// A pokedex id plus optional form. In a pokemon scan filter pokemon_id 0
+// matches any pokemon; an unset form matches any form.
+message DnfId {
+  int32 pokemon_id = 1;
+  optional int32 form = 2;
+}
+
+// ---- pokemon ----
+
+message PokemonDnfFilter {
+  repeated DnfId pokemon = 1;
+  IntRange iv = 2;
+  IntRange atk_iv = 3;
+  IntRange def_iv = 4;
+  IntRange sta_iv = 5;
+  IntRange level = 6;
+  IntRange cp = 7;
+  repeated int32 gender = 8;
+  IntRange size = 9;
+  IntRange pvp_little = 10;
+  IntRange pvp_great = 11;
+  IntRange pvp_ultra = 12;
+}
+
+message PokemonScanRequest {
+  LatLon min = 1;
+  LatLon max = 2;
+  int32 limit = 3;                        // 0 = server default (tuning.max_pokemon_results)
+  // OR'd clauses. As in the JSON API an EMPTY list matches nothing; send one
+  // clause with no conditions ({}) to match every pokemon.
+  repeated PokemonDnfFilter filters = 4;
+  // Only pokemon with updated > updated_after (unix seconds); unset = all.
+  // Applied at response build, after the scan and limit: counters and
+  // limit_reached describe the scan, so a page may come back short. Entities
+  // that expire or stop matching disappear silently; pass max(updated)-1
+  // from the previous response and expect the boundary second again.
+  optional int64 updated_after = 5;
+}
+
+message PokemonScanResponse {
+  repeated Pokemon pokemon = 1;
+  int32 examined = 2;
+  int32 skipped = 3;
+  int32 total = 4;
+  bool limit_reached = 5;
+}
+
+message GetPokemonRequest {
+  repeated uint64 encounter_ids = 1 [jstype = JS_STRING];
+}
+
+message GetPokemonResponse {
+  repeated Pokemon pokemon = 1;
+}
+
+message PvpEntry {
+  int32 pokemon = 1;
+  int32 form = 2;
+  double cap = 3;
+  double value = 4;
+  double level = 5;
+  int32 cp = 6;
+  double percentage = 7;
+  int32 rank = 8;
+  bool capped = 9;
+  int32 evolution = 10;
+}
+
+message PvpRankings {
+  repeated PvpEntry little = 1;
+  repeated PvpEntry great = 2;
+  repeated PvpEntry ultra = 3;
+}
+
+// Mirrors decoder.ApiPokemonResult.
+message Pokemon {
+  uint64 id = 1 [jstype = JS_STRING];
+  optional string pokestop_id = 2;
+  optional int64 spawn_id = 3 [jstype = JS_STRING];
+  double lat = 4;
+  double lon = 5;
+  optional float weight = 6;
+  optional uint32 size = 7;
+  optional float height = 8;
+  optional int64 expire_timestamp = 9;
+  optional int64 updated = 10;
+  int32 pokemon_id = 11;
+  optional uint32 move_1 = 12;
+  optional uint32 move_2 = 13;
+  optional uint32 gender = 14;
+  optional uint32 cp = 15;
+  optional uint32 atk_iv = 16;
+  optional uint32 def_iv = 17;
+  optional uint32 sta_iv = 18;
+  optional float iv = 19;
+  optional uint32 form = 20;
+  optional uint32 level = 21;
+  optional uint32 weather = 22;
+  optional uint32 costume = 23;
+  int64 first_seen_timestamp = 24;
+  int64 changed = 25;
+  optional int64 cell_id = 26 [jstype = JS_STRING];
+  bool expire_timestamp_verified = 27;
+  optional uint32 display_pokemon_id = 28;
+  optional uint32 display_pokemon_form = 29;
+  bool is_ditto = 30;
+  optional string seen_type = 31;
+  optional bool shiny = 32;
+  optional string username = 33;
+  optional double capture_1 = 34;
+  optional double capture_2 = 35;
+  optional double capture_3 = 36;
+  PvpRankings pvp = 37;
+  int32 is_event = 38;
+}
+
+// ---- forts ----
+
+message ContestFocus {
+  string type = 1;
+  optional int32 min_level = 2;
+}
+
+// Mirrors decoder.ApiFortDnfFilter. An empty repeated field means no
+// constraint (proto3 cannot distinguish empty from absent).
+message FortDnfFilter {
+  optional bool is_ar_scan_eligible = 1;
+  // Gym
+  IntRange available_slots = 2;
+  repeated int32 team_id = 3;
+  repeated int32 raid_level = 4;
+  repeated DnfId raid_pokemon_id = 5;
+  repeated int32 raid_temp_evolution_id = 6;
+  // Pokestop: quest (matches AR or no-AR)
+  repeated int32 lure_id = 7;
+  repeated int32 quest_reward_type = 8;
+  IntRange quest_reward_amount = 9;
+  repeated int32 quest_reward_item_id = 10;
+  repeated DnfId quest_reward_pokemon = 11;
+  // Pokestop: incident
+  repeated int32 incident_display_type = 12;
+  repeated int32 incident_character = 13;
+  // Pokestop: contest
+  repeated DnfId contest_pokemon = 14;
+  repeated int32 contest_pokemon_type = 15;
+  repeated ContestFocus contest_focus = 16;
+  repeated int32 contest_ranking_standard = 17;
+  // Station
+  repeated int32 battle_level = 18;
+  repeated DnfId battle_pokemon = 19;
+  optional bool stationed_gmax = 20;
+  optional bool station_active = 21;
+  // The station's is_battle_available flag as last decoded; implies nothing
+  // about the station window (station_active) or a scheduled battle.
+  optional bool battle_available = 22;
+}
+
+message FortScanRequest {
+  LatLon min = 1;
+  LatLon max = 2;
+  int32 limit = 3;                       // 0 = server default (tuning.max_fort_results)
+  repeated FortDnfFilter filters = 4;    // empty = every fort of the requested type
+  bool with_incidents = 5;               // pokestop scans only
+  optional int64 updated_after = 6;      // see PokemonScanRequest.updated_after
+}
+
+message FortTypeScanGroup {
+  repeated FortDnfFilter filters = 1;
+  int32 limit = 2;                       // per-type cap; 0 = server default (tuning.max_fort_results)
+}
+
+// One fort type's share of a combined scan's counters.
+message FortTypeScanStats {
+  int32 examined = 1;                    // forts of this type examined (lookup loaded); 0 for an excluded type
+  bool limit_reached = 2;                // this type's accepted results reached its per-type limit
+}
+
+message FortCombinedScanRequest {
+  LatLon min = 1;
+  LatLon max = 2;
+  int32 limit = 3;
+  bool with_incidents = 4;
+  FortTypeScanGroup gyms = 5;            // unset = exclude gyms (unless all three unset)
+  FortTypeScanGroup pokestops = 6;
+  FortTypeScanGroup stations = 7;
+  optional int64 updated_after = 8;      // applies to every group; see PokemonScanRequest.updated_after
+}
+
+// Mirrors decoder.ApiPokestopIncident.
+message Incident {
+  string id = 1;
+  string pokestop_id = 2;
+  int32 display_type = 3;
+  int32 style = 4;
+  int32 character = 5;
+  int64 start = 6;
+  int64 expiration = 7;
+  bool confirmed = 8;
+  int64 updated = 9;
+  optional int64 slot_1_pokemon_id = 10;
+  optional int64 slot_1_form = 11;
+  optional int64 slot_2_pokemon_id = 12;
+  optional int64 slot_2_form = 13;
+  optional int64 slot_3_pokemon_id = 14;
+  optional int64 slot_3_form = 15;
+}
+
+// Mirrors decoder.ApiStationBattleResult.
+message StationBattle {
+  int64 bread_battle_seed = 1 [jstype = JS_STRING];
+  int32 battle_level = 2;
+  int64 battle_start = 3;
+  int64 battle_end = 4;
+  int64 updated = 5;
+  optional int64 battle_pokemon_id = 6;
+  optional int64 battle_pokemon_form = 7;
+  optional int64 battle_pokemon_costume = 8;
+  optional int64 battle_pokemon_gender = 9;
+  optional int64 battle_pokemon_alignment = 10;
+  optional int64 battle_pokemon_bread_mode = 11;
+  optional int64 battle_pokemon_move_1 = 12;
+  optional int64 battle_pokemon_move_2 = 13;
+  optional int64 battle_pokemon_stamina = 14;
+  optional double battle_pokemon_cp_multiplier = 15;
+}
+
+// Mirrors decoder.ApiGymResult. *_json fields carry the stored JSON text
+// verbatim (unset = JSON null).
+message Gym {
+  string id = 1;
+  double lat = 2;
+  double lon = 3;
+  optional string name = 4;
+  optional string url = 5;
+  optional int64 last_modified_timestamp = 6;
+  optional int64 raid_end_timestamp = 7;
+  optional int64 raid_spawn_timestamp = 8;
+  optional int64 raid_battle_timestamp = 9;
+  int64 updated = 10;
+  optional int64 raid_pokemon_id = 11;
+  optional int64 guarding_pokemon_id = 12;
+  optional string guarding_pokemon_display_json = 13;
+  optional int64 available_slots = 14;
+  optional int64 team_id = 15;
+  optional int64 raid_level = 16;
+  optional int64 enabled = 17;
+  optional int64 ex_raid_eligible = 18;
+  optional int64 in_battle = 19;
+  optional int64 raid_pokemon_move_1 = 20;
+  optional int64 raid_pokemon_move_2 = 21;
+  optional int64 raid_pokemon_form = 22;
+  optional int64 raid_pokemon_alignment = 23;
+  optional int64 raid_pokemon_cp = 24;
+  optional int64 raid_is_exclusive = 25;
+  optional int64 cell_id = 26 [jstype = JS_STRING];
+  bool deleted = 27;
+  optional int64 total_cp = 28;
+  int64 first_seen_timestamp = 29;
+  optional int64 raid_pokemon_gender = 30;
+  optional int64 sponsor_id = 31;
+  optional string partner_id = 32;
+  optional int64 raid_pokemon_costume = 33;
+  optional int64 raid_pokemon_evolution = 34;
+  optional int64 ar_scan_eligible = 35;
+  optional int64 power_up_level = 36;
+  optional int64 power_up_points = 37;
+  optional int64 power_up_end_timestamp = 38;
+  optional string description = 39;
+  optional string defenders_json = 40;
+  optional string rsvps_json = 41;
+}
+
+// Mirrors decoder.ApiPokestopResult.
+message Pokestop {
+  string id = 1;
+  double lat = 2;
+  double lon = 3;
+  optional string name = 4;
+  optional string url = 5;
+  optional int64 lure_expire_timestamp = 6;
+  optional int64 last_modified_timestamp = 7;
+  int64 updated = 8;
+  optional bool enabled = 9;
+  optional int64 quest_type = 10;
+  optional int64 quest_timestamp = 11;
+  optional int64 quest_target = 12;
+  optional int64 quest_reward_type = 13;
+  optional int64 quest_item_id = 14;
+  optional int64 quest_reward_amount = 15;
+  optional int64 quest_pokemon_id = 16;
+  optional int64 quest_pokemon_form_id = 17;
+  optional string quest_conditions_json = 18;
+  optional string quest_rewards_json = 19;
+  optional string quest_template = 20;
+  optional string quest_title = 21;
+  optional int64 quest_expiry = 22;
+  optional int64 cell_id = 23 [jstype = JS_STRING];
+  bool deleted = 24;
+  int32 lure_id = 25;
+  int64 first_seen_timestamp = 26;
+  optional int64 sponsor_id = 27;
+  optional string partner_id = 28;
+  optional int64 ar_scan_eligible = 29;
+  optional int64 power_up_level = 30;
+  optional int64 power_up_points = 31;
+  optional int64 power_up_end_timestamp = 32;
+  optional int64 alternative_quest_type = 33;
+  optional int64 alternative_quest_timestamp = 34;
+  optional int64 alternative_quest_target = 35;
+  optional int64 alternative_quest_reward_type = 36;
+  optional int64 alternative_quest_item_id = 37;
+  optional int64 alternative_quest_reward_amount = 38;
+  optional int64 alternative_quest_pokemon_id = 39;
+  optional int64 alternative_quest_pokemon_form_id = 40;
+  optional string alternative_quest_conditions_json = 41;
+  optional string alternative_quest_rewards_json = 42;
+  optional string alternative_quest_template = 43;
+  optional string alternative_quest_title = 44;
+  optional int64 alternative_quest_expiry = 45;
+  optional string description = 46;
+  optional string showcase_focus_json = 47;
+  optional int64 showcase_pokemon_id = 48;
+  optional int64 showcase_pokemon_form_id = 49;
+  optional int64 showcase_pokemon_type_id = 50;
+  optional int64 showcase_ranking_standard = 51;
+  optional int64 showcase_expiry = 52;
+  optional string showcase_rankings_json = 53;
+  repeated Incident invasions = 54;
+}
+
+// Mirrors decoder.ApiStationResult.
+message Station {
+  string id = 1;
+  double lat = 2;
+  double lon = 3;
+  string name = 4;
+  int64 cell_id = 5 [jstype = JS_STRING];
+  int64 start_time = 6;
+  int64 end_time = 7;
+  int64 cooldown_complete = 8;
+  bool is_battle_available = 9;
+  bool is_inactive = 10;
+  int64 updated = 11;
+  optional int64 battle_level = 12;
+  optional int64 battle_start = 13;
+  optional int64 battle_end = 14;
+  optional int64 battle_pokemon_id = 15;
+  optional int64 battle_pokemon_form = 16;
+  optional int64 battle_pokemon_costume = 17;
+  optional int64 battle_pokemon_gender = 18;
+  optional int64 battle_pokemon_alignment = 19;
+  optional int64 battle_pokemon_bread_mode = 20;
+  optional int64 battle_pokemon_move_1 = 21;
+  optional int64 battle_pokemon_move_2 = 22;
+  optional int64 battle_pokemon_stamina = 23;
+  optional double battle_pokemon_cp_multiplier = 24;
+  optional int64 total_stationed_pokemon = 25;
+  optional int64 total_stationed_gmax = 26;
+  optional string stationed_pokemon_json = 27;
+  repeated StationBattle battles = 28;
+}
+
+message GymScanResponse {
+  repeated Gym gyms = 1;
+  int32 examined = 2;
+  int32 skipped = 3;
+  int32 total = 4;
+  bool limit_reached = 5;
+}
+
+message PokestopScanResponse {
+  repeated Pokestop pokestops = 1;
+  int32 examined = 2;
+  int32 skipped = 3;
+  int32 total = 4;
+  bool limit_reached = 5;
+}
+
+message StationScanResponse {
+  repeated Station stations = 1;
+  int32 examined = 2;
+  int32 skipped = 3;
+  int32 total = 4;
+  bool limit_reached = 5;
+}
+
+message FortScanResponse {
+  repeated Gym gyms = 1;
+  repeated Pokestop pokestops = 2;
+  repeated Station stations = 3;
+  int32 examined = 4;
+  int32 skipped = 5;
+  int32 total = 6;
+  bool limit_reached = 7;                // any type reached its limit, or the overall cap
+  FortTypeScanStats gyms_stats = 8;
+  FortTypeScanStats pokestops_stats = 9;
+  FortTypeScanStats stations_stats = 10;
+}

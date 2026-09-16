@@ -56,7 +56,11 @@ type ApiPokestopShowcaseAvailable struct {
 // ApiAvailablePokestops is the whole-instance snapshot served by
 // GET /api/pokestop/available.
 type ApiAvailablePokestops struct {
-	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"True when contest_focus Buddy selectors are supported by fort scans before the result cap"`
+	// ReactMap requires this key on this response and errors without it
+	// (server/src/models/Pokestop.js: "Golbat lacks the required
+	// showcase_focus_filter capability"). Capabilities belong on /api/status
+	// filters; add new ones there, never here.
+	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"Deprecated: use filters.showcase_focus on /api/status. Present because ReactMap requires it on this response."`
 	Quests              []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
 	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
 	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`

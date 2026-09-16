@@ -207,7 +207,7 @@ type ApiPokemonScanResultV3 struct {
 // ApiPokemonResult, discarding the candidate counts (matching the v2 shape).
 func GetPokemonInArea2Clean(req ApiPokemonScan2) []ApiPokemonResult {
 	keys, _, _, _ := internalGetPokemonInArea2(req)
-	return collectApiPokemonResults(keys, "API.ScanPokemon.v2.clean")
+	return collectApiPokemonResults(keys, "API.ScanPokemon.v2.clean", 0)
 }
 
 // GetPokemonInArea3Clean runs the v3 rtree/DNF search and returns the matched
@@ -215,7 +215,7 @@ func GetPokemonInArea2Clean(req ApiPokemonScan2) []ApiPokemonResult {
 func GetPokemonInArea3Clean(req ApiPokemonScan3) *ApiPokemonScanResultV3 {
 	keys, examined, skipped, total := internalGetPokemonInArea3(req)
 	return &ApiPokemonScanResultV3{
-		Pokemon:      collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean"),
+		Pokemon:      collectApiPokemonResults(keys, "API.ScanPokemon.v3.clean", req.UpdatedAfter),
 		Examined:     examined,
 		Skipped:      skipped,
 		Total:        total,
@@ -223,20 +223,47 @@ func GetPokemonInArea3Clean(req ApiPokemonScan3) *ApiPokemonScanResultV3 {
 	}
 }
 
-// collectApiPokemonResults peeks each pokemon by encounter ID and builds
-// ApiPokemonResult values, filtering out expired pokemon.
-func collectApiPokemonResults(keys []uint64, caller string) []ApiPokemonResult {
-	results := make([]ApiPokemonResult, 0, len(keys))
+// forEachLivePokemonResult peeks each pokemon by encounter id, skips expired
+// or uncached ones and (when updatedAfter > 0) ones not updated strictly
+// after it, builds its ApiPokemonResult under the record lock, then releases
+// the lock before handing the result (and the numeric id) to visit. Both the
+// JSON collector and the gRPC collector run this one loop.
+//
+// The updated_after gate lives here, at response build, rather than in the
+// spatial scan: the record is already locked for the copy, so the check is
+// free and needs no timestamp on PokemonLookup. The trade is that the scan
+// counters and limit_reached describe the pre-gate result set.
+func forEachLivePokemonResult(keys []uint64, caller string, updatedAfter int64, visit func(id uint64, r *ApiPokemonResult)) {
 	nowUnix := time.Now().Unix()
 	for _, key := range keys {
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, caller)
-		if pokemon != nil {
-			if int64OrZero(pokemon.ExpireTimestamp) > nowUnix {
-				results = append(results, buildApiPokemonResult(pokemon))
-			}
-			unlock()
+		if pokemon == nil {
+			continue
 		}
+		if int64OrZero(pokemon.ExpireTimestamp) <= nowUnix || !updatedStrictlyAfter(int64OrZero(pokemon.Updated), updatedAfter) {
+			unlock()
+			continue
+		}
+		r := buildApiPokemonResult(pokemon)
+		unlock()
+		visit(key, &r)
 	}
+}
+
+// updatedStrictlyAfter is the updated_after predicate shared by every scan:
+// a zero threshold disables the gate; otherwise updated must be newer.
+func updatedStrictlyAfter(updated, updatedAfter int64) bool {
+	return updatedAfter <= 0 || updated > updatedAfter
+}
+
+// collectApiPokemonResults builds ApiPokemonResult values for the live
+// pokemon among keys updated strictly after updatedAfter (0 = all), in key
+// order.
+func collectApiPokemonResults(keys []uint64, caller string, updatedAfter int64) []ApiPokemonResult {
+	results := make([]ApiPokemonResult, 0, len(keys))
+	forEachLivePokemonResult(keys, caller, updatedAfter, func(_ uint64, r *ApiPokemonResult) {
+		results = append(results, *r)
+	})
 	return results
 }
 

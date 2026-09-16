@@ -24,7 +24,7 @@ func TestGetAvailablePokestops(t *testing.T) {
 
 	res := GetAvailablePokestops(now)
 	if !res.ShowcaseFocusFilter {
-		t.Fatal("showcase_focus_filter capability must be true even when no showcases are active")
+		t.Fatal("showcase_focus_filter must stay true: ReactMap rejects the response without it")
 	}
 	if len(res.Lures) != 1 || res.Lures[0].LureId != 501 {
 		t.Fatalf("lure: %+v", res.Lures)
@@ -48,6 +48,6 @@ func TestGetAvailablePokestops(t *testing.T) {
 		t.Fatalf("decode availability: %v", err)
 	}
 	if got := string(body["showcase_focus_filter"]); got != "true" {
-		t.Fatalf("showcase_focus_filter wire value = %s, want true", got)
+		t.Fatalf("showcase_focus_filter wire value = %s, want true (ReactMap compatibility)", got)
 	}
 }

@@ -21,7 +21,7 @@ func TestGetAvailableForts(t *testing.T) {
 
 	combined := GetAvailableForts(now)
 	if !combined.Pokestops.ShowcaseFocusFilter {
-		t.Fatal("combined availability must carry the nested showcase-focus filter capability")
+		t.Fatal("combined availability must keep the nested showcase_focus_filter for ReactMap")
 	}
 	if len(combined.Gyms.Raids) != 1 {
 		t.Fatalf("gyms: %+v", combined.Gyms)

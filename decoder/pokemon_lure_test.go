@@ -369,7 +369,7 @@ func TestCollectApiPokemonResultsIncludesEstimatedExpiry(t *testing.T) {
 	request, response := testDiskEncounterProtos(encId, testFortIdStr(910108), 40.1, -73.1)
 	UpdatePokemonRecordWithDiskEncounterProto(context.Background(), db.DbDetails{}, request, response, "tester")
 
-	results := collectApiPokemonResults([]uint64{encId}, "test")
+	results := collectApiPokemonResults([]uint64{encId}, "test", 0)
 	if len(results) != 1 {
 		t.Fatalf("collectApiPokemonResults returned %d results, want 1", len(results))
 	}

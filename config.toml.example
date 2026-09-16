@@ -1,5 +1,5 @@
 port = 9001             # Listening port for golbat
-#grpc_port = 50001      # Listening port for grpc
+#grpc_port = 50001      # Listening port for grpc (raw ingest + GolbatApi, which uses api_secret)
 raw_bearer = ""         # Raw bearer (password) required
 api_secret = "golbat"   # Golbat secret required on api calls (blank for none)
 api_docs = true         # Serve interactive API docs at /docs (+ /openapi.json, /schemas); never requires the api secret

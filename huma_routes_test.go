@@ -404,7 +404,10 @@ func TestFortScanEndpoints(t *testing.T) {
 		}
 	})
 
-	t.Run("availability advertises showcase focus filtering", func(t *testing.T) {
+	t.Run("pokestop availability carries showcase_focus_filter for ReactMap", func(t *testing.T) {
+		// ReactMap requires this key and errors when it is missing or false
+		// (server/src/models/Pokestop.js). Capabilities are advertised on
+		// /api/status filters; this one is served here as well.
 		resp := api.Get("/api/pokestop/available")
 		if resp.Code != http.StatusOK {
 			t.Fatalf("pokestop availability got %d, want 200; body=%s", resp.Code, resp.Body.String())
@@ -414,7 +417,7 @@ func TestFortScanEndpoints(t *testing.T) {
 			t.Fatalf("decode pokestop availability: %v", err)
 		}
 		if supported, ok := pokestops["showcase_focus_filter"].(bool); !ok || !supported {
-			t.Fatalf("pokestop availability capability = %v, want true", pokestops["showcase_focus_filter"])
+			t.Fatalf("pokestop availability showcase_focus_filter = %v, want true", pokestops["showcase_focus_filter"])
 		}
 
 		resp = api.Get("/api/fort/available")
@@ -428,7 +431,7 @@ func TestFortScanEndpoints(t *testing.T) {
 			t.Fatalf("decode fort availability: %v", err)
 		}
 		if supported, ok := forts.Pokestops["showcase_focus_filter"].(bool); !ok || !supported {
-			t.Fatalf("nested pokestop capability = %v, want true", forts.Pokestops["showcase_focus_filter"])
+			t.Fatalf("nested showcase_focus_filter = %v, want true", forts.Pokestops["showcase_focus_filter"])
 		}
 	})
 
@@ -727,6 +730,20 @@ func TestHumaStatusRoute(t *testing.T) {
 	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
+		}
+	}
+
+	// Filter capabilities live here (not on the availability responses) so
+	// consumers detect DNF support from one place.
+	var parsed struct {
+		Filters map[string]bool `json:"filters"`
+	}
+	if err := gojson.Unmarshal(resp.Body.Bytes(), &parsed); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	for _, name := range []string{"showcase_focus", "battle_available", "updated_after"} {
+		if !parsed.Filters[name] {
+			t.Errorf("status filters.%s = %v, want true; body=%s", name, parsed.Filters[name], body)
 		}
 	}
 }

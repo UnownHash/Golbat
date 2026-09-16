@@ -18,9 +18,15 @@ type ApiAvailableStations struct {
 	Battles []ApiStationBattleAvailable `json:"battles" doc:"Distinct active battle level/pokemon options on resident stations"`
 }
 
+// newAvailableStations builds the station snapshot shared by
+// /api/station/available and the stations group of /api/fort/available.
+func newAvailableStations(now int64) *ApiAvailableStations {
+	return &ApiAvailableStations{Battles: readBattles(now)}
+}
+
 // GetAvailableStations reads the maintained battle index (no fort scan).
 func GetAvailableStations(now int64) *ApiAvailableStations {
-	res := &ApiAvailableStations{Battles: readBattles(now)}
+	res := newAvailableStations(now)
 	log.Infof("available-stations: %d battle options (maintained)", len(res.Battles))
 	return res
 }

@@ -1,12 +1,7 @@
 package decoder
 
 import (
-	"time"
-
 	"golbat/geo"
-	pb "golbat/grpc"
-
-	log "github.com/sirupsen/logrus"
 )
 
 type ApiPokemonScan2 struct {
@@ -93,91 +88,4 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) ([]uint64, in
 	}
 
 	return internalGetPokemonInArea[ApiPokemonDnfFilter](retrieveParameters, dnfFilters, isPokemonDnfMatch)
-}
-
-func GrpcGetPokemonInArea2(retrieveParameters *pb.PokemonScanRequest) []*pb.PokemonDetails {
-	// Build consistent api request
-
-	apiRequest := ApiPokemonScan2{
-		Min: ApiLatLon{
-			Lat: float64(retrieveParameters.MinLat),
-			Lon: float64(retrieveParameters.MinLon),
-		},
-		Max: ApiLatLon{
-			Lat: float64(retrieveParameters.MaxLat),
-			Lon: float64(retrieveParameters.MaxLon),
-		},
-		Limit: int(retrieveParameters.Limit),
-	}
-	var dnfFilters []ApiPokemonDnfFilter
-
-	for _, filter := range retrieveParameters.Filters {
-		dnfFilter := ApiPokemonDnfFilter{
-			Pokemon: func() []ApiPokemonDnfId {
-				var pokemonRes []ApiPokemonDnfId
-				for _, pokemon := range filter.Pokemon {
-					pokemonRes = append(pokemonRes, ApiPokemonDnfId{
-						Pokemon: func() int16 {
-							if pokemon.Id == nil {
-								return 0
-							}
-							return int16(*pokemon.Id)
-						}(),
-						Form: func() *int16 {
-							if pokemon.Form != nil {
-								form := int16(*pokemon.Form)
-								return &form
-							}
-							return nil
-						}(),
-					})
-				}
-
-				return pokemonRes
-			}(),
-			Iv:     convertToMinMax(filter.Iv),
-			AtkIv:  convertToMinMax(filter.AtkIv),
-			DefIv:  convertToMinMax(filter.DefIv),
-			StaIv:  convertToMinMax(filter.StaIv),
-			Level:  convertToMinMax(filter.Level),
-			Cp:     convertToMinMax(filter.Cp),
-			Size:   convertToMinMax(filter.Size),
-			Gender: convertToMinMax(filter.Gender),
-			Little: convertToMinMax(filter.PvpLittleRanking),
-			Great:  convertToMinMax(filter.PvpGreatRanking),
-			Ultra:  convertToMinMax(filter.PvpUltraRanking),
-		}
-
-		dnfFilters = append(dnfFilters, dnfFilter)
-	}
-	apiRequest.DnfFilters = dnfFilters
-
-	returnKeys, _, _, _ := internalGetPokemonInArea2(apiRequest)
-	results := make([]*pb.PokemonDetails, 0, len(returnKeys))
-
-	start := time.Now()
-	startUnix := start.Unix()
-
-	for _, key := range returnKeys {
-		pokemon, unlock, _ := peekPokemonRecordReadOnly(key, "API.ScanPokemon.v2.pokemon")
-		if pokemon != nil {
-			if int64OrZero(pokemon.ExpireTimestamp) > startUnix {
-				pokestopId := pokemon.PokestopId.Ptr()
-				apiPokemon := pb.PokemonDetails{
-					Id:         uint64(pokemon.Id),
-					PokestopId: pokestopId,
-					SpawnId:    pokemon.SpawnId.Ptr(),
-					Lat:        pokemon.Lat,
-					Lon:        pokemon.Lon,
-				}
-				results = append(results, &apiPokemon)
-			}
-
-			unlock()
-		}
-	}
-
-	log.Infof("GetPokemonInAreaV2 - result buffer time %s, %d added", time.Since(start), len(results))
-
-	return results
 }

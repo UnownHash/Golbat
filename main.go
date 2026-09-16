@@ -17,7 +17,6 @@ import (
 	db2 "golbat/db"
 	"golbat/decoder"
 	"golbat/external"
-	pb "golbat/grpc"
 	"golbat/stats_collector"
 	"golbat/webhooks"
 
@@ -30,7 +29,6 @@ import (
 	"github.com/jmoiron/sqlx"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
-	"google.golang.org/grpc"
 )
 
 var db *sqlx.DB
@@ -336,24 +334,16 @@ func main() {
 				log.Fatalf("failed to listen: %v", err)
 			}
 
-			// Initialize gRPC Prometheus metrics if enabled
-			var grpcServerOpts []grpc.ServerOption
+			var srvMetrics *grpcprom.ServerMetrics
 			if cfg.Prometheus.Enabled {
-				srvMetrics := grpcprom.NewServerMetrics(
+				srvMetrics = grpcprom.NewServerMetrics(
 					grpcprom.WithServerHandlingTimeHistogram(
 						grpcprom.WithHistogramBuckets(cfg.Prometheus.BucketSize),
 					),
 				)
-				grpcServerOpts = append(grpcServerOpts,
-					grpc.UnaryInterceptor(srvMetrics.UnaryServerInterceptor()),
-					grpc.StreamInterceptor(srvMetrics.StreamServerInterceptor()),
-				)
-				srvMetrics.InitializeMetrics(grpc.NewServer(grpcServerOpts...))
 			}
 
-			s := grpc.NewServer(grpcServerOpts...)
-			pb.RegisterRawProtoServer(s, &grpcRawServer{})
-			pb.RegisterPokemonServer(s, &grpcPokemonServer{})
+			s := newGrpcServer(srvMetrics)
 			log.Printf("grpc server listening at %v", lis.Addr())
 			if err := s.Serve(lis); err != nil {
 				log.Fatalf("failed to serve: %v", err)

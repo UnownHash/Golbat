@@ -5,9 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/puzpuzpuz/xsync/v4"
-	"github.com/tidwall/rtree"
-
 	"golbat/config"
 )
 
@@ -15,24 +12,10 @@ import (
 // invariant: unrelated showcases must never consume max_fort_results before
 // the exact structured-focus predicate runs.
 func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
-	oldLookup := fortLookupCache
-	oldSnapshot := fortTreeSnapshot.Load()
+	swapFortIndex(t)
 	oldMax := config.Config.Tuning.MaxFortResults
-	fortTreeMutex.Lock()
-	oldTree := fortTree
-	fortTree = rtree.RTreeG[FortId]{}
-	fortTreeMutex.Unlock()
-	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
-	fortTreeSnapshot.Store(nil)
 	config.Config.Tuning.MaxFortResults = 1
-	t.Cleanup(func() {
-		config.Config.Tuning.MaxFortResults = oldMax
-		fortLookupCache = oldLookup
-		fortTreeMutex.Lock()
-		fortTree = oldTree
-		fortTreeMutex.Unlock()
-		fortTreeSnapshot.Store(oldSnapshot)
-	})
+	t.Cleanup(func() { config.Config.Tuning.MaxFortResults = oldMax })
 
 	now := time.Now().Unix()
 	const count = 8
@@ -89,16 +72,17 @@ func TestBuddyShowcaseDnfRunsBeforeResultCap(t *testing.T) {
 		t.Fatalf("single-type scan stats = examined:%d skipped:%d total:%d, want %d/0/%d", examined, skipped, total, count, count)
 	}
 
-	gyms, stops, stations, examined, skipped, total := internalGetFortsCombined(ApiFortCombinedScan{
+	combined := internalGetFortsCombined(ApiFortCombinedScan{
 		Min:       scan.Min,
 		Max:       scan.Max,
 		Limit:     0,
 		Pokestops: &ApiFortTypeScanGroup{DnfFilters: []ApiFortDnfFilter{filter}},
 	})
+	gyms, stops, stations := combined.gyms.keys, combined.pokestops.keys, combined.stations.keys
 	if len(gyms) != 0 || len(stations) != 0 || len(stops) != 1 || stops[0] != target {
 		t.Fatalf("combined scan returned gyms=%v stops=%v stations=%v, want only stop %q", gyms, stops, stations, target)
 	}
-	if examined != count || skipped != 0 || total != count {
-		t.Fatalf("combined scan stats = examined:%d skipped:%d total:%d, want %d/0/%d", examined, skipped, total, count, count)
+	if combined.examined != count || combined.skipped != 0 || combined.total != count {
+		t.Fatalf("combined scan stats = examined:%d skipped:%d total:%d, want %d/0/%d", combined.examined, combined.skipped, combined.total, count, count)
 	}
 }
