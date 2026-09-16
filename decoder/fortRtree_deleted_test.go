@@ -18,7 +18,7 @@ func TestDeletedFortsNotIndexedOnLoad(t *testing.T) {
 	t.Cleanup(func() { config.Config.FortInMemory = prev })
 
 	t.Run("pokestop", func(t *testing.T) {
-		const id = "deleted-pokestop-on-load"
+		id := mustFortId(t, "00000000000000000000000000000d01")
 		t.Cleanup(func() { fortLookupCache.Delete(id) })
 
 		fortRtreeUpdatePokestopOnGet(&Pokestop{PokestopData: PokestopData{
@@ -31,7 +31,7 @@ func TestDeletedFortsNotIndexedOnLoad(t *testing.T) {
 	})
 
 	t.Run("gym", func(t *testing.T) {
-		const id = "deleted-gym-on-load"
+		id := mustFortId(t, "00000000000000000000000000000d02")
 		t.Cleanup(func() { fortLookupCache.Delete(id) })
 
 		fortRtreeUpdateGymOnGet(&Gym{GymData: GymData{
@@ -44,7 +44,7 @@ func TestDeletedFortsNotIndexedOnLoad(t *testing.T) {
 	})
 
 	t.Run("a live pokestop is still indexed", func(t *testing.T) {
-		const id = "live-pokestop-on-load"
+		id := mustFortId(t, "00000000000000000000000000000d03")
 		t.Cleanup(func() { fortLookupCache.Delete(id) })
 
 		fortRtreeUpdatePokestopOnGet(&Pokestop{PokestopData: PokestopData{
