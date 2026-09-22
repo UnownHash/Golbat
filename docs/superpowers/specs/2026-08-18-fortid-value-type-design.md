@@ -26,6 +26,23 @@ pokemon resident) answered this:
   including bare 32-char sponsored-fort ids, with exactly one junk row (empty string) in the
   whole database.
 
+> **Correction, 2026-09-22 — the census above was wrong, and shipped a production bug.**
+> It missed one-digit suffixes: `...cd7.2` is 34 characters, and the implemented parser
+> accepted only 32 or 35, so every fort carrying one was dropped on ingest and failed
+> `Scan` on preload. A re-run over 7,065,029 gym + pokestop + station rows found six
+> suffixes — bare, `.2`, `.11`, `.12`, `.16`, `.23` — with **no hex letter and no leading
+> zero in any row**. Both absences identify the scheme: the suffix is an **unpadded decimal
+> number**, and **0 is spelled by omitting the suffix entirely** (which is what bare ids
+> are). `.2` and `.02` are therefore not two spellings of one id — `.02` is not a string
+> Niantic emits. §2's "two-hex-digit suffix" reading below is superseded: `Suffix uint8`
+> now holds the decimal value 0–99, non-canonical spellings (`.0`, `.00`, `.02`, `.ff`) are
+> rejected rather than rewritten, and `Compare` renders the digits back so byte order still
+> equals varchar order. The type is still 17 bytes.
+>
+> The lesson for the next census: count the **shapes** (`LENGTH(id)`, character classes),
+> not just the values. The original query grouped suffixes and never asked how long they
+> were, so a 39-row shape hid inside a 7M-row result that looked complete.
+
 Decision: **`[16]byte` GUID + 1-byte numeric suffix, everywhere fort ids live, including
 `pokemon.PokestopId`.** On the decisive metric the options tie, so structure wins: the value type
 deletes the global table, its unbounded-growth ceilings, its deleted-fort leak, and its resolve
