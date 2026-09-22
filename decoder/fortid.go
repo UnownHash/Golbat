@@ -6,9 +6,6 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
-	"sync"
-
-	log "github.com/sirupsen/logrus"
 
 	"golbat/util"
 )
@@ -51,31 +48,34 @@ var FortIdParseDrops util.DropReporter
 // so "no fort" and "some fort" must never share a representation.
 type FortId struct {
 	Guid [16]byte
-	// Suffix holds the two-hex-digit suffix's value directly; 0 means the
-	// bare 32-character form.
+	// Suffix holds the id's numeric suffix as its decimal value; 0 means
+	// the bare 32-character form.
 	//
-	// Bare ids are a live shape, not legacy junk — a production census
-	// found them on sponsored forts (EE, Community Ambassador Location),
-	// updated within the hour. They are treated as Niantic's null suffix,
-	// so a literal ".00" is the same id as the bare form and canonicalizes
-	// to it (never observed; see fortIdDotZeroWarn).
+	// Niantic's suffix is an unpadded decimal number, and 0 is rendered by
+	// omitting the '.' and the digits entirely. A 7,065,029-row production
+	// census (gym + pokestop + station, 2026-09-22) found exactly six
+	// suffixes — bare, .2, .11, .12, .16, .23 — with **no hex letter in any
+	// row** and **no leading zero in any row**. Both absences are the
+	// evidence: a hexadecimal suffix would put a-f in ~37% of two-digit
+	// values, and a zero-padded one would spell .2 as .02. Bare ids are not
+	// legacy junk (they are live on sponsored forts); they are suffix 0.
 	//
-	// Nothing is enumerated. The observed set is .11/.12/.16 (pokestops,
-	// gyms, and occasionally stations) and .23 (stations), but any two
-	// lowercase hex digits parse, so a new Niantic suffix needs no code
-	// change — and the encoding is correct whether their scheme is decimal
-	// or hexadecimal.
+	// So .2 and .02 are not two spellings of one id — .02 is not a string
+	// Niantic emits, and parsing it would be guessing. Only the canonical
+	// spelling parses: a leading zero, a lone ".0", and any hex letter are
+	// rejected like any other unexpected format (logged via
+	// FortIdParseDrops, row skipped) rather than silently rewritten into a
+	// different primary key.
 	//
-	// Storing the value raw (rather than an enum, or value+1) is what makes
-	// byte order match varchar order: the bare form sorts first because its
-	// suffix byte is 0 and its string is the shorter prefix, and lowercase
-	// hex digits ascend in ASCII exactly as they ascend in value, so the
-	// fixed-width pair's lexicographic order equals its numeric order.
-	// TestFortIdCompareMatchesStringOrder pins this.
+	// Storing the decimal value keeps the type 17 bytes and makes
+	// parse/format exact inverses over every id the scheme can produce, so
+	// a FortId never rewrites the varchar it came from. Only ParseFortId,
+	// Scan and UnmarshalText construct values; they never yield a Suffix
+	// above 99, which is the largest the varchar(35) column can hold.
+	// Compare renders the suffix back to its digits so byte order still
+	// matches varchar order (TestFortIdCompareMatchesStringOrder).
 	Suffix uint8
 }
-
-const fortIdHexDigits = "0123456789abcdef"
 
 // fortIdNibble maps a byte to its hex value, or -1. Deliberately lowercase
 // only: strict parsing keeps parse and format exact inverses, which is what
@@ -94,10 +94,17 @@ var fortIdNibble = func() (t [256]int8) {
 	return
 }()
 
-// fortIdDotZeroWarn fires at most once per process: a ".00" suffix has
-// never been observed, and its appearance would be the first evidence that
-// bare ids really are the stripped zero suffix.
-var fortIdDotZeroWarn sync.Once
+// fortIdDigit maps a byte to its decimal value, or -1. The suffix is
+// decimal (see the Suffix field comment); the GUID stays hex.
+var fortIdDigit = func() (t [256]int8) {
+	for i := range t {
+		t[i] = -1
+	}
+	for c := byte('0'); c <= '9'; c++ {
+		t[c] = int8(c - '0')
+	}
+	return
+}()
 
 // ParseFortId converts the canonical string form of a fort id.
 //
@@ -108,19 +115,30 @@ var fortIdDotZeroWarn sync.Once
 // is no fallback representation.
 func ParseFortId(s string) (FortId, bool) {
 	var f FortId
-	var sawDotZero bool
 	switch len(s) {
 	case 32:
+		// Bare: suffix 0.
+	case 34:
+		if s[32] != '.' {
+			return FortId{}, false
+		}
+		// A lone ".0" is suffix 0, which Niantic spells as the bare form;
+		// accepting it would let one fort hold two keys.
+		if d := fortIdDigit[s[33]]; d > 0 {
+			f.Suffix = uint8(d)
+		} else {
+			return FortId{}, false
+		}
 	case 35:
 		if s[32] != '.' {
 			return FortId{}, false
 		}
-		hi, lo := fortIdNibble[s[33]], fortIdNibble[s[34]]
-		if hi < 0 || lo < 0 {
+		// hi > 0: a leading zero is not a spelling Niantic emits.
+		hi, lo := fortIdDigit[s[33]], fortIdDigit[s[34]]
+		if hi < 1 || lo < 0 {
 			return FortId{}, false
 		}
-		f.Suffix = byte(hi)<<4 | byte(lo)
-		sawDotZero = f.Suffix == 0
+		f.Suffix = uint8(hi)*10 + uint8(lo)
 	default:
 		return FortId{}, false
 	}
@@ -134,15 +152,6 @@ func ParseFortId(s string) (FortId, bool) {
 	if f == (FortId{}) {
 		// Reserved: the zero value means "no fort".
 		return FortId{}, false
-	}
-	if sawDotZero {
-		// Only warn once the id is known to actually succeed — an all-zero
-		// GUID with ".00" is rejected above as the sentinel, and must not
-		// burn the one-shot slot a genuine occurrence needs.
-		fortIdDotZeroWarn.Do(func() {
-			log.Warnf("[FORTID] fort id %q has a .00 suffix, which has never been observed; "+
-				"treating it as the bare form (see decoder/fortid.go)", s)
-		})
 	}
 	return f, true
 }
@@ -171,7 +180,11 @@ func (f FortId) AppendText(b []byte) ([]byte, error) {
 	b = append(b, "00000000000000000000000000000000"...)
 	hex.Encode(b[off:], f.Guid[:])
 	if f.Suffix != 0 {
-		b = append(b, '.', fortIdHexDigits[f.Suffix>>4], fortIdHexDigits[f.Suffix&0xf])
+		b = append(b, '.')
+		if f.Suffix >= 10 {
+			b = append(b, '0'+f.Suffix/10)
+		}
+		b = append(b, '0'+f.Suffix%10)
 	}
 	return b, nil
 }
@@ -238,7 +251,27 @@ func (f FortId) Compare(o FortId) int {
 	if c := bytes.Compare(f.Guid[:], o.Guid[:]); c != 0 {
 		return c
 	}
-	return cmp.Compare(f.Suffix, o.Suffix)
+	a, b := fortIdSuffixKey(f.Suffix), fortIdSuffixKey(o.Suffix)
+	if a[0] != b[0] {
+		return cmp.Compare(a[0], b[0])
+	}
+	return cmp.Compare(a[1], b[1])
+}
+
+// fortIdSuffixKey renders a suffix as the two bytes it occupies in the
+// string form, zero-padded on the right for the absent/one-digit cases.
+// Comparing these instead of the raw values is what keeps Compare equal to
+// varchar order: ".16" sorts before ".2" as a string, while 16 > 2 as a
+// number.
+func fortIdSuffixKey(s uint8) [2]byte {
+	switch {
+	case s == 0:
+		return [2]byte{}
+	case s < 10:
+		return [2]byte{'0' + s, 0}
+	default:
+		return [2]byte{'0' + s/10, '0' + s%10}
+	}
 }
 
 // Value implements driver.Valuer, writing the varchar the column has always

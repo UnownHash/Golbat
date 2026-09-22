@@ -9,13 +9,15 @@ import (
 )
 
 // genFortIdStrings builds ids in the shapes the production census found:
-// 32 lowercase hex chars, optionally followed by '.' and two hex digits.
-// Suffixes are NOT restricted to the observed set — the encoding must not
-// privilege it.
+// 32 lowercase hex chars, optionally followed by '.' and an unpadded
+// decimal suffix. Suffixes are NOT restricted to the observed set — the
+// encoding must not privilege it — but they are restricted to the observed
+// *spelling*: unpadded decimal, which is the grammar ParseFortId accepts
+// (see the Suffix field comment).
 func genFortIdStrings(t *testing.T, n int, seed uint64) []string {
 	t.Helper()
 	const hexDigits = "0123456789abcdef"
-	suffixes := []string{"", ".11", ".12", ".16", ".23", ".99", ".ff", ".0a"}
+	suffixes := []string{"", ".2", ".11", ".12", ".16", ".23", ".1", ".9", ".10", ".99"}
 	r := rand.New(rand.NewPCG(seed, seed^0x9e3779b97f4a7c15))
 	out := make([]string, n)
 	for i := range out {
@@ -54,8 +56,10 @@ func TestFortIdRoundTrip(t *testing.T) {
 		"a1b2c3d4e5f60718293a4b5c6d7e8f90.11", // pokestop/gym/station
 		"deadbeefcafef00dfeedfacebadc0de5.12", // pokestop/gym/station
 		"763109934ddb4d98b9e0d09726be1950.23", // station
+		"0c7418e52b714481a7a1b146dd554cd7.2",  // one-digit suffix (issue: dropped as unparseable)
+		"a1b2c3d4e5f60718293a4b5c6d7e8f90.9",  // one-digit, maximum
 		"00000000000000000000000000000001",    // minimum nonzero bare
-		"ffffffffffffffffffffffffffffffff.ff", // maximum
+		"ffffffffffffffffffffffffffffffff.99", // maximum suffix
 	}
 	for _, s := range cases {
 		f, ok := ParseFortId(s)
@@ -89,15 +93,22 @@ func TestFortIdParseRejects(t *testing.T) {
 		"3f4938f1348c2bc00973eeb715552b4",      // 31 chars
 		"3f4938f1348c2bc00973eeb715552b422",    // 33 chars
 		"3f4938f1348c2bc00973eeb715552b42.",    // trailing dot only
-		"3f4938f1348c2bc00973eeb715552b42.1",   // one suffix digit
 		"3f4938f1348c2bc00973eeb715552b42.161", // three suffix digits
 		"3f4938f1348c2bc00973eeb715552b42x16",  // separator not '.'
 		"3F4938F1348C2BC00973EEB715552B42.16",  // uppercase hex
 		"zzzz38f1348c2bc00973eeb715552b42.16",  // non-hex guid
-		"3f4938f1348c2bc00973eeb715552b42.zz",  // non-hex suffix
-		"3f4938f1348c2bc00973eeb715552b42.1G",  // partially non-hex suffix
+		"3f4938f1348c2bc00973eeb715552b42.zz",  // non-digit suffix
+		"3f4938f1348c2bc00973eeb715552b42.1x",  // partially non-digit suffix
 		"00000000000000000000000000000000",     // all-zero bare == sentinel
-		"00000000000000000000000000000000.00",  // canonicalizes to sentinel
+		// Non-canonical spellings of a suffix Niantic writes differently.
+		// Parsing these would let one fort hold two primary keys, so they
+		// are rejected rather than rewritten — see TestFortIdRejectsNonCanonicalSuffixes.
+		"3f4938f1348c2bc00973eeb715552b42.0",  // suffix 0 is spelled bare
+		"3f4938f1348c2bc00973eeb715552b42.00", // ditto, padded
+		"3f4938f1348c2bc00973eeb715552b42.02", // leading zero; Niantic writes .2
+		"3f4938f1348c2bc00973eeb715552b42.ff", // hex suffix; the scheme is decimal
+		"3f4938f1348c2bc00973eeb715552b42.a",  // ditto, one digit
+		"00000000000000000000000000000000.00", // all-zero + non-canonical
 	}
 	for _, s := range bad {
 		if f, ok := ParseFortId(s); ok {
@@ -123,23 +134,37 @@ func TestFortIdZeroValueIsAbsent(t *testing.T) {
 	}
 }
 
-// A literal ".00" suffix means the same id as the bare form: bare is
-// Niantic's stripped null suffix. Never observed in any census; pinned so
-// the canonicalization is deliberate rather than accidental.
-func TestFortIdDotZeroCanonicalizesToBare(t *testing.T) {
-	withSuffix, ok := ParseFortId("a1b2c3d4e5f60718293a4b5c6d7e8f90.00")
-	if !ok {
-		t.Fatal("ParseFortId of a .00 id = not ok, want ok")
+// The suffix is an unpadded decimal number and 0 is spelled by omitting the
+// suffix entirely (Suffix field comment). Every other spelling of a value —
+// ".0"/".00" for bare, ".02" for ".2" — is therefore a string Niantic does
+// not emit. Parsing one would give a single fort two primary keys: it would
+// enter memory under the canonical spelling and then upsert a second row.
+// They are rejected instead, which routes them to the same log-and-skip path
+// as any other unexpected format.
+func TestFortIdRejectsNonCanonicalSuffixes(t *testing.T) {
+	const guid = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+	for _, alias := range []string{guid + ".0", guid + ".00", guid + ".02", guid + ".016"} {
+		if f, ok := ParseFortId(alias); ok {
+			t.Errorf("ParseFortId(%q) = (%v, true); a non-canonical spelling must not parse", alias, f)
+		}
 	}
-	bare, ok := ParseFortId("a1b2c3d4e5f60718293a4b5c6d7e8f90")
-	if !ok {
-		t.Fatal("ParseFortId of the bare id = not ok, want ok")
+	// The canonical spellings it would have aliased do parse, and round trip.
+	for _, s := range []string{guid, guid + ".2", guid + ".16"} {
+		if got := mustFortId(t, s).String(); got != s {
+			t.Errorf("round trip %q -> %q", s, got)
+		}
 	}
-	if withSuffix != bare {
-		t.Fatalf(".00 id %v does not equal bare id %v", withSuffix, bare)
-	}
-	if got := withSuffix.String(); got != "a1b2c3d4e5f60718293a4b5c6d7e8f90" {
-		t.Fatalf(".00 id formats as %q, want the bare form", got)
+}
+
+// ParseFortId must never produce a suffix the string form cannot hold:
+// varchar(35) has room for two digits, so 99 is the ceiling. AppendText
+// assumes it.
+func TestFortIdSuffixNeverExceedsTwoDigits(t *testing.T) {
+	for _, s := range genFortIdStrings(t, 2000, 11) {
+		f := mustFortId(t, s)
+		if f.Suffix > 99 {
+			t.Fatalf("ParseFortId(%q).Suffix = %d, want <= 99", s, f.Suffix)
+		}
 	}
 }
 
@@ -148,9 +173,11 @@ func TestFortIdDotZeroCanonicalizesToBare(t *testing.T) {
 // to stay congruent with the database's ORDER BY id.
 func TestFortIdCompareMatchesStringOrder(t *testing.T) {
 	ids := genFortIdStrings(t, 400, 7)
-	// Include a bare/suffixed pair sharing a GUID: the shorter string must
-	// sort first, which the zero suffix byte gives us.
-	ids = append(ids, ids[0][:32], ids[0][:32]+".01")
+	// Include ids sharing a GUID that pin the two cases where numeric order
+	// and varchar order disagree: the bare form must sort before any
+	// suffixed one (shorter string first), and ".16" must sort before ".2"
+	// even though 16 > 2.
+	ids = append(ids, ids[0][:32], ids[0][:32]+".1", ids[0][:32]+".2", ids[0][:32]+".16", ids[0][:32]+".99")
 
 	parsed := make([]FortId, len(ids))
 	for i, s := range ids {
