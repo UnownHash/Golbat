@@ -299,6 +299,10 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	}
 }
 
+// gmoCellLevel is the S2 level of the cells a GetMapObjects response is
+// organised by, and so the level nearby pokemon cells are expressed at.
+const gmoCellLevel = 15
+
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
 	pokemon.SetIsEvent(0)
 	pokestopId := nearbyPokemon.FortId
@@ -337,9 +341,19 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 			lat, lon = pokestop.Lat, pokestop.Lon
 			useCellLatLon = false
 			unlock()
+			if cellId == 0 {
+				// Snapshot entry whose fort was not listed in the response:
+				// the pokestop's own location says which cell it is in.
+				cellId = int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(gmoCellLevel))
+			}
 		}
 	}
 	if useCellLatLon {
+		if cellId == 0 {
+			// No cell to place the pokemon in (a snapshot entry with an
+			// unknown pokestop). Better nothing than the centre of cell 0.
+			return
+		}
 		// Cell Pokemon
 		if !overrideLatLon && pokemon.SeenType.Code != SeenTypeCodeCell {
 			// do not downgrade to nearby cell
