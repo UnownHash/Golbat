@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"slices"
 	"time"
 
 	"golbat/config"
@@ -36,6 +37,130 @@ type dnfFilterLookup struct {
 	form    int16
 }
 
+// dnfFilterIndex groups a scan's clauses by the (pokemon, form) keys they
+// apply to, so each candidate evaluates only clauses that can match it.
+//
+// Clauses are OR'd, so a pokemon must see every clause keyed at {id, form},
+// {id, -1}, {-1, form} or {-1, -1}. Rather than probing all four keys per
+// candidate, buildDnfFilterIndex folds each clause into every more specific
+// bucket up front, so the first bucket found holds every applicable clause
+// and the per-candidate cost stays a single first-hit lookup chain.
+type dnfFilterIndex[F any] struct {
+	keyed map[dnfFilterLookup][]F // every key except {-1, -1}, pre-merged
+	any   []F                     // clauses without a pokemon list
+	// formOnly holds the unmerged {-1, form} clauses. A {id, -1} bucket
+	// cannot include them (they depend on the candidate's form), and
+	// materialising every species × form bucket would grow quadratically
+	// with the request, so they are returned alongside it instead.
+	formOnly   map[int16][]F
+	hasSpecies bool // keyed holds {id, *} buckets
+}
+
+// clauses returns every clause that can match a pokemon with the given id and
+// form: the first merged bucket found, most to least specific, plus any
+// form-only clauses that bucket could not include. A clause can appear in
+// both; evaluating it twice is harmless.
+func (ix *dnfFilterIndex[F]) clauses(pokemonId, form int16) (bucket, extra []F) {
+	if ix.hasSpecies {
+		if c, ok := ix.keyed[dnfFilterLookup{pokemon: pokemonId, form: form}]; ok {
+			return c, nil
+		}
+		if c, ok := ix.keyed[dnfFilterLookup{pokemon: pokemonId, form: -1}]; ok {
+			if ix.formOnly == nil {
+				return c, nil
+			}
+			return c, ix.formOnly[form]
+		}
+	}
+	if ix.formOnly != nil {
+		if c, ok := ix.keyed[dnfFilterLookup{pokemon: -1, form: form}]; ok {
+			return c, nil
+		}
+	}
+	return ix.any, nil
+}
+
+// buildDnfFilterIndex keys each clause by its pokemon list (id 0 = any
+// pokemon, nil form = any form; an empty list keys it at {-1, -1}) and merges
+// every bucket with the buckets it is more specific than. Each merged bucket
+// keeps request order and holds a clause once, even when the clause reaches
+// it through several keys.
+func buildDnfFilterIndex[F any](filters []F, pokemonOf func(*F) []ApiPokemonDnfId) *dnfFilterIndex[F] {
+	anyKey := dnfFilterLookup{pokemon: -1, form: -1}
+
+	// Clause indices per raw key; merging works on indices so a clause
+	// reachable through several keys can be deduplicated.
+	raw := make(map[dnfFilterLookup][]int)
+	for i := range filters {
+		ids := pokemonOf(&filters[i])
+		if len(ids) == 0 {
+			raw[anyKey] = append(raw[anyKey], i)
+			continue
+		}
+		for _, id := range ids {
+			key := dnfFilterLookup{pokemon: id.Pokemon, form: -1}
+			if key.pokemon == 0 {
+				key.pokemon = -1
+			}
+			if id.Form != nil {
+				key.form = *id.Form
+			}
+			raw[key] = append(raw[key], i)
+		}
+	}
+
+	ix := &dnfFilterIndex[F]{keyed: make(map[dnfFilterLookup][]F, len(raw))}
+	collect := func(indices []int) []F {
+		bucket := make([]F, len(indices))
+		for j, i := range indices {
+			bucket[j] = filters[i]
+		}
+		return bucket
+	}
+
+	seen := make([]bool, len(filters))
+	var merged []int
+	for key, own := range raw {
+		merged = merged[:0]
+		for _, pokemon := range [...]int16{key.pokemon, -1} {
+			for _, form := range [...]int16{key.form, -1} {
+				for _, i := range raw[dnfFilterLookup{pokemon: pokemon, form: form}] {
+					if !seen[i] {
+						seen[i] = true
+						merged = append(merged, i)
+					}
+				}
+				if form == -1 {
+					break // key.form is -1: visit {pokemon, -1} once
+				}
+			}
+			if pokemon == -1 {
+				break // key.pokemon is -1: visit {-1, *} once
+			}
+		}
+		for _, i := range merged {
+			seen[i] = false
+		}
+		slices.Sort(merged)
+		bucket := collect(merged)
+
+		switch {
+		case key == anyKey:
+			ix.any = bucket
+		case key.pokemon == -1:
+			ix.keyed[key] = bucket
+			if ix.formOnly == nil {
+				ix.formOnly = make(map[int16][]F)
+			}
+			ix.formOnly[key.form] = collect(own)
+		default:
+			ix.keyed[key] = bucket
+			ix.hasSpecies = true
+		}
+	}
+	return ix
+}
+
 type PokemonScanRetrieveParameters interface {
 	GetMin() geo.Location
 	GetMax() geo.Location
@@ -56,7 +181,7 @@ func pokemonScanLimitReached(retrieveParameters PokemonScanRetrieveParameters, r
 
 func internalGetPokemonInArea[F any](
 	retrieveParameters PokemonScanRetrieveParameters,
-	dnfFilters map[dnfFilterLookup][]F,
+	dnfFilters *dnfFilterIndex[F],
 	isPokemonDnfMatch func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *F) bool,
 ) ([]uint64, int, int, int) {
 	start := time.Now()
@@ -106,31 +231,15 @@ func internalGetPokemonInArea[F any](
 
 				matched := false
 
-				filters, found := dnfFilters[dnfFilterLookup{
-					pokemon: pokemonLookup.PokemonId,
-					form:    pokemonLookup.Form}]
-
-				if !found {
-					filters, found = dnfFilters[dnfFilterLookup{
-						pokemon: pokemonLookup.PokemonId,
-						form:    -1}]
-
-					if !found {
-						filters, found = dnfFilters[dnfFilterLookup{
-							pokemon: -1,
-							form:    -1}]
-
-						if !found {
-							return true
-						}
-					}
-				}
-
+				filters, extra := dnfFilters.clauses(pokemonLookup.PokemonId, pokemonLookup.Form)
 				for x := 0; x < len(filters); x++ {
 					if isPokemonDnfMatch(pokemonLookup, pvpLookup, &filters[x]) {
 						matched = true
 						break
 					}
+				}
+				for x := 0; !matched && x < len(extra); x++ {
+					matched = isPokemonDnfMatch(pokemonLookup, pvpLookup, &extra[x])
 				}
 
 				if matched {
