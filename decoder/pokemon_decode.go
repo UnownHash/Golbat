@@ -342,68 +342,75 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // organised by, and so the level nearby pokemon cells are expressed at.
 const gmoCellLevel = 15
 
-func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) {
-	pokemon.SetIsEvent(0)
-	pokestopId := nearbyPokemon.FortId
-	pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
-	pokemon.recomputeCpIfNeeded(ctx, db, weather)
+// updateFromNearby applies a GMO nearby sighting. A pokemon attached to a fort
+// is placed at that pokestop; a fort-less one (a cell pokemon) at its cell
+// centre. It returns false, with the record untouched, when there is nowhere
+// to place it: the pokestop is unknown or has no location, or a cell pokemon
+// has no cell. The caller must then skip the save; a later GMO can place it
+// once the pokestop is known. A pokemon already placed more precisely (wild,
+// encounter, lure) keeps its location and takes only the display.
+func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
+	applyDisplay := func() {
+		pokemon.SetIsEvent(0)
+		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
+		pokemon.recomputeCpIfNeeded(ctx, db, weather)
+	}
 
 	var lat, lon float64
 	overrideLatLon := pokemon.isNewRecord()
-	useCellLatLon := true
-	if pokestopId != "" {
+	seenType := SeenTypeCodeCell
+	var fortId FortId
+	if pokestopId := nearbyPokemon.FortId; pokestopId != "" {
 		switch pokemon.SeenType.Code {
 		case SeenTypeCodeUnset, SeenTypeCodeCell:
 			overrideLatLon = true // a better estimate is available
 		case SeenTypeCodeNearbyStop:
 		default:
-			return
+			applyDisplay()
+			return true
 		}
-		fortId, ok := ParseFortId(pokestopId)
+		var ok bool
+		fortId, ok = ParseFortId(pokestopId)
 		if !ok {
 			FortIdParseDrops.Report(func(dropped int64) {
 				log.Errorf("[POKEMON] dropped %d unparseable updateFromNearby fort id(s) in the last second (most recently pokemon %d, id %q)",
 					dropped, pokemon.Id, pokestopId)
 			})
+			return false
 		}
-		var pokestop *Pokestop
-		var unlock func()
-		if ok {
-			pokestop, unlock, _ = getPokestopRecordReadOnly(ctx, db, fortId, "updateFromNearby")
-		}
+		pokestop, unlock, _ := getPokestopRecordReadOnly(ctx, db, fortId, "updateFromNearby")
 		if pokestop == nil {
-			// Unrecognised (or unparseable) pokestop, rollback changes
-			overrideLatLon = pokemon.isNewRecord()
-		} else {
-			pokemon.SetSeenType(SeenTypeCodeNearbyStop)
-			pokemon.SetPokestopId(fortId)
-			lat, lon = pokestop.Lat, pokestop.Lon
-			useCellLatLon = false
-			unlock()
-			if cellId == 0 {
-				// Snapshot entry whose fort was not listed in the response:
-				// the pokestop's own location says which cell it is in.
-				cellId = int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(gmoCellLevel))
-			}
+			return false
 		}
-	}
-	if useCellLatLon {
+		lat, lon = pokestop.Lat, pokestop.Lon
+		unlock()
+		if lat == 0 && lon == 0 {
+			return false
+		}
 		if cellId == 0 {
-			// No cell to place the pokemon in (a snapshot entry with an
-			// unknown pokestop). Better nothing than the centre of cell 0.
-			return
+			// Snapshot entry whose fort was not listed in the response:
+			// the pokestop's own location says which cell it is in.
+			cellId = int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lon)).Parent(gmoCellLevel))
 		}
-		// Cell Pokemon
+		seenType = SeenTypeCodeNearbyStop
+	} else {
+		if cellId == 0 {
+			return false
+		}
 		if !overrideLatLon && pokemon.SeenType.Code != SeenTypeCodeCell {
 			// do not downgrade to nearby cell
-			return
+			applyDisplay()
+			return true
 		}
-
 		s2cell := s2.CellFromCellID(s2.CellID(cellId))
 		lat = s2cell.CapBound().RectBound().Center().Lat.Degrees()
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
+	}
 
-		pokemon.SetSeenType(SeenTypeCodeCell)
+	applyDisplay()
+	pokemon.SetSeenType(seenType)
+	if seenType == SeenTypeCodeNearbyStop {
+		pokemon.SetPokestopId(fortId)
 	}
 	if overrideLatLon {
 		pokemon.SetLat(lat)
@@ -417,6 +424,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 	pokemon.setUsernameIfStored(username)
+	return true
 }
 
 // SeenTypeCode is the in-memory representation of the seen_type enum column.

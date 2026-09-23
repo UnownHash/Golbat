@@ -179,8 +179,9 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 		updateTime := nearby.Timestamp / 1000
 		if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
-			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
+			if pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username) {
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
+			}
 		}
 
 		unlock()
