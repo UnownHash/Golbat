@@ -138,7 +138,8 @@ func main() {
 
 	db.SetConnMaxLifetime(time.Minute * 3) // Recommended by go mysql driver
 	db.SetMaxOpenConns(cfg.Database.MaxPool)
-	db.SetMaxIdleConns(10)
+	// Keep released connections open: redialing costs several round trips.
+	db.SetMaxIdleConns(cfg.Database.MaxPool)
 	db.SetConnMaxIdleTime(time.Minute)
 
 	pingErr := db.Ping()
