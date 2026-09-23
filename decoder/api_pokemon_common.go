@@ -106,29 +106,28 @@ func internalGetPokemonInArea[F any](
 
 				matched := false
 
-				filters, found := dnfFilters[dnfFilterLookup{
-					pokemon: pokemonLookup.PokemonId,
-					form:    pokemonLookup.Form}]
-
-				if !found {
-					filters, found = dnfFilters[dnfFilterLookup{
-						pokemon: pokemonLookup.PokemonId,
-						form:    -1}]
-
-					if !found {
-						filters, found = dnfFilters[dnfFilterLookup{
-							pokemon: -1,
-							form:    -1}]
-
-						if !found {
-							return true
+				// Clauses with a pokemon list are keyed by their most specific
+				// (pokemon, form) pair, but a pokemon also matches clauses
+				// registered under the form-wildcard, pokemon-wildcard and
+				// fully generic keys. Every applicable key has to be
+				// evaluated: stopping at the first key that exists lets a
+				// species-specific clause shadow a generic one (e.g.
+				// "Bulbasaur + female" hiding "all 100%" for male Bulbasaur),
+				// contradicting the documented OR semantics.
+				for _, lookup := range [...]dnfFilterLookup{
+					{pokemon: pokemonLookup.PokemonId, form: pokemonLookup.Form},
+					{pokemon: pokemonLookup.PokemonId, form: -1},
+					{pokemon: -1, form: pokemonLookup.Form},
+					{pokemon: -1, form: -1},
+				} {
+					filters := dnfFilters[lookup]
+					for x := range filters {
+						if isPokemonDnfMatch(pokemonLookup, pvpLookup, &filters[x]) {
+							matched = true
+							break
 						}
 					}
-				}
-
-				for x := 0; x < len(filters); x++ {
-					if isPokemonDnfMatch(pokemonLookup, pvpLookup, &filters[x]) {
-						matched = true
+					if matched {
 						break
 					}
 				}
