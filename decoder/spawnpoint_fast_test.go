@@ -4,6 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"golbat/geo"
+	"golbat/pogo"
+
 	"github.com/guregu/null/v6"
 )
 
@@ -123,5 +126,24 @@ func TestWriterFastPathPreconditions(t *testing.T) {
 	unpersisted.SetLastSeen(now)
 	if unpersisted.LastSeenFast() != now {
 		t.Fatal("SetLastSeen must publish lastSeenFast")
+	}
+}
+
+// A wild sighting at 0,0 takes the id-derived location; real coordinates
+// are used as sent; an undecodable id with no coordinates is not ok.
+func TestWildPokemonLocation(t *testing.T) {
+	lat, lon, ok := wildPokemonLocation(8855336329721, &pogo.WildPokemonProto{Latitude: 10.5, Longitude: 20.5})
+	if !ok || lat != 10.5 || lon != 20.5 {
+		t.Errorf("sent coordinates not used: %f,%f ok=%v", lat, lon, ok)
+	}
+	lat, lon, ok = wildPokemonLocation(8855336329721, &pogo.WildPokemonProto{})
+	if !ok {
+		t.Fatal("0,0 sighting with a decodable id must be ok")
+	}
+	if _, _, ok := wildPokemonLocation(0, &pogo.WildPokemonProto{}); ok {
+		t.Error("0,0 sighting with an undecodable id must not be ok")
+	}
+	if d := haversine(geo.Location{Latitude: lat, Longitude: lon}, geo.Location{Latitude: 34.06451334604487, Longitude: -117.39832236239404}) * 1000; d > 0.5 {
+		t.Errorf("0,0 sighting: derived %f,%f is %.2fm off", lat, lon, d)
 	}
 }

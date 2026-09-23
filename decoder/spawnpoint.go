@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"golbat/db"
+	"golbat/geo"
 	"golbat/pogo"
+	"golbat/util"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
@@ -359,6 +361,15 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		}
 	}
 
+	lat, lon, ok := wildPokemonLocation(spawnId, wildPokemon)
+	if !ok {
+		undecodableSpawnpointIds.Report(func(dropped int64) {
+			log.Warnf("Spawnpoint: dropped %d wild sighting(s) at 0,0 whose spawnpoint id does not decode to a level-%d cell in the last second (most recently %s)",
+				dropped, geo.SpawnpointCellLevel, wildPokemon.SpawnPointId)
+		})
+		return
+	}
+
 	if hasTTH {
 
 		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWild")
@@ -366,8 +377,8 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
 			return
 		}
-		spawnpoint.SetLat(wildPokemon.Latitude)
-		spawnpoint.SetLon(wildPokemon.Longitude)
+		spawnpoint.SetLat(lat)
+		spawnpoint.SetLon(lon)
 		spawnpoint.SetDespawnSec(null.IntFrom(int64(secondOfHour)))
 		spawnpointUpdate(ctx, db, spawnpoint)
 		unlock()
@@ -378,8 +389,8 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 			return
 		}
 		if spawnpoint.newRecord {
-			spawnpoint.SetLat(wildPokemon.Latitude)
-			spawnpoint.SetLon(wildPokemon.Longitude)
+			spawnpoint.SetLat(lat)
+			spawnpoint.SetLon(lon)
 			spawnpointUpdate(ctx, db, spawnpoint)
 		} else {
 			spawnpointSeen(ctx, db, spawnpoint)
@@ -387,6 +398,23 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		}
 		unlock()
 	}
+}
+
+// undecodableSpawnpointIds aggregates dropped sightings whose id could not
+// be turned into a location, one log line per second.
+var undecodableSpawnpointIds util.DropReporter
+
+// wildPokemonLocation is the spawnpoint location a wild sighting carries:
+// the proto's coordinates, or — the game has started sending
+// WildPokemonProtos at 0,0 — the location derived from the spawnpoint id.
+// ok is false only when the proto is at 0,0 and the id does not decode; no
+// location can be stored then, so the sighting must be dropped.
+func wildPokemonLocation(spawnId int64, wildPokemon *pogo.WildPokemonProto) (lat, lon float64, ok bool) {
+	if wildPokemon.Latitude != 0 || wildPokemon.Longitude != 0 {
+		return wildPokemon.Latitude, wildPokemon.Longitude, true
+	}
+	derived, ok := geo.SpawnpointLocation(spawnId)
+	return derived.Latitude, derived.Longitude, ok
 }
 
 func spawnpointUpdate(ctx context.Context, db db.DbDetails, spawnpoint *Spawnpoint) {
