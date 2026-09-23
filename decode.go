@@ -534,6 +534,20 @@ func extractFortMapPokemon(fort *pogo.PokemonFortProto, cellId uint64, timestamp
 	return out
 }
 
+// extractCellNearbyPokemon collects a map cell's nearby pokemon. One without
+// a fort is a cell pokemon, placed at the cell centre, and is only kept when
+// includeCellPokemon is set (the nearby_cell_pokemon scan rule).
+func extractCellNearbyPokemon(mapCell *pogo.ClientMapCellProto, includeCellPokemon bool) []decoder.RawNearbyPokemonData {
+	var out []decoder.RawNearbyPokemonData
+	for _, mon := range mapCell.NearbyPokemon {
+		if mon.FortId == "" && !includeCellPokemon {
+			continue
+		}
+		out = append(out, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+	}
+	return out
+}
+
 // extractSnapshotNearbyPokemon converts the GMO-level NearbyPokemonSnapshot
 // into the same raw records the per-cell NearbyPokemon list produces, so the
 // rest of the pipeline treats both alike. Newer clients report nearby pokemon
@@ -643,15 +657,17 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 		for _, mon := range mapCell.WildPokemon {
 			newWildPokemon = append(newWildPokemon, decoder.RawWildPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
 		}
-		for _, mon := range mapCell.NearbyPokemon {
-			newNearbyPokemon = append(newNearbyPokemon, decoder.RawNearbyPokemonData{Cell: mapCell.S2CellId, Data: mon, Timestamp: mapCell.AsOfTimeMs})
+		if scanParameters.ProcessPokemon && scanParameters.ProcessNearby {
+			newNearbyPokemon = append(newNearbyPokemon, extractCellNearbyPokemon(mapCell, scanParameters.ProcessNearbyCell)...)
 		}
 		for _, station := range mapCell.Stations {
 			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
 		}
 	}
 	// Newer clients send nearby pokemon once per response instead of per cell.
-	// Process both until the per-cell list is retired.
+	// Process both until the per-cell list is retired. Fort-less snapshot
+	// entries are skipped even with nearby_cell_pokemon on: unlike the
+	// per-cell list, the snapshot gives them no cell to be placed in.
 	if scanParameters.ProcessPokemon && scanParameters.ProcessNearby {
 		newNearbyPokemon = append(newNearbyPokemon, extractSnapshotNearbyPokemon(decodedGmo)...)
 	}

@@ -167,26 +167,23 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		}
 	}
 
-	if scanParameters.ProcessNearby {
-		for _, nearby := range nearbyPokemonList {
-			encounterId := nearby.Data.EncounterId
-
-			if nearby.Data.FortId != "" || scanParameters.ProcessNearbyCell {
-				pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, encounterId, "UpdatePokemonBatch.nearby")
-				if err != nil {
-					log.Printf("getOrCreatePokemonRecord: %s", err)
-					continue
-				}
-
-				updateTime := nearby.Timestamp / 1000
-				if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
-					pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
-					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
-				}
-
-				unlock()
-			}
+	// The nearby list is already filtered by the scan rules at extraction
+	// (decodeGMO): empty when nearby pokemon are off, and without fort-less
+	// cell pokemon unless nearby_cell_pokemon is on.
+	for _, nearby := range nearbyPokemonList {
+		pokemon, unlock, err := getOrCreatePokemonRecord(ctx, db, nearby.Data.EncounterId, "UpdatePokemonBatch.nearby")
+		if err != nil {
+			log.Printf("getOrCreatePokemonRecord: %s", err)
+			continue
 		}
+
+		updateTime := nearby.Timestamp / 1000
+		if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
+			pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username)
+			savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
+		}
+
+		unlock()
 	}
 
 	for _, mapPokemon := range mapPokemonList {

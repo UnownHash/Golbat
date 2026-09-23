@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -94,6 +95,40 @@ func TestDecodeGMOSkipsSnapshotWhenNearbyDisabled(t *testing.T) {
 		res := decodeGMO(context.Background(), &ProtoData{Data: data}, params)
 		if !strings.HasSuffix(res, " 0 nearby") {
 			t.Errorf("decodeGMO with %+v = %q, want no nearby pokemon extracted", params, res)
+		}
+	}
+}
+
+// A per-cell nearby pokemon without a fort is a cell pokemon, placed at the
+// cell centre. It is only extracted when cell pokemon are processed.
+func TestExtractCellNearbyPokemon(t *testing.T) {
+	const cell uint64 = 0x2a0000000000000f
+	mapCell := &pogo.ClientMapCellProto{
+		S2CellId:   cell,
+		AsOfTimeMs: 1000,
+		NearbyPokemon: []*pogo.NearbyPokemonProto{
+			{EncounterId: 1, FortId: "fort-a"},
+			{EncounterId: 2},
+		},
+	}
+
+	for _, tc := range []struct {
+		includeCell bool
+		want        []uint64
+	}{
+		{false, []uint64{1}},
+		{true, []uint64{1, 2}},
+	} {
+		got := extractCellNearbyPokemon(mapCell, tc.includeCell)
+		var ids []uint64
+		for _, g := range got {
+			if g.Cell != cell || g.Timestamp != 1000 {
+				t.Errorf("includeCell=%t: entry %d has cell %#x ts %d, want %#x ts 1000", tc.includeCell, g.Data.EncounterId, g.Cell, g.Timestamp, cell)
+			}
+			ids = append(ids, g.Data.EncounterId)
+		}
+		if !slices.Equal(ids, tc.want) {
+			t.Errorf("includeCell=%t: extracted %v, want %v", tc.includeCell, ids, tc.want)
 		}
 	}
 }
