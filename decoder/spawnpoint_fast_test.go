@@ -1,9 +1,11 @@
 package decoder
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"golbat/db"
 	"golbat/geo"
 	"golbat/pogo"
 
@@ -146,4 +148,120 @@ func TestWildPokemonLocation(t *testing.T) {
 	if d := haversine(geo.Location{Latitude: lat, Longitude: lon}, geo.Location{Latitude: 34.06451334604487, Longitude: -117.39832236239404}) * 1000; d > 0.5 {
 		t.Errorf("0,0 sighting: derived %f,%f is %.2fm off", lat, lon, d)
 	}
+}
+
+// A wild sighting whose spawnpoint id is not hex is dropped by the
+// spawnpoint path without panicking and without creating a spawnpoint.
+func TestSpawnpointUpdateFromWildUnparseableId(t *testing.T) {
+	wild := &pogo.WildPokemonProto{
+		EncounterId:  4243,
+		SpawnPointId: "not-hex",
+		Latitude:     10.5,
+		Longitude:    20.5,
+		Pokemon:      &pogo.PokemonProto{PokemonId: 25, PokemonDisplay: &pogo.PokemonDisplayProto{}},
+	}
+	spawnpointUpdateFromWild(context.Background(), db.DbDetails{}, wild, 1700000000000)
+}
+
+// The pokemon is placed by the same rule as the spawnpoint row: a wild
+// sighting or encounter at 0,0 takes the id-derived location, real
+// coordinates are used as sent, and a 0,0 sighting whose id does not decode
+// is refused before the record is touched.
+func TestAddWildPokemonPlacement(t *testing.T) {
+	const encounterId = 4242
+	wild := func(spawnId string, lat, lon float64) *pogo.WildPokemonProto {
+		return &pogo.WildPokemonProto{
+			EncounterId:  encounterId,
+			SpawnPointId: spawnId,
+			Latitude:     lat,
+			Longitude:    lon,
+			Pokemon: &pogo.PokemonProto{
+				PokemonId:      25,
+				PokemonDisplay: &pogo.PokemonDisplayProto{},
+			},
+		}
+	}
+	derived := geo.Location{Latitude: 34.06451334604487, Longitude: -117.39832236239404}
+	const derivedSpawnId = "80dcb2d21f9" // 8855336329721, the id TestWildPokemonLocation decodes
+	ctx := context.Background()
+
+	// A decodable id reaches setExpireTimestampFromSpawnpoint, which would
+	// otherwise go to the (absent) database; a resident spawnpoint keeps it
+	// on the cache.
+	spawnpointCache.Set(8855336329721, &Spawnpoint{SpawnpointData: SpawnpointData{Id: 8855336329721, Lat: derived.Latitude, Lon: derived.Longitude}}, time.Minute)
+	defer spawnpointCache.Delete(8855336329721)
+
+	t.Run("wild: sent coordinates are used", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		if !p.updateFromWild(ctx, db.DbDetails{}, wild("0", 10.5, 20.5), 99, nil, 1700000000000, "tester") {
+			t.Fatal("sighting with real coordinates must be accepted")
+		}
+		if p.Lat != 10.5 || p.Lon != 20.5 {
+			t.Errorf("placed at %f,%f, want 10.5,20.5", p.Lat, p.Lon)
+		}
+	})
+
+	t.Run("wild: 0,0 takes the id-derived location", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		if !p.updateFromWild(ctx, db.DbDetails{}, wild(derivedSpawnId, 0, 0), 99, nil, 1700000000000, "tester") {
+			t.Fatal("0,0 sighting with a decodable id must be accepted")
+		}
+		if d := haversine(geo.Location{Latitude: p.Lat, Longitude: p.Lon}, derived) * 1000; d > 0.5 {
+			t.Errorf("placed at %f,%f, %.2fm from the id's cell centre", p.Lat, p.Lon, d)
+		}
+		if p.SpawnId.ValueOrZero() != 8855336329721 {
+			t.Errorf("SpawnId = %d, want 8855336329721", p.SpawnId.ValueOrZero())
+		}
+	})
+
+	t.Run("wild: 0,0 with an undecodable id is dropped untouched", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		if p.updateFromWild(ctx, db.DbDetails{}, wild("0", 0, 0), 99, nil, 1700000000000, "tester") {
+			t.Fatal("0,0 sighting with an undecodable id must be dropped")
+		}
+		if p.IsDirty() || p.SeenType.Valid || p.CellId.Valid || p.PokemonId != 0 {
+			t.Errorf("dropped sighting mutated the record: dirty=%t seenType=%v cell=%v pokemonId=%d", p.IsDirty(), p.SeenType, p.CellId, p.PokemonId)
+		}
+	})
+
+	t.Run("wild: an unparseable spawnpoint id is dropped untouched", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		if p.updateFromWild(ctx, db.DbDetails{}, wild("not-hex", 10.5, 20.5), 99, nil, 1700000000000, "tester") {
+			t.Fatal("sighting with an unparseable spawnpoint id must be dropped")
+		}
+		if p.IsDirty() || p.Lat != 0 || p.Lon != 0 {
+			t.Errorf("dropped sighting mutated the record: dirty=%t at %f,%f", p.IsDirty(), p.Lat, p.Lon)
+		}
+	})
+
+	t.Run("encounter: 0,0 takes the id-derived location", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		enc := &pogo.EncounterOutProto{Pokemon: wild(derivedSpawnId, 0, 0)}
+		if !p.updatePokemonFromEncounterProto(ctx, db.DbDetails{}, enc, "tester", 1700000000000) {
+			t.Fatal("0,0 encounter with a decodable id must be accepted")
+		}
+		if d := haversine(geo.Location{Latitude: p.Lat, Longitude: p.Lon}, derived) * 1000; d > 0.5 {
+			t.Errorf("placed at %f,%f, %.2fm from the id's cell centre", p.Lat, p.Lon, d)
+		}
+		if !p.CellId.Valid || p.CellId.ValueOrZero() == 0 {
+			t.Errorf("CellId = %v, want one derived from the placed location", p.CellId)
+		}
+	})
+
+	t.Run("encounter: 0,0 with an undecodable id is dropped untouched", func(t *testing.T) {
+		p := &Pokemon{}
+		p.Id = encounterId
+		enc := &pogo.EncounterOutProto{Pokemon: wild("0", 0, 0)}
+		if p.updatePokemonFromEncounterProto(ctx, db.DbDetails{}, enc, "tester", 1700000000000) {
+			t.Fatal("0,0 encounter with an undecodable id must be dropped")
+		}
+		if p.IsDirty() || p.SeenType.Valid || p.CellId.Valid {
+			t.Errorf("dropped encounter mutated the record: dirty=%t seenType=%v cell=%v", p.IsDirty(), p.SeenType, p.CellId)
+		}
+	})
 }

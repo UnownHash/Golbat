@@ -27,7 +27,9 @@ func UpdatePokemonRecordWithEncounterProto(ctx context.Context, db db.DbDetails,
 	}
 	defer unlock()
 
-	pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp)
+	if !pokemon.updatePokemonFromEncounterProto(ctx, db, encounter, username, timestamp) {
+		return fmt.Sprintf("Dropped encounter %d at 0,0 with undecodable spawnpoint id %q", encounterId, encounter.Pokemon.SpawnPointId)
+	}
 	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestamp/1000, username)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
