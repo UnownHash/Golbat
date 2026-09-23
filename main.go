@@ -303,6 +303,10 @@ func main() {
 	// FortInMemory: enables rtree spatial lookups (only loads forts)
 	fortInMemory := cfg.FortInMemory
 
+	// Rows written at 0,0 while the game withheld wild-pokemon coordinates:
+	// fix them from their ids before the cache is warmed from the table.
+	decoder.RepairZeroLocationSpawnpoints(dbDetails)
+
 	if cfg.Preload {
 		// Full preload: loads forts, stations, spawnpoints into cache
 		// Registers forts with fort tracker, optionally builds rtree
