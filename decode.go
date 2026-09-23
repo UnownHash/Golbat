@@ -534,6 +534,50 @@ func extractFortMapPokemon(fort *pogo.PokemonFortProto, cellId uint64, timestamp
 	return out
 }
 
+// extractSnapshotNearbyPokemon converts the GMO-level NearbyPokemonSnapshot
+// into the same raw records the per-cell NearbyPokemon list produces, so the
+// rest of the pipeline treats both alike. Newer clients report nearby pokemon
+// once per response instead of per cell, and snapshot entries carry no cell or
+// timestamp of their own. A pokemon attached to a fort takes the cell and
+// timestamp of the map cell that lists that fort. One whose fort is not in
+// this response is passed on with no cell: updateFromNearby derives it from
+// the pokestop's stored location, and drops the entry if the pokestop is
+// unknown. One without a fort at all is skipped: the only position available
+// for it would be the scanner's own, which must not be used to place pokemon.
+func extractSnapshotNearbyPokemon(gmo *pogo.GetMapObjectsOutProto) []decoder.RawNearbyPokemonData {
+	snapshot := gmo.GetNearbyPokemonSnapshot().GetPokemon()
+	if len(snapshot) == 0 || len(gmo.MapCell) == 0 {
+		return nil
+	}
+
+	type cellRef struct {
+		cell      uint64
+		timestamp int64
+	}
+	fortCells := make(map[string]cellRef)
+	for _, mapCell := range gmo.MapCell {
+		for _, fort := range mapCell.Fort {
+			fortCells[fort.FortId] = cellRef{cell: mapCell.S2CellId, timestamp: mapCell.AsOfTimeMs}
+		}
+	}
+	// Entries whose fort is not listed in this response take the response's
+	// timestamp; every cell in a GMO carries the same as-of time.
+	fallback := cellRef{timestamp: gmo.MapCell[0].AsOfTimeMs}
+
+	out := make([]decoder.RawNearbyPokemonData, 0, len(snapshot))
+	for _, mon := range snapshot {
+		if mon == nil || mon.FortId == "" {
+			continue
+		}
+		ref, ok := fortCells[mon.FortId]
+		if !ok {
+			ref = fallback
+		}
+		out = append(out, decoder.RawNearbyPokemonData{Cell: ref.cell, Data: mon, Timestamp: ref.timestamp})
+	}
+	return out
+}
+
 func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder.ScanParameters) string {
 	decodedGmo := &pogo.GetMapObjectsOutProto{}
 
@@ -606,6 +650,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 			newStations = append(newStations, decoder.RawStationData{Cell: mapCell.S2CellId, Data: station})
 		}
 	}
+	// Newer clients send nearby pokemon once per response instead of per cell.
+	// Process both until the per-cell list is retired.
+	newNearbyPokemon = append(newNearbyPokemon, extractSnapshotNearbyPokemon(decodedGmo)...)
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
