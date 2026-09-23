@@ -184,13 +184,18 @@ func internalGetPokemonInArea[F any](
 	lockedTime := time.Since(start)
 	totalPokemon := pokemonTree2.Len()
 
-	var returnKeys []uint64
+	// A scan that hits the limit collects maxPokemon results; sizing the
+	// result slice and the dedup set for that up front avoids regrowing
+	// both while candidates stream in. The cap keeps a huge limit from
+	// reserving memory a small result never uses.
+	resultHint := min(maxPokemon, 4096)
+	returnKeys := make([]uint64, 0, resultHint)
 
 	performScan := func() {
 		pokemonMatched := 0
 		// The shared snapshot can briefly hold duplicate points for one id
 		// (eviction delete still queued while a save re-added the point).
-		seen := make(map[uint64]struct{})
+		seen := make(map[uint64]struct{}, resultHint)
 		// Hoisted outside the closure: its address is passed to the
 		// (indirect) matcher call, which would otherwise heap-escape a
 		// fresh copy per candidate. One escape per scan, reused for all
