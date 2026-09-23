@@ -34,7 +34,8 @@ from a single `GetMapObjectsOutProto`:
 - **Wild pokémon** — basic location and despawn data, plus spawnpoint and
   TTH updates. Gated by `ProcessPokemon` + `ProcessWild`.
 - **Nearby pokémon** — minimal data; written only if the pokémon is attached
-  to a pokestop, or if `ProcessNearbyCell` is enabled for cell-only nearby.
+  to a pokestop, or if `ProcessNearbyCell` (off by default) is enabled for
+  cell-only nearby.
   Gated by `ProcessPokemon` + `ProcessNearby`.
 - **Map pokémon** (pokémon tied to forts, e.g. lure spawns). Gated by
   `ProcessPokemon`.
