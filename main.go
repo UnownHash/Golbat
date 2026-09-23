@@ -104,6 +104,8 @@ func main() {
 		Addr:                 cfg.Database.Addr,
 		DBName:               cfg.Database.Db,
 		AllowNativePasswords: true,
+		// One round trip per query instead of prepare, execute and close.
+		InterpolateParams: true,
 	}
 
 	dbConnectionString := mysqlConfig.FormatDSN()
