@@ -119,14 +119,16 @@ func TestDnfFilterIndexMatchesDefinition(t *testing.T) {
 				if got := clauseNumbers(bucket, extra); !slices.Equal(got, want) {
 					t.Fatalf("clauses %+v: clauses(%d, %d) = %v, want %v", clauses, pokemon, form, got, want)
 				}
-				// A merged bucket is evaluated per candidate: request order,
-				// each clause once.
-				var order []int
-				for _, c := range bucket {
-					order = append(order, c.n)
-				}
-				if !slices.IsSorted(order) || len(slices.Compact(slices.Clone(order))) != len(order) {
-					t.Fatalf("clauses %+v: bucket for (%d, %d) = %v, want ascending without duplicates", clauses, pokemon, form, order)
+				// Each slice is evaluated per candidate: request order, each
+				// clause once.
+				for name, part := range map[string][]dnfTestClause{"bucket": bucket, "extra": extra} {
+					var order []int
+					for _, c := range part {
+						order = append(order, c.n)
+					}
+					if !slices.IsSorted(order) || len(slices.Compact(slices.Clone(order))) != len(order) {
+						t.Fatalf("clauses %+v: %s for (%d, %d) = %v, want ascending without duplicates", clauses, name, pokemon, form, order)
+					}
 				}
 			}
 		}
@@ -147,5 +149,23 @@ func TestDnfFilterIndexStaysLinear(t *testing.T) {
 	}
 	if got := clauseNumbers(ix.clauses(5, 7)); !slices.Equal(got, []int{0}) {
 		t.Errorf("clauses(5, 7) = %v, want [0]", got)
+	}
+}
+
+// 0 and negative ids mean any pokemon (ReactMap sends -1); nil and negative
+// forms mean any form. They must key the generic bucket, not a species or
+// form bucket no candidate can hit, which would switch on the probes for
+// the whole scan.
+func TestDnfFilterIndexWildcardIds(t *testing.T) {
+	formMinus2 := int16(-2)
+	ix := buildTestIndex([]dnfTestClause{
+		{n: 0, pokemon: []ApiPokemonDnfId{{Pokemon: -1}}},
+		{n: 1, pokemon: []ApiPokemonDnfId{{Pokemon: -2, Form: &formMinus2}}},
+	})
+	if ix.hasSpecies || ix.hasFormOnly || len(ix.keyed) != 0 {
+		t.Errorf("wildcard ids built keyed buckets %v (species %v, form-only %v)", ix.keyed, ix.hasSpecies, ix.hasFormOnly)
+	}
+	if got := clauseNumbers(ix.clauses(25, 3)); !slices.Equal(got, []int{0, 1}) {
+		t.Errorf("clauses(25, 3) = %v, want [0 1]", got)
 	}
 }
