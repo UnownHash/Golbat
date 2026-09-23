@@ -330,7 +330,11 @@ func Abs(x int64) int64 {
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
 	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	if err != nil {
-		panic(err)
+		unparseableSpawnpointIds.Report(func(dropped int64) {
+			log.Errorf("Spawnpoint: dropped %d wild sighting(s) with an unparseable spawnpoint id in the last second (most recently %q: %s)",
+				dropped, wildPokemon.SpawnPointId, err)
+		})
+		return
 	}
 
 	hasTTH := wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0

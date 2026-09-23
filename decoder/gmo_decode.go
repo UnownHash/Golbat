@@ -159,8 +159,9 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 
 			updateTime := wild.Timestamp / 1000
 			if pokemon.isNewRecord() || pokemon.wildSignificantUpdate(wild.Data, updateTime) {
-				pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username)
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
+				if pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username) {
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
+				}
 			}
 			unlock()
 		}

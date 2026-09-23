@@ -9,18 +9,18 @@ import (
 // TappableData contains all database-persisted fields for Tappable.
 // This struct is embedded in Tappable and can be safely copied for write-behind queueing.
 type TappableData struct {
-	Id                      uint64      `db:"id"`
-	Lat                     float64     `db:"lat"`
-	Lon                     float64     `db:"lon"`
-	FortId                  FortId      `db:"fort_id"` // either fortId or spawnpointId are given; zero value = absent
-	SpawnId                 null.Int    `db:"spawn_id"`
-	Type                    string      `db:"type"`
-	Encounter               null.Int    `db:"pokemon_id"`
-	ItemId                  null.Int    `db:"item_id"`
-	Count                   null.Int    `db:"count"`
-	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
-	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
-	Updated                 int64       `db:"updated"`
+	Id                      uint64   `db:"id"`
+	Lat                     float64  `db:"lat"`
+	Lon                     float64  `db:"lon"`
+	FortId                  FortId   `db:"fort_id"` // either fortId or spawnpointId are given; zero value = absent
+	SpawnId                 null.Int `db:"spawn_id"`
+	Type                    string   `db:"type"`
+	Encounter               null.Int `db:"pokemon_id"`
+	ItemId                  null.Int `db:"item_id"`
+	Count                   null.Int `db:"count"`
+	ExpireTimestamp         null.Int `db:"expire_timestamp"`
+	ExpireTimestampVerified bool     `db:"expire_timestamp_verified"`
+	Updated                 int64    `db:"updated"`
 }
 
 // Tappable struct.
