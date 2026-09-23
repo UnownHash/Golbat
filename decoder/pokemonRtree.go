@@ -189,6 +189,11 @@ func handlePokemonEviction(pokemon *Pokemon) {
 	// Non-blocking: eviction callbacks are one goroutine per item and this
 	// one holds the entity lock — see treeEvictor.Enqueue for the incident
 	// a blocking send here caused.
+	// A pokemon with no position was never indexed, so there is nothing to
+	// evict -- and (0,0) deletes are what make the degenerate pile expensive.
+	if !hasRealPosition(pokemon.Lat, pokemon.Lon) {
+		return
+	}
 	pokemonTreeEvictor.TryEnqueue(pokemonId, pokemon.Lat, pokemon.Lon)
 }
 
@@ -197,10 +202,22 @@ func handlePokemonEviction(pokemon *Pokemon) {
 // entity locks) never contend on the tree mutex. Preload and tests use the
 // direct add/remove functions below.
 func queuePokemonTreeInsert(pokemon *Pokemon) {
+	// Never index a pokemon with no position. The record, webhooks, database
+	// writes and encounters are unaffected; only the map index waits until a
+	// real position is known.
+	if !hasRealPosition(pokemon.Lat, pokemon.Lon) {
+		return
+	}
 	pokemonTreeEvictor.EnqueueInsert(uint64(pokemon.Id), pokemon.Lat, pokemon.Lon)
 }
 
 func queuePokemonTreeRemove(pokemonId uint64, lat, lon float64) {
+	// Guarding the remove matters as much as the insert: an encounter supplying
+	// a real position removes the old entry first, so an unguarded delete aims
+	// a steady stream of removals at the most degenerate point in the tree.
+	if !hasRealPosition(lat, lon) {
+		return
+	}
 	pokemonTreeEvictor.Enqueue(pokemonId, lat, lon)
 }
 
@@ -413,6 +430,10 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 }
 
 func addPokemonToTree(pokemon *Pokemon) {
+	if !hasRealPosition(pokemon.Lat, pokemon.Lon) {
+		return
+	}
+
 	pokemonId := uint64(pokemon.Id)
 
 	pokemonTreeMutex.Lock()

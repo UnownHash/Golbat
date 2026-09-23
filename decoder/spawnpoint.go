@@ -359,6 +359,30 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		}
 	}
 
+	if !hasRealPosition(wildPokemon.Latitude, wildPokemon.Longitude) {
+		// No position was supplied. Keep an existing spawnpoint's timings fresh,
+		// but never write (0,0) over a known location and never create a new
+		// spawnpoint without one: a spawnpoint's identity is its position, and a
+		// null one corrupts the record for every later consumer.
+		spawnpoint, unlock, err := getSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWildNoPosition")
+		if err != nil {
+			log.Errorf("getSpawnpointRecord: %s", err)
+			return
+		}
+		if spawnpoint == nil {
+			return
+		}
+		if hasTTH {
+			spawnpoint.SetDespawnSec(null.IntFrom(int64(secondOfHour)))
+		}
+		spawnpointSeen(ctx, db, spawnpoint)
+		spawnpointUpdate(ctx, db, spawnpoint)
+		if unlock != nil {
+			unlock()
+		}
+		return
+	}
+
 	if hasTTH {
 
 		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWild")

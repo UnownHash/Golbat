@@ -110,12 +110,60 @@ func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
 	return 0 // the encounter cache interprets 0 as its default TTL
 }
 
+// hasRealPosition reports whether a latitude/longitude pair is a position at
+// all. Wild pokemon stopped carrying coordinates in the 0.427 rollout: the
+// proto fields are unchanged (latitude is still field 3, longitude field 4)
+// and decode correctly, they simply arrive as zero. Zero is a real point in
+// the Gulf of Guinea, so writing it is not a harmless placeholder -- every
+// wild pokemon lands on one coordinate, and an R-tree cannot split coincident
+// points, so that pile becomes a single degenerate node whose delete cost
+// grows with its own size.
+func hasRealPosition(lat, lon float64) bool {
+	return lat != 0 || lon != 0
+}
+
+// deriveMissingPosition supplies a position when the wild proto carried none.
+// The spawnpoint is authoritative: a spawnpoint id is derived from its
+// location, so a known spawnpoint returns the exact original coordinates.
+// Failing that the containing map cell is used, which is the same estimate
+// upstream settled on for nearby pokemon -- a level-15 cell is comparable to
+// nearby range. A pokemon with neither keeps no position, and the tree guards
+// leave it out of the map index rather than pile it at (0,0).
+func (pokemon *Pokemon) deriveMissingPosition(ctx context.Context, db db.DbDetails, cellId int64) {
+	if hasRealPosition(pokemon.Lat, pokemon.Lon) {
+		return
+	}
+
+	if pokemon.SpawnId.Valid {
+		spawnpoint, unlock, err := getSpawnpointRecord(ctx, db, pokemon.SpawnId.ValueOrZero(), "deriveMissingPosition")
+		if err == nil && spawnpoint != nil {
+			lat, lon := spawnpoint.Lat, spawnpoint.Lon
+			if unlock != nil {
+				unlock()
+			}
+			if hasRealPosition(lat, lon) {
+				pokemon.SetLat(lat)
+				pokemon.SetLon(lon)
+				return
+			}
+		}
+	}
+
+	if cellId != 0 {
+		center := s2.CellID(uint64(cellId)).LatLng()
+		pokemon.SetLat(center.Lat.Degrees())
+		pokemon.SetLon(center.Lng.Degrees())
+	}
+}
+
 func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
-	pokemon.SetLat(wildPokemon.Latitude)
-	pokemon.SetLon(wildPokemon.Longitude)
+	if hasRealPosition(wildPokemon.Latitude, wildPokemon.Longitude) {
+		pokemon.SetLat(wildPokemon.Latitude)
+		pokemon.SetLon(wildPokemon.Longitude)
+	}
 
 	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	if err != nil {
@@ -185,6 +233,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true)
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetCellId(null.IntFrom(cellId))
+	pokemon.deriveMissingPosition(ctx, db, cellId)
 	pokemon.setUsernameIfStored(username)
 }
 
