@@ -11,8 +11,8 @@ import (
 )
 
 type ApiPokemonDnfId struct {
-	Pokemon int16  `json:"id" doc:"Pokedex id to match; 0 matches any pokemon. Required within a pokemon entry — a form without an id can never match."`
-	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null matches any form of the given id."`
+	Pokemon int16  `json:"id" doc:"Pokedex id to match; 0 (or a negative value) matches any pokemon. Required within a pokemon entry — a form without an id can never match."`
+	Form    *int16 `json:"form" required:"false" doc:"Form id to match; null (or a negative value) matches any form of the given id."`
 }
 
 // ApiPokemonDnfMinMax is an inclusive integer range used by the filter clauses.
@@ -41,118 +41,103 @@ type dnfFilterLookup struct {
 // apply to, so each candidate evaluates only clauses that can match it.
 //
 // Clauses are OR'd, so a pokemon must see every clause keyed at {id, form},
-// {id, -1}, {-1, form} or {-1, -1}. Rather than probing all four keys per
-// candidate, buildDnfFilterIndex folds each clause into every more specific
-// bucket up front, so the first bucket found holds every applicable clause
-// and the per-candidate cost stays a single first-hit lookup chain.
+// {id, -1}, {-1, form} and {-1, -1}. Rather than probing all four keys per
+// candidate, buildDnfFilterIndex folds the less specific keys into each
+// species bucket up front, so the first bucket found holds every applicable
+// clause and the per-candidate cost stays a single first-hit lookup chain.
 type dnfFilterIndex[F any] struct {
-	keyed map[dnfFilterLookup][]F // every key except {-1, -1}, pre-merged
-	any   []F                     // clauses without a pokemon list
-	// formOnly holds the unmerged {-1, form} clauses. A {id, -1} bucket
-	// cannot include them (they depend on the candidate's form), and
-	// materialising every species × form bucket would grow quadratically
-	// with the request, so they are returned alongside it instead.
-	formOnly   map[int16][]F
-	hasSpecies bool // keyed holds {id, *} buckets
+	// keyed holds every key except {-1, -1}. A species bucket ({id, form} or
+	// {id, -1}) is merged with every less specific key it covers. A form-only
+	// bucket ({-1, form}) is left as listed: merging it into every {id, -1}
+	// bucket would need a bucket per species × form pair, quadratic in the
+	// request, so clauses returns it separately instead.
+	keyed       map[dnfFilterLookup][]F
+	any         []F // clauses without a pokemon list
+	hasSpecies  bool
+	hasFormOnly bool
 }
 
 // clauses returns every clause that can match a pokemon with the given id and
-// form: the first merged bucket found, most to least specific, plus any
-// form-only clauses that bucket could not include. A clause can appear in
-// both; evaluating it twice is harmless.
+// form as up to two slices: the first bucket found, most to least specific,
+// plus whatever that bucket could not have merged. A clause listed under two
+// keys can appear in both slices; evaluating it twice is harmless.
 func (ix *dnfFilterIndex[F]) clauses(pokemonId, form int16) (bucket, extra []F) {
 	if ix.hasSpecies {
 		if c, ok := ix.keyed[dnfFilterLookup{pokemon: pokemonId, form: form}]; ok {
 			return c, nil
 		}
 		if c, ok := ix.keyed[dnfFilterLookup{pokemon: pokemonId, form: -1}]; ok {
-			if ix.formOnly == nil {
-				return c, nil
+			if ix.hasFormOnly {
+				return c, ix.keyed[dnfFilterLookup{pokemon: -1, form: form}]
 			}
-			return c, ix.formOnly[form]
+			return c, nil
 		}
 	}
-	if ix.formOnly != nil {
+	if ix.hasFormOnly {
 		if c, ok := ix.keyed[dnfFilterLookup{pokemon: -1, form: form}]; ok {
-			return c, nil
+			return c, ix.any
 		}
 	}
 	return ix.any, nil
 }
 
-// buildDnfFilterIndex keys each clause by its pokemon list (id 0 = any
-// pokemon, nil form = any form; an empty list keys it at {-1, -1}) and merges
-// every bucket with the buckets it is more specific than. Each merged bucket
-// keeps request order and holds a clause once, even when the clause reaches
-// it through several keys.
+// buildDnfFilterIndex keys each clause by its pokemon list (a non-positive
+// id = any pokemon, a nil or negative form = any form; an empty list keys it
+// at {-1, -1}) and merges
+// each species bucket with the less specific keys it covers. Every bucket
+// keeps request order and holds a clause once, even when the clause is listed
+// under several of the keys a bucket merges, or under the same key twice.
 func buildDnfFilterIndex[F any](filters []F, pokemonOf func(*F) []ApiPokemonDnfId) *dnfFilterIndex[F] {
 	anyKey := dnfFilterLookup{pokemon: -1, form: -1}
 
-	// Clause indices per raw key; merging works on indices so a clause
-	// reachable through several keys can be deduplicated.
-	raw := make(map[dnfFilterLookup][]int)
+	// Clause positions per key as listed in the request. Merging works on
+	// positions so a clause reachable through several keys can be deduplicated.
+	listed := make(map[dnfFilterLookup][]int)
 	for i := range filters {
 		ids := pokemonOf(&filters[i])
 		if len(ids) == 0 {
-			raw[anyKey] = append(raw[anyKey], i)
+			listed[anyKey] = append(listed[anyKey], i)
 			continue
 		}
 		for _, id := range ids {
+			// -1 is the wildcard on both axes. Any other non-positive id or
+			// negative form would make a key no candidate can hit, which
+			// would still switch on the species or form probes for the
+			// whole scan.
 			key := dnfFilterLookup{pokemon: id.Pokemon, form: -1}
-			if key.pokemon == 0 {
+			if key.pokemon <= 0 {
 				key.pokemon = -1
 			}
-			if id.Form != nil {
+			if id.Form != nil && *id.Form >= 0 {
 				key.form = *id.Form
 			}
-			raw[key] = append(raw[key], i)
+			listed[key] = append(listed[key], i)
 		}
 	}
 
-	ix := &dnfFilterIndex[F]{keyed: make(map[dnfFilterLookup][]F, len(raw))}
-	collect := func(indices []int) []F {
-		bucket := make([]F, len(indices))
-		for j, i := range indices {
-			bucket[j] = filters[i]
-		}
-		return bucket
-	}
-
-	seen := make([]bool, len(filters))
+	ix := &dnfFilterIndex[F]{keyed: make(map[dnfFilterLookup][]F, len(listed))}
 	var merged []int
-	for key, own := range raw {
-		merged = merged[:0]
-		for _, pokemon := range [...]int16{key.pokemon, -1} {
-			for _, form := range [...]int16{key.form, -1} {
-				for _, i := range raw[dnfFilterLookup{pokemon: pokemon, form: form}] {
-					if !seen[i] {
-						seen[i] = true
-						merged = append(merged, i)
-					}
-				}
-				if form == -1 {
-					break // key.form is -1: visit {pokemon, -1} once
-				}
+	for key, positions := range listed {
+		merged = append(merged[:0], positions...)
+		if key.pokemon != -1 {
+			merged = append(merged, listed[anyKey]...)
+			if key.form != -1 {
+				merged = append(merged, listed[dnfFilterLookup{pokemon: key.pokemon, form: -1}]...)
+				merged = append(merged, listed[dnfFilterLookup{pokemon: -1, form: key.form}]...)
 			}
-			if pokemon == -1 {
-				break // key.pokemon is -1: visit {-1, *} once
-			}
-		}
-		for _, i := range merged {
-			seen[i] = false
 		}
 		slices.Sort(merged)
-		bucket := collect(merged)
-
+		merged = slices.Compact(merged) // a clause may list the same key twice
+		bucket := make([]F, len(merged))
+		for j, i := range merged {
+			bucket[j] = filters[i]
+		}
 		switch {
 		case key == anyKey:
 			ix.any = bucket
 		case key.pokemon == -1:
 			ix.keyed[key] = bucket
-			if ix.formOnly == nil {
-				ix.formOnly = make(map[int16][]F)
-			}
-			ix.formOnly[key.form] = collect(own)
+			ix.hasFormOnly = true
 		default:
 			ix.keyed[key] = bucket
 			ix.hasSpecies = true

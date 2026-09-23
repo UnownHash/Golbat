@@ -17,12 +17,10 @@ import (
 func seedDnfBenchPokemon(b *testing.B, n int) {
 	b.Helper()
 	r := rand.New(rand.NewSource(1))
-	ids := make([]uint64, 0, n)
-	points := make([][2]float64, 0, n)
+	seeded := make([]*Pokemon, 0, n)
 	for i := 0; i < n; i++ {
-		id := uint64(95_000_000 + i)
 		p := &Pokemon{PokemonData: PokemonData{
-			Id:        Uint64Str(id),
+			Id:        Uint64Str(uint64(95_000_000 + i)),
 			Lat:       50 + r.Float64(),
 			Lon:       50 + r.Float64(),
 			PokemonId: int16(1 + r.Intn(400)),
@@ -32,27 +30,23 @@ func seedDnfBenchPokemon(b *testing.B, n int) {
 		}}
 		p.ExpireTimestamp = null.ValueFrom(uint32(time.Now().Unix() + 3600))
 		pokemonRtreePreloadInsert(p)
-		ids = append(ids, id)
-		points = append(points, [2]float64{p.Lon, p.Lat})
+		seeded = append(seeded, p)
 	}
 	pokemonTreeSnapshot.Store(nil)
 	b.Cleanup(func() {
-		pokemonTreeMutex.Lock()
-		for i, id := range ids {
-			pokemonTree.Delete(points[i], points[i], id)
-			pokemonLookupCache.Delete(id)
+		for _, p := range seeded {
+			unindexScannedPokemon(p)
 		}
-		pokemonTreeMutex.Unlock()
-		pokemonTreeSnapshot.Store(nil)
 	})
 }
 
 // BenchmarkPokemonDnfScan scans 100k candidates with request shapes seen from
-// real clients. "matched" is reported so variants can be checked for equal
-// results as well as speed.
+// real clients, at the default result limit (scans stop once it is hit) and
+// unbounded (every candidate is examined, which isolates the per-candidate
+// cost). "matched" is reported so variants can be checked for equal results
+// as well as speed.
 func BenchmarkPokemonDnfScan(b *testing.B) {
 	prevLimit, prevLevel := config.Config.Tuning.MaxPokemonResults, log.GetLevel()
-	config.Config.Tuning.MaxPokemonResults = 1 << 30
 	log.SetLevel(log.WarnLevel)
 	b.Cleanup(func() {
 		config.Config.Tuning.MaxPokemonResults = prevLimit
@@ -97,19 +91,29 @@ func BenchmarkPokemonDnfScan(b *testing.B) {
 			{Iv: iv(100, 100)},
 		}},
 	}
-	for _, tc := range cases {
-		params := ApiPokemonScan3{
-			Min:        ApiLatLon{Lat: 50, Lon: 50},
-			Max:        ApiLatLon{Lat: 51, Lon: 51},
-			DnfFilters: tc.filters,
-		}
-		b.Run(tc.name, func(b *testing.B) {
-			var matched int
-			for b.Loop() {
-				keys, _, _, _ := internalGetPokemonInArea3(params)
-				matched = len(keys)
+	limits := []struct {
+		name  string
+		limit int
+	}{
+		{"default-limit", 3000}, // config default for max_pokemon_results
+		{"unbounded", 1 << 30},
+	}
+	for _, lim := range limits {
+		config.Config.Tuning.MaxPokemonResults = lim.limit
+		for _, tc := range cases {
+			params := ApiPokemonScan3{
+				Min:        ApiLatLon{Lat: 50, Lon: 50},
+				Max:        ApiLatLon{Lat: 51, Lon: 51},
+				DnfFilters: tc.filters,
 			}
-			b.ReportMetric(float64(matched), "matched")
-		})
+			b.Run(lim.name+"/"+tc.name, func(b *testing.B) {
+				var matched int
+				for b.Loop() {
+					keys, _, _, _ := internalGetPokemonInArea3(params)
+					matched = len(keys)
+				}
+				b.ReportMetric(float64(matched), "matched")
+			})
+		}
 	}
 }

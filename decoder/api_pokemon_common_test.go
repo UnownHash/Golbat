@@ -9,12 +9,34 @@ import (
 	"golbat/config"
 )
 
-// seedScannedPokemon places a live pokemon in the rtree and lookup cache for
-// the duration of one test. Call pokemonTreeSnapshot.Store(nil) after seeding
-// to make the next scan see the fresh tree.
+// indexScannedPokemon places p in the pokemon tree and lookup cache for the
+// duration of one test or benchmark and resets the scan snapshot so the next
+// scan sees it. It does not touch pokemonCache; a test that builds full
+// results (rather than scanning for keys) adds the entity itself.
+func indexScannedPokemon(tb testing.TB, p *Pokemon) {
+	tb.Helper()
+	pokemonRtreePreloadInsert(p)
+	pokemonTreeSnapshot.Store(nil)
+	tb.Cleanup(func() { unindexScannedPokemon(p) })
+}
+
+// unindexScannedPokemon reverses pokemonRtreePreloadInsert for p, form count
+// included, the way the eviction path does.
+func unindexScannedPokemon(p *Pokemon) {
+	id := uint64(p.Id)
+	if item, ok := pokemonLookupCache.LoadAndDelete(id); ok && item.HasLookup {
+		adjustPokemonFormCount(pokemonFormKey{item.PokemonLookup.PokemonId, item.PokemonLookup.Form}, -1)
+	}
+	pokemonTreeMutex.Lock()
+	pokemonTree.Delete([2]float64{p.Lon, p.Lat}, [2]float64{p.Lon, p.Lat}, id)
+	pokemonTreeMutex.Unlock()
+	pokemonTreeSnapshot.Store(nil)
+}
+
+// seedScannedPokemon indexes a live pokemon with the fields the DNF tests
+// filter on.
 func seedScannedPokemon(t *testing.T, id uint64, lat, lon float64, pokemonId int16, form uint16, gender uint8, iv float32) {
 	t.Helper()
-
 	p := &Pokemon{PokemonData: PokemonData{
 		Id:        Uint64Str(id),
 		Lat:       lat,
@@ -25,17 +47,7 @@ func seedScannedPokemon(t *testing.T, id uint64, lat, lon float64, pokemonId int
 		Iv:        null.ValueFrom(iv),
 	}}
 	p.ExpireTimestamp = null.ValueFrom(uint32(time.Now().Unix() + 600))
-
-	pokemonRtreePreloadInsert(p)
-	pokemonCache.Set(id, p, time.Minute)
-	t.Cleanup(func() {
-		pokemonCache.Delete(id)
-		pokemonLookupCache.Delete(id)
-		pokemonTreeMutex.Lock()
-		pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, id)
-		pokemonTreeMutex.Unlock()
-		pokemonTreeSnapshot.Store(nil)
-	})
+	indexScannedPokemon(t, p)
 }
 
 func matchedKeys(keys []uint64) map[uint64]struct{} {
@@ -62,7 +74,6 @@ func TestPokemonDnfGenericClauseNotShadowedBySpeciesClause(t *testing.T) {
 	seedScannedPokemon(t, maleBulbasaur, lat, lon, 1, 0, 1, 100)
 	seedScannedPokemon(t, femaleBulbasaur, lat, lon, 1, 0, 2, 100)
 	seedScannedPokemon(t, malePidgey, lat, lon, 16, 0, 1, 100)
-	pokemonTreeSnapshot.Store(nil)
 
 	params := ApiPokemonScan3{
 		Min: ApiLatLon{Lat: lat - 0.01, Lon: lon - 0.01},
@@ -103,7 +114,6 @@ func TestPokemonDnfAnyPokemonFormClauseMatches(t *testing.T) {
 
 	seedScannedPokemon(t, formZero, lat, lon, 1, 0, 1, 100)
 	seedScannedPokemon(t, formOne, lat, lon, 1, 1, 1, 100)
-	pokemonTreeSnapshot.Store(nil)
 
 	params := ApiPokemonScan3{
 		Min: ApiLatLon{Lat: lat - 0.01, Lon: lon - 0.01},
