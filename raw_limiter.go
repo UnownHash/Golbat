@@ -42,6 +42,11 @@ var rawProcessingWaiting atomic.Int64
 // second — log I/O amplifying the overload it reports.
 var rawShedDrops util.DropReporter
 
+// Slow slot waits are aggregated the same way. slowSlotWaitMax holds the
+// longest wait since the last report.
+var slowSlotWaits util.DropReporter
+var slowSlotWaitMax atomic.Int64
+
 // initSlowDbQueryLogging resolves tuning.slow_db_query_ms into the db
 // package's [DB_SLOW] threshold (0 = 1s default, negative = disabled).
 func initSlowDbQueryLogging() {
@@ -112,8 +117,22 @@ func acquireRawProcessingSlot() (func(), bool) {
 		sem <- struct{}{}
 		rawProcessingWaiting.Add(-1)
 		if wait := time.Since(start); wait > rawSlotWaitWarning {
-			log.Warnf("[RAW_LIMITER] waited %s for a processing slot (limit %d)", wait, cap(sem))
+			reportSlowSlotWait(wait, cap(sem))
 		}
 	}
 	return func() { <-sem }, true
+}
+
+func reportSlowSlotWait(wait time.Duration, limit int) {
+	for {
+		longest := slowSlotWaitMax.Load()
+		if int64(wait) <= longest || slowSlotWaitMax.CompareAndSwap(longest, int64(wait)) {
+			break
+		}
+	}
+	slowSlotWaits.Report(func(count int64) {
+		longest := time.Duration(slowSlotWaitMax.Swap(0))
+		log.Warnf("[RAW_LIMITER] %d packets waited over %s for a processing slot in the last second (longest %s, limit %d)",
+			count, rawSlotWaitWarning, longest.Round(time.Millisecond), limit)
+	})
 }

@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"golbat/config"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func TestRawLimiterBoundsConcurrency(t *testing.T) {
@@ -97,4 +102,29 @@ func TestRawLimiterShedsWhenParkedQueueFull(t *testing.T) {
 
 	rawProcessingWaiting.Store(0)
 	release()
+}
+
+// Slow slot waits are logged once per second with a count and the longest
+// wait, not once per packet.
+func TestSlowSlotWaitsAggregate(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+	slowSlotWaits.Reset()
+	slowSlotWaitMax.Store(0)
+
+	reportSlowSlotWait(2*time.Second, 64)
+	reportSlowSlotWait(5*time.Second, 64)
+	reportSlowSlotWait(3*time.Second, 64)
+	if lines := strings.Count(buf.String(), "[RAW_LIMITER]"); lines != 1 {
+		t.Fatalf("got %d log lines within one second, want 1:\n%s", lines, buf.String())
+	}
+
+	time.Sleep(1100 * time.Millisecond)
+	buf.Reset()
+	reportSlowSlotWait(4*time.Second, 64)
+	got := buf.String()
+	if !strings.Contains(got, "3 packets") || !strings.Contains(got, "longest 5s") {
+		t.Fatalf("second window should report the 3 suppressed waits and the longest of them, got:\n%s", got)
+	}
 }
