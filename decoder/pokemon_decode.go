@@ -183,8 +183,9 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 	pokemonDisplay := wildPokemon.PokemonDisplay
 	// We would accept a wild update if the pokemon has changed; or to extend an unknown spawn time that is expired
 
-	// Narrowed on both sides, as in wildSignificantUpdate above.
-	pokemonChanged := pokemon.PokemonId != int16(pokemonDisplay.DisplayId) ||
+	// Narrowed on both sides, as in wildSignificantUpdate above. The species
+	// is PokedexNumber: PokemonDisplay.DisplayId carries the encounter id.
+	pokemonChanged := pokemon.PokemonId != int16(wildPokemon.PokedexNumber) ||
 		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
 		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
 		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||

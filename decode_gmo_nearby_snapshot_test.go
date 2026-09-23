@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
+
+	"golbat/decoder"
 	"golbat/pogo"
+	"golbat/stats_collector"
 )
 
 // Newer clients deliver nearby pokemon in a response-level snapshot instead
@@ -60,5 +66,34 @@ func TestExtractSnapshotNearbyPokemonAbsent(t *testing.T) {
 	gmo := &pogo.GetMapObjectsOutProto{MapCell: []*pogo.ClientMapCellProto{{S2CellId: 7}}}
 	if got := extractSnapshotNearbyPokemon(gmo); got != nil {
 		t.Fatalf("got %+v from a response with no snapshot, want nil", got)
+	}
+}
+
+// The snapshot is only extracted when nearby pokemon are processed; a scan
+// rule that disables them skips the work entirely.
+func TestDecodeGMOSkipsSnapshotWhenNearbyDisabled(t *testing.T) {
+	statsCollector = stats_collector.NewNoopStatsCollector()
+	data, err := proto.Marshal(&pogo.GetMapObjectsOutProto{
+		Status: pogo.GetMapObjectsOutProto_SUCCESS,
+		MapCell: []*pogo.ClientMapCellProto{
+			{S2CellId: 0x2a0000000000000f, AsOfTimeMs: 1000, Fort: []*pogo.PokemonFortProto{{FortId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}},
+		},
+		NearbyPokemonSnapshot: &pogo.NearbyPokemonSnapshot{
+			Status:  pogo.NearbyPokemonSnapshot_COMPLETE,
+			Pokemon: []*pogo.NearbyPokemonProto{{EncounterId: 1, FortId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, params := range []decoder.ScanParameters{
+		{ProcessPokemon: false, ProcessNearby: true},
+		{ProcessPokemon: true, ProcessNearby: false},
+	} {
+		res := decodeGMO(context.Background(), &ProtoData{Data: data}, params)
+		if !strings.HasSuffix(res, " 0 nearby") {
+			t.Errorf("decodeGMO with %+v = %q, want no nearby pokemon extracted", params, res)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/golang/geo/s2"
+	"github.com/guregu/null/v6"
 
 	"golbat/db"
 	"golbat/pogo"
@@ -63,4 +64,31 @@ func TestUpdateFromNearbyWithoutCell(t *testing.T) {
 			t.Errorf("pokemon placed anyway: cell %+v at (%v, %v) seen type %d", p.CellId, p.Lat, p.Lon, p.SeenType.Code)
 		}
 	})
+}
+
+// Snapshot entries carry the encounter id in PokemonDisplay.DisplayId, not
+// the species. An unchanged pokemon must not count as a significant update,
+// or every nearby pokemon is rewritten on every GMO.
+func TestNearbySignificantUpdateIgnoresDisplayId(t *testing.T) {
+	p := &Pokemon{}
+	p.Id = 3920828785339412403
+	p.PokemonId = 66
+	p.SetSeenType(SeenTypeCodeNearbyStop)
+	p.SetExpireTimestamp(null.IntFrom(1700000600))
+
+	// The value seen on the wire: DisplayId is the encounter id.
+	encounterId := uint64(3920828785339412403)
+	nearby := func(dex int32) *pogo.NearbyPokemonProto {
+		return &pogo.NearbyPokemonProto{
+			EncounterId:    encounterId,
+			PokedexNumber:  dex,
+			PokemonDisplay: &pogo.PokemonDisplayProto{DisplayId: int64(encounterId)},
+		}
+	}
+	if p.nearbySignificantUpdate(nearby(66), 1700000000) {
+		t.Error("unchanged nearby pokemon reported as a significant update")
+	}
+	if !p.nearbySignificantUpdate(nearby(67), 1700000000) {
+		t.Error("species change not reported as a significant update")
+	}
 }

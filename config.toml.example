@@ -124,6 +124,8 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 # Example: Disable nearby pokemon in MainArea, allow everything from Scout context, disable all pokemon elsewhere
 
 # Under heavy load you will gain an advantage from disabling nearby_pokemon
+# nearby_cell_pokemon (nearby pokemon with no pokestop, placed at the S2 cell centre) is off unless
+# a rule sets it to true; nearby_pokemon does not enable it
 # Contexts sent from dragonite are Fort, Pokemon, Quest, Scout, RarePokemon
 
 #[[scan_rules]]

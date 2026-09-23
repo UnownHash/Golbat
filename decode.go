@@ -652,7 +652,9 @@ func decodeGMO(ctx context.Context, protoData *ProtoData, scanParameters decoder
 	}
 	// Newer clients send nearby pokemon once per response instead of per cell.
 	// Process both until the per-cell list is retired.
-	newNearbyPokemon = append(newNearbyPokemon, extractSnapshotNearbyPokemon(decodedGmo)...)
+	if scanParameters.ProcessPokemon && scanParameters.ProcessNearby {
+		newNearbyPokemon = append(newNearbyPokemon, extractSnapshotNearbyPokemon(decodedGmo)...)
+	}
 
 	if scanParameters.ProcessGyms || scanParameters.ProcessPokestops {
 		decoder.UpdateFortBatch(ctx, dbDetails, scanParameters, newForts)
