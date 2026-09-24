@@ -378,7 +378,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 
 		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromWild")
 		if err != nil {
-			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
+			reportSpawnpointLoadFailure(spawnId, err)
 			return
 		}
 		spawnpoint.SetLat(lat)
@@ -389,7 +389,7 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 	} else {
 		spawnpoint, unlock, err := getOrCreateSpawnpointRecord(ctx, db, spawnId, "spawnpointUpdateFromMap")
 		if err != nil {
-			log.Errorf("getOrCreateSpawnpointRecord: %s", err)
+			reportSpawnpointLoadFailure(spawnId, err)
 			return
 		}
 		if spawnpoint.newRecord {
@@ -407,6 +407,17 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 // undecodableSpawnpointIds aggregates dropped sightings whose id could not
 // be turned into a location, one log line per second.
 var undecodableSpawnpointIds util.DropReporter
+
+// spawnpointLoadFailures aggregates failed spawnpoint loads, one log line per
+// second. One expired context fails every later spawnpoint in its GMO.
+var spawnpointLoadFailures util.DropReporter
+
+func reportSpawnpointLoadFailure(spawnId int64, err error) {
+	spawnpointLoadFailures.Report(func(dropped int64) {
+		log.Errorf("getOrCreateSpawnpointRecord: skipped %d spawnpoint update(s) in the last second (most recently %d: %s)",
+			dropped, spawnId, err)
+	})
+}
 
 // wildPokemonLocation is the spawnpoint location a wild sighting carries:
 // the proto's coordinates, or — the game has started sending

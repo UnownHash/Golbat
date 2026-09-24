@@ -265,3 +265,35 @@ func TestAddWildPokemonPlacement(t *testing.T) {
 		}
 	})
 }
+
+// Preload skips the load paths that sync the lock-free mirrors, but a
+// preloaded spawnpoint must still skip its lock when nothing changes.
+func TestPreloadedSpawnpointTakesFastPaths(t *testing.T) {
+	const spawnId = 8855336329721
+	now := time.Now()
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1200), LastSeen: now.Unix()}}
+	cachePreloadedSpawnpoint(sp)
+	defer spawnpointCache.Delete(spawnId)
+
+	sp.Lock("TestPreloadedSpawnpointTakesFastPaths")
+	defer sp.Unlock()
+
+	p := &Pokemon{}
+	p.SetSpawnId(null.IntFrom(spawnId))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		wild := &pogo.WildPokemonProto{SpawnPointId: "80dcb2d21f9", Latitude: 10.5, Longitude: 20.5}
+		spawnpointUpdateFromWild(context.Background(), db.DbDetails{}, wild, now.UnixMilli())
+		p.setExpireTimestampFromSpawnpoint(context.Background(), db.DbDetails{}, now.UnixMilli(), true)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sighting of a preloaded spawnpoint blocked on its lock")
+	}
+	if !p.ExpireTimestampVerified {
+		t.Error("preloaded despawn second did not verify the pokemon's expiry")
+	}
+}
