@@ -389,13 +389,12 @@ Three API versions exist (V1/V2/V3), all following the same pattern:
 
 **DNF (Disjunctive Normal Form) Filters**: An array of filter clauses OR'd together. Each clause has AND'd conditions (IV range, level range, CP range, pokemon ID + form, PVP ranking, gender, size). A pokemon matches if ANY clause fully matches.
 
-**Filter lookup optimization**: Filters are pre-indexed per request by `{pokemonId, form}` key (`buildDnfFilterIndex`); a non-positive id means any pokemon (`-1`), a nil or negative form any form. Clauses are OR'd, so a pokemon must see every clause keyed at `{id, form}`, `{id, -1}`, `{-1, form}` or `{-1, -1}` — a species clause must never shadow a generic one. The index merges the less specific keys into each species bucket at build time, so the scan does a single first-hit probe per candidate:
-1. Exact `{pokemonId, form}` — already holds everything below
-2. Wildcard form: `{pokemonId, -1}` — plus the `{-1, form}` bucket, which is kept unmerged (crossing it into every species bucket would grow quadratically with the request)
-3. Wildcard pokemon: `{-1, form}` — plus the generic clauses; only probed when such keys exist
-4. Global catch-all: `{-1, -1}` — returned directly when no keyed clauses exist
+**Filter lookup optimization**: Filters are pre-indexed by `{pokemonId, form}` key. For each pokemon, the system tries:
+1. Exact `{pokemonId, form}` match
+2. Wildcard form: `{pokemonId, -1}`
+3. Global catch-all: `{-1, -1}`
 
-This avoids iterating all filters for every pokemon. `BenchmarkPokemonDnfScan` covers the common request shapes at the default result limit and unbounded.
+This avoids iterating all filters for every pokemon.
 
 #### Fort Scan
 

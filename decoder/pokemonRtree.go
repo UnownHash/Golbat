@@ -275,11 +275,11 @@ func lookupInt16[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) int16 {
 // lookupForm reads the stored form into PokemonLookup.Form. Unlike the two
 // helpers above it has no absent sentinel — an absent form is 0, matching the
 // column — but it must still never produce -1, for a different reason: -1 is
-// the *wildcard-form* key in the DNF filter index (buildDnfFilterIndex in
-// api_pokemon_common.go keys any-form clauses at {pokemonId, -1}). A stored
-// 65535 converted to -1 would therefore not read as "no form"; it would probe
-// the any-form bucket for that pokemon id as if it were the wildcard, and
-// adjustPokemonFormCount would file it under the wildcard key. Saturating at MaxInt16 gives it a form key of its
+// the *wildcard-form* key in the DNF filter index (api_pokemon_common.go
+// falls back to {pokemonId, -1} and then {-1, -1}). A stored 65535 converted
+// to -1 would therefore not read as "no form"; it would match the catch-all
+// filter set for that pokemon id, and adjustPokemonFormCount would file it
+// under the wildcard key. Saturating at MaxInt16 gives it a form key of its
 // own that no filter fallback and no real form id can collide with.
 func lookupForm(n null.Value[uint16]) int16 {
 	if !n.Valid {

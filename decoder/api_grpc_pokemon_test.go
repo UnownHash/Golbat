@@ -202,9 +202,17 @@ func TestGrpcScanPokemonReturnsLivePokemon(t *testing.T) {
 	p.ExpireTimestamp = null.ValueFrom(uint32(time.Now().Unix() + 600))
 	p.Cp = null.ValueFrom(uint16(777))
 
-	indexScannedPokemon(t, p)
-	pokemonCache.Set(id, p, time.Minute) // the response is built from the entity
-	t.Cleanup(func() { pokemonCache.Delete(id) })
+	pokemonRtreePreloadInsert(p)
+	pokemonCache.Set(id, p, time.Minute)
+	pokemonTreeSnapshot.Store(nil) // force the next scan to see the fresh tree
+	t.Cleanup(func() {
+		pokemonCache.Delete(id)
+		pokemonLookupCache.Delete(id)
+		pokemonTreeMutex.Lock()
+		pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, id)
+		pokemonTreeMutex.Unlock()
+		pokemonTreeSnapshot.Store(nil)
+	})
 
 	// One clause with no conditions is the catch-all; an empty filters list
 	// matches nothing (JSON parity: the DNF map then has no entry to hit).

@@ -39,7 +39,33 @@ type ApiPokemonDnfFilter struct {
 }
 
 func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) ([]uint64, int, int, int) {
-	dnfFilters := buildDnfFilterIndex(retrieveParameters.DnfFilters, func(f *ApiPokemonDnfFilter) []ApiPokemonDnfId { return f.Pokemon })
+	dnfFilters := make(map[dnfFilterLookup][]ApiPokemonDnfFilter)
+
+	for _, filter := range retrieveParameters.DnfFilters {
+		if len(filter.Pokemon) > 0 {
+			for _, keyString := range filter.Pokemon {
+				pokemonId := keyString.Pokemon
+				if pokemonId == 0 {
+					pokemonId = -1
+				}
+				var formId int16 = -1
+				if keyString.Form != nil {
+					formId = *keyString.Form
+				}
+				key := dnfFilterLookup{
+					pokemon: pokemonId,
+					form:    formId,
+				}
+				dnfFilters[key] = append(dnfFilters[key], filter)
+			}
+		} else {
+			key := dnfFilterLookup{
+				pokemon: -1,
+				form:    -1,
+			}
+			dnfFilters[key] = append(dnfFilters[key], filter)
+		}
+	}
 
 	isPokemonDnfMatch := func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonDnfFilter) bool {
 		if filter.Iv != nil && (int16(pokemonLookup.Iv) < filter.Iv.Min || int16(pokemonLookup.Iv) > filter.Iv.Max) ||
