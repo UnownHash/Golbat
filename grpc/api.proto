@@ -38,8 +38,11 @@ message IntRange {
   optional int32 max = 2;
 }
 
-// A pokedex id plus optional form. In a pokemon scan filter pokemon_id 0
-// matches any pokemon; an unset form matches any form.
+// A pokedex id plus optional form. In a pokemon scan filter pokemon_id 0 with
+// no form files the clause under "everything else"; 0 with a form can never
+// match, because forms belong to a species. An unset form matches any form of
+// the id; for pokemon of a given form, clauses listing the exact id+form take
+// precedence over clauses listing the id alone (see PokemonScanRequest).
 message DnfId {
   int32 pokemon_id = 1;
   optional int32 form = 2;
@@ -48,6 +51,8 @@ message DnfId {
 // ---- pokemon ----
 
 message PokemonDnfFilter {
+  // Keys this clause is filed under; empty = "everything else", which applies
+  // only to pokemon with no clause of their own (see PokemonScanRequest).
   repeated DnfId pokemon = 1;
   IntRange iv = 2;
   IntRange atk_iv = 3;
@@ -66,8 +71,15 @@ message PokemonScanRequest {
   LatLon min = 1;
   LatLon max = 2;
   int32 limit = 3;                        // 0 = server default (tuning.max_pokemon_results)
-  // OR'd clauses. As in the JSON API an EMPTY list matches nothing; send one
-  // clause with no conditions ({}) to match every pokemon.
+  // Clauses grouped by the pokemon/form keys they list. A pokemon is matched
+  // against the most specific group that exists for it - exact id+form, else
+  // its id with no form, else the clauses with no pokemon list ("everything
+  // else") - and within that group a clause matches if all its conditions
+  // hold (an OR of ANDs). A less specific group never applies to a pokemon
+  // that has a more specific one: list a shared clause under that pokemon's
+  // key too if it should apply there. As in the JSON API an EMPTY list
+  // matches nothing; send one clause with no conditions ({}) to match every
+  // pokemon.
   repeated PokemonDnfFilter filters = 4;
   // Only pokemon with updated > updated_after (unix seconds); unset = all.
   // Applied at response build, after the scan and limit: counters and

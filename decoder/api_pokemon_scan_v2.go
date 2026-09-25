@@ -8,7 +8,7 @@ type ApiPokemonScan2 struct {
 	Min        ApiLatLon             `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
 	Max        ApiLatLon             `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
 	Limit      int                   `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
-	DnfFilters []ApiPokemonDnfFilter `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	DnfFilters []ApiPokemonDnfFilter `json:"filters" required:"false" doc:"Filter clauses. Clauses are grouped by the pokemon/form keys they list, and a pokemon is matched against the most specific group that exists for it: clauses listing its exact id+form, else clauses listing its id with no form, else the clauses with no pokemon list ('everything else'). Within that group a clause matches if all its conditions hold (an OR of ANDs). A less specific group never applies to a pokemon that has a more specific one, so a shared clause that should also apply to such a pokemon must be listed under its key as well. An empty list matches nothing; one clause with no conditions matches everything."`
 }
 
 func (r ApiPokemonScan2) GetMin() geo.Location {
@@ -24,7 +24,7 @@ func (r ApiPokemonScan2) GetLimit() int {
 }
 
 type ApiPokemonDnfFilter struct {
-	Pokemon []ApiPokemonDnfId    `json:"pokemon" required:"false" doc:"Pokemon/form ids this clause applies to; empty matches any pokemon. All other conditions in the clause are AND'd together."`
+	Pokemon []ApiPokemonDnfId    `json:"pokemon" required:"false" doc:"Pokemon/form keys this clause is filed under; empty files it under 'everything else', which applies only to pokemon with no clause of their own. All other conditions in the clause are AND'd together. A clause whose conditions can never hold (iv min 1, max 0) hides the listed pokemon entirely."`
 	Iv      *ApiPokemonDnfMinMax `json:"iv" required:"false" doc:"Inclusive IV percentage range; null means no IV constraint."`
 	AtkIv   *ApiPokemonDnfMinMax `json:"atk_iv" required:"false" doc:"Inclusive attack IV range; null means no attack IV constraint."`
 	DefIv   *ApiPokemonDnfMinMax `json:"def_iv" required:"false" doc:"Inclusive defense IV range; null means no defense IV constraint."`

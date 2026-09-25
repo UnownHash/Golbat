@@ -387,14 +387,14 @@ Three API versions exist (V1/V2/V3), all following the same pattern:
 5. Collect matching IDs up to a configurable limit
 6. For matched IDs, call `peekPokemonRecordReadOnly()` to lock and build full API results. The optional `updated_after` request field is applied here, on the locked record (`forEachLivePokemonResult`), never in the tree walk: it costs no lookup-cache bytes, and in exchange `examined`/`skipped`/`limit_reached` describe the pre-gate set. The fort collectors (`collect*Results`) apply the same gate.
 
-**DNF (Disjunctive Normal Form) Filters**: An array of filter clauses OR'd together. Each clause has AND'd conditions (IV range, level range, CP range, pokemon ID + form, PVP ranking, gender, size). A pokemon matches if ANY clause fully matches.
+**DNF filters: precedence, not a flat OR.** Clauses are grouped by the pokemon/form keys they list (`{pokemonId, form}`; no pokemon list = the "everything else" group at `{-1, -1}`). A pokemon is matched against the most specific group that exists for it:
+1. Exact `{pokemonId, form}`
+2. Species with any form: `{pokemonId, -1}`
+3. Everything else: `{-1, -1}`
 
-**Filter lookup optimization**: Filters are pre-indexed by `{pokemonId, form}` key. For each pokemon, the system tries:
-1. Exact `{pokemonId, form}` match
-2. Wildcard form: `{pokemonId, -1}`
-3. Global catch-all: `{-1, -1}`
+Within that group a clause matches if all its conditions hold (OR of ANDs). A less specific group never applies to a pokemon that has a more specific one: the generic group means *everything else*, which is what lets a client hide or restrict a species without enumerating the complement; a client that wants a shared clause to also apply to such a species lists it under that key too (ReactMap does). This was designed in with the DNF API (#134) and is pinned by `api_pokemon_semantics_test.go`; #414/#416 read it as a bug and were reverted — see #417 and the "Filter semantics" section of `api.md`. **Never merge groups server-side**: copying generic clauses into species buckets is O(species × generic clauses) per request before any scanning happens. Fort filters are the other model: a plain OR over every clause.
 
-This avoids iterating all filters for every pokemon.
+The grouping is also the performance lever: a candidate costs at most three map probes and evaluates only the applicable clauses, however many per-species rules the request carries.
 
 #### Fort Scan
 
