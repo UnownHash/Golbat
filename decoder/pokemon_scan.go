@@ -73,11 +73,10 @@ func (s *pokemonScan) RemoveDittoAuxInfo() {
 	s.Confirmed = false
 }
 
-// String reproduces what the generated grpc.PokemonScan.String() used to put in
-// the Ditto debug logs and error messages: proto text format, one line, proto
-// field names, zero-valued fields omitted, "<nil>" for a nil scan. prototext
-// deliberately randomises its inter-field spacing, so this is the same content
-// with stable spacing rather than a byte-for-byte match.
+// String formats a scan for the Ditto debug logs and error messages in the
+// style of proto text format: one line, proto field names, zero-valued fields
+// omitted, "<nil>" for a nil scan, with stable spacing (prototext deliberately
+// randomises it).
 func (s *pokemonScan) String() string {
 	if s == nil {
 		return "<nil>"
@@ -152,8 +151,8 @@ func scanHistoryFromProto(internal *grpc.PokemonInternal) []*pokemonScan {
 
 // scanHistoryToProto builds the protobuf message to marshal into
 // golbat_internal. Write boundary only.
-func scanHistoryToProto(history []*pokemonScan) *grpc.PokemonInternal {
-	internal := &grpc.PokemonInternal{}
+func scanHistoryToProto(history []*pokemonScan, dittoRollMarked bool) *grpc.PokemonInternal {
+	internal := &grpc.PokemonInternal{DittoRollMarked: dittoRollMarked}
 	if len(history) == 0 {
 		return internal
 	}
@@ -192,7 +191,7 @@ func (pokemon *Pokemon) rewriteGolbatInternal() {
 	if strong != nil {
 		strong.RemoveDittoAuxInfo()
 	}
-	marshaled, err := proto.Marshal(scanHistoryToProto(pokemon.scanHistory))
+	marshaled, err := proto.Marshal(scanHistoryToProto(pokemon.scanHistory, pokemon.dittoRollMarked))
 	if err != nil {
 		log.Errorf("[POKEMON] Failed to marshal internal data for %d, data may be lost: %s", pokemon.Id, err)
 		return

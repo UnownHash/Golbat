@@ -22,108 +22,41 @@ const gcSizeThreshold = 512
 // Go rounds every heap allocation up to a size class, so the cost of your
 // field is not its own width but the distance to the next class boundary.
 //
-// THERE IS NO HEADROOM. Pokemon's 352-byte compiled size is EXACTLY a Go size
-// class, so the allocator hands out 352 bytes (confirmed empirically: n=200000
-// live *Pokemon, runtime.MemStats.TotalAlloc delta / n = 352.0 exactly). Every
-// byte you add crosses into the next class, 384. A single bool costs 32 bytes
-// per cached pokemon — roughly 160 MB at 5M, about half of what task 7 won by
-// removing the embedded protobuf.
+// Pokemon compiles to 344 bytes, which the allocator rounds up to the
+// 352-byte size class (measured: n=200000 live *Pokemon,
+// runtime.MemStats.TotalAlloc delta / n = 352.0 exactly). That leaves 8 bytes
+// of headroom; anything more crosses into the next class, 384, which costs 32
+// bytes per cached pokemon — roughly 160 MB at 5M.
 //
-// So a field addition here is NOT free, and this is the opposite of the
-// situation before task 7, when Pokemon sat mid-class at 392 with 24 bytes of
-// slack. If you are here because the test failed, the question is not "what is
-// the new number" — it is whether the field can be narrower, packed into an
+// If you are here because the test failed, the question is not "what is the
+// new number" — it is whether the field can be narrower, packed into an
 // existing byte, or live somewhere other than the per-pokemon struct. Bump the
-// constant only once you have decided the 32 bytes are worth paying, and say so
-// in the paragraph below.
+// constant only once you have decided the cost is worth paying, and say so in
+// the paragraph below.
 func TestPokemonEntitySizes(t *testing.T) {
-	// wantPokemonData: field payload sums to 273 bytes (8-byte group 56 +
-	// 4-byte group 48 + 2-byte group 26 + 1-byte group 23 + pointer group
-	// 120: PokestopId/SeenType/Username/Pvp/GolbatInternal, each 8-byte
-	// aligned). Go's struct alignment is 8 (driven by the uint64/float64/
-	// pointer fields), so ANY ordering of this field set rounds up to 280 —
-	// that is the achievable minimum, not a target this order fell short of.
-	// The pointer group is placed last (after the 1-byte group) for a
-	// tighter GC pointer-scan span, which forces exactly 7 bytes of
-	// mandatory padding at offset 153->160; moving that group elsewhere does
-	// not remove those 7 bytes, it only relocates them (e.g. to trailing
-	// padding at the very end) — 273 always rounds to 280. The design doc's
-	// original estimate of 232 for this order (and 264 for an unordered
-	// trial) was an arithmetic error: 264 was never achievable either,
-	// being below the 273-byte payload. Still 592 -> 280: a 2.1x reduction.
-	// No field regrouping was made to chase the doc's wrong number — see
-	// this test's file-level comment for why that's not how a fail here
-	// should be resolved.
+	// wantPokemonData: field payload sums to 244 bytes (8-byte group 56 +
+	// 4-byte group 48 + 2-byte group 26 + 1-byte group 42, which includes
+	// SeenType and the 17-byte FortId PokestopId, + pointer group 72:
+	// Username/Pvp/GolbatInternal, each 8-byte aligned). Go's struct alignment
+	// is 8 (driven by the uint64/float64/pointer fields), so the pointer group,
+	// placed last for a tighter GC pointer-scan span, starts after 4 bytes of
+	// mandatory padding, and the struct is 248. A hand-computed estimate is not
+	// to be trusted over running this test.
 	//
-	// Task 5 moved SeenType out of the pointer group (null.String, 24 bytes,
-	// 8-byte aligned) into the 1-byte group (NullSeenType — a uint8 code plus
-	// a bool, 2 bytes, 1-byte aligned): pointer group 120 -> 96, 1-byte group
-	// 23 -> 25. New payload: 56 + 48 + 26 + 25 + 96 = 251, rounding up to 256.
-	// That is a 24-byte drop, not the design doc's estimated 22 — another of
-	// its arithmetic misses (see the 232/264 note above); 256 is what the
-	// test actually measures and is the number that matters.
+	// wantPokemon: PokemonData plus the cache-side fields — scanHistory (a
+	// 24-byte slice header), PokemonOldValues (32 bytes, for webhook and stats
+	// comparison) and the rest — is 344. In a production (non-dbdebug) build
+	// the `debug debugChangeAccumulator` field is zero-sized (see
+	// db_debug_off.go), so it costs nothing.
 	//
-	// wantPokemon: 800 -> 456 from tasks 1-4, then a further 40-byte drop
-	// from task 5's SeenType narrowing: PokemonData embeds the same 24-byte
-	// drop as above, and PokemonOldValues (also holding a SeenType, used for
-	// webhook/stats comparison) shrinks from 48 to 32 bytes for the same
-	// reason, a 16-byte drop. 456 - 24 - 16 = 416, landing exactly on a GC
-	// size class.
-	//
-	// Task 6 dropped the `changedFields []string` field (24 bytes): 416 - 24
-	// = 392. In a PRODUCTION (non-dbdebug)
-	// build the field's replacement, `debug debugChangeAccumulator`, is defined
-	// zero-sized (see db_debug_off.go), so it costs nothing — the 392 is a
-	// real, full 24-byte reduction in compiled struct size, not a rounding
-	// artifact. It did NOT change the GC size class the allocator actually
-	// handed out: 392 still rounded up to 416, same as before that task. The durable win is the removed
-	// field itself — one fewer pointer word in the GC scan bitmap per cached
-	// pokemon, and a dead-in-production field gone from the struct — not a
-	// reduction in allocated bytes.
-	//
-	// Task 7 took the other lever that comment named: the embedded
-	// `internal grpc.PokemonInternal` (64 bytes of protobuf machinery —
-	// MessageState, sizeCache, unknownFields, slice header) became
-	// `scanHistory []*pokemonScan` (a 24-byte slice header), 392 - 40 = 352,
-	// this test's current pinned value. Unlike task 6 this one DOES move the
-	// allocator: 352 is itself a Go size class, so the bytes handed out per
-	// cached pokemon go 416 -> 352. Measured the same way as the 416 above
-	// (n=200000 live *Pokemon, runtime.MemStats.TotalAlloc delta / n): 352.0
-	// exactly, against 416.0 for a 392-byte control struct. Each history
-	// entry also shrank, 88 -> 44 bytes (allocator 96 -> 48).
-	//
-	// Task 8 moved PokestopId out of the pointer group entirely: it was
-	// null.String (24 bytes, 8-byte aligned — a 16-byte string header plus
-	// a bool, padded), and is now FortId (17 bytes, 1-byte aligned),
-	// relocated into the 1-byte group after SeenType per PokemonData's own
-	// field-order comment. That is a net -7 to the raw payload (-24 in the
-	// pointer group, +17 in the 1-byte group) — 251 -> 244 — and the
-	// mandatory pre-pointer-group padding shrinks from 5 bytes (155->160)
-	// to 4 (172->176), landing PokemonData at 248, eight bytes SMALLER than
-	// before, not larger. The task brief's own arithmetic ("the struct
-	// grows by 1 byte") assumed FortId's 17 bytes would simply be added to
-	// PokemonData's existing total rather than netted against the pointer
-	// group member it displaced — another instance of this file's running
-	// theme that a hand-computed estimate is not to be trusted over
-	// actually running this test. Pokemon itself drops the same 8 bytes,
-	// 352 -> 344 (unsafe.Sizeof; no other field changed). 344 is not itself
-	// a Go size class, so the allocator still rounds it up to 352 — the
-	// SAME class Pokemon already occupied (confirmed empirically the same
-	// way as the 352/416 numbers above: n=200000 live *Pokemon,
-	// runtime.MemStats.TotalAlloc delta / n = 352.0000 exactly, both before
-	// and after this change). So there is no allocator-class trade to
-	// record here, contrary to what this task's brief anticipated: the
-	// struct got smaller, and the class stayed put. The real win this task
-	// exists for is invisible to unsafe.Sizeof entirely — every cached
-	// pokemon that had a non-empty PokestopId used to hold a second heap
-	// object (the string's backing bytes) that FortId's inline [16]byte+
-	// uint8 has no equivalent of; that object and its GC scan cost are what
-	// go away, not bytes inside the Pokemon struct itself.
+	// PokestopId is a FortId (an inline [16]byte + uint8) rather than a string,
+	// so a pokemon at a pokestop holds no second heap object for the string's
+	// backing bytes; that saving is invisible to unsafe.Sizeof.
 	//
 	// A dbdebug build (`-tags dbdebug`) keeps debugChangeAccumulator's real
 	// `[]string` accumulator (24 bytes, see db_debug.go) so it can still
 	// aggregate per-field change descriptions into one dbDebugLog line per
-	// save, matching the original behavior. Pokemon is therefore 368 bytes
+	// save. Pokemon is therefore 368 bytes
 	// under dbdebug, not the 344 pinned here for production; that's expected
 	// instrumentation overhead in a build that's never deployed at scale, so
 	// this test only enforces the production number.
@@ -169,47 +102,39 @@ func TestPokemonUnderGCThreshold(t *testing.T) {
 	}
 }
 
-// TestClassMovedEntitySizes pins the four entities whose allocator size
-// class actually moved when their `changedFields []string` field was
-// replaced by the shared debugChangeAccumulator (a build-tag-split type,
-// real accumulator under -tags dbdebug and zero-sized otherwise — see
-// db_debug.go / db_debug_off.go and the `debug` field on each struct below).
+// TestClassMovedEntitySizes pins four entities that sit close enough to a
+// Go size-class boundary that a small field change moves their allocation.
+// Each struct carries a `debug debugChangeAccumulator` field (a
+// build-tag-split type, a real accumulator under -tags dbdebug and
+// zero-sized otherwise — see db_debug.go / db_debug_off.go), which is free in
+// a production build.
 //
-// Eight entities got this same 24-byte-field-drop treatment; only these four
-// crossed a Go size-class boundary in the production (non-dbdebug) build, so
-// only these four get an allocator-visible win and only these four are
-// pinned here. The other four (Pokestop, Gym, Route, Player) shrank their
-// compiled struct size by the same 24 bytes but landed in the SAME size
-// class as before — nothing for the allocator to hand out less of — so
-// pinning them would just be nine constants to maintain for four real wins.
+// Pokestop, Gym, Route and Player are not pinned: a 24-byte change in their
+// compiled size was measured not to move their size class. Note
+// that Go's static size-class table (8, 16, 24, 32, ..., 1024, 1152, 1280,
+// ...) is not by itself reliable for pointer-containing structs — only
+// measuring is. On go1.26.5 a noscan (no pointer fields) 1152-byte struct
+// allocates in the 1152-byte class, but an otherwise-identical struct with
+// one pointer field measures into 1280: 1152 exists as a class for noscan
+// objects but scan objects skip it. Every entity here contains pointers, so
+// all are scan objects. This was confirmed stable across repeated
+// measurement and with debug.SetGCPercent(-1) disabling concurrent GC during
+// the window.
 //
-// Reading Pokestop/Gym/Route/Player as "no win" off Go's static size-class
-// table (8, 16, 24, 32, ..., 1024, 1152, 1280, ...) applied to the compiled
-// struct sizes is not by itself reliable for pointer-containing structs —
-// only measuring is. On this toolchain (go1.26.5), a noscan (no pointer
-// fields) 1152-byte control struct allocates in the 1152-byte class as the
-// table says, but an otherwise-identical 1152-byte struct with one pointer
-// field (scan, in GC terms) measures into 1280, not 1152: 1152 exists as a
-// class for noscan objects but scan objects skip it. Every entity here
-// contains pointers (strings, null.String, slices, ...), so all are scan
-// objects. That's why Pokestop (1176->1152) and Player (1392->1368) don't
-// move a class despite each dropping exactly 24 bytes and despite a naive
-// table read suggesting the after-size (1152, itself a listed class) should
-// drop one: 1152 isn't an available class for a scan object at this size.
-// Confirmed stable across repeated measurement and with
-// debug.SetGCPercent(-1) disabling concurrent GC during the window (to rule
-// out mark-assist noise).
+// Allocated sizes, measured with runtime.MemStats.TotalAlloc delta / n
+// (n=100000 live pointers each, matching TestPokemonEntitySizes):
 //
-// Sizes measured with runtime.MemStats.TotalAlloc delta / n (n=100000 live
-// pointers each, matching TestPokemonEntitySizes's methodology):
-//
-//	Station:    496 (class 512) -> 472 (class 480), 32 bytes/instance saved
-//	Spawnpoint: 136 (class 144) -> 104 (class 112), 32 bytes/instance saved
-//	Incident:   272 (class 288) -> 248 (class 256), 32 bytes/instance saved
-//	Tappable:   224 (class 224) -> 200 (class 208), 16 bytes/instance saved
+//	Station:    class 480
+//	Spawnpoint: class 112
+//	Incident:   class 256
+//	Tappable:   class 208
 //
 // Spawnpoint is the one that matters most here: millions of entries cached,
 // same order of magnitude as Pokemon.
+//
+// Tappable is 208 bytes including its in-memory `firstSeen int64` field (see
+// Tappable.firstSeen). Without the field it is 200 bytes, which allocates in
+// the same size class 208, so the field costs nothing per instance.
 //
 // This test only enforces the production (non-dbdebug) numbers, same
 // carve-out as TestPokemonEntitySizes: a dbdebug build's real accumulator
@@ -233,7 +158,7 @@ func TestClassMovedEntitySizes(t *testing.T) {
 		// exact Go size class, so both 248 and 256 round up to class 256 —
 		// still no allocator regression.
 		"Incident": {unsafe.Sizeof(Incident{}), 256},
-		"Tappable": {unsafe.Sizeof(Tappable{}), 200},
+		"Tappable": {unsafe.Sizeof(Tappable{}), 208},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)

@@ -50,9 +50,12 @@ func TestDespawnSecFastMirror(t *testing.T) {
 
 // applyVerifiedDespawn is shared by the lock-free and locked paths; pin the
 // second-of-hour wraparound math.
+//
+// The fixture instant is 10:50:00 UTC, so secondOfHour (unix % 3600) is 3000
+// — on every machine, regardless of process timezone, since despawnSecondOfHour
+// does not read one.
 func TestApplyVerifiedDespawn(t *testing.T) {
-	// timestamp at 10:50:00 UTC => secondOfHour = 3000
-	ts := int64(1751799000000) // 2025-07-06 10:50:00 UTC
+	ts := time.Date(2025, 7, 6, 10, 50, 0, 0, time.UTC).UnixMilli()
 	cases := []struct {
 		despawnSec int
 		wantOffset int64

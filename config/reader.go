@@ -29,6 +29,15 @@ func ReadConfig(configPath string) (configDefinition, error) {
 	// Default values
 	defaultErr := k.Load(structs.Provider(configDefinition{
 		ApiDocs: true,
+		// DittoDerivation defaults true because the rule it acts on agrees with
+		// Golbat's own cross-boost Ditto detection on every case that
+		// detection can resolve (3,797 checked, with no false positive and no
+		// false negative). DittoPool
+		// has no default: empty means the published pool
+		// (decoder/ditto_pool_remote.go).
+		DeriveIv:        true,
+		DeriveDespawn:   true,
+		DittoDerivation: true,
 		Sentry: sentry{
 			SampleRate:       1.0,
 			TracesSampleRate: 1.0,

@@ -41,6 +41,19 @@ type Tappable struct {
 	debug debugChangeAccumulator `db:"-"`
 
 	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
+
+	// firstSeen is a lower bound on this Tappable's lifetime, used only by
+	// resolveDespawnExpiry (pokemon_decode.go): no tappable lives longer than
+	// an hour, so an expiry landing more than an hour past firstSeen has
+	// wrapped and belongs an hour earlier.
+	//
+	// Unlike Pokemon.FirstSeenTimestamp, this is NOT persisted — the
+	// tappable table (sql/41_tappables.up.sql) carries only `updated`, which
+	// is LAST seen, not first. It is set once, in getOrCreateTappableRecord,
+	// and only when no row exists in the database. A tappable loaded from the
+	// database (e.g. after a restart) has firstSeen == 0, so the clamp is
+	// inactive for it.
+	firstSeen int64 `db:"-"`
 }
 
 // IsDirty returns true if any field has been modified

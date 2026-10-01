@@ -40,6 +40,47 @@ type StatsCollector interface {
 	UpdateFortCount(areas []geo.AreaName, fortType string, changeType string)
 	UpdateIncidentCount(areas []geo.AreaName)
 	IncDuplicateEncounters(sameAccount bool)
+	IncDespawnWrapClamped()
+
+	// IncDerivationChecked counts a real encounter whose raw observed stats
+	// were compared against a fresh encounter-id derivation, by sighting
+	// path. Strong Pokemon are excluded: the ordinary boosted floor this
+	// derivation models does not apply to them, so every one would register
+	// as a disagreement and hide a real regression inside
+	// derivation_disagreed_total's baseline.
+	IncDerivationChecked(path string)
+	// IncDerivationDisagreed counts a checked encounter whose observed stats
+	// did not match the derivation, by sighting path. This should sit at
+	// approximately zero; a rising rate means the derivation has stopped
+	// matching the game.
+	IncDerivationDisagreed(path string)
+	// IncDerivationMoveMismatch counts a checked encounter whose observed
+	// move_1/move_2 did not match the derivation, by sighting path. Also
+	// counted by IncDerivationDisagreed; tracked separately so the
+	// move-specific rate is visible without grepping logs. Counted only when
+	// the species/form's move pools resolved, and per slot only when the
+	// observed move is in the pool the derivation drew from: in either case
+	// the derivation has no opinion rather than a disagreement, as with
+	// POKEMON_SIZE_UNSET. Out-of-pool moves have no counter of their own; the
+	// logged row carries both moves, which is enough to identify them.
+	IncDerivationMoveMismatch(path string)
+	// IncDerivationBoostBranchDivergence counts a checked, non-strong
+	// encounter whose observed IVs matched the OPPOSITE weather-boost branch
+	// (ditto_branch "opposite" — decoder's dittoBranchFor) rather than the
+	// one scan.Weather implies, by sighting path. It is evidence of a Ditto,
+	// not a confirmed one (see dittoBranch). Not counted by
+	// IncDerivationDisagreed: such a row is a Ditto whose boost state
+	// follows its own typing rather than its disguise's, and counting it
+	// would give derivation_disagreed_total a floor that masks real
+	// regressions.
+	IncDerivationBoostBranchDivergence(path string)
+
+	// IncDespawnPhaseDiverged counts a TTH sighting whose despawn instant,
+	// modulo the half hour, is more than decoder's despawnPhaseTolerance
+	// from the phase derived from its spawnpoint id. Every TTH sighting is
+	// checked.
+	IncDespawnPhaseDiverged()
+
 	IncDbQuery(query string, err error)
 	SetGyms(teamId int8, inBattle bool, count float64)
 	SetRaids(level int64, count float64)

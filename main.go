@@ -82,6 +82,14 @@ func main() {
 	// fort eviction-callback registration).
 	decoder.InitDataCache()
 
+	// Load the Ditto disguise pool: the published one, or ditto_pool from
+	// config when set. Must run after config load and before any sighting can
+	// reach maybeMarkDittoFromRoll; the watcher keeps it fresh after that.
+	decoder.EnsureDittoPool()
+	if err := decoder.WatchDittoPool(); err != nil {
+		log.Warnf("Ditto pool watcher failed: %v", err)
+	}
+
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
 	// Both Sentry & Pyroscope are optional and off by default. Read more:
@@ -208,8 +216,15 @@ func main() {
 		go db2.PromLiveStatsUpdater(dbDetails, cfg.Prometheus.LiveStatsSleep)
 	}
 
-	needsOhbem := cfg.Pvp.Enabled
-	needsMasterfile := needsOhbem || cfg.Weather.ProactiveIVSwitching
+	// Derivation needs ohbem too: CP is computed from the derived IVs and
+	// level, so without it a derived pokemon has IVs but no CP.
+	needsOhbem := cfg.Pvp.Enabled || cfg.DeriveIv
+	// DeriveIv resolves move pools through the masterfile, and DerivationLog
+	// resolves the disguise's boosted weathers through it. Both paths check
+	// its Initialized guard and silently skip their work when it was never
+	// loaded.
+	needsMasterfile := needsOhbem || cfg.Weather.ProactiveIVSwitching ||
+		cfg.DeriveIv || cfg.DerivationLog
 	if needsMasterfile {
 		if err := decoder.EnsureMasterFileData(); err != nil {
 			log.Fatalf("Unable to initialise MasterFile: %v", err)
