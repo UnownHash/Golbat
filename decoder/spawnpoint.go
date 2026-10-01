@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"golbat/db"
+	"golbat/derive/despawn"
 	"golbat/geo"
 	"golbat/pogo"
 	"golbat/util"
@@ -327,6 +328,90 @@ func Abs(x int64) int64 {
 	return x
 }
 
+// despawnPhaseTolerance is the wobble this comparison must absorb, in
+// seconds. It is deliberately the same ±2s despawnSecUnchanged allows on the
+// very same quantity — a spawnpoint's despawn second is not reported to the
+// second, which is why SetDespawnSec treats a 2s move as no change at all.
+// PositionMs also carries sub-second precision that /1000 truncates away, and
+// the observed side truncates again at (timestampMs+tth)/1000, so even a
+// perfectly agreeing sighting can land a second off. Exact equality would make
+// ordinary jitter register as divergence and give the counter a large,
+// permanent, meaningless baseline.
+const despawnPhaseTolerance = 2
+
+// despawnPhaseDiverged reports whether a TTH sighting's observed despawn
+// instant disagrees with the phase despawn.PositionMs derives for this
+// spawnpoint id.
+//
+// expireTimestampSec is the ABSOLUTE unix second the sighting says the
+// pokemon disappears. despawn.NextOccurrence anchors the phase to the UTC
+// half hour, and the unix epoch is itself aligned to a half hour, so
+// expireTimestampSec%1800 IS the UTC-anchored phase, in every zone.
+//
+// despawn_sec (the column, and despawnSecondOfHour's result) is
+// `unix % 3600`, and (unix%3600)%1800 == unix%1800, so the stored
+// second-of-hour would agree; the absolute instant is taken because
+// spawnpointUpdateFromWild already has it. A LOCAL second-of-hour would not
+// agree: a 45-minute zone (Kathmandu +5:45, Eucla +8:45, Chatham +12:45)
+// shifts it by exactly 900s and would pin the counter at 100% divergence. See
+// TestDespawnPhaseDivergedIgnoresFortyFiveMinuteZones.
+//
+// It validates the phase algorithm itself — nothing else in production checks
+// it — but cannot classify a spawnpoint's duration: an hour-long spawnpoint's
+// pokemon legitimately despawns half an hour after the derived phase, which is
+// why the comparison is mod 1800.
+func despawnPhaseDiverged(spawnId int64, expireTimestampSec int64) bool {
+	delta, _, _ := despawnPhaseDelta(spawnId, expireTimestampSec)
+	return delta > despawnPhaseTolerance
+}
+
+// despawnPhaseDelta is how far, in seconds, a TTH sighting's observed despawn
+// instant lies from the phase derived for its spawnpoint id, within the half
+// hour, along with both phases.
+func despawnPhaseDelta(spawnId int64, expireTimestampSec int64) (delta, derivedPhase, observedPhase int64) {
+	derivedPhase = despawn.PositionMs(spawnId) / 1000
+	observedPhase = expireTimestampSec % 1800
+
+	// Wrap at the half-hour boundary, as despawnSecUnchanged wraps at the
+	// hour: phase 1799 and phase 0 are one second apart, not 1799.
+	delta = Abs(observedPhase - derivedPhase)
+	if delta > 900 {
+		delta = 1800 - delta
+	}
+	return delta, derivedPhase, observedPhase
+}
+
+// despawnPhaseWrongThreshold is how far from the derived phase a TTH
+// sighting's despawn must be to count as the derivation being wrong rather
+// than measurement jitter. Jitter is a second or two (despawnPhaseTolerance),
+// so a minute is far outside it; while the algorithm matches the game such a
+// sighting should not occur at all.
+const despawnPhaseWrongThreshold = 60
+
+// despawnPhaseWrong aggregates TTH sightings far from their derived phase,
+// one warning per second at most. It is always on: it is how an operator
+// without metrics learns that despawn derivation has stopped matching the
+// game.
+var despawnPhaseWrong util.DropReporter
+
+// reportDespawnPhaseWrong warns about a TTH sighting whose despawn is
+// despawnPhaseWrongThreshold or more from the phase derived for it.
+func reportDespawnPhaseWrong(spawnId int64, observedPhase, derivedPhase, delta int64) {
+	despawnPhaseWrong.Report(func(n int64) {
+		log.Warnf("[DESPAWN] %d sighting(s) in the last second despawned far from the derived despawn time "+
+			"(most recently spawnpoint %x: second %d of the half hour, derived %d, %ds off). An occasional one "+
+			"is noise; a steady stream means despawn derivation no longer matches the game — set "+
+			"derive_despawn = false until golbat is updated.", n, spawnId, observedPhase, derivedPhase, delta)
+	})
+}
+
+// wildHasTTH reports whether a wild sighting carries the real despawn time:
+// the game gives time-till-hidden only in a pokemon's last 90 seconds, and a
+// larger value is not a despawn time.
+func wildHasTTH(wildPokemon *pogo.WildPokemonProto) bool {
+	return wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0
+}
+
 func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64) {
 	spawnId, err := strconv.ParseInt(wildPokemon.SpawnPointId, 16, 64)
 	if err != nil {
@@ -337,12 +422,25 @@ func spawnpointUpdateFromWild(ctx context.Context, db db.DbDetails, wildPokemon 
 		return
 	}
 
-	hasTTH := wildPokemon.TimeTillHiddenMs <= 90000 && wildPokemon.TimeTillHiddenMs > 0
+	hasTTH := wildHasTTH(wildPokemon)
 	var secondOfHour int
+	var expireTimeStamp int64
 	if hasTTH {
-		expireTimeStamp := (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
-		date := time.Unix(expireTimeStamp, 0)
-		secondOfHour = date.Second() + date.Minute()*60
+		expireTimeStamp = (timestampMs + int64(wildPokemon.TimeTillHiddenMs)) / 1000
+		// ABSOLUTE second-of-hour (unix % 3600): that is what the despawn_sec
+		// column holds. See despawnSecondOfHour.
+		secondOfHour = despawnSecondOfHour(expireTimeStamp)
+	}
+
+	// The phase check takes the absolute instant; see despawnPhaseDiverged.
+	if hasTTH {
+		delta, derivedPhase, observedPhase := despawnPhaseDelta(spawnId, expireTimeStamp)
+		if delta > despawnPhaseTolerance {
+			getStatsCollector().IncDespawnPhaseDiverged()
+		}
+		if delta >= despawnPhaseWrongThreshold {
+			reportDespawnPhaseWrong(spawnId, observedPhase, derivedPhase, delta)
+		}
 	}
 
 	// Lock-free fast path: spawnpoints appear in every GMO (once per wild

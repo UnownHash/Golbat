@@ -279,7 +279,7 @@ encountered.
 | `latitude`                | float64           | Geographic latitude. |
 | `longitude`               | float64           | Geographic longitude. |
 | `disappear_time`          | int64             | Unix seconds when the Pokémon despawns. `0` if unknown. |
-| `disappear_time_verified` | bool              | `true` if the despawn time comes from a trusted source (spawnpoint history, encounter). |
+| `disappear_time_verified` | bool              | `true` if the despawn time is known rather than predicted: the spawnpoint's despawn was seen in the game data, or a lure's expiry was given. `false` for a despawn predicted from the spawnpoint id, or a guess. |
 | `first_seen`              | int64             | Unix seconds when Golbat first saw this encounter. |
 | `last_modified_time`      | null.Value[uint32]  | Unix seconds of Golbat's most recent update to the record. |
 | `gender`                  | null.Value[uint8]   | Gender enum: 1=male, 2=female, 3=genderless. Source: `pogo.PokemonDisplayProto_Gender`. |
