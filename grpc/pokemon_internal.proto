@@ -6,6 +6,14 @@ package pokemon_internal;
 
 message PokemonInternal {
   repeated PokemonScan scan_history = 1;
+  // Set when this record's Ditto identity came from the encounter-id roll
+  // rather than from detectDitto's own cross-boost comparison. Without it a
+  // reloaded record keeps IsDitto but loses how it got there, and its first
+  // encounter finds a confirmed-looking Ditto with no history — the shape
+  // detectDitto resets. Only persisted when pokemon_internal_to_db is on;
+  // otherwise a reload loses the distinction, which is acceptable because a
+  // pokemon lives at most an hour.
+  bool ditto_roll_marked = 2;
 }
 
 message PokemonScan {

@@ -9,16 +9,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// legacyGolbatInternalHex is a real golbat_internal payload produced by the
-// code that predates the pokemonScan type — i.e. proto.Marshal of a
-// grpc.PokemonInternal holding two grpc.PokemonScan entries, exactly what the
-// write boundary in savePokemonRecordAsAtTime used to emit. Operators have rows
-// containing bytes of this shape, so decoding it correctly is a compatibility
-// requirement, not a stylistic one.
+// legacyGolbatInternalHex is a real golbat_internal payload written by older
+// Golbat versions — proto.Marshal of a grpc.PokemonInternal holding two
+// grpc.PokemonScan entries. Operators have rows containing bytes of this
+// shape, so decoding it correctly is a compatibility requirement.
 const legacyGolbatInternalHex = "0a1a08031001181f200f280e300d38054084014807500258b80760010a0c181428043009380140135001"
 
-// legacyScanHistory is the same content as legacyGolbatInternalHex expressed in
-// the old protobuf shape.
+// legacyScanHistory is the same content as legacyGolbatInternalHex, as the
+// protobuf message.
 func legacyScanHistory() *grpc.PokemonInternal {
 	return &grpc.PokemonInternal{ScanHistory: []*grpc.PokemonScan{
 		{Weather: 3, Strong: true, Level: 31, Attack: 15, Defense: 14, Stamina: 13,
@@ -77,10 +75,10 @@ func TestPopulateInternalDecodesLegacyBytes(t *testing.T) {
 	}
 }
 
-// TestScanHistoryWireRoundTrip covers the write boundary and back: what the new
-// code writes into golbat_internal must decode to the same history, and must be
-// byte-identical to what the old code wrote for the same content (so a row
-// written after this change is still readable by a Golbat running before it).
+// TestScanHistoryWireRoundTrip covers the write boundary and back: what is
+// written into golbat_internal must decode to the same history, and must be
+// byte-identical to what older Golbat versions wrote for the same content, so
+// those versions can still read it.
 func TestScanHistoryWireRoundTrip(t *testing.T) {
 	scans := wantScanHistory()
 	history := make([]*pokemonScan, len(scans))
@@ -88,7 +86,7 @@ func TestScanHistoryWireRoundTrip(t *testing.T) {
 		history[i] = &scans[i]
 	}
 
-	marshaled, err := proto.Marshal(scanHistoryToProto(history))
+	marshaled, err := proto.Marshal(scanHistoryToProto(history, false))
 	if err != nil {
 		t.Fatalf("marshal: %s", err)
 	}
@@ -96,7 +94,7 @@ func TestScanHistoryWireRoundTrip(t *testing.T) {
 		t.Errorf("new write path produced %s, want the legacy bytes %s",
 			hex.EncodeToString(marshaled), legacyGolbatInternalHex)
 	}
-	if !proto.Equal(scanHistoryToProto(history), legacyScanHistory()) {
+	if !proto.Equal(scanHistoryToProto(history, false), legacyScanHistory()) {
 		t.Errorf("new write path built a different message than the legacy shape")
 	}
 
@@ -148,7 +146,7 @@ func TestPokemonScanCoversEveryProtoField(t *testing.T) {
 }
 
 func TestScanHistoryEmptyRoundTrip(t *testing.T) {
-	marshaled, err := proto.Marshal(scanHistoryToProto(nil))
+	marshaled, err := proto.Marshal(scanHistoryToProto(nil, false))
 	if err != nil {
 		t.Fatalf("marshal: %s", err)
 	}

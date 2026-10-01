@@ -16,6 +16,7 @@ Golbat provides both HTTP REST and gRPC APIs for querying Pokemon GO data.
 - [Debug Endpoints](#debug-endpoints)
 - [gRPC API](#grpc-api)
 - [Data Structures](#data-structures)
+- [Derived Stats and Despawn Times](#derived-stats-and-despawn-times)
 
 ---
 
@@ -832,6 +833,210 @@ disable compression on the client, or compress both paths.
   "updated": 1234567800
 }
 ```
+
+---
+
+## Derived Stats and Despawn Times
+
+Golbat can compute a Pokemon's IVs, level, size, moves, despawn time and
+Ditto identity directly from data every sighting already carries — the
+encounter id and the spawn id — instead of waiting for a real encounter or
+a verified despawn second.
+
+Three switches control it, all on by default and all there to turn a
+derivation off if the game changes the algorithm before Golbat is updated:
+
+| Setting | Controls |
+|---|---|
+| `derive_iv` | IVs, level, size and moves |
+| `derive_despawn` | despawn times at spawnpoints whose despawn has not been observed; off, they get a 20-minute guess |
+| `ditto_derivation` | marking a sighting as a Ditto (see "Ditto derivation" below) |
+
+### What is derived, and when
+
+- **IVs, level, size and moves**, on all three sighting paths that can
+  produce or update a record without an actual encounter: `updateFromWild`
+  (GMO wild pokemon), `updateFromNearby` (GMO nearby pokemon), and
+  `updateFromMap` (GMO lure pokemon at a fort) — all in
+  `decoder/pokemon_decode.go`. Each calls `deriveIvIfAbsent`, which keeps
+  IVs already stored (filling only an absent size or move) and otherwise
+  fills `atk_iv`/`def_iv`/`sta_iv`/`iv`, `level`, `size` and any absent move from
+  `derive/encounter.For`, using the pokemon's own encounter id and the boost
+  state it was seen under (`pokemon.Weather`, as set by this sighting's
+  display proto). For a known Ditto the boost state is the Ditto's own — it
+  is boosted only when the reported condition is partly cloudy — not its
+  disguise's. The values written are bit-for-bit what a real encounter would
+  have produced for that id and boost state.
+- **Despawn time**, from the spawn id alone, via `derive/despawn.NextOccurrence`
+  (applied through `applyDerivedDespawn` in `decoder/pokemon_decode.go`)
+  whenever no verified despawn second is available for the spawnpoint. See
+  "Storage" below for what counts as available.
+- **Repopulation instead of blanking on a weather flip.** When a wild/nearby
+  pokemon's weather-boost state changes between sightings and Golbat has no
+  scan on file for the new state, `repopulateIv` re-derives IVs, level
+  and size for the new state from the encounter id rather than clearing
+  them, so a pokemon does not go from "known" back to "unknown" merely
+  because the weather changed between two sightings.
+
+### Size classes
+
+Size is a `nextDouble()` draw classified by fixed, strict cut points: below
+`0.004` is XXS, below `0.029` XS, below `0.971` M, below `0.996` XL, and
+anything else XXL. Size events shift these cut points for the species they
+apply to, and derivation does not model events, so a size derived during
+one can be a class off until a real encounter reports the actual size.
+
+### Ditto derivation
+
+The game decides whether a spawn is a Ditto from the same encounter-id
+generator that produces its IVs: the third value it draws, read as a Java
+`nextFloat()`, is compared against `0.02f`. A sighting is marked as a Ditto
+when that value is strictly below the threshold — `nextFloat() < 0.02f`,
+equivalently `next(24) < 335545`, since `0.02f` is 0.0199999996 — **and**
+its displayed species and form are in the Ditto pool. The code calls this
+value the Ditto *roll*; it has nothing to do with weather rerolls.
+
+The pool lists the species and forms a Ditto can disguise as. Golbat uses
+the pool published at `https://uxie.unownhash.com/`, fetched at startup and
+every 6 hours and cached under `cache/ditto-pool.json`, with a copy built
+into the binary as a fallback. Its maintainers decide what goes in it. An
+operator who needs something different sets `ditto_pool` in config, which
+replaces the published pool entirely.
+
+The threshold is fixed rather than configurable. If the game changes it,
+Golbat will be patched; until then the derivation can be turned off with
+`ditto_derivation = false`. Event effects are not modelled: a real
+encounter always reports the game's actual values, and those replace
+anything derived.
+
+A real encounter can still establish or clear Ditto identity on its own
+(`detectDitto`), including from a single encounter whose level or IVs are
+impossible for the boost state the game reports. A marking made by
+derivation is never overridden by derivation, but it is by that evidence.
+The first encounter of a marked Pokemon also clears the mark when its stats
+follow the disguise's weather boost rather than a Ditto's — possible
+whenever the two differ, as in rain over a disguise rain boosts. A Pokemon
+that has been encountered is never marked by derivation afterwards.
+
+**What is measured and what is assumed.** The rule itself — the third draw,
+`nextFloat() < 0.02f` — is the game's as far as it has been observed: it
+was confirmed in game for three disguise species, and matched Golbat's own
+cross-boost detection on all 3,797 encounters that detection could resolve.
+The largest roll measured on a confirmed Ditto is 0.0199940. A later week of
+encounters (September 2026) resolved 6 Dittos, largest roll 0.0171, and 56
+non-Dittos of pool species, smallest roll 0.0353. The exact cutoff between
+0.0199940 and 0.02 has not been observed, and neither has the game's rate
+during a Ditto event.
+
+### What is not derived, and why
+
+**Strong Pokemon are excluded from all of the above, entirely.** Golbat
+treats a strong Pokemon's IVs as unaffected by weather — see
+`repopulateIv`'s `isBoostedMatches || isStrong` branch and `detectDitto`'s
+requirement that a strong scan's IVs stay identical across boost states.
+The derivation in `derive/encounter.For` implements the ordinary
+boosted-floor mechanic instead, which does not apply to strong Pokemon.
+Deriving for one anyway would write IVs that look exactly like real ones
+but are wrong. So a strong Pokemon's IVs come only from a real encounter:
+they are absent until one arrives, and cleared on a weather flip when no
+scan is stored. The same applies to Ditto derivation: whether
+a strong Pokemon can be a Ditto is not known either way, so a strong
+Pokemon is never marked as one by derivation.
+
+### `seen_type` says whether the stats were observed
+
+Derivation never upgrades `seen_type`: a Pokemon whose stats came from
+`deriveIvIfAbsent` keeps the `seen_type` its sighting gave it (`wild`,
+`nearby_stop`, `nearby_cell` or `lure_wild`) until a real encounter
+arrives. When a weather change replaces an encounter's stats with derived
+ones for the new weather, an `encounter` or `lure_encounter` record goes back
+to `wild` or `lure_wild`, as it does when the change clears them. So
+`encounter` and `lure_encounter` mean the stats on the row are the ones an
+encounter reported.
+
+A consumer that wants to know "do we have usable stats for this Pokemon"
+should check IV validity (e.g. whether `atk_iv`/`iv` is non-null); one that
+wants to know whether they were observed should read `seen_type`.
+
+### Derived values have the shape of observed ones
+
+A derived IV, level, size or move is written exactly as an encounter's would
+be, so every existing consumer — webhooks, PVP rankings, the stats/IV
+counters — uses it without any change on their end. Beyond `seen_type`, no
+column records where a value came from, so a wrong derivation cannot be
+picked out after the fact. That is why the exclusions above are
+conservative, and why the derivation is checked continuously against every
+real encounter — see "Metrics" below.
+
+### Storage
+
+A **spawnpoint** is a place. Every Pokemon that spawns there despawns at the
+same second of each hour, and the spawnpoint row stores that second as
+`despawn_sec`. A **Pokemon** has one despawn instant of its own, stored as
+`expire_timestamp`, with `expire_timestamp_verified` saying whether it was
+seen or worked out. Derivation treats the two differently.
+
+| | Spawnpoint `despawn_sec` | Pokemon `expire_timestamp` |
+|---|---|---|
+| What it is | Second of the hour, recurring, for the place | One instant, for one Pokemon |
+| Written from | A wild sighting showing the time till hidden — nothing else | That spawnpoint's `despawn_sec` if known; otherwise derived from the spawn id |
+| Ever derived? | **Never** | Yes, with `expire_timestamp_verified` false |
+| Absent means | Not yet observed | — |
+
+`despawn_sec` is an absolute second of the hour (`unix % 3600`), independent
+of any timezone. Derivation does not otherwise touch spawnpoint rows or
+their `last_seen`.
+
+**How a derived expiry behaves.** It is exact for spawnpoints whose Pokemon
+live half an hour (roughly 94%) and half an hour early for the rest. A
+Pokemon still listed after its derived expiry is accepted again by the next
+sighting and given the next half hour, so a 60-minute Pokemon corrects
+itself without anything being written to its spawnpoint. A sighting up to
+5 s past a derived expiry counts as that same despawn, since the derived
+second can differ from the game's by a moment. Once a sighting shows the
+real time till hidden, the spawnpoint gets its `despawn_sec` and every later
+Pokemon there gets a verified expiry. Tappables at a spawnpoint with no
+`despawn_sec` derive their expiry the same way.
+
+### Metrics
+
+Six Prometheus counters (namespace `golbat`, so exported as
+`golbat_<name>`) back this feature, declared in
+`stats_collector/prometheus.go`:
+
+| Metric | Type | Labels | Meaning |
+|---|---|---|---|
+| `golbat_derivation_checked_total` | Counter | `path` | Real encounters whose raw observed stats were compared against a fresh encounter-id derivation. `path` is the sighting's `seen_type` at the time of the encounter (e.g. `encounter`, `lure_encounter`). Excludes strong Pokemon. |
+| `golbat_derivation_disagreed_total` | Counter | `path` | Checked encounters whose observed stats did *not* match the derivation. Should sit at approximately zero; a rising rate means the derivation has stopped matching the game. |
+| `golbat_derivation_boost_branch_divergence_total` | Counter | `path` | Checked encounters whose observed stats matched the *other* weather-boost branch — what a Ditto's do when its boost state differs from its disguise's. Not counted as a disagreement. |
+| `golbat_derivation_move_mismatch_total` | Counter | `path` | Checked encounters whose observed moves differ from the derived ones, where the observed move is in the pool the derivation draws from. Also counted in `derivation_disagreed_total`. |
+| `golbat_despawn_phase_diverged_total` | Counter | — | TTH sightings whose despawn instant is more than **2 s** away, modulo the half hour, from the phase derived from their spawnpoint id. See the baseline notes below. |
+| `golbat_despawn_wrap_clamped_total` | Counter | — | Verified despawns whose `+3600` wraparound implied an impossible (>1 hour) lifetime and were clamped back to a *different* expiry than the record already held. A clamp that merely re-confirms the stored value is deliberately not counted — a record re-decoded after its despawn (a Ditto passes the wild significant-update check on every GMO) re-runs this path, and counting those re-confirmations would give the counter a meaningless baseline. |
+
+**Expected baseline for `golbat_despawn_phase_diverged_total`:** not
+zero. The comparison carries a ±2 s tolerance — the same tolerance
+`SetDespawnSec` applies to this very quantity, because a spawnpoint's
+despawn second is not reported to the second, and because both sides of
+the comparison truncate sub-second precision away. A TTH reading still
+lands further out than that from time to time, so a small steady trickle
+is normal. What the counter is for is the *rate*: a step change, or a rate
+climbing toward the TTH sighting rate, means the phase algorithm has
+stopped matching the game.
+
+A sighting a minute or more from its derived phase is a different matter:
+while the algorithm matches the game it does not happen. Each one is logged,
+at most one line per second, whether or not metrics are collected:
+
+```
+[DESPAWN] 1 sighting(s) in the last second despawned far from the derived despawn time (most recently spawnpoint 47b973e0595: second 384 of the half hour, derived 1784, 400s off). ...
+```
+
+An occasional line is noise; a steady stream means despawn derivation no
+longer matches the game, and `derive_despawn = false` turns it off until
+Golbat is updated.
+
+Both checks compare the absolute unix second, `x mod 1800`, so they hold in
+every timezone, including 45-minute offsets.
 
 ---
 

@@ -1,0 +1,28 @@
+{
+  "ditto_disguises": {
+    "species": [
+      { "pokemon_id": 56, "form": 0 },
+      { "pokemon_id": 56, "form": 999 },
+      { "pokemon_id": 58, "form": 0 },
+      { "pokemon_id": 58, "form": 280 },
+      { "pokemon_id": 81, "form": 0 },
+      { "pokemon_id": 81, "form": 655 },
+      { "pokemon_id": 100, "form": 0 },
+      { "pokemon_id": 100, "form": 1047 },
+      { "pokemon_id": 161, "form": 0 },
+      { "pokemon_id": 161, "form": 1145 },
+      { "pokemon_id": 216, "form": 0 },
+      { "pokemon_id": 216, "form": 1265 },
+      { "pokemon_id": 273, "form": 0 },
+      { "pokemon_id": 273, "form": 625 },
+      { "pokemon_id": 283, "form": 0 },
+      { "pokemon_id": 283, "form": 1412 },
+      { "pokemon_id": 287, "form": 0 },
+      { "pokemon_id": 287, "form": 1424 },
+      { "pokemon_id": 293, "form": 0 },
+      { "pokemon_id": 293, "form": 1442 },
+      { "pokemon_id": 355, "form": 0 },
+      { "pokemon_id": 355, "form": 914 }
+    ]
+  }
+}
