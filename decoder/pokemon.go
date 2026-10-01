@@ -195,7 +195,11 @@ func (pokemon *Pokemon) snapshotOldValues() {
 //   - a verified time moving;
 //   - a derived expiry that had already passed moving forward: the pokemon
 //     was presumed gone and is still there, as a 60-minute pokemon re-derived
-//     to its next half hour is.
+//     to its next half hour is;
+//   - a guess replaced by a derived expiry, as when a pokemon first seen
+//     nearby, with no spawn id, is then seen wild at a spawnpoint whose
+//     despawn has not been observed. The guess can be twenty minutes out
+//     either way.
 //
 // An unverified expiry moving before it arrives is not news: nothing has
 // acted on it yet. Nor is a guess (see hasSpawnpointExpiry) being extended
@@ -210,8 +214,17 @@ func (pokemon *Pokemon) expiryNewsForConsumers(now int64) bool {
 	if old.Expiry == cur {
 		return false
 	}
-	return pokemon.ExpireTimestampVerified ||
-		(pokemon.hasSpawnpointExpiry() && old.Expiry != 0 && int64(old.Expiry) <= now && cur > old.Expiry)
+	if pokemon.ExpireTimestampVerified {
+		return true
+	}
+	if !pokemon.hasSpawnpointExpiry() || old.Expiry == 0 {
+		return false
+	}
+	// A guess is never on the spawnpoint's derived phase; a derivation is.
+	if !onDerivedPhase(pokemon.SpawnId.ValueOrZero(), int64(old.Expiry)) {
+		return true
+	}
+	return int64(old.Expiry) <= now && cur > old.Expiry
 }
 
 // Lock acquires the Pokemon's mutex with caller tracking

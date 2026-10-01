@@ -10,6 +10,7 @@ import (
 	"golbat/derive/despawn"
 	"golbat/pogo"
 
+	"github.com/golang/geo/s2"
 	"github.com/guregu/null/v6"
 	"github.com/jmoiron/sqlx"
 )
@@ -344,25 +345,35 @@ func TestCacheLifetimeFollowsADerivedExpiry(t *testing.T) {
 }
 
 // What a webhook consumer must hear about the expiry, and what it need not.
+// Expiries marked derived sit on the spawnpoint's phase, as a derivation
+// does; a guess sits off it.
 func TestExpiryNewsForConsumers(t *testing.T) {
+	const spawnID = int64(0x47b973e0595)
 	const now = uint32(1787486400)
+	phase := uint32(deriveExpiry(spawnID, int64(now))) // the next derived expiry
+	past := phase - 1800                               // the one just passed
+	guess := now + 1200                                // 20 minutes on, off the phase
+	if phase == guess || phase == guess+1800 {
+		t.Fatal("fixture assumption violated: the guess landed on the phase")
+	}
 	for _, c := range []struct {
 		name                  string
 		oldExp, newExp        uint32
 		oldVerified, verified bool
-		guess                 bool // no spawn id: the expiry is a guess, not derived
+		noSpawnId             bool // a guess with nothing to derive from
 		want                  bool
 	}{
-		{"re-derived after the old expiry passed", now - 60, now + 1740, false, false, false, true},
+		{"re-derived after the old expiry passed", past, phase, false, false, false, true},
+		{"guess replaced by a derived expiry", guess, phase, false, false, false, true},
 		{"guess extended after it passed", now - 60, now + 540, false, false, true, false},
-		{"unverified moved before it arrived", now + 60, now + 120, false, false, false, false},
-		{"became verified", now + 60, now + 60, false, true, false, true},
-		{"verified time moved", now + 60, now + 1860, true, true, false, true},
-		{"unchanged", now + 60, now + 60, true, true, false, false},
+		{"derived moved before it arrived", phase, phase + 1800, false, false, false, false},
+		{"became verified", phase, phase, false, true, false, true},
+		{"verified time moved", phase, phase + 1800, true, true, false, true},
+		{"unchanged", phase, phase, true, true, false, false},
 	} {
 		p := &Pokemon{}
-		if !c.guess {
-			p.SpawnId = null.ValueFrom(int64(0x47b973e0595))
+		if !c.noSpawnId {
+			p.SpawnId = null.ValueFrom(spawnID)
 		}
 		p.oldValues = PokemonOldValues{Expiry: c.oldExp, ExpiryVerified: c.oldVerified}
 		p.ExpireTimestamp = null.ValueFrom(c.newExp)
@@ -656,4 +667,64 @@ func TestTappableKeepsAFutureExpiryWhenTheSpawnpointLookupFails(t *testing.T) {
 			t.Errorf("expiry = %d verified=%v, want the derived %d unverified", ta.ExpireTimestamp.Int64, ta.ExpireTimestampVerified, want)
 		}
 	})
+}
+
+// A pokemon seen nearby first carries the 20-minute guess. Its first wild
+// sighting, at a spawnpoint whose despawn has not been observed, replaces
+// that with the derived expiry, and nothing else a consumer watches changes —
+// the nearby sighting already derived the same IVs. The webhook must still go
+// out, or consumers keep a time up to 20 minutes out either way.
+func TestUpdatePokemonBatchSendsTheDerivedExpiryThatReplacesANearbyGuess(t *testing.T) {
+	sink := lureTestSetup(t)
+
+	const spawnHex = "2b7c1a9d0f7"
+	const spawnID = int64(0x2b7c1a9d0f7)
+	const encId = uint64(920231)
+	freshPokemonRecord(t, encId)
+	seedCachedSpawnpoint(t, spawnID, null.Int{})
+
+	fortHex := "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	fortId := mustFortId(t, fortHex)
+	pokestopCache.Set(fortId, &Pokestop{PokestopData: PokestopData{Id: fortId, Lat: 51.5007, Lon: -0.1246}}, time.Minute)
+	t.Cleanup(func() { pokestopCache.Delete(fortId) })
+
+	seen := time.Date(2026, 8, 23, 12, 17, 33, 0, time.UTC)
+	cell := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.5007, -0.1246)).Parent(gmoCellLevel))
+	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{ProcessNearby: true},
+		nil, []RawNearbyPokemonData{{
+			Cell:      uint64(cell),
+			Timestamp: seen.UnixMilli(),
+			Data: &pogo.NearbyPokemonProto{
+				EncounterId:    encId,
+				FortId:         fortHex,
+				PokedexNumber:  int32(pogo.HoloPokemonId_RATTATA),
+				PokemonDisplay: &pogo.PokemonDisplayProto{},
+			},
+		}}, nil, nil, "tester")
+
+	p, unlock, _ := peekPokemonRecordReadOnly(encId, "test")
+	if p == nil {
+		t.Fatal("nearby pokemon not in cache")
+	}
+	guess, hasIv := int64(p.ExpireTimestamp.ValueOrZero()), p.AtkIv.Valid
+	unlock()
+	derived := deriveExpiry(spawnID, seen.Unix()+60)
+	if !hasIv || guess == derived {
+		t.Fatalf("fixture assumption violated: nearby sighting must derive IVs and carry a guess off the derived expiry (guess %d, derived %d)", guess, derived)
+	}
+	sink.drain()
+
+	UpdatePokemonBatch(context.Background(), db.DbDetails{}, ScanParameters{ProcessWild: true},
+		[]RawWildPokemonData{derivedDespawnBatchWild(encId, spawnHex, seen.UnixMilli()+60_000)},
+		nil, nil, nil, "tester")
+
+	p, unlock, _ = peekPokemonRecordReadOnly(encId, "test")
+	got := int64(p.ExpireTimestamp.ValueOrZero())
+	unlock()
+	if got != derived {
+		t.Fatalf("expiry after the wild sighting = %d, want the derived %d", got, derived)
+	}
+	if len(sink.drain()) == 0 {
+		t.Error("no webhook when the derived expiry replaced the nearby guess: consumers keep the guess")
+	}
 }
