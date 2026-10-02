@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -136,11 +137,38 @@ func registerPokemonReadRoutes(api huma.API) {
 	}, func(ctx context.Context, _ *struct{}) (*pokemonAvailableOutput, error) {
 		return &pokemonAvailableOutput{Body: decoder.GetAvailablePokemon()}, nil
 	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "count-pokemon",
+		Method:        http.MethodPost,
+		Path:          "/api/pokemon/count",
+		Summary:       "Count live pokemon within a geofence",
+		Description:   "Returns how many live (not yet despawned) pokemon are inside the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence). An empty body counts the whole map. Unlike the scans this has no result cap.",
+		Tags:          []string{"Pokemon"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, in *pokemonCountInput) (*pokemonCountOutput, error) {
+		if in.Body == nil || len(bytes.TrimSpace(*in.Body)) == 0 {
+			return &pokemonCountOutput{Body: decoder.ApiPokemonCountResult{Count: decoder.CountPokemon(nil)}}, nil
+		}
+		fence, err := geo.NormaliseFenceFromBytes(*in.Body)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		return &pokemonCountOutput{Body: decoder.ApiPokemonCountResult{Count: decoder.CountPokemon(fence)}}, nil
+	})
 }
 
 type pokemonAvailableOutput struct {
 	Body []*decoder.ApiPokemonAvailableResult
 }
+
+type pokemonCountInput struct {
+	// Body is an optional geofence: a GeoJSON polygon geometry, a GeoJSON
+	// feature with one, or a Golbat fence object. Empty counts the whole map.
+	Body *json.RawMessage
+}
+type pokemonCountOutput struct{ Body decoder.ApiPokemonCountResult }
 
 type gymScanInput struct{ Body decoder.ApiFortScan }
 type gymScanOutput struct{ Body decoder.ApiGymScanResult }

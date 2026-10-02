@@ -153,6 +153,30 @@ List all available pokemon species with counts.
 
 ---
 
+### POST /api/pokemon/count
+
+Count live (not yet despawned) pokemon inside a geofence. Unlike the scans
+there is no `max_pokemon_results` cap and no per-pokemon JSON, so it suits
+dashboards that only need a number.
+
+**Authentication:** Required
+
+**Request Body:** GeoJSON Feature or Geometry (Polygon, MultiPolygon, or a GeometryCollection of polygons), or Golbat Geofence format. An empty body counts the whole map.
+
+**Response:**
+```json
+{
+  "count": 1234
+}
+```
+
+**Notes:**
+- Pokemon stay in the cache for a short grace period after despawn; those are not counted.
+- A pokemon inside overlapping polygons of a MultiPolygon is counted once.
+- A point or line body returns 400.
+
+---
+
 ### POST /api/pokemon/scan
 
 Query pokemon in a geographic area with filters (v1 - legacy).
