@@ -174,6 +174,34 @@ func TestPokemonReadEndpoints(t *testing.T) {
 			t.Fatalf("got %d, want 202; body=%s", resp.Code, resp.Body.String())
 		}
 	})
+
+	t.Run("count-pokemon with no body counts the whole map", func(t *testing.T) {
+		resp := api.Post("/api/pokemon/count")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		var out struct {
+			Count *int `json:"count"`
+		}
+		if err := gojson.Unmarshal(resp.Body.Bytes(), &out); err != nil || out.Count == nil {
+			t.Fatalf("body has no count: %v; body=%s", err, resp.Body.String())
+		}
+	})
+
+	t.Run("count-pokemon with a fence returns 200", func(t *testing.T) {
+		body := `{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1],[0,0]]]}`
+		resp := api.Post("/api/pokemon/count", strings.NewReader(body))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
+	t.Run("count-pokemon rejects a point fence", func(t *testing.T) {
+		resp := api.Post("/api/pokemon/count", strings.NewReader(`{"type":"Point","coordinates":[0,0]}`))
+		if resp.Code != http.StatusBadRequest {
+			t.Fatalf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
+		}
+	})
 }
 
 // TestTier3ReadEndpoints exercises the migrated tier-3 read endpoints over the
