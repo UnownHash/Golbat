@@ -58,7 +58,7 @@ func internalGetPokemonInArea[F any](
 	retrieveParameters PokemonScanRetrieveParameters,
 	dnfFilters map[dnfFilterLookup][]F,
 	isPokemonDnfMatch func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *F) bool,
-	secondPass ...func(uint64, *PokemonLookup, *PokemonPvpLookup) (match, stop bool),
+	secondPass func(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, location [2]float64) (match, stop bool),
 ) ([]uint64, int, int, int) {
 	start := time.Now()
 
@@ -121,7 +121,7 @@ func internalGetPokemonInArea[F any](
 							pokemon: -1,
 							form:    -1}]
 
-						if !found && len(secondPass) == 0 {
+						if !found && secondPass == nil {
 							return true
 						}
 					}
@@ -136,8 +136,8 @@ func internalGetPokemonInArea[F any](
 
 				// Clauses outside the normal selection, e.g. personal shiny
 				// clauses, are tried only for candidates it did not match.
-				if !matched && len(secondPass) > 0 {
-					match, stop := secondPass[0](pokemonId, pokemonLookup, pvpLookup)
+				if !matched && secondPass != nil {
+					match, stop := secondPass(pokemonId, pokemonLookup, pvpLookup, min)
 					if stop {
 						return false
 					}

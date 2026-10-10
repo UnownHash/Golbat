@@ -3,16 +3,16 @@ package decoder
 import (
 	"context"
 	"crypto/sha1"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -23,6 +23,12 @@ import (
 
 const shinyScale = 1 << 24
 const defaultShinyCutoff = shinyScale / 512
+
+// Cost is candidates x players, so the number of distinct IDs is bounded.
+const maxPersonalPlayers = 50
+
+// ErrPersonalRequest marks a malformed personal shiny/background request.
+var ErrPersonalRequest = errors.New("invalid personal request")
 
 type shinyPrediction struct {
 	Probability float64 `json:"probability"`
@@ -57,34 +63,42 @@ type shinyRates struct {
 	backgroundMaximum map[int16]uint32
 }
 
-func newShinyRates() *shinyRates {
-	return &shinyRates{variants: map[shinyVariant]shinyRate{}, maximum: map[int16]uint32{}, backgroundMaximum: map[int16]uint32{}}
+// Scans read the current snapshot without locking; only the refresher swaps it.
+var shinyRatesSnapshot atomic.Pointer[shinyRates]
+
+// StartShinyRates refreshes rates in the background every five minutes, or
+// 30 seconds after a failure. A failed refresh keeps the last snapshot.
+func StartShinyRates(ctx context.Context) {
+	if config.Config.ShinyRates.URL == "" {
+		return
+	}
+	go func() {
+		for {
+			wait := 5 * time.Minute
+			if err := refreshShinyRates(ctx); err != nil {
+				wait = 30 * time.Second
+				if shinyRatesSnapshot.Load() == nil {
+					log.Warnf("Shiny rates have not loaded yet; personal scans are unavailable: %v", err)
+				} else {
+					log.Warnf("Shiny rate refresh failed; retaining cached rates: %v", err)
+				}
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(wait):
+			}
+		}
+	}()
 }
 
-var shinyRateCache struct {
-	sync.Mutex
-	rates   *shinyRates
-	expires time.Time
-}
-
-// Fetch once per five minutes, shared by scans. A temporary outage retains the
-// last snapshot; species without a rate use 1/512.
-func loadShinyRates(ctx context.Context) *shinyRates {
-	shinyRateCache.Lock()
-	defer shinyRateCache.Unlock()
-	if shinyRateCache.rates == nil {
-		shinyRateCache.rates = newShinyRates()
-	}
-	if time.Now().Before(shinyRateCache.expires) {
-		return shinyRateCache.rates
-	}
-	shinyRateCache.expires = time.Now().Add(30 * time.Second)
+func refreshShinyRates(ctx context.Context) error {
 	c := config.Config.ShinyRates
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.URL, "/")+"/v1/rates?compact=1", nil)
 	if err != nil {
-		return shinyRateCache.rates
+		return err
 	}
 	if c.Token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.Token)
@@ -92,23 +106,23 @@ func loadShinyRates(ctx context.Context) *shinyRates {
 	client := &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Warn("Shiny rate refresh failed; retaining cached rates")
-		return shinyRateCache.rates
+		return err
 	}
 	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", res.StatusCode)
+	}
 	var feed struct {
 		Rates []shinyRate `json:"rates"`
 	}
-	if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed) != nil {
-		log.Warn("Shiny rate refresh failed; retaining cached rates")
-		return shinyRateCache.rates
+	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed); err != nil {
+		return err
 	}
-	next := newShinyRates()
+	next := &shinyRates{variants: make(map[shinyVariant]shinyRate), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
 	for _, r := range feed.Rates {
 		next.variants[shinyVariant{r.Pokemon, r.Form, r.Costume}] = r
 		// Unknown costumes/forms still default to 1/512 shiny and no background.
-		// This is just a cheap rejection before reading the full record to
-		// check its exact variant.
+		// The per-species maxima are a cheap rejection before the exact variant.
 		bound := max(defaultShinyCutoff, r.Prediction.cutoff(defaultShinyCutoff))
 		for _, p := range r.Overrides {
 			bound = max(bound, p.cutoff(defaultShinyCutoff))
@@ -123,79 +137,63 @@ func loadShinyRates(ctx context.Context) *shinyRates {
 		}
 		next.backgroundMaximum[int16(r.Pokemon)] = max(next.backgroundMaximum[int16(r.Pokemon)], background)
 	}
-	shinyRateCache.rates = next
-	shinyRateCache.expires = time.Now().Add(5 * time.Minute)
-	return next
+	shinyRatesSnapshot.Store(next)
+	return nil
 }
 
-// rolls packs the shiny roll (low 24 bits), the background roll (next 24
-// bits) and a valid flag (bit 63), keeping each entry at 48 bytes.
-type shinyRollEntry struct {
-	player    [32]byte
-	encounter uint64
-	rolls     uint64
+// personalLookup packs roll eligibility and costume into PokemonLookup's
+// spare byte: 0 means never personally shiny or background-eligible
+// (Ditto, disguised, or seen only as nearby), otherwise costume+1.
+func personalLookup(pokemon *Pokemon) uint8 {
+	costume := pokemon.Costume.ValueOrZero()
+	if pokemon.IsDitto || pokemon.PokemonId == 132 || costume == math.MaxUint8 ||
+		pokemon.DisplayPokemonId.ValueOrZero() != 0 && int16(pokemon.DisplayPokemonId.ValueOrZero()) != pokemon.PokemonId ||
+		pokemon.SeenType != SeenTypeFrom(SeenTypeCodeWild) && pokemon.SeenType != SeenTypeFrom(SeenTypeCodeEncounter) {
+		return 0
+	}
+	return uint8(costume) + 1
 }
-type shinyRollShard struct {
-	sync.Mutex
-	entries []shinyRollEntry
-}
-
-// Globally bounded to 96 MiB, allocated lazily; collisions evict, never match.
-// Immutable rolls need no invalidation when a rate changes.
-var shinyRollShards [64]shinyRollShard
 
 type shinyPlayer struct {
-	key   [32]byte
 	input []byte
 }
 
-const shinyRollValid = 1 << 63
-
 // rolls returns the shiny roll and the next value from the same generator,
-// which decides the background. Both are 24-bit, compared against cutoffs.
+// which decides the background: two java.util.Random nextFloat draws, kept as
+// their 24-bit integers. Recomputing (one SHA-1 block) is cheaper than a cache.
 func (p *shinyPlayer) rolls(encounter uint64) (shiny, background uint32) {
-	index := ((encounter ^ binary.LittleEndian.Uint64(p.key[:8])) * 11400714819323198485) >> 43
-	shard := &shinyRollShards[index&63]
-	shard.Lock()
-	defer shard.Unlock()
-	if shard.entries == nil {
-		shard.entries = make([]shinyRollEntry, 1<<15)
-	}
-	entry := &shard.entries[index>>6]
-	if entry.rolls&shinyRollValid != 0 && entry.encounter == encounter && entry.player == p.key {
-		return uint32(entry.rolls & (shinyScale - 1)), uint32(entry.rolls>>24) & (shinyScale - 1)
-	}
 	binary.LittleEndian.PutUint64(p.input[:8], encounter)
 	digest := sha1.Sum(p.input)
-	seed := binary.LittleEndian.Uint64(digest[:8])
-	// Two java.util.Random nextFloat draws, kept as their 24-bit integers.
-	rng := javarandom.New(seed)
-	shiny, background = rng.Next(24), rng.Next(24)
-	*entry = shinyRollEntry{player: p.key, encounter: encounter, rolls: shinyRollValid | uint64(background)<<24 | uint64(shiny)}
-	return shiny, background
+	rng := javarandom.New(binary.LittleEndian.Uint64(digest[:8]))
+	return rng.Next(24), rng.Next(24)
 }
 
 type shinyScan struct {
 	ctx     context.Context
 	rates   *shinyRates
 	players map[string]*shinyPlayer
+	// zone is the timezone of all four bbox corners, or "" if they differ.
+	zone string
 }
 
 var shinyScanSlots = make(chan struct{}, 4)
 
 // ScanPokemonWithShiny keeps the ordinary scan path intact. Only requests with
-// shiny_for, background_for or annotate_for acquire a cancellable worker slot and load shiny rates.
+// shiny_for, background_for or annotate_for acquire a cancellable worker slot.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
 	players := make(map[string]*shinyPlayer)
 	add := func(ids []string) error {
 		for _, id := range ids {
 			if id == "" {
-				return fmt.Errorf("empty player ID")
+				return fmt.Errorf("%w: empty player ID", ErrPersonalRequest)
 			}
 			if players[id] == nil {
+				if len(players) == maxPersonalPlayers {
+					return fmt.Errorf("%w: at most %d distinct player IDs per request", ErrPersonalRequest, maxPersonalPlayers)
+				}
 				input := make([]byte, 8+len(id))
 				copy(input[8:], id)
-				players[id] = &shinyPlayer{key: sha256.Sum256([]byte(id)), input: input}
+				players[id] = &shinyPlayer{input: input}
 			}
 		}
 		return nil
@@ -217,13 +215,17 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	if config.Config.ShinyRates.URL == "" {
 		return nil, fmt.Errorf("shiny rates are not configured")
 	}
+	rates := shinyRatesSnapshot.Load()
+	if rates == nil {
+		return nil, fmt.Errorf("shiny rates have not loaded yet")
+	}
 	select {
 	case shinyScanSlots <- struct{}{}:
 		defer func() { <-shinyScanSlots }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	req.shiny = &shinyScan{ctx: ctx, rates: loadShinyRates(ctx), players: players}
+	req.shiny = &shinyScan{ctx: ctx, rates: rates, players: players, zone: bboxZone(req.Min, req.Max)}
 	result := GetPokemonInArea3Clean(req)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -236,86 +238,103 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	return result, nil
 }
 
-func shinyEligible(isDitto bool, pokemon, display int, seen NullSeenType) bool {
-	return !isDitto && pokemon != 132 && (display == 0 || display == pokemon) &&
-		(seen == SeenTypeFrom(SeenTypeCodeWild) || seen == SeenTypeFrom(SeenTypeCodeEncounter))
+// bboxZone resolves the timezone once per scan. Corners that agree are taken
+// to cover the box; otherwise zones are looked up per pokemon, and only for
+// variants that have overrides.
+func bboxZone(lo, hi ApiLatLon) string {
+	zone := tz.SearchTimezone(lo.Lat, lo.Lon)
+	for _, c := range [][2]float64{{lo.Lat, hi.Lon}, {hi.Lat, lo.Lon}, {hi.Lat, hi.Lon}} {
+		if tz.SearchTimezone(c[0], c[1]) != zone {
+			return ""
+		}
+	}
+	return zone
 }
 
-// cutoffs returns the shiny and background thresholds for a variant at a
-// location. The timezone is looked up only when the variant has overrides.
-func (s *shinyScan) cutoffs(pokemon, form, costume int, lat, lon float64) (shiny, background uint32) {
+func (s *shinyScan) rate(pokemon, form, costume int) (shinyRate, bool) {
 	rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]
-	if !ok {
-		return defaultShinyCutoff, 0
-	}
-	zone := ""
-	if len(rate.Overrides) > 0 || len(rate.BackgroundOverrides) > 0 {
-		zone = tz.SearchTimezone(lat, lon)
-	}
-	shiny = rate.Prediction.cutoff(defaultShinyCutoff)
-	if override, ok := rate.Overrides[zone]; ok {
-		shiny = override.cutoff(defaultShinyCutoff)
-	}
-	if rate.Background != nil {
-		background = rate.Background.cutoff(0)
-	}
-	if override, ok := rate.BackgroundOverrides[zone]; ok {
-		background = override.cutoff(0)
-	}
-	return shiny, background
+	return rate, ok
 }
 
-// lowest returns the smallest shiny and background rolls across players.
-func (s *shinyScan) lowest(id uint64, players []string) (shiny, background uint32) {
-	shiny, background = shinyScale, shinyScale
-	for _, player := range players {
-		a, b := s.players[player].rolls(id)
-		shiny, background = min(shiny, a), min(background, b)
+func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float64) string {
+	if len(overrides) == 0 {
+		return ""
 	}
-	return shiny, background
+	if s.zone != "" {
+		return s.zone
+	}
+	return tz.SearchTimezone(lat, lon)
+}
+
+func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
+	if !ok {
+		return defaultShinyCutoff
+	}
+	if override, found := rate.Overrides[s.zoneAt(rate.Overrides, lat, lon)]; found {
+		return override.cutoff(defaultShinyCutoff)
+	}
+	return rate.Prediction.cutoff(defaultShinyCutoff)
+}
+
+func (s *shinyScan) backgroundCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
+	if !ok {
+		return 0
+	}
+	if override, found := rate.BackgroundOverrides[s.zoneAt(rate.BackgroundOverrides, lat, lon)]; found {
+		return override.cutoff(0)
+	}
+	if rate.Background == nil {
+		return 0
+	}
+	return rate.Background.cutoff(0)
 }
 
 // matchAny is the second pass over personal clauses for candidates the
 // normal v3 selection did not match.
-func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, clauses []ApiPokemonDnfFilter3) (bool, bool) {
+func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, location [2]float64, clauses []ApiPokemonDnfFilter3) (bool, bool) {
 	if s.ctx.Err() != nil {
 		return false, true
 	}
+	if lookup.Personal == 0 {
+		return false, false
+	}
 	for i := range clauses {
-		if pokemonClauseApplies(&clauses[i], lookup) && isPokemonDnfMatch3(lookup, pvp, &clauses[i]) && s.match(id, lookup, &clauses[i]) {
+		if pokemonClauseApplies(&clauses[i], lookup) && isPokemonDnfMatch3(lookup, pvp, &clauses[i]) && s.match(id, lookup, location, &clauses[i]) {
 			return true, false
 		}
 	}
 	return false, false
 }
 
-func (s *shinyScan) match(id uint64, lookup *PokemonLookup, filter *ApiPokemonDnfFilter3) bool {
-	if lookup.PokemonId == 132 {
-		return false
+// match needs no record lock: eligibility, form and costume come from the
+// lookup and the location from the spatial index. Each check first compares
+// the lowest roll with the species maximum, so most candidates stop there.
+func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64, filter *ApiPokemonDnfFilter3) bool {
+	lon, lat := location[0], location[1]
+	rate, ok := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.Personal)-1)
+	if len(filter.ShinyFor) > 0 {
+		lowest := uint32(shinyScale)
+		for _, player := range filter.ShinyFor {
+			lowest = min(lowest, first(s.players[player].rolls(id)))
+		}
+		if lowest >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) || lowest >= s.shinyCutoff(rate, ok, lat, lon) {
+			return false
+		}
 	}
-	shiny, _ := s.lowest(id, filter.ShinyFor)
-	_, background := s.lowest(id, filter.BackgroundFor)
-	if len(filter.ShinyFor) > 0 && shiny >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) ||
-		len(filter.BackgroundFor) > 0 && background >= s.rates.backgroundMaximum[lookup.PokemonId] {
-		return false
+	if len(filter.BackgroundFor) > 0 {
+		lowest := uint32(shinyScale)
+		for _, player := range filter.BackgroundFor {
+			_, background := s.players[player].rolls(id)
+			lowest = min(lowest, background)
+		}
+		if lowest >= s.rates.backgroundMaximum[lookup.PokemonId] || lowest >= s.backgroundCutoff(rate, ok, lat, lon) {
+			return false
+		}
 	}
-	// Typically fewer than 1% of candidates reach the record lock. No decode
-	// changes, extra lookup fields, SQL queries, or coordinate calls to the rates source.
-	p, unlock, _ := peekPokemonRecordReadOnly(id, "API.ScanPokemon.shiny")
-	if p == nil {
-		return false
-	}
-	pokemon, form, costume := int(p.PokemonId), int(p.Form.ValueOrZero()), int(p.Costume.ValueOrZero())
-	lat, lon := p.Lat, p.Lon
-	eligible := shinyEligible(p.IsDitto, pokemon, int(p.DisplayPokemonId.ValueOrZero()), p.SeenType)
-	unlock()
-	if !eligible {
-		return false
-	}
-	shinyCutoff, backgroundCutoff := s.cutoffs(pokemon, form, costume, lat, lon)
-	return (len(filter.ShinyFor) == 0 || shiny < shinyCutoff) &&
-		(len(filter.BackgroundFor) == 0 || background < backgroundCutoff)
+	return true
 }
+
+func first(a, _ uint32) uint32 { return a }
 
 // annotate fills ShinyFor and BackgroundFor from the already-built result, so
 // it needs no record lock. Ineligible results get neither.
@@ -324,26 +343,28 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	if err != nil {
 		return
 	}
-	seen := NullSeenType{}
-	if r.SeenType != nil {
-		seen, _ = ParseSeenType(*r.SeenType)
+	pokemon := Pokemon{}
+	pokemon.PokemonId = r.PokemonId
+	pokemon.IsDitto = r.IsDitto
+	if r.Costume != nil {
+		pokemon.Costume.SetValid(*r.Costume)
 	}
-	display := 0
 	if r.DisplayPokemonId != nil {
-		display = int(*r.DisplayPokemonId)
+		pokemon.DisplayPokemonId.SetValid(*r.DisplayPokemonId)
 	}
-	pokemon := int(r.PokemonId)
-	if !shinyEligible(r.IsDitto, pokemon, display, seen) {
+	if r.SeenType != nil {
+		pokemon.SeenType, _ = ParseSeenType(*r.SeenType)
+	}
+	personal := personalLookup(&pokemon)
+	if personal == 0 {
 		return
 	}
-	form, costume := 0, 0
+	form := 0
 	if r.Form != nil {
 		form = int(*r.Form)
 	}
-	if r.Costume != nil {
-		costume = int(*r.Costume)
-	}
-	shinyCutoff, backgroundCutoff := s.cutoffs(pokemon, form, costume, r.Lat, r.Lon)
+	rate, ok := s.rate(int(r.PokemonId), form, int(personal)-1)
+	shinyCutoff, backgroundCutoff := s.shinyCutoff(rate, ok, r.Lat, r.Lon), s.backgroundCutoff(rate, ok, r.Lat, r.Lon)
 	for _, player := range players {
 		shiny, background := s.players[player].rolls(id)
 		if shiny < shinyCutoff {

@@ -1,9 +1,11 @@
 # Personal shiny and background filtering
 
 Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
-bearer `token`. Golbat fetches `GET <url>/v1/rates?compact=1` and caches it for
-five minutes. Unknown variants assume 1/512; Ditto is excluded. A failed refresh
-retains the last rates and retries after 30 seconds.
+bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
+startup and every five minutes. A failed refresh keeps the last rates and
+retries after 30 seconds; until the first successful load, personal scans fail
+rather than guess. Unknown variants assume 1/512 shiny and no background.
+Ditto, disguised Pokémon and nearby-only sightings are never eligible.
 
 The rate source must return JSON in this shape:
 
@@ -35,7 +37,20 @@ The rate source must return JSON in this shape:
   for backgrounds. A variant without them never has a background.
 
 The shiny roll and the background roll are the first and second `nextFloat`
-draws from the same per-player, per-encounter generator.
+draws from the same per-player, per-encounter generator. The background part
+assumes the game takes no other draw in between; the test vectors pin current
+behaviour, so a change in the game would break background predictions without
+an error.
+
+Limitations:
+
+- Rates are keyed by variant and, optionally, IANA timezone. Backgrounds tied
+  to a city, Go Fest venue or landmark would need geofence- or S2-keyed rates,
+  which this format cannot express.
+- Rates are applied when the scan runs, not when the Pokémon spawned or was
+  encountered, and the cached rates can be up to five minutes old. A Pokémon
+  that spawned before a rate change is judged at the new rate. Which time the
+  game itself uses has not been verified.
 
 On the existing HTTP `POST /api/pokemon/v3/scan`, add `shiny_for` to a filter
 clause:
@@ -45,7 +60,8 @@ clause:
 ```
 
 The clause matches Pokémon shiny for **any** supplied player ID, AND its other
-conditions. Clauses are ORed. IDs are opaque, nonempty strings. Result limits
+conditions. Clauses are ORed. IDs are opaque, nonempty strings; a request may use at most 50 distinct IDs
+across all fields (more returns 400). Result limits
 apply after shiny filtering. The API secret is still required as configured;
 frontends must authorize account ownership and map access themselves.
 
@@ -83,5 +99,6 @@ fields are omitted when empty:
 `/api/status` advertises `filters.shiny_for`, `filters.background_for` and
 `filters.annotate_for` when configured. This extension is
 HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
-required. Calculations use bounded memory (up to 96 MiB shared across players);
-concurrent shiny scans queue behind four active slots and respect cancellation.
+required. Rolls are recomputed rather than cached (one SHA-1 block each), and
+candidates that can never qualify are skipped before hashing. Concurrent
+personal scans queue behind four active slots and respect cancellation.

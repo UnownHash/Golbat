@@ -87,5 +87,5 @@ func internalGetPokemonInArea2(retrieveParameters ApiPokemonScan2) ([]uint64, in
 		return true
 	}
 
-	return internalGetPokemonInArea[ApiPokemonDnfFilter](retrieveParameters, dnfFilters, isPokemonDnfMatch)
+	return internalGetPokemonInArea[ApiPokemonDnfFilter](retrieveParameters, dnfFilters, isPokemonDnfMatch, nil)
 }

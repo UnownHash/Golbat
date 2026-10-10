@@ -54,6 +54,9 @@ type PokemonLookup struct {
 	Gender             int8
 	Iv                 int8
 	Size               int8
+	// Personal is 0 when personal shiny/background rolls can never apply,
+	// otherwise costume+1. It fills what was padding; see personalLookup.
+	Personal uint8
 }
 
 type PokemonPvpLookup struct {
@@ -344,6 +347,7 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 		Cp:                 lookupInt16(pokemon.Cp),
 		Iv:                 lookupIv(pokemon.Iv),
 		Size:               lookupInt8(pokemon.Size),
+		Personal:           personalLookup(pokemon),
 	}
 	if !pokemon.IsDitto {
 		pokemonLookupCacheItem.PokemonLookup.Form = lookupForm(pokemon.Form)
