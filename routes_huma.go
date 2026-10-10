@@ -58,6 +58,9 @@ func registerHumaRoutes(api huma.API) {
 		DefaultStatus: http.StatusAccepted,
 	}, func(ctx context.Context, in *pokemonV3ScanInput) (*pokemonV3ScanOutput, error) {
 		result, err := decoder.ScanPokemonWithShiny(ctx, in.Body)
+		if errors.Is(err, decoder.ErrPersonalRequest) {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
 		if err != nil {
 			return nil, huma.Error503ServiceUnavailable("Pokemon scan unavailable", err)
 		}

@@ -2,7 +2,8 @@ package decoder
 
 import (
 	"context"
-	"crypto/sha256"
+	"errors"
+	"fmt"
 	"github.com/guregu/null/v6"
 	"golbat/config"
 	"net/http"
@@ -25,7 +26,7 @@ func TestPersonalShinyScan(t *testing.T) {
 	} {
 		input := make([]byte, 8+len(tc.id))
 		copy(input[8:], tc.id)
-		p := shinyPlayer{key: sha256.Sum256([]byte(tc.id)), input: input}
+		p := shinyPlayer{input: input}
 		for i := 0; i < 2; i++ {
 			shiny, background := p.rolls(tc.encounter)
 			if got := float64(shiny) / shinyScale; got != tc.shiny {
@@ -50,11 +51,15 @@ func TestPersonalShinyScan(t *testing.T) {
 	t.Cleanup(func() {
 		config.Config.ShinyRates = oldConfig
 		config.Config.Tuning.MaxPokemonResults = oldLimit
-		shinyRateCache.Lock()
-		shinyRateCache.rates = nil
-		shinyRateCache.expires = time.Time{}
-		shinyRateCache.Unlock()
+		shinyRatesSnapshot.Store(nil)
 	})
+	shinyRatesSnapshot.Store(nil)
+	if _, err := ScanPokemonWithShiny(context.Background(), ApiPokemonScan3{DnfFilters: []ApiPokemonDnfFilter3{{ShinyFor: []string{"x"}}}}); err == nil {
+		t.Fatal("personal scan ran before rates loaded")
+	}
+	if err := refreshShinyRates(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 	p := &Pokemon{PokemonData: PokemonData{Id: 1, PokemonId: 25, Lat: 33.45, Lon: -112.07, SeenType: SeenTypeFrom(SeenTypeCodeWild), ExpireTimestamp: null.ValueFrom(uint32(time.Now().Unix() + 600))}}
 	pokemonRtreePreloadInsert(p)
 	pokemonCache.Set(1, p, time.Minute)
@@ -127,4 +132,35 @@ func TestPersonalShinyScan(t *testing.T) {
 	// Annotation alone keeps ordinary clause selection: the specific clause hides the wildcard.
 	req.DnfFilters = []ApiPokemonDnfFilter3{{Pokemon: []ApiPokemonDnfId{{Pokemon: 25}}, Iv: &ApiPokemonDnfMinMax{Min: 100, Max: 100}}, {}}
 	check(0)
+
+	// Too many distinct IDs is a client error.
+	many := make([]string, maxPersonalPlayers+1)
+	for i := range many {
+		many[i] = fmt.Sprint("player-", i)
+	}
+	req.DnfFilters = []ApiPokemonDnfFilter3{{ShinyFor: many}}
+	if _, err := ScanPokemonWithShiny(context.Background(), req); !errors.Is(err, ErrPersonalRequest) {
+		t.Fatalf("err = %v, want ErrPersonalRequest", err)
+	}
+
+	// Nearby sightings are never roll-eligible and are rejected before hashing.
+	req.AnnotateFor = nil
+	req.DnfFilters = []ApiPokemonDnfFilter3{{ShinyFor: []string{" Trainer-é "}}}
+	check(1)
+	p.SeenType = SeenTypeFrom(SeenTypeCodeNearbyStop)
+	updatePokemonLookup(p, false, nil)
+	check(0)
+}
+
+func BenchmarkPersonalRolls(b *testing.B) {
+	id := "Player-ID:ABC/123"
+	input := make([]byte, 8+len(id))
+	copy(input[8:], id)
+	p := shinyPlayer{input: input}
+	var sink uint32
+	for i := 0; i < b.N; i++ {
+		shiny, background := p.rolls(uint64(i))
+		sink += shiny ^ background
+	}
+	_ = sink
 }

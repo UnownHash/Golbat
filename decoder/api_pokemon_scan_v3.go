@@ -82,11 +82,11 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 	if len(personal) > 0 {
 		s := retrieveParameters.shiny
 		return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3,
-			func(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup) (bool, bool) {
-				return s.matchAny(id, lookup, pvp, personal)
+			func(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, location [2]float64) (bool, bool) {
+				return s.matchAny(id, lookup, pvp, location, personal)
 			})
 	}
-	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3)
+	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3, nil)
 }
 
 // pokemonClauseApplies reports whether a clause's pokemon list covers the
