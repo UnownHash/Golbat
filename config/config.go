@@ -6,7 +6,13 @@ import (
 	"golbat/geo"
 )
 
+type Shinx struct {
+	URL   string `koanf:"url"`
+	Token string `koanf:"token"`
+}
+
 type configDefinition struct {
+	Shinx                   Shinx      `koanf:"shinx"`
 	Port                    int        `koanf:"port"`
 	GrpcPort                int        `koanf:"grpc_port"`
 	Webhooks                []Webhook  `koanf:"webhooks"`

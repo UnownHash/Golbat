@@ -58,6 +58,7 @@ func internalGetPokemonInArea[F any](
 	retrieveParameters PokemonScanRetrieveParameters,
 	dnfFilters map[dnfFilterLookup][]F,
 	isPokemonDnfMatch func(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *F) bool,
+	candidateMatch ...func(uint64, *PokemonLookup, *F) (bool, bool),
 ) ([]uint64, int, int, int) {
 	start := time.Now()
 
@@ -128,6 +129,15 @@ func internalGetPokemonInArea[F any](
 
 				for x := 0; x < len(filters); x++ {
 					if isPokemonDnfMatch(pokemonLookup, pvpLookup, &filters[x]) {
+						if len(candidateMatch) > 0 {
+							match, stop := candidateMatch[0](pokemonId, pokemonLookup, &filters[x])
+							if stop {
+								return false
+							}
+							if !match {
+								continue
+							}
+						}
 						matched = true
 						break
 					}

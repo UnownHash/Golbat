@@ -25,6 +25,7 @@ type ApiStatusResult struct {
 // missing (or false) and does not send the filter. New filters get a new
 // field here rather than a flag on an availability response.
 type ApiStatusFilters struct {
+	ShinyFor        bool `json:"shiny_for" doc:"Player IDs can be supplied as shiny_for on pokemon v3 HTTP filter clauses"`
 	ShowcaseFocus   bool `json:"showcase_focus" doc:"contest_focus Buddy selectors are honoured by pokestop scans before the result cap"`
 	BattleAvailable bool `json:"battle_available" doc:"battle_available (the station is_battle_available flag) is honoured by station scans"`
 	UpdatedAfter    bool `json:"updated_after" doc:"updated_after (return only entities updated strictly after a unix time) is honoured by the pokemon v3 scan and every fort scan"`
@@ -35,6 +36,6 @@ func GetApiStatus() *ApiStatusResult {
 	status.Features.FortInMemory = config.Config.FortInMemory
 	status.Limits.MaxPokemonResults = config.Config.Tuning.MaxPokemonResults
 	status.Limits.MaxFortResults = config.Config.Tuning.MaxFortResults
-	status.Filters = ApiStatusFilters{ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
+	status.Filters = ApiStatusFilters{ShinyFor: config.Config.Shinx.URL != "", ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
 	return status
 }

@@ -186,3 +186,8 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 #raid_stats_interval_minutes = 10       # Interval for writing raid stats (default: 10 minutes)
 #invasion_stats_interval_minutes = 15   # Interval for writing invasion stats (default: 15 minutes)
 #quest_stats_interval_minutes = 15      # Interval for writing quest stats (default: 15 minutes)
+
+# Optional personal shiny filtering on /api/pokemon/v3/scan.
+# [shinx]
+# url = "http://shinx:3911"
+# token = "" # Shinx API token (not dashboard token)
