@@ -7,6 +7,7 @@ import (
 	"golbat/config"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"testing"
 	"time"
 )
@@ -14,20 +15,24 @@ import (
 func TestPersonalShinyScan(t *testing.T) {
 	// Pin the independently verified game calculation, including opaque IDs.
 	for _, tc := range []struct {
-		id        string
-		encounter uint64
-		want      float64
+		id                string
+		encounter         uint64
+		shiny, background float64
 	}{
-		{"0123456789abcdef", 1, 0.22137850522994995},
-		{"Player-ID:ABC/123", 1, 0.3684830665588379},
-		{" Trainer-é ", 1, 0.03772324323654175},
+		{"0123456789abcdef", 1, 0.22137850522994995, 0.1431974172592163},
+		{"Player-ID:ABC/123", 1, 0.3684830665588379, 0.9563266038894653},
+		{" Trainer-é ", 1, 0.03772324323654175, 0.7365694642066956},
 	} {
 		input := make([]byte, 8+len(tc.id))
 		copy(input[8:], tc.id)
 		p := shinyPlayer{key: sha256.Sum256([]byte(tc.id)), input: input}
 		for i := 0; i < 2; i++ {
-			if got := float64(p.roll(tc.encounter)) / shinyScale; got != tc.want {
-				t.Fatalf("roll=%v want=%v", got, tc.want)
+			shiny, background := p.rolls(tc.encounter)
+			if got := float64(shiny) / shinyScale; got != tc.shiny {
+				t.Fatalf("shiny roll=%v want=%v", got, tc.shiny)
+			}
+			if got := float64(background) / shinyScale; got != tc.background {
+				t.Fatalf("background roll=%v want=%v", got, tc.background)
 			}
 		}
 	}
@@ -35,7 +40,7 @@ func TestPersonalShinyScan(t *testing.T) {
 		if r.URL.Path != "/v1/rates" || r.Header.Get("Authorization") != "Bearer test" {
 			t.Error("incorrect rates request")
 		}
-		_, _ = w.Write([]byte(`{"rates":[{"pokemon":25,"form":0,"costume":0,"prediction":{"probability":0.1,"supported":true},"overrides":{"America/Phoenix":{"probability":0.05,"supported":true}}}]}`))
+		_, _ = w.Write([]byte(`{"rates":[{"pokemon":25,"form":0,"costume":0,"prediction":{"probability":0.1,"supported":true},"overrides":{"America/Phoenix":{"probability":0.05,"supported":true}},"background":{"probability":0.2,"supported":true},"background_overrides":{"America/Phoenix":{"probability":0.15,"supported":true}}}]}`))
 	}))
 	defer server.Close()
 	oldConfig := config.Config.ShinyRates
@@ -84,4 +89,29 @@ func TestPersonalShinyScan(t *testing.T) {
 	req.DnfFilters[0].ShinyFor = []string{"Player-ID:ABC/123"}
 	req.DnfFilters[1].Iv = nil
 	check(1)
+
+	// Backgrounds use the next roll from the same generator.
+	req.DnfFilters = []ApiPokemonDnfFilter3{{BackgroundFor: []string{"Player-ID:ABC/123"}}}
+	check(0)
+	req.DnfFilters[0].BackgroundFor = []string{"0123456789abcdef"}
+	check(1)
+	req.DnfFilters[0].ShinyFor = []string{"Player-ID:ABC/123"}
+	check(0) // shiny_for and background_for in one clause are AND'd
+	req.DnfFilters[0].ShinyFor = []string{" Trainer-é "}
+	check(1)
+
+	// Annotation marks results without filtering them.
+	req.DnfFilters = []ApiPokemonDnfFilter3{{}}
+	req.AnnotateFor = []string{"0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "}
+	res, err := ScanPokemonWithShiny(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Pokemon) != 1 || !slices.Equal(res.Pokemon[0].ShinyFor, []string{" Trainer-é "}) ||
+		!slices.Equal(res.Pokemon[0].BackgroundFor, []string{"0123456789abcdef"}) {
+		t.Fatalf("annotations = %+v", res.Pokemon)
+	}
+	// Annotation alone keeps ordinary clause selection: the specific clause hides the wildcard.
+	req.DnfFilters = []ApiPokemonDnfFilter3{{Pokemon: []ApiPokemonDnfId{{Pokemon: 25}}, Iv: &ApiPokemonDnfMinMax{Min: 100, Max: 100}}, {}}
+	check(0)
 }
