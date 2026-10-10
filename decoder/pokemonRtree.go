@@ -54,9 +54,11 @@ type PokemonLookup struct {
 	Gender             int8
 	Iv                 int8
 	Size               int8
-	// Personal is 0 when personal shiny/background rolls can never apply,
-	// otherwise costume+1. It fills what was padding; see personalLookup.
-	Personal uint8
+	// RollEligibleCostume belongs to personal shiny/background rolls
+	// (api_pokemon_shiny.go): 0 when they can never apply, otherwise
+	// costume+1. It fills what was padding. Changing the eligibility rules
+	// means changing personalLookup, which runs on this save path.
+	RollEligibleCostume uint8
 }
 
 type PokemonPvpLookup struct {
@@ -336,18 +338,18 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 
 	pokemonLookupCacheItem.HasLookup = true
 	pokemonLookupCacheItem.PokemonLookup = PokemonLookup{
-		PokemonId:          pokemon.PokemonId,
-		HasEncounterValues: pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.scanHistory) > 0,
-		Weather:            lookupInt8(pokemon.Weather),
-		Atk:                lookupInt8(pokemon.AtkIv),
-		Def:                lookupInt8(pokemon.DefIv),
-		Sta:                lookupInt8(pokemon.StaIv),
-		Level:              lookupInt8(pokemon.Level),
-		Gender:             lookupInt8(pokemon.Gender),
-		Cp:                 lookupInt16(pokemon.Cp),
-		Iv:                 lookupIv(pokemon.Iv),
-		Size:               lookupInt8(pokemon.Size),
-		Personal:           personalLookup(pokemon),
+		PokemonId:           pokemon.PokemonId,
+		HasEncounterValues:  pokemon.AtkIv.Valid || len(pokemon.GolbatInternal) > 0 || len(pokemon.scanHistory) > 0,
+		Weather:             lookupInt8(pokemon.Weather),
+		Atk:                 lookupInt8(pokemon.AtkIv),
+		Def:                 lookupInt8(pokemon.DefIv),
+		Sta:                 lookupInt8(pokemon.StaIv),
+		Level:               lookupInt8(pokemon.Level),
+		Gender:              lookupInt8(pokemon.Gender),
+		Cp:                  lookupInt16(pokemon.Cp),
+		Iv:                  lookupIv(pokemon.Iv),
+		Size:                lookupInt8(pokemon.Size),
+		RollEligibleCostume: personalLookup(pokemon),
 	}
 	if !pokemon.IsDitto {
 		pokemonLookupCacheItem.PokemonLookup.Form = lookupForm(pokemon.Form)

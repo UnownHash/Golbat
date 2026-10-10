@@ -154,18 +154,29 @@ func personalLookup(pokemon *Pokemon) uint8 {
 	return uint8(costume) + 1
 }
 
+// shinyPlayer is used by one scan goroutine. It remembers only the last
+// encounter's rolls, so a player listed in several clauses is hashed at most
+// once per candidate, and only if a clause gets that far.
 type shinyPlayer struct {
-	input []byte
+	input                     []byte
+	last                      uint64
+	lastValid                 bool
+	lastShiny, lastBackground uint32
 }
 
 // rolls returns the shiny roll and the next value from the same generator,
 // which decides the background: two java.util.Random nextFloat draws, kept as
 // their 24-bit integers. Recomputing (one SHA-1 block) is cheaper than a cache.
 func (p *shinyPlayer) rolls(encounter uint64) (shiny, background uint32) {
+	if p.lastValid && p.last == encounter {
+		return p.lastShiny, p.lastBackground
+	}
 	binary.LittleEndian.PutUint64(p.input[:8], encounter)
 	digest := sha1.Sum(p.input)
 	rng := javarandom.New(binary.LittleEndian.Uint64(digest[:8]))
-	return rng.Next(24), rng.Next(24)
+	shiny, background = rng.Next(24), rng.Next(24)
+	p.last, p.lastValid, p.lastShiny, p.lastBackground = encounter, true, shiny, background
+	return shiny, background
 }
 
 type shinyScan struct {
@@ -295,7 +306,7 @@ func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLo
 	if s.ctx.Err() != nil {
 		return false, true
 	}
-	if lookup.Personal == 0 {
+	if lookup.RollEligibleCostume == 0 {
 		return false, false
 	}
 	for i := range clauses {
@@ -311,7 +322,7 @@ func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLo
 // the lowest roll with the species maximum, so most candidates stop there.
 func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64, filter *ApiPokemonDnfFilter3) bool {
 	lon, lat := location[0], location[1]
-	rate, ok := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.Personal)-1)
+	rate, ok := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.RollEligibleCostume)-1)
 	if len(filter.ShinyFor) > 0 {
 		lowest := uint32(shinyScale)
 		for _, player := range filter.ShinyFor {
@@ -322,6 +333,10 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		}
 	}
 	if len(filter.BackgroundFor) > 0 {
+		// Most species can never have a background: skip hashing entirely.
+		if s.rates.backgroundMaximum[lookup.PokemonId] == 0 {
+			return false
+		}
 		lowest := uint32(shinyScale)
 		for _, player := range filter.BackgroundFor {
 			_, background := s.players[player].rolls(id)
