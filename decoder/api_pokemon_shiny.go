@@ -50,7 +50,7 @@ type shinyRates struct {
 	maximum  map[int16]uint32
 }
 
-var shinxRateCache struct {
+var shinyRateCache struct {
 	sync.Mutex
 	rates   *shinyRates
 	expires time.Time
@@ -59,36 +59,38 @@ var shinxRateCache struct {
 // Fetch once per five minutes, shared by scans. A temporary outage retains the
 // last snapshot; species without a rate use 1/512.
 func loadShinyRates(ctx context.Context) *shinyRates {
-	shinxRateCache.Lock()
-	defer shinxRateCache.Unlock()
-	if shinxRateCache.rates == nil {
-		shinxRateCache.rates = &shinyRates{variants: map[shinyVariant]shinyRate{}, maximum: map[int16]uint32{}}
+	shinyRateCache.Lock()
+	defer shinyRateCache.Unlock()
+	if shinyRateCache.rates == nil {
+		shinyRateCache.rates = &shinyRates{variants: map[shinyVariant]shinyRate{}, maximum: map[int16]uint32{}}
 	}
-	if time.Now().Before(shinxRateCache.expires) {
-		return shinxRateCache.rates
+	if time.Now().Before(shinyRateCache.expires) {
+		return shinyRateCache.rates
 	}
-	shinxRateCache.expires = time.Now().Add(30 * time.Second)
-	c := config.Config.Shinx
+	shinyRateCache.expires = time.Now().Add(30 * time.Second)
+	c := config.Config.ShinyRates
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.URL, "/")+"/v1/rates?compact=1", nil)
 	if err != nil {
-		return shinxRateCache.rates
+		return shinyRateCache.rates
 	}
-	req.Header.Set("Authorization", "Bearer "+c.Token)
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
 	client := &http.Client{CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	res, err := client.Do(req)
 	if err != nil {
-		log.Warn("Shinx rate refresh failed; retaining cached rates")
-		return shinxRateCache.rates
+		log.Warn("Shiny rate refresh failed; retaining cached rates")
+		return shinyRateCache.rates
 	}
 	defer res.Body.Close()
 	var feed struct {
 		Rates []shinyRate `json:"rates"`
 	}
 	if res.StatusCode != http.StatusOK || json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed) != nil {
-		log.Warn("Shinx rate refresh failed; retaining cached rates")
-		return shinxRateCache.rates
+		log.Warn("Shiny rate refresh failed; retaining cached rates")
+		return shinyRateCache.rates
 	}
 	next := &shinyRates{variants: make(map[shinyVariant]shinyRate), maximum: make(map[int16]uint32)}
 	for _, r := range feed.Rates {
@@ -101,8 +103,8 @@ func loadShinyRates(ctx context.Context) *shinyRates {
 		}
 		next.maximum[int16(r.Pokemon)] = max(next.maximum[int16(r.Pokemon)], bound)
 	}
-	shinxRateCache.rates = next
-	shinxRateCache.expires = time.Now().Add(5 * time.Minute)
+	shinyRateCache.rates = next
+	shinyRateCache.expires = time.Now().Add(5 * time.Minute)
 	return next
 }
 
@@ -155,7 +157,7 @@ type shinyScan struct {
 var shinyScanSlots = make(chan struct{}, 4)
 
 // ScanPokemonWithShiny keeps the ordinary scan path intact. Only requests with
-// shiny_for acquire a cancellable worker slot and load Shinx rates.
+// shiny_for acquire a cancellable worker slot and load shiny rates.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
 	players := make(map[string]*shinyPlayer)
 	for _, f := range req.DnfFilters {
@@ -173,8 +175,8 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	if len(players) == 0 {
 		return GetPokemonInArea3Clean(req), nil
 	}
-	if config.Config.Shinx.URL == "" {
-		return nil, fmt.Errorf("shinx is not configured")
+	if config.Config.ShinyRates.URL == "" {
+		return nil, fmt.Errorf("shiny rates are not configured")
 	}
 	select {
 	case shinyScanSlots <- struct{}{}:
@@ -209,7 +211,7 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, filter *ApiPokemonDn
 		return false, false
 	}
 	// Typically fewer than 1% of candidates reach the record lock. No decode
-	// changes, extra lookup fields, SQL queries, or coordinate calls to Shinx.
+	// changes, extra lookup fields, SQL queries, or coordinate calls to the rates source.
 	p, unlock, _ := peekPokemonRecordReadOnly(id, "API.ScanPokemon.shiny")
 	if p == nil {
 		return false, false
