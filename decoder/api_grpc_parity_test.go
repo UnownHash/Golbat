@@ -30,8 +30,9 @@ func expectedProtoFieldNames(t *testing.T, typ reflect.Type, overrides map[strin
 		if !f.IsExported() {
 			continue
 		}
-		// Personal shiny filtering is an optional HTTP-only extension.
-		if typ == reflect.TypeOf(ApiPokemonDnfFilter3{}) && f.Name == "ShinyFor" {
+		// Personal shiny/background fields are optional HTTP-only extensions.
+		if (typ == reflect.TypeOf(ApiPokemonDnfFilter3{}) || typ == reflect.TypeOf(ApiPokemonResult{})) && (f.Name == "ShinyFor" || f.Name == "BackgroundFor") ||
+			typ == reflect.TypeOf(ApiPokemonScan3{}) && f.Name == "AnnotateFor" {
 			continue
 		}
 		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")

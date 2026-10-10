@@ -1,4 +1,4 @@
-# Personal shiny filtering
+# Personal shiny and background filtering
 
 Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
 bearer `token`. Golbat fetches `GET <url>/v1/rates?compact=1` and caches it for
@@ -17,6 +17,10 @@ The rate source must return JSON in this shape:
       "prediction": {"probability": 0.001953125, "supported": true},
       "overrides": {
         "Europe/Berlin": {"probability": 0.0625, "supported": true}
+      },
+      "background": {"probability": 0.04, "supported": true},
+      "background_overrides": {
+        "Europe/Berlin": {"probability": 0.1, "supported": true}
       }
     }
   ]
@@ -26,6 +30,12 @@ The rate source must return JSON in this shape:
 - `prediction.probability` is the shiny probability for that species/form/costume.
 - `supported: false` means the variant is never shiny-eligible.
 - `overrides` is optional and keyed by IANA timezone of the spawn's location.
+  Local-time events such as Community Day change rates per timezone.
+- `background` and `background_overrides` are optional and work the same way
+  for backgrounds. A variant without them never has a background.
+
+The shiny roll and the background roll are the first and second `nextFloat`
+draws from the same per-player, per-encounter generator.
 
 On the existing HTTP `POST /api/pokemon/v3/scan`, add `shiny_for` to a filter
 clause:
@@ -52,7 +62,25 @@ Shinies or hundos:
 "filters": [{"shiny_for": ["player-id"]}, {"iv": {"min": 100, "max": 100}}]
 ```
 
-`/api/status` advertises `filters.shiny_for` when configured. This extension is
+`background_for` works the same way for backgrounds. In one clause,
+`shiny_for` and `background_for` are ANDed like any other condition.
+
+When any clause has `shiny_for` or `background_for`, generic clauses are also
+evaluated for species that have their own clause, so all clauses are simply
+ORed. A generic shiny clause therefore still covers a species that has its own
+ordinary clause. Requests without either keep the normal v3 clause selection.
+
+To mark results without filtering them, pass player IDs at the top level as
+`annotate_for`. Each returned Pokémon then lists the IDs it is shiny for in
+`shiny_for` and the IDs it has a background for in `background_for`. Both
+fields are omitted when empty:
+
+```json
+{"min":{...},"max":{...},"filters":[{}],"annotate_for":["player-id"]}
+```
+
+`/api/status` advertises `filters.shiny_for`, `filters.background_for` and
+`filters.annotate_for` when configured. This extension is
 HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
 required. Calculations use bounded memory (up to 96 MiB shared across players);
 concurrent shiny scans queue behind four active slots and respect cancellation.
