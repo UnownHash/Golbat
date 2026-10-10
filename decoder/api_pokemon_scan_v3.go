@@ -45,8 +45,15 @@ type ApiPokemonDnfFilter3 struct {
 
 func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, int, int, int) {
 	dnfFilters := make(map[dnfFilterLookup][]ApiPokemonDnfFilter3)
+	var personal []ApiPokemonDnfFilter3
 
 	for _, filter := range retrieveParameters.DnfFilters {
+		// Personal clauses stay out of the normal selection, so adding one never
+		// changes which ordinary clauses apply. They are tried in a second pass.
+		if retrieveParameters.shiny != nil && (len(filter.ShinyFor) > 0 || len(filter.BackgroundFor) > 0) {
+			personal = append(personal, filter)
+			continue
+		}
 		if len(filter.Pokemon) > 0 {
 			for _, keyString := range filter.Pokemon {
 				pokemonId := keyString.Pokemon
@@ -72,26 +79,35 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 		}
 	}
 
-	if retrieveParameters.shiny != nil && retrieveParameters.shiny.filtering {
-		// Include wildcard clauses in specific groups for mixed shiny/ordinary OR filters.
-		original := make(map[dnfFilterLookup][]ApiPokemonDnfFilter3, len(dnfFilters))
-		for key, filters := range dnfFilters {
-			original[key] = filters
-		}
-		for key, filters := range original {
-			if key.pokemon == -1 {
-				continue
-			}
-			merged := append([]ApiPokemonDnfFilter3(nil), filters...)
-			if key.form != -1 {
-				merged = append(merged, original[dnfFilterLookup{key.pokemon, -1}]...)
-			}
-			merged = append(merged, original[dnfFilterLookup{-1, -1}]...)
-			dnfFilters[key] = merged
-		}
-		return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3, retrieveParameters.shiny.match)
+	if len(personal) > 0 {
+		s := retrieveParameters.shiny
+		return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3,
+			func(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup) (bool, bool) {
+				return s.matchAny(id, lookup, pvp, personal)
+			})
 	}
 	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3)
+}
+
+// pokemonClauseApplies reports whether a clause's pokemon list covers the
+// candidate, mirroring the normal selection keys: an id of 0 with no form
+// matches any pokemon, and a form without an id never matches.
+func pokemonClauseApplies(filter *ApiPokemonDnfFilter3, lookup *PokemonLookup) bool {
+	if len(filter.Pokemon) == 0 {
+		return true
+	}
+	for _, id := range filter.Pokemon {
+		if id.Pokemon == 0 {
+			if id.Form == nil {
+				return true
+			}
+			continue
+		}
+		if id.Pokemon == lookup.PokemonId && (id.Form == nil || *id.Form == lookup.Form) {
+			return true
+		}
+	}
+	return false
 }
 
 func isPokemonDnfMatch3(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonDnfFilter3) bool {

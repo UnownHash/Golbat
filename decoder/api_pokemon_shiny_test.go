@@ -111,6 +111,19 @@ func TestPersonalShinyScan(t *testing.T) {
 		!slices.Equal(res.Pokemon[0].BackgroundFor, []string{"0123456789abcdef"}) {
 		t.Fatalf("annotations = %+v", res.Pokemon)
 	}
+	// A personal clause never hides ordinary clauses, even species-specific ones.
+	req.AnnotateFor = nil
+	req.DnfFilters = []ApiPokemonDnfFilter3{{}, {Pokemon: []ApiPokemonDnfId{{Pokemon: 25}}, ShinyFor: []string{"Player-ID:ABC/123"}}}
+	check(1)
+	req.DnfFilters[0].Cp = &ApiPokemonDnfMinMax{Min: 100, Max: 200}
+	check(0)
+	req.DnfFilters[1].Pokemon = []ApiPokemonDnfId{{Pokemon: 26}}
+	req.DnfFilters[1].ShinyFor = []string{" Trainer-é "}
+	check(0) // the personal clause's pokemon list still applies
+	req.DnfFilters[1].Pokemon = []ApiPokemonDnfId{{Pokemon: 25}}
+	check(1)
+	req.AnnotateFor = []string{"0123456789abcdef"}
+
 	// Annotation alone keeps ordinary clause selection: the specific clause hides the wildcard.
 	req.DnfFilters = []ApiPokemonDnfFilter3{{Pokemon: []ApiPokemonDnfId{{Pokemon: 25}}, Iv: &ApiPokemonDnfMinMax{Min: 100, Max: 100}}, {}}
 	check(0)
