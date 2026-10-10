@@ -39,6 +39,19 @@ conditions. Clauses are ORed. IDs are opaque, nonempty strings. Result limits
 apply after shiny filtering. The API secret is still required as configured;
 frontends must authorize account ownership and map access themselves.
 
+Combine it with other conditions in the same clause for AND, or use separate
+clauses for OR. For example, shundos only:
+
+```json
+"filters": [{"shiny_for": ["player-id"], "iv": {"min": 100, "max": 100}}]
+```
+
+Shinies or hundos:
+
+```json
+"filters": [{"shiny_for": ["player-id"]}, {"iv": {"min": 100, "max": 100}}]
+```
+
 `/api/status` advertises `filters.shiny_for` when configured. This extension is
 HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
 required. Calculations use bounded memory (up to 96 MiB shared across players);
