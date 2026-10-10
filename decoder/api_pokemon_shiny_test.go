@@ -33,22 +33,22 @@ func TestPersonalShinyScan(t *testing.T) {
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/rates" || r.Header.Get("Authorization") != "Bearer test" {
-			t.Error("incorrect Shinx request")
+			t.Error("incorrect rates request")
 		}
 		_, _ = w.Write([]byte(`{"rates":[{"pokemon":25,"form":0,"costume":0,"prediction":{"probability":0.1,"supported":true},"overrides":{"America/Phoenix":{"probability":0.05,"supported":true}}}]}`))
 	}))
 	defer server.Close()
-	oldConfig := config.Config.Shinx
+	oldConfig := config.Config.ShinyRates
 	oldLimit := config.Config.Tuning.MaxPokemonResults
-	config.Config.Shinx = config.Shinx{URL: server.URL, Token: "test"}
+	config.Config.ShinyRates = config.ShinyRates{URL: server.URL, Token: "test"}
 	config.Config.Tuning.MaxPokemonResults = 100
 	t.Cleanup(func() {
-		config.Config.Shinx = oldConfig
+		config.Config.ShinyRates = oldConfig
 		config.Config.Tuning.MaxPokemonResults = oldLimit
-		shinxRateCache.Lock()
-		shinxRateCache.rates = nil
-		shinxRateCache.expires = time.Time{}
-		shinxRateCache.Unlock()
+		shinyRateCache.Lock()
+		shinyRateCache.rates = nil
+		shinyRateCache.expires = time.Time{}
+		shinyRateCache.Unlock()
 	})
 	p := &Pokemon{PokemonData: PokemonData{Id: 1, PokemonId: 25, Lat: 33.45, Lon: -112.07, SeenType: SeenTypeFrom(SeenTypeCodeWild), ExpireTimestamp: null.ValueFrom(uint32(time.Now().Unix() + 600))}}
 	pokemonRtreePreloadInsert(p)

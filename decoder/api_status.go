@@ -36,6 +36,6 @@ func GetApiStatus() *ApiStatusResult {
 	status.Features.FortInMemory = config.Config.FortInMemory
 	status.Limits.MaxPokemonResults = config.Config.Tuning.MaxPokemonResults
 	status.Limits.MaxFortResults = config.Config.Tuning.MaxFortResults
-	status.Filters = ApiStatusFilters{ShinyFor: config.Config.Shinx.URL != "", ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
+	status.Filters = ApiStatusFilters{ShinyFor: config.Config.ShinyRates.URL != "", ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
 	return status
 }
