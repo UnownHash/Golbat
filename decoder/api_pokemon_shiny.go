@@ -176,10 +176,9 @@ func (p *shinyPlayer) rolls(encounter uint64) (shiny, background uint32) {
 }
 
 type shinyScan struct {
-	ctx       context.Context
-	rates     *shinyRates
-	players   map[string]*shinyPlayer
-	filtering bool
+	ctx     context.Context
+	rates   *shinyRates
+	players map[string]*shinyPlayer
 }
 
 var shinyScanSlots = make(chan struct{}, 4)
@@ -188,7 +187,6 @@ var shinyScanSlots = make(chan struct{}, 4)
 // shiny_for, background_for or annotate_for acquire a cancellable worker slot and load shiny rates.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
 	players := make(map[string]*shinyPlayer)
-	filtering := false
 	add := func(ids []string) error {
 		for _, id := range ids {
 			if id == "" {
@@ -209,7 +207,6 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 		if err := add(f.BackgroundFor); err != nil {
 			return nil, err
 		}
-		filtering = filtering || len(f.ShinyFor) > 0 || len(f.BackgroundFor) > 0
 	}
 	if err := add(req.AnnotateFor); err != nil {
 		return nil, err
@@ -226,7 +223,7 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	req.shiny = &shinyScan{ctx: ctx, rates: loadShinyRates(ctx), players: players, filtering: filtering}
+	req.shiny = &shinyScan{ctx: ctx, rates: loadShinyRates(ctx), players: players}
 	result := GetPokemonInArea3Clean(req)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -278,38 +275,46 @@ func (s *shinyScan) lowest(id uint64, players []string) (shiny, background uint3
 	return shiny, background
 }
 
-func (s *shinyScan) match(id uint64, lookup *PokemonLookup, filter *ApiPokemonDnfFilter3) (bool, bool) {
+// matchAny is the second pass over personal clauses for candidates the
+// normal v3 selection did not match.
+func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, clauses []ApiPokemonDnfFilter3) (bool, bool) {
 	if s.ctx.Err() != nil {
 		return false, true
 	}
-	if len(filter.ShinyFor) == 0 && len(filter.BackgroundFor) == 0 {
-		return true, false
+	for i := range clauses {
+		if pokemonClauseApplies(&clauses[i], lookup) && isPokemonDnfMatch3(lookup, pvp, &clauses[i]) && s.match(id, lookup, &clauses[i]) {
+			return true, false
+		}
 	}
+	return false, false
+}
+
+func (s *shinyScan) match(id uint64, lookup *PokemonLookup, filter *ApiPokemonDnfFilter3) bool {
 	if lookup.PokemonId == 132 {
-		return false, false
+		return false
 	}
 	shiny, _ := s.lowest(id, filter.ShinyFor)
 	_, background := s.lowest(id, filter.BackgroundFor)
 	if len(filter.ShinyFor) > 0 && shiny >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) ||
 		len(filter.BackgroundFor) > 0 && background >= s.rates.backgroundMaximum[lookup.PokemonId] {
-		return false, false
+		return false
 	}
 	// Typically fewer than 1% of candidates reach the record lock. No decode
 	// changes, extra lookup fields, SQL queries, or coordinate calls to the rates source.
 	p, unlock, _ := peekPokemonRecordReadOnly(id, "API.ScanPokemon.shiny")
 	if p == nil {
-		return false, false
+		return false
 	}
 	pokemon, form, costume := int(p.PokemonId), int(p.Form.ValueOrZero()), int(p.Costume.ValueOrZero())
 	lat, lon := p.Lat, p.Lon
 	eligible := shinyEligible(p.IsDitto, pokemon, int(p.DisplayPokemonId.ValueOrZero()), p.SeenType)
 	unlock()
 	if !eligible {
-		return false, false
+		return false
 	}
 	shinyCutoff, backgroundCutoff := s.cutoffs(pokemon, form, costume, lat, lon)
 	return (len(filter.ShinyFor) == 0 || shiny < shinyCutoff) &&
-		(len(filter.BackgroundFor) == 0 || background < backgroundCutoff), false
+		(len(filter.BackgroundFor) == 0 || background < backgroundCutoff)
 }
 
 // annotate fills ShinyFor and BackgroundFor from the already-built result, so

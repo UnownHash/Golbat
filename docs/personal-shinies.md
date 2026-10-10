@@ -65,10 +65,11 @@ Shinies or hundos:
 `background_for` works the same way for backgrounds. In one clause,
 `shiny_for` and `background_for` are ANDed like any other condition.
 
-When any clause has `shiny_for` or `background_for`, generic clauses are also
-evaluated for species that have their own clause, so all clauses are simply
-ORed. A generic shiny clause therefore still covers a species that has its own
-ordinary clause. Requests without either keep the normal v3 clause selection.
+Clauses with `shiny_for` or `background_for` are personal clauses. They are
+kept out of the normal v3 clause selection, so adding one never changes which
+ordinary clauses apply to a species. A Pokémon matches if it matches under the
+normal v3 selection, or if it matches any personal clause (its `pokemon` list
+and other conditions included).
 
 To mark results without filtering them, pass player IDs at the top level as
 `annotate_for`. Each returned Pokémon then lists the IDs it is shiny for in
