@@ -183,8 +183,6 @@ type shinyScan struct {
 	ctx     context.Context
 	rates   *shinyRates
 	players map[string]*shinyPlayer
-	// zone is the timezone of all four bbox corners, or "" if they differ.
-	zone string
 }
 
 var shinyScanSlots = make(chan struct{}, 4)
@@ -193,31 +191,44 @@ var shinyScanSlots = make(chan struct{}, 4)
 // shiny_for, background_for or annotate_for acquire a cancellable worker slot.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
 	players := make(map[string]*shinyPlayer)
-	add := func(ids []string) error {
+	// add registers players and returns the list without duplicates, so the
+	// matching and annotation loops are bounded by distinct IDs too.
+	add := func(ids []string) ([]string, error) {
+		var unique []string
+		seen := make(map[string]bool, len(ids))
 		for _, id := range ids {
 			if id == "" {
-				return fmt.Errorf("%w: empty player ID", ErrPersonalRequest)
+				return nil, fmt.Errorf("%w: empty player ID", ErrPersonalRequest)
 			}
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+			unique = append(unique, id)
 			if players[id] == nil {
 				if len(players) == maxPersonalPlayers {
-					return fmt.Errorf("%w: at most %d distinct player IDs per request", ErrPersonalRequest, maxPersonalPlayers)
+					return nil, fmt.Errorf("%w: at most %d distinct player IDs per request", ErrPersonalRequest, maxPersonalPlayers)
 				}
 				input := make([]byte, 8+len(id))
 				copy(input[8:], id)
 				players[id] = &shinyPlayer{input: input}
 			}
 		}
-		return nil
+		return unique, nil
 	}
-	for _, f := range req.DnfFilters {
-		if err := add(f.ShinyFor); err != nil {
+	// Copy the clauses before normalizing so the caller's request is untouched.
+	req.DnfFilters = append([]ApiPokemonDnfFilter3(nil), req.DnfFilters...)
+	var err error
+	for i := range req.DnfFilters {
+		f := &req.DnfFilters[i]
+		if f.ShinyFor, err = add(f.ShinyFor); err != nil {
 			return nil, err
 		}
-		if err := add(f.BackgroundFor); err != nil {
+		if f.BackgroundFor, err = add(f.BackgroundFor); err != nil {
 			return nil, err
 		}
 	}
-	if err := add(req.AnnotateFor); err != nil {
+	if req.AnnotateFor, err = add(req.AnnotateFor); err != nil {
 		return nil, err
 	}
 	if len(players) == 0 {
@@ -236,7 +247,7 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
-	req.shiny = &shinyScan{ctx: ctx, rates: rates, players: players, zone: bboxZone(req.Min, req.Max)}
+	req.shiny = &shinyScan{ctx: ctx, rates: rates, players: players}
 	result := GetPokemonInArea3Clean(req)
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -249,19 +260,6 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	return result, nil
 }
 
-// bboxZone resolves the timezone once per scan. Corners that agree are taken
-// to cover the box; otherwise zones are looked up per pokemon, and only for
-// variants that have overrides.
-func bboxZone(lo, hi ApiLatLon) string {
-	zone := tz.SearchTimezone(lo.Lat, lo.Lon)
-	for _, c := range [][2]float64{{lo.Lat, hi.Lon}, {hi.Lat, lo.Lon}, {hi.Lat, hi.Lon}} {
-		if tz.SearchTimezone(c[0], c[1]) != zone {
-			return ""
-		}
-	}
-	return zone
-}
-
 func (s *shinyScan) rate(pokemon, form, costume int) (shinyRate, bool) {
 	rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]
 	return rate, ok
@@ -271,9 +269,8 @@ func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float6
 	if len(overrides) == 0 {
 		return ""
 	}
-	if s.zone != "" {
-		return s.zone
-	}
+	// Resolved per spawn: matching bbox corners do not imply the whole box
+	// shares a zone (e.g. enclaves), and only variants with overrides pay.
 	return tz.SearchTimezone(lat, lon)
 }
 
