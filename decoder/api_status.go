@@ -27,7 +27,7 @@ type ApiStatusResult struct {
 type ApiStatusFilters struct {
 	ShinyFor        bool `json:"shiny_for" doc:"Player IDs can be supplied as shiny_for on pokemon v3 HTTP filter clauses"`
 	BackgroundFor   bool `json:"background_for" doc:"Player IDs can be supplied as background_for on pokemon v3 HTTP filter clauses"`
-	AnnotateFor     bool `json:"annotate_for" doc:"Player IDs can be supplied as annotate_for on pokemon v3 HTTP scans to mark results with shiny_for, background_for and size_for"`
+	AnnotateFor     bool `json:"annotate_for" doc:"Player IDs can be supplied as annotate_for on pokemon v3 HTTP scans to mark results with shiny_for and background_for"`
 	ShowcaseFocus   bool `json:"showcase_focus" doc:"contest_focus Buddy selectors are honoured by pokestop scans before the result cap"`
 	BattleAvailable bool `json:"battle_available" doc:"battle_available (the station is_battle_available flag) is honoured by station scans"`
 	UpdatedAfter    bool `json:"updated_after" doc:"updated_after (return only entities updated strictly after a unix time) is honoured by the pokemon v3 scan and every fort scan"`

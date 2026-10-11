@@ -1,4 +1,4 @@
-# Personal shiny, background and size prediction
+# Personal shiny and background filtering
 
 Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
 bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
@@ -43,8 +43,7 @@ takes a draw only for rolls the variant actually has, in this order:
 1. the shiny roll, if the variant can be shiny at that location
    (`supported`, or an unknown variant);
 2. the background roll, if a background is on offer (nonzero rate);
-3. two more draws if a background was rolled;
-4. the height draw, plus one more for XXS and XXL.
+3. two more draws if a background was rolled (then the height draws).
 
 So the background is the second draw for shiny-capable variants and the
 first otherwise. The test vectors pin current behaviour, so a change in the
@@ -101,26 +100,12 @@ clause.
 
 To mark results without filtering them, pass player IDs at the top level as
 `annotate_for`. Each returned Pokémon then lists the IDs it is shiny for in
-`shiny_for`, the IDs it has a background for in `background_for`, and each
-player's height (m) and weight (kg) in `size_for`. All three are omitted when
-empty:
+`shiny_for` and the IDs it has a background for in `background_for`. Both
+fields are omitted when empty:
 
 ```json
 {"min":{...},"max":{...},"filters":[{}],"annotate_for":["player-id"]}
 ```
-
-```json
-"size_for": {"player-id": {"height": 0.71, "weight": 6.52}}
-```
-
-Sizes need the masterfile's per-species/form `height`, `weight` and
-`size_settings` (the game master's size-class bounds), and IVs that match the
-encounter derivation, which also supplies the size class and weight noise.
-Without them `size_for` is left out. Each player's height is drawn inside the
-class's bounds (XXS and XXL put it in the far 20% of the band 5% of the time),
-and weight = base weight × ((height / base height)² + 0.125 × noise), using
-height / base height without squaring for XXL. This model has not been
-checked against live encounters here.
 
 `/api/status` advertises `filters.shiny_for`, `filters.background_for` and
 `filters.annotate_for` when configured. This extension is

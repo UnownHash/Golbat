@@ -74,53 +74,46 @@ type ApiPvpRankings struct {
 // PokemonData field at all and are always left unset (see
 // buildApiPokemonResult's PARITY comment).
 type ApiPokemonResult struct {
-	Id                      string                     `json:"id" doc:"Encounter ID of the pokemon"`
-	PokestopId              *string                    `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
-	SpawnId                 *int64                     `json:"spawn_id" doc:"Spawnpoint ID for this pokemon, if known"`
-	Lat                     float64                    `json:"lat" doc:"Latitude of the pokemon"`
-	Lon                     float64                    `json:"lon" doc:"Longitude of the pokemon"`
-	Weight                  *float32                   `json:"weight" doc:"Weight of the pokemon"`
-	Size                    *uint8                     `json:"size" doc:"Size value of the pokemon"`
-	Height                  *float32                   `json:"height" doc:"Height of the pokemon"`
-	ExpireTimestamp         *int64                     `json:"expire_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon despawns"`
-	Updated                 *int64                     `json:"updated" minimum:"0" doc:"Unix timestamp when the record was last updated"`
-	PokemonId               int16                      `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
-	Move1                   *uint16                    `json:"move_1" doc:"Fast move ID"`
-	Move2                   *uint16                    `json:"move_2" doc:"Charge move ID"`
-	Gender                  *uint8                     `json:"gender" doc:"Gender of the pokemon"`
-	Cp                      *uint16                    `json:"cp" doc:"Combat power of the pokemon"`
-	AtkIv                   *uint8                     `json:"atk_iv" doc:"Attack individual value"`
-	DefIv                   *uint8                     `json:"def_iv" doc:"Defense individual value"`
-	StaIv                   *uint8                     `json:"sta_iv" doc:"Stamina individual value"`
-	Iv                      *float32                   `json:"iv" doc:"Overall IV percentage"`
-	Form                    *uint16                    `json:"form" doc:"Form ID of the pokemon"`
-	Level                   *uint8                     `json:"level" doc:"Level of the pokemon"`
-	Weather                 *uint8                     `json:"weather" doc:"Weather boost ID affecting the pokemon"`
-	Costume                 *uint8                     `json:"costume" doc:"Costume ID of the pokemon"`
-	FirstSeenTimestamp      int64                      `json:"first_seen_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon was first seen"`
-	Changed                 int64                      `json:"changed" minimum:"0" doc:"Unix timestamp when the pokemon last changed"`
-	CellId                  *int64                     `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
-	ExpireTimestampVerified bool                       `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
-	DisplayPokemonId        *uint16                    `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
-	DisplayPokemonForm      *uint16                    `json:"display_pokemon_form" doc:"Displayed pokemon form"`
-	IsDitto                 bool                       `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
-	SeenType                *string                    `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
-	ShinyFor                []string                   `json:"shiny_for,omitempty" doc:"Player IDs from annotate_for this pokemon is shiny for. Pokemon v3 HTTP scan only."`
-	BackgroundFor           []string                   `json:"background_for,omitempty" doc:"Player IDs from annotate_for this pokemon has a background for. Pokemon v3 HTTP scan only."`
-	SizeFor                 map[string]ApiPersonalSize `json:"size_for,omitempty" doc:"Height and weight each annotate_for player would see, keyed by player ID. Omitted without masterfile size data or derived IVs. Pokemon v3 HTTP scan only."`
-	Shiny                   *bool                      `json:"shiny" doc:"Whether the pokemon is shiny"`
-	Username                *string                    `json:"username" doc:"Username of the account that reported the pokemon"`
-	Capture1                *float64                   `json:"capture_1" doc:"Base capture rate with one ball"`
-	Capture2                *float64                   `json:"capture_2" doc:"Base capture rate with two balls"`
-	Capture3                *float64                   `json:"capture_3" doc:"Base capture rate with three balls"`
-	Pvp                     ApiPvpRankings             `json:"pvp" doc:"PVP rankings for the pokemon"`
-	IsEvent                 int8                       `json:"is_event" doc:"Whether the pokemon is part of an event"`
-}
-
-// ApiPersonalSize is one player's height (m) and weight (kg) for a pokemon.
-type ApiPersonalSize struct {
-	Height float32 `json:"height" doc:"Height in metres"`
-	Weight float32 `json:"weight" doc:"Weight in kilograms"`
+	Id                      string         `json:"id" doc:"Encounter ID of the pokemon"`
+	PokestopId              *string        `json:"pokestop_id" doc:"ID of the pokestop the pokemon was seen near, if any"`
+	SpawnId                 *int64         `json:"spawn_id" doc:"Spawnpoint ID for this pokemon, if known"`
+	Lat                     float64        `json:"lat" doc:"Latitude of the pokemon"`
+	Lon                     float64        `json:"lon" doc:"Longitude of the pokemon"`
+	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
+	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
+	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
+	ExpireTimestamp         *int64         `json:"expire_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon despawns"`
+	Updated                 *int64         `json:"updated" minimum:"0" doc:"Unix timestamp when the record was last updated"`
+	PokemonId               int16          `json:"pokemon_id" doc:"Pokedex ID of the pokemon"`
+	Move1                   *uint16        `json:"move_1" doc:"Fast move ID"`
+	Move2                   *uint16        `json:"move_2" doc:"Charge move ID"`
+	Gender                  *uint8         `json:"gender" doc:"Gender of the pokemon"`
+	Cp                      *uint16        `json:"cp" doc:"Combat power of the pokemon"`
+	AtkIv                   *uint8         `json:"atk_iv" doc:"Attack individual value"`
+	DefIv                   *uint8         `json:"def_iv" doc:"Defense individual value"`
+	StaIv                   *uint8         `json:"sta_iv" doc:"Stamina individual value"`
+	Iv                      *float32       `json:"iv" doc:"Overall IV percentage"`
+	Form                    *uint16        `json:"form" doc:"Form ID of the pokemon"`
+	Level                   *uint8         `json:"level" doc:"Level of the pokemon"`
+	Weather                 *uint8         `json:"weather" doc:"Weather boost ID affecting the pokemon"`
+	Costume                 *uint8         `json:"costume" doc:"Costume ID of the pokemon"`
+	FirstSeenTimestamp      int64          `json:"first_seen_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon was first seen"`
+	Changed                 int64          `json:"changed" minimum:"0" doc:"Unix timestamp when the pokemon last changed"`
+	CellId                  *int64         `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
+	ExpireTimestampVerified bool           `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
+	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
+	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
+	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
+	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
+	ShinyFor                []string       `json:"shiny_for,omitempty" doc:"Player IDs from annotate_for this pokemon is shiny for. Pokemon v3 HTTP scan only."`
+	BackgroundFor           []string       `json:"background_for,omitempty" doc:"Player IDs from annotate_for this pokemon has a background for. Pokemon v3 HTTP scan only."`
+	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
+	Username                *string        `json:"username" doc:"Username of the account that reported the pokemon"`
+	Capture1                *float64       `json:"capture_1" doc:"Base capture rate with one ball"`
+	Capture2                *float64       `json:"capture_2" doc:"Base capture rate with two balls"`
+	Capture3                *float64       `json:"capture_3" doc:"Base capture rate with three balls"`
+	Pvp                     ApiPvpRankings `json:"pvp" doc:"PVP rankings for the pokemon"`
+	IsEvent                 int8           `json:"is_event" doc:"Whether the pokemon is part of an event"`
 }
 
 // buildApiPokemonResult builds an ApiPokemonResult from a cached Pokemon.
