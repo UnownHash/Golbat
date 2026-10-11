@@ -17,6 +17,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	"golbat/derive/encounter"
 	"golbat/derive/javarandom"
 	"golbat/tz"
 )
@@ -160,25 +161,32 @@ func personalLookup(pokemon *Pokemon) uint8 {
 // encounter's rolls, so a player listed in several clauses is hashed at most
 // once per candidate, and only if a clause gets that far.
 type shinyPlayer struct {
-	input                     []byte
-	last                      uint64
-	lastValid                 bool
-	lastShiny, lastBackground uint32
+	input                 []byte
+	last                  uint64
+	lastValid             bool
+	lastFirst, lastSecond uint32
 }
 
-// rolls returns the shiny roll and the next value from the same generator,
-// which decides the background: two java.util.Random nextFloat draws, kept as
-// their 24-bit integers. Recomputing (one SHA-1 block) is cheaper than a cache.
-func (p *shinyPlayer) rolls(encounter uint64) (shiny, background uint32) {
+// rolls returns the first two java.util.Random nextFloat draws of the
+// player's generator for an encounter, kept as their 24-bit integers. The
+// shiny roll is the first; the background is the next draw after it, so the
+// first when the variant cannot be shiny (see backgroundRoll). Recomputing
+// (one SHA-1 block) is cheaper than a cache.
+func (p *shinyPlayer) rolls(encounter uint64) (first, second uint32) {
 	if p.lastValid && p.last == encounter {
-		return p.lastShiny, p.lastBackground
+		return p.lastFirst, p.lastSecond
 	}
+	rng := p.generator(encounter)
+	first, second = rng.Next(24), rng.Next(24)
+	p.last, p.lastValid, p.lastFirst, p.lastSecond = encounter, true, first, second
+	return first, second
+}
+
+// generator is the player's fresh generator for an encounter.
+func (p *shinyPlayer) generator(encounter uint64) *javarandom.Random {
 	binary.LittleEndian.PutUint64(p.input[:8], encounter)
 	digest := sha1.Sum(p.input)
-	rng := javarandom.New(binary.LittleEndian.Uint64(digest[:8]))
-	shiny, background = rng.Next(24), rng.Next(24)
-	p.last, p.lastValid, p.lastShiny, p.lastBackground = encounter, true, shiny, background
-	return shiny, background
+	return javarandom.New(binary.LittleEndian.Uint64(digest[:8]))
 }
 
 type shinyScan struct {
@@ -276,14 +284,18 @@ func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float6
 	return tz.SearchTimezone(lat, lon)
 }
 
-func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
+// shinyCutoff resolves the shiny threshold at a location. capable reports
+// whether the variant can be shiny there at all; only then does the game take
+// a draw for the shiny roll, which shifts every later draw.
+func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) (cutoff uint32, capable bool) {
 	if !ok {
-		return defaultShinyCutoff
+		return defaultShinyCutoff, true
 	}
+	prediction := rate.Prediction
 	if override, found := rate.Overrides[s.zoneAt(rate.Overrides, lat, lon)]; found {
-		return override.cutoff(defaultShinyCutoff)
+		prediction = override
 	}
-	return rate.Prediction.cutoff(defaultShinyCutoff)
+	return prediction.cutoff(defaultShinyCutoff), prediction.Supported
 }
 
 func (s *shinyScan) backgroundCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
@@ -299,21 +311,19 @@ func (s *shinyScan) backgroundCutoff(rate shinyRate, ok bool, lat, lon float64) 
 	return rate.Background.cutoff(0)
 }
 
-// matchAny is the second pass over personal clauses for candidates the
-// normal v3 selection did not match.
-func (s *shinyScan) matchAny(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, location [2]float64, clauses []ApiPokemonDnfFilter3) (bool, bool) {
+// matchClause applies a clause's personal conditions once its ordinary
+// conditions have matched. Clauses without any pass straight through.
+func (s *shinyScan) matchClause(id uint64, lookup *PokemonLookup, location [2]float64, filter *ApiPokemonDnfFilter3) (match, stop bool) {
+	if len(filter.ShinyFor) == 0 && len(filter.BackgroundFor) == 0 {
+		return true, false
+	}
 	if s.ctx.Err() != nil {
 		return false, true
 	}
 	if lookup.RollEligibleCostume == 0 {
 		return false, false
 	}
-	for i := range clauses {
-		if pokemonClauseApplies(&clauses[i], lookup) && isPokemonDnfMatch3(lookup, pvp, &clauses[i]) && s.match(id, lookup, location, &clauses[i]) {
-			return true, false
-		}
-	}
-	return false, false
+	return s.match(id, lookup, location, filter), false
 }
 
 // match needs no record lock: eligibility, form and costume come from the
@@ -327,7 +337,10 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		for _, player := range filter.ShinyFor {
 			lowest = min(lowest, first(s.players[player].rolls(id)))
 		}
-		if lowest >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) || lowest >= s.shinyCutoff(rate, ok, lat, lon) {
+		if lowest >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) {
+			return false
+		}
+		if cutoff, _ := s.shinyCutoff(rate, ok, lat, lon); lowest >= cutoff {
 			return false
 		}
 	}
@@ -336,10 +349,10 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		if s.rates.backgroundMaximum[lookup.PokemonId] == 0 {
 			return false
 		}
+		_, capable := s.shinyCutoff(rate, ok, lat, lon)
 		lowest := uint32(shinyScale)
 		for _, player := range filter.BackgroundFor {
-			_, background := s.players[player].rolls(id)
-			lowest = min(lowest, background)
+			lowest = min(lowest, backgroundRoll(capable, s.players[player], id))
 		}
 		if lowest >= s.rates.backgroundMaximum[lookup.PokemonId] || lowest >= s.backgroundCutoff(rate, ok, lat, lon) {
 			return false
@@ -348,10 +361,20 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 	return true
 }
 
+// backgroundRoll is the draw after the shiny roll, which the game takes only
+// when the variant can be shiny: the second draw if so, otherwise the first.
+func backgroundRoll(shinyCapable bool, player *shinyPlayer, encounter uint64) uint32 {
+	first, second := player.rolls(encounter)
+	if shinyCapable {
+		return second
+	}
+	return first
+}
+
 func first(a, _ uint32) uint32 { return a }
 
-// annotate fills ShinyFor and BackgroundFor from the already-built result, so
-// it needs no record lock. Ineligible results get neither.
+// annotate fills ShinyFor, BackgroundFor and SizeFor from the already-built
+// result, so it needs no record lock. Ineligible results get none of them.
 func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	id, err := strconv.ParseUint(r.Id, 10, 64)
 	if err != nil {
@@ -378,14 +401,96 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 		form = int(*r.Form)
 	}
 	rate, ok := s.rate(int(r.PokemonId), form, int(personal)-1)
-	shinyCutoff, backgroundCutoff := s.shinyCutoff(rate, ok, r.Lat, r.Lon), s.backgroundCutoff(rate, ok, r.Lat, r.Lon)
+	shinyCutoff, shinyCapable := s.shinyCutoff(rate, ok, r.Lat, r.Lon)
+	backgroundCutoff := s.backgroundCutoff(rate, ok, r.Lat, r.Lon)
+	shared, sized := sharedSize(r, id, int16(form))
 	for _, player := range players {
-		shiny, background := s.players[player].rolls(id)
-		if shiny < shinyCutoff {
+		rng := s.players[player].generator(id)
+		if shinyCapable && rng.Next(24) < shinyCutoff {
 			r.ShinyFor = append(r.ShinyFor, player)
 		}
-		if background < backgroundCutoff {
+		// A background is on offer exactly when its cutoff is nonzero.
+		if backgroundCutoff > 0 && rng.Next(24) < backgroundCutoff {
 			r.BackgroundFor = append(r.BackgroundFor, player)
+			// A rolled background (location card) takes two more draws.
+			rng.Next(24)
+			rng.Next(24)
+		}
+		if sized {
+			height, weight := shared.personal(rng)
+			if r.SizeFor == nil {
+				r.SizeFor = make(map[string]ApiPersonalSize, len(players))
+			}
+			r.SizeFor[player] = ApiPersonalSize{Height: float32(height), Weight: float32(weight)}
 		}
 	}
+}
+
+// encounterSize is the player-independent part of a size: the class and
+// weight noise from the encounter's own generator, and the masterfile data.
+type encounterSize struct {
+	class int32
+	noise float64
+	MasterFileSize
+}
+
+// sharedSize derives the class and weight noise the way the encounter's IVs
+// are derived, checking the result against the IVs and level already known.
+// ok is false without masterfile size data or when the derivation does not
+// describe this pokemon.
+func sharedSize(r *ApiPokemonResult, id uint64, form int16) (encounterSize, bool) {
+	if r.AtkIv == nil || r.DefIv == nil || r.StaIv == nil || r.Level == nil {
+		return encounterSize{}, false
+	}
+	size, ok := sizeFor(getMasterFileData(), r.PokemonId, form)
+	if !ok {
+		return encounterSize{}, false
+	}
+	boosted := r.Weather != nil && *r.Weather != 0
+	draw := encounter.For(id, boosted, int32(form))
+	if draw.Attack != int32(*r.AtkIv) || draw.Defense != int32(*r.DefIv) || draw.Stamina != int32(*r.StaIv) || draw.Level != int32(*r.Level) {
+		return encounterSize{}, false
+	}
+	return encounterSize{class: draw.Size, noise: draw.WeightNoise, MasterFileSize: size}, true
+}
+
+// personal draws one player's height inside the class's bounds, continuing
+// that player's generator after the shiny and background draws, and derives
+// the weight from it. XXS and XXL take one more draw that puts the height in
+// the far 20% of the band (below 0.05) or the near 80%.
+func (e encounterSize) personal(rng *javarandom.Random) (height, weight float64) {
+	b := e.Bounds
+	var lo, hi float64
+	switch e.class {
+	case encounter.SizeXXS:
+		lo, hi = b[0], b[1]
+	case encounter.SizeXS:
+		lo, hi = b[1], b[2]
+	case encounter.SizeXL:
+		lo, hi = b[3], b[4]
+	case encounter.SizeXXL:
+		lo, hi = b[4], b[5]
+	default:
+		lo, hi = b[2], b[3]
+	}
+	u := float64(rng.Float())
+	if e.class == encounter.SizeXXS || e.class == encounter.SizeXXL {
+		far := rng.Float() < 0.05
+		split := lo + 0.2*(hi-lo) // XXS: far end is the bottom
+		if e.class == encounter.SizeXXL {
+			split = lo + 0.8*(hi-lo) // XXL: far end is the top
+		}
+		if far == (e.class == encounter.SizeXXS) {
+			hi = split
+		} else {
+			lo = split
+		}
+	}
+	height = lo + (hi-lo)*u
+	h := height / e.Height
+	scale := h * h
+	if e.class == encounter.SizeXXL {
+		scale = h
+	}
+	return height, e.Weight * (scale + 0.125*e.noise)
 }

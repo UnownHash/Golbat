@@ -1,4 +1,4 @@
-# Personal shiny and background filtering
+# Personal shiny, background and size prediction
 
 Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
 bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
@@ -36,11 +36,19 @@ The rate source must return JSON in this shape:
 - `background` and `background_overrides` are optional and work the same way
   for backgrounds. A variant without them never has a background.
 
-The shiny roll and the background roll are the first and second `nextFloat`
-draws from the same per-player, per-encounter generator. The background part
-assumes the game takes no other draw in between; the test vectors pin current
-behaviour, so a change in the game would break background predictions without
-an error.
+Rolls come from a per-player, per-encounter `java.util.Random` (seeded from
+SHA-1 of the little-endian encounter ID followed by the player ID). The game
+takes a draw only for rolls the variant actually has, in this order:
+
+1. the shiny roll, if the variant can be shiny at that location
+   (`supported`, or an unknown variant);
+2. the background roll, if a background is on offer (nonzero rate);
+3. two more draws if a background was rolled;
+4. the height draw, plus one more for XXS and XXL.
+
+So the background is the second draw for shiny-capable variants and the
+first otherwise. The test vectors pin current behaviour, so a change in the
+game would break predictions without an error.
 
 Limitations:
 
@@ -60,7 +68,7 @@ clause:
 ```
 
 The clause matches Pokémon shiny for **any** supplied player ID, AND its other
-conditions. Clauses are ORed. IDs are opaque, nonempty strings; a request may use at most 50 distinct IDs
+conditions. Clauses in the group that applies are ORed. IDs are opaque, nonempty strings; a request may use at most 50 distinct IDs
 across all fields, each at most 256 bytes (otherwise 400). Result limits
 apply after shiny filtering. The API secret is still required as configured;
 frontends must authorize account ownership and map access themselves.
@@ -81,20 +89,38 @@ Shinies or hundos:
 `background_for` works the same way for backgrounds. In one clause,
 `shiny_for` and `background_for` are ANDed like any other condition.
 
-Clauses with `shiny_for` or `background_for` are personal clauses. They are
-kept out of the normal v3 clause selection, so adding one never changes which
-ordinary clauses apply to a species. A Pokémon matches if it matches under the
-normal v3 selection, or if it matches any personal clause (its `pokemon` list
-and other conditions included).
+`shiny_for` and `background_for` are ordinary clause conditions. Clause
+selection follows the v3 filter semantics in `api.md` (#420): a Pokémon is
+checked only against the most specific group of clauses that exists for it
+(exact id+form, else id, else the clauses with no `pokemon` list), and Golbat
+never merges groups. A client that wants "my shinies everywhere" alongside
+per-species rules lists `{"shiny_for": [...]}` under those species keys as
+well, like any other shared clause. The same rules hide a species: a
+never-matching clause under its key keeps it out of a generic `shiny_for`
+clause.
 
 To mark results without filtering them, pass player IDs at the top level as
 `annotate_for`. Each returned Pokémon then lists the IDs it is shiny for in
-`shiny_for` and the IDs it has a background for in `background_for`. Both
-fields are omitted when empty:
+`shiny_for`, the IDs it has a background for in `background_for`, and each
+player's height (m) and weight (kg) in `size_for`. All three are omitted when
+empty:
 
 ```json
 {"min":{...},"max":{...},"filters":[{}],"annotate_for":["player-id"]}
 ```
+
+```json
+"size_for": {"player-id": {"height": 0.71, "weight": 6.52}}
+```
+
+Sizes need the masterfile's per-species/form `height`, `weight` and
+`size_settings` (the game master's size-class bounds), and IVs that match the
+encounter derivation, which also supplies the size class and weight noise.
+Without them `size_for` is left out. Each player's height is drawn inside the
+class's bounds (XXS and XXL put it in the far 20% of the band 5% of the time),
+and weight = base weight × ((height / base height)² + 0.125 × noise), using
+height / base height without squaring for XXL. This model has not been
+checked against live encounters here.
 
 `/api/status` advertises `filters.shiny_for`, `filters.background_for` and
 `filters.annotate_for` when configured. This extension is
