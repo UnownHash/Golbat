@@ -2,15 +2,11 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/guregu/null/v6"
 	"golbat/config"
-	"golbat/derive/encounter"
-	"golbat/derive/javarandom"
 	"golbat/tz"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -261,123 +257,5 @@ func TestPersonalDrawOrder(t *testing.T) {
 		if got := s.match(1, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{BackgroundFor: []string{id}}); got != want {
 			t.Errorf("match background_for %q = %v, want %v", id, got, want)
 		}
-	}
-}
-
-func TestPersonalSize(t *testing.T) {
-	bounds := sizeBounds{0.343, 0.35, 0.525, 0.875, 1.05, 1.225} // Bulbasaur
-	base := MasterFileSize{Height: 0.7, Weight: 6.9, Bounds: bounds}
-	bands := map[int32][2]float64{
-		1: {bounds[0], bounds[1]}, 2: {bounds[1], bounds[2]}, 3: {bounds[2], bounds[3]},
-		4: {bounds[3], bounds[4]}, 5: {bounds[4], bounds[5]},
-	}
-	for class, band := range bands {
-		far := 0
-		const n = 20000
-		for seed := uint64(0); seed < n; seed++ {
-			e := encounterSize{class: class, MasterFileSize: base}
-			height, weight := e.personal(javarandom.New(seed))
-			if height < band[0] || height > band[1] {
-				t.Fatalf("class %d: height %v outside %v", class, height, band)
-			}
-			h := height / base.Height
-			want := base.Weight * h * h
-			if class == 5 {
-				want = base.Weight * h
-			}
-			if math.Abs(weight-want) > 1e-9 {
-				t.Fatalf("class %d: weight %v want %v without noise", class, weight, want)
-			}
-			split := band[0] + 0.2*(band[1]-band[0])
-			if class == 1 && height < split || class == 5 && height > band[0]+0.8*(band[1]-band[0]) {
-				far++
-			}
-		}
-		// XXS/XXL land in the far 20% of the band 5% of the time.
-		if class == 1 || class == 5 {
-			if rate := float64(far) / n; rate < 0.04 || rate > 0.06 {
-				t.Errorf("class %d: far-band rate %v, want about 0.05", class, rate)
-			}
-		}
-	}
-	// Noise moves weight linearly: base weight x 0.125 per unit.
-	e := encounterSize{class: 3, noise: 2, MasterFileSize: base}
-	_, quiet := encounterSize{class: 3, MasterFileSize: base}.personal(javarandom.New(7))
-	if _, noisy := e.personal(javarandom.New(7)); math.Abs(noisy-quiet-base.Weight*0.25) > 1e-9 {
-		t.Fatalf("noise: %v vs %v", noisy, quiet)
-	}
-}
-
-func TestPersonalSizeAnnotation(t *testing.T) {
-	old := getMasterFileData()
-	t.Cleanup(func() {
-		masterFileMu.Lock()
-		masterFileData = old
-		masterFileMu.Unlock()
-	})
-	masterFileMu.Lock()
-	masterFileData = MasterFileData{Initialized: true, Pokemon: map[int]MasterFilePokemon{
-		1: {Size: MasterFileSize{Height: 0.7, Weight: 6.9, Bounds: sizeBounds{0.343, 0.35, 0.525, 0.875, 1.05, 1.225}}},
-	}}
-	masterFileMu.Unlock()
-
-	const encounterID = 8429844873227918432
-	draw := encounter.For(encounterID, false, 0)
-	atk, def, sta, level, weather := uint8(draw.Attack), uint8(draw.Defense), uint8(draw.Stamina), uint8(draw.Level), uint8(0)
-	seen := "wild"
-	player := "0123456789abcdef"
-	input := make([]byte, 8+len(player))
-	copy(input[8:], player)
-	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{player: {input: input}},
-		rates: &shinyRates{variants: map[shinyVariant]shinyRate{}}}
-	r := ApiPokemonResult{Id: fmt.Sprint(uint64(encounterID)), PokemonId: 1, SeenType: &seen, AtkIv: &atk, DefIv: &def, StaIv: &sta, Level: &level, Weather: &weather}
-	s.annotate(&r, []string{player})
-	size, ok := r.SizeFor[player]
-	if !ok {
-		t.Fatalf("no size: %+v", r.SizeFor)
-	}
-	// Unknown variant: 1/512 shiny draw, no background, then the height.
-	rng := s.players[player].generator(encounterID)
-	rng.Next(24)
-	height, weight := encounterSize{class: draw.Size, noise: draw.WeightNoise, MasterFileSize: masterFileData.Pokemon[1].Size}.personal(rng)
-	if size.Height != float32(height) || size.Weight != float32(weight) {
-		t.Fatalf("size %+v, want %v/%v", size, height, weight)
-	}
-	// Values that don't match the derivation get no size.
-	r = ApiPokemonResult{Id: r.Id, PokemonId: 1, SeenType: &seen, AtkIv: &def, DefIv: &atk, StaIv: &sta, Level: &level, Weather: &weather}
-	if atk != def {
-		s.annotate(&r, []string{player})
-		if r.SizeFor != nil {
-			t.Fatalf("mismatched derivation still sized: %+v", r.SizeFor)
-		}
-	}
-}
-
-func TestMasterFileSizeSettings(t *testing.T) {
-	for _, raw := range []string{
-		`{"xxsLowerBound":0.343,"xsLowerBound":0.35,"mLowerBound":0.525,"mUpperBound":0.875,"xlUpperBound":1.05,"xxlUpperBound":1.225,"xxsScaleMultiplier":0.67}`,
-		`[{"name":"xxsLowerBound","value":0.343},{"name":"xsLowerBound","value":0.35},{"name":"mLowerBound","value":0.525},{"name":"mUpperBound","value":0.875},{"name":"xlUpperBound","value":1.05},{"name":"xxlUpperBound","value":1.225},{"name":"disablePokedexRecordDisplayForForms","value":true}]`,
-		`{"xxs_lower_bound":0.343,"xs_lower_bound":0.35,"m_lower_bound":0.525,"m_upper_bound":0.875,"xl_upper_bound":1.05,"xxl_upper_bound":1.225}`,
-	} {
-		var b sizeBounds
-		if err := json.Unmarshal([]byte(raw), &b); err != nil {
-			t.Fatal(err)
-		}
-		if b != (sizeBounds{0.343, 0.35, 0.525, 0.875, 1.05, 1.225}) || !b.valid() {
-			t.Fatalf("%s -> %v", raw, b)
-		}
-	}
-	data := MasterFileData{Pokemon: map[int]MasterFilePokemon{710: {
-		Size:  MasterFileSize{Height: 0.4, Weight: 5, Bounds: sizeBounds{0.3, 0.3, 0.4, 0.4, 0.4, 0.4}},
-		Forms: map[int]MasterFileForm{2644: {Size: MasterFileSize{Height: 0.8, Weight: 15, Bounds: sizeBounds{0.6, 0.6, 0.6, 0.6, 0.6, 0.8}}}, 2641: {}},
-	}}}
-	if size, ok := sizeFor(data, 710, 2644); !ok || size.Height != 0.8 || size.Bounds[5] != 0.8 {
-		t.Fatalf("form override: %+v %v", size, ok)
-	}
-	if size, ok := sizeFor(data, 710, 2641); !ok || size.Height != 0.4 {
-		t.Fatalf("form fallback: %+v %v", size, ok)
-	}
-	if _, ok := sizeFor(MasterFileData{Pokemon: map[int]MasterFilePokemon{1: {}}}, 1, 0); ok {
-		t.Fatal("missing size data reported ok")
 	}
 }

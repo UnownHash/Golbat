@@ -43,8 +43,6 @@ type MasterFilePokemon struct {
 	QuickMoves   []int                  `json:"quick_moves"`
 	ChargedMoves []int                  `json:"charged_moves"`
 	Forms        map[int]MasterFileForm `json:"forms"`
-	// Size is optional: personal height/weight annotation needs it.
-	Size MasterFileSize `json:"-"`
 }
 
 type MasterFileForm struct {
@@ -55,98 +53,6 @@ type MasterFileForm struct {
 	// separately, not as a pair.
 	QuickMoves   []int `json:"quick_moves"`
 	ChargedMoves []int `json:"charged_moves"`
-	// Size overrides the species' own field by field, where present.
-	Size MasterFileSize `json:"-"`
-}
-
-// MasterFileSize is a species' or form's average height (m) and weight (kg)
-// and its size-class bounds (m) from the game master's size settings. Zero
-// means absent.
-type MasterFileSize struct {
-	Height, Weight float64
-	Bounds         sizeBounds
-}
-
-// sizeBounds are XXS lower, XS lower, M lower, M upper, XL upper and XXL upper.
-type sizeBounds [6]float64
-
-var sizeBoundNames = [6]string{"xxsLowerBound", "xsLowerBound", "mLowerBound", "mUpperBound", "xlUpperBound", "xxlUpperBound"}
-
-// UnmarshalJSON accepts the generator's size_settings either as an object
-// keyed by setting name or as its raw list of {name, value} pairs. Other
-// settings (scale multipliers, display flags) are ignored.
-func (b *sizeBounds) UnmarshalJSON(data []byte) error {
-	values := map[string]any{}
-	if err := json.Unmarshal(data, &values); err != nil {
-		var list []struct {
-			Name  string `json:"name"`
-			Value any    `json:"value"`
-		}
-		if err := json.Unmarshal(data, &list); err != nil {
-			return err
-		}
-		for _, setting := range list {
-			values[setting.Name] = setting.Value
-		}
-	}
-	for i, name := range sizeBoundNames {
-		value, ok := values[name]
-		if !ok {
-			value = values[snakeCase(name)]
-		}
-		if f, ok := value.(float64); ok {
-			b[i] = f
-		}
-	}
-	return nil
-}
-
-func snakeCase(name string) string {
-	var out []byte
-	for i := 0; i < len(name); i++ {
-		c := name[i]
-		if c >= 'A' && c <= 'Z' {
-			out = append(out, '_', c+'a'-'A')
-		} else {
-			out = append(out, c)
-		}
-	}
-	return string(out)
-}
-
-// valid reports whether all six bounds are present and ordered.
-func (b sizeBounds) valid() bool {
-	if b[0] <= 0 {
-		return false
-	}
-	for i := 1; i < len(b); i++ {
-		if b[i] < b[i-1] {
-			return false
-		}
-	}
-	return true
-}
-
-// sizeFor resolves a species/form's size data, the form overriding the
-// species field by field. ok is false unless all of it is present.
-func sizeFor(data MasterFileData, pokemonId, form int16) (size MasterFileSize, ok bool) {
-	pokemon, found := data.Pokemon[int(pokemonId)]
-	if !found {
-		return size, false
-	}
-	size = pokemon.Size
-	if formData, found := pokemon.Forms[int(form)]; found && form > 0 {
-		if formData.Size.Height > 0 {
-			size.Height = formData.Size.Height
-		}
-		if formData.Size.Weight > 0 {
-			size.Weight = formData.Size.Weight
-		}
-		if formData.Size.Bounds.valid() {
-			size.Bounds = formData.Size.Bounds
-		}
-	}
-	return size, size.Height > 0 && size.Weight > 0 && size.Bounds.valid()
 }
 
 type rawMasterFile struct {
@@ -160,24 +66,12 @@ type rawMasterFilePokemon struct {
 	QuickMoves   []int                               `json:"quick_moves"`
 	ChargedMoves []int                               `json:"charged_moves"`
 	Forms        map[string]rawMasterFilePokemonForm `json:"forms"`
-	rawMasterFileSize
 }
 
 type rawMasterFilePokemonForm struct {
 	Types        []int `json:"types"`
 	QuickMoves   []int `json:"quick_moves"`
 	ChargedMoves []int `json:"charged_moves"`
-	rawMasterFileSize
-}
-
-type rawMasterFileSize struct {
-	Height       float64    `json:"height"`
-	Weight       float64    `json:"weight"`
-	SizeSettings sizeBounds `json:"size_settings"`
-}
-
-func (r rawMasterFileSize) size() MasterFileSize {
-	return MasterFileSize{Height: r.Height, Weight: r.Weight, Bounds: r.SizeSettings}
 }
 
 var (
@@ -228,7 +122,6 @@ func loadMasterFileBytes(data []byte) error {
 				Types:        append([]int(nil), form.Types...),
 				QuickMoves:   append([]int(nil), form.QuickMoves...),
 				ChargedMoves: append([]int(nil), form.ChargedMoves...),
-				Size:         form.size(),
 			}
 		}
 		parsed.Pokemon[intPid] = MasterFilePokemon{
@@ -237,7 +130,6 @@ func loadMasterFileBytes(data []byte) error {
 			QuickMoves:   append([]int(nil), pokemon.QuickMoves...),
 			ChargedMoves: append([]int(nil), pokemon.ChargedMoves...),
 			Forms:        forms,
-			Size:         pokemon.size(),
 		}
 	}
 
