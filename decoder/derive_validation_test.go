@@ -3,6 +3,8 @@ package decoder
 import (
 	"context"
 	"encoding/json"
+	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -324,40 +326,154 @@ func TestCheckDerivationDittoPoolAgreementIsCountedNotLogged(t *testing.T) {
 	}
 }
 
-// A strong Pokemon must not pollute derivation_checked/agreed/disagreed_total,
-// but must still be logged with is_strong true.
-func TestCheckDerivationStrongPokemonExcludedFromCountersButLogged(t *testing.T) {
-	fake := withDerivationCountingCollector(t)
+// A strong Pokemon is scored against the strong walk and counted like any
+// other. Every strong encounter is logged, agreeing or not, with model
+// "strong" and "strong" among its reasons; a disagreement adds "mismatch".
+func TestCheckDerivationScoresStrongPokemonAgainstTheStrongWalk(t *testing.T) {
+	const eid = uint64(444555666777)
+	v := encounter.ForStrong(eid, false, 0)
+	for _, tc := range []struct {
+		name         string
+		attack       int32
+		wantDisagree int
+		wantReasons  []any
+	}{
+		{"agrees", v.Attack, 0, []any{"strong"}},
+		{"disagrees", 13 + (v.Attack-13+1)%3, 1, []any{"mismatch", "strong"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := withDerivationCountingCollector(t)
+			withDerivationLog(t)
+			hook := captureStandardLoggerHook(t)
+
+			scan := &pokemonScan{
+				Weather: int32(pogo.GameplayWeatherProto_NONE),
+				Level:   v.Level,
+				Attack:  tc.attack,
+				Defense: v.Defense,
+				Stamina: v.Stamina,
+				Pokemon: 1,
+				Strong:  true,
+			}
+			p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(eid)}}
+
+			p.checkDerivation(scan, v.Size, 0, 0, "encounter", false, false)
+
+			if fake.checked["encounter"] != 1 || fake.disagreed["encounter"] != tc.wantDisagree {
+				t.Fatalf("checked=%d disagreed=%d, want 1 and %d", fake.checked["encounter"], fake.disagreed["encounter"], tc.wantDisagree)
+			}
+			fields := derivationLogFields(t, soleDerivationLogEntry(t, hook.Entries))
+			if fields["is_strong"] != true || fields["model"] != "strong" {
+				t.Errorf("is_strong = %v, model = %v, want true and \"strong\"", fields["is_strong"], fields["model"])
+			}
+			if got := fields["logged_because"]; !reflect.DeepEqual(got, tc.wantReasons) {
+				t.Errorf("logged_because = %v, want %v", got, tc.wantReasons)
+			}
+			unboosted := fields["derived_unboosted"].(map[string]any)
+			if unboosted["level"] != float64(v.Level) || unboosted["attack"] != float64(v.Attack) {
+				t.Errorf("derived_unboosted = %v, want ForStrong's %+v", unboosted, v.Values)
+			}
+		})
+	}
+}
+
+// The record's previous sighting is read from oldValues. When its strong flag
+// differs from the encounter's, the row is logged as strong_changed with the
+// prior flag and seen type — in both directions, and for an ordinary
+// encounter even when its values agree. A record with no prior sighting
+// carries no prior fields.
+func TestCheckDerivationLogsAStrongFlagTheEncounterContradicts(t *testing.T) {
+	const eid = uint64(444555666779)
+	for _, tc := range []struct {
+		name          string
+		prior         *PokemonOldValues
+		strong        bool
+		wantReasons   []any
+		wantPriorType any
+	}{
+		{"nearby said ordinary, encounter strong",
+			&PokemonOldValues{SeenType: SeenTypeFrom(SeenTypeCodeNearbyStop)}, true,
+			[]any{"strong_changed", "strong"}, "nearby_stop"},
+		{"wild said strong, encounter ordinary",
+			&PokemonOldValues{SeenType: SeenTypeFrom(SeenTypeCodeWild), IsStrong: true}, false,
+			[]any{"strong_changed"}, "wild"},
+		{"prior agrees", &PokemonOldValues{SeenType: SeenTypeFrom(SeenTypeCodeWild), IsStrong: true}, true,
+			[]any{"strong"}, "wild"},
+		{"no prior sighting", nil, true, []any{"strong"}, nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withDerivationLog(t)
+			hook := captureStandardLoggerHook(t)
+
+			v := encounter.Derive(eid, false, tc.strong, 0)
+			scan := &pokemonScan{
+				Weather: int32(pogo.GameplayWeatherProto_NONE),
+				Level:   v.Level, Attack: v.Attack, Defense: v.Defense, Stamina: v.Stamina,
+				Pokemon: 1,
+				Strong:  tc.strong,
+			}
+			p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(eid)}}
+			if tc.prior != nil {
+				p.oldValues = *tc.prior
+			}
+
+			p.checkDerivation(scan, v.Size, 0, 0, "encounter", false, false)
+
+			fields := derivationLogFields(t, soleDerivationLogEntry(t, hook.Entries))
+			if got := fields["logged_because"]; !reflect.DeepEqual(got, tc.wantReasons) {
+				t.Errorf("logged_because = %v, want %v", got, tc.wantReasons)
+			}
+			if got := fields["prior_seen_type"]; got != tc.wantPriorType {
+				t.Errorf("prior_seen_type = %v, want %v", got, tc.wantPriorType)
+			}
+			gotPrior, present := fields["prior_is_strong"]
+			if tc.prior == nil {
+				if present {
+					t.Errorf("prior_is_strong = %v, want absent with no prior sighting", gotPrior)
+				}
+			} else if gotPrior != tc.prior.IsStrong {
+				t.Errorf("prior_is_strong = %v, want %v", gotPrior, tc.prior.IsStrong)
+			}
+		})
+	}
+}
+
+// End to end: a record seen nearby without the strong flag, then encountered
+// strong. The production snapshot (snapshotOldValues, taken when the record
+// is locked) is what checkDerivation reads, so the row names the nearby
+// sighting whose derivation used the wrong walk.
+func TestEncounterOfAStrongPokemonFirstSeenNearbyLogsStrongChanged(t *testing.T) {
 	withDerivationLog(t)
 	hook := captureStandardLoggerHook(t)
 
-	const eid = uint64(444555666777)
-	const form = int32(0)
-	v := encounter.For(eid, false, form)
-	scan := &pokemonScan{
-		Weather: int32(pogo.GameplayWeatherProto_NONE),
-		Level:   v.Level,
-		Attack:  (v.Attack + 1) % 16, // strong Pokemon routinely mismatch
-		Defense: v.Defense,
-		Stamina: v.Stamina,
-		Pokemon: 1,
-		Form:    form,
-		Strong:  true,
-	}
+	const eid = uint64(8429844873227918432)
 	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(eid)}}
+	p.setPokemonDisplay(1, &pogo.PokemonDisplayProto{})
+	p.SetSeenType(SeenTypeCodeNearbyStop)
+	p.deriveIvIfAbsent()
+	p.newRecord = false
 
-	p.checkDerivation(scan, v.Size, 0, 0, "encounter", false, false)
+	p.snapshotOldValues()
+	p.setPokemonDisplay(1, &pogo.PokemonDisplayProto{IsStrongPokemon: true})
+	p.SetSeenType(SeenTypeCodeEncounter)
+	v := encounter.ForStrong(eid, false, 0)
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, &pogo.PokemonProto{
+		PokemonId:         1,
+		IndividualAttack:  v.Attack,
+		IndividualDefense: v.Defense,
+		IndividualStamina: v.Stamina,
+		CpMultiplier:      0.5,
+		PokemonDisplay:    &pogo.PokemonDisplayProto{IsStrongPokemon: true},
+	}, "")
 
-	if fake.checked["encounter"] != 0 || fake.agreedCount("encounter") != 0 || fake.disagreed["encounter"] != 0 {
-		t.Fatalf("strong Pokemon must not touch the counters: checked=%d agreed=%d disagreed=%d",
-			fake.checked["encounter"], fake.agreedCount("encounter"), fake.disagreed["encounter"])
+	fields := derivationLogFields(t, soleDerivationLogEntry(t, hook.Entries))
+	reasons, _ := fields["logged_because"].([]any)
+	if !slices.Contains(reasons, any("strong_changed")) {
+		t.Errorf("logged_because = %v, want strong_changed", reasons)
 	}
-	if len(hook.Entries) != 1 {
-		t.Fatalf("expected exactly one log entry for the strong mismatch, got %d", len(hook.Entries))
-	}
-	fields := derivationLogFields(t, &hook.Entries[0])
-	if got := fields["is_strong"]; got != true {
-		t.Errorf("is_strong = %v, want true", got)
+	if fields["prior_seen_type"] != "nearby_stop" || fields["prior_is_strong"] != false {
+		t.Errorf("prior_seen_type = %v, prior_is_strong = %v, want nearby_stop and false",
+			fields["prior_seen_type"], fields["prior_is_strong"])
 	}
 }
 
@@ -1670,52 +1786,36 @@ func TestCheckDerivationDisagreedCounterOnlyCountsNeitherBranch(t *testing.T) {
 	}
 }
 
-// TestCheckDerivationStrongPokemonYieldsUnknownBranchNotNeither pins the
-// fourth ditto_branch state's real-world trigger: a strong Pokemon's
-// observed IVs are excluded from dittoBranchFor's comparison entirely (its
-// IVs are unaffected by weather, so neither derived branch is a meaningful
-// prediction), so ditto_branch must read "unknown", never "neither", even
-// though the deliberately-wrong observed Attack below
-// would read as "neither" for a non-strong Pokemon (see
-// TestCheckDerivationDisagreedCounterOnlyCountsNeitherBranch's "neither"
-// case, which uses an off-by-one fixture of the same kind). This is also
-// TestCheckDerivationStrongPokemonExcludedFromCountersButLogged's fixture,
-// extended with the ditto_branch assertion that test does not make.
+// A strong Pokemon is outside the Ditto comparison, so its ditto_branch reads "unknown",
+// never "neither", even on a genuine mismatch that would read "neither" for
+// an ordinary Pokemon, and it never moves the boost-branch divergence
+// counter.
 func TestCheckDerivationStrongPokemonYieldsUnknownBranchNotNeither(t *testing.T) {
 	fake := withDerivationCountingCollector(t)
 	withDerivationLog(t)
 	hook := captureStandardLoggerHook(t)
 
 	const eid = uint64(444555666778)
-	const form = int32(0)
-	v := encounter.For(eid, false, form)
+	v := encounter.ForStrong(eid, false, 0)
 	scan := &pokemonScan{
 		Weather: int32(pogo.GameplayWeatherProto_NONE),
 		Level:   v.Level,
-		Attack:  (v.Attack + 1) % 16, // strong Pokemon routinely mismatch — would read "neither" if not strong
+		Attack:  13 + (v.Attack-13+1)%3, // still in the strong range, but wrong
 		Defense: v.Defense,
 		Stamina: v.Stamina,
 		Pokemon: 1,
-		Form:    form,
 		Strong:  true,
 	}
 	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(eid)}}
 
 	p.checkDerivation(scan, v.Size, 0, 0, "encounter", false, false)
 
-	// Strong Pokemon never touch these counters, including the boost-branch
-	// divergence counter.
-	if fake.checked["encounter"] != 0 || fake.agreedCount("encounter") != 0 || fake.disagreed["encounter"] != 0 ||
-		fake.boostBranchDivergence["encounter"] != 0 {
-		t.Fatalf("strong Pokemon must not touch any derivation counter: checked=%d agreed=%d disagreed=%d divergence=%d",
-			fake.checked["encounter"], fake.agreedCount("encounter"), fake.disagreed["encounter"], fake.boostBranchDivergence["encounter"])
+	if fake.boostBranchDivergence["encounter"] != 0 {
+		t.Fatalf("divergence = %d, want 0 for a strong Pokemon", fake.boostBranchDivergence["encounter"])
 	}
-
-	entry := soleDerivationLogEntry(t, hook.Entries)
-	fields := derivationLogFields(t, entry)
+	fields := derivationLogFields(t, soleDerivationLogEntry(t, hook.Entries))
 	if got := fields["ditto_branch"]; got != "unknown" {
-		t.Errorf("ditto_branch = %v, want \"unknown\" (a strong Pokemon must never read \"neither\", "+
-			"even on a genuine IV mismatch)", got)
+		t.Errorf("ditto_branch = %v, want \"unknown\"", got)
 	}
 }
 

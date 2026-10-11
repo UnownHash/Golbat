@@ -76,16 +76,11 @@ func TestDeriveIvLeavesExistingIvsAlone(t *testing.T) {
 	}
 }
 
-// Strong Pokemon must not be derived from. The ordinary boosted-floor
-// mechanic encounter.For models does not apply to strong Pokemon —
-// repopulateIv's own "isBoostedMatches || isStrong" branch and detectDitto's
-// identical-CompressedIv-across-boost-states requirement
-// for a strong scan both say a strong Pokemon's IVs do not move with
-// weather — so deriving one here would silently write a wrong-but-plausible
-// IV set that looks identical to a real encounter. See
-// TestRepopulateIvClearsStrongPokemonInsteadOfDeriving for the companion
-// guard in repopulateIv.
-func TestDeriveIvIfAbsentSkipsStrongPokemon(t *testing.T) {
+// A strong Pokemon is derived with its own walk: IVs 13..15 that do not
+// move with weather, and a level of 36..40 (41..45 boosted). The ordinary
+// walk would write a plausible but wrong set. The values are ForStrong's for
+// 8429844873227918432, boosted (golden in derive/encounter).
+func TestDeriveIvIfAbsentDerivesStrongPokemon(t *testing.T) {
 	p := &Pokemon{}
 	p.Id = Uint64Str(8429844873227918432)
 	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_RAINY)))
@@ -94,11 +89,26 @@ func TestDeriveIvIfAbsentSkipsStrongPokemon(t *testing.T) {
 
 	p.deriveIvIfAbsent()
 
-	if p.AtkIv.Valid {
-		t.Errorf("AtkIv = %v, want invalid — a strong Pokemon must not be derived from", p.AtkIv)
+	got := [4]uint8{p.AtkIv.ValueOrZero(), p.DefIv.ValueOrZero(), p.StaIv.ValueOrZero(), p.Level.ValueOrZero()}
+	if want := [4]uint8{15, 14, 14, 42}; got != want {
+		t.Fatalf("atk/def/sta/level = %v, want ForStrong's %v", got, want)
 	}
-	if p.Level.Valid {
-		t.Errorf("Level = %v, want invalid — a strong Pokemon must not be derived from", p.Level)
+}
+
+// derive_strong off leaves a strong Pokemon underived, as before mighty
+// derivation existed.
+func TestDeriveIvIfAbsentSkipsStrongPokemonWhenDeriveStrongOff(t *testing.T) {
+	withDeriveStrong(t, false)
+	p := &Pokemon{}
+	p.Id = Uint64Str(8429844873227918432)
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_RAINY)))
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetIsStrong(null.BoolFrom(true))
+
+	p.deriveIvIfAbsent()
+
+	if p.AtkIv.Valid || p.Level.Valid {
+		t.Errorf("AtkIv = %v, Level = %v, want both invalid with derive_strong off", p.AtkIv, p.Level)
 	}
 }
 
@@ -465,6 +475,14 @@ func withDeriveIv(t *testing.T, enabled bool) {
 	old := config.Config.DeriveIv
 	config.Config.DeriveIv = enabled
 	t.Cleanup(func() { config.Config.DeriveIv = old })
+}
+
+// withDeriveStrong sets derive_strong for one test and restores it.
+func withDeriveStrong(t *testing.T, enabled bool) {
+	t.Helper()
+	old := config.Config.DeriveStrong
+	config.Config.DeriveStrong = enabled
+	t.Cleanup(func() { config.Config.DeriveStrong = old })
 }
 
 // derive_iv off restores stock behaviour: a sighting carries no IVs until a
