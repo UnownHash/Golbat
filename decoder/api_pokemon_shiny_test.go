@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/guregu/null/v6"
 	"golbat/config"
+	"golbat/tz"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -116,6 +117,17 @@ func TestPersonalShinyScan(t *testing.T) {
 		!slices.Equal(res.Pokemon[0].BackgroundFor, []string{"0123456789abcdef"}) {
 		t.Fatalf("annotations = %+v", res.Pokemon)
 	}
+	// Duplicate IDs are matched and reported once.
+	dup := req
+	dup.DnfFilters = []ApiPokemonDnfFilter3{{}}
+	dup.AnnotateFor = []string{" Trainer-é ", " Trainer-é ", " Trainer-é "}
+	if res, err := ScanPokemonWithShiny(context.Background(), dup); err != nil || len(res.Pokemon) != 1 || len(res.Pokemon[0].ShinyFor) != 1 {
+		t.Fatalf("duplicate annotation: %v %+v", err, res)
+	}
+	if len(dup.AnnotateFor) != 3 {
+		t.Fatal("caller's request was modified")
+	}
+
 	// A personal clause never hides ordinary clauses, even species-specific ones.
 	req.AnnotateFor = nil
 	req.DnfFilters = []ApiPokemonDnfFilter3{{}, {Pokemon: []ApiPokemonDnfId{{Pokemon: 25}}, ShinyFor: []string{"Player-ID:ABC/123"}}}
@@ -163,4 +175,18 @@ func BenchmarkPersonalRolls(b *testing.B) {
 		sink += shiny ^ background
 	}
 	_ = sink
+}
+
+func TestShinyZonePerSpawn(t *testing.T) {
+	// All four corners of this box are America/Denver, but the point inside is
+	// America/Phoenix; overrides must follow the spawn, not the box.
+	for _, c := range [][2]float64{{35.5, -111.2}, {35.5, -109.8}, {36.3, -111.2}, {36.3, -109.8}} {
+		if z := tz.SearchTimezone(c[0], c[1]); z != "America/Denver" {
+			t.Skipf("timezone data changed: corner %v is %s", c, z)
+		}
+	}
+	s := &shinyScan{}
+	if z := s.zoneAt(map[string]shinyPrediction{"America/Phoenix": {}}, 35.812, -110.195); z != "America/Phoenix" {
+		t.Fatalf("zone = %q", z)
+	}
 }
