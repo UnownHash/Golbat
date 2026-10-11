@@ -1,4 +1,4 @@
-# Personal shiny and background filtering
+# Personal shiny, background and size prediction
 
 Configure `[shiny_rates]` with the `url` of a shiny-rate source, an optional
 bearer `token` and an optional `max_bytes`. A background task fetches
@@ -62,7 +62,8 @@ takes a draw only for rolls the variant actually has, in this order:
 1. the shiny roll, if the variant can be shiny (base `prediction` supported
    with a nonzero probability, or an unknown variant), regardless of location;
 2. the background roll, if a background is on offer (nonzero rate);
-3. two more draws if a background was rolled (then the height draws).
+3. two more draws if a background was rolled;
+4. the height draw, plus one more for XXS and XXL.
 
 So the background is the second draw for shiny-capable variants and the
 first otherwise. The test vectors pin current behaviour, so a change in the
@@ -126,17 +127,37 @@ clause.
 
 To mark results without filtering them, pass player IDs at the top level as
 `annotate_for`. Each returned Pokémon then lists the IDs it is shiny for in
-`shiny_for` and the IDs it has a background for in `background_for`. Both
-fields are omitted when empty:
+`shiny_for`, the IDs it has a background for in `background_for`, and each
+player's height (m) and weight (kg) in `size_for`. All three are omitted when
+empty:
 
 ```json
 {"min":{...},"max":{...},"filters":[{}],"annotate_for":["player-id"]}
 ```
 
+```json
+"size_for": {"player-id": {"height": 0.71, "weight": 6.52}}
+```
+
+Sizes need the masterfile's per-species/form `height`, `weight` and
+`size_settings` (the game master's size-class bounds), and IVs that match the
+encounter derivation, which also supplies the size class and weight noise.
+Without them `size_for` is left out. Pumpkaboo and Gourgeist have no size
+model (their form is the size) and never get one.
+
+Each player's height is `lo + (hi − lo)·u` for the height draw `u` inside the
+class's bounds. XXS and XXL read one more draw: below 0.05 it picks the far
+20% of the band (away from M), otherwise the near 80%. Weight is base weight ×
+ratio, where ratio = (height / base height)² + 0.125 × noise, with the noise
+clamped to ±4, the height ratio not squared for XXL, and the noise term
+dropped if it would make the ratio nonpositive. The model and the test
+vectors come from roundaboutluke's captures (#423).
+
 gRPC uses the same field names with the same semantics:
 `PokemonDnfFilter.shiny_for` and `background_for`,
 `PokemonScanRequest.annotate_for`, and `Pokemon.shiny_for` and
-`background_for` on results (empty when not annotated). Where HTTP answers
+`background_for` on results (empty when not annotated). `size_for` is
+HTTP-only for now. Where HTTP answers
 503, gRPC answers `FAILED_PRECONDITION` if `[shiny_rates]` is not configured
 and `UNAVAILABLE` while the rates have not loaded yet (retry).
 
@@ -178,6 +199,8 @@ Ditto limitations:
   record that a later encounter refutes reverts to the disguise's rule.
 - `background_for` never matches a Ditto and `annotate_for` never lists one
   in `background_for`: no Ditto background has been observed.
+- `annotate_for` gives a Ditto no `size_for`: its height draws come after
+  Ditto's own draws, which are not modelled.
 - A Pokémon with `pokemon_id` 132 that is not marked `is_ditto` (an
   undisguised Ditto) is not eligible; the rule is verified only for disguised
   wild Dittos.

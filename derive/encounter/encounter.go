@@ -45,6 +45,11 @@ type Draw struct {
 	// reading 24 of them costs no more than discarding the advance.
 	DittoRoll float32
 
+	// WeightNoise is the second deviate of the Gaussian pair taken before the
+	// size roll, unclamped: the shared part of the displayed weight. The rest
+	// is the per-player height.
+	WeightNoise float64
+
 	// gen is the live generator, positioned immediately after the size roll:
 	// where MoveIndices continues from, and reachable without a pool size.
 	gen javarandom.Random
@@ -79,12 +84,14 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 		Stamina: r.Int(span) + floor,
 		Level:   r.Int(30) + 1 + levelBonus,
 	}
-	v.Size = size(r, form)
+	var noise float64
+	v.Size, noise = size(r, form)
 
 	return Draw{
-		Values:    v,
-		DittoRoll: dittoRoll,
-		gen:       *r,
+		Values:      v,
+		DittoRoll:   dittoRoll,
+		WeightNoise: noise,
+		gen:         *r,
 	}
 }
 
@@ -115,19 +122,21 @@ func DittoCandidateRoll(encounterID uint64) float32 {
 	return roll
 }
 
-func size(r *javarandom.Random, form int32) int32 {
-	// The Gaussian draw is discarded, but it advances the generator a variable
-	// number of times and so must be taken before the size roll.
+func size(r *javarandom.Random, form int32) (int32, float64) {
+	// The first Gaussian deviate is discarded, but the pair advances the
+	// generator a variable number of times and so must be taken before the
+	// size roll. The second comes from the cache without advancing it.
 	r.Gaussian()
+	noise := r.Gaussian()
 
 	// nextDouble, not nextFloat: the size roll is the full 53-bit draw, and
 	// it consumes two advances.
 	rolled := classifySize(r.Double())
 
 	if override, ok := formSizes[form]; ok {
-		return override
+		return override, noise
 	}
-	return rolled
+	return rolled, noise
 }
 
 // MoveIndices draws the quick- and charged-move pool indices, continuing the
