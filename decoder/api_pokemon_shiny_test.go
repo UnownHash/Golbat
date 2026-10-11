@@ -259,3 +259,22 @@ func TestPersonalDrawOrder(t *testing.T) {
 		}
 	}
 }
+
+func TestShinyRatesRejectMissingList(t *testing.T) {
+	for _, body := range []string{`{}`, `null`, `{"error":"down"}`, `{"rates":null}`} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
+		old := config.Config.ShinyRates
+		config.Config.ShinyRates = config.ShinyRates{URL: server.URL}
+		good := &shinyRates{}
+		shinyRatesSnapshot.Store(good)
+		if err := refreshShinyRates(context.Background()); err == nil {
+			t.Errorf("%s: accepted", body)
+		}
+		if shinyRatesSnapshot.Load() != good {
+			t.Errorf("%s: replaced the last good snapshot", body)
+		}
+		config.Config.ShinyRates = old
+		shinyRatesSnapshot.Store(nil)
+		server.Close()
+	}
+}

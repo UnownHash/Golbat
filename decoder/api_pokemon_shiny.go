@@ -115,13 +115,17 @@ func refreshShinyRates(ctx context.Context) error {
 		return fmt.Errorf("status %d", res.StatusCode)
 	}
 	var feed struct {
-		Rates []shinyRate `json:"rates"`
+		Rates *[]shinyRate `json:"rates"`
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed); err != nil {
 		return err
 	}
+	// {} , null or an error object would otherwise replace good rates with none.
+	if feed.Rates == nil {
+		return fmt.Errorf("rates response has no rates list")
+	}
 	next := &shinyRates{variants: make(map[shinyVariant]shinyRate), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
-	for _, r := range feed.Rates {
+	for _, r := range *feed.Rates {
 		next.variants[shinyVariant{r.Pokemon, r.Form, r.Costume}] = r
 		// Unknown costumes/forms still default to 1/512 shiny and no background.
 		// The per-species maxima are a cheap rejection before the exact variant.
@@ -263,6 +267,9 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	}
 	if len(req.AnnotateFor) > 0 {
 		for i := range result.Pokemon {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			req.shiny.annotate(&result.Pokemon[i], req.AnnotateFor)
 		}
 	}
