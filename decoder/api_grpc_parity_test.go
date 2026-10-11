@@ -30,6 +30,10 @@ func expectedProtoFieldNames(t *testing.T, typ reflect.Type, overrides map[strin
 		if !f.IsExported() {
 			continue
 		}
+		// size_for is still HTTP-only.
+		if typ == reflect.TypeOf(ApiPokemonResult{}) && f.Name == "SizeFor" {
+			continue
+		}
 		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s has no json name; the proto mirror needs one", typ.Name(), f.Name)

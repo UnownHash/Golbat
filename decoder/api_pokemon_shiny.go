@@ -17,6 +17,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"golbat/config"
+	"golbat/derive/encounter"
 	"golbat/derive/javarandom"
 	"golbat/tz"
 )
@@ -575,9 +576,10 @@ func backgroundRoll(capable bool, player *shinyPlayer, encounter uint64) uint32 
 
 func first(a, _ uint32) uint32 { return a }
 
-// annotate fills ShinyFor and BackgroundFor from the already-built result, so
-// it needs no record lock. Ineligible results get neither, and a known Ditto
-// only ShinyFor.
+// annotate fills ShinyFor, BackgroundFor and SizeFor from the already-built
+// result, so it needs no record lock. Ineligible results get none of them,
+// and a known Ditto only ShinyFor: its size draws follow Ditto's own draws,
+// which aren't modelled, so it gets no SizeFor.
 func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	id, err := strconv.ParseUint(r.Id, 10, 64)
 	if err != nil {
@@ -615,6 +617,7 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	capable := rate.capable()
 	shinyCutoff := s.shinyCutoff(rate, r.Lat, r.Lon)
 	backgroundCutoff := s.backgroundCutoff(rate, r.Lat, r.Lon)
+	shared, sized := sharedSize(r, id, int16(form))
 	for _, player := range players {
 		rng := s.players[player].generator(id)
 		if capable && rng.Next(24) < shinyCutoff {
@@ -623,6 +626,92 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 		// A background is on offer exactly when its cutoff is nonzero.
 		if backgroundCutoff > 0 && rng.Next(24) < backgroundCutoff {
 			r.BackgroundFor = append(r.BackgroundFor, player)
+			// A rolled background (location card) takes two more draws.
+			rng.Next(24)
+			rng.Next(24)
+		}
+		if sized {
+			height, weight := shared.personal(rng)
+			if r.SizeFor == nil {
+				r.SizeFor = make(map[string]ApiPersonalSize, len(players))
+			}
+			r.SizeFor[player] = ApiPersonalSize{Height: float32(height), Weight: float32(weight)}
 		}
 	}
+}
+
+// encounterSize is the player-independent part of a size: the class and
+// weight noise from the encounter's own generator, and the masterfile data.
+type encounterSize struct {
+	class int32
+	noise float64
+	MasterFileSize
+}
+
+// sharedSize derives the class and weight noise the way the encounter's IVs
+// are derived, checking the result against the IVs and level already known.
+// ok is false without masterfile size data or when the derivation does not
+// describe this pokemon.
+func sharedSize(r *ApiPokemonResult, id uint64, form int16) (encounterSize, bool) {
+	// Pumpkaboo and Gourgeist have no size model: their form is the size.
+	if r.PokemonId == 710 || r.PokemonId == 711 || r.AtkIv == nil || r.DefIv == nil || r.StaIv == nil || r.Level == nil {
+		return encounterSize{}, false
+	}
+	size, ok := sizeFor(getMasterFileData(), r.PokemonId, form)
+	if !ok {
+		return encounterSize{}, false
+	}
+	boosted := r.Weather != nil && *r.Weather != 0
+	draw := encounter.For(id, boosted, int32(form))
+	if draw.Attack != int32(*r.AtkIv) || draw.Defense != int32(*r.DefIv) || draw.Stamina != int32(*r.StaIv) || draw.Level != int32(*r.Level) {
+		return encounterSize{}, false
+	}
+	return encounterSize{class: draw.Size, noise: draw.WeightNoise, MasterFileSize: size}, true
+}
+
+// personal continues a player's generator at the height draw (after the
+// shiny, background and card draws) and returns that player's height and
+// weight.
+func (e encounterSize) personal(rng *javarandom.Random) (height, weight float64) {
+	return e.at(float64(rng.Float()), func() float64 { return float64(rng.Float()) })
+}
+
+// at places the height at u inside the class's bounds. XXS and XXL read one
+// more draw, the selector: below 0.05 it picks the far 20% of the band (away
+// from M), otherwise the near 80%. Model and vectors: roundaboutluke on #423.
+func (e encounterSize) at(u float64, selector func() float64) (height, weight float64) {
+	b := e.Bounds
+	var lo, hi float64
+	switch e.class {
+	case encounter.SizeXXS:
+		lo, hi = b[0], b[1]
+		if split := b[1] - 0.8*(b[1]-b[0]); selector() < 0.05 {
+			hi = split
+		} else {
+			lo = split
+		}
+	case encounter.SizeXS:
+		lo, hi = b[1], b[2]
+	case encounter.SizeXL:
+		lo, hi = b[3], b[4]
+	case encounter.SizeXXL:
+		lo, hi = b[4], b[5]
+		if split := b[4] + 0.8*(b[5]-b[4]); selector() < 0.05 {
+			lo = split
+		} else {
+			hi = split
+		}
+	default:
+		lo, hi = b[2], b[3]
+	}
+	height = lo + (hi-lo)*u
+	h := height / e.Height
+	ratio := h * h
+	if e.class == encounter.SizeXXL {
+		ratio = h
+	}
+	if withNoise := ratio + 0.125*max(-4, min(4, e.noise)); withNoise > 0 {
+		ratio = withNoise
+	}
+	return height, e.Weight * ratio
 }
