@@ -24,8 +24,10 @@ import (
 const shinyScale = 1 << 24
 const defaultShinyCutoff = shinyScale / 512
 
-// Cost is candidates x players, so the number of distinct IDs is bounded.
+// Cost is candidates x players x ID length, so both are bounded. 256 bytes
+// covers every known player ID format with room to spare.
 const maxPersonalPlayers = 50
+const maxPersonalPlayerIDBytes = 256
 
 // ErrPersonalRequest marks a malformed personal shiny/background request.
 var ErrPersonalRequest = errors.New("invalid personal request")
@@ -197,8 +199,8 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 		var unique []string
 		seen := make(map[string]bool, len(ids))
 		for _, id := range ids {
-			if id == "" {
-				return nil, fmt.Errorf("%w: empty player ID", ErrPersonalRequest)
+			if id == "" || len(id) > maxPersonalPlayerIDBytes {
+				return nil, fmt.Errorf("%w: player IDs must be 1-%d bytes", ErrPersonalRequest, maxPersonalPlayerIDBytes)
 			}
 			if seen[id] {
 				continue

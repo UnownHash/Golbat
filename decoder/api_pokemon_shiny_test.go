@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 )
@@ -153,6 +154,11 @@ func TestPersonalShinyScan(t *testing.T) {
 	req.DnfFilters = []ApiPokemonDnfFilter3{{ShinyFor: many}}
 	if _, err := ScanPokemonWithShiny(context.Background(), req); !errors.Is(err, ErrPersonalRequest) {
 		t.Fatalf("err = %v, want ErrPersonalRequest", err)
+	}
+
+	req.DnfFilters = []ApiPokemonDnfFilter3{{ShinyFor: []string{strings.Repeat("x", maxPersonalPlayerIDBytes+1)}}}
+	if _, err := ScanPokemonWithShiny(context.Background(), req); !errors.Is(err, ErrPersonalRequest) {
+		t.Fatalf("oversized ID: err = %v", err)
 	}
 
 	// Nearby sightings are never roll-eligible and are rejected before hashing.

@@ -61,7 +61,7 @@ clause:
 
 The clause matches Pokémon shiny for **any** supplied player ID, AND its other
 conditions. Clauses are ORed. IDs are opaque, nonempty strings; a request may use at most 50 distinct IDs
-across all fields (more returns 400). Result limits
+across all fields, each at most 256 bytes (otherwise 400). Result limits
 apply after shiny filtering. The API secret is still required as configured;
 frontends must authorize account ownership and map access themselves.
 
