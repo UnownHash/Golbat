@@ -198,10 +198,8 @@ type shinyScan struct {
 	players map[string]*shinyPlayer
 }
 
-var shinyScanSlots = make(chan struct{}, 4)
-
-// ScanPokemonWithShiny keeps the ordinary scan path intact. Only requests with
-// shiny_for, background_for or annotate_for acquire a cancellable worker slot.
+// ScanPokemonWithShiny keeps the ordinary scan path intact; requests without
+// shiny_for, background_for or annotate_for take it unchanged.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
 	players := make(map[string]*shinyPlayer)
 	// add registers players and returns the list without duplicates, so the
@@ -253,12 +251,6 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	rates := shinyRatesSnapshot.Load()
 	if rates == nil {
 		return nil, fmt.Errorf("shiny rates have not loaded yet")
-	}
-	select {
-	case shinyScanSlots <- struct{}{}:
-		defer func() { <-shinyScanSlots }()
-	case <-ctx.Done():
-		return nil, ctx.Err()
 	}
 	req.shiny = &shinyScan{ctx: ctx, rates: rates, players: players}
 	result := GetPokemonInArea3Clean(req)

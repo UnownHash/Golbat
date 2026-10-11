@@ -111,5 +111,5 @@ fields are omitted when empty:
 `filters.annotate_for` when configured. This extension is
 HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
 required. Rolls are recomputed rather than cached (one SHA-1 block each), and
-candidates that can never qualify are skipped before hashing. Concurrent
-personal scans queue behind four active slots and respect cancellation.
+candidates that can never qualify are skipped before hashing. Personal scans
+run like ordinary scans, without a separate concurrency limit.
