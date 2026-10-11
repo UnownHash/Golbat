@@ -10,7 +10,7 @@ type ApiPokemonScan3 struct {
 	Max          ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
 	Limit        int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
 	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
-	AnnotateFor  []string               `json:"annotate_for,omitempty" required:"false" doc:"Player IDs to check every returned pokemon against; each result lists the ones it is shiny for in shiny_for and has a background for in background_for. Does not filter. HTTP only."`
+	AnnotateFor  []string               `json:"annotate_for,omitempty" required:"false" doc:"Player IDs to check every returned pokemon against; each result lists the ones it is shiny for in shiny_for, has a background for in background_for, and their height and weight in size_for. Does not filter. HTTP only."`
 	UpdatedAfter int64                  `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
@@ -45,15 +45,8 @@ type ApiPokemonDnfFilter3 struct {
 
 func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, int, int, int) {
 	dnfFilters := make(map[dnfFilterLookup][]ApiPokemonDnfFilter3)
-	var personal []ApiPokemonDnfFilter3
 
 	for _, filter := range retrieveParameters.DnfFilters {
-		// Personal clauses stay out of the normal selection, so adding one never
-		// changes which ordinary clauses apply. They are tried in a second pass.
-		if retrieveParameters.shiny != nil && (len(filter.ShinyFor) > 0 || len(filter.BackgroundFor) > 0) {
-			personal = append(personal, filter)
-			continue
-		}
 		if len(filter.Pokemon) > 0 {
 			for _, keyString := range filter.Pokemon {
 				pokemonId := keyString.Pokemon
@@ -79,35 +72,10 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 		}
 	}
 
-	if len(personal) > 0 {
-		s := retrieveParameters.shiny
-		return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3,
-			func(id uint64, lookup *PokemonLookup, pvp *PokemonPvpLookup, location [2]float64) (bool, bool) {
-				return s.matchAny(id, lookup, pvp, location, personal)
-			})
+	if s := retrieveParameters.shiny; s != nil {
+		return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3, s.matchClause)
 	}
 	return internalGetPokemonInArea[ApiPokemonDnfFilter3](retrieveParameters, dnfFilters, isPokemonDnfMatch3, nil)
-}
-
-// pokemonClauseApplies reports whether a clause's pokemon list covers the
-// candidate, mirroring the normal selection keys: an id of 0 with no form
-// matches any pokemon, and a form without an id never matches.
-func pokemonClauseApplies(filter *ApiPokemonDnfFilter3, lookup *PokemonLookup) bool {
-	if len(filter.Pokemon) == 0 {
-		return true
-	}
-	for _, id := range filter.Pokemon {
-		if id.Pokemon == 0 {
-			if id.Form == nil {
-				return true
-			}
-			continue
-		}
-		if id.Pokemon == lookup.PokemonId && (id.Form == nil || *id.Form == lookup.Form) {
-			return true
-		}
-	}
-	return false
 }
 
 func isPokemonDnfMatch3(pokemonLookup *PokemonLookup, pvpLookup *PokemonPvpLookup, filter *ApiPokemonDnfFilter3) bool {

@@ -31,7 +31,7 @@ func expectedProtoFieldNames(t *testing.T, typ reflect.Type, overrides map[strin
 			continue
 		}
 		// Personal shiny/background fields are optional HTTP-only extensions.
-		if (typ == reflect.TypeOf(ApiPokemonDnfFilter3{}) || typ == reflect.TypeOf(ApiPokemonResult{})) && (f.Name == "ShinyFor" || f.Name == "BackgroundFor") ||
+		if (typ == reflect.TypeOf(ApiPokemonDnfFilter3{}) || typ == reflect.TypeOf(ApiPokemonResult{})) && (f.Name == "ShinyFor" || f.Name == "BackgroundFor" || f.Name == "SizeFor") ||
 			typ == reflect.TypeOf(ApiPokemonScan3{}) && f.Name == "AnnotateFor" {
 			continue
 		}
