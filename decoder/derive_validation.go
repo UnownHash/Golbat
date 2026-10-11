@@ -32,23 +32,27 @@ import (
 // from the comparison; counting it would give derivation_disagreed_total a
 // permanent floor from every proto that omits size.
 //
-// Strong Pokemon are excluded from the counters. Golbat holds that their IVs
-// are unaffected by weather while encounter.For applies the ordinary boosted
-// floor, so every strong encounter would register as a disagreement, and the
-// counter's alarm value rests on it sitting near zero. One that disagrees is
-// still logged, with both derived branches, so the question can be settled
-// from data.
+// A strong Pokemon is scored against the strong walk (encounter.ForStrong).
+// That walk rests on a small sample, so every strong encounter is logged,
+// agreeing or not ("strong" in logged_because): the corpus then holds the
+// strong agreement rate, not only the failures.
+//
+// The record's state before this encounter (oldValues, snapshotted when the
+// record was locked) says how it was last seen. When that sighting's strong
+// flag differs from the encounter's, what was derived from it used the wrong
+// walk, and the row is logged as "strong_changed" with the prior seen type,
+// so a source that does not carry the flag (nearby, say) shows up by name.
 func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int32, move2 int32, path string, wasRollMarked bool, hadDetectEvidence bool) {
 	encounterID := uint64(pokemon.Id)
 	boosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
-	derived := encounter.For(encounterID, boosted, scan.Form)
+	derived := encounter.Derive(encounterID, boosted, scan.Strong, scan.Form)
 
 	// oppositeValues is the other boost branch. It is computed for every
 	// encounter, not only logged ones, because dittoBranchFor needs it to
 	// drive derivation_disagreed_total and the unknown-disguise check below.
 	// It is PRNG arithmetic only; the masterfile lookup a logged row needs
 	// (disguiseBoostedWeathers) stays deferred to logDerivationOutcome.
-	oppositeValues := encounter.For(encounterID, !boosted, scan.Form).Values
+	oppositeValues := encounter.Derive(encounterID, !boosted, scan.Strong, scan.Form).Values
 
 	observed := encounter.Values{
 		Attack:  scan.Attack,
@@ -97,12 +101,9 @@ func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int
 	// typing rather than its disguise's; a raw observed-vs-derived compare
 	// would count it and put a floor under derivation_disagreed_total.
 	//
-	// dittoBranchFor reports dittoBranchUnknown for a strong Pokemon, so a
-	// strong one falls back to comparing against the expected branch alone.
-	// That result only decides whether it logs (strong Pokemon stay out of
-	// the counters); the row carries both branches, so the log can test
-	// whether a strong Pokemon's IVs are the unboosted derivation with the
-	// level shift applied separately.
+	// dittoBranchFor reports dittoBranchUnknown for a strong Pokemon, which
+	// the Ditto comparison does not cover, so a strong one is compared
+	// against the expected branch alone.
 	var ivMismatch bool
 	if scan.Strong {
 		ivMismatch = !boostBranchValuesMatch(observed, derived.Values)
@@ -112,26 +113,32 @@ func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int
 	mismatch := ivMismatch || moveMismatch
 	dittoPoolMember := inDittoPool(int16(scan.Pokemon), int16(scan.Form))
 
-	if !scan.Strong {
-		getStatsCollector().IncDerivationChecked(path)
-		if mismatch {
-			getStatsCollector().IncDerivationDisagreed(path)
-		}
-		// Counted separately as well, so a move-only disagreement can be told
-		// apart from an IV/level/size one without reading logs.
-		if moveMismatch {
-			getStatsCollector().IncDerivationMoveMismatch(path)
-		}
-		// The "opposite" population ivMismatch excludes: evidence of a Ditto,
-		// not a derivation failure, so it has its own counter.
-		if branch == dittoBranchOpposite {
-			getStatsCollector().IncDerivationBoostBranchDivergence(path)
-		}
+	getStatsCollector().IncDerivationChecked(path)
+	if mismatch {
+		getStatsCollector().IncDerivationDisagreed(path)
+	}
+	// Counted separately as well, so a move-only disagreement can be told
+	// apart from an IV/level/size one without reading logs.
+	if moveMismatch {
+		getStatsCollector().IncDerivationMoveMismatch(path)
+	}
+	// The "opposite" population ivMismatch excludes: evidence of a Ditto,
+	// not a derivation failure, so it has its own counter. Never a strong
+	// Pokemon, whose branch is unknown.
+	if branch == dittoBranchOpposite {
+		getStatsCollector().IncDerivationBoostBranchDivergence(path)
 	}
 
-	// A row is written only for a disagreement: a value mismatch, an observed
-	// move outside its pool, or a conflict between the Ditto signals (see
-	// dittoSignalConflict). Agreement is counted above and not logged.
+	// A record with no valid seen type had no sighting before this one.
+	prior := pokemon.oldValues
+	priorKnown := prior.SeenType.Valid
+	strongChanged := priorKnown && prior.IsStrong != scan.Strong
+
+	// A row is written for a disagreement: a value mismatch, an observed move
+	// outside its pool, a conflict between the Ditto signals (see
+	// dittoSignalConflict), or a strong flag the previous sighting got wrong.
+	// Agreement is counted above and not logged, except for a strong
+	// Pokemon, which is always logged.
 	//
 	// config.Config.DerivationLog gates only the [DERIVE] payload. The
 	// counters above and the unknown-disguise warning below stay on: an
@@ -139,9 +146,12 @@ func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int
 	// and needs to hear about a disguise the pool does not know, without
 	// opting into the validation log.
 	loggedBecause := derivationLogReasons(mismatch, moveOutOfPool,
-		dittoSignalConflict(wasRollMarked || (dittoPoolMember && dittoSuspectRoll(derived.DittoRoll)),
+		// The roll never marks a strong Pokemon (maybeMarkDittoFromRoll), so it
+		// does not fire for one.
+		dittoSignalConflict(!scan.Strong && (wasRollMarked || (dittoPoolMember && dittoSuspectRoll(derived.DittoRoll))),
 			pokemon.IsDitto, !pokemon.IsDitto && hadDetectEvidence,
-			branch == dittoBranchOpposite))
+			branch == dittoBranchOpposite),
+		scan.Strong, strongChanged)
 	shouldLog := config.Config.DerivationLog && len(loggedBecause) > 0
 
 	// Independent of shouldLog: see logUnknownDittoDisguise. An in-pool
@@ -167,6 +177,9 @@ func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int
 			ObservedMove1:     move1,
 			ObservedMove2:     move2,
 			LoggedBecause:     loggedBecause,
+			PriorKnown:        priorKnown,
+			PriorIsStrong:     prior.IsStrong,
+			PriorSeenType:     prior.SeenType.Code,
 		})
 	}
 }
@@ -203,8 +216,9 @@ func dittoSignalConflict(rollFired, detectConfirmed, detectRejected, opposite bo
 
 // derivationLogReasons lists why a [DERIVE] row is written; an empty list
 // means it is not. The reasons travel in the row, so a reader knows the
-// corpus holds disagreements only.
-func derivationLogReasons(mismatch, moveOutOfPool bool, dittoConflict string) []string {
+// corpus holds disagreements only — apart from "strong", which samples every
+// strong encounter and which a reader holds apart for that reason.
+func derivationLogReasons(mismatch, moveOutOfPool bool, dittoConflict string, strong, strongChanged bool) []string {
 	var reasons []string
 	if mismatch {
 		reasons = append(reasons, "mismatch")
@@ -214,6 +228,12 @@ func derivationLogReasons(mismatch, moveOutOfPool bool, dittoConflict string) []
 	}
 	if dittoConflict != "" {
 		reasons = append(reasons, dittoConflict)
+	}
+	if strongChanged {
+		reasons = append(reasons, "strong_changed")
+	}
+	if strong {
+		reasons = append(reasons, "strong")
 	}
 	return reasons
 }
@@ -372,6 +392,17 @@ type derivationLogPayload struct {
 	ObservedMove1 int32 `json:"observed_move_1"`
 	ObservedMove2 int32 `json:"observed_move_2"`
 	IsStrong      bool  `json:"is_strong"`
+	// Model is the walk derived_unboosted, derived_boosted and the derived
+	// moves came from: "strong" (encounter.ForStrong) or "ordinary"
+	// (encounter.For). Rows written before strong derivation carry no model,
+	// and their strong rows were derived with the ordinary walk.
+	Model string `json:"model"`
+	// PriorIsStrong and PriorSeenType are the record's strong flag and seen
+	// type before this encounter, absent when there was no earlier sighting.
+	// A prior_is_strong that differs from is_strong means whatever was
+	// derived from that sighting used the wrong walk.
+	PriorIsStrong *bool  `json:"prior_is_strong,omitempty"`
+	PriorSeenType string `json:"prior_seen_type,omitempty"`
 	// DittoRollMarked is whether the record was roll-marked
 	// (maybeMarkDittoFromRoll; config ditto_derivation/ditto_pool) rather than
 	// confirmed by detectDitto, which is what lets roll marking be audited.
@@ -477,6 +508,11 @@ type derivationOutcomeParams struct {
 	ObservedMove1   int32
 	ObservedMove2   int32
 	LoggedBecause   []string
+	// PriorKnown is whether the record had a sighting before this encounter;
+	// PriorIsStrong and PriorSeenType describe it when it did.
+	PriorKnown    bool
+	PriorIsStrong bool
+	PriorSeenType SeenTypeCode
 }
 
 // logDerivationOutcome emits one structured line recording how the
@@ -545,8 +581,15 @@ func logDerivationOutcome(pokemon *Pokemon, scan *pokemonScan, outcome derivatio
 		ObservedMove1:           outcome.ObservedMove1,
 		ObservedMove2:           outcome.ObservedMove2,
 		IsStrong:                scan.Strong,
+		Model:                   derivationModel(scan.Strong),
 		DittoRollMarked:         outcome.WasRollMarked,
 		LoggedBecause:           outcome.LoggedBecause,
+	}
+
+	if outcome.PriorKnown {
+		priorIsStrong := outcome.PriorIsStrong
+		payload.PriorIsStrong = &priorIsStrong
+		payload.PriorSeenType = outcome.PriorSeenType.String()
 	}
 
 	data, err := json.Marshal(payload)
@@ -560,4 +603,13 @@ func logDerivationOutcome(pokemon *Pokemon, scan *pokemonScan, outcome derivatio
 	}
 
 	log.Infof("[DERIVE] %s", data)
+}
+
+// derivationModel names the walk a row's derived values came from; see
+// derivationLogPayload.Model.
+func derivationModel(strong bool) string {
+	if strong {
+		return "strong"
+	}
+	return "ordinary"
 }

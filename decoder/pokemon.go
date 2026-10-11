@@ -149,9 +149,19 @@ type PokemonOldValues struct {
 	// bool and a uint32 rather than the null.Value and its flag, so both sit
 	// in the padding before Lat and the struct stays 32 bytes.
 	ExpiryVerified bool
-	Expiry         uint32
-	Lat            float64
-	Lon            float64
+	// IsStrong is the strong flag as it was, read by checkDerivation to log a
+	// sighting whose flag the encounter contradicts. A plain bool, unset
+	// reading false: SeenType.Valid says whether there was a prior sighting.
+	// It fills the padding byte after ExpiryVerified.
+	//
+	// Temporary: it exists only to find out whether every sighting source
+	// (nearby especially) carries is_strong_pokemon. Once derivecheck's
+	// section 7 shows strong_changed staying at zero through a mighty event,
+	// remove it, strong_changed and the prior_* log fields.
+	IsStrong bool
+	Expiry   uint32
+	Lat      float64
+	Lon      float64
 }
 
 // The pokemon table's current shape is the composition of sql/1_rdmdb_tables.up.sql
@@ -183,6 +193,7 @@ func (pokemon *Pokemon) snapshotOldValues() {
 		Lat:            pokemon.Lat,
 		Lon:            pokemon.Lon,
 		ExpiryVerified: pokemon.ExpireTimestampVerified,
+		IsStrong:       pokemon.IsStrong.ValueOrZero(),
 		Expiry:         pokemon.ExpireTimestamp.ValueOrZero(),
 	}
 }

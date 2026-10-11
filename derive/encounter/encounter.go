@@ -88,6 +88,56 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 	}
 }
 
+// ForStrong derives a strong (mighty) encounter's Values. The walk is
+// For's with two more leading advances, IVs drawn from 13..15 whatever the
+// weather, and a level of 36..40, or 41..45 when weather boosted. Size and
+// moves follow exactly as for an ordinary encounter.
+//
+// Every bound is the same in both weather branches, so the branches advance
+// the generator identically: IVs, size and moves agree across them and the
+// boosted level is the unboosted one plus 5.
+//
+// The walk comes from a limited sample of mighty encounters. checkDerivation
+// logs every strong encounter that disagrees with it.
+func ForStrong(encounterID uint64, weatherBoosted bool, form int32) Draw {
+	r := javarandom.New(encounterID ^ EncounterXor)
+
+	r.Next(1)
+	r.Next(1)
+	// Read as For reads it, so DittoRoll means the same thing on every Draw;
+	// nothing consults it for a strong encounter.
+	dittoRoll := r.Float()
+	r.Next(1)
+	r.Next(1)
+
+	levelBase := int32(36)
+	if weatherBoosted {
+		levelBase = 41
+	}
+
+	v := Values{
+		Attack:  r.Int(3) + 13,
+		Defense: r.Int(3) + 13,
+		Stamina: r.Int(3) + 13,
+		Level:   r.Int(5) + levelBase,
+	}
+	v.Size = size(r, form)
+
+	return Draw{
+		Values:    v,
+		DittoRoll: dittoRoll,
+		gen:       *r,
+	}
+}
+
+// Derive is For or ForStrong, chosen by whether the encounter is strong.
+func Derive(encounterID uint64, weatherBoosted bool, strong bool, form int32) Draw {
+	if strong {
+		return ForStrong(encounterID, weatherBoosted, form)
+	}
+	return For(encounterID, weatherBoosted, form)
+}
+
 // dittoCandidateAdvanceIndex is the generator advance (1-based) the Ditto
 // candidate rule reads. For captures the same advance as Draw.DittoRoll.
 const dittoCandidateAdvanceIndex = 3
