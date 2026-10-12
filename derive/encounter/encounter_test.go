@@ -386,3 +386,80 @@ func TestSizeRollIsFullDoubleNotTruncatedFloat(t *testing.T) {
 			"the full draw gives ~0.02900004 (M)", got, SizeM)
 	}
 }
+
+// Golden values from an independent Python implementation of the mighty
+// walk (5 advances, nextInt(3)+13 three times, nextInt(5) plus 36 or 41,
+// then an XL/XXL size roll cut at 0.8). A separate implementation checked
+// against a GO Wild Area 2025 export (44,078 strong encounters) agrees on
+// all four, sizes included.
+func TestForStrongKnownEncounters(t *testing.T) {
+	cases := []struct {
+		encounterID          uint64
+		atk, def, sta, level int32
+		size                 int32
+		quick, charged       int32 // MoveIndices(4, 7)
+	}{
+		{8429844873227918432, 15, 14, 14, 37, SizeXL, 2, 1},
+		{12642008892750441874, 14, 15, 14, 38, SizeXXL, 0, 1},
+		{5379006789627013438, 13, 15, 13, 39, SizeXL, 3, 3},
+		{6264748011300813614, 14, 13, 14, 38, SizeXL, 1, 4},
+	}
+	for _, c := range cases {
+		for _, boosted := range []bool{false, true} {
+			d := ForStrong(c.encounterID, boosted, 0)
+			want := Values{Attack: c.atk, Defense: c.def, Stamina: c.sta, Level: c.level, Size: c.size}
+			if boosted {
+				want.Level += 5
+			}
+			if d.Values != want {
+				t.Errorf("encounter %d boosted=%t: got %+v want %+v", c.encounterID, boosted, d.Values, want)
+			}
+			q, ch := d.MoveIndices(4, 7)
+			if q != c.quick || ch != c.charged {
+				t.Errorf("encounter %d boosted=%t: moves %d/%d want %d/%d", c.encounterID, boosted, q, ch, c.quick, c.charged)
+			}
+		}
+	}
+}
+
+// A mighty Pokemon's walk draws the same bounds whatever the weather, so
+// weather moves only the level: IVs, size and moves are identical across the
+// two branches, and the boosted level is exactly the unboosted one plus 5.
+func TestForStrongBranchesDifferOnlyInLevel(t *testing.T) {
+	for id := uint64(1); id < 20000; id++ {
+		u, b := ForStrong(id, false, 0), ForStrong(id, true, 0)
+		if u.Attack < 13 || u.Attack > 15 || u.Defense < 13 || u.Defense > 15 || u.Stamina < 13 || u.Stamina > 15 {
+			t.Fatalf("id %d ivs out of range: %+v", id, u.Values)
+		}
+		if u.Level < 36 || u.Level > 40 {
+			t.Fatalf("id %d unboosted level out of range: %d", id, u.Level)
+		}
+		if u.Size != SizeXL && u.Size != SizeXXL {
+			t.Fatalf("id %d: strong size %d, want XL or XXL", id, u.Size)
+		}
+		if !u.Strong || For(id, false, 0).Strong {
+			t.Fatalf("id %d: Draw.Strong must be set by ForStrong only", id)
+		}
+		shifted := u.Values
+		shifted.Level += 5
+		if b.Values != shifted {
+			t.Fatalf("id %d: boosted %+v is not unboosted %+v with level+5", id, b.Values, u.Values)
+		}
+		uq, uc := u.MoveIndices(5, 9)
+		bq, bc := b.MoveIndices(5, 9)
+		if uq != bq || uc != bc {
+			t.Fatalf("id %d: moves differ across branches: %d/%d vs %d/%d", id, uq, uc, bq, bc)
+		}
+	}
+}
+
+// Derive dispatches on strong.
+func TestDrawDispatchesOnStrong(t *testing.T) {
+	const id = 8429844873227918432
+	if Derive(id, true, false, 0) != For(id, true, 0) {
+		t.Fatal("Derive(strong=false) is not For")
+	}
+	if Derive(id, true, true, 0) != ForStrong(id, true, 0) {
+		t.Fatal("Derive(strong=true) is not ForStrong")
+	}
+}

@@ -226,7 +226,7 @@ func TestSetPokemonDisplayConvergesOnOutOfRangeDisplay(t *testing.T) {
 	p := &Pokemon{}
 	// First sighting: the record has no display yet, so the changed-branch
 	// firing here is correct. It stores the narrowed values.
-	p.setPokemonDisplay(25, display)
+	p.setPokemonDisplay(25, display, SeenTypeCodeWild)
 
 	if want := null.ValueFrom(uint8(math.MaxUint8)); p.Costume != want {
 		t.Fatalf("Costume after out-of-range sighting = %+v, want %+v", p.Costume, want)
@@ -242,7 +242,7 @@ func TestSetPokemonDisplayConvergesOnOutOfRangeDisplay(t *testing.T) {
 	enrichFromEncounter(p)
 
 	// A second, identical sighting must leave that enrichment alone.
-	p.setPokemonDisplay(25, display)
+	p.setPokemonDisplay(25, display, SeenTypeCodeWild)
 
 	if !p.Cp.Valid || !p.Move1.Valid || !p.Move2.Valid || !p.Shiny.Valid ||
 		!p.Weight.Valid || !p.Height.Valid || !p.Size.Valid || !p.Pvp.Valid {
@@ -263,7 +263,7 @@ func TestSetPokemonDisplayCountsEachClampOnce(t *testing.T) {
 
 	// A fresh record: one clamp per field, from the three setters.
 	p := &Pokemon{}
-	p.setPokemonDisplay(25, outOfRangeDisplay())
+	p.setPokemonDisplay(25, outOfRangeDisplay(), SeenTypeCodeWild)
 
 	for _, field := range []string{"costume", "gender", "form"} {
 		if got := fake.count(field); got != 1 {
@@ -285,7 +285,7 @@ func TestSetPokemonDisplayCountsEachClampOnce(t *testing.T) {
 	// 6 is the pre-fix rate, unchanged: a repeat sighting stores nothing
 	// new, but each setter still clamps its argument on the way in, so the
 	// counter advances by one per field per sighting.
-	p.setPokemonDisplay(25, outOfRangeDisplay())
+	p.setPokemonDisplay(25, outOfRangeDisplay(), SeenTypeCodeWild)
 	if got := fake.total(); got != 6 {
 		t.Errorf("total clamp count after two sightings = %d, want 6 (one per field per sighting)", got)
 	}
@@ -312,7 +312,7 @@ func TestSignificantUpdateConvergesOnOutOfRangeDisplay(t *testing.T) {
 	display.DisplayId = 25
 
 	p := &Pokemon{}
-	p.setPokemonDisplay(25, display)
+	p.setPokemonDisplay(25, display, SeenTypeCodeWild)
 	p.SetSeenType(SeenTypeCodeEncounter)
 	p.SetExpireTimestampVerified(true)
 
@@ -401,7 +401,7 @@ func TestRepopulateIvConvergesOnOutOfRangeWeather(t *testing.T) {
 	// One unboosted scan in history, so locateScan has something to return.
 	p.scanHistory = []*pokemonScan{{Weather: 0, Level: 20, Attack: 15, Defense: 15, Stamina: 15}}
 
-	p.setPokemonDisplay(25, display)
+	p.setPokemonDisplay(25, display, SeenTypeCodeWild)
 	if want := null.ValueFrom(uint8(0)); p.Weather != want {
 		t.Fatalf("Weather after a negative reading = %+v, want %+v", p.Weather, want)
 	}
@@ -411,7 +411,7 @@ func TestRepopulateIvConvergesOnOutOfRangeWeather(t *testing.T) {
 	enrichFromEncounter(p)
 
 	// The same sighting again must not re-run the boost repopulation.
-	p.setPokemonDisplay(25, display)
+	p.setPokemonDisplay(25, display, SeenTypeCodeWild)
 
 	if !p.Cp.Valid || !p.Pvp.Valid || !p.AtkIv.Valid {
 		t.Errorf("repeat sighting of an out-of-range weather cleared encounter data: cp=%+v pvp=%+v atkIv=%+v",
