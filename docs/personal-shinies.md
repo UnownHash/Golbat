@@ -4,7 +4,7 @@ Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
 bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
 startup and every five minutes. A failed refresh keeps the last rates and
 retries after 30 seconds; until the first successful load, personal scans fail
-rather than guess. Unknown variants assume 1/512 shiny and no background.
+rather than guess. Unknown variants assume 1/512 shiny and no background, unless their species is listed in `unsupportedPokemon`.
 Ditto, disguised Pokémon and nearby-only sightings are never eligible.
 
 The rate source must return JSON in this shape:
@@ -25,12 +25,14 @@ The rate source must return JSON in this shape:
         "Europe/Berlin": {"probability": 0.1, "supported": true}
       }
     }
-  ]
+  ],
+  "unsupportedPokemon": [132, 931]
 }
 ```
 
 - `prediction.probability` is the shiny probability for that species/form/costume.
 - `supported: false` means the variant is never shiny-eligible.
+- `unsupportedPokemon` is optional: species with no released shiny. Their variants are never shiny-eligible even without an entry in `rates`.
 - `overrides` is optional and keyed by IANA timezone of the spawn's location.
   Local-time events such as Community Day change rates per timezone.
 - `background` and `background_overrides` are optional and work the same way
