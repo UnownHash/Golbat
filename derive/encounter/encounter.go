@@ -51,6 +51,10 @@ type Draw struct {
 
 	// moveIndicesDrawn guards MoveIndices against a second call.
 	moveIndicesDrawn bool
+
+	// Strong is whether this Draw is ForStrong's. A strong encounter's moves
+	// are not derived (see ForStrong), so a caller writing moves checks it.
+	Strong bool
 }
 
 // For derives one encounter's Values in a single walk, returning a Draw that
@@ -90,15 +94,21 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 
 // ForStrong derives a strong (mighty) encounter's Values. The walk is
 // For's with two more leading advances, IVs drawn from 13..15 whatever the
-// weather, and a level of 36..40, or 41..45 when weather boosted. Size and
-// moves follow exactly as for an ordinary encounter.
+// weather, a level of 36..40, or 41..45 when weather boosted, and a size of
+// XL or XXL only (strongSize).
 //
 // Every bound is the same in both weather branches, so the branches advance
-// the generator identically: IVs, size and moves agree across them and the
-// boosted level is the unboosted one plus 5.
+// the generator identically: IVs, size and the move indices agree across
+// them and the boosted level is the unboosted one plus 5.
 //
-// The walk comes from a limited sample of mighty encounters. checkDerivation
-// logs every strong encounter that disagrees with it.
+// The move indices continue the walk as for an ordinary encounter and match
+// where the game draws them, but an event can fix a strong species' move —
+// often outside its pool — and a fixed slot takes no draw, shifting the
+// other. Without a list of the fixed moves the indices cannot be trusted, so
+// callers do not write moves from a strong Draw (see Draw.Strong).
+//
+// Checked against a scanner export of GO Wild Area 2025 (44,078 strong
+// encounters) and two further datasets.
 func ForStrong(encounterID uint64, weatherBoosted bool, form int32) Draw {
 	r := javarandom.New(encounterID ^ EncounterXor)
 
@@ -121,13 +131,34 @@ func ForStrong(encounterID uint64, weatherBoosted bool, form int32) Draw {
 		Stamina: r.Int(3) + 13,
 		Level:   r.Int(5) + levelBase,
 	}
-	v.Size = size(r, form)
+	v.Size = strongSize(r, form)
 
 	return Draw{
 		Values:    v,
 		DittoRoll: dittoRoll,
 		gen:       *r,
+		Strong:    true,
 	}
+}
+
+// strongSizeCut splits a strong encounter's size roll: XL below it, XXL at
+// or above. Observed bracket 0.799975..0.800014 over 44,392 encounters, with
+// no exception.
+const strongSizeCut = 0.8
+
+// strongSize is size for a strong encounter: the same draws, but only XL or
+// XXL. A form with a fixed size keeps it, as for an ordinary encounter; no
+// strong Pumpkaboo or Gourgeist has been observed to confirm that either way.
+func strongSize(r *javarandom.Random, form int32) int32 {
+	r.Gaussian()
+	rolled := SizeXXL
+	if r.Double() < strongSizeCut {
+		rolled = SizeXL
+	}
+	if override, ok := formSizes[form]; ok {
+		return override
+	}
+	return rolled
 }
 
 // Derive is For or ForStrong, chosen by whether the encounter is strong.

@@ -124,6 +124,20 @@ type Pokemon struct {
 	// pokemon_internal_to_db is on.
 	dittoRollMarked bool `db:"-" json:"-"`
 
+	// displaySource is the kind of sighting that last applied a display —
+	// and with it IsStrong — named by the seen type that sighting would
+	// give (SeenType itself records coverage: a wild record keeps it when a
+	// nearby sighting updates its display). Unset on a record loaded from
+	// the database or a preserved cache until its next sighting. Read only
+	// for the [DERIVE] prior_source field (see priorSighting).
+	//
+	// Temporary: it exists only to find out whether every sighting source
+	// (nearby especially) carries is_strong_pokemon. Once derivecheck's
+	// section 7 shows strong_changed staying at zero through a mighty event,
+	// remove it, priorSighting, strong_changed and the prior_* log fields.
+	// It sits in padding before oldValues, so Pokemon does not grow.
+	displaySource SeenTypeCode `db:"-" json:"-"`
+
 	// debug accumulates per-field change descriptions for dbDebugLog, one
 	// aggregated log line per save (see pokemon_state.go). Its type is
 	// debugChangeAccumulator, defined once per build tag in db_debug.go /
@@ -149,19 +163,9 @@ type PokemonOldValues struct {
 	// bool and a uint32 rather than the null.Value and its flag, so both sit
 	// in the padding before Lat and the struct stays 32 bytes.
 	ExpiryVerified bool
-	// IsStrong is the strong flag as it was, read by checkDerivation to log a
-	// sighting whose flag the encounter contradicts. A plain bool, unset
-	// reading false: SeenType.Valid says whether there was a prior sighting.
-	// It fills the padding byte after ExpiryVerified.
-	//
-	// Temporary: it exists only to find out whether every sighting source
-	// (nearby especially) carries is_strong_pokemon. Once derivecheck's
-	// section 7 shows strong_changed staying at zero through a mighty event,
-	// remove it, strong_changed and the prior_* log fields.
-	IsStrong bool
-	Expiry   uint32
-	Lat      float64
-	Lon      float64
+	Expiry         uint32
+	Lat            float64
+	Lon            float64
 }
 
 // The pokemon table's current shape is the composition of sql/1_rdmdb_tables.up.sql
@@ -193,7 +197,6 @@ func (pokemon *Pokemon) snapshotOldValues() {
 		Lat:            pokemon.Lat,
 		Lon:            pokemon.Lon,
 		ExpiryVerified: pokemon.ExpireTimestampVerified,
-		IsStrong:       pokemon.IsStrong.ValueOrZero(),
 		Expiry:         pokemon.ExpireTimestamp.ValueOrZero(),
 	}
 }

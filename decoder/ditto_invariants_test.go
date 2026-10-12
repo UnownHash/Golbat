@@ -316,7 +316,7 @@ func TestEncounterPublishesTheCaughtDittoNotWhatItReported(t *testing.T) {
 			withDeriveIv(t, derive)
 			p := newRecord()
 
-			p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto(), "")
+			p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto(), "", priorSighting{})
 
 			if !p.IsDitto {
 				t.Fatal("the \">0P\" branch should have confirmed a Ditto — the fixture no " +
@@ -509,7 +509,7 @@ func TestEncounterFilesABoostedDittoCorrectlyWithNoCellWeather(t *testing.T) {
 		IndividualStamina: boosted.Stamina,
 		CpMultiplier:      cpMultiplier,
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
-	}, "")
+	}, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("the roll-marked Ditto was reset by its first encounter")
@@ -654,7 +654,7 @@ func TestEncounterKeepsTheCaughtSetForARollMarkedDittoIn0P(t *testing.T) {
 		IndividualStamina: seen.Stamina,
 		CpMultiplier:      cpMultiplier,
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
-	}, "")
+	}, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("the roll-marked Ditto was reset by its first encounter")
@@ -753,7 +753,7 @@ func TestRollMarkedDittoIn0PPublishesTheCaughtLevelWithDerivationOff(t *testing.
 		IndividualStamina: 15,
 		CpMultiplier:      cpMultiplier,
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
-	}, "")
+	}, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("the roll-mark must survive a first encounter with no history")
@@ -876,7 +876,7 @@ func TestRollMarkedDittoInPPKeepsTheObservedStatsWithDerivationOff(t *testing.T)
 		PokemonDisplay: &pogo.PokemonDisplayProto{
 			WeatherBoostedCondition: pogo.GameplayWeatherProto_PARTLY_CLOUDY,
 		},
-	}, "")
+	}, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("the roll-mark must survive a first encounter with no history")
@@ -1114,7 +1114,7 @@ func TestRollMarkedDittoSurvivesAWeatherCacheMissWithDerivationOff(t *testing.T)
 
 	t.Run("the boosted branch's own values keep the mark", func(t *testing.T) {
 		p := newRecord()
-		p.addEncounterPokemon(context.Background(), db.DbDetails{}, encounter(15, 6, 8), "")
+		p.addEncounterPokemon(context.Background(), db.DbDetails{}, encounter(15, 6, 8), "", priorSighting{})
 
 		if !p.IsDitto {
 			t.Fatalf("a roll-marked Ditto seen at level 34 was reset to %d on a weather-cache miss: the miss was "+
@@ -1138,7 +1138,7 @@ func TestRollMarkedDittoSurvivesAWeatherCacheMissWithDerivationOff(t *testing.T)
 	// 34 then refutes — the inference must not blanket-suppress that.
 	t.Run("values matching neither branch still refute", func(t *testing.T) {
 		p := newRecord()
-		p.addEncounterPokemon(context.Background(), db.DbDetails{}, encounter(1, 1, 1), "")
+		p.addEncounterPokemon(context.Background(), db.DbDetails{}, encounter(1, 1, 1), "", priorSighting{})
 
 		if p.IsDitto {
 			t.Fatal("a roll-marked record whose observed values match neither derived branch kept its mark " +
@@ -1198,7 +1198,7 @@ func TestStaleCachedWeatherDoesNotRefuteARollMarkedDitto(t *testing.T) {
 				IndividualAttack: 15, IndividualDefense: 6, IndividualStamina: 8,
 				CpMultiplier:   0.7527, // level 34: MustBeBoosted
 				PokemonDisplay: &pogo.PokemonDisplayProto{WeatherBoostedCondition: pogo.GameplayWeatherProto_NONE},
-			}, "")
+			}, "", priorSighting{})
 
 			if p.IsDitto != c.wantDitto {
 				t.Errorf("is_ditto = %v, want %v", p.IsDitto, c.wantDitto)
@@ -1281,7 +1281,7 @@ func TestFirstEncounterRefutesARollMarkWhoseStatsFollowTheDisguise(t *testing.T)
 				IndividualStamina: stats.Stamina,
 				CpMultiplier:      cpMultiplier,
 				PokemonDisplay:    &pogo.PokemonDisplayProto{WeatherBoostedCondition: c.reported},
-			}, "")
+			}, "", priorSighting{})
 
 			if p.IsDitto != c.wantStillMark {
 				t.Errorf("IsDitto = %v, want %v", p.IsDitto, c.wantStillMark)
