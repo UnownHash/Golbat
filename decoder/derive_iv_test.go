@@ -95,6 +95,40 @@ func TestDeriveIvIfAbsentDerivesStrongPokemon(t *testing.T) {
 	}
 }
 
+// A strong Pokemon gets its walk's XL/XXL size but no moves, even with
+// resolvable pools: an event can fix a strong species' moves, which the draw
+// cannot know. The ordinary record beside it, same id, does get moves.
+func TestDeriveIvIfAbsentLeavesStrongMovesForAnEncounter(t *testing.T) {
+	withMasterFileData(t, MasterFileData{
+		Initialized: true,
+		Pokemon: map[int]MasterFilePokemon{
+			1: {QuickMoves: []int{214, 215}, ChargedMoves: []int{90, 91, 92}},
+		},
+	})
+	const eid = uint64(12642008892750441874) // ForStrong size: XXL
+	for _, strong := range []bool{true, false} {
+		p := &Pokemon{}
+		p.Id = Uint64Str(eid)
+		p.PokemonId = 1
+		p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+		p.SetSeenType(SeenTypeCodeWild)
+		p.SetIsStrong(null.BoolFrom(strong))
+
+		p.deriveIvIfAbsent()
+
+		if strong {
+			if p.Move1.Valid || p.Move2.Valid {
+				t.Errorf("strong: moves %v/%v, want both absent", p.Move1, p.Move2)
+			}
+			if got := p.Size.ValueOrZero(); got != uint8(encounter.SizeXXL) {
+				t.Errorf("strong: size %d, want XXL", got)
+			}
+		} else if !p.Move1.Valid || !p.Move2.Valid {
+			t.Errorf("ordinary: moves %v/%v, want both derived", p.Move1, p.Move2)
+		}
+	}
+}
+
 // derive_strong off leaves a strong Pokemon underived, as before mighty
 // derivation existed.
 func TestDeriveIvIfAbsentSkipsStrongPokemonWhenDeriveStrongOff(t *testing.T) {

@@ -93,10 +93,13 @@ if pokemon.AtkIv.Valid {
 an absent size or move is filled (a display change clears those but not the
 IVs). `IsStrong` picks the walk, not the precedence: a strong (mighty) Pokémon
 is derived with `encounter.ForStrong` — IVs 13–15 that do not move with
-weather, level 36–40 or 41–45 boosted — and only while `derive_strong` is on
-(default). Its IVs being weather-independent is what `repopulateIv`'s
-`isBoostedMatches || isStrong` and `detectDitto` already assumed. The walk
-rests on a small sample, so `checkDerivation` logs every strong encounter.
+weather, level 36–40 or 41–45 boosted, size XL or XXL only — and only while
+`derive_strong` is on (default). Its IVs being weather-independent is what
+`repopulateIv`'s `isBoostedMatches || isStrong` and `detectDitto` already
+assumed. Its **moves are not derived**: an event can fix a strong species'
+move (often outside its pool), and a fixed slot takes no draw, so the drawn
+indices cannot be trusted without a list of the fixed moves. `checkDerivation`
+logs every strong encounter, moves included, without scoring the moves.
 
 A known Ditto is derived, on its own boost branch rather than its disguise's
 (`statsBoosted`): a caught Ditto is boosted only in `PP`.

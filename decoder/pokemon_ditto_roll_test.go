@@ -517,7 +517,7 @@ func TestAddEncounterPokemonMarksFirstEncounterOfPoolSpeciesFromRoll(t *testing.
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
 	}
 
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto, "")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("expected the record to be marked as a Ditto by the roll on its first-ever encounter")
@@ -575,7 +575,7 @@ func TestAddEncounterPokemonWithPriorHistoryDoesNotMarkFromRoll(t *testing.T) {
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
 	}
 
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto, "")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, proto, "", priorSighting{})
 
 	if p.IsDitto {
 		t.Fatal("must not mark: this record already had scan history BEFORE this encounter — the " +
@@ -789,7 +789,7 @@ func TestSetPokemonDisplayStoresTheDisguisesWeather(t *testing.T) {
 	// The disguise is not boosted by this weather, so the display says NONE
 	// even though the cell is partly cloudy and the Ditto itself is boosted.
 	display := &pogo.PokemonDisplayProto{WeatherBoostedCondition: pogo.GameplayWeatherProto_NONE}
-	p.setPokemonDisplay(disguise, display)
+	p.setPokemonDisplay(disguise, display, SeenTypeCodeWild)
 
 	if got := int64OrZero(p.Weather); got != int64(pogo.GameplayWeatherProto_NONE) {
 		t.Errorf("stored weather = %d, want %d (the disguise's) — the weather column describes "+
@@ -955,7 +955,7 @@ func TestEncounterOfADittoKeepsTheReportedMoves(t *testing.T) {
 		Move1:             pogo.HoloPokemonMove(216),
 		Move2:             pogo.HoloPokemonMove(250),
 		PokemonDisplay:    &pogo.PokemonDisplayProto{},
-	}, "")
+	}, "", priorSighting{})
 
 	if !p.IsDitto {
 		t.Fatal("fixture assumption violated: the roll must have marked this record")

@@ -388,26 +388,26 @@ func TestSizeRollIsFullDoubleNotTruncatedFloat(t *testing.T) {
 }
 
 // Golden values from an independent Python implementation of the mighty
-// walk as reported (5 advances, nextInt(3)+13 three times, nextInt(5) plus
-// 36 or 41, then the ordinary size roll), cross-checked here so a port slip
-// in ForStrong cannot pass. They pin the walk as reported, not the game: the
-// reported walk comes from a limited sample, and checkDerivation's [DERIVE]
-// rows are what confirm or refute it.
+// walk (5 advances, nextInt(3)+13 three times, nextInt(5) plus 36 or 41,
+// then an XL/XXL size roll cut at 0.8). A separate implementation checked
+// against a GO Wild Area 2025 export (44,078 strong encounters) agrees on
+// all four, sizes included.
 func TestForStrongKnownEncounters(t *testing.T) {
 	cases := []struct {
 		encounterID          uint64
 		atk, def, sta, level int32
+		size                 int32
 		quick, charged       int32 // MoveIndices(4, 7)
 	}{
-		{8429844873227918432, 15, 14, 14, 37, 2, 1},
-		{12642008892750441874, 14, 15, 14, 38, 0, 1},
-		{5379006789627013438, 13, 15, 13, 39, 3, 3},
-		{6264748011300813614, 14, 13, 14, 38, 1, 4},
+		{8429844873227918432, 15, 14, 14, 37, SizeXL, 2, 1},
+		{12642008892750441874, 14, 15, 14, 38, SizeXXL, 0, 1},
+		{5379006789627013438, 13, 15, 13, 39, SizeXL, 3, 3},
+		{6264748011300813614, 14, 13, 14, 38, SizeXL, 1, 4},
 	}
 	for _, c := range cases {
 		for _, boosted := range []bool{false, true} {
 			d := ForStrong(c.encounterID, boosted, 0)
-			want := Values{Attack: c.atk, Defense: c.def, Stamina: c.sta, Level: c.level, Size: SizeM}
+			want := Values{Attack: c.atk, Defense: c.def, Stamina: c.sta, Level: c.level, Size: c.size}
 			if boosted {
 				want.Level += 5
 			}
@@ -433,6 +433,12 @@ func TestForStrongBranchesDifferOnlyInLevel(t *testing.T) {
 		}
 		if u.Level < 36 || u.Level > 40 {
 			t.Fatalf("id %d unboosted level out of range: %d", id, u.Level)
+		}
+		if u.Size != SizeXL && u.Size != SizeXXL {
+			t.Fatalf("id %d: strong size %d, want XL or XXL", id, u.Size)
+		}
+		if !u.Strong || For(id, false, 0).Strong {
+			t.Fatalf("id %d: Draw.Strong must be set by ForStrong only", id)
 		}
 		shifted := u.Values
 		shifted.Level += 5
