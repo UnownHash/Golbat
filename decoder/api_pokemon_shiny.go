@@ -61,6 +61,7 @@ type shinyRate struct {
 }
 type shinyRates struct {
 	variants          map[shinyVariant]shinyRate
+	unsupported       map[int16]bool // species without a released shiny
 	maximum           map[int16]uint32
 	backgroundMaximum map[int16]uint32
 }
@@ -115,7 +116,8 @@ func refreshShinyRates(ctx context.Context) error {
 		return fmt.Errorf("status %d", res.StatusCode)
 	}
 	var feed struct {
-		Rates *[]shinyRate `json:"rates"`
+		Rates       *[]shinyRate `json:"rates"`
+		Unsupported []int        `json:"unsupportedPokemon"`
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed); err != nil {
 		return err
@@ -125,6 +127,10 @@ func refreshShinyRates(ctx context.Context) error {
 		return fmt.Errorf("rates response has no rates list")
 	}
 	next := &shinyRates{variants: make(map[shinyVariant]shinyRate), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
+	next.unsupported = make(map[int16]bool, len(feed.Unsupported))
+	for _, p := range feed.Unsupported {
+		next.unsupported[int16(p)] = true
+	}
 	for _, r := range *feed.Rates {
 		next.variants[shinyVariant{r.Pokemon, r.Form, r.Costume}] = r
 		// Unknown costumes/forms still default to 1/512 shiny and no background.
@@ -270,6 +276,11 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 
 func (s *shinyScan) rate(pokemon, form, costume int) (shinyRate, bool) {
 	rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]
+	if !ok && s.rates.unsupported[int16(pokemon)] {
+		// A species the feed lists as never shiny: no shiny draw is taken,
+		// rather than falling back to 1/512.
+		return shinyRate{Pokemon: pokemon, Form: form, Costume: costume}, true
+	}
 	return rate, ok
 }
 
