@@ -230,7 +230,7 @@ func TestPersonalDrawOrder(t *testing.T) {
 		{Pokemon: 25, Prediction: shinyPrediction{Probability: 0.1, Supported: true}, Background: background},
 		{Pokemon: 26, Prediction: shinyPrediction{Supported: false}, Background: background},
 		{Pokemon: 29, Prediction: shinyPrediction{Probability: 0, Supported: true}, Background: background},
-	}, nil)}
+	}, nil, nil)}
 	for _, id := range players {
 		input := make([]byte, 8+len(id))
 		copy(input[8:], id)
@@ -325,7 +325,7 @@ func TestShinyCapabilityIgnoresTimezone(t *testing.T) {
 		{Pokemon: 27, Prediction: shinyPrediction{Supported: false}, Overrides: phoenix(shinyPrediction{Probability: 1, Supported: true}), Background: background},
 		// Shiny-capable everywhere, with no chance in Phoenix.
 		{Pokemon: 28, Prediction: shinyPrediction{Probability: 1, Supported: true}, Overrides: phoenix(shinyPrediction{Supported: false}), Background: background},
-	}, nil)}
+	}, nil, nil)}
 	for _, id := range players {
 		input := make([]byte, 8+len(id))
 		copy(input[8:], id)
@@ -374,7 +374,7 @@ func TestShinyRatesNormalize(t *testing.T) {
 			Background: &background, BackgroundOverrides: phoenix(background)},
 		// Not capable: overrides cannot change that, so none are kept.
 		{Pokemon: 3, Prediction: shinyPrediction{Supported: true}, Overrides: phoenix(base)},
-	}, nil)
+	}, nil, nil)
 	if rates.zoned {
 		t.Error("snapshot with only no-op overrides is zoned")
 	}
@@ -394,7 +394,7 @@ func TestShinyRatesNormalize(t *testing.T) {
 	rates = newShinyRates([]shinyRate{
 		{Pokemon: 1, Prediction: base, Overrides: map[string]shinyPrediction{"America/Phoenix": {Probability: 0.25, Supported: true}, "America/Denver": base}},
 		{Pokemon: 2, Prediction: base, BackgroundOverrides: phoenix(shinyPrediction{Probability: 0.1, Supported: true})},
-	}, nil)
+	}, nil, nil)
 	if !rates.zoned {
 		t.Error("snapshot with effective overrides is not zoned")
 	}
@@ -413,5 +413,44 @@ func TestShinyRatesNormalize(t *testing.T) {
 	}
 	if got := s.shinyCutoff(rates.variants[shinyVariant{1, 0, 0}], 33.45, -112.07); got != shinyScale/4 {
 		t.Errorf("Phoenix cutoff %d", got)
+	}
+}
+
+func TestShinyRatesFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		fallback string
+		want     uint32
+	}{
+		{"omitted", ``, defaultShinyCutoff},
+		{"published", `,"fallback":{"probability":0.00390625,"assumed":true,"supported":true}`, shinyScale / 256},
+		{"zero", `,"fallback":{"probability":0,"supported":true}`, 0},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"rates":[{"pokemon":1,"form":0,"costume":0,"prediction":{"probability":2,"supported":true}}],"unsupportedPokemon":[931]` + tc.fallback + `}`))
+		}))
+		old := config.Config.ShinyRates
+		config.Config.ShinyRates = config.ShinyRates{URL: server.URL}
+		err := refreshShinyRates(context.Background())
+		config.Config.ShinyRates = old
+		server.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := &shinyScan{rates: shinyRatesSnapshot.Load()}
+		shinyRatesSnapshot.Store(nil)
+		// Unlisted variants, and listed ones with an invalid probability,
+		// take the fallback; a zero fallback leaves them not capable.
+		for _, rate := range []shinyCutoffs{s.rate(25, 0, 0), s.rate(1, 0, 0)} {
+			if rate.shiny != tc.want || rate.capable() != (tc.want > 0) {
+				t.Errorf("%s: cutoffs %+v", tc.name, rate)
+			}
+		}
+		if m := s.rates.shinyMaximum(25); m != tc.want {
+			t.Errorf("%s: maximum %d", tc.name, m)
+		}
+		if rate := s.rate(931, 0, 0); rate.capable() {
+			t.Errorf("%s: unsupported species capable", tc.name)
+		}
 	}
 }
