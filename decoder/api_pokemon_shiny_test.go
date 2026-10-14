@@ -454,3 +454,39 @@ func TestShinyRatesFallback(t *testing.T) {
 		}
 	}
 }
+
+func TestShinyRatesMaxBytes(t *testing.T) {
+	body := `{"rates":[{"pokemon":25,"form":0,"costume":0,"prediction":{"probability":0.1,"supported":true}}]}`
+	for _, tc := range []struct {
+		name     string
+		limit    int64
+		chunked  bool
+		tooLarge bool
+	}{
+		{"fits exactly", int64(len(body)), false, false},
+		{"over by one", int64(len(body)) - 1, false, true},
+		{"over by one, no length", int64(len(body)) - 1, true, true},
+		{"unset uses the default", 0, false, false},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if tc.chunked {
+				w.(http.Flusher).Flush()
+			}
+			_, _ = w.Write([]byte(body))
+		}))
+		old := config.Config.ShinyRates
+		config.Config.ShinyRates = config.ShinyRates{URL: server.URL, MaxBytes: tc.limit}
+		good := &shinyRates{}
+		shinyRatesSnapshot.Store(good)
+		err := refreshShinyRates(context.Background())
+		if got := errors.Is(err, errShinyRatesTooLarge); got != tc.tooLarge {
+			t.Errorf("%s: err = %v", tc.name, err)
+		}
+		if tc.tooLarge && shinyRatesSnapshot.Load() != good {
+			t.Errorf("%s: replaced the last good snapshot", tc.name)
+		}
+		config.Config.ShinyRates = old
+		shinyRatesSnapshot.Store(nil)
+		server.Close()
+	}
+}

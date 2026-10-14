@@ -38,6 +38,9 @@ func ReadConfig(configPath string) (configDefinition, error) {
 		DeriveIv:        true,
 		DeriveDespawn:   true,
 		DittoDerivation: true,
+		ShinyRates: ShinyRates{
+			MaxBytes: 16 << 20,
+		},
 		Sentry: sentry{
 			SampleRate:       1.0,
 			TracesSampleRate: 1.0,

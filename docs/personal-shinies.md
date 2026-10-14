@@ -1,12 +1,15 @@
 # Personal shiny and background filtering
 
-Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
-bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
-startup and every five minutes. A failed refresh keeps the last rates and
-retries after 30 seconds; until the first successful load, personal scans fail
-rather than guess. Unknown variants take the feed's `fallback` shiny rate
-(1/512 if it publishes none) and no background, unless their species is
-listed in `unsupportedPokemon`.
+Configure `[shiny_rates]` with the `url` of a shiny-rate source, an optional
+bearer `token` and an optional `max_bytes`. A background task fetches
+`GET <url>/v1/rates?compact=1` at startup and every five minutes. A failed
+refresh keeps the last rates and retries after 30 seconds; until the first
+successful load, personal scans fail rather than guess. A response larger than
+`max_bytes` (default 16 MiB) fails the refresh with an error naming the limit
+instead of being parsed truncated; raise it if the feed outgrows the default.
+Unknown variants take the feed's `fallback` shiny rate (1/512 if it publishes
+none) and no background, unless their species is listed in
+`unsupportedPokemon`.
 Ditto, disguised Pokémon and nearby-only sightings are never eligible.
 
 The rate source must return JSON in this shape:

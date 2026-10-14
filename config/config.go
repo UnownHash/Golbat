@@ -7,8 +7,9 @@ import (
 )
 
 type ShinyRates struct {
-	URL   string `koanf:"url"`
-	Token string `koanf:"token"`
+	URL      string `koanf:"url"`
+	Token    string `koanf:"token"`
+	MaxBytes int64  `koanf:"max_bytes"`
 }
 
 type configDefinition struct {
