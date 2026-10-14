@@ -4,7 +4,9 @@ Configure `[shiny_rates]` with the `url` of a shiny-rate source and an optional
 bearer `token`. A background task fetches `GET <url>/v1/rates?compact=1` at
 startup and every five minutes. A failed refresh keeps the last rates and
 retries after 30 seconds; until the first successful load, personal scans fail
-rather than guess. Unknown variants assume 1/512 shiny and no background, unless their species is listed in `unsupportedPokemon`.
+rather than guess. Unknown variants take the feed's `fallback` shiny rate
+(1/512 if it publishes none) and no background, unless their species is
+listed in `unsupportedPokemon`.
 Ditto, disguised Pokémon and nearby-only sightings are never eligible.
 
 The rate source must return JSON in this shape:
@@ -26,7 +28,8 @@ The rate source must return JSON in this shape:
       }
     }
   ],
-  "unsupportedPokemon": [132, 931]
+  "unsupportedPokemon": [132, 931],
+  "fallback": {"probability": 0.001953125, "supported": true}
 }
 ```
 
@@ -35,6 +38,10 @@ The rate source must return JSON in this shape:
   means the same, even with `supported: true`: no shiny is available, so the
   variant takes no shiny draw (Golbat treats any zero cutoff as not capable).
 - `unsupportedPokemon` is optional: species with no released shiny. Their variants are never shiny-eligible even without an entry in `rates`.
+- `fallback` is optional: the shiny rate for variants not listed in `rates`
+  (and for listed ones with an invalid probability). Without it Golbat uses
+  1/512. A fallback of probability 0 or `supported: false` makes unlisted
+  variants never shiny-eligible.
 - `overrides` is optional and keyed by IANA timezone of the spawn's location.
   Local-time events such as Community Day change rates per timezone. An
   override changes only the probability used at that location, never whether

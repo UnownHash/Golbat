@@ -22,6 +22,8 @@ import (
 )
 
 const shinyScale = 1 << 24
+
+// defaultShinyCutoff applies when the feed does not publish a fallback.
 const defaultShinyCutoff = shinyScale / 512
 
 // Cost is candidates x players x ID length, so both are bounded. 256 bytes
@@ -38,7 +40,8 @@ type shinyPrediction struct {
 }
 
 // cutoff converts a probability to a threshold on a 24-bit roll. Invalid
-// probabilities use fallback: 1/512 for shiny, never for backgrounds.
+// probabilities use fallback: the feed's fallback for shiny, never for
+// backgrounds.
 func (p shinyPrediction) cutoff(fallback uint32) uint32 {
 	if !p.Supported {
 		return 0
@@ -74,6 +77,7 @@ type shinyCutoffs struct {
 type shinyRates struct {
 	variants          map[shinyVariant]shinyCutoffs
 	unsupported       map[int16]bool // species without a released shiny
+	fallback          uint32         // shiny cutoff of unlisted variants
 	maximum           map[int16]uint32
 	backgroundMaximum map[int16]uint32
 	zoned             bool // some variant has an effective override
@@ -129,8 +133,9 @@ func refreshShinyRates(ctx context.Context) error {
 		return fmt.Errorf("status %d", res.StatusCode)
 	}
 	var feed struct {
-		Rates       *[]shinyRate `json:"rates"`
-		Unsupported []int        `json:"unsupportedPokemon"`
+		Rates       *[]shinyRate     `json:"rates"`
+		Unsupported []int            `json:"unsupportedPokemon"`
+		Fallback    *shinyPrediction `json:"fallback"`
 	}
 	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed); err != nil {
 		return err
@@ -139,22 +144,27 @@ func refreshShinyRates(ctx context.Context) error {
 	if feed.Rates == nil {
 		return fmt.Errorf("rates response has no rates list")
 	}
-	shinyRatesSnapshot.Store(newShinyRates(*feed.Rates, feed.Unsupported))
+	shinyRatesSnapshot.Store(newShinyRates(*feed.Rates, feed.Unsupported, feed.Fallback))
 	return nil
 }
 
 // newShinyRates normalizes a feed so scans compare integers and resolve a
-// timezone only where the answer depends on it.
-func newShinyRates(rates []shinyRate, unsupported []int) *shinyRates {
+// timezone only where the answer depends on it. fallback is the feed's rate
+// for unlisted variants; 1/512 when it publishes none.
+func newShinyRates(rates []shinyRate, unsupported []int, fallback *shinyPrediction) *shinyRates {
 	next := &shinyRates{variants: make(map[shinyVariant]shinyCutoffs, len(rates)), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
+	next.fallback = defaultShinyCutoff
+	if fallback != nil {
+		next.fallback = fallback.cutoff(defaultShinyCutoff)
+	}
 	next.unsupported = make(map[int16]bool, len(unsupported))
 	for _, p := range unsupported {
 		next.unsupported[int16(p)] = true
 	}
 	for _, r := range rates {
-		c := shinyCutoffs{shiny: r.Prediction.cutoff(defaultShinyCutoff)}
+		c := shinyCutoffs{shiny: r.Prediction.cutoff(next.fallback)}
 		if c.shiny > 0 {
-			c.shinyOverrides = effectiveOverrides(r.Overrides, c.shiny, defaultShinyCutoff)
+			c.shinyOverrides = effectiveOverrides(r.Overrides, c.shiny, next.fallback)
 		}
 		if r.Background != nil {
 			c.background = r.Background.cutoff(0)
@@ -193,12 +203,12 @@ func effectiveOverrides(overrides map[string]shinyPrediction, base, fallback uin
 }
 
 // shinyMaximum bounds the shiny cutoff of any variant of a species, counting
-// unlisted variants: 1/512 unless the species is listed as never shiny.
+// unlisted variants: the fallback unless the species is listed as never shiny.
 func (r *shinyRates) shinyMaximum(pokemon int16) uint32 {
 	if r.unsupported[pokemon] {
 		return r.maximum[pokemon]
 	}
-	return max(r.maximum[pokemon], defaultShinyCutoff)
+	return max(r.maximum[pokemon], r.fallback)
 }
 
 // personalLookup packs roll eligibility and costume into PokemonLookup's
@@ -322,8 +332,8 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	return result, nil
 }
 
-// rate returns a variant's cutoffs. Unknown costumes/forms default to 1/512
-// shiny and no background, unless the species is listed as never shiny.
+// rate returns a variant's cutoffs. Unknown costumes/forms take the fallback
+// shiny rate and no background, unless the species is listed as never shiny.
 func (s *shinyScan) rate(pokemon, form, costume int) shinyCutoffs {
 	if rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]; ok {
 		return rate
@@ -331,7 +341,7 @@ func (s *shinyScan) rate(pokemon, form, costume int) shinyCutoffs {
 	if s.rates.unsupported[int16(pokemon)] {
 		return shinyCutoffs{}
 	}
-	return shinyCutoffs{shiny: defaultShinyCutoff}
+	return shinyCutoffs{shiny: s.rates.fallback}
 }
 
 func (s *shinyScan) zoneAt(overrides map[string]uint32, lat, lon float64) string {
