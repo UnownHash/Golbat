@@ -119,5 +119,8 @@ fields are omitted when empty:
 `filters.annotate_for` when configured. This extension is
 HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
 required. Rolls are recomputed rather than cached (one SHA-1 block each), and
-candidates that can never qualify are skipped before hashing. Personal scans
+candidates that can never qualify are skipped before hashing. Rates are
+converted to integer cutoffs once per refresh, and overrides equal to their
+base rate are dropped, so a spawn's timezone is looked up only for variants
+whose rate actually differs by timezone (never, if none do). Personal scans
 run like ordinary scans, without a separate concurrency limit.
