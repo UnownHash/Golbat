@@ -60,6 +60,11 @@ message PokemonDnfFilter {
   IntRange pvp_little = 10;
   IntRange pvp_great = 11;
   IntRange pvp_ultra = 12;
+  // Personal conditions, as in JSON: match if shiny (or has a background)
+  // for any of these player IDs; ANDed with the rest of the clause. Empty
+  // means no constraint. Needs [shiny_rates]; see docs/personal-shinies.md.
+  repeated string shiny_for = 13;
+  repeated string background_for = 14;
 }
 
 message PokemonScanRequest {
@@ -75,6 +80,9 @@ message PokemonScanRequest {
   // that expire or stop matching disappear silently; pass max(updated)-1
   // from the previous response and expect the boundary second again.
   optional int64 updated_after = 5;
+  // Player IDs to check every returned pokemon against; results list the
+  // matching ones in Pokemon.shiny_for / background_for. Does not filter.
+  repeated string annotate_for = 6;
 }
 
 message PokemonScanResponse {
@@ -152,6 +160,10 @@ message Pokemon {
   optional double capture_3 = 36;
   PvpRankings pvp = 37;
   int32 is_event = 38;
+  // Player IDs from PokemonScanRequest.annotate_for this pokemon is shiny
+  // for / has a background for. Empty unless annotate_for was sent.
+  repeated string shiny_for = 39;
+  repeated string background_for = 40;
 }
 
 // ---- forts ----
