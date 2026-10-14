@@ -229,6 +229,7 @@ func TestPersonalDrawOrder(t *testing.T) {
 	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: &shinyRates{variants: map[shinyVariant]shinyRate{
 		{25, 0, 0}: {Pokemon: 25, Prediction: shinyPrediction{Probability: 0.1, Supported: true}, Background: background},
 		{26, 0, 0}: {Pokemon: 26, Prediction: shinyPrediction{Supported: false}, Background: background},
+		{29, 0, 0}: {Pokemon: 29, Prediction: shinyPrediction{Probability: 0, Supported: true}, Background: background},
 	}}}
 	for _, id := range players {
 		input := make([]byte, 8+len(id))
@@ -245,17 +246,22 @@ func TestPersonalDrawOrder(t *testing.T) {
 	if r := annotate(25); !slices.Equal(r.ShinyFor, []string{" Trainer-é "}) || !slices.Equal(r.BackgroundFor, []string{"0123456789abcdef"}) {
 		t.Fatalf("capable: shiny %v background %v", r.ShinyFor, r.BackgroundFor)
 	}
-	// Never shiny: no shiny draw, so the background is the first draw.
-	if r := annotate(26); len(r.ShinyFor) != 0 || !slices.Equal(r.BackgroundFor, []string{" Trainer-é "}) {
-		t.Fatalf("not capable: shiny %v background %v", r.ShinyFor, r.BackgroundFor)
+	// Never shiny, whether unsupported or at probability 0: no shiny draw,
+	// so the background is the first draw.
+	for _, pokemon := range []int16{26, 29} {
+		if r := annotate(pokemon); len(r.ShinyFor) != 0 || !slices.Equal(r.BackgroundFor, []string{" Trainer-é "}) {
+			t.Fatalf("%d not capable: shiny %v background %v", pokemon, r.ShinyFor, r.BackgroundFor)
+		}
 	}
 	// Filtering agrees with annotation.
-	lookup := PokemonLookup{PokemonId: 26, RollEligibleCostume: 1}
-	s.rates.backgroundMaximum = map[int16]uint32{26: background.cutoff(0)}
-	for _, id := range players {
-		want := id == " Trainer-é "
-		if got := s.match(1, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{BackgroundFor: []string{id}}); got != want {
-			t.Errorf("match background_for %q = %v, want %v", id, got, want)
+	s.rates.backgroundMaximum = map[int16]uint32{26: background.cutoff(0), 29: background.cutoff(0)}
+	for _, pokemon := range []int16{26, 29} {
+		lookup := PokemonLookup{PokemonId: pokemon, RollEligibleCostume: 1}
+		for _, id := range players {
+			want := id == " Trainer-é "
+			if got := s.match(1, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{BackgroundFor: []string{id}}); got != want {
+				t.Errorf("%d: match background_for %q = %v, want %v", pokemon, id, got, want)
+			}
 		}
 	}
 }
