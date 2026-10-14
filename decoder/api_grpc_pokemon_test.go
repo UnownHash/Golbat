@@ -13,6 +13,7 @@ import (
 	"github.com/guregu/null/v6"
 
 	"golbat/config"
+	"golbat/derive/encounter"
 	pb "golbat/grpc"
 )
 
@@ -127,6 +128,7 @@ func fullApiPokemonResult() ApiPokemonResult {
 
 func TestPokemonToProtoFullyPopulated(t *testing.T) {
 	r := fullApiPokemonResult()
+	r.SizeFor = map[string]ApiPersonalSize{"player-id": {Height: 0.71, Weight: 6.52}}
 	got := pokemonToProto(&r, 123456789)
 
 	if got.Id != 123456789 || got.GetPokestopId() != "fedcba9876543210fedcba9876543210.16" || got.GetSpawnId() != 0x1234 {
@@ -170,6 +172,22 @@ func TestPokemonToProtoFullyPopulated(t *testing.T) {
 	if pvp.Ultra[0].Pokemon != 26 || pvp.Ultra[0].Rank != 1 {
 		t.Errorf("ultra entry = %+v", pvp.Ultra[0])
 	}
+	if !sizesMatch(got.SizeFor, r.SizeFor) {
+		t.Errorf("size_for = %v, want %v", got.SizeFor, r.SizeFor)
+	}
+}
+
+// sizesMatch reports whether a proto size_for carries exactly the HTTP one.
+func sizesMatch(got map[string]*pb.PersonalSize, want map[string]ApiPersonalSize) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for player, w := range want {
+		if g, ok := got[player]; !ok || g.GetHeight() != w.Height || g.GetWeight() != w.Weight {
+			return false
+		}
+	}
+	return true
 }
 
 func TestPokemonToProtoNilOptionalsStayUnset(t *testing.T) {
@@ -349,8 +367,8 @@ func TestGrpcPersonalShinyScan(t *testing.T) {
 			t.Fatalf("%s: gRPC %d results, HTTP %d", name, len(resp.Pokemon), len(viaHTTP.Pokemon))
 		}
 		for i, r := range viaHTTP.Pokemon {
-			if g := resp.Pokemon[i]; !slices.Equal(g.ShinyFor, r.ShinyFor) || !slices.Equal(g.BackgroundFor, r.BackgroundFor) {
-				t.Errorf("%s: gRPC %v/%v, HTTP %v/%v", name, g.ShinyFor, g.BackgroundFor, r.ShinyFor, r.BackgroundFor)
+			if g := resp.Pokemon[i]; !slices.Equal(g.ShinyFor, r.ShinyFor) || !slices.Equal(g.BackgroundFor, r.BackgroundFor) || !sizesMatch(g.SizeFor, r.SizeFor) {
+				t.Errorf("%s: gRPC %v/%v/%v, HTTP %v/%v/%v", name, g.ShinyFor, g.BackgroundFor, g.SizeFor, r.ShinyFor, r.BackgroundFor, r.SizeFor)
 			}
 		}
 		return resp.Pokemon
@@ -485,9 +503,98 @@ func TestGrpcPersonalDittoScan(t *testing.T) {
 		for i, r := range viaHTTP.Pokemon {
 			g := resp.Pokemon[i]
 			if !slices.Equal(g.ShinyFor, tc.shiny) || !slices.Equal(r.ShinyFor, tc.shiny) ||
-				!slices.Equal(g.BackgroundFor, tc.background) || !slices.Equal(r.BackgroundFor, tc.background) {
-				t.Errorf("%s: gRPC %v/%v, HTTP %v/%v", tc.name, g.ShinyFor, g.BackgroundFor, r.ShinyFor, r.BackgroundFor)
+				!slices.Equal(g.BackgroundFor, tc.background) || !slices.Equal(r.BackgroundFor, tc.background) ||
+				g.SizeFor != nil || r.SizeFor != nil {
+				t.Errorf("%s: gRPC %v/%v/%v, HTTP %v/%v/%v", tc.name, g.ShinyFor, g.BackgroundFor, g.SizeFor, r.ShinyFor, r.BackgroundFor, r.SizeFor)
 			}
+		}
+	}
+}
+
+// TestGrpcPersonalSizeScan mirrors TestPersonalSizeAnnotation through a full
+// gRPC scan: size_for carries each annotate_for player's height and weight,
+// identical to the HTTP scan, and is empty when the IVs don't match the
+// encounter derivation.
+func TestGrpcPersonalSizeScan(t *testing.T) {
+	withScanLimits(t)
+	oldMasterFile := getMasterFileData()
+	oldConfig := config.Config.ShinyRates
+	config.Config.ShinyRates = config.ShinyRates{URL: "http://rates.invalid"}
+	shinyRatesSnapshot.Store(newShinyRates(nil, nil, nil))
+	masterFileMu.Lock()
+	masterFileData = MasterFileData{Initialized: true, Pokemon: map[int]MasterFilePokemon{
+		1: {Size: MasterFileSize{Height: 0.7, Weight: 6.9, Bounds: sizeBounds{0.343, 0.35, 0.525, 0.875, 1.05, 1.225}}},
+	}}
+	masterFileMu.Unlock()
+	t.Cleanup(func() {
+		config.Config.ShinyRates = oldConfig
+		shinyRatesSnapshot.Store(nil)
+		masterFileMu.Lock()
+		masterFileData = oldMasterFile
+		masterFileMu.Unlock()
+	})
+
+	const encounterID = 8429844873227918432
+	const lat, lon = 33.45, -112.07
+	draw := encounter.For(encounterID, false, 0)
+	p := &Pokemon{PokemonData: PokemonData{Id: encounterID, PokemonId: 1, Lat: lat, Lon: lon,
+		SeenType: SeenTypeFrom(SeenTypeCodeWild), ExpireTimestamp: null.ValueFrom(uint32(time.Now().Unix() + 600)),
+		AtkIv: null.ValueFrom(uint8(draw.Attack)), DefIv: null.ValueFrom(uint8(draw.Defense)), StaIv: null.ValueFrom(uint8(draw.Stamina)),
+		Level: null.ValueFrom(uint8(draw.Level)), Weather: null.ValueFrom(uint8(0))}}
+	pokemonRtreePreloadInsert(p)
+	pokemonCache.Set(encounterID, p, time.Minute)
+	pokemonTreeSnapshot.Store(nil)
+	t.Cleanup(func() {
+		pokemonCache.Delete(encounterID)
+		pokemonLookupCache.Delete(encounterID)
+		pokemonTreeMutex.Lock()
+		pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, encounterID)
+		pokemonTreeMutex.Unlock()
+		pokemonTreeSnapshot.Store(nil)
+	})
+
+	const player = "0123456789abcdef"
+	req := &pb.PokemonScanRequest{
+		Min:         &pb.LatLon{Lat: lat - 0.01, Lon: lon - 0.01},
+		Max:         &pb.LatLon{Lat: lat + 0.01, Lon: lon + 0.01},
+		Filters:     []*pb.PokemonDnfFilter{{}},
+		AnnotateFor: []string{player},
+	}
+	resp := mustGrpcScanPokemon(t, req)
+	if len(resp.Pokemon) != 1 {
+		t.Fatalf("results = %+v", resp.Pokemon)
+	}
+	size, ok := resp.Pokemon[0].SizeFor[player]
+	if !ok {
+		t.Fatalf("no size: %+v", resp.Pokemon[0].SizeFor)
+	}
+	// Unknown variant: 1/512 shiny draw, no background, then the height.
+	input := make([]byte, 8+len(player))
+	copy(input[8:], player)
+	rng := (&shinyPlayer{input: input}).generator(encounterID)
+	rng.Next(24)
+	height, weight := encounterSize{class: draw.Size, noise: draw.WeightNoise, MasterFileSize: masterFileData.Pokemon[1].Size}.personal(rng)
+	if size.GetHeight() != float32(height) || size.GetWeight() != float32(weight) {
+		t.Fatalf("size %+v, want %v/%v", size, height, weight)
+	}
+	viaHTTP, err := ScanPokemonWithShiny(context.Background(), pokemonScanRequestFromProto(req))
+	if err != nil {
+		t.Fatalf("HTTP: %v", err)
+	}
+	if len(viaHTTP.Pokemon) != 1 || !sizesMatch(resp.Pokemon[0].SizeFor, viaHTTP.Pokemon[0].SizeFor) {
+		t.Fatalf("gRPC %v, HTTP %+v", resp.Pokemon[0].SizeFor, viaHTTP.Pokemon)
+	}
+
+	// Without annotate_for, or with IVs the derivation doesn't produce, no size.
+	req.AnnotateFor = nil
+	if got := mustGrpcScanPokemon(t, req); len(got.Pokemon) != 1 || got.Pokemon[0].SizeFor != nil {
+		t.Errorf("size_for without annotate_for: %+v", got.Pokemon)
+	}
+	if draw.Attack != draw.Defense {
+		p.AtkIv, p.DefIv = p.DefIv, p.AtkIv
+		req.AnnotateFor = []string{player}
+		if got := mustGrpcScanPokemon(t, req); len(got.Pokemon) != 1 || got.Pokemon[0].SizeFor != nil {
+			t.Errorf("mismatched derivation still sized: %+v", got.Pokemon)
 		}
 	}
 }

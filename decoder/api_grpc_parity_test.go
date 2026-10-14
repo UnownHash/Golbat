@@ -30,10 +30,6 @@ func expectedProtoFieldNames(t *testing.T, typ reflect.Type, overrides map[strin
 		if !f.IsExported() {
 			continue
 		}
-		// size_for is still HTTP-only.
-		if typ == reflect.TypeOf(ApiPokemonResult{}) && f.Name == "SizeFor" {
-			continue
-		}
 		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s has no json name; the proto mirror needs one", typ.Name(), f.Name)
@@ -60,6 +56,7 @@ func TestGrpcApiFieldParity(t *testing.T) {
 		overrides map[string]string
 	}{
 		{"Pokemon", reflect.TypeOf(ApiPokemonResult{}), &pb.Pokemon{}, nil},
+		{"PersonalSize", reflect.TypeOf(ApiPersonalSize{}), &pb.PersonalSize{}, nil},
 		{"PvpRankings", reflect.TypeOf(ApiPvpRankings{}), &pb.PvpRankings{}, nil},
 		{"PvpEntry", reflect.TypeOf(ApiPvpEntry{}), &pb.PvpEntry{}, nil},
 		{"Gym", reflect.TypeOf(ApiGymResult{}), &pb.Gym{}, nil},

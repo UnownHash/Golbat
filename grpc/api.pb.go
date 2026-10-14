@@ -810,6 +810,9 @@ type Pokemon struct {
 	// for / has a background for. Empty unless annotate_for was sent.
 	ShinyFor      []string `protobuf:"bytes,39,rep,name=shiny_for,json=shinyFor,proto3" json:"shiny_for,omitempty"`
 	BackgroundFor []string `protobuf:"bytes,40,rep,name=background_for,json=backgroundFor,proto3" json:"background_for,omitempty"`
+	// Height and weight each annotate_for player would see, keyed by player
+	// ID. Empty without masterfile size data or derived IVs.
+	SizeFor       map[string]*PersonalSize `protobuf:"bytes,41,rep,name=size_for,json=sizeFor,proto3" json:"size_for,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1120,6 +1123,13 @@ func (x *Pokemon) GetShinyFor() []string {
 func (x *Pokemon) GetBackgroundFor() []string {
 	if x != nil {
 		return x.BackgroundFor
+	}
+	return nil
+}
+
+func (x *Pokemon) GetSizeFor() map[string]*PersonalSize {
+	if x != nil {
+		return x.SizeFor
 	}
 	return nil
 }
@@ -3440,6 +3450,59 @@ func (x *FortScanResponse) GetStationsStats() *FortTypeScanStats {
 	return nil
 }
 
+// Mirrors decoder.ApiPersonalSize: one player's height (m) and weight (kg).
+type PersonalSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Height        float32                `protobuf:"fixed32,1,opt,name=height,proto3" json:"height,omitempty"`
+	Weight        float32                `protobuf:"fixed32,2,opt,name=weight,proto3" json:"weight,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PersonalSize) Reset() {
+	*x = PersonalSize{}
+	mi := &file_grpc_api_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PersonalSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PersonalSize) ProtoMessage() {}
+
+func (x *PersonalSize) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PersonalSize.ProtoReflect.Descriptor instead.
+func (*PersonalSize) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *PersonalSize) GetHeight() float32 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
+func (x *PersonalSize) GetWeight() float32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
 var File_grpc_api_proto protoreflect.FileDescriptor
 
 const file_grpc_api_proto_rawDesc = "" +
@@ -3511,7 +3574,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\vPvpRankings\x12,\n" +
 	"\x06little\x18\x01 \x03(\v2\x14.golbat_api.PvpEntryR\x06little\x12*\n" +
 	"\x05great\x18\x02 \x03(\v2\x14.golbat_api.PvpEntryR\x05great\x12*\n" +
-	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\xf1\f\n" +
+	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\x84\x0e\n" +
 	"\aPokemon\x12\x12\n" +
 	"\x02id\x18\x01 \x01(\x04B\x020\x01R\x02id\x12$\n" +
 	"\vpokestop_id\x18\x02 \x01(\tH\x00R\n" +
@@ -3556,7 +3619,11 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\x03pvp\x18% \x01(\v2\x17.golbat_api.PvpRankingsR\x03pvp\x12\x19\n" +
 	"\bis_event\x18& \x01(\x05R\aisEvent\x12\x1b\n" +
 	"\tshiny_for\x18' \x03(\tR\bshinyFor\x12%\n" +
-	"\x0ebackground_for\x18( \x03(\tR\rbackgroundForB\x0e\n" +
+	"\x0ebackground_for\x18( \x03(\tR\rbackgroundFor\x12;\n" +
+	"\bsize_for\x18) \x03(\v2 .golbat_api.Pokemon.SizeForEntryR\asizeFor\x1aT\n" +
+	"\fSizeForEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12.\n" +
+	"\x05value\x18\x02 \x01(\v2\x18.golbat_api.PersonalSizeR\x05value:\x028\x01B\x0e\n" +
 	"\f_pokestop_idB\v\n" +
 	"\t_spawn_idB\t\n" +
 	"\a_weightB\a\n" +
@@ -3981,7 +4048,10 @@ const file_grpc_api_proto_rawDesc = "" +
 	"gyms_stats\x18\b \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\tgymsStats\x12F\n" +
 	"\x0fpokestops_stats\x18\t \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\x0epokestopsStats\x12D\n" +
 	"\x0estations_stats\x18\n" +
-	" \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\rstationsStats2\xe8\x03\n" +
+	" \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\rstationsStats\">\n" +
+	"\fPersonalSize\x12\x16\n" +
+	"\x06height\x18\x01 \x01(\x02R\x06height\x12\x16\n" +
+	"\x06weight\x18\x02 \x01(\x02R\x06weight2\xe8\x03\n" +
 	"\tGolbatApi\x12P\n" +
 	"\vScanPokemon\x12\x1e.golbat_api.PokemonScanRequest\x1a\x1f.golbat_api.PokemonScanResponse\"\x00\x12M\n" +
 	"\n" +
@@ -4003,7 +4073,7 @@ func file_grpc_api_proto_rawDescGZIP() []byte {
 	return file_grpc_api_proto_rawDescData
 }
 
-var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_grpc_api_proto_goTypes = []any{
 	(*LatLon)(nil),                  // 0: golbat_api.LatLon
 	(*IntRange)(nil),                // 1: golbat_api.IntRange
@@ -4031,6 +4101,8 @@ var file_grpc_api_proto_goTypes = []any{
 	(*PokestopScanResponse)(nil),    // 23: golbat_api.PokestopScanResponse
 	(*StationScanResponse)(nil),     // 24: golbat_api.StationScanResponse
 	(*FortScanResponse)(nil),        // 25: golbat_api.FortScanResponse
+	(*PersonalSize)(nil),            // 26: golbat_api.PersonalSize
+	nil,                             // 27: golbat_api.Pokemon.SizeForEntry
 }
 var file_grpc_api_proto_depIdxs = []int32{
 	2,  // 0: golbat_api.PokemonDnfFilter.pokemon:type_name -> golbat_api.DnfId
@@ -4053,50 +4125,52 @@ var file_grpc_api_proto_depIdxs = []int32{
 	8,  // 17: golbat_api.PvpRankings.great:type_name -> golbat_api.PvpEntry
 	8,  // 18: golbat_api.PvpRankings.ultra:type_name -> golbat_api.PvpEntry
 	9,  // 19: golbat_api.Pokemon.pvp:type_name -> golbat_api.PvpRankings
-	1,  // 20: golbat_api.FortDnfFilter.available_slots:type_name -> golbat_api.IntRange
-	2,  // 21: golbat_api.FortDnfFilter.raid_pokemon_id:type_name -> golbat_api.DnfId
-	1,  // 22: golbat_api.FortDnfFilter.quest_reward_amount:type_name -> golbat_api.IntRange
-	2,  // 23: golbat_api.FortDnfFilter.quest_reward_pokemon:type_name -> golbat_api.DnfId
-	2,  // 24: golbat_api.FortDnfFilter.contest_pokemon:type_name -> golbat_api.DnfId
-	11, // 25: golbat_api.FortDnfFilter.contest_focus:type_name -> golbat_api.ContestFocus
-	2,  // 26: golbat_api.FortDnfFilter.battle_pokemon:type_name -> golbat_api.DnfId
-	0,  // 27: golbat_api.FortScanRequest.min:type_name -> golbat_api.LatLon
-	0,  // 28: golbat_api.FortScanRequest.max:type_name -> golbat_api.LatLon
-	12, // 29: golbat_api.FortScanRequest.filters:type_name -> golbat_api.FortDnfFilter
-	12, // 30: golbat_api.FortTypeScanGroup.filters:type_name -> golbat_api.FortDnfFilter
-	0,  // 31: golbat_api.FortCombinedScanRequest.min:type_name -> golbat_api.LatLon
-	0,  // 32: golbat_api.FortCombinedScanRequest.max:type_name -> golbat_api.LatLon
-	14, // 33: golbat_api.FortCombinedScanRequest.gyms:type_name -> golbat_api.FortTypeScanGroup
-	14, // 34: golbat_api.FortCombinedScanRequest.pokestops:type_name -> golbat_api.FortTypeScanGroup
-	14, // 35: golbat_api.FortCombinedScanRequest.stations:type_name -> golbat_api.FortTypeScanGroup
-	17, // 36: golbat_api.Pokestop.invasions:type_name -> golbat_api.Incident
-	18, // 37: golbat_api.Station.battles:type_name -> golbat_api.StationBattle
-	19, // 38: golbat_api.GymScanResponse.gyms:type_name -> golbat_api.Gym
-	20, // 39: golbat_api.PokestopScanResponse.pokestops:type_name -> golbat_api.Pokestop
-	21, // 40: golbat_api.StationScanResponse.stations:type_name -> golbat_api.Station
-	19, // 41: golbat_api.FortScanResponse.gyms:type_name -> golbat_api.Gym
-	20, // 42: golbat_api.FortScanResponse.pokestops:type_name -> golbat_api.Pokestop
-	21, // 43: golbat_api.FortScanResponse.stations:type_name -> golbat_api.Station
-	15, // 44: golbat_api.FortScanResponse.gyms_stats:type_name -> golbat_api.FortTypeScanStats
-	15, // 45: golbat_api.FortScanResponse.pokestops_stats:type_name -> golbat_api.FortTypeScanStats
-	15, // 46: golbat_api.FortScanResponse.stations_stats:type_name -> golbat_api.FortTypeScanStats
-	4,  // 47: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
-	6,  // 48: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
-	13, // 49: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
-	13, // 50: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
-	13, // 51: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
-	16, // 52: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
-	5,  // 53: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
-	7,  // 54: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
-	22, // 55: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
-	23, // 56: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
-	24, // 57: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
-	25, // 58: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
-	53, // [53:59] is the sub-list for method output_type
-	47, // [47:53] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	27, // 20: golbat_api.Pokemon.size_for:type_name -> golbat_api.Pokemon.SizeForEntry
+	1,  // 21: golbat_api.FortDnfFilter.available_slots:type_name -> golbat_api.IntRange
+	2,  // 22: golbat_api.FortDnfFilter.raid_pokemon_id:type_name -> golbat_api.DnfId
+	1,  // 23: golbat_api.FortDnfFilter.quest_reward_amount:type_name -> golbat_api.IntRange
+	2,  // 24: golbat_api.FortDnfFilter.quest_reward_pokemon:type_name -> golbat_api.DnfId
+	2,  // 25: golbat_api.FortDnfFilter.contest_pokemon:type_name -> golbat_api.DnfId
+	11, // 26: golbat_api.FortDnfFilter.contest_focus:type_name -> golbat_api.ContestFocus
+	2,  // 27: golbat_api.FortDnfFilter.battle_pokemon:type_name -> golbat_api.DnfId
+	0,  // 28: golbat_api.FortScanRequest.min:type_name -> golbat_api.LatLon
+	0,  // 29: golbat_api.FortScanRequest.max:type_name -> golbat_api.LatLon
+	12, // 30: golbat_api.FortScanRequest.filters:type_name -> golbat_api.FortDnfFilter
+	12, // 31: golbat_api.FortTypeScanGroup.filters:type_name -> golbat_api.FortDnfFilter
+	0,  // 32: golbat_api.FortCombinedScanRequest.min:type_name -> golbat_api.LatLon
+	0,  // 33: golbat_api.FortCombinedScanRequest.max:type_name -> golbat_api.LatLon
+	14, // 34: golbat_api.FortCombinedScanRequest.gyms:type_name -> golbat_api.FortTypeScanGroup
+	14, // 35: golbat_api.FortCombinedScanRequest.pokestops:type_name -> golbat_api.FortTypeScanGroup
+	14, // 36: golbat_api.FortCombinedScanRequest.stations:type_name -> golbat_api.FortTypeScanGroup
+	17, // 37: golbat_api.Pokestop.invasions:type_name -> golbat_api.Incident
+	18, // 38: golbat_api.Station.battles:type_name -> golbat_api.StationBattle
+	19, // 39: golbat_api.GymScanResponse.gyms:type_name -> golbat_api.Gym
+	20, // 40: golbat_api.PokestopScanResponse.pokestops:type_name -> golbat_api.Pokestop
+	21, // 41: golbat_api.StationScanResponse.stations:type_name -> golbat_api.Station
+	19, // 42: golbat_api.FortScanResponse.gyms:type_name -> golbat_api.Gym
+	20, // 43: golbat_api.FortScanResponse.pokestops:type_name -> golbat_api.Pokestop
+	21, // 44: golbat_api.FortScanResponse.stations:type_name -> golbat_api.Station
+	15, // 45: golbat_api.FortScanResponse.gyms_stats:type_name -> golbat_api.FortTypeScanStats
+	15, // 46: golbat_api.FortScanResponse.pokestops_stats:type_name -> golbat_api.FortTypeScanStats
+	15, // 47: golbat_api.FortScanResponse.stations_stats:type_name -> golbat_api.FortTypeScanStats
+	26, // 48: golbat_api.Pokemon.SizeForEntry.value:type_name -> golbat_api.PersonalSize
+	4,  // 49: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
+	6,  // 50: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
+	13, // 51: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
+	13, // 52: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
+	13, // 53: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
+	16, // 54: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
+	5,  // 55: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
+	7,  // 56: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
+	22, // 57: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
+	23, // 58: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
+	24, // 59: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
+	25, // 60: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
+	55, // [55:61] is the sub-list for method output_type
+	49, // [49:55] is the sub-list for method input_type
+	49, // [49:49] is the sub-list for extension type_name
+	49, // [49:49] is the sub-list for extension extendee
+	0,  // [0:49] is the sub-list for field type_name
 }
 
 func init() { file_grpc_api_proto_init() }
@@ -4123,7 +4197,7 @@ func file_grpc_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_api_proto_rawDesc), len(file_grpc_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

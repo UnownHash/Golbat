@@ -155,11 +155,11 @@ vectors come from roundaboutluke's captures (#423).
 
 gRPC uses the same field names with the same semantics:
 `PokemonDnfFilter.shiny_for` and `background_for`,
-`PokemonScanRequest.annotate_for`, and `Pokemon.shiny_for` and
-`background_for` on results (empty when not annotated). `size_for` is
-HTTP-only for now. Where HTTP answers
-503, gRPC answers `FAILED_PRECONDITION` if `[shiny_rates]` is not configured
-and `UNAVAILABLE` while the rates have not loaded yet (retry).
+`PokemonScanRequest.annotate_for`, and `Pokemon.shiny_for`,
+`background_for` and `size_for` (a map of player ID to `PersonalSize`) on
+results (empty when not annotated). Where HTTP answers 503, gRPC answers
+`FAILED_PRECONDITION` if `[shiny_rates]` is not configured and `UNAVAILABLE`
+while the rates have not loaded yet (retry).
 
 ```bash
 grpcurl -plaintext -H 'x-golbat-secret: your_api_secret' \

@@ -164,6 +164,9 @@ message Pokemon {
   // for / has a background for. Empty unless annotate_for was sent.
   repeated string shiny_for = 39;
   repeated string background_for = 40;
+  // Height and weight each annotate_for player would see, keyed by player
+  // ID. Empty without masterfile size data or derived IVs.
+  map<string, PersonalSize> size_for = 41;
 }
 
 // ---- forts ----
@@ -447,4 +450,10 @@ message FortScanResponse {
   FortTypeScanStats gyms_stats = 8;
   FortTypeScanStats pokestops_stats = 9;
   FortTypeScanStats stations_stats = 10;
+}
+
+// Mirrors decoder.ApiPersonalSize: one player's height (m) and weight (kg).
+message PersonalSize {
+  float height = 1;
+  float weight = 2;
 }
