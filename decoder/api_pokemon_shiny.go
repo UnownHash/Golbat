@@ -34,6 +34,13 @@ const maxPersonalPlayerIDBytes = 256
 // ErrPersonalRequest marks a malformed personal shiny/background request.
 var ErrPersonalRequest = errors.New("invalid personal request")
 
+// Personal requests the server cannot answer, kept apart so gRPC can tell a
+// permanent misconfiguration from a startup wait.
+var (
+	ErrShinyRatesNotConfigured = errors.New("shiny rates are not configured")
+	ErrShinyRatesNotLoaded     = errors.New("shiny rates have not loaded yet")
+)
+
 // defaultShinyRatesMaxBytes applies when [shiny_rates] max_bytes is unset.
 const defaultShinyRatesMaxBytes = 16 << 20
 
@@ -286,6 +293,44 @@ type shinyScan struct {
 // ScanPokemonWithShiny keeps the ordinary scan path intact; requests without
 // shiny_for, background_for or annotate_for take it unchanged.
 func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemonScanResultV3, error) {
+	if err := preparePersonalScan(ctx, &req); err != nil {
+		return nil, err
+	}
+	result := GetPokemonInArea3Clean(req)
+	if req.shiny == nil {
+		return result, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	for i := range result.Pokemon {
+		if err := req.annotate(&result.Pokemon[i]); err != nil {
+			return nil, err
+		}
+	}
+	return result, nil
+}
+
+// hasPersonal reports whether a request uses any personal field.
+func (req *ApiPokemonScan3) hasPersonal() bool {
+	if len(req.AnnotateFor) > 0 {
+		return true
+	}
+	for i := range req.DnfFilters {
+		if len(req.DnfFilters[i].ShinyFor) > 0 || len(req.DnfFilters[i].BackgroundFor) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// preparePersonalScan validates and de-duplicates the player IDs and attaches
+// the rate snapshot to req.shiny. Both the HTTP and gRPC scans call it;
+// requests without personal fields return at once with req.shiny nil.
+func preparePersonalScan(ctx context.Context, req *ApiPokemonScan3) error {
+	if !req.hasPersonal() {
+		return nil
+	}
 	players := make(map[string]*shinyPlayer)
 	// add registers players and returns the list without duplicates, so the
 	// matching and annotation loops are bounded by distinct IDs too.
@@ -318,39 +363,37 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	for i := range req.DnfFilters {
 		f := &req.DnfFilters[i]
 		if f.ShinyFor, err = add(f.ShinyFor); err != nil {
-			return nil, err
+			return err
 		}
 		if f.BackgroundFor, err = add(f.BackgroundFor); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if req.AnnotateFor, err = add(req.AnnotateFor); err != nil {
-		return nil, err
-	}
-	if len(players) == 0 {
-		return GetPokemonInArea3Clean(req), nil
+		return err
 	}
 	if config.Config.ShinyRates.URL == "" {
-		return nil, fmt.Errorf("shiny rates are not configured")
+		return ErrShinyRatesNotConfigured
 	}
 	rates := shinyRatesSnapshot.Load()
 	if rates == nil {
-		return nil, fmt.Errorf("shiny rates have not loaded yet")
+		return ErrShinyRatesNotLoaded
 	}
 	req.shiny = &shinyScan{ctx: ctx, rates: rates, players: players}
-	result := GetPokemonInArea3Clean(req)
-	if err := ctx.Err(); err != nil {
-		return nil, err
+	return nil
+}
+
+// annotate marks one built result for the request's annotate_for players,
+// failing once the request is cancelled. A no-op without annotate_for.
+func (req *ApiPokemonScan3) annotate(r *ApiPokemonResult) error {
+	if req.shiny == nil || len(req.AnnotateFor) == 0 {
+		return nil
 	}
-	if len(req.AnnotateFor) > 0 {
-		for i := range result.Pokemon {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			req.shiny.annotate(&result.Pokemon[i], req.AnnotateFor)
-		}
+	if err := req.shiny.ctx.Err(); err != nil {
+		return err
 	}
-	return result, nil
+	req.shiny.annotate(r, req.AnnotateFor)
+	return nil
 }
 
 // rate returns a variant's cutoffs. Unknown costumes/forms take the fallback
