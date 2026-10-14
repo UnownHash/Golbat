@@ -56,7 +56,7 @@ type PokemonLookup struct {
 	Size               int8
 	// RollEligibleCostume belongs to personal shiny/background rolls
 	// (api_pokemon_shiny.go): 0 when they can never apply, otherwise
-	// costume+1. It fills what was padding. Changing the eligibility rules
+	// costume+1 (1 for a known Ditto). It fills what was padding. Changing the eligibility rules
 	// means changing personalLookup, which runs on this save path.
 	RollEligibleCostume uint8
 }

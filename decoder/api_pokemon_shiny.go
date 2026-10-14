@@ -26,6 +26,14 @@ const shinyScale = 1 << 24
 // defaultShinyCutoff applies when the feed does not publish a fallback.
 const defaultShinyCutoff = shinyScale / 512
 
+// dittoPokemonId is Ditto's species. A known Ditto has its own shiny roll at
+// a fixed rate, so the feed's rates (and its unsupportedPokemon entry for
+// Ditto) never apply to it.
+const dittoPokemonId = 132
+
+// dittoShinyCutoff is the 1/64 Ditto shiny rate on a 24-bit roll.
+const dittoShinyCutoff = shinyScale / 64
+
 // Cost is candidates x players x ID length, so both are bounded. 256 bytes
 // covers every known player ID format with room to spare.
 const maxPersonalPlayers = 50
@@ -241,15 +249,33 @@ func (r *shinyRates) shinyMaximum(pokemon int16) uint32 {
 
 // personalLookup packs roll eligibility and costume into PokemonLookup's
 // spare byte: 0 means never personally shiny or background-eligible
-// (Ditto, disguised, or seen only as nearby), otherwise costume+1.
+// (disguised, Ditto not known as one, or seen only as nearby), otherwise
+// costume+1. A known Ditto is 1: its rule ignores costume, and an eligible
+// lookup with PokemonId 132 is always a known Ditto (see isKnownDitto).
 func personalLookup(pokemon *Pokemon) uint8 {
+	if pokemon.SeenType != SeenTypeFrom(SeenTypeCodeWild) && pokemon.SeenType != SeenTypeFrom(SeenTypeCodeEncounter) {
+		return 0
+	}
+	if isKnownDitto(pokemon) {
+		return 1
+	}
 	costume := pokemon.Costume.ValueOrZero()
-	if pokemon.IsDitto || pokemon.PokemonId == 132 || costume == math.MaxUint8 ||
-		pokemon.DisplayPokemonId.ValueOrZero() != 0 && int16(pokemon.DisplayPokemonId.ValueOrZero()) != pokemon.PokemonId ||
-		pokemon.SeenType != SeenTypeFrom(SeenTypeCodeWild) && pokemon.SeenType != SeenTypeFrom(SeenTypeCodeEncounter) {
+	if pokemon.IsDitto || pokemon.PokemonId == dittoPokemonId || costume == math.MaxUint8 ||
+		pokemon.DisplayPokemonId.ValueOrZero() != 0 && int16(pokemon.DisplayPokemonId.ValueOrZero()) != pokemon.PokemonId {
 		return 0
 	}
 	return uint8(costume) + 1
+}
+
+// isKnownDitto reports whether Golbat has identified the record as a Ditto:
+// setDittoAttributes sets IsDitto and species 132 together, whether from
+// detectDitto's scan evidence or the encounter-ID roll (markDittoFromRoll),
+// and resetDittoAttributes clears both. Until then a disguised Ditto looks
+// like its disguise and takes that species' rule; nothing can tell it apart.
+// Species 132 without IsDitto (an undisguised Ditto) is not covered by the
+// Ditto rule's evidence and stays ineligible.
+func isKnownDitto(pokemon *Pokemon) bool {
+	return pokemon.IsDitto && pokemon.PokemonId == dittoPokemonId
 }
 
 // shinyPlayer is used by one scan goroutine. It remembers only the last
@@ -275,6 +301,17 @@ func (p *shinyPlayer) rolls(encounter uint64) (first, second uint32) {
 	first, second = rng.Next(24), rng.Next(24)
 	p.last, p.lastValid, p.lastFirst, p.lastSecond = encounter, true, first, second
 	return first, second
+}
+
+// dittoRoll is the third draw, the Ditto shiny roll. The game takes all three
+// draws for a Ditto whatever the disguise's rates: the first two are the
+// disguise's shiny and background rolls, which never apply (a disguise is
+// never shiny). Dittos are rare, so this is not cached.
+func (p *shinyPlayer) dittoRoll(encounter uint64) uint32 {
+	rng := p.generator(encounter)
+	rng.Next(24)
+	rng.Next(24)
+	return rng.Next(24)
 }
 
 // generator is the player's fresh generator for an encounter.
@@ -459,6 +496,9 @@ func (s *shinyScan) matchClause(id uint64, lookup *PokemonLookup, location [2]fl
 // lookup and the location from the spatial index. Each check first compares
 // the lowest roll with the species maximum, so most candidates stop there.
 func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64, filter *ApiPokemonDnfFilter3) bool {
+	if lookup.PokemonId == dittoPokemonId {
+		return s.matchDitto(id, filter)
+	}
 	lon, lat := location[0], location[1]
 	rate := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.RollEligibleCostume)-1)
 	if len(filter.ShinyFor) > 0 {
@@ -494,6 +534,21 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 	return true
 }
 
+// matchDitto applies the Ditto rule to a known Ditto, bypassing the feed and
+// its per-species maxima. No Ditto background has been observed, so
+// background_for never matches one.
+func (s *shinyScan) matchDitto(id uint64, filter *ApiPokemonDnfFilter3) bool {
+	if len(filter.BackgroundFor) > 0 {
+		return false
+	}
+	for _, player := range filter.ShinyFor {
+		if s.players[player].dittoRoll(id) < dittoShinyCutoff {
+			return true
+		}
+	}
+	return false
+}
+
 // backgroundRoll is the draw after the shiny roll, which the game takes only
 // when the variant can be shiny: the second draw if so, otherwise the first.
 func backgroundRoll(capable bool, player *shinyPlayer, encounter uint64) uint32 {
@@ -507,7 +562,8 @@ func backgroundRoll(capable bool, player *shinyPlayer, encounter uint64) uint32 
 func first(a, _ uint32) uint32 { return a }
 
 // annotate fills ShinyFor and BackgroundFor from the already-built result, so
-// it needs no record lock. Ineligible results get neither.
+// it needs no record lock. Ineligible results get neither, and a known Ditto
+// only ShinyFor.
 func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	id, err := strconv.ParseUint(r.Id, 10, 64)
 	if err != nil {
@@ -527,6 +583,14 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	}
 	personal := personalLookup(&pokemon)
 	if personal == 0 {
+		return
+	}
+	if isKnownDitto(&pokemon) {
+		for _, player := range players {
+			if s.players[player].dittoRoll(id) < dittoShinyCutoff {
+				r.ShinyFor = append(r.ShinyFor, player)
+			}
+		}
 		return
 	}
 	form := 0

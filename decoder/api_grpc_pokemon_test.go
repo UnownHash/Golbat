@@ -424,3 +424,70 @@ func TestGrpcPersonalShinyScan(t *testing.T) {
 		t.Errorf("nearby annotations = %+v", got)
 	}
 }
+
+// TestGrpcPersonalDittoScan checks a known Ditto over gRPC against HTTP.
+// Encounter 6 is a Ditto shiny for Player-ID:ABC/123 only (see
+// TestPersonalDittoShiny), while its Pidgey disguise would be shiny and have
+// a background for everyone and the feed lists 132 as never shiny.
+func TestGrpcPersonalDittoScan(t *testing.T) {
+	withScanLimits(t)
+	const id = uint64(6)
+	const lat, lon = 12.75, 34.25
+	oldConfig := config.Config.ShinyRates
+	config.Config.ShinyRates = config.ShinyRates{URL: "http://rates.invalid"}
+	always := shinyPrediction{Probability: 1, Supported: true}
+	shinyRatesSnapshot.Store(newShinyRates([]shinyRate{{Pokemon: 16, Prediction: always, Background: &always}}, []int{dittoPokemonId}, nil))
+	t.Cleanup(func() {
+		config.Config.ShinyRates = oldConfig
+		shinyRatesSnapshot.Store(nil)
+	})
+	p := &Pokemon{PokemonData: PokemonData{Id: Uint64Str(id), PokemonId: dittoPokemonId, IsDitto: true, DisplayPokemonId: null.ValueFrom(uint16(16)),
+		Lat: lat, Lon: lon, SeenType: SeenTypeFrom(SeenTypeCodeWild), ExpireTimestamp: null.ValueFrom(uint32(time.Now().Unix() + 600))}}
+	pokemonRtreePreloadInsert(p)
+	pokemonCache.Set(id, p, time.Minute)
+	pokemonTreeSnapshot.Store(nil)
+	t.Cleanup(func() {
+		pokemonCache.Delete(id)
+		pokemonLookupCache.Delete(id)
+		pokemonTreeMutex.Lock()
+		pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, id)
+		pokemonTreeMutex.Unlock()
+		pokemonTreeSnapshot.Store(nil)
+	})
+	const hex, abc, trainer = "0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "
+	box := func(filters []*pb.PokemonDnfFilter, annotate ...string) *pb.PokemonScanRequest {
+		return &pb.PokemonScanRequest{
+			Min:         &pb.LatLon{Lat: lat - 0.01, Lon: lon - 0.01},
+			Max:         &pb.LatLon{Lat: lat + 0.01, Lon: lon + 0.01},
+			Filters:     filters,
+			AnnotateFor: annotate,
+		}
+	}
+	for _, tc := range []struct {
+		name              string
+		req               *pb.PokemonScanRequest
+		want              int
+		shiny, background []string
+	}{
+		{"shiny_for", box([]*pb.PokemonDnfFilter{{ShinyFor: []string{abc}}}), 1, nil, nil},
+		{"not shiny_for", box([]*pb.PokemonDnfFilter{{ShinyFor: []string{hex, trainer}}}), 0, nil, nil},
+		{"background_for", box([]*pb.PokemonDnfFilter{{BackgroundFor: []string{hex, abc, trainer}}}), 0, nil, nil},
+		{"annotate_for", box([]*pb.PokemonDnfFilter{{}}, hex, abc, trainer), 1, []string{abc}, nil},
+	} {
+		resp := mustGrpcScanPokemon(t, tc.req)
+		viaHTTP, err := ScanPokemonWithShiny(context.Background(), pokemonScanRequestFromProto(tc.req))
+		if err != nil {
+			t.Fatalf("%s: HTTP: %v", tc.name, err)
+		}
+		if len(resp.Pokemon) != tc.want || len(viaHTTP.Pokemon) != tc.want {
+			t.Fatalf("%s: gRPC %d results, HTTP %d, want %d", tc.name, len(resp.Pokemon), len(viaHTTP.Pokemon), tc.want)
+		}
+		for i, r := range viaHTTP.Pokemon {
+			g := resp.Pokemon[i]
+			if !slices.Equal(g.ShinyFor, tc.shiny) || !slices.Equal(r.ShinyFor, tc.shiny) ||
+				!slices.Equal(g.BackgroundFor, tc.background) || !slices.Equal(r.BackgroundFor, tc.background) {
+				t.Errorf("%s: gRPC %v/%v, HTTP %v/%v", tc.name, g.ShinyFor, g.BackgroundFor, r.ShinyFor, r.BackgroundFor)
+			}
+		}
+	}
+}
