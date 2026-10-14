@@ -10,7 +10,7 @@ type ApiPokemonScan3 struct {
 	Max          ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
 	Limit        int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
 	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
-	AnnotateFor  []string               `json:"annotate_for,omitempty" required:"false" doc:"Player IDs to check every returned pokemon against; each result lists the ones it is shiny for in shiny_for and has a background for in background_for. Does not filter. HTTP only."`
+	AnnotateFor  []string               `json:"annotate_for,omitempty" required:"false" doc:"Player IDs to check every returned pokemon against; each result lists the ones it is shiny for in shiny_for and has a background for in background_for. Does not filter."`
 	UpdatedAfter int64                  `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
@@ -27,8 +27,8 @@ func (r ApiPokemonScan3) GetLimit() int {
 }
 
 type ApiPokemonDnfFilter3 struct {
-	ShinyFor      []string             `json:"shiny_for,omitempty" required:"false" doc:"Match if shiny for any of these player IDs; empty disables personal shiny filtering. HTTP only."`
-	BackgroundFor []string             `json:"background_for,omitempty" required:"false" doc:"Match if it has a background for any of these player IDs; empty disables personal background filtering. HTTP only."`
+	ShinyFor      []string             `json:"shiny_for,omitempty" required:"false" doc:"Match if shiny for any of these player IDs; empty disables personal shiny filtering."`
+	BackgroundFor []string             `json:"background_for,omitempty" required:"false" doc:"Match if it has a background for any of these player IDs; empty disables personal background filtering."`
 	Pokemon       []ApiPokemonDnfId    `json:"pokemon" required:"false" doc:"Pokemon/form ids this clause applies to; empty matches any pokemon. All other conditions in the clause are AND'd together."`
 	Iv            *ApiPokemonDnfMinMax `json:"iv" required:"false" doc:"Inclusive IV percentage range; null means no IV constraint."`
 	AtkIv         *ApiPokemonDnfMinMax `json:"atk_iv" required:"false" doc:"Inclusive attack IV range; null means no attack IV constraint."`
