@@ -1,7 +1,12 @@
 package decoder
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"math"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -194,6 +199,16 @@ func withScanLimits(t *testing.T) {
 	})
 }
 
+// mustGrpcScanPokemon runs a scan that has no reason to fail.
+func mustGrpcScanPokemon(t *testing.T, req *pb.PokemonScanRequest) *pb.PokemonScanResponse {
+	t.Helper()
+	resp, err := GrpcScanPokemon(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GrpcScanPokemon: %v", err)
+	}
+	return resp
+}
+
 func TestGrpcScanPokemonReturnsLivePokemon(t *testing.T) {
 	withScanLimits(t)
 	const id = uint64(940001)
@@ -216,7 +231,7 @@ func TestGrpcScanPokemonReturnsLivePokemon(t *testing.T) {
 
 	// One clause with no conditions is the catch-all; an empty filters list
 	// matches nothing (JSON parity: the DNF map then has no entry to hit).
-	resp := GrpcScanPokemon(&pb.PokemonScanRequest{
+	resp := mustGrpcScanPokemon(t, &pb.PokemonScanRequest{
 		Min:     &pb.LatLon{Lat: lat - 0.01, Lon: lon - 0.01},
 		Max:     &pb.LatLon{Lat: lat + 0.01, Lon: lon + 0.01},
 		Filters: []*pb.PokemonDnfFilter{{}},
@@ -231,7 +246,7 @@ func TestGrpcScanPokemonReturnsLivePokemon(t *testing.T) {
 	if resp.Examined < 1 || resp.Total < 1 || resp.LimitReached {
 		t.Errorf("counts = examined %d skipped %d total %d limit_reached %v", resp.Examined, resp.Skipped, resp.Total, resp.LimitReached)
 	}
-	noFilters := GrpcScanPokemon(&pb.PokemonScanRequest{
+	noFilters := mustGrpcScanPokemon(t, &pb.PokemonScanRequest{
 		Min: &pb.LatLon{Lat: lat - 0.01, Lon: lon - 0.01},
 		Max: &pb.LatLon{Lat: lat + 0.01, Lon: lon + 0.01},
 	})
@@ -248,11 +263,164 @@ func TestGrpcScanPokemonReturnsLivePokemon(t *testing.T) {
 
 func TestGrpcScanPokemonEmptyBoxHasNoResults(t *testing.T) {
 	withScanLimits(t)
-	resp := GrpcScanPokemon(&pb.PokemonScanRequest{
+	resp := mustGrpcScanPokemon(t, &pb.PokemonScanRequest{
 		Min: &pb.LatLon{Lat: -89.9, Lon: -179.9},
 		Max: &pb.LatLon{Lat: -89.8, Lon: -179.8},
 	})
 	if len(resp.Pokemon) != 0 || resp.LimitReached {
 		t.Errorf("empty box: %d results, limit_reached %v", len(resp.Pokemon), resp.LimitReached)
+	}
+}
+
+// TestGrpcPersonalShinyScan mirrors TestPersonalShinyScan through the gRPC
+// adapter, and checks each answer against the HTTP entry point. Rates and
+// rolls as there: encounter 1 in Phoenix, shiny 0.05 and background 0.15.
+func TestGrpcPersonalShinyScan(t *testing.T) {
+	withScanLimits(t)
+	const lat, lon = 33.45, -112.07
+	oldConfig := config.Config.ShinyRates
+	config.Config.ShinyRates = config.ShinyRates{URL: "http://rates.invalid"}
+	shinyRatesSnapshot.Store(nil)
+	t.Cleanup(func() {
+		config.Config.ShinyRates = oldConfig
+		shinyRatesSnapshot.Store(nil)
+	})
+	p := &Pokemon{PokemonData: PokemonData{Id: 1, PokemonId: 25, Lat: lat, Lon: lon, SeenType: SeenTypeFrom(SeenTypeCodeWild), ExpireTimestamp: null.ValueFrom(uint32(time.Now().Unix() + 600))}}
+	pokemonRtreePreloadInsert(p)
+	pokemonCache.Set(1, p, time.Minute)
+	pokemonTreeSnapshot.Store(nil)
+	t.Cleanup(func() {
+		pokemonCache.Delete(1)
+		pokemonLookupCache.Delete(1)
+		pokemonTreeMutex.Lock()
+		pokemonTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, 1)
+		pokemonTreeMutex.Unlock()
+		pokemonTreeSnapshot.Store(nil)
+	})
+	const hex, abc, trainer = "0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "
+	box := func(filters []*pb.PokemonDnfFilter, annotate ...string) *pb.PokemonScanRequest {
+		return &pb.PokemonScanRequest{
+			Min:         &pb.LatLon{Lat: lat - 0.01, Lon: lon - 0.01},
+			Max:         &pb.LatLon{Lat: lat + 0.01, Lon: lon + 0.01},
+			Filters:     filters,
+			AnnotateFor: annotate,
+		}
+	}
+	plain := box([]*pb.PokemonDnfFilter{{}})
+	personal := box([]*pb.PokemonDnfFilter{{ShinyFor: []string{trainer}}})
+
+	// Without rates, personal scans fail rather than guess; others run.
+	for _, tc := range []struct {
+		url  string
+		want error
+	}{{"", ErrShinyRatesNotConfigured}, {"http://rates.invalid", ErrShinyRatesNotLoaded}} {
+		config.Config.ShinyRates.URL = tc.url
+		if _, err := GrpcScanPokemon(context.Background(), personal); !errors.Is(err, tc.want) {
+			t.Errorf("url %q: err = %v, want %v", tc.url, err, tc.want)
+		}
+		if _, err := GrpcScanPokemon(context.Background(), box(nil, hex)); !errors.Is(err, tc.want) {
+			t.Errorf("url %q annotate_for: err = %v, want %v", tc.url, err, tc.want)
+		}
+		if resp := mustGrpcScanPokemon(t, plain); len(resp.Pokemon) != 1 || resp.Pokemon[0].ShinyFor != nil {
+			t.Errorf("url %q: plain scan = %+v", tc.url, resp.Pokemon)
+		}
+	}
+	config.Config.ShinyRates.URL = "http://rates.invalid"
+	background := &shinyPrediction{Probability: 0.2, Supported: true}
+	shinyRatesSnapshot.Store(newShinyRates([]shinyRate{{
+		Pokemon: 25, Prediction: shinyPrediction{Probability: 0.1, Supported: true}, Background: background,
+		Overrides:           map[string]shinyPrediction{"America/Phoenix": {Probability: 0.05, Supported: true}},
+		BackgroundOverrides: map[string]shinyPrediction{"America/Phoenix": {Probability: 0.15, Supported: true}},
+	}}, nil, nil))
+
+	// scan runs req over gRPC and HTTP and requires the same pokemon with
+	// the same annotations from both.
+	scan := func(name string, req *pb.PokemonScanRequest) []*pb.Pokemon {
+		t.Helper()
+		resp, err := GrpcScanPokemon(context.Background(), req)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		viaHTTP, err := ScanPokemonWithShiny(context.Background(), pokemonScanRequestFromProto(req))
+		if err != nil {
+			t.Fatalf("%s: HTTP: %v", name, err)
+		}
+		if len(viaHTTP.Pokemon) != len(resp.Pokemon) {
+			t.Fatalf("%s: gRPC %d results, HTTP %d", name, len(resp.Pokemon), len(viaHTTP.Pokemon))
+		}
+		for i, r := range viaHTTP.Pokemon {
+			if g := resp.Pokemon[i]; !slices.Equal(g.ShinyFor, r.ShinyFor) || !slices.Equal(g.BackgroundFor, r.BackgroundFor) {
+				t.Errorf("%s: gRPC %v/%v, HTTP %v/%v", name, g.ShinyFor, g.BackgroundFor, r.ShinyFor, r.BackgroundFor)
+			}
+		}
+		return resp.Pokemon
+	}
+	form0 := ptr(int32(0))
+	for _, tc := range []struct {
+		name    string
+		filters []*pb.PokemonDnfFilter
+		want    int
+	}{
+		{"not shiny", []*pb.PokemonDnfFilter{{ShinyFor: []string{abc}}}, 0},
+		{"shiny for any listed player", []*pb.PokemonDnfFilter{{ShinyFor: []string{abc, trainer}}}, 1},
+		{"ANDed with ordinary conditions", []*pb.PokemonDnfFilter{{ShinyFor: []string{trainer}, Cp: &pb.IntRange{Min: ptr(int32(100)), Max: ptr(int32(200))}}}, 0},
+		{"background", []*pb.PokemonDnfFilter{{BackgroundFor: []string{hex}}}, 1},
+		{"no background", []*pb.PokemonDnfFilter{{BackgroundFor: []string{abc}}}, 0},
+		{"shiny_for AND background_for", []*pb.PokemonDnfFilter{{ShinyFor: []string{abc}, BackgroundFor: []string{hex}}}, 0},
+		{"shiny_for AND background_for, both hit", []*pb.PokemonDnfFilter{{ShinyFor: []string{trainer}, BackgroundFor: []string{hex}}}, 1},
+		{"clauses OR", []*pb.PokemonDnfFilter{{ShinyFor: []string{abc}}, {}}, 1},
+		{"species group shadows everything else",
+			[]*pb.PokemonDnfFilter{{ShinyFor: []string{trainer}}, {Pokemon: []*pb.DnfId{{PokemonId: 25}}, Iv: &pb.IntRange{Min: ptr(int32(100)), Max: ptr(int32(100))}}}, 0},
+		{"exact form shadows the species",
+			[]*pb.PokemonDnfFilter{{Pokemon: []*pb.DnfId{{PokemonId: 25, Form: form0}}, ShinyFor: []string{abc}}, {Pokemon: []*pb.DnfId{{PokemonId: 25}}, ShinyFor: []string{trainer}}}, 0},
+	} {
+		if got := scan(tc.name, box(tc.filters)); len(got) != tc.want {
+			t.Errorf("%s: got %d results want %d", tc.name, len(got), tc.want)
+		}
+	}
+
+	// Annotation marks results without filtering them; duplicates count once.
+	got := scan("annotate_for", box([]*pb.PokemonDnfFilter{{}}, hex, abc, trainer, trainer))
+	if len(got) != 1 || !slices.Equal(got[0].ShinyFor, []string{trainer}) || !slices.Equal(got[0].BackgroundFor, []string{hex}) {
+		t.Fatalf("annotations = %+v", got)
+	}
+	if got := mustGrpcScanPokemon(t, plain); got.Pokemon[0].ShinyFor != nil || got.Pokemon[0].BackgroundFor != nil {
+		t.Errorf("annotations without annotate_for: %+v", got.Pokemon[0])
+	}
+
+	// Malformed player IDs are client errors, wherever they appear.
+	many := make([]string, maxPersonalPlayers+1)
+	for i := range many {
+		many[i] = fmt.Sprint("player-", i)
+	}
+	for name, req := range map[string]*pb.PokemonScanRequest{
+		"empty ID":           box([]*pb.PokemonDnfFilter{{ShinyFor: []string{""}}}),
+		"oversized ID":       box([]*pb.PokemonDnfFilter{{BackgroundFor: []string{strings.Repeat("x", maxPersonalPlayerIDBytes+1)}}}),
+		"oversized annotate": box([]*pb.PokemonDnfFilter{{}}, strings.Repeat("x", maxPersonalPlayerIDBytes+1)),
+		"too many players":   box([]*pb.PokemonDnfFilter{{ShinyFor: many[:25]}}, many[25:]...),
+	} {
+		if _, err := GrpcScanPokemon(context.Background(), req); !errors.Is(err, ErrPersonalRequest) {
+			t.Errorf("%s: err = %v, want ErrPersonalRequest", name, err)
+		}
+	}
+	if _, err := GrpcScanPokemon(context.Background(), box([]*pb.PokemonDnfFilter{{ShinyFor: []string{strings.Repeat("x", maxPersonalPlayerIDBytes)}}})); err != nil {
+		t.Errorf("ID at the byte cap: %v", err)
+	}
+
+	// A cancelled request fails instead of returning a partial answer.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := GrpcScanPokemon(ctx, personal); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled: err = %v", err)
+	}
+
+	// Nearby sightings are never eligible: not matched, not annotated.
+	p.SeenType = SeenTypeFrom(SeenTypeCodeNearbyStop)
+	updatePokemonLookup(p, false, nil)
+	if got := scan("nearby shiny_for", personal); len(got) != 0 {
+		t.Errorf("nearby matched shiny_for: %+v", got)
+	}
+	if got := scan("nearby annotate_for", box([]*pb.PokemonDnfFilter{{}}, trainer, hex)); len(got) != 1 || got[0].ShinyFor != nil || got[0].BackgroundFor != nil {
+		t.Errorf("nearby annotations = %+v", got)
 	}
 }

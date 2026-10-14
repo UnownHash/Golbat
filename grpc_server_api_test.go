@@ -202,3 +202,34 @@ func TestGrpcApiFortScansRequireFortInMemory(t *testing.T) {
 		t.Errorf("pokemon scan must work without fort_in_memory: %v", err)
 	}
 }
+
+// Personal scan errors reach clients as the status codes api.md documents.
+// No rates ever load in this binary, so a configured URL is "not loaded yet".
+func TestGrpcScanPokemonPersonalStatus(t *testing.T) {
+	withTestConfig(t, "", true)
+	prevRates := config.Config.ShinyRates
+	t.Cleanup(func() { config.Config.ShinyRates = prevRates })
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
+	ctx := context.Background()
+	personal := &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max, Filters: []*pb.PokemonDnfFilter{{ShinyFor: []string{"player-id"}}}}
+
+	for _, tc := range []struct {
+		name string
+		url  string
+		req  *pb.PokemonScanRequest
+		code codes.Code
+	}{
+		{"not configured", "", personal, codes.FailedPrecondition},
+		{"rates not loaded", "http://rates.invalid", personal, codes.Unavailable},
+		{"annotate_for, rates not loaded", "http://rates.invalid", &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max, AnnotateFor: []string{"player-id"}}, codes.Unavailable},
+		{"oversized player ID", "http://rates.invalid", &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max, Filters: []*pb.PokemonDnfFilter{{BackgroundFor: []string{string(make([]byte, 257))}}}}, codes.InvalidArgument},
+		{"non-personal scan is unaffected", "http://rates.invalid", &pb.PokemonScanRequest{Min: testBox.min, Max: testBox.max, Filters: []*pb.PokemonDnfFilter{{}}}, codes.OK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config.Config.ShinyRates.URL = tc.url
+			if _, err := client.ScanPokemon(ctx, tc.req); status.Code(err) != tc.code {
+				t.Errorf("code = %v (%v), want %v", status.Code(err), err, tc.code)
+			}
+		})
+	}
+}
