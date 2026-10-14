@@ -83,8 +83,8 @@ Limitations:
   that spawned before a rate change is judged at the new rate. Which time the
   game itself uses has not been verified.
 
-On the existing HTTP `POST /api/pokemon/v3/scan`, add `shiny_for` to a filter
-clause:
+On the existing HTTP `POST /api/pokemon/v3/scan`, or the gRPC
+`GolbatApi.ScanPokemon`, add `shiny_for` to a filter clause:
 
 ```json
 {"min":{"latitude":33.15,"longitude":-112.8},"max":{"latitude":34.0,"longitude":-111.4},"filters":[{"shiny_for":["player-id"]}]}
@@ -92,7 +92,8 @@ clause:
 
 The clause matches Pokémon shiny for **any** supplied player ID, AND its other
 conditions. Clauses in the group that applies are ORed. IDs are opaque, nonempty strings; a request may use at most 50 distinct IDs
-across all fields, each at most 256 bytes (otherwise 400). Result limits
+across all fields, each at most 256 bytes (otherwise 400, or
+`INVALID_ARGUMENT` over gRPC). Result limits
 apply after shiny filtering. The API secret is still required as configured;
 frontends must authorize account ownership and map access themselves.
 
@@ -131,9 +132,23 @@ fields are omitted when empty:
 {"min":{...},"max":{...},"filters":[{}],"annotate_for":["player-id"]}
 ```
 
+gRPC uses the same field names with the same semantics:
+`PokemonDnfFilter.shiny_for` and `background_for`,
+`PokemonScanRequest.annotate_for`, and `Pokemon.shiny_for` and
+`background_for` on results (empty when not annotated). Where HTTP answers
+503, gRPC answers `FAILED_PRECONDITION` if `[shiny_rates]` is not configured
+and `UNAVAILABLE` while the rates have not loaded yet (retry).
+
+```bash
+grpcurl -plaintext -H 'x-golbat-secret: your_api_secret' \
+  -d '{"min":{"lat":33.15,"lon":-112.8},"max":{"lat":34.0,"lon":-111.4},
+       "filters":[{"shiny_for":["player-id"]}],"annotate_for":["player-id"]}' \
+  localhost:50001 golbat_api.GolbatApi/ScanPokemon
+```
+
 `/api/status` advertises `filters.shiny_for`, `filters.background_for` and
-`filters.annotate_for` when configured. This extension is
-HTTP-only; ordinary HTTP/gRPC scans are unchanged. No database changes are
+`filters.annotate_for` when configured, for both APIs. Scans without these
+fields are unchanged. No database changes are
 required. Rolls are recomputed rather than cached (one SHA-1 block each), and
 candidates that can never qualify are skipped before hashing. Rates are
 converted to integer cutoffs once per refresh, and overrides equal to their
