@@ -34,7 +34,11 @@ The rate source must return JSON in this shape:
 - `supported: false` means the variant is never shiny-eligible.
 - `unsupportedPokemon` is optional: species with no released shiny. Their variants are never shiny-eligible even without an entry in `rates`.
 - `overrides` is optional and keyed by IANA timezone of the spawn's location.
-  Local-time events such as Community Day change rates per timezone.
+  Local-time events such as Community Day change rates per timezone. An
+  override changes only the probability used at that location, never whether
+  the variant can be shiny: that comes from the base `prediction` alone, so an
+  override cannot make a never-shiny variant shiny, and an override with
+  `supported: false` means no chance there but still a shiny draw.
 - `background` and `background_overrides` are optional and work the same way
   for backgrounds. A variant without them never has a background.
 
@@ -42,8 +46,8 @@ Rolls come from a per-player, per-encounter `java.util.Random` (seeded from
 SHA-1 of the little-endian encounter ID followed by the player ID). The game
 takes a draw only for rolls the variant actually has, in this order:
 
-1. the shiny roll, if the variant can be shiny at that location
-   (`supported`, or an unknown variant);
+1. the shiny roll, if the variant can be shiny (base `prediction.supported`,
+   or an unknown variant), regardless of location;
 2. the background roll, if a background is on offer (nonzero rate);
 3. two more draws if a background was rolled (then the height draws).
 
