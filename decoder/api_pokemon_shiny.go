@@ -293,18 +293,29 @@ func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float6
 	return tz.SearchTimezone(lat, lon)
 }
 
-// shinyCutoff resolves the shiny threshold at a location. capable reports
-// whether the variant can be shiny there at all; only then does the game take
-// a draw for the shiny roll, which shifts every later draw.
-func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) (cutoff uint32, capable bool) {
+// shinyCapable reports whether the variant has a shiny roll at all; only then
+// does the game take a draw for it, which shifts every later draw. A shiny is
+// released per species and form, not per location, so this reads the base
+// rate only and never needs a timezone.
+func shinyCapable(rate shinyRate, ok bool) bool {
+	return !ok || rate.Prediction.Supported
+}
+
+// shinyCutoff resolves the shiny threshold at a location. Overrides change
+// only the threshold: a variant that is not capable is never shiny, whatever
+// its overrides say.
+func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
 	if !ok {
-		return defaultShinyCutoff, true
+		return defaultShinyCutoff
+	}
+	if !shinyCapable(rate, ok) {
+		return 0
 	}
 	prediction := rate.Prediction
 	if override, found := rate.Overrides[s.zoneAt(rate.Overrides, lat, lon)]; found {
 		prediction = override
 	}
-	return prediction.cutoff(defaultShinyCutoff), prediction.Supported
+	return prediction.cutoff(defaultShinyCutoff)
 }
 
 func (s *shinyScan) backgroundCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
@@ -349,7 +360,7 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		if lowest >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) {
 			return false
 		}
-		if cutoff, _ := s.shinyCutoff(rate, ok, lat, lon); lowest >= cutoff {
+		if lowest >= s.shinyCutoff(rate, ok, lat, lon) {
 			return false
 		}
 	}
@@ -358,7 +369,7 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		if s.rates.backgroundMaximum[lookup.PokemonId] == 0 {
 			return false
 		}
-		_, capable := s.shinyCutoff(rate, ok, lat, lon)
+		capable := shinyCapable(rate, ok)
 		lowest := uint32(shinyScale)
 		for _, player := range filter.BackgroundFor {
 			lowest = min(lowest, backgroundRoll(capable, s.players[player], id))
@@ -372,9 +383,9 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 
 // backgroundRoll is the draw after the shiny roll, which the game takes only
 // when the variant can be shiny: the second draw if so, otherwise the first.
-func backgroundRoll(shinyCapable bool, player *shinyPlayer, encounter uint64) uint32 {
+func backgroundRoll(capable bool, player *shinyPlayer, encounter uint64) uint32 {
 	first, second := player.rolls(encounter)
-	if shinyCapable {
+	if capable {
 		return second
 	}
 	return first
@@ -410,11 +421,12 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 		form = int(*r.Form)
 	}
 	rate, ok := s.rate(int(r.PokemonId), form, int(personal)-1)
-	shinyCutoff, shinyCapable := s.shinyCutoff(rate, ok, r.Lat, r.Lon)
+	capable := shinyCapable(rate, ok)
+	shinyCutoff := s.shinyCutoff(rate, ok, r.Lat, r.Lon)
 	backgroundCutoff := s.backgroundCutoff(rate, ok, r.Lat, r.Lon)
 	for _, player := range players {
 		rng := s.players[player].generator(id)
-		if shinyCapable && rng.Next(24) < shinyCutoff {
+		if capable && rng.Next(24) < shinyCutoff {
 			r.ShinyFor = append(r.ShinyFor, player)
 		}
 		// A background is on offer exactly when its cutoff is nonzero.

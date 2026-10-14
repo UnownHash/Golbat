@@ -294,10 +294,65 @@ func TestShinyRatesUnsupportedSpecies(t *testing.T) {
 	s := &shinyScan{rates: shinyRatesSnapshot.Load()}
 	rate931, ok931 := s.rate(931, 2601, 0)
 	rate25, ok25 := s.rate(25, 0, 0)
-	if cutoff, capable := s.shinyCutoff(rate931, ok931, 0, 0); capable || cutoff != 0 {
+	if cutoff, capable := s.shinyCutoff(rate931, ok931, 0, 0), shinyCapable(rate931, ok931); capable || cutoff != 0 {
 		t.Errorf("unsupported species: cutoff %d capable %v", cutoff, capable)
 	}
-	if cutoff, capable := s.shinyCutoff(rate25, ok25, 0, 0); !capable || cutoff != defaultShinyCutoff {
+	if cutoff, capable := s.shinyCutoff(rate25, ok25, 0, 0), shinyCapable(rate25, ok25); !capable || cutoff != defaultShinyCutoff {
 		t.Errorf("unlisted species: cutoff %d capable %v", cutoff, capable)
+	}
+}
+
+func TestShinyCapabilityIgnoresTimezone(t *testing.T) {
+	// Capability comes from the base rate; a timezone override changes only
+	// the cutoff. Rolls as in TestPersonalDrawOrder.
+	if z := tz.SearchTimezone(33.45, -112.07); z != "America/Phoenix" {
+		t.Skipf("timezone data changed: %s", z)
+	}
+	players := []string{"0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "}
+	background := &shinyPrediction{Probability: 0.2, Supported: true}
+	phoenix := func(p shinyPrediction) map[string]shinyPrediction {
+		return map[string]shinyPrediction{"America/Phoenix": p}
+	}
+	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: &shinyRates{
+		variants: map[shinyVariant]shinyRate{
+			// Never shiny, even where an override claims otherwise.
+			{27, 0, 0}: {Pokemon: 27, Prediction: shinyPrediction{Supported: false}, Overrides: phoenix(shinyPrediction{Probability: 1, Supported: true}), Background: background},
+			// Shiny-capable everywhere, with no chance in Phoenix.
+			{28, 0, 0}: {Pokemon: 28, Prediction: shinyPrediction{Probability: 1, Supported: true}, Overrides: phoenix(shinyPrediction{Supported: false}), Background: background},
+		},
+		maximum:           map[int16]uint32{27: shinyScale, 28: shinyScale},
+		backgroundMaximum: map[int16]uint32{27: background.cutoff(0), 28: background.cutoff(0)},
+	}}
+	for _, id := range players {
+		input := make([]byte, 8+len(id))
+		copy(input[8:], id)
+		s.players[id] = &shinyPlayer{input: input}
+	}
+	seen := "wild"
+	for _, tc := range []struct {
+		pokemon           int16
+		lat, lon          float64
+		shiny, background []string
+	}{
+		{27, 33.45, -112.07, nil, []string{" Trainer-é "}},
+		{27, 0, 0, nil, []string{" Trainer-é "}},
+		{28, 33.45, -112.07, nil, []string{"0123456789abcdef"}},
+		{28, 0, 0, players, []string{"0123456789abcdef"}},
+	} {
+		r := ApiPokemonResult{Id: "1", PokemonId: tc.pokemon, SeenType: &seen, Lat: tc.lat, Lon: tc.lon}
+		s.annotate(&r, players)
+		if !slices.Equal(r.ShinyFor, tc.shiny) || !slices.Equal(r.BackgroundFor, tc.background) {
+			t.Errorf("%d at %v,%v: shiny %v background %v", tc.pokemon, tc.lat, tc.lon, r.ShinyFor, r.BackgroundFor)
+		}
+		lookup := PokemonLookup{PokemonId: tc.pokemon, RollEligibleCostume: 1}
+		location := [2]float64{tc.lon, tc.lat}
+		for _, id := range players {
+			if got, want := s.match(1, &lookup, location, &ApiPokemonDnfFilter3{ShinyFor: []string{id}}), slices.Contains(tc.shiny, id); got != want {
+				t.Errorf("%d at %v,%v: match shiny_for %q = %v", tc.pokemon, tc.lat, tc.lon, id, got)
+			}
+			if got, want := s.match(1, &lookup, location, &ApiPokemonDnfFilter3{BackgroundFor: []string{id}}), slices.Contains(tc.background, id); got != want {
+				t.Errorf("%d at %v,%v: match background_for %q = %v", tc.pokemon, tc.lat, tc.lon, id, got)
+			}
+		}
 	}
 }
