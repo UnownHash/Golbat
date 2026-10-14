@@ -2,10 +2,13 @@ package decoder
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/guregu/null/v6"
 	"golbat/config"
+	"golbat/derive/javarandom"
 	"golbat/tz"
 	"net/http"
 	"net/http/httptest"
@@ -262,6 +265,92 @@ func TestPersonalDrawOrder(t *testing.T) {
 				t.Errorf("%d: match background_for %q = %v, want %v", pokemon, id, got, want)
 			}
 		}
+	}
+}
+
+// thirdDraw is the Ditto shiny roll computed from scratch, independently of
+// shinyPlayer: the third Next(24) of the personal generator.
+func thirdDraw(encounter uint64, player string) uint32 {
+	input := make([]byte, 8+len(player))
+	binary.LittleEndian.PutUint64(input, encounter)
+	copy(input[8:], player)
+	digest := sha1.Sum(input)
+	rng := javarandom.New(binary.LittleEndian.Uint64(digest[:8]))
+	rng.Next(24)
+	rng.Next(24)
+	return rng.Next(24)
+}
+
+func TestPersonalDittoShiny(t *testing.T) {
+	// Pidgey disguises at rate 1 would be shiny and have a background for
+	// everyone; a known Ditto must ignore that and the unsupportedPokemon
+	// entry for 132, and use only the third draw at 1/64.
+	players := []string{"0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "}
+	always := shinyPrediction{Probability: 1, Supported: true}
+	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: newShinyRates([]shinyRate{
+		{Pokemon: 16, Prediction: always, Background: &always},
+	}, []int{dittoPokemonId}, nil)}
+	for _, id := range players {
+		input := make([]byte, 8+len(id))
+		copy(input[8:], id)
+		s.players[id] = &shinyPlayer{input: input}
+	}
+	seen, disguise := "wild", uint16(16)
+	annotate := func(encounter uint64) ApiPokemonResult {
+		r := ApiPokemonResult{Id: fmt.Sprint(encounter), PokemonId: dittoPokemonId, IsDitto: true, DisplayPokemonId: &disguise, SeenType: &seen}
+		s.annotate(&r, players)
+		return r
+	}
+	ditto := &Pokemon{PokemonData: PokemonData{PokemonId: dittoPokemonId, IsDitto: true, DisplayPokemonId: null.ValueFrom(disguise), SeenType: SeenTypeFrom(SeenTypeCodeWild)}}
+	lookup := PokemonLookup{PokemonId: dittoPokemonId, RollEligibleCostume: personalLookup(ditto)}
+	if lookup.RollEligibleCostume == 0 {
+		t.Fatal("known Ditto is not eligible")
+	}
+	// Pinned: 6 is a Ditto shiny for Player-ID:ABC/123 only, 26 for
+	// Trainer-é only. 25 is not, though Trainer-é's first two draws are
+	// below 1/64; 15 is not, though 0123456789abcdef's first is.
+	pinned := map[uint64][]string{1: nil, 6: {"Player-ID:ABC/123"}, 15: nil, 25: nil, 26: {" Trainer-é "}}
+	for encounter := uint64(1); encounter <= 1000; encounter++ {
+		var want []string
+		for _, id := range players {
+			if thirdDraw(encounter, id) < (1<<24)/64 {
+				want = append(want, id)
+			}
+		}
+		if pin, ok := pinned[encounter]; ok && !slices.Equal(want, pin) {
+			t.Fatalf("encounter %d: generator gives %v, pinned %v", encounter, want, pin)
+		}
+		r := annotate(encounter)
+		if !slices.Equal(r.ShinyFor, want) || r.BackgroundFor != nil {
+			t.Fatalf("encounter %d: shiny %v background %v, want shiny %v", encounter, r.ShinyFor, r.BackgroundFor, want)
+		}
+		for _, id := range players {
+			if got := s.match(encounter, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{ShinyFor: []string{id}}); got != slices.Contains(want, id) {
+				t.Fatalf("encounter %d: match shiny_for %q = %v", encounter, id, got)
+			}
+			// No Ditto background has been observed: never matched.
+			if s.match(encounter, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{BackgroundFor: []string{id}}) {
+				t.Fatalf("encounter %d: matched background_for %q", encounter, id)
+			}
+		}
+		if got := s.match(encounter, &lookup, [2]float64{0, 0}, &ApiPokemonDnfFilter3{ShinyFor: players}); got != (len(want) > 0) {
+			t.Fatalf("encounter %d: match any = %v", encounter, got)
+		}
+	}
+
+	// Records not known to be Ditto stay ineligible.
+	for name, p := range map[string]*Pokemon{
+		"undisguised 132":               {PokemonData: PokemonData{PokemonId: dittoPokemonId, SeenType: SeenTypeFrom(SeenTypeCodeWild)}},
+		"disguised, not known as Ditto": {PokemonData: PokemonData{PokemonId: 16, DisplayPokemonId: null.ValueFrom(uint16(19)), SeenType: SeenTypeFrom(SeenTypeCodeWild)}},
+		"nearby Ditto":                  {PokemonData: PokemonData{PokemonId: dittoPokemonId, IsDitto: true, DisplayPokemonId: null.ValueFrom(disguise), SeenType: SeenTypeFrom(SeenTypeCodeNearbyStop)}},
+	} {
+		if got := personalLookup(p); got != 0 {
+			t.Errorf("%s: eligible (%d)", name, got)
+		}
+	}
+	unknown := ApiPokemonResult{Id: "6", PokemonId: dittoPokemonId, SeenType: &seen}
+	if s.annotate(&unknown, players); unknown.ShinyFor != nil || unknown.BackgroundFor != nil {
+		t.Errorf("undisguised 132 annotated: %v %v", unknown.ShinyFor, unknown.BackgroundFor)
 	}
 }
 

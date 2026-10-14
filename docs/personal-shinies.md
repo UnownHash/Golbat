@@ -10,7 +10,8 @@ instead of being parsed truncated; raise it if the feed outgrows the default.
 Unknown variants take the feed's `fallback` shiny rate (1/512 if it publishes
 none) and no background, unless their species is listed in
 `unsupportedPokemon`.
-Ditto, disguised Pokémon and nearby-only sightings are never eligible.
+Disguised Pokémon not known to be Ditto and nearby-only sightings are never
+eligible; known Dittos follow their own rule (see [Ditto](#ditto)).
 
 The rate source must return JSON in this shape:
 
@@ -155,3 +156,28 @@ converted to integer cutoffs once per refresh, and overrides equal to their
 base rate are dropped, so a spawn's timezone is looked up only for variants
 whose rate actually differs by timezone (never, if none do). Personal scans
 run like ordinary scans, without a separate concurrency limit.
+
+## Ditto
+
+A record Golbat has identified as Ditto (`is_ditto` with `pokemon_id` 132,
+from encounter evidence or the encounter-ID Ditto roll) is shiny for a player
+when the **third** draw of the same generator is below 1/64. The game takes
+all three draws for a Ditto whatever its disguise's rates: the first two are
+the disguise's shiny and background rolls, and the disguise itself is never
+shiny. The 1/64 rate is fixed in Golbat; the feed's rates, `fallback` and
+`unsupportedPokemon` (which usually lists 132) do not apply to a known Ditto.
+The rule was verified against 124 caught Dittos (30 shiny), including
+different players' outcomes on shared spawns, and none of 285 disguises was
+shiny.
+
+Ditto limitations:
+
+- A Ditto is covered only once Golbat knows it is one. Until then it looks
+  like its disguise and is judged as that species, and could be reported
+  shiny by the disguise's rate even though it will not be. A roll-marked
+  record that a later encounter refutes reverts to the disguise's rule.
+- `background_for` never matches a Ditto and `annotate_for` never lists one
+  in `background_for`: no Ditto background has been observed.
+- A Pokémon with `pokemon_id` 132 that is not marked `is_ditto` (an
+  undisguised Ditto) is not eligible; the rule is verified only for disguised
+  wild Dittos.
