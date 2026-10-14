@@ -629,10 +629,17 @@ the serialisation differs.
   expect the boundary second to be re-delivered. Same semantics on the JSON
   v3 pokemon scan and the fort scans; advertised as `filters.updated_after`
   on `/api/status`.
+- **Personal shiny/background filtering** (`shiny_for` / `background_for`
+  on `PokemonDnfFilter`, `annotate_for` on `PokemonScanRequest`, and
+  `shiny_for` / `background_for` / `size_for` on annotated `Pokemon`) works
+  as on the JSON v3 scan; see `docs/personal-shinies.md`.
 - **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
-  `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, HTTP 503),
-  `INVALID_ARGUMENT` (`min` or `max` missing, or more than
-  `max_pokemon_results` ids in `GetPokemon`).
+  `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, or personal
+  pokemon fields without `[shiny_rates]`; HTTP 503), `UNAVAILABLE` (personal
+  pokemon fields before the shiny rates first load; HTTP 503, retry),
+  `INVALID_ARGUMENT` (`min` or `max` missing, more than
+  `max_pokemon_results` ids in `GetPokemon`, or malformed personal player
+  IDs).
 
 ### Example
 

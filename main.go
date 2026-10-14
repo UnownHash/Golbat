@@ -245,6 +245,7 @@ func main() {
 	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
+	decoder.StartShinyRates(ctx)
 	initRawProcessingLimiter()
 	initSlowDbQueryLogging()
 	decoder.StartWorkerBacklogReporter()

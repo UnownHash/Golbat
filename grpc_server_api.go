@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"golbat/config"
@@ -55,7 +56,26 @@ func (s *grpcApiServer) ScanPokemon(ctx context.Context, in *pb.PokemonScanReque
 	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
 		return nil, err
 	}
-	return decoder.GrpcScanPokemon(in), nil
+	resp, err := decoder.GrpcScanPokemon(ctx, in)
+	if err != nil {
+		return nil, personalScanStatus(err)
+	}
+	return resp, nil
+}
+
+// personalScanStatus maps the personal shiny/background errors HTTP answers
+// with 400 or 503. Missing [shiny_rates] is configuration, like
+// requireFortInMemory; rates still loading at startup is worth a retry.
+func personalScanStatus(err error) error {
+	switch {
+	case errors.Is(err, decoder.ErrPersonalRequest):
+		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, decoder.ErrShinyRatesNotConfigured):
+		return status.Error(codes.FailedPrecondition, err.Error())
+	case errors.Is(err, decoder.ErrShinyRatesNotLoaded):
+		return status.Error(codes.Unavailable, err.Error())
+	}
+	return status.FromContextError(err).Err()
 }
 
 // GetPokemon is the batched form of GET /api/pokemon/id/{pokemon_id}. The

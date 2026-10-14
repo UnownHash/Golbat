@@ -56,6 +56,7 @@ func TestGrpcApiFieldParity(t *testing.T) {
 		overrides map[string]string
 	}{
 		{"Pokemon", reflect.TypeOf(ApiPokemonResult{}), &pb.Pokemon{}, nil},
+		{"PersonalSize", reflect.TypeOf(ApiPersonalSize{}), &pb.PersonalSize{}, nil},
 		{"PvpRankings", reflect.TypeOf(ApiPvpRankings{}), &pb.PvpRankings{}, nil},
 		{"PvpEntry", reflect.TypeOf(ApiPvpEntry{}), &pb.PvpEntry{}, nil},
 		{"Gym", reflect.TypeOf(ApiGymResult{}), &pb.Gym{}, nil},
