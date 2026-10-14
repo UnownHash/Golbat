@@ -296,9 +296,10 @@ func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float6
 // shinyCapable reports whether the variant has a shiny roll at all; only then
 // does the game take a draw for it, which shifts every later draw. A shiny is
 // released per species and form, not per location, so this reads the base
-// rate only and never needs a timezone.
+// rate only and never needs a timezone. A zero cutoff (probability 0, even
+// when marked supported) means no shiny is available, so no draw.
 func shinyCapable(rate shinyRate, ok bool) bool {
-	return !ok || rate.Prediction.Supported
+	return !ok || rate.Prediction.cutoff(defaultShinyCutoff) > 0
 }
 
 // shinyCutoff resolves the shiny threshold at a location. Overrides change

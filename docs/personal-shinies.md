@@ -31,7 +31,9 @@ The rate source must return JSON in this shape:
 ```
 
 - `prediction.probability` is the shiny probability for that species/form/costume.
-- `supported: false` means the variant is never shiny-eligible.
+- `supported: false` means the variant is never shiny-eligible. Probability 0
+  means the same, even with `supported: true`: no shiny is available, so the
+  variant takes no shiny draw (Golbat treats any zero cutoff as not capable).
 - `unsupportedPokemon` is optional: species with no released shiny. Their variants are never shiny-eligible even without an entry in `rates`.
 - `overrides` is optional and keyed by IANA timezone of the spawn's location.
   Local-time events such as Community Day change rates per timezone. An
@@ -46,8 +48,8 @@ Rolls come from a per-player, per-encounter `java.util.Random` (seeded from
 SHA-1 of the little-endian encounter ID followed by the player ID). The game
 takes a draw only for rolls the variant actually has, in this order:
 
-1. the shiny roll, if the variant can be shiny (base `prediction.supported`,
-   or an unknown variant), regardless of location;
+1. the shiny roll, if the variant can be shiny (base `prediction` supported
+   with a nonzero probability, or an unknown variant), regardless of location;
 2. the background roll, if a background is on offer (nonzero rate);
 3. two more draws if a background was rolled (then the height draws).
 
