@@ -59,11 +59,24 @@ type shinyRate struct {
 	Background          *shinyPrediction           `json:"background"`
 	BackgroundOverrides map[string]shinyPrediction `json:"background_overrides"`
 }
+
+// shinyCutoffs is a variant's rates in scan-ready form, built once per
+// refresh: integer cutoffs, and only the overrides that differ from the base
+// (nil when none do). A zero shiny cutoff means not shiny-capable, so such a
+// variant keeps no shiny overrides.
+type shinyCutoffs struct {
+	shiny               uint32
+	shinyOverrides      map[string]uint32
+	background          uint32
+	backgroundOverrides map[string]uint32
+}
+
 type shinyRates struct {
-	variants          map[shinyVariant]shinyRate
+	variants          map[shinyVariant]shinyCutoffs
 	unsupported       map[int16]bool // species without a released shiny
 	maximum           map[int16]uint32
 	backgroundMaximum map[int16]uint32
+	zoned             bool // some variant has an effective override
 }
 
 // Scans read the current snapshot without locking; only the refresher swaps it.
@@ -126,31 +139,66 @@ func refreshShinyRates(ctx context.Context) error {
 	if feed.Rates == nil {
 		return fmt.Errorf("rates response has no rates list")
 	}
-	next := &shinyRates{variants: make(map[shinyVariant]shinyRate), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
-	next.unsupported = make(map[int16]bool, len(feed.Unsupported))
-	for _, p := range feed.Unsupported {
+	shinyRatesSnapshot.Store(newShinyRates(*feed.Rates, feed.Unsupported))
+	return nil
+}
+
+// newShinyRates normalizes a feed so scans compare integers and resolve a
+// timezone only where the answer depends on it.
+func newShinyRates(rates []shinyRate, unsupported []int) *shinyRates {
+	next := &shinyRates{variants: make(map[shinyVariant]shinyCutoffs, len(rates)), maximum: make(map[int16]uint32), backgroundMaximum: make(map[int16]uint32)}
+	next.unsupported = make(map[int16]bool, len(unsupported))
+	for _, p := range unsupported {
 		next.unsupported[int16(p)] = true
 	}
-	for _, r := range *feed.Rates {
-		next.variants[shinyVariant{r.Pokemon, r.Form, r.Costume}] = r
-		// Unknown costumes/forms still default to 1/512 shiny and no background.
-		// The per-species maxima are a cheap rejection before the exact variant.
-		bound := max(defaultShinyCutoff, r.Prediction.cutoff(defaultShinyCutoff))
-		for _, p := range r.Overrides {
-			bound = max(bound, p.cutoff(defaultShinyCutoff))
+	for _, r := range rates {
+		c := shinyCutoffs{shiny: r.Prediction.cutoff(defaultShinyCutoff)}
+		if c.shiny > 0 {
+			c.shinyOverrides = effectiveOverrides(r.Overrides, c.shiny, defaultShinyCutoff)
 		}
-		next.maximum[int16(r.Pokemon)] = max(next.maximum[int16(r.Pokemon)], bound)
-		background := uint32(0)
 		if r.Background != nil {
-			background = r.Background.cutoff(0)
+			c.background = r.Background.cutoff(0)
 		}
-		for _, p := range r.BackgroundOverrides {
-			background = max(background, p.cutoff(0))
+		c.backgroundOverrides = effectiveOverrides(r.BackgroundOverrides, c.background, 0)
+		next.zoned = next.zoned || c.shinyOverrides != nil || c.backgroundOverrides != nil
+		next.variants[shinyVariant{r.Pokemon, r.Form, r.Costume}] = c
+		// The per-species maxima are a cheap rejection before the exact variant.
+		species := int16(r.Pokemon)
+		shiny, background := c.shiny, c.background
+		for _, cutoff := range c.shinyOverrides {
+			shiny = max(shiny, cutoff)
 		}
-		next.backgroundMaximum[int16(r.Pokemon)] = max(next.backgroundMaximum[int16(r.Pokemon)], background)
+		for _, cutoff := range c.backgroundOverrides {
+			background = max(background, cutoff)
+		}
+		next.maximum[species] = max(next.maximum[species], shiny)
+		next.backgroundMaximum[species] = max(next.backgroundMaximum[species], background)
 	}
-	shinyRatesSnapshot.Store(next)
-	return nil
+	return next
+}
+
+// effectiveOverrides converts overrides to cutoffs and drops those equal to
+// the base cutoff, comparing integers so near-equal probabilities collapse.
+func effectiveOverrides(overrides map[string]shinyPrediction, base, fallback uint32) map[string]uint32 {
+	var effective map[string]uint32
+	for zone, p := range overrides {
+		if cutoff := p.cutoff(fallback); cutoff != base {
+			if effective == nil {
+				effective = make(map[string]uint32)
+			}
+			effective[zone] = cutoff
+		}
+	}
+	return effective
+}
+
+// shinyMaximum bounds the shiny cutoff of any variant of a species, counting
+// unlisted variants: 1/512 unless the species is listed as never shiny.
+func (r *shinyRates) shinyMaximum(pokemon int16) uint32 {
+	if r.unsupported[pokemon] {
+		return r.maximum[pokemon]
+	}
+	return max(r.maximum[pokemon], defaultShinyCutoff)
 }
 
 // personalLookup packs roll eligibility and costume into PokemonLookup's
@@ -274,18 +322,20 @@ func ScanPokemonWithShiny(ctx context.Context, req ApiPokemonScan3) (*ApiPokemon
 	return result, nil
 }
 
-func (s *shinyScan) rate(pokemon, form, costume int) (shinyRate, bool) {
-	rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]
-	if !ok && s.rates.unsupported[int16(pokemon)] {
-		// A species the feed lists as never shiny: no shiny draw is taken,
-		// rather than falling back to 1/512.
-		return shinyRate{Pokemon: pokemon, Form: form, Costume: costume}, true
+// rate returns a variant's cutoffs. Unknown costumes/forms default to 1/512
+// shiny and no background, unless the species is listed as never shiny.
+func (s *shinyScan) rate(pokemon, form, costume int) shinyCutoffs {
+	if rate, ok := s.rates.variants[shinyVariant{pokemon, form, costume}]; ok {
+		return rate
 	}
-	return rate, ok
+	if s.rates.unsupported[int16(pokemon)] {
+		return shinyCutoffs{}
+	}
+	return shinyCutoffs{shiny: defaultShinyCutoff}
 }
 
-func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float64) string {
-	if len(overrides) == 0 {
+func (s *shinyScan) zoneAt(overrides map[string]uint32, lat, lon float64) string {
+	if !s.rates.zoned || len(overrides) == 0 {
 		return ""
 	}
 	// Resolved per spawn: matching bbox corners do not imply the whole box
@@ -293,43 +343,27 @@ func (s *shinyScan) zoneAt(overrides map[string]shinyPrediction, lat, lon float6
 	return tz.SearchTimezone(lat, lon)
 }
 
-// shinyCapable reports whether the variant has a shiny roll at all; only then
+// capable reports whether the variant has a shiny roll at all; only then
 // does the game take a draw for it, which shifts every later draw. A shiny is
 // released per species and form, not per location, so this reads the base
-// rate only and never needs a timezone. A zero cutoff (probability 0, even
+// cutoff only and never needs a timezone. A zero cutoff (probability 0, even
 // when marked supported) means no shiny is available, so no draw.
-func shinyCapable(rate shinyRate, ok bool) bool {
-	return !ok || rate.Prediction.cutoff(defaultShinyCutoff) > 0
-}
+func (c shinyCutoffs) capable() bool { return c.shiny > 0 }
 
 // shinyCutoff resolves the shiny threshold at a location. Overrides change
-// only the threshold: a variant that is not capable is never shiny, whatever
-// its overrides say.
-func (s *shinyScan) shinyCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
-	if !ok {
-		return defaultShinyCutoff
+// only the threshold; a variant that is not capable has none and stays 0.
+func (s *shinyScan) shinyCutoff(rate shinyCutoffs, lat, lon float64) uint32 {
+	if override, found := rate.shinyOverrides[s.zoneAt(rate.shinyOverrides, lat, lon)]; found {
+		return override
 	}
-	if !shinyCapable(rate, ok) {
-		return 0
-	}
-	prediction := rate.Prediction
-	if override, found := rate.Overrides[s.zoneAt(rate.Overrides, lat, lon)]; found {
-		prediction = override
-	}
-	return prediction.cutoff(defaultShinyCutoff)
+	return rate.shiny
 }
 
-func (s *shinyScan) backgroundCutoff(rate shinyRate, ok bool, lat, lon float64) uint32 {
-	if !ok {
-		return 0
+func (s *shinyScan) backgroundCutoff(rate shinyCutoffs, lat, lon float64) uint32 {
+	if override, found := rate.backgroundOverrides[s.zoneAt(rate.backgroundOverrides, lat, lon)]; found {
+		return override
 	}
-	if override, found := rate.BackgroundOverrides[s.zoneAt(rate.BackgroundOverrides, lat, lon)]; found {
-		return override.cutoff(0)
-	}
-	if rate.Background == nil {
-		return 0
-	}
-	return rate.Background.cutoff(0)
+	return rate.background
 }
 
 // matchClause applies a clause's personal conditions once its ordinary
@@ -352,16 +386,20 @@ func (s *shinyScan) matchClause(id uint64, lookup *PokemonLookup, location [2]fl
 // the lowest roll with the species maximum, so most candidates stop there.
 func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64, filter *ApiPokemonDnfFilter3) bool {
 	lon, lat := location[0], location[1]
-	rate, ok := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.RollEligibleCostume)-1)
+	rate := s.rate(int(lookup.PokemonId), int(lookup.Form), int(lookup.RollEligibleCostume)-1)
 	if len(filter.ShinyFor) > 0 {
+		maximum := s.rates.shinyMaximum(lookup.PokemonId)
+		if maximum == 0 {
+			return false
+		}
 		lowest := uint32(shinyScale)
 		for _, player := range filter.ShinyFor {
 			lowest = min(lowest, first(s.players[player].rolls(id)))
 		}
-		if lowest >= max(defaultShinyCutoff, s.rates.maximum[lookup.PokemonId]) {
+		if lowest >= maximum {
 			return false
 		}
-		if lowest >= s.shinyCutoff(rate, ok, lat, lon) {
+		if lowest >= s.shinyCutoff(rate, lat, lon) {
 			return false
 		}
 	}
@@ -370,12 +408,12 @@ func (s *shinyScan) match(id uint64, lookup *PokemonLookup, location [2]float64,
 		if s.rates.backgroundMaximum[lookup.PokemonId] == 0 {
 			return false
 		}
-		capable := shinyCapable(rate, ok)
+		capable := rate.capable()
 		lowest := uint32(shinyScale)
 		for _, player := range filter.BackgroundFor {
 			lowest = min(lowest, backgroundRoll(capable, s.players[player], id))
 		}
-		if lowest >= s.rates.backgroundMaximum[lookup.PokemonId] || lowest >= s.backgroundCutoff(rate, ok, lat, lon) {
+		if lowest >= s.rates.backgroundMaximum[lookup.PokemonId] || lowest >= s.backgroundCutoff(rate, lat, lon) {
 			return false
 		}
 	}
@@ -421,10 +459,10 @@ func (s *shinyScan) annotate(r *ApiPokemonResult, players []string) {
 	if r.Form != nil {
 		form = int(*r.Form)
 	}
-	rate, ok := s.rate(int(r.PokemonId), form, int(personal)-1)
-	capable := shinyCapable(rate, ok)
-	shinyCutoff := s.shinyCutoff(rate, ok, r.Lat, r.Lon)
-	backgroundCutoff := s.backgroundCutoff(rate, ok, r.Lat, r.Lon)
+	rate := s.rate(int(r.PokemonId), form, int(personal)-1)
+	capable := rate.capable()
+	shinyCutoff := s.shinyCutoff(rate, r.Lat, r.Lon)
+	backgroundCutoff := s.backgroundCutoff(rate, r.Lat, r.Lon)
 	for _, player := range players {
 		rng := s.players[player].generator(id)
 		if capable && rng.Next(24) < shinyCutoff {

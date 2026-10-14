@@ -212,8 +212,8 @@ func TestShinyZonePerSpawn(t *testing.T) {
 			t.Skipf("timezone data changed: corner %v is %s", c, z)
 		}
 	}
-	s := &shinyScan{}
-	if z := s.zoneAt(map[string]shinyPrediction{"America/Phoenix": {}}, 35.812, -110.195); z != "America/Phoenix" {
+	s := &shinyScan{rates: &shinyRates{zoned: true}}
+	if z := s.zoneAt(map[string]uint32{"America/Phoenix": 1}, 35.812, -110.195); z != "America/Phoenix" {
 		t.Fatalf("zone = %q", z)
 	}
 }
@@ -226,11 +226,11 @@ func TestPersonalDrawOrder(t *testing.T) {
 	//    Trainer-é         0.0377 / 0.7366
 	players := []string{"0123456789abcdef", "Player-ID:ABC/123", " Trainer-é "}
 	background := &shinyPrediction{Probability: 0.2, Supported: true}
-	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: &shinyRates{variants: map[shinyVariant]shinyRate{
-		{25, 0, 0}: {Pokemon: 25, Prediction: shinyPrediction{Probability: 0.1, Supported: true}, Background: background},
-		{26, 0, 0}: {Pokemon: 26, Prediction: shinyPrediction{Supported: false}, Background: background},
-		{29, 0, 0}: {Pokemon: 29, Prediction: shinyPrediction{Probability: 0, Supported: true}, Background: background},
-	}}}
+	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: newShinyRates([]shinyRate{
+		{Pokemon: 25, Prediction: shinyPrediction{Probability: 0.1, Supported: true}, Background: background},
+		{Pokemon: 26, Prediction: shinyPrediction{Supported: false}, Background: background},
+		{Pokemon: 29, Prediction: shinyPrediction{Probability: 0, Supported: true}, Background: background},
+	}, nil)}
 	for _, id := range players {
 		input := make([]byte, 8+len(id))
 		copy(input[8:], id)
@@ -254,7 +254,6 @@ func TestPersonalDrawOrder(t *testing.T) {
 		}
 	}
 	// Filtering agrees with annotation.
-	s.rates.backgroundMaximum = map[int16]uint32{26: background.cutoff(0), 29: background.cutoff(0)}
 	for _, pokemon := range []int16{26, 29} {
 		lookup := PokemonLookup{PokemonId: pokemon, RollEligibleCostume: 1}
 		for _, id := range players {
@@ -298,13 +297,15 @@ func TestShinyRatesUnsupportedSpecies(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &shinyScan{rates: shinyRatesSnapshot.Load()}
-	rate931, ok931 := s.rate(931, 2601, 0)
-	rate25, ok25 := s.rate(25, 0, 0)
-	if cutoff, capable := s.shinyCutoff(rate931, ok931, 0, 0), shinyCapable(rate931, ok931); capable || cutoff != 0 {
+	rate931, rate25 := s.rate(931, 2601, 0), s.rate(25, 0, 0)
+	if cutoff, capable := s.shinyCutoff(rate931, 0, 0), rate931.capable(); capable || cutoff != 0 {
 		t.Errorf("unsupported species: cutoff %d capable %v", cutoff, capable)
 	}
-	if cutoff, capable := s.shinyCutoff(rate25, ok25, 0, 0), shinyCapable(rate25, ok25); !capable || cutoff != defaultShinyCutoff {
+	if cutoff, capable := s.shinyCutoff(rate25, 0, 0), rate25.capable(); !capable || cutoff != defaultShinyCutoff {
 		t.Errorf("unlisted species: cutoff %d capable %v", cutoff, capable)
+	}
+	if m := s.rates.shinyMaximum(931); m != 0 {
+		t.Errorf("unsupported species maximum %d", m)
 	}
 }
 
@@ -319,16 +320,12 @@ func TestShinyCapabilityIgnoresTimezone(t *testing.T) {
 	phoenix := func(p shinyPrediction) map[string]shinyPrediction {
 		return map[string]shinyPrediction{"America/Phoenix": p}
 	}
-	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: &shinyRates{
-		variants: map[shinyVariant]shinyRate{
-			// Never shiny, even where an override claims otherwise.
-			{27, 0, 0}: {Pokemon: 27, Prediction: shinyPrediction{Supported: false}, Overrides: phoenix(shinyPrediction{Probability: 1, Supported: true}), Background: background},
-			// Shiny-capable everywhere, with no chance in Phoenix.
-			{28, 0, 0}: {Pokemon: 28, Prediction: shinyPrediction{Probability: 1, Supported: true}, Overrides: phoenix(shinyPrediction{Supported: false}), Background: background},
-		},
-		maximum:           map[int16]uint32{27: shinyScale, 28: shinyScale},
-		backgroundMaximum: map[int16]uint32{27: background.cutoff(0), 28: background.cutoff(0)},
-	}}
+	s := &shinyScan{ctx: context.Background(), players: map[string]*shinyPlayer{}, rates: newShinyRates([]shinyRate{
+		// Never shiny, even where an override claims otherwise.
+		{Pokemon: 27, Prediction: shinyPrediction{Supported: false}, Overrides: phoenix(shinyPrediction{Probability: 1, Supported: true}), Background: background},
+		// Shiny-capable everywhere, with no chance in Phoenix.
+		{Pokemon: 28, Prediction: shinyPrediction{Probability: 1, Supported: true}, Overrides: phoenix(shinyPrediction{Supported: false}), Background: background},
+	}, nil)}
 	for _, id := range players {
 		input := make([]byte, 8+len(id))
 		copy(input[8:], id)
@@ -360,5 +357,61 @@ func TestShinyCapabilityIgnoresTimezone(t *testing.T) {
 				t.Errorf("%d at %v,%v: match background_for %q = %v", tc.pokemon, tc.lat, tc.lon, id, got)
 			}
 		}
+	}
+}
+
+func TestShinyRatesNormalize(t *testing.T) {
+	phoenix := func(p shinyPrediction) map[string]shinyPrediction {
+		return map[string]shinyPrediction{"America/Phoenix": p}
+	}
+	base := shinyPrediction{Probability: 1.0 / 512, Supported: true}
+	background := shinyPrediction{Probability: 0.04, Supported: true}
+	// As in the live feed: every override matches its base, here once only
+	// after rounding to a cutoff. Nothing needs a timezone.
+	rates := newShinyRates([]shinyRate{
+		{Pokemon: 1, Prediction: base, Overrides: phoenix(shinyPrediction{Probability: 0.0019531, Supported: true})},
+		{Pokemon: 2, Prediction: base, Overrides: phoenix(base),
+			Background: &background, BackgroundOverrides: phoenix(background)},
+		// Not capable: overrides cannot change that, so none are kept.
+		{Pokemon: 3, Prediction: shinyPrediction{Supported: true}, Overrides: phoenix(base)},
+	}, nil)
+	if rates.zoned {
+		t.Error("snapshot with only no-op overrides is zoned")
+	}
+	for v, c := range rates.variants {
+		if c.shinyOverrides != nil || c.backgroundOverrides != nil {
+			t.Errorf("%v kept overrides %+v", v, c)
+		}
+	}
+	if c := rates.variants[shinyVariant{2, 0, 0}]; c.shiny != defaultShinyCutoff || c.background != background.cutoff(0) {
+		t.Errorf("cutoffs %+v", c)
+	}
+	if m := rates.maximum[3]; m != 0 {
+		t.Errorf("not-capable species maximum %d", m)
+	}
+
+	// A real override survives, marks the snapshot, and raises the maximum.
+	rates = newShinyRates([]shinyRate{
+		{Pokemon: 1, Prediction: base, Overrides: map[string]shinyPrediction{"America/Phoenix": {Probability: 0.25, Supported: true}, "America/Denver": base}},
+		{Pokemon: 2, Prediction: base, BackgroundOverrides: phoenix(shinyPrediction{Probability: 0.1, Supported: true})},
+	}, nil)
+	if !rates.zoned {
+		t.Error("snapshot with effective overrides is not zoned")
+	}
+	if c := rates.variants[shinyVariant{1, 0, 0}]; len(c.shinyOverrides) != 1 || c.shinyOverrides["America/Phoenix"] != shinyScale/4 {
+		t.Errorf("shiny overrides %v", c.shinyOverrides)
+	}
+	if rates.maximum[1] != shinyScale/4 || rates.backgroundMaximum[2] == 0 {
+		t.Errorf("maxima %v %v", rates.maximum, rates.backgroundMaximum)
+	}
+	s := &shinyScan{rates: rates}
+	if got := s.shinyCutoff(rates.variants[shinyVariant{1, 0, 0}], 0, 0); got != defaultShinyCutoff {
+		t.Errorf("default cutoff %d", got)
+	}
+	if tz.SearchTimezone(33.45, -112.07) != "America/Phoenix" {
+		t.Skip("timezone data changed")
+	}
+	if got := s.shinyCutoff(rates.variants[shinyVariant{1, 0, 0}], 33.45, -112.07); got != shinyScale/4 {
+		t.Errorf("Phoenix cutoff %d", got)
 	}
 }
