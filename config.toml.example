@@ -192,3 +192,4 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 # [shiny_rates]
 # url = "http://rates-service:8080"
 # token = "" # Optional bearer token
+# max_bytes = 16777216 # Largest rate feed accepted (default 16 MiB); a larger feed fails the refresh

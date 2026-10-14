@@ -34,6 +34,11 @@ const maxPersonalPlayerIDBytes = 256
 // ErrPersonalRequest marks a malformed personal shiny/background request.
 var ErrPersonalRequest = errors.New("invalid personal request")
 
+// defaultShinyRatesMaxBytes applies when [shiny_rates] max_bytes is unset.
+const defaultShinyRatesMaxBytes = 16 << 20
+
+var errShinyRatesTooLarge = errors.New("rate feed is too large")
+
 type shinyPrediction struct {
 	Probability float64 `json:"probability"`
 	Supported   bool    `json:"supported"`
@@ -137,7 +142,23 @@ func refreshShinyRates(ctx context.Context) error {
 		Unsupported []int            `json:"unsupportedPokemon"`
 		Fallback    *shinyPrediction `json:"fallback"`
 	}
-	if err := json.NewDecoder(io.LimitReader(res.Body, 4<<20)).Decode(&feed); err != nil {
+	limit := c.MaxBytes
+	if limit <= 0 {
+		limit = defaultShinyRatesMaxBytes
+	}
+	// Read one byte past the limit so an oversized feed fails by name rather
+	// than as a truncated-JSON parse error.
+	if res.ContentLength > limit {
+		return fmt.Errorf("%w: %d bytes exceeds [shiny_rates] max_bytes = %d", errShinyRatesTooLarge, res.ContentLength, limit)
+	}
+	body, err := io.ReadAll(io.LimitReader(res.Body, limit+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(body)) > limit {
+		return fmt.Errorf("%w: exceeds [shiny_rates] max_bytes = %d", errShinyRatesTooLarge, limit)
+	}
+	if err := json.Unmarshal(body, &feed); err != nil {
 		return err
 	}
 	// {} , null or an error object would otherwise replace good rates with none.
