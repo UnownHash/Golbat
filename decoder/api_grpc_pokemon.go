@@ -230,7 +230,19 @@ func pokemonToProto(r *ApiPokemonResult, encounterId uint64) *pb.Pokemon {
 		IsEvent:                 int32(r.IsEvent),
 		ShinyFor:                r.ShinyFor,
 		BackgroundFor:           r.BackgroundFor,
+		SizeFor:                 personalSizesToProto(r.SizeFor),
 	}
+}
+
+func personalSizesToProto(sizes map[string]ApiPersonalSize) map[string]*pb.PersonalSize {
+	if len(sizes) == 0 {
+		return nil
+	}
+	out := make(map[string]*pb.PersonalSize, len(sizes))
+	for player, size := range sizes {
+		out[player] = &pb.PersonalSize{Height: size.Height, Weight: size.Weight}
+	}
+	return out
 }
 
 // GrpcScanPokemon is the gRPC counterpart of ScanPokemonWithShiny: same

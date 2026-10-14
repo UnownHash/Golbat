@@ -107,7 +107,7 @@ type ApiPokemonResult struct {
 	SeenType                *string                    `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell, lure_wild, lure_encounter, tappable_encounter, tappable_lure_encounter)"`
 	ShinyFor                []string                   `json:"shiny_for,omitempty" doc:"Player IDs from annotate_for this pokemon is shiny for. Pokemon v3 scan only."`
 	BackgroundFor           []string                   `json:"background_for,omitempty" doc:"Player IDs from annotate_for this pokemon has a background for. Pokemon v3 scan only."`
-	SizeFor                 map[string]ApiPersonalSize `json:"size_for,omitempty" doc:"Height and weight each annotate_for player would see, keyed by player ID. Omitted without masterfile size data or derived IVs. Pokemon v3 HTTP scan only."`
+	SizeFor                 map[string]ApiPersonalSize `json:"size_for,omitempty" doc:"Height and weight each annotate_for player would see, keyed by player ID. Omitted without masterfile size data or derived IVs. Pokemon v3 scan only."`
 	Shiny                   *bool                      `json:"shiny" doc:"Whether the pokemon is shiny"`
 	Username                *string                    `json:"username" doc:"Username of the account that reported the pokemon"`
 	Capture1                *float64                   `json:"capture_1" doc:"Base capture rate with one ball"`

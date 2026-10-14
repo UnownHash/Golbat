@@ -631,8 +631,8 @@ the serialisation differs.
   on `/api/status`.
 - **Personal shiny/background filtering** (`shiny_for` / `background_for`
   on `PokemonDnfFilter`, `annotate_for` on `PokemonScanRequest`, and
-  `shiny_for` / `background_for` on annotated `Pokemon`) works as on the JSON
-  v3 scan; see `docs/personal-shinies.md`.
+  `shiny_for` / `background_for` / `size_for` on annotated `Pokemon`) works
+  as on the JSON v3 scan; see `docs/personal-shinies.md`.
 - **Errors are gRPC status codes**: `UNAUTHENTICATED` (secret),
   `FAILED_PRECONDITION` (fort scans without `fort_in_memory`, or personal
   pokemon fields without `[shiny_rates]`; HTTP 503), `UNAVAILABLE` (personal
