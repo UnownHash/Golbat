@@ -30,11 +30,6 @@ func expectedProtoFieldNames(t *testing.T, typ reflect.Type, overrides map[strin
 		if !f.IsExported() {
 			continue
 		}
-		// Personal shiny/background fields are optional HTTP-only extensions.
-		if (typ == reflect.TypeOf(ApiPokemonDnfFilter3{}) || typ == reflect.TypeOf(ApiPokemonResult{})) && (f.Name == "ShinyFor" || f.Name == "BackgroundFor") ||
-			typ == reflect.TypeOf(ApiPokemonScan3{}) && f.Name == "AnnotateFor" {
-			continue
-		}
 		tag, _, _ := strings.Cut(f.Tag.Get("json"), ",")
 		if tag == "" || tag == "-" {
 			t.Fatalf("%s.%s has no json name; the proto mirror needs one", typ.Name(), f.Name)
