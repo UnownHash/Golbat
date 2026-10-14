@@ -67,6 +67,12 @@ So the background is the second draw for shiny-capable variants and the
 first otherwise. The test vectors pin current behaviour, so a change in the
 game would break predictions without an error.
 
+The background draw position is validated only for shiny-capable variants.
+No encounter of a never-shiny variant with a background has been captured, so
+"background is the first draw when there is no shiny draw" is inferred from
+the shiny-draw skip seen in height-matched encounters, not observed. Such a
+combination may never occur in the wild.
+
 Limitations:
 
 - Rates are keyed by variant and, optionally, IANA timezone. Backgrounds tied
