@@ -177,7 +177,9 @@ Ditto limitations:
   shiny by the disguise's rate even though it will not be. A roll-marked
   record that a later encounter refutes reverts to the disguise's rule.
 - `background_for` never matches a Ditto and `annotate_for` never lists one
-  in `background_for`: no Ditto background has been observed.
+  in `background_for`. No wild Ditto background appears in our captures, but
+  a costumed shiny Ditto with a background was seen during the Pokopia event,
+  so Ditto backgrounds are possible; which draw decides them is unknown.
 - A Pokémon with `pokemon_id` 132 that is not marked `is_ditto` (an
   undisguised Ditto) is not eligible; the rule is verified only for disguised
   wild Dittos.
