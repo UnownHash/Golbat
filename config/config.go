@@ -6,7 +6,14 @@ import (
 	"golbat/geo"
 )
 
+type ShinyRates struct {
+	URL      string `koanf:"url"`
+	Token    string `koanf:"token"`
+	MaxBytes int64  `koanf:"max_bytes"`
+}
+
 type configDefinition struct {
+	ShinyRates              ShinyRates `koanf:"shiny_rates"`
 	Port                    int        `koanf:"port"`
 	GrpcPort                int        `koanf:"grpc_port"`
 	Webhooks                []Webhook  `koanf:"webhooks"`

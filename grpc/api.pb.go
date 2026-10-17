@@ -182,19 +182,24 @@ func (x *DnfId) GetForm() int32 {
 }
 
 type PokemonDnfFilter struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Pokemon       []*DnfId               `protobuf:"bytes,1,rep,name=pokemon,proto3" json:"pokemon,omitempty"`
-	Iv            *IntRange              `protobuf:"bytes,2,opt,name=iv,proto3" json:"iv,omitempty"`
-	AtkIv         *IntRange              `protobuf:"bytes,3,opt,name=atk_iv,json=atkIv,proto3" json:"atk_iv,omitempty"`
-	DefIv         *IntRange              `protobuf:"bytes,4,opt,name=def_iv,json=defIv,proto3" json:"def_iv,omitempty"`
-	StaIv         *IntRange              `protobuf:"bytes,5,opt,name=sta_iv,json=staIv,proto3" json:"sta_iv,omitempty"`
-	Level         *IntRange              `protobuf:"bytes,6,opt,name=level,proto3" json:"level,omitempty"`
-	Cp            *IntRange              `protobuf:"bytes,7,opt,name=cp,proto3" json:"cp,omitempty"`
-	Gender        []int32                `protobuf:"varint,8,rep,packed,name=gender,proto3" json:"gender,omitempty"`
-	Size          *IntRange              `protobuf:"bytes,9,opt,name=size,proto3" json:"size,omitempty"`
-	PvpLittle     *IntRange              `protobuf:"bytes,10,opt,name=pvp_little,json=pvpLittle,proto3" json:"pvp_little,omitempty"`
-	PvpGreat      *IntRange              `protobuf:"bytes,11,opt,name=pvp_great,json=pvpGreat,proto3" json:"pvp_great,omitempty"`
-	PvpUltra      *IntRange              `protobuf:"bytes,12,opt,name=pvp_ultra,json=pvpUltra,proto3" json:"pvp_ultra,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Pokemon   []*DnfId               `protobuf:"bytes,1,rep,name=pokemon,proto3" json:"pokemon,omitempty"`
+	Iv        *IntRange              `protobuf:"bytes,2,opt,name=iv,proto3" json:"iv,omitempty"`
+	AtkIv     *IntRange              `protobuf:"bytes,3,opt,name=atk_iv,json=atkIv,proto3" json:"atk_iv,omitempty"`
+	DefIv     *IntRange              `protobuf:"bytes,4,opt,name=def_iv,json=defIv,proto3" json:"def_iv,omitempty"`
+	StaIv     *IntRange              `protobuf:"bytes,5,opt,name=sta_iv,json=staIv,proto3" json:"sta_iv,omitempty"`
+	Level     *IntRange              `protobuf:"bytes,6,opt,name=level,proto3" json:"level,omitempty"`
+	Cp        *IntRange              `protobuf:"bytes,7,opt,name=cp,proto3" json:"cp,omitempty"`
+	Gender    []int32                `protobuf:"varint,8,rep,packed,name=gender,proto3" json:"gender,omitempty"`
+	Size      *IntRange              `protobuf:"bytes,9,opt,name=size,proto3" json:"size,omitempty"`
+	PvpLittle *IntRange              `protobuf:"bytes,10,opt,name=pvp_little,json=pvpLittle,proto3" json:"pvp_little,omitempty"`
+	PvpGreat  *IntRange              `protobuf:"bytes,11,opt,name=pvp_great,json=pvpGreat,proto3" json:"pvp_great,omitempty"`
+	PvpUltra  *IntRange              `protobuf:"bytes,12,opt,name=pvp_ultra,json=pvpUltra,proto3" json:"pvp_ultra,omitempty"`
+	// Personal conditions, as in JSON: match if shiny (or has a background)
+	// for any of these player IDs; ANDed with the rest of the clause. Empty
+	// means no constraint. Needs [shiny_rates]; see docs/personal-shinies.md.
+	ShinyFor      []string `protobuf:"bytes,13,rep,name=shiny_for,json=shinyFor,proto3" json:"shiny_for,omitempty"`
+	BackgroundFor []string `protobuf:"bytes,14,rep,name=background_for,json=backgroundFor,proto3" json:"background_for,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -313,6 +318,20 @@ func (x *PokemonDnfFilter) GetPvpUltra() *IntRange {
 	return nil
 }
 
+func (x *PokemonDnfFilter) GetShinyFor() []string {
+	if x != nil {
+		return x.ShinyFor
+	}
+	return nil
+}
+
+func (x *PokemonDnfFilter) GetBackgroundFor() []string {
+	if x != nil {
+		return x.BackgroundFor
+	}
+	return nil
+}
+
 type PokemonScanRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Min   *LatLon                `protobuf:"bytes,1,opt,name=min,proto3" json:"min,omitempty"`
@@ -326,7 +345,10 @@ type PokemonScanRequest struct {
 	// limit_reached describe the scan, so a page may come back short. Entities
 	// that expire or stop matching disappear silently; pass max(updated)-1
 	// from the previous response and expect the boundary second again.
-	UpdatedAfter  *int64 `protobuf:"varint,5,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"`
+	UpdatedAfter *int64 `protobuf:"varint,5,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"`
+	// Player IDs to check every returned pokemon against; results list the
+	// matching ones in Pokemon.shiny_for / background_for. Does not filter.
+	AnnotateFor   []string `protobuf:"bytes,6,rep,name=annotate_for,json=annotateFor,proto3" json:"annotate_for,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -394,6 +416,13 @@ func (x *PokemonScanRequest) GetUpdatedAfter() int64 {
 		return *x.UpdatedAfter
 	}
 	return 0
+}
+
+func (x *PokemonScanRequest) GetAnnotateFor() []string {
+	if x != nil {
+		return x.AnnotateFor
+	}
+	return nil
 }
 
 type PokemonScanResponse struct {
@@ -777,8 +806,12 @@ type Pokemon struct {
 	Capture_3               *float64               `protobuf:"fixed64,36,opt,name=capture_3,json=capture3,proto3,oneof" json:"capture_3,omitempty"`
 	Pvp                     *PvpRankings           `protobuf:"bytes,37,opt,name=pvp,proto3" json:"pvp,omitempty"`
 	IsEvent                 int32                  `protobuf:"varint,38,opt,name=is_event,json=isEvent,proto3" json:"is_event,omitempty"`
-	unknownFields           protoimpl.UnknownFields
-	sizeCache               protoimpl.SizeCache
+	// Player IDs from PokemonScanRequest.annotate_for this pokemon is shiny
+	// for / has a background for. Empty unless annotate_for was sent.
+	ShinyFor      []string `protobuf:"bytes,39,rep,name=shiny_for,json=shinyFor,proto3" json:"shiny_for,omitempty"`
+	BackgroundFor []string `protobuf:"bytes,40,rep,name=background_for,json=backgroundFor,proto3" json:"background_for,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Pokemon) Reset() {
@@ -1075,6 +1108,20 @@ func (x *Pokemon) GetIsEvent() int32 {
 		return x.IsEvent
 	}
 	return 0
+}
+
+func (x *Pokemon) GetShinyFor() []string {
+	if x != nil {
+		return x.ShinyFor
+	}
+	return nil
+}
+
+func (x *Pokemon) GetBackgroundFor() []string {
+	if x != nil {
+		return x.BackgroundFor
+	}
+	return nil
 }
 
 type ContestFocus struct {
@@ -3411,7 +3458,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\n" +
 	"pokemon_id\x18\x01 \x01(\x05R\tpokemonId\x12\x17\n" +
 	"\x04form\x18\x02 \x01(\x05H\x00R\x04form\x88\x01\x01B\a\n" +
-	"\x05_form\"\x9b\x04\n" +
+	"\x05_form\"\xdf\x04\n" +
 	"\x10PokemonDnfFilter\x12+\n" +
 	"\apokemon\x18\x01 \x03(\v2\x11.golbat_api.DnfIdR\apokemon\x12$\n" +
 	"\x02iv\x18\x02 \x01(\v2\x14.golbat_api.IntRangeR\x02iv\x12+\n" +
@@ -3426,13 +3473,16 @@ const file_grpc_api_proto_rawDesc = "" +
 	"pvp_little\x18\n" +
 	" \x01(\v2\x14.golbat_api.IntRangeR\tpvpLittle\x121\n" +
 	"\tpvp_great\x18\v \x01(\v2\x14.golbat_api.IntRangeR\bpvpGreat\x121\n" +
-	"\tpvp_ultra\x18\f \x01(\v2\x14.golbat_api.IntRangeR\bpvpUltra\"\xea\x01\n" +
+	"\tpvp_ultra\x18\f \x01(\v2\x14.golbat_api.IntRangeR\bpvpUltra\x12\x1b\n" +
+	"\tshiny_for\x18\r \x03(\tR\bshinyFor\x12%\n" +
+	"\x0ebackground_for\x18\x0e \x03(\tR\rbackgroundFor\"\x8d\x02\n" +
 	"\x12PokemonScanRequest\x12$\n" +
 	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
 	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\x126\n" +
 	"\afilters\x18\x04 \x03(\v2\x1c.golbat_api.PokemonDnfFilterR\afilters\x12(\n" +
-	"\rupdated_after\x18\x05 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01B\x10\n" +
+	"\rupdated_after\x18\x05 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01\x12!\n" +
+	"\fannotate_for\x18\x06 \x03(\tR\vannotateForB\x10\n" +
 	"\x0e_updated_after\"\xb5\x01\n" +
 	"\x13PokemonScanResponse\x12-\n" +
 	"\apokemon\x18\x01 \x03(\v2\x13.golbat_api.PokemonR\apokemon\x12\x1a\n" +
@@ -3461,7 +3511,7 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\vPvpRankings\x12,\n" +
 	"\x06little\x18\x01 \x03(\v2\x14.golbat_api.PvpEntryR\x06little\x12*\n" +
 	"\x05great\x18\x02 \x03(\v2\x14.golbat_api.PvpEntryR\x05great\x12*\n" +
-	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\xad\f\n" +
+	"\x05ultra\x18\x03 \x03(\v2\x14.golbat_api.PvpEntryR\x05ultra\"\xf1\f\n" +
 	"\aPokemon\x12\x12\n" +
 	"\x02id\x18\x01 \x01(\x04B\x020\x01R\x02id\x12$\n" +
 	"\vpokestop_id\x18\x02 \x01(\tH\x00R\n" +
@@ -3504,7 +3554,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\tcapture_2\x18# \x01(\x01H\x1aR\bcapture2\x88\x01\x01\x12 \n" +
 	"\tcapture_3\x18$ \x01(\x01H\x1bR\bcapture3\x88\x01\x01\x12)\n" +
 	"\x03pvp\x18% \x01(\v2\x17.golbat_api.PvpRankingsR\x03pvp\x12\x19\n" +
-	"\bis_event\x18& \x01(\x05R\aisEventB\x0e\n" +
+	"\bis_event\x18& \x01(\x05R\aisEvent\x12\x1b\n" +
+	"\tshiny_for\x18' \x03(\tR\bshinyFor\x12%\n" +
+	"\x0ebackground_for\x18( \x03(\tR\rbackgroundForB\x0e\n" +
 	"\f_pokestop_idB\v\n" +
 	"\t_spawn_idB\t\n" +
 	"\a_weightB\a\n" +

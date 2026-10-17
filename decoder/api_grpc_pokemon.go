@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"context"
 	"math"
 
 	pb "golbat/grpc"
@@ -122,6 +123,9 @@ func pokemonDnfFilterFromProto(f *pb.PokemonDnfFilter) ApiPokemonDnfFilter3 {
 		Little:  intRangeToPokemonMinMax(f.GetPvpLittle()),
 		Great:   intRangeToPokemonMinMax(f.GetPvpGreat()),
 		Ultra:   intRangeToPokemonMinMax(f.GetPvpUltra()),
+
+		ShinyFor:      f.GetShinyFor(),
+		BackgroundFor: f.GetBackgroundFor(),
 	}
 }
 
@@ -131,6 +135,7 @@ func pokemonScanRequestFromProto(req *pb.PokemonScanRequest) ApiPokemonScan3 {
 		Max:          latLonFromProto(req.GetMax()),
 		Limit:        int(req.GetLimit()),
 		UpdatedAfter: req.GetUpdatedAfter(),
+		AnnotateFor:  req.GetAnnotateFor(),
 	}
 	if filters := req.GetFilters(); len(filters) > 0 {
 		out.DnfFilters = make([]ApiPokemonDnfFilter3, 0, len(filters))
@@ -223,19 +228,41 @@ func pokemonToProto(r *ApiPokemonResult, encounterId uint64) *pb.Pokemon {
 		Capture_3:               r.Capture3,
 		Pvp:                     pvpRankingsToProto(r.Pvp),
 		IsEvent:                 int32(r.IsEvent),
+		ShinyFor:                r.ShinyFor,
+		BackgroundFor:           r.BackgroundFor,
 	}
 }
 
-// GrpcScanPokemon is the gRPC counterpart of GetPokemonInArea3Clean: same
+// GrpcScanPokemon is the gRPC counterpart of ScanPokemonWithShiny: same
 // spatial scan, same DNF matching, same per-record build, proto out.
-func GrpcScanPokemon(req *pb.PokemonScanRequest) *pb.PokemonScanResponse {
+// Personal fields share preparePersonalScan and annotate with HTTP, so errors
+// are the same: ErrPersonalRequest, ErrShinyRatesNotConfigured,
+// ErrShinyRatesNotLoaded or the context's. Requests without them never fail.
+func GrpcScanPokemon(ctx context.Context, req *pb.PokemonScanRequest) (*pb.PokemonScanResponse, error) {
 	apiReq := pokemonScanRequestFromProto(req)
+	if err := preparePersonalScan(ctx, &apiReq); err != nil {
+		return nil, err
+	}
 	keys, examined, skipped, total := internalGetPokemonInArea3(apiReq)
+	if apiReq.shiny != nil {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
 
+	var annotateErr error
 	results := make([]*pb.Pokemon, 0, len(keys))
 	forEachLivePokemonResult(keys, "API.ScanPokemon.v3.grpc", apiReq.UpdatedAfter, func(id uint64, r *ApiPokemonResult) {
-		results = append(results, pokemonToProto(r, id))
+		if annotateErr != nil {
+			return
+		}
+		if annotateErr = apiReq.annotate(r); annotateErr == nil {
+			results = append(results, pokemonToProto(r, id))
+		}
 	})
+	if annotateErr != nil {
+		return nil, annotateErr
+	}
 
 	return &pb.PokemonScanResponse{
 		Pokemon:      results,
@@ -243,7 +270,7 @@ func GrpcScanPokemon(req *pb.PokemonScanRequest) *pb.PokemonScanResponse {
 		Skipped:      int32(skipped),
 		Total:        int32(total),
 		LimitReached: pokemonScanLimitReached(apiReq, len(keys)),
-	}
+	}, nil
 }
 
 // GrpcGetPokemon answers a batched by-id lookup from the cache. Unknown ids

@@ -105,6 +105,8 @@ type ApiPokemonResult struct {
 	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
 	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
 	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
+	ShinyFor                []string       `json:"shiny_for,omitempty" doc:"Player IDs from annotate_for this pokemon is shiny for. Pokemon v3 scan only."`
+	BackgroundFor           []string       `json:"background_for,omitempty" doc:"Player IDs from annotate_for this pokemon has a background for. Pokemon v3 scan only."`
 	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
 	Username                *string        `json:"username" doc:"Username of the account that reported the pokemon"`
 	Capture1                *float64       `json:"capture_1" doc:"Base capture rate with one ball"`

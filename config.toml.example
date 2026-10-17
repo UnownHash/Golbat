@@ -186,3 +186,10 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 #raid_stats_interval_minutes = 10       # Interval for writing raid stats (default: 10 minutes)
 #invasion_stats_interval_minutes = 15   # Interval for writing invasion stats (default: 15 minutes)
 #quest_stats_interval_minutes = 15      # Interval for writing quest stats (default: 15 minutes)
+
+# Optional personal shiny filtering on /api/pokemon/v3/scan.
+# Rates are fetched from GET <url>/v1/rates?compact=1 (see docs/personal-shinies.md).
+# [shiny_rates]
+# url = "http://rates-service:8080"
+# token = "" # Optional bearer token
+# max_bytes = 16777216 # Largest rate feed accepted (default 16 MiB); a larger feed fails the refresh
