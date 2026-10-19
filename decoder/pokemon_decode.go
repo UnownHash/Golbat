@@ -1145,8 +1145,38 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	}
 }
 
+// clearMiniorEncounterStats removes player-specific encounter values. Minior's
+// encounter stats cannot describe the shared spawn, including across weather
+// changes. Discard old scan history too so it cannot restore those values or
+// misidentify a later encounter as Ditto. Shared map/display fields stay intact.
+func (pokemon *Pokemon) clearMiniorEncounterStats() bool {
+	if pokemon.PokemonId != int16(pogo.HoloPokemonId_MINIOR) {
+		return false
+	}
+	pokemon.clearIv(false)
+	pokemon.SetCp(null.Int{})
+	pokemon.SetLevel(null.Int{})
+	pokemon.SetMove1(null.Int{})
+	pokemon.SetMove2(null.Int{})
+	pokemon.SetHeight(null.Float{})
+	pokemon.SetWeight(null.Float{})
+	pokemon.SetSize(null.Int{})
+	pokemon.SetShiny(null.Bool{})
+	pokemon.SetPvp(null.String{})
+	if len(pokemon.GolbatInternal) != 0 {
+		pokemon.GolbatInternal = nil
+		pokemon.dirty = true
+	}
+	pokemon.scanHistory = nil
+	return true
+}
+
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+	if pokemon.clearMiniorEncounterStats() {
+		pokemon.setUsernameIfStored(username)
+		return
+	}
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1365,6 +1395,9 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
+	if pokemon.clearMiniorEncounterStats() {
+		return
+	}
 	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
 	// before deriving isBoosted from it (see narrowUint8). Out of range, the
 	// raw reading and the value that actually gets stored can classify

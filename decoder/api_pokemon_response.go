@@ -3,6 +3,8 @@ package decoder
 import (
 	"time"
 
+	"golbat/pogo"
+
 	"github.com/UnownHash/gohbem"
 )
 
@@ -168,6 +170,11 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 // buildApiPvpRankings queries ohbem for PVP rankings. Returns a zero value when
 // PVP is disabled (no ohbem instance) or on query error.
 func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
+	// Minior has no shared encounter IVs/level to rank. Do not turn its
+	// cleared fields into a synthetic 0/0/0 ranking via ValueOrZero below.
+	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+		return ApiPvpRankings{}
+	}
 	o := ohbem.Load()
 	if o == nil {
 		return ApiPvpRankings{}
