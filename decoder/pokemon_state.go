@@ -12,7 +12,6 @@ import (
 	"golbat/config"
 	"golbat/db"
 	"golbat/geo"
-	"golbat/pogo"
 	"golbat/webhooks"
 
 	"github.com/UnownHash/gohbem"
@@ -48,9 +47,6 @@ func loadPokemonFromDatabase(ctx context.Context, db db.DbDetails, encounterId u
 			"SELECT "+pokemonSelectColumns+" FROM pokemon WHERE id = ?",
 			strconv.FormatUint(encounterId, 10))
 		getStatsCollector().IncDbQuery("select pokemon", err)
-		if err == nil {
-			pokemon.clearMiniorEncounterStats()
-		}
 		return err
 	})
 }
@@ -147,8 +143,6 @@ func getOrCreatePokemonRecord(ctx context.Context, db db.DbDetails, encounterId 
 }
 
 func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Pokemon, isEncounter, writeDB, webhook bool, now int64, username string) {
-	// Also cover existing records saved without a fresh encounter.
-	pokemon.clearMiniorEncounterStats()
 	if !pokemon.newRecord && !pokemon.IsDirty() {
 		return
 	}
@@ -320,10 +314,9 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 			return err
 		}
 	} else {
-		// Minior must clear old rankings even when its new value is NULL.
-		// Other species retain the usual no-new-ranking behavior.
+		// Always include PVP field for updates if it's set
 		pvpUpdate := ""
-		if pokemon.Pvp.Valid || pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+		if pokemon.Pvp.Valid {
 			pvpUpdate = "pvp = :pvp, "
 		}
 		_, err := db.PokemonDb.NamedExecContext(ctx, fmt.Sprintf("UPDATE pokemon SET "+

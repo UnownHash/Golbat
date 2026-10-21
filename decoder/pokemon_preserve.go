@@ -135,8 +135,6 @@ func PreloadPreservedPokemon(dbDetails db.DbDetails) int32 {
 			defer wg.Done()
 			currentTime := time.Now().Unix()
 			for pokemon := range jobs {
-				// Do not republish encounter stats saved by older versions.
-				pokemon.clearMiniorEncounterStats()
 				// Only restore pokemon with verified despawns. Unverified
 				// expire timestamps are guesses, and remainingDuration now
 				// always returns a positive (jittered) duration for them, so

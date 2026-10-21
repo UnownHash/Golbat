@@ -12,7 +12,6 @@ import (
 	"golbat/webhooks"
 
 	"github.com/guregu/null/v6"
-	"google.golang.org/protobuf/proto"
 )
 
 func miniorTestPokemon() *Pokemon {
@@ -23,17 +22,8 @@ func miniorTestPokemon() *Pokemon {
 		ExpireTimestampVerified: true,
 		Weather:                 null.ValueFrom(uint8(1)), Form: null.ValueFrom(uint16(2707)),
 		Gender: null.ValueFrom(uint8(3)), Costume: null.ValueFrom(uint8(0)),
-		IsStrong: null.ValueFrom(false), SeenType: SeenTypeFrom(SeenTypeCodeEncounter),
-		Cp: null.ValueFrom(uint16(123)), Level: null.ValueFrom(uint8(20)),
-		AtkIv: null.ValueFrom(uint8(15)), DefIv: null.ValueFrom(uint8(15)),
-		StaIv: null.ValueFrom(uint8(15)), Iv: null.ValueFrom(float32(100)),
-		Move1: null.ValueFrom(uint16(1)), Move2: null.ValueFrom(uint16(2)),
-		Height: null.ValueFrom(float32(1.5)), Weight: null.ValueFrom(float32(25)),
-		Size: null.ValueFrom(uint8(3)), Shiny: null.ValueFrom(true),
-		Pvp: null.StringFrom(`{"great":[{"rank":1}]}`),
-	}}
-	p.scanHistory = []*pokemonScan{{Pokemon: int32(pogo.HoloPokemonId_MINIOR), Level: 20, Attack: 15, Defense: 15, Stamina: 15}}
-	p.GolbatInternal, _ = proto.Marshal(scanHistoryToProto(p.scanHistory))
+		IsStrong: null.ValueFrom(false), SeenType: SeenTypeFrom(SeenTypeCodeWild),
+	}, newRecord: true}
 	p.snapshotOldValues()
 	return p
 }
@@ -52,30 +42,25 @@ func assertMiniorStatsNull(t *testing.T, p *Pokemon) {
 	if p.AtkIv.Valid || p.DefIv.Valid || p.StaIv.Valid || p.Iv.Valid ||
 		p.Cp.Valid || p.Level.Valid || p.Move1.Valid || p.Move2.Valid ||
 		p.Height.Valid || p.Weight.Valid || p.Size.Valid || p.Shiny.Valid || p.Pvp.Valid {
-		t.Errorf("Minior retained encounter stats: %+v", p.PokemonData)
+		t.Errorf("Minior was assigned encounter stats: %+v", p.PokemonData)
 	}
 	if len(p.scanHistory) != 0 || len(p.GolbatInternal) != 0 {
-		t.Error("Minior retained encounter scan history")
+		t.Error("Minior recorded encounter scan history")
 	}
 }
 
-func TestMiniorEncounterStatsAlwaysNull(t *testing.T) {
+func TestMiniorEncounterSetsNoStats(t *testing.T) {
 	for _, form := range []pogo.PokemonDisplayProto_Form{
 		0, pogo.PokemonDisplayProto_MINIOR_METEOR_BLUE, pogo.PokemonDisplayProto_MINIOR_BLUE,
 		pogo.PokemonDisplayProto_MINIOR_METEOR_YELLOW, pogo.PokemonDisplayProto_MINIOR_YELLOW,
 	} {
 		t.Run(form.String(), func(t *testing.T) {
-			for _, stale := range []bool{false, true} {
-				p := miniorTestPokemon()
-				if !stale {
-					p = &Pokemon{PokemonData: PokemonData{PokemonId: int16(pogo.HoloPokemonId_MINIOR), Weather: null.ValueFrom(uint8(1))}, newRecord: true}
-				}
-				p.SetForm(null.IntFrom(int64(form)))
-				p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, form), "tester")
-				assertMiniorStatsNull(t, p)
-				if p.PokemonId != int16(pogo.HoloPokemonId_MINIOR) || p.Form.ValueOrZero() != uint16(form) {
-					t.Error("Minior identity/form changed")
-				}
+			p := miniorTestPokemon()
+			p.SetForm(null.IntFrom(int64(form)))
+			p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, form), "tester")
+			assertMiniorStatsNull(t, p)
+			if p.PokemonId != int16(pogo.HoloPokemonId_MINIOR) || p.Form.ValueOrZero() != uint16(form) {
+				t.Error("Minior identity/form changed")
 			}
 		})
 	}
@@ -83,8 +68,29 @@ func TestMiniorEncounterStatsAlwaysNull(t *testing.T) {
 
 func TestMiniorWeatherChangeCannotRestoreEncounterStats(t *testing.T) {
 	p := miniorTestPokemon()
+	// An older build may have recorded a scan; do not restore its values.
+	p.scanHistory = []*pokemonScan{{Pokemon: int32(pogo.HoloPokemonId_MINIOR), Weather: 1, Level: 20, Attack: 15, Defense: 15, Stamina: 15}}
+	history := p.scanHistory[0]
 	p.repopulateIv(int64(pogo.GameplayWeatherProto_NONE), false)
-	assertMiniorStatsNull(t, p)
+	if p.AtkIv.Valid || p.Cp.Valid || p.Level.Valid || p.Iv.Valid {
+		t.Fatal("weather change restored Minior encounter stats")
+	}
+	if len(p.scanHistory) != 1 || p.scanHistory[0] != history {
+		t.Fatal("weather check should not clean up stored scan history")
+	}
+}
+
+func TestMiniorGuardsDoNotCleanExistingStats(t *testing.T) {
+	p := miniorTestPokemon()
+	p.Cp = null.ValueFrom(uint16(123))
+	p.Level = null.ValueFrom(uint8(20))
+	p.AtkIv = null.ValueFrom(uint8(15))
+	before := p.PokemonData
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "")
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_NONE), false)
+	if !reflect.DeepEqual(before, p.PokemonData) {
+		t.Fatal("go-forward guards should neither clear nor overwrite existing stats")
+	}
 }
 
 func TestMiniorLureAndTappableEncounters(t *testing.T) {
@@ -107,28 +113,10 @@ func TestMiniorLureAndTappableEncounters(t *testing.T) {
 	}
 }
 
-func TestMiniorCleanupIsIdempotentAndSpeciesScoped(t *testing.T) {
+func TestMiniorApiStatsNullAfterEncounter(t *testing.T) {
+	lureTestSetup(t)
 	p := miniorTestPokemon()
-	if !p.clearMiniorEncounterStats() || !p.IsDirty() {
-		t.Fatal("stale Minior stats were not marked for cleanup")
-	}
-	assertMiniorStatsNull(t, p)
-	p.ClearDirty()
-	p.clearMiniorEncounterStats()
-	if p.IsDirty() {
-		t.Fatal("clearing already-null stats dirtied Minior again")
-	}
-	p = miniorTestPokemon()
-	p.PokemonId = 25
-	before := p.PokemonData
-	if p.clearMiniorEncounterStats() || p.IsDirty() || !reflect.DeepEqual(before, p.PokemonData) || len(p.scanHistory) == 0 {
-		t.Fatal("Minior cleanup changed another species")
-	}
-}
-
-func TestMiniorApiStatsNullAfterCleanup(t *testing.T) {
-	p := miniorTestPokemon()
-	p.clearMiniorEncounterStats()
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester")
 	data, err := json.Marshal(buildApiPokemonResult(p))
 	if err != nil {
 		t.Fatal(err)
@@ -147,13 +135,11 @@ func TestMiniorApiStatsNullAfterCleanup(t *testing.T) {
 	}
 }
 
-func TestMiniorSaveClearsStaleStatsBeforeDirtyCheckAndWebhook(t *testing.T) {
+func TestMiniorEncounterPublishesNoIvSpawn(t *testing.T) {
 	sink := lureTestSetup(t)
 	p := miniorTestPokemon()
 	before := p.PokemonData
-	if p.IsDirty() {
-		t.Fatal("fixture should start clean")
-	}
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester")
 	savePokemonRecordAsAtTime(context.Background(), db.DbDetails{}, p, false, false, true, time.Now().Unix(), "tester")
 	assertMiniorStatsNull(t, p)
 	if p.Lat != before.Lat || p.Lon != before.Lon || p.SpawnId != before.SpawnId ||

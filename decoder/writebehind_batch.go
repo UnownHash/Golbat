@@ -445,9 +445,6 @@ ON DUPLICATE KEY UPDATE
 // set forwards, so a NULL reaching here means "we do not know", never
 // "clear it". The explanation lives here rather than as a SQL comment so
 // the statement on the wire stays exactly as short as it was.
-//
-// Minior (774) must also clear previously stored PVP instead of preserving it
-// through the usual NULL-means-no-new-ranking COALESCE.
 const pokemonBatchUpsertQuery = `
 INSERT INTO pokemon (
 	id, pokemon_id, lat, lon, spawn_id, expire_timestamp, atk_iv, def_iv, sta_iv,
@@ -497,7 +494,7 @@ ON DUPLICATE KEY UPDATE
 	expire_timestamp_verified = VALUES(expire_timestamp_verified),
 	shiny = VALUES(shiny),
 	username = VALUES(username),
-	pvp = IF(VALUES(pokemon_id) = 774, NULL, COALESCE(VALUES(pvp), pvp)),
+	pvp = COALESCE(VALUES(pvp), pvp),
 	is_event = VALUES(is_event),
 	seen_type = COALESCE(VALUES(seen_type), seen_type)
 `
