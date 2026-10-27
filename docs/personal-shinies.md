@@ -10,8 +10,9 @@ instead of being parsed truncated; raise it if the feed outgrows the default.
 Unknown variants take the feed's `fallback` shiny rate (1/512 if it publishes
 none) and no background, unless their species is listed in
 `unsupportedPokemon`.
-Disguised Pokémon not known to be Ditto and nearby-only sightings are never
-eligible; known Dittos follow their own rule (see [Ditto](#ditto)).
+Wild sightings, encounters and tappable encounters (lured or not) are rolled.
+Nearby-only and lure sightings are not, and neither are disguised Pokémon not
+known to be Ditto; known Dittos follow their own rule (see [Ditto](#ditto)).
 
 The rate source must return JSON in this shape:
 

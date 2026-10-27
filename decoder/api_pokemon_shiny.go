@@ -247,13 +247,27 @@ func (r *shinyRates) shinyMaximum(pokemon int16) uint32 {
 	return max(r.maximum[pokemon], r.fallback)
 }
 
+// personalRollSeenType reports whether a sighting of this kind carries the
+// encounter ID the player's own roll is seeded from. Tappables were checked
+// against scanner accounts: predicted shinies came out shiny. Nearby
+// sightings have no rollable ID, and lure spawns have not been checked.
+func personalRollSeenType(code SeenTypeCode) bool {
+	switch code {
+	case SeenTypeCodeWild, SeenTypeCodeEncounter,
+		SeenTypeCodeTappableEncounter, SeenTypeCodeTappableLureEncounter:
+		return true
+	}
+	return false
+}
+
 // personalLookup packs roll eligibility and costume into PokemonLookup's
 // spare byte: 0 means never personally shiny or background-eligible
-// (disguised, Ditto not known as one, or seen only as nearby), otherwise
-// costume+1. A known Ditto is 1: its rule ignores costume, and an eligible
-// lookup with PokemonId 132 is always a known Ditto (see isKnownDitto).
+// (disguised, Ditto not known as one, or a seen type personalRollSeenType
+// rejects), otherwise costume+1. A known Ditto is 1: its rule ignores
+// costume, and an eligible lookup with PokemonId 132 is always a known Ditto
+// (see isKnownDitto).
 func personalLookup(pokemon *Pokemon) uint8 {
-	if pokemon.SeenType != SeenTypeFrom(SeenTypeCodeWild) && pokemon.SeenType != SeenTypeFrom(SeenTypeCodeEncounter) {
+	if !personalRollSeenType(pokemon.SeenType.Code) {
 		return 0
 	}
 	if isKnownDitto(pokemon) {

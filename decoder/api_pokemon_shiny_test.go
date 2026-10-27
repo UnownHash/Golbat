@@ -579,3 +579,26 @@ func TestShinyRatesMaxBytes(t *testing.T) {
 		server.Close()
 	}
 }
+
+func TestPersonalRollSeenTypes(t *testing.T) {
+	rolled := map[SeenTypeCode]bool{
+		SeenTypeCodeWild:                  true,
+		SeenTypeCodeEncounter:             true,
+		SeenTypeCodeTappableEncounter:     true,
+		SeenTypeCodeTappableLureEncounter: true,
+	}
+	codes := []SeenTypeCode{SeenTypeCodeUnknown}
+	for code := SeenTypeCodeUnset; code <= SeenTypeCodeTappableLureEncounter; code++ {
+		codes = append(codes, code)
+	}
+	for _, code := range codes {
+		p := &Pokemon{PokemonData: PokemonData{PokemonId: 94, Costume: null.ValueFrom[uint8](3), SeenType: SeenTypeFrom(code)}}
+		want := uint8(0)
+		if rolled[code] {
+			want = 4
+		}
+		if got := personalLookup(p); got != want {
+			t.Errorf("personalLookup with seen type %d = %d, want %d", code, got, want)
+		}
+	}
+}
