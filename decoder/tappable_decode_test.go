@@ -205,8 +205,14 @@ func decodeTappableEncounter(t *testing.T, ta *Tappable, pokemonId pogo.HoloPoke
 }
 
 func TestTappableDecodeEncounterClearsRewardColumns(t *testing.T) {
-	ta := &Tappable{}
-	decodeTappableLoot(t, ta, &pogo.LootItemProto{Type: &pogo.LootItemProto_PokemonCandy{PokemonCandy: pogo.HoloPokemonId_PIKACHU}, Count: 6})
+	// every reward field set, so each one's clearing is checked
+	ta := &Tappable{TappableData: TappableData{
+		RewardType:      null.StringFrom("pokemon_candy"),
+		ItemId:          null.IntFrom(1301),
+		RewardPokemonId: null.IntFrom(25),
+		Count:           null.IntFrom(6),
+		Rewards:         null.StringFrom(`[{"pokemon_candy":25,"count":6}]`),
+	}}
 	decodeTappableEncounter(t, ta, pogo.HoloPokemonId_PIKACHU)
 	if ta.RewardType.Valid || ta.ItemId.Valid || ta.RewardPokemonId.Valid || ta.Count.Valid || ta.Rewards.Valid {
 		t.Errorf("stale reward after encounter: type %v item %v pokemon %v count %v rewards %v",
