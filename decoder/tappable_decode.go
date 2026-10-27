@@ -43,28 +43,30 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 	} else if reward := tappable.GetReward(); reward != nil {
 		for _, lootProto := range reward {
 			for _, itemProto := range lootProto.GetLootItem() {
+				field := itemProto.ProtoReflect().WhichOneof(lootItemTypeOneof)
+				if field == nil {
+					log.Warnf("Unknown or unset Type")
+					continue
+				}
+				var itemId, pokemonId null.Int
 				switch t := itemProto.Type.(type) {
 				case *pogo.LootItemProto_Item:
-					ta.SetItemId(null.IntFrom(int64(t.Item)))
-					ta.SetCount(null.IntFrom(int64(itemProto.Count)))
-				case *pogo.LootItemProto_Stardust:
-					log.Warnf("[TAPPABLE] Reward is Stardust: %t", t.Stardust)
-				case *pogo.LootItemProto_Pokecoin:
-					log.Warnf("[TAPPABLE] Reward is Pokecoin: %t", t.Pokecoin)
+					itemId = null.IntFrom(int64(t.Item))
 				case *pogo.LootItemProto_PokemonCandy:
-					log.Warnf("[TAPPABLE] Reward is Pokemon Candy: %v", t.PokemonCandy)
-				case *pogo.LootItemProto_Experience:
-					log.Warnf("[TAPPABLE] Reward is Experience: %t", t.Experience)
+					pokemonId = null.IntFrom(int64(t.PokemonCandy))
+				case *pogo.LootItemProto_XlCandy:
+					pokemonId = null.IntFrom(int64(t.XlCandy))
+				case *pogo.LootItemProto_MegaEnergyPokemonId:
+					pokemonId = null.IntFrom(int64(t.MegaEnergyPokemonId))
+				case *pogo.LootItemProto_TempEvoPokemonBranch:
+					// temp evo id (mega X/Y) is not stored
+					pokemonId = null.IntFrom(int64(t.TempEvoPokemonBranch.GetPokedexId()))
 				case *pogo.LootItemProto_PokemonEgg:
 					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
 				case *pogo.LootItemProto_AvatarTemplateId:
 					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", t.AvatarTemplateId)
 				case *pogo.LootItemProto_StickerId:
 					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
-				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					log.Warnf("[TAPPABLE] Reward is Mega Energy Pokemon ID: %v", t.MegaEnergyPokemonId)
-				case *pogo.LootItemProto_XlCandy:
-					log.Warnf("[TAPPABLE] Reward is XL Candy: %v", t.XlCandy)
 				case *pogo.LootItemProto_FollowerPokemon:
 					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
 				case *pogo.LootItemProto_NeutralAvatarTemplateId:
@@ -73,12 +75,22 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
 				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
 					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
-				default:
-					log.Warnf("Unknown or unset Type")
 				}
+				ta.setReward(null.StringFrom(string(field.Name())), itemId, pokemonId, null.IntFrom(int64(itemProto.Count)))
 			}
 		}
 	}
+}
+
+// lootItemTypeOneof is LootItemProto's reward oneof; its set field name is stored as reward_type.
+var lootItemTypeOneof = (&pogo.LootItemProto{}).ProtoReflect().Descriptor().Oneofs().ByName("Type")
+
+// setReward stores one loot reward; fields not used by the reward type are cleared.
+func (ta *Tappable) setReward(rewardType null.String, itemId, pokemonId, count null.Int) {
+	ta.SetRewardType(rewardType)
+	ta.SetItemId(itemId)
+	ta.SetRewardPokemonId(pokemonId)
+	ta.SetCount(count)
 }
 
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {

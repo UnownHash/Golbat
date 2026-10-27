@@ -233,7 +233,9 @@ func TestClassMovedEntitySizes(t *testing.T) {
 		// exact Go size class, so both 248 and 256 round up to class 256 —
 		// still no allocator regression.
 		"Incident": {unsafe.Sizeof(Incident{}), 256},
-		"Tappable": {unsafe.Sizeof(Tappable{}), 200},
+		// Tappable grew 200->240 (class 208->240) for RewardType and
+		// RewardPokemonId. Tappables are short-lived and few; accepted.
+		"Tappable": {unsafe.Sizeof(Tappable{}), 240},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)

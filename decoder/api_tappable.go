@@ -11,8 +11,10 @@ type ApiTappableResult struct {
 	SpawnId                 *int64  `json:"spawn_id" doc:"ID of the spawnpoint the tappable belongs to"`
 	Type                    string  `json:"type" doc:"Type of the tappable"`
 	Encounter               *int64  `json:"pokemon_id" doc:"Pokedex ID of the encountered pokemon"`
+	RewardType              *string `json:"reward_type" doc:"Reward kind: LootItemProto field name (item, pokemon_candy, xl_candy, mega_energy_pokemon_id, temp_evo_pokemon_branch, stardust, …)"`
 	ItemId                  *int64  `json:"item_id" doc:"ID of the item reward"`
-	Count                   *int64  `json:"count" doc:"Count of the item reward"`
+	RewardPokemonId         *int64  `json:"reward_pokemon_id" doc:"Pokedex ID for candy, XL candy, mega energy and temp evo branch rewards"`
+	Count                   *int64  `json:"count" doc:"Amount of the reward"`
 	ExpireTimestamp         *int64  `json:"expire_timestamp" doc:"Unix timestamp when the tappable expires"`
 	ExpireTimestampVerified bool    `json:"expire_timestamp_verified" doc:"Whether the expire timestamp is verified"`
 	Updated                 int64   `json:"updated" doc:"Unix timestamp when the record was last updated"`
@@ -28,7 +30,9 @@ func buildTappableResult(tappable *Tappable) ApiTappableResult {
 		SpawnId:                 tappable.SpawnId.Ptr(),
 		Type:                    tappable.Type,
 		Encounter:               tappable.Encounter.Ptr(),
+		RewardType:              tappable.RewardType.Ptr(),
 		ItemId:                  tappable.ItemId.Ptr(),
+		RewardPokemonId:         tappable.RewardPokemonId.Ptr(),
 		Count:                   tappable.Count.Ptr(),
 		ExpireTimestamp:         tappable.ExpireTimestamp.Ptr(),
 		ExpireTimestampVerified: tappable.ExpireTimestampVerified,
