@@ -554,11 +554,11 @@ ON DUPLICATE KEY UPDATE
 const tappableBatchUpsertQuery = `
 INSERT INTO tappable (
 	id, lat, lon, fort_id, spawn_id, type, pokemon_id, reward_type, item_id,
-	reward_pokemon_id, count, expire_timestamp, expire_timestamp_verified, updated
+	reward_pokemon_id, count, rewards, expire_timestamp, expire_timestamp_verified, updated
 )
 VALUES (
 	:id, :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :reward_type, :item_id,
-	:reward_pokemon_id, :count, :expire_timestamp, :expire_timestamp_verified, :updated
+	:reward_pokemon_id, :count, :rewards, :expire_timestamp, :expire_timestamp_verified, :updated
 )
 ON DUPLICATE KEY UPDATE
 	lat = VALUES(lat),
@@ -571,6 +571,7 @@ ON DUPLICATE KEY UPDATE
 	item_id = VALUES(item_id),
 	reward_pokemon_id = VALUES(reward_pokemon_id),
 	count = VALUES(count),
+	rewards = VALUES(rewards),
 	expire_timestamp = VALUES(expire_timestamp),
 	expire_timestamp_verified = VALUES(expire_timestamp_verified),
 	updated = VALUES(updated)

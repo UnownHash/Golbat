@@ -84,6 +84,73 @@ func TestTappableDecodeRewards(t *testing.T) {
 	}
 }
 
+func TestTappableDecodeRewardsJson(t *testing.T) {
+	for name, tc := range map[string]struct {
+		items []*pogo.LootItemProto
+		want  string
+	}{
+		// "candy" and "item" match payloads seen in traffic
+		"candy": {
+			items: []*pogo.LootItemProto{{Type: &pogo.LootItemProto_PokemonCandy{PokemonCandy: pogo.HoloPokemonId_PIKACHU}, Count: 6}},
+			want:  `[{"pokemon_candy":25,"count":6}]`,
+		},
+		"item": {
+			items: []*pogo.LootItemProto{{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_RARE_CANDY}, Count: 1}},
+			want:  `[{"item":1301,"count":1}]`,
+		},
+		"temp evo branch keeps temp_evo_id": {
+			items: []*pogo.LootItemProto{{Type: &pogo.LootItemProto_TempEvoPokemonBranch{TempEvoPokemonBranch: &pogo.TempEvoPokemonBranch{
+				PokedexId: pogo.HoloPokemonId_CHARIZARD,
+				TempEvoId: pogo.HoloTemporaryEvolutionId_TEMP_EVOLUTION_MEGA_X,
+			}}, Count: 20}},
+			want: `[{"temp_evo_pokemon_branch":{"pokedex_id":6,"temp_evo_id":2},"count":20}]`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			ta := &Tappable{}
+			decodeTappableLoot(t, ta, tc.items...)
+			if ta.Rewards != null.StringFrom(tc.want) {
+				t.Errorf("rewards = %v, want %s", ta.Rewards, tc.want)
+			}
+		})
+	}
+}
+
+func TestTappableDecodeMultipleRewardsColumnsFromFirst(t *testing.T) {
+	ta := &Tappable{}
+	decodeTappableLoot(t, ta,
+		&pogo.LootItemProto{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_RARE_CANDY}, Count: 1},
+		&pogo.LootItemProto{Type: &pogo.LootItemProto_Stardust{Stardust: true}, Count: 100},
+	)
+	if want := `[{"item":1301,"count":1},{"stardust":true,"count":100}]`; ta.Rewards != null.StringFrom(want) {
+		t.Errorf("rewards = %v, want %s", ta.Rewards, want)
+	}
+	if ta.RewardType != null.StringFrom("item") || ta.ItemId != null.IntFrom(1301) || ta.Count != null.IntFrom(1) {
+		t.Errorf("columns = type %v item %v count %v, want first reward", ta.RewardType, ta.ItemId, ta.Count)
+	}
+}
+
+func TestTappableDecodeRewardsJsonStable(t *testing.T) {
+	item := &pogo.LootItemProto{Type: &pogo.LootItemProto_PokemonCandy{PokemonCandy: pogo.HoloPokemonId_PIKACHU}, Count: 6}
+	ta := &Tappable{}
+	decodeTappableLoot(t, ta, item)
+	ta.ClearDirty()
+	decodeTappableLoot(t, ta, item)
+	if ta.IsDirty() {
+		t.Error("re-decoding the same loot marked the tappable dirty")
+	}
+}
+
+func TestTappableDecodeEncounterClearsRewardsJson(t *testing.T) {
+	ta := &Tappable{TappableData: TappableData{Rewards: null.StringFrom(`[{"item":1}]`)}}
+	out := &pogo.ProcessTappableOutProto{Encounter: &pogo.TappableEncounterProto{Pokemon: &pogo.PokemonProto{PokemonId: pogo.HoloPokemonId_PIKACHU}}}
+	req := &pogo.ProcessTappableProto{EncounterId: 42}
+	ta.updateFromProcessTappableProto(context.Background(), db.DbDetails{}, out, req, 1700000000000)
+	if ta.Rewards.Valid {
+		t.Errorf("rewards = %v, want null for encounter", ta.Rewards)
+	}
+}
+
 func TestTappableDecodeRewardChangeClearsStaleFields(t *testing.T) {
 	ta := &Tappable{}
 	decodeTappableLoot(t, ta, &pogo.LootItemProto{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_POKE_BALL}, Count: 1})

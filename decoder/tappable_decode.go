@@ -1,12 +1,15 @@
 package decoder
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"strconv"
 	"time"
 
 	"github.com/guregu/null/v6"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"golbat/db"
 	"golbat/pogo"
@@ -40,13 +43,21 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 		// tappable is a Pokèmon, encounter is sent in a separate proto
 		// we store this to link tappable with Pokèmon from encounter proto
 		ta.SetEncounter(null.IntFrom(int64(encounter.Pokemon.PokemonId)))
+		ta.SetRewards(null.String{})
 	} else if reward := tappable.GetReward(); reward != nil {
+		var rewardsJson [][]byte
+		first := true
 		for _, lootProto := range reward {
 			for _, itemProto := range lootProto.GetLootItem() {
 				field := itemProto.ProtoReflect().WhichOneof(lootItemTypeOneof)
 				if field == nil {
 					log.Warnf("Unknown or unset Type")
 					continue
+				}
+				if itemJson, err := lootItemJsonOptions.Marshal(itemProto); err != nil {
+					log.Errorf("[TAPPABLE] marshal loot item: %s", err)
+				} else {
+					rewardsJson = append(rewardsJson, itemJson)
 				}
 				var itemId, pokemonId null.Int
 				switch t := itemProto.Type.(type) {
@@ -76,10 +87,34 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
 					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
 				}
-				ta.setReward(null.StringFrom(string(field.Name())), itemId, pokemonId, null.IntFrom(int64(itemProto.Count)))
+				if first {
+					// columns hold the first reward; all of them are in rewards
+					ta.setReward(null.StringFrom(string(field.Name())), itemId, pokemonId, null.IntFrom(int64(itemProto.Count)))
+					first = false
+				}
 			}
 		}
+		ta.SetRewards(lootItemsJson(rewardsJson))
 	}
+}
+
+// lootItemJsonOptions renders loot items with proto field names and numeric enums,
+// e.g. {"pokemon_candy":25,"count":6}.
+var lootItemJsonOptions = protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}
+
+// lootItemsJson joins marshaled loot items into a compact JSON array.
+// Compacting matters: protojson output has unstable whitespace, which would
+// mark the tappable dirty on every update.
+func lootItemsJson(items [][]byte) null.String {
+	if len(items) == 0 {
+		return null.String{}
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, append(append([]byte("["), bytes.Join(items, []byte(","))...), ']')); err != nil {
+		log.Errorf("[TAPPABLE] compact rewards json: %s", err)
+		return null.String{}
+	}
+	return null.StringFrom(buf.String())
 }
 
 // lootItemTypeOneof is LootItemProto's reward oneof; its set field name is stored as reward_type.

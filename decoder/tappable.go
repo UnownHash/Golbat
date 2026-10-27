@@ -20,6 +20,7 @@ type TappableData struct {
 	ItemId                  null.Int    `db:"item_id"`
 	RewardPokemonId         null.Int    `db:"reward_pokemon_id"` // candy / XL candy / mega energy species
 	Count                   null.Int    `db:"count"`
+	Rewards                 null.String `db:"rewards"` // all loot items as protojson array
 	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
 	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
 	Updated                 int64       `db:"updated"`
@@ -158,6 +159,16 @@ func (ta *Tappable) SetRewardPokemonId(v null.Int) {
 			ta.debug.recordChange(fmt.Sprintf("RewardPokemonId:%s->%s", FormatNull(ta.RewardPokemonId), FormatNull(v)))
 		}
 		ta.RewardPokemonId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetRewards(v null.String) {
+	if ta.Rewards != v {
+		if dbDebugEnabled {
+			ta.debug.recordChange(fmt.Sprintf("Rewards:%s->%s", FormatNull(ta.Rewards), FormatNull(v)))
+		}
+		ta.Rewards = v
 		ta.dirty = true
 	}
 }
