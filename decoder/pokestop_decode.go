@@ -294,13 +294,15 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 				}
 			} else {
 				pokemonId := info.GetPokemonId()
+				resolved := true
 				if dist := info.GetPokemonEncounterDistribution(); dist != nil {
 					templateId := dist.GetQuestDistributionTemplateId()
 					infoData["distribution_template_id"] = templateId
 					pokemonId = questDistributionPokemonId(templateId)
+					resolved = pokemonId != pogo.HoloPokemonId_MISSINGNO
 				}
 				infoData["pokemon_id"] = int(pokemonId)
-				if isFirst && pokemonId != pogo.HoloPokemonId_MISSINGNO {
+				if isFirst && resolved {
 					rewardPokemonId = null.IntFrom(int64(pokemonId))
 				}
 			}
@@ -583,6 +585,9 @@ func questDistributionPokemonId(templateId string) pogo.HoloPokemonId {
 				return pogo.HoloPokemonId(id)
 			}
 		}
+	}
+	if templateId == "" {
+		return pogo.HoloPokemonId_MISSINGNO
 	}
 	if _, seen := unresolvedQuestDistributions.LoadOrStore(templateId, struct{}{}); !seen {
 		log.Warnf("[POKESTOP] Unresolved quest encounter distribution %q", templateId)

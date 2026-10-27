@@ -145,3 +145,24 @@ func TestUpdatePokestopFromQuestProtoEncounterDistribution(t *testing.T) {
 		t.Errorf("QuestPokemonId = %d, want null for unresolved template", unresolved.QuestPokemonId.Int64)
 	}
 }
+
+func TestUpdatePokestopFromQuestProtoEncounterWithoutId(t *testing.T) {
+	stop := &Pokestop{}
+	stop.updatePokestopFromQuestProto(&pogo.FortSearchOutProto{
+		ChallengeQuest: &pogo.ClientQuestProto{
+			Quest: &pogo.QuestProto{
+				Goal: &pogo.QuestGoalProto{},
+				QuestRewards: []*pogo.QuestRewardProto{{
+					Type: pogo.QuestRewardProto_POKEMON_ENCOUNTER,
+					Reward: &pogo.QuestRewardProto_PokemonEncounter{
+						PokemonEncounter: &pogo.PokemonEncounterRewardProto{},
+					},
+				}},
+			},
+			QuestDisplay: &pogo.QuestDisplayProto{},
+		},
+	}, true)
+	if !stop.QuestPokemonId.Valid || stop.QuestPokemonId.Int64 != 0 {
+		t.Errorf("QuestPokemonId = %+v, want valid 0", stop.QuestPokemonId)
+	}
+}
