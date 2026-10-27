@@ -43,58 +43,52 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 		// tappable is a Pokèmon, encounter is sent in a separate proto
 		// we store this to link tappable with Pokèmon from encounter proto
 		ta.SetEncounter(null.IntFrom(int64(encounter.Pokemon.PokemonId)))
-		ta.SetRewards(null.String{})
+		ta.setRewards(null.String{}, null.Int{}, null.Int{}, null.Int{}, null.String{})
 	} else if reward := tappable.GetReward(); reward != nil {
-		var rewardsJson [][]byte
-		first := true
+		ta.SetEncounter(null.Int{})
+		// columns hold the first stored loot item; rewards holds all of them
+		var rewardType null.String
+		var itemId, pokemonId, count null.Int
+		var buf bytes.Buffer
+		stored := 0
 		for _, lootProto := range reward {
 			for _, itemProto := range lootProto.GetLootItem() {
 				field := itemProto.ProtoReflect().WhichOneof(lootItemTypeOneof)
 				if field == nil {
-					log.Warnf("Unknown or unset Type")
+					log.Warnf("[TAPPABLE] %d: unknown or unset loot type (unknown fields: %x)", ta.Id, itemProto.ProtoReflect().GetUnknown())
 					continue
 				}
-				if itemJson, err := lootItemJsonOptions.Marshal(itemProto); err != nil {
-					log.Errorf("[TAPPABLE] marshal loot item: %s", err)
+				itemJson, err := lootItemJsonOptions.Marshal(itemProto)
+				if err != nil {
+					log.Errorf("[TAPPABLE] %d: marshal loot item: %s", ta.Id, err)
+					continue
+				}
+				before := buf.Len()
+				if stored == 0 {
+					buf.WriteByte('[')
 				} else {
-					rewardsJson = append(rewardsJson, itemJson)
+					buf.WriteByte(',')
 				}
-				var itemId, pokemonId null.Int
-				switch t := itemProto.Type.(type) {
-				case *pogo.LootItemProto_Item:
-					itemId = null.IntFrom(int64(t.Item))
-				case *pogo.LootItemProto_PokemonCandy:
-					pokemonId = null.IntFrom(int64(t.PokemonCandy))
-				case *pogo.LootItemProto_XlCandy:
-					pokemonId = null.IntFrom(int64(t.XlCandy))
-				case *pogo.LootItemProto_MegaEnergyPokemonId:
-					pokemonId = null.IntFrom(int64(t.MegaEnergyPokemonId))
-				case *pogo.LootItemProto_TempEvoPokemonBranch:
-					// temp evo id (mega X/Y) is not stored
-					pokemonId = null.IntFrom(int64(t.TempEvoPokemonBranch.GetPokedexId()))
-				case *pogo.LootItemProto_PokemonEgg:
-					log.Warnf("[TAPPABLE] Reward is a Pokemon Egg: %v", t.PokemonEgg)
-				case *pogo.LootItemProto_AvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is an Avatar Template ID: %v", t.AvatarTemplateId)
-				case *pogo.LootItemProto_StickerId:
-					log.Warnf("[TAPPABLE] Reward is a Sticker ID: %s", t.StickerId)
-				case *pogo.LootItemProto_FollowerPokemon:
-					log.Warnf("[TAPPABLE] Reward is a Follower Pokemon: %v", t.FollowerPokemon)
-				case *pogo.LootItemProto_NeutralAvatarTemplateId:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Template ID: %v", t.NeutralAvatarTemplateId)
-				case *pogo.LootItemProto_NeutralAvatarItemTemplate:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Template: %v", t.NeutralAvatarItemTemplate)
-				case *pogo.LootItemProto_NeutralAvatarItemDisplay:
-					log.Warnf("[TAPPABLE] Reward is a Neutral Avatar Item Display: %v", t.NeutralAvatarItemDisplay)
+				// protojson whitespace is unstable; compact so unchanged loot doesn't mark the tappable dirty
+				if err := json.Compact(&buf, itemJson); err != nil {
+					buf.Truncate(before)
+					log.Errorf("[TAPPABLE] %d: compact loot item: %s", ta.Id, err)
+					continue
 				}
-				if first {
-					// columns hold the first reward; all of them are in rewards
-					ta.setReward(null.StringFrom(string(field.Name())), itemId, pokemonId, null.IntFrom(int64(itemProto.Count)))
-					first = false
+				if stored == 0 {
+					rewardType = null.StringFrom(string(field.Name()))
+					itemId, pokemonId = lootItemIds(itemProto)
+					count = null.IntFrom(int64(itemProto.Count))
 				}
+				stored++
 			}
 		}
-		ta.SetRewards(lootItemsJson(rewardsJson))
+		var rewards null.String
+		if stored > 0 {
+			buf.WriteByte(']')
+			rewards = null.StringFrom(buf.String())
+		}
+		ta.setRewards(rewardType, itemId, pokemonId, count, rewards)
 	}
 }
 
@@ -102,30 +96,34 @@ func (ta *Tappable) updateFromProcessTappableProto(ctx context.Context, db db.Db
 // e.g. {"pokemon_candy":25,"count":6}.
 var lootItemJsonOptions = protojson.MarshalOptions{UseProtoNames: true, UseEnumNumbers: true}
 
-// lootItemsJson joins marshaled loot items into a compact JSON array.
-// Compacting matters: protojson output has unstable whitespace, which would
-// mark the tappable dirty on every update.
-func lootItemsJson(items [][]byte) null.String {
-	if len(items) == 0 {
-		return null.String{}
+// lootItemIds returns the item id or species a loot item carries, if any.
+func lootItemIds(item *pogo.LootItemProto) (itemId, pokemonId null.Int) {
+	switch t := item.Type.(type) {
+	case *pogo.LootItemProto_Item:
+		itemId = null.IntFrom(int64(t.Item))
+	case *pogo.LootItemProto_PokemonCandy:
+		pokemonId = null.IntFrom(int64(t.PokemonCandy))
+	case *pogo.LootItemProto_XlCandy:
+		pokemonId = null.IntFrom(int64(t.XlCandy))
+	case *pogo.LootItemProto_MegaEnergyPokemonId:
+		pokemonId = null.IntFrom(int64(t.MegaEnergyPokemonId))
+	case *pogo.LootItemProto_TempEvoPokemonBranch:
+		// temp evo id (mega X/Y) is only in rewards
+		pokemonId = null.IntFrom(int64(t.TempEvoPokemonBranch.GetPokedexId()))
 	}
-	var buf bytes.Buffer
-	if err := json.Compact(&buf, append(append([]byte("["), bytes.Join(items, []byte(","))...), ']')); err != nil {
-		log.Errorf("[TAPPABLE] compact rewards json: %s", err)
-		return null.String{}
-	}
-	return null.StringFrom(buf.String())
+	return itemId, pokemonId
 }
 
 // lootItemTypeOneof is LootItemProto's reward oneof; its set field name is stored as reward_type.
 var lootItemTypeOneof = (&pogo.LootItemProto{}).ProtoReflect().Descriptor().Oneofs().ByName("Type")
 
-// setReward stores one loot reward; fields not used by the reward type are cleared.
-func (ta *Tappable) setReward(rewardType null.String, itemId, pokemonId, count null.Int) {
+// setRewards sets all reward fields together, so none is left from a previous decode.
+func (ta *Tappable) setRewards(rewardType null.String, itemId, pokemonId, count null.Int, rewards null.String) {
 	ta.SetRewardType(rewardType)
 	ta.SetItemId(itemId)
 	ta.SetRewardPokemonId(pokemonId)
 	ta.SetCount(count)
+	ta.SetRewards(rewards)
 }
 
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {

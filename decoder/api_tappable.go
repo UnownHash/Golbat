@@ -17,7 +17,7 @@ type ApiTappableResult struct {
 	ItemId                  *int64           `json:"item_id" doc:"ID of the item reward"`
 	RewardPokemonId         *int64           `json:"reward_pokemon_id" doc:"Pokedex ID for candy, XL candy, mega energy and temp evo branch rewards"`
 	Count                   *int64           `json:"count" doc:"Amount of the reward"`
-	Rewards                 *json.RawMessage `json:"rewards" doc:"All loot items as protojson (proto field names, numeric enums), e.g. [{\"pokemon_candy\":25,\"count\":6}]; null for encounters"`
+	Rewards                 *json.RawMessage `json:"rewards" doc:"All loot items as protojson (proto field names, numeric enums), e.g. [{\"pokemon_candy\":25,\"count\":6}]; null for encounters or when no loot item could be stored"`
 	ExpireTimestamp         *int64           `json:"expire_timestamp" doc:"Unix timestamp when the tappable expires"`
 	ExpireTimestampVerified bool             `json:"expire_timestamp_verified" doc:"Whether the expire timestamp is verified"`
 	Updated                 int64            `json:"updated" doc:"Unix timestamp when the record was last updated"`

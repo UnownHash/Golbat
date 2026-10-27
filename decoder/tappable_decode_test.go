@@ -143,9 +143,7 @@ func TestTappableDecodeRewardsJsonStable(t *testing.T) {
 
 func TestTappableDecodeEncounterClearsRewardsJson(t *testing.T) {
 	ta := &Tappable{TappableData: TappableData{Rewards: null.StringFrom(`[{"item":1}]`)}}
-	out := &pogo.ProcessTappableOutProto{Encounter: &pogo.TappableEncounterProto{Pokemon: &pogo.PokemonProto{PokemonId: pogo.HoloPokemonId_PIKACHU}}}
-	req := &pogo.ProcessTappableProto{EncounterId: 42}
-	ta.updateFromProcessTappableProto(context.Background(), db.DbDetails{}, out, req, 1700000000000)
+	decodeTappableEncounter(t, ta, pogo.HoloPokemonId_PIKACHU)
 	if ta.Rewards.Valid {
 		t.Errorf("rewards = %v, want null for encounter", ta.Rewards)
 	}
@@ -196,5 +194,44 @@ func TestTappableRewardTypeNamesPinned(t *testing.T) {
 		if string(f.Name()) != name {
 			t.Errorf("LootItemProto field %d renamed %q -> %q: stored reward_type values change", f.Number(), name, f.Name())
 		}
+	}
+}
+
+func decodeTappableEncounter(t *testing.T, ta *Tappable, pokemonId pogo.HoloPokemonId) {
+	t.Helper()
+	out := &pogo.ProcessTappableOutProto{Encounter: &pogo.TappableEncounterProto{Pokemon: &pogo.PokemonProto{PokemonId: pokemonId}}}
+	req := &pogo.ProcessTappableProto{EncounterId: 42}
+	ta.updateFromProcessTappableProto(context.Background(), db.DbDetails{}, out, req, 1700000000000)
+}
+
+func TestTappableDecodeEncounterClearsRewardColumns(t *testing.T) {
+	ta := &Tappable{}
+	decodeTappableLoot(t, ta, &pogo.LootItemProto{Type: &pogo.LootItemProto_PokemonCandy{PokemonCandy: pogo.HoloPokemonId_PIKACHU}, Count: 6})
+	decodeTappableEncounter(t, ta, pogo.HoloPokemonId_PIKACHU)
+	if ta.RewardType.Valid || ta.ItemId.Valid || ta.RewardPokemonId.Valid || ta.Count.Valid || ta.Rewards.Valid {
+		t.Errorf("stale reward after encounter: type %v item %v pokemon %v count %v rewards %v",
+			ta.RewardType, ta.ItemId, ta.RewardPokemonId, ta.Count, ta.Rewards)
+	}
+	if ta.Encounter != null.IntFrom(int64(pogo.HoloPokemonId_PIKACHU)) {
+		t.Errorf("pokemon_id = %v, want pikachu", ta.Encounter)
+	}
+}
+
+func TestTappableDecodeRewardClearsEncounter(t *testing.T) {
+	ta := &Tappable{}
+	decodeTappableEncounter(t, ta, pogo.HoloPokemonId_PIKACHU)
+	decodeTappableLoot(t, ta, &pogo.LootItemProto{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_RARE_CANDY}, Count: 1})
+	if ta.Encounter.Valid {
+		t.Errorf("pokemon_id = %v, want null after reward", ta.Encounter)
+	}
+}
+
+func TestTappableDecodeOnlyUnknownLootClearsColumns(t *testing.T) {
+	ta := &Tappable{}
+	decodeTappableLoot(t, ta, &pogo.LootItemProto{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_RARE_CANDY}, Count: 1})
+	decodeTappableLoot(t, ta, &pogo.LootItemProto{Count: 1}) // unset oneof, e.g. a type newer than our protos
+	if ta.RewardType.Valid || ta.ItemId.Valid || ta.Count.Valid || ta.Rewards.Valid {
+		t.Errorf("columns/rewards disagree after unknown loot: type %v item %v count %v rewards %v",
+			ta.RewardType, ta.ItemId, ta.Count, ta.Rewards)
 	}
 }

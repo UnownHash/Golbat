@@ -18,7 +18,7 @@ type TappableData struct {
 	Encounter               null.Int    `db:"pokemon_id"`
 	RewardType              null.String `db:"reward_type"` // LootItemProto oneof field name, e.g. "pokemon_candy"
 	ItemId                  null.Int    `db:"item_id"`
-	RewardPokemonId         null.Int    `db:"reward_pokemon_id"` // candy / XL candy / mega energy species
+	RewardPokemonId         null.Int    `db:"reward_pokemon_id"` // candy / XL candy / mega energy / temp evo branch species
 	Count                   null.Int    `db:"count"`
 	Rewards                 null.String `db:"rewards"` // all loot items as protojson array
 	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
