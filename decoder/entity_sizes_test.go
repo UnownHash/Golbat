@@ -234,9 +234,9 @@ func TestClassMovedEntitySizes(t *testing.T) {
 		// still no allocator regression.
 		"Incident": {unsafe.Sizeof(Incident{}), 256},
 		// Tappable grew 200->264 (class 208->288) for RewardType,
-		// RewardPokemonId and Rewards. Tappables are short-lived and few;
-		// accepted.
-		"Tappable": {unsafe.Sizeof(Tappable{}), 264},
+		// RewardPokemonId and Rewards, then 272 for cachedExpire (class
+		// unchanged). Tappables are short-lived; accepted.
+		"Tappable": {unsafe.Sizeof(Tappable{}), 272},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("unsafe.Sizeof(%s{}) = %d, want %d", name, tc.got, tc.want)
