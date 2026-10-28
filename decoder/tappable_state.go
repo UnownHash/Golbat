@@ -98,6 +98,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 			tappableCacheOnSave(tappable, time.Now().Unix())
 			tappableRtreeUpdateOnSave(tappable)
 		}
+		tappable.rewardChanged = false
 		return
 	}
 
@@ -130,6 +131,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	tappable.ClearDirty()
 	tappableCacheOnSave(tappable, now)
 	tappableRtreeUpdateOnSave(tappable)
+	tappableWebhookOnSave(tappable, isNewRecord)
 	if isNewRecord {
 		tappable.newRecord = false
 	}

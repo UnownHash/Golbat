@@ -3,6 +3,8 @@ package decoder
 import (
 	"encoding/json"
 	"strconv"
+
+	"golbat/webhooks"
 )
 
 // TappableWebhook is the "tappable" webhook payload: reward tappables only
@@ -41,4 +43,13 @@ func buildTappableWebhook(t *Tappable) TappableWebhook {
 		ExpireTimestampVerified: t.ExpireTimestampVerified,
 		Updated:                 t.Updated,
 	}
+}
+
+// tappableWebhookOnSave sends the tappable webhook for a new or changed
+// reward, then clears rewardChanged. Caller holds the tappable lock.
+func tappableWebhookOnSave(t *Tappable, isNewRecord bool) {
+	if t.RewardType.Valid && (isNewRecord || t.rewardChanged) {
+		webhooksSender.AddMessage(webhooks.Tappable, buildTappableWebhook(t), MatchStatsGeofence(t.Lat, t.Lon))
+	}
+	t.rewardChanged = false
 }

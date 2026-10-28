@@ -297,6 +297,9 @@ Worker queue depths are exported every 10s as
 | `weather` | Weather | `weather` |
 | `fort_update` | FortUpdate | `fort_update` |
 | `max_battle` | MaxBattle | `max_battle` |
+| `tappable` | Tappable | `tappable` |
+
+`tappable` covers reward tappables only, sent on a new or changed reward (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks.
 
 ### Dispatch Flow
 
