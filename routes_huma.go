@@ -388,6 +388,9 @@ type tappableByIdInput struct {
 }
 type tappableByIdOutput struct{ Body decoder.ApiTappableResult }
 
+type tappableScanInput struct{ Body decoder.ApiTappableScan }
+type tappableScanOutput struct{ Body decoder.ApiTappableScanResult }
+
 type pokestopPositionsInput struct {
 	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
 	// one, or a Golbat fence object. Captured as raw JSON and parsed by
@@ -708,6 +711,26 @@ func registerTier3Routes(api huma.API) {
 			return nil, huma.Error404NotFound("tappable not found")
 		}
 		return &tappableByIdOutput{Body: decoder.BuildTappableResult(tappable)}, nil
+	})
+
+	// POST /api/tappable/scan
+	tappableScanOp := huma.Operation{
+		OperationID:   "scan-tappables",
+		Method:        http.MethodPost,
+		Path:          "/api/tappable/scan",
+		Summary:       "Search tappables in a bounding box (DNF filters)",
+		Description:   "Returns unexpired tappables within [min,max] matching any DNF filter clause. 400 on an unknown reward_type.",
+		Tags:          []string{"Tappable"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&tappableScanOp)
+	huma.Register(api, tappableScanOp, func(ctx context.Context, in *tappableScanInput) (*tappableScanOutput, error) {
+		res, err := decoder.TappableScanEndpoint(in.Body)
+		if err != nil {
+			return nil, huma.Error400BadRequest(err.Error())
+		}
+		return &tappableScanOutput{Body: *res}, nil
 	})
 
 	// POST /api/pokestop-positions

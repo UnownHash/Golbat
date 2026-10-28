@@ -229,6 +229,23 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("tappable/scan empty area is 200", func(t *testing.T) {
+		resp := api.Post("/api/tappable/scan", strings.NewReader(`{"min":{"lat":1,"lon":1},"max":{"lat":1.001,"lon":1.001}}`))
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		if !strings.Contains(resp.Body.String(), `"tappables":[]`) {
+			t.Errorf("body = %s, want empty tappables", resp.Body.String())
+		}
+	})
+
+	t.Run("tappable/scan unknown reward_type is 400", func(t *testing.T) {
+		resp := api.Post("/api/tappable/scan", strings.NewReader(`{"min":{"lat":1,"lon":1},"max":{"lat":2,"lon":2},"filters":[{"reward_type":["Item"]}]}`))
+		if resp.Code != http.StatusBadRequest {
+			t.Errorf("got %d, want 400; body=%s", resp.Code, resp.Body.String())
+		}
+	})
+
 	t.Run("gym/query accepts an empty object body", func(t *testing.T) {
 		resp := api.Post("/api/gym/query", strings.NewReader(`{}`))
 		if resp.Code != http.StatusOK {
@@ -340,12 +357,16 @@ func TestTier3RoutesRegisterInSpec(t *testing.T) {
 		{"get", "/api/station/id/{station_id}"},
 		{"get", "/api/pokestop/id/{fort_id}"},
 		{"get", "/api/tappable/id/{tappable_id}"},
+		{"post", "/api/tappable/scan"},
 		{"post", "/api/pokestop-positions"},
 	}
 	for _, w := range want {
 		if _, ok := doc.Paths[w.path][w.method]; !ok {
 			t.Errorf("missing %s %s in OpenAPI spec", w.method, w.path)
 		}
+	}
+	if op, _ := doc.Paths["/api/tappable/scan"]["post"].(map[string]any); op == nil || len(op["security"].([]any)) == 0 {
+		t.Error("POST /api/tappable/scan has no security requirement")
 	}
 }
 
