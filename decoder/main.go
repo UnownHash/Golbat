@@ -243,6 +243,7 @@ func initDataCache() {
 	})
 	initPokemonRtree()
 	initFortRtree()
+	initTappableRtree()
 	initStationBattleCache()
 
 	incidentCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Incident]{

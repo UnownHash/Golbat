@@ -123,6 +123,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	}
 	tappable.ClearDirty()
 	tappableCacheOnSave(tappable, isNewRecord, now)
+	tappableRtreeUpdateOnSave(tappable)
 	if isNewRecord {
 		tappable.newRecord = false
 	}
