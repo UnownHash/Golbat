@@ -21,9 +21,12 @@ func goldenSnapshotTappable(t *testing.T) *Tappable {
 			Lon:    -120.9876,
 			FortId: mustFortId(t, "0123456789abcdef0123456789abcdef"),
 			// SpawnId intentionally left null
-			Type:      "item",
-			Encounter: null.IntFrom(150),
-			ItemId:    null.IntFrom(1),
+			Type:       "item",
+			Encounter:  null.IntFrom(150),
+			RewardType: null.StringFrom("item"),
+			ItemId:     null.IntFrom(1),
+			// RewardPokemonId intentionally left null
+			Rewards: null.StringFrom(`[{"item":1}]`),
 			// Count intentionally left null
 			ExpireTimestamp:         null.IntFrom(1700001000),
 			ExpireTimestampVerified: true,
@@ -48,7 +51,7 @@ func TestBuildTappableResult_GoldenSnapshot(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":123456789,"lat":45.6789,"lon":-120.9876,"fort_id":"0123456789abcdef0123456789abcdef","spawn_id":null,"type":"item","pokemon_id":150,"item_id":1,"count":null,"expire_timestamp":1700001000,"expire_timestamp_verified":true,"updated":1699999999}`
+	const want = `{"id":123456789,"lat":45.6789,"lon":-120.9876,"fort_id":"0123456789abcdef0123456789abcdef","spawn_id":null,"type":"item","pokemon_id":150,"reward_type":"item","item_id":1,"reward_pokemon_id":null,"count":null,"rewards":[{"item":1}],"expire_timestamp":1700001000,"expire_timestamp_verified":true,"updated":1699999999}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)

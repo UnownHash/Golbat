@@ -9,18 +9,21 @@ import (
 // TappableData contains all database-persisted fields for Tappable.
 // This struct is embedded in Tappable and can be safely copied for write-behind queueing.
 type TappableData struct {
-	Id                      uint64   `db:"id"`
-	Lat                     float64  `db:"lat"`
-	Lon                     float64  `db:"lon"`
-	FortId                  FortId   `db:"fort_id"` // either fortId or spawnpointId are given; zero value = absent
-	SpawnId                 null.Int `db:"spawn_id"`
-	Type                    string   `db:"type"`
-	Encounter               null.Int `db:"pokemon_id"`
-	ItemId                  null.Int `db:"item_id"`
-	Count                   null.Int `db:"count"`
-	ExpireTimestamp         null.Int `db:"expire_timestamp"`
-	ExpireTimestampVerified bool     `db:"expire_timestamp_verified"`
-	Updated                 int64    `db:"updated"`
+	Id                      uint64      `db:"id"`
+	Lat                     float64     `db:"lat"`
+	Lon                     float64     `db:"lon"`
+	FortId                  FortId      `db:"fort_id"` // either fortId or spawnpointId are given; zero value = absent
+	SpawnId                 null.Int    `db:"spawn_id"`
+	Type                    string      `db:"type"`
+	Encounter               null.Int    `db:"pokemon_id"`
+	RewardType              null.String `db:"reward_type"` // LootItemProto oneof field name, e.g. "pokemon_candy"
+	ItemId                  null.Int    `db:"item_id"`
+	RewardPokemonId         null.Int    `db:"reward_pokemon_id"` // candy / XL candy / mega energy / temp evo branch species
+	Count                   null.Int    `db:"count"`
+	Rewards                 null.String `db:"rewards"` // all loot items as protojson array
+	ExpireTimestamp         null.Int    `db:"expire_timestamp"`
+	ExpireTimestampVerified bool        `db:"expire_timestamp_verified"`
+	Updated                 int64       `db:"updated"`
 }
 
 // Tappable struct.
@@ -136,6 +139,36 @@ func (ta *Tappable) SetItemId(v null.Int) {
 			ta.debug.recordChange(fmt.Sprintf("ItemId:%s->%s", FormatNull(ta.ItemId), FormatNull(v)))
 		}
 		ta.ItemId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetRewardType(v null.String) {
+	if ta.RewardType != v {
+		if dbDebugEnabled {
+			ta.debug.recordChange(fmt.Sprintf("RewardType:%s->%s", FormatNull(ta.RewardType), FormatNull(v)))
+		}
+		ta.RewardType = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetRewardPokemonId(v null.Int) {
+	if ta.RewardPokemonId != v {
+		if dbDebugEnabled {
+			ta.debug.recordChange(fmt.Sprintf("RewardPokemonId:%s->%s", FormatNull(ta.RewardPokemonId), FormatNull(v)))
+		}
+		ta.RewardPokemonId = v
+		ta.dirty = true
+	}
+}
+
+func (ta *Tappable) SetRewards(v null.String) {
+	if ta.Rewards != v {
+		if dbDebugEnabled {
+			ta.debug.recordChange(fmt.Sprintf("Rewards:%s->%s", FormatNull(ta.Rewards), FormatNull(v)))
+		}
+		ta.Rewards = v
 		ta.dirty = true
 	}
 }

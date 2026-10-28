@@ -18,7 +18,7 @@ import (
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
 	return timedDbQuery("loadTappableFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, tappable,
-			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
+			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, reward_type, item_id, reward_pokemon_id, count, rewards, expire_timestamp, expire_timestamp_verified, updated
          FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
 		getStatsCollector().IncDbQuery("select tappable", err)
 		return err
@@ -138,9 +138,9 @@ func tappableWriteDB(details db.DbDetails, tappable *Tappable, isNewRecord bool)
 	if isNewRecord {
 		res, err := details.GeneralDb.NamedExecContext(ctx, fmt.Sprintf(`
 			INSERT INTO tappable (
-				id, lat, lon, fort_id, spawn_id, type, pokemon_id, item_id, count, expire_timestamp, expire_timestamp_verified, updated
+				id, lat, lon, fort_id, spawn_id, type, pokemon_id, reward_type, item_id, reward_pokemon_id, count, rewards, expire_timestamp, expire_timestamp_verified, updated
 			) VALUES (
-				"%d", :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :item_id, :count, :expire_timestamp, :expire_timestamp_verified, :updated
+				"%d", :lat, :lon, :fort_id, :spawn_id, :type, :pokemon_id, :reward_type, :item_id, :reward_pokemon_id, :count, :rewards, :expire_timestamp, :expire_timestamp_verified, :updated
 			)
 			`, tappable.Id), tappable)
 		getStatsCollector().IncDbQuery("insert tappable", err)
@@ -158,8 +158,11 @@ func tappableWriteDB(details db.DbDetails, tappable *Tappable, isNewRecord bool)
 				spawn_id = :spawn_id,
 				type = :type,
 				pokemon_id = :pokemon_id,
+				reward_type = :reward_type,
 				item_id = :item_id,
+				reward_pokemon_id = :reward_pokemon_id,
 				count = :count,
+				rewards = :rewards,
 				expire_timestamp = :expire_timestamp,
 				expire_timestamp_verified = :expire_timestamp_verified,
 				updated = :updated
