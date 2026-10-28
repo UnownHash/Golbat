@@ -13,8 +13,9 @@ type ApiStatusResult struct {
 		FortInMemory bool `json:"fort_in_memory" doc:"Whether the in-memory fort index (and with it the /api/{gym,pokestop,station,fort}/scan and /available endpoints) is enabled. By-id and query endpoints do not depend on it: they read through to the database on a cache miss and work either way."`
 	} `json:"features" doc:"Enabled optional features"`
 	Limits struct {
-		MaxPokemonResults int `json:"max_pokemon_results" doc:"Server cap on pokemon scan results per request (tuning.max_pokemon_results)"`
-		MaxFortResults    int `json:"max_fort_results" doc:"Server cap on fort scan results per request (tuning.max_fort_results)"`
+		MaxPokemonResults  int `json:"max_pokemon_results" doc:"Server cap on pokemon scan results per request (tuning.max_pokemon_results)"`
+		MaxFortResults     int `json:"max_fort_results" doc:"Server cap on fort scan results per request (tuning.max_fort_results)"`
+		MaxTappableResults int `json:"max_tappable_results" doc:"Server cap on tappable scan results per request (tuning.max_tappable_results)"`
 	} `json:"limits" doc:"Effective server-side result caps"`
 	Filters ApiStatusFilters `json:"filters" doc:"DNF filter fields this build supports beyond the base set. A consumer sends a filter only when its flag is true; a flag that is absent from the response is unsupported."`
 }
@@ -35,6 +36,7 @@ func GetApiStatus() *ApiStatusResult {
 	status.Features.FortInMemory = config.Config.FortInMemory
 	status.Limits.MaxPokemonResults = config.Config.Tuning.MaxPokemonResults
 	status.Limits.MaxFortResults = config.Config.Tuning.MaxFortResults
+	status.Limits.MaxTappableResults = config.Config.Tuning.MaxTappableResults
 	status.Filters = ApiStatusFilters{ShowcaseFocus: true, BattleAvailable: true, UpdatedAfter: true}
 	return status
 }

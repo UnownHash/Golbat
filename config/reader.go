@@ -66,6 +66,7 @@ func ReadConfig(configPath string) (configDefinition, error) {
 		Tuning: tuning{
 			MaxPokemonResults:              3000,
 			MaxFortResults:                 9000,
+			MaxTappableResults:             9000,
 			MaxPokemonDistance:             100,
 			MaxConcurrentProactiveIVSwitch: 6,
 			ReduceUpdates:                  false,

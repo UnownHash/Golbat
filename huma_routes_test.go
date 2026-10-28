@@ -694,14 +694,17 @@ func TestHumaStatusRoute(t *testing.T) {
 	prevFim := config.Config.FortInMemory
 	prevMaxP := config.Config.Tuning.MaxPokemonResults
 	prevMaxF := config.Config.Tuning.MaxFortResults
+	prevMaxT := config.Config.Tuning.MaxTappableResults
 	config.Config.ApiSecret = "topsecret"
 	config.Config.Tuning.MaxPokemonResults = 3000
 	config.Config.Tuning.MaxFortResults = 4000
+	config.Config.Tuning.MaxTappableResults = 5000
 	defer func() {
 		config.Config.ApiSecret = prevSecret
 		config.Config.FortInMemory = prevFim
 		config.Config.Tuning.MaxPokemonResults = prevMaxP
 		config.Config.Tuning.MaxFortResults = prevMaxF
+		config.Config.Tuning.MaxTappableResults = prevMaxT
 	}()
 
 	_, api := humatest.New(t, newHumaConfig("test"))
@@ -727,7 +730,7 @@ func TestHumaStatusRoute(t *testing.T) {
 		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
 	}
 	body := resp.Body.String()
-	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`} {
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`, `"max_tappable_results":5000`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
 		}
