@@ -545,6 +545,29 @@ Cache-only: a tappable is cached until 60 s past its `expire_timestamp` (60 min 
 - 400: Invalid ID
 - 404: Tappable not found
 
+### GET /api/tappable/available
+
+Distinct live reward options and encounter species, from the in-memory tappable index (no DB scan). Each entry can be sent back as a `/api/tappable/scan` filter clause.
+
+**Authentication:** Required
+
+**Response:**
+```json
+{
+  "rewards": [
+    {"reward_type": "item", "item_id": 1301, "reward_pokemon_id": null},
+    {"reward_type": "pokemon_candy", "item_id": null, "reward_pokemon_id": 25},
+    {"reward_type": "stardust", "item_id": null, "reward_pokemon_id": null}
+  ],
+  "encounters": [{"pokemon_id": 25}]
+}
+```
+
+- Rewards describe the first loot item. An option is reported until the latest expiry seen for it passes (tappables without an expiry: 60 min), so a replaced option can over-report briefly.
+- `features.tappable_scan` in `/api/status` is true on builds that have this and the scan.
+
+---
+
 ### POST /api/tappable/scan
 
 Unexpired tappables within a bounding box, filtered by DNF clauses.

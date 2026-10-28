@@ -11,6 +11,7 @@ import (
 type ApiStatusResult struct {
 	Features struct {
 		FortInMemory bool `json:"fort_in_memory" doc:"Whether the in-memory fort index (and with it the /api/{gym,pokestop,station,fort}/scan and /available endpoints) is enabled. By-id and query endpoints do not depend on it: they read through to the database on a cache miss and work either way."`
+		TappableScan bool `json:"tappable_scan" doc:"Whether /api/tappable/scan and /api/tappable/available exist (always true on this build; absent on older builds)."`
 	} `json:"features" doc:"Enabled optional features"`
 	Limits struct {
 		MaxPokemonResults  int `json:"max_pokemon_results" doc:"Server cap on pokemon scan results per request (tuning.max_pokemon_results)"`
@@ -34,6 +35,7 @@ type ApiStatusFilters struct {
 func GetApiStatus() *ApiStatusResult {
 	status := &ApiStatusResult{}
 	status.Features.FortInMemory = config.Config.FortInMemory
+	status.Features.TappableScan = true
 	status.Limits.MaxPokemonResults = config.Config.Tuning.MaxPokemonResults
 	status.Limits.MaxFortResults = config.Config.Tuning.MaxFortResults
 	status.Limits.MaxTappableResults = config.Config.Tuning.MaxTappableResults

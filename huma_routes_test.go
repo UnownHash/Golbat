@@ -239,6 +239,18 @@ func TestTier3ReadEndpoints(t *testing.T) {
 		}
 	})
 
+	t.Run("tappable/available is 200 with rewards and encounters", func(t *testing.T) {
+		resp := api.Get("/api/tappable/available")
+		if resp.Code != http.StatusOK {
+			t.Fatalf("got %d, want 200; body=%s", resp.Code, resp.Body.String())
+		}
+		for _, key := range []string{`"rewards":`, `"encounters":`} {
+			if !strings.Contains(resp.Body.String(), key) {
+				t.Errorf("body missing %s: %s", key, resp.Body.String())
+			}
+		}
+	})
+
 	t.Run("tappable/scan unknown reward_type is 400", func(t *testing.T) {
 		resp := api.Post("/api/tappable/scan", strings.NewReader(`{"min":{"lat":1,"lon":1},"max":{"lat":2,"lon":2},"filters":[{"reward_type":["Item"]}]}`))
 		if resp.Code != http.StatusBadRequest {
@@ -358,6 +370,7 @@ func TestTier3RoutesRegisterInSpec(t *testing.T) {
 		{"get", "/api/pokestop/id/{fort_id}"},
 		{"get", "/api/tappable/id/{tappable_id}"},
 		{"post", "/api/tappable/scan"},
+		{"get", "/api/tappable/available"},
 		{"post", "/api/pokestop-positions"},
 	}
 	for _, w := range want {
@@ -751,7 +764,7 @@ func TestHumaStatusRoute(t *testing.T) {
 		t.Fatalf("fim on: got %d, want 200; body=%s", resp.Code, resp.Body.String())
 	}
 	body := resp.Body.String()
-	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`, `"max_tappable_results":5000`} {
+	for _, want := range []string{`"fort_in_memory":true`, `"max_pokemon_results":3000`, `"max_fort_results":4000`, `"max_tappable_results":5000`, `"tappable_scan":true`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("body missing %s: %s", want, body)
 		}

@@ -4,6 +4,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/guregu/null/v6"
 	"github.com/puzpuzpuz/xsync/v4"
@@ -57,6 +58,7 @@ func getTappableTreeSnapshot() *rtree.RTreeG[uint64] {
 func initTappableRtree() {
 	tappableTreeEvictor = newTreeEvictor[uint64]("tappable", 65536, treeEvictorBatchSize, flushTappableTreeEvictions)
 	tappableLookupCache = xsync.NewMap[uint64, TappableLookup]()
+	initTappableAvailability()
 	tappableCache.OnEviction(func(_ uint64, t *Tappable, _ ottercache.EvictionReason) {
 		handleTappableEviction(t)
 	})
@@ -119,7 +121,9 @@ func tappableRtreeUpdateOnSave(t *Tappable) {
 		tappableTreeEvictor.Enqueue(t.Id, old.Lat, old.Lon)
 		tappableTreeEvictor.EnqueueInsert(t.Id, t.Lat, t.Lon)
 	}
-	tappableLookupCache.Store(t.Id, buildTappableLookup(t))
+	l := buildTappableLookup(t)
+	tappableLookupCache.Store(t.Id, l)
+	observeTappable(l, time.Now().Unix())
 }
 
 // tappablePreloadInsert inserts directly; preload runs before traffic.
@@ -130,7 +134,9 @@ func tappablePreloadInsert(t *Tappable) {
 	tappableTreeMutex.Lock()
 	tappableTree.Insert([2]float64{t.Lon, t.Lat}, [2]float64{t.Lon, t.Lat}, t.Id)
 	tappableTreeMutex.Unlock()
-	tappableLookupCache.Store(t.Id, buildTappableLookup(t))
+	l := buildTappableLookup(t)
+	tappableLookupCache.Store(t.Id, l)
+	observeTappable(l, time.Now().Unix())
 }
 
 // handleTappableEviction drops an evicted tappable's lookup and queues its

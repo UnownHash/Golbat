@@ -371,6 +371,7 @@ This separation means a scan of 100,000 pokemon in a bounding box only touches t
 - All runtime tree mutations go through `tappableTreeEvictor` (savers never take `tappableTreeMutex`); preload inserts directly.
 - Eviction callback takes the entity lock, skips a re-cached tappable, else drops the lookup and `TryEnqueue`s the tree delete.
 - `POST /api/tappable/scan`: bbox + DNF clauses over `reward_type` (names; unknown → 400), `item_id`, `reward_pokemon_id`, `pokemon_id` (negative ids → 400), `count` range (first loot item); expired tappables are skipped; limit clamped by `tuning.max_tappable_results` (default 9000, reported in `/api/status`).
+- `GET /api/tappable/available`: maintained max-expiry index (`decoder/tappable_availability.go`, same helpers as fort availability) of live `(reward_type, item_id, reward_pokemon_id)` options and encounter species, observed on every index update and preload; no-expiry tappables count for 60 min. HTTP only (GolbatApi has no availability RPCs). `features.tappable_scan` in `/api/status`.
 
 ### Fort R-tree (`fortRtree.go`)
 

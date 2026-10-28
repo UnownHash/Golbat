@@ -390,6 +390,7 @@ type tappableByIdOutput struct{ Body decoder.ApiTappableResult }
 
 type tappableScanInput struct{ Body decoder.ApiTappableScan }
 type tappableScanOutput struct{ Body decoder.ApiTappableScanResult }
+type tappableAvailableOutput struct{ Body *decoder.ApiTappableAvailable }
 
 type pokestopPositionsInput struct {
 	// Body is the geofence: a GeoJSON polygon geometry, a GeoJSON feature with
@@ -731,6 +732,22 @@ func registerTier3Routes(api huma.API) {
 			return nil, huma.Error400BadRequest(err.Error())
 		}
 		return &tappableScanOutput{Body: *res}, nil
+	})
+
+	// GET /api/tappable/available
+	tappableAvailableOp := huma.Operation{
+		OperationID:   "available-tappables",
+		Method:        http.MethodGet,
+		Path:          "/api/tappable/available",
+		Summary:       "List currently available tappable reward options and encounter species",
+		Description:   "Distinct live (reward_type, item_id, reward_pokemon_id) options and encounter species from the in-memory tappable index (no DB scan). An option can be reported until its own expiry passes.",
+		Tags:          []string{"Tappable"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}
+	draftBadge(&tappableAvailableOp)
+	huma.Register(api, tappableAvailableOp, func(ctx context.Context, _ *struct{}) (*tappableAvailableOutput, error) {
+		return &tappableAvailableOutput{Body: decoder.GetAvailableTappables(time.Now().Unix())}, nil
 	})
 
 	// POST /api/pokestop-positions
