@@ -529,6 +529,8 @@ Reload geofence boundaries and clear stats.
 
 Retrieve a tappable (invasions, research, etc.).
 
+Cache-only: a tappable is cached until 60 s past its `expire_timestamp` (60 min without one), then returns 404.
+
 **Authentication:** Required
 
 **Parameters:**
@@ -569,6 +571,9 @@ Unexpired tappables within a bounding box, filtered by DNF clauses.
 - `filters`: clauses are OR'd, fields within a clause AND'd. Omitted/null list = no constraint; empty list = matches nothing. Omitted/empty `filters` matches every tappable.
 - `reward_type` values: `item`, `stardust`, `pokecoin`, `pokemon_candy`, `experience`, `pokemon_egg`, `avatar_template_id`, `sticker_id`, `mega_energy_pokemon_id`, `xl_candy`, `follower_pokemon`, `neutral_avatar_template_id`, `neutral_avatar_item_template`, `neutral_avatar_item_display`, `temp_evo_pokemon_branch`. Case-sensitive.
 - `pokemon_id` matches encounter tappables only; the reward fields match reward tappables only.
+- Reward fields match the first loot item (`rewards[0]`) only.
+- Negative `item_id` / `reward_pokemon_id` / `pokemon_id` values → 400.
+- Served from memory. With `preload` off, tappables known before a restart appear once they are seen again.
 
 **Response:**
 ```json
@@ -577,7 +582,7 @@ Unexpired tappables within a bounding box, filtered by DNF clauses.
 
 **Status Codes:**
 - 200: OK
-- 400: Unknown `reward_type`
+- 400: Unknown `reward_type` or negative id
 
 ---
 

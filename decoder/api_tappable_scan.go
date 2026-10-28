@@ -11,12 +11,13 @@ import (
 )
 
 // ApiTappableDnfFilter is one clause of a tappable scan: fields AND'd; an
-// omitted/null list is no constraint, an empty list matches nothing.
+// omitted/null list is no constraint, an empty list matches nothing. Reward
+// fields match the first loot item (rewards[0]) only.
 type ApiTappableDnfFilter struct {
 	RewardType      []string `json:"reward_type" required:"false" doc:"reward_type values (LootItemProto field names, e.g. item, pokemon_candy). Unknown names are rejected with 400."`
-	ItemId          []int16  `json:"item_id" required:"false" doc:"item_id values (item rewards)"`
-	RewardPokemonId []int16  `json:"reward_pokemon_id" required:"false" doc:"reward_pokemon_id values (candy / XL candy / mega energy / temp evo branch species)"`
-	PokemonId       []int16  `json:"pokemon_id" required:"false" doc:"pokemon_id values (encounter tappables)"`
+	ItemId          []int16  `json:"item_id" required:"false" doc:"item_id values (item rewards); negative values are rejected with 400"`
+	RewardPokemonId []int16  `json:"reward_pokemon_id" required:"false" doc:"reward_pokemon_id values (candy / XL candy / mega energy / temp evo branch species); negative values are rejected with 400"`
+	PokemonId       []int16  `json:"pokemon_id" required:"false" doc:"pokemon_id values (encounter tappables); negative values are rejected with 400"`
 }
 
 // ApiTappableScan is the request body for POST /api/tappable/scan.
@@ -48,6 +49,11 @@ func compileTappableDnf(f ApiTappableDnfFilter) (tappableDnfCompiled, error) {
 		itemId: f.ItemId, rewardPokemonId: f.RewardPokemonId, pokemonId: f.PokemonId,
 		hasRewardType: f.RewardType != nil, hasItemId: f.ItemId != nil,
 		hasRewardPokemonId: f.RewardPokemonId != nil, hasPokemonId: f.PokemonId != nil,
+	}
+	for field, ids := range map[string][]int16{"item_id": f.ItemId, "reward_pokemon_id": f.RewardPokemonId, "pokemon_id": f.PokemonId} {
+		if slices.ContainsFunc(ids, func(id int16) bool { return id < 0 }) {
+			return c, fmt.Errorf("negative %s value", field)
+		}
 	}
 	for _, name := range f.RewardType {
 		i, ok := lootRewardTypeIndex(name)
@@ -93,8 +99,8 @@ func TappableScanEndpoint(p ApiTappableScan) (*ApiTappableScanResult, error) {
 	tree := getTappableTreeSnapshot()
 
 	var keys []uint64
-	// the snapshot can briefly hold duplicate points for one id
-	seen := make(map[uint64]struct{})
+	// the snapshot can briefly hold duplicate points for one id; created on first match
+	var seen map[uint64]struct{}
 	tree.Search([2]float64{minLocation.Longitude, minLocation.Latitude}, [2]float64{maxLocation.Longitude, maxLocation.Latitude},
 		func(_, _ [2]float64, id uint64) bool {
 			examined++
@@ -118,6 +124,9 @@ func TappableScanEndpoint(p ApiTappableScan) (*ApiTappableScanResult, error) {
 			}
 			if _, dup := seen[id]; dup {
 				return true
+			}
+			if seen == nil {
+				seen = make(map[uint64]struct{})
 			}
 			seen[id] = struct{}{}
 			keys = append(keys, id)

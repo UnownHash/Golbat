@@ -176,3 +176,16 @@ func TestTappableScanInvertedBox(t *testing.T) {
 		t.Errorf("inverted box: %d results, err %v; want 0, nil", len(res.Tappables), err)
 	}
 }
+
+func TestTappableScanRejectsNegativeIds(t *testing.T) {
+	for name, f := range map[string]ApiTappableDnfFilter{
+		"item_id":           {ItemId: []int16{-1}},
+		"reward_pokemon_id": {RewardPokemonId: []int16{-1}},
+		"pokemon_id":        {PokemonId: []int16{-1}},
+	} {
+		_, err := TappableScanEndpoint(ApiTappableScan{DnfFilters: []ApiTappableDnfFilter{f}})
+		if err == nil || !strings.Contains(err.Error(), "negative "+name) {
+			t.Errorf("%s [-1]: err = %v, want negative %s error", name, err, name)
+		}
+	}
+}
