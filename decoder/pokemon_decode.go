@@ -506,7 +506,7 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 	// The gate lives here rather than at the three call sites because this is
 	// the only place derived IVs, level, size or moves are written. A caller
 	// that forgets the check cannot write them anyway.
-	if !config.Config.DeriveIv {
+	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
 
@@ -535,7 +535,7 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 // identity has just changed can have its moves re-derived without its IVs
 // and level being touched — see resetDittoAttributes.
 func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
-	if !config.Config.DeriveIv {
+	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
 	if pokemon.Move1.Valid && pokemon.Move2.Valid {
@@ -566,7 +566,7 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 // always advance the generator equally, but not when the boosted branch's
 // nextInt(12) hits Java's rejection path.
 func (pokemon *Pokemon) deriveSizeAndMovesIfAbsent() {
-	if !config.Config.DeriveIv || pokemon.IsStrong.ValueOrZero() {
+	if !config.Config.DeriveIv || pokemon.IsStrong.ValueOrZero() || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
 	v := encounter.For(uint64(pokemon.Id), pokemon.statsBoosted(), int32(int64OrZero(pokemon.Form)))
@@ -1869,6 +1869,11 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	if pokemon.IsStrong.ValueOrZero() {
 		return
 	}
+	// A player-specific species has no spawn-level stats to derive. See
+	// TestDeriveSkipsMinior.
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
+		return
+	}
 	// IVs already settled — by an encounter, or derived on an earlier
 	// sighting — are kept. A display change (species, form or costume) clears
 	// size and moves but not the IVs, so those are filled on their own:
@@ -1963,10 +1968,17 @@ func (pokemon *Pokemon) cpInputs() cpInputs {
 	return cpInputs{pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv, pokemon.Level}
 }
 
+// hasPlayerSpecificStats reports whether a species' encounter stats belong to
+// the player rather than the shared spawn. Minior's do: its IVs, level, CP,
+// moves and size are neither observed onto the record nor derived for it.
+func hasPlayerSpecificStats(pokemonId int16) bool {
+	return pokemonId == int16(pogo.HoloPokemonId_MINIOR)
+}
+
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	// Minior's encounter stats belong to the player, not the shared spawn.
-	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		pokemon.setUsernameIfStored(username)
 		return
 	}
@@ -2306,6 +2318,15 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 				pokemon.clearIv(false)
 				pokemon.SetLevel(null.NewInt(0, false))
 			}
+			// IVs and level otherwise survive a display change, so a spawn
+			// first seen (and derived or encountered) as another species that
+			// now displays as Minior would keep that identity's stats, and
+			// have a Minior CP recomputed from them. Minior's stats are the
+			// player's, so they are dropped rather than carried over.
+			if hasPlayerSpecificStats(pokemonId) {
+				pokemon.clearIv(true)
+				pokemon.SetLevel(null.NewInt(0, false))
+			}
 			pokemon.SetIsDitto(false)
 			pokemon.SetDisplayPokemonId(null.NewInt(0, false))
 			pokemon.SetDisplayPokemonForm(null.NewInt(0, false))
@@ -2344,8 +2365,9 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
-	// Do not restore player-specific Minior stats from an earlier encounter.
-	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+	// Do not restore player-specific Minior stats from an earlier encounter,
+	// nor derive them for the new weather.
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
 	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
