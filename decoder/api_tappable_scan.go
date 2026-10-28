@@ -14,10 +14,11 @@ import (
 // omitted/null list is no constraint, an empty list matches nothing. Reward
 // fields match the first loot item (rewards[0]) only.
 type ApiTappableDnfFilter struct {
-	RewardType      []string `json:"reward_type" required:"false" doc:"reward_type values (LootItemProto field names, e.g. item, pokemon_candy). Unknown names are rejected with 400."`
-	ItemId          []int16  `json:"item_id" required:"false" doc:"item_id values (item rewards); negative values are rejected with 400"`
-	RewardPokemonId []int16  `json:"reward_pokemon_id" required:"false" doc:"reward_pokemon_id values (candy / XL candy / mega energy / temp evo branch species); negative values are rejected with 400"`
-	PokemonId       []int16  `json:"pokemon_id" required:"false" doc:"pokemon_id values (encounter tappables); negative values are rejected with 400"`
+	RewardType      []string          `json:"reward_type" required:"false" doc:"reward_type values (LootItemProto field names, e.g. item, pokemon_candy). Unknown names are rejected with 400."`
+	ItemId          []int16           `json:"item_id" required:"false" doc:"item_id values (item rewards); negative values are rejected with 400"`
+	RewardPokemonId []int16           `json:"reward_pokemon_id" required:"false" doc:"reward_pokemon_id values (candy / XL candy / mega energy / temp evo branch species); negative values are rejected with 400"`
+	PokemonId       []int16           `json:"pokemon_id" required:"false" doc:"pokemon_id values (encounter tappables); negative values are rejected with 400"`
+	Count           *ApiFortDnfMinMax `json:"count" required:"false" doc:"Inclusive reward amount range (first loot item); null means no constraint. Encounters have no count and never match."`
 }
 
 // ApiTappableScan is the request body for POST /api/tappable/scan.
@@ -42,6 +43,7 @@ type ApiTappableScanResult struct {
 type tappableDnfCompiled struct {
 	rewardType, itemId, rewardPokemonId, pokemonId             []int16
 	hasRewardType, hasItemId, hasRewardPokemonId, hasPokemonId bool
+	count                                                      *ApiFortDnfMinMax
 }
 
 func compileTappableDnf(f ApiTappableDnfFilter) (tappableDnfCompiled, error) {
@@ -49,6 +51,7 @@ func compileTappableDnf(f ApiTappableDnfFilter) (tappableDnfCompiled, error) {
 		itemId: f.ItemId, rewardPokemonId: f.RewardPokemonId, pokemonId: f.PokemonId,
 		hasRewardType: f.RewardType != nil, hasItemId: f.ItemId != nil,
 		hasRewardPokemonId: f.RewardPokemonId != nil, hasPokemonId: f.PokemonId != nil,
+		count: f.Count,
 	}
 	for field, ids := range map[string][]int16{"item_id": f.ItemId, "reward_pokemon_id": f.RewardPokemonId, "pokemon_id": f.PokemonId} {
 		if slices.ContainsFunc(ids, func(id int16) bool { return id < 0 }) {
@@ -69,7 +72,8 @@ func isTappableDnfMatch(l *TappableLookup, f *tappableDnfCompiled) bool {
 	return (!f.hasRewardType || slices.Contains(f.rewardType, int16(l.RewardType))) &&
 		(!f.hasItemId || slices.Contains(f.itemId, l.ItemId)) &&
 		(!f.hasRewardPokemonId || slices.Contains(f.rewardPokemonId, l.RewardPokemonId)) &&
-		(!f.hasPokemonId || slices.Contains(f.pokemonId, l.PokemonId))
+		(!f.hasPokemonId || slices.Contains(f.pokemonId, l.PokemonId)) &&
+		(f.count == nil || (l.Count >= 0 && l.Count >= f.count.Min && l.Count <= f.count.Max))
 }
 
 // tappableScanLimit: requested limit clamped by tuning.max_tappable_results (0 = server default).
@@ -109,7 +113,7 @@ func TappableScanEndpoint(p ApiTappableScan) (*ApiTappableScanResult, error) {
 				skipped++
 				return true
 			}
-			if l.ExpireTimestamp != 0 && l.ExpireTimestamp <= now {
+			if l.ExpireTimestamp != 0 && int64(l.ExpireTimestamp) <= now {
 				return true
 			}
 			matched := len(filters) == 0

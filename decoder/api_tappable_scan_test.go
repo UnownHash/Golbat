@@ -64,9 +64,9 @@ func scanIds(t *testing.T, p ApiTappableScan) (*ApiTappableScanResult, map[uint6
 }
 
 func TestTappableDnfMatch(t *testing.T) {
-	item := TappableLookup{RewardType: 0, ItemId: 1301, RewardPokemonId: -1, PokemonId: -1}
-	candy := TappableLookup{RewardType: 3, ItemId: -1, RewardPokemonId: 25, PokemonId: -1}
-	encounter := TappableLookup{RewardType: -1, ItemId: -1, RewardPokemonId: -1, PokemonId: 25}
+	item := TappableLookup{RewardType: 0, ItemId: 1301, RewardPokemonId: -1, PokemonId: -1, Count: 1}
+	candy := TappableLookup{RewardType: 3, ItemId: -1, RewardPokemonId: 25, PokemonId: -1, Count: 6}
+	encounter := TappableLookup{RewardType: -1, ItemId: -1, RewardPokemonId: -1, PokemonId: 25, Count: -1}
 	for name, tc := range map[string]struct {
 		filter ApiTappableDnfFilter
 		lookup TappableLookup
@@ -81,6 +81,9 @@ func TestTappableDnfMatch(t *testing.T) {
 		"reward_pokemon_id match":             {ApiTappableDnfFilter{RewardPokemonId: []int16{25}}, candy, true},
 		"encounter clause vs reward tappable": {ApiTappableDnfFilter{PokemonId: []int16{25}}, candy, false},
 		"reward clause vs encounter tappable": {ApiTappableDnfFilter{RewardType: []string{"pokemon_candy"}}, encounter, false},
+		"count in range":                      {ApiTappableDnfFilter{Count: &ApiFortDnfMinMax{Min: 3, Max: 10}}, candy, true},
+		"count below range":                   {ApiTappableDnfFilter{Count: &ApiFortDnfMinMax{Min: 3, Max: 10}}, item, false},
+		"count vs encounter (absent)":         {ApiTappableDnfFilter{Count: &ApiFortDnfMinMax{Min: 0, Max: 10}}, encounter, false},
 		"AND with one failing":                {ApiTappableDnfFilter{RewardType: []string{"item"}, ItemId: []int16{1}}, item, false},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -192,5 +195,18 @@ func TestTappableScanRejectsNegativeIds(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "negative "+name) {
 			t.Errorf("%s [-1]: err = %v, want negative %s error", name, err, name)
 		}
+	}
+}
+
+func TestTappableScanCountRange(t *testing.T) {
+	setMaxTappableResults(t, 100)
+	seedTappable(t, 930061, 37.001, 47.001, func(d *TappableData) { d.RewardType, d.Count = null.StringFrom("stardust"), null.IntFrom(100) })
+	seedTappable(t, 930062, 37.002, 47.002, func(d *TappableData) { d.RewardType, d.Count = null.StringFrom("stardust"), null.IntFrom(500) })
+	min, max := box(37, 47)
+	_, ids := scanIds(t, ApiTappableScan{Min: min, Max: max, DnfFilters: []ApiTappableDnfFilter{
+		{RewardType: []string{"stardust"}, Count: &ApiFortDnfMinMax{Min: 500, Max: 32767}},
+	}})
+	if len(ids) != 1 || !ids[930062] {
+		t.Errorf("ids = %v, want only 930062", ids)
 	}
 }

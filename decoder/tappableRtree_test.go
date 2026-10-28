@@ -65,13 +65,13 @@ func TestLootRewardTypeIndex(t *testing.T) {
 func TestBuildTappableLookup(t *testing.T) {
 	candy := &Tappable{TappableData: TappableData{
 		Lat: 1, Lon: 2, RewardType: null.StringFrom("pokemon_candy"), RewardPokemonId: null.IntFrom(25),
-		ExpireTimestamp: null.IntFrom(1700000000),
+		Count: null.IntFrom(6), ExpireTimestamp: null.IntFrom(1700000000),
 	}}
-	if got, want := buildTappableLookup(candy), (TappableLookup{Lat: 1, Lon: 2, ExpireTimestamp: 1700000000, RewardType: 3, ItemId: -1, RewardPokemonId: 25, PokemonId: -1}); got != want {
+	if got, want := buildTappableLookup(candy), (TappableLookup{Lat: 1, Lon: 2, ExpireTimestamp: 1700000000, RewardType: 3, ItemId: -1, RewardPokemonId: 25, PokemonId: -1, Count: 6}); got != want {
 		t.Errorf("candy lookup = %+v, want %+v", got, want)
 	}
 	encounter := &Tappable{TappableData: TappableData{Encounter: null.IntFrom(25)}}
-	if got, want := buildTappableLookup(encounter), (TappableLookup{ExpireTimestamp: 0, RewardType: -1, ItemId: -1, RewardPokemonId: -1, PokemonId: 25}); got != want {
+	if got, want := buildTappableLookup(encounter), (TappableLookup{ExpireTimestamp: 0, RewardType: -1, ItemId: -1, RewardPokemonId: -1, PokemonId: 25, Count: -1}); got != want {
 		t.Errorf("encounter lookup = %+v, want %+v", got, want)
 	}
 }

@@ -13,15 +13,16 @@ import (
 )
 
 // TappableLookup holds the fields tappable scans filter on. -1 = absent;
-// ExpireTimestamp 0 = unknown.
+// ExpireTimestamp 0 = unknown (uint32 unix seconds keeps the entry at 32 bytes).
 type TappableLookup struct {
 	Lat             float64
 	Lon             float64
-	ExpireTimestamp int64
-	RewardType      int8 // index into lootRewardTypeNames
+	ExpireTimestamp uint32
 	ItemId          int16
 	RewardPokemonId int16
 	PokemonId       int16 // encounter species
+	Count           int16
+	RewardType      int8 // index into lootRewardTypeNames
 }
 
 // lootRewardTypeNames are the LootItemProto oneof field names (reward_type
@@ -87,12 +88,24 @@ func buildTappableLookup(t *Tappable) TappableLookup {
 	return TappableLookup{
 		Lat:             t.Lat,
 		Lon:             t.Lon,
-		ExpireTimestamp: t.ExpireTimestamp.ValueOrZero(),
+		ExpireTimestamp: tappableLookupExpire(t.ExpireTimestamp),
 		RewardType:      rewardType,
 		ItemId:          tappableLookupInt16(t.ItemId),
 		RewardPokemonId: tappableLookupInt16(t.RewardPokemonId),
 		PokemonId:       tappableLookupInt16(t.Encounter),
+		Count:           tappableLookupInt16(t.Count),
 	}
+}
+
+// tappableLookupExpire clamps the expiry into uint32 unix seconds; 0 = unknown.
+func tappableLookupExpire(n null.Int) uint32 {
+	switch {
+	case !n.Valid || n.Int64 <= 0:
+		return 0
+	case n.Int64 > math.MaxUint32:
+		return math.MaxUint32
+	}
+	return uint32(n.Int64)
 }
 
 // tappableRtreeUpdateOnSave refreshes the lookup and queues tree mutations

@@ -561,7 +561,8 @@ Unexpired tappables within a bounding box, filtered by DNF clauses.
   "filters": [
     {"reward_type": ["item"], "item_id": [1301]},
     {"reward_type": ["pokemon_candy"], "reward_pokemon_id": [25]},
-    {"pokemon_id": [25]}
+    {"pokemon_id": [25]},
+    {"reward_type": ["stardust"], "count": {"min": 500, "max": 32767}}
   ]
 }
 ```
@@ -571,6 +572,7 @@ Unexpired tappables within a bounding box, filtered by DNF clauses.
 - `filters`: clauses are OR'd, fields within a clause AND'd. Omitted/null list = no constraint; empty list = matches nothing. Omitted/empty `filters` matches every tappable.
 - `reward_type` values: `item`, `stardust`, `pokecoin`, `pokemon_candy`, `experience`, `pokemon_egg`, `avatar_template_id`, `sticker_id`, `mega_energy_pokemon_id`, `xl_candy`, `follower_pokemon`, `neutral_avatar_template_id`, `neutral_avatar_item_template`, `neutral_avatar_item_display`, `temp_evo_pokemon_branch`. Case-sensitive.
 - `pokemon_id` matches encounter tappables only; the reward fields match reward tappables only.
+- `count`: inclusive reward amount range, as fort `quest_reward_amount` (send both bounds). Encounters have no count and never match.
 - Reward fields match the first loot item (`rewards[0]`) only.
 - Negative `item_id` / `reward_pokemon_id` / `pokemon_id` values → 400.
 - Served from memory. With `preload` off, tappables known before a restart appear once they are seen again.

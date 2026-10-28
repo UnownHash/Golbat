@@ -365,11 +365,11 @@ This separation means a scan of 100,000 pokemon in a bounding box only touches t
 
 ### Tappable R-tree (`tappableRtree.go`)
 
-**TappableLookup** (32 bytes, size-pinned) stores lat/lon, expiry, reward type (index into the 15 `LootItemProto` oneof names), item id, reward species and encounter species; `-1` = absent. Always on, no config flag.
+**TappableLookup** (32 bytes, size-pinned) stores lat/lon, expiry (uint32), count, reward type (index into the 15 `LootItemProto` oneof names), item id, reward species and encounter species; `-1` = absent. Always on, no config flag.
 
 - All runtime tree mutations go through `tappableTreeEvictor` (savers never take `tappableTreeMutex`); preload inserts directly.
 - Eviction callback takes the entity lock, skips a re-cached tappable, else drops the lookup and `TryEnqueue`s the tree delete.
-- `POST /api/tappable/scan`: bbox + DNF clauses over `reward_type` (names; unknown → 400), `item_id`, `reward_pokemon_id`, `pokemon_id`; expired tappables are skipped; limit clamped by `tuning.max_tappable_results` (default 9000, reported in `/api/status`).
+- `POST /api/tappable/scan`: bbox + DNF clauses over `reward_type` (names; unknown → 400), `item_id`, `reward_pokemon_id`, `pokemon_id` (negative ids → 400), `count` range (first loot item); expired tappables are skipped; limit clamped by `tuning.max_tappable_results` (default 9000, reported in `/api/status`).
 
 ### Fort R-tree (`fortRtree.go`)
 
