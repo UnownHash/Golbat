@@ -74,7 +74,7 @@ func (x *LatLon) GetLon() float64 {
 }
 
 // Inclusive integer range. Unset min is 0; unset max is 32767 (no upper
-// bound). This differs from the JSON API, where an omitted max is 0.
+// bound), as an omitted or null max in the JSON API.
 type IntRange struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Min           *int32                 `protobuf:"varint,1,opt,name=min,proto3,oneof" json:"min,omitempty"`
