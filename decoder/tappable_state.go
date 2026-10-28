@@ -93,6 +93,11 @@ func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, 
 func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
 	// Skip save if not dirty and not new
 	if !tappable.IsDirty() && !tappable.IsNewRecord() {
+		// DB-loaded and unchanged: still needs its TTL and index
+		if _, indexed := tappableLookupCache.Load(tappable.Id); !indexed {
+			tappableCacheOnSave(tappable, time.Now().Unix())
+			tappableRtreeUpdateOnSave(tappable)
+		}
 		return
 	}
 
@@ -123,7 +128,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		tappable.debug.reset()
 	}
 	tappable.ClearDirty()
-	tappableCacheOnSave(tappable, isNewRecord, now)
+	tappableCacheOnSave(tappable, now)
 	tappableRtreeUpdateOnSave(tappable)
 	if isNewRecord {
 		tappable.newRecord = false

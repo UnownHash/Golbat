@@ -22,7 +22,7 @@ Today `tappableCache` uses a flat 60 min TTL with touch-on-hit (`decoder/main.go
 Change:
 - `TouchOnHit: false`.
 - `tappableCacheTTL(t, now)`: `expire_timestamp + 60s - now`, minimum 1 min; no `expire_timestamp` → 60 min.
-- `saveTappableRecord`: new record → `Set` with that TTL; existing record → `UpdateTTL` when `ExpireTimestamp` changed (`setUnknownTimestamp` extends it).
+- `saveTappableRecord`: every save `Set`s with that TTL (not `UpdateTTL`: the upsert re-caches a tappable evicted mid-save, see `OtterCache`). A clean save (DB-loaded, unchanged) with no lookup entry also sets the TTL and indexes it.
 
 ## 4. Index (`decoder/tappableRtree.go`)
 

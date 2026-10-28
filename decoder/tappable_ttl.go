@@ -12,16 +12,8 @@ func tappableCacheTTL(t *Tappable, now int64) time.Duration {
 	return max(ttl, time.Minute)
 }
 
-// tappableCacheUpdateTTL is a test seam.
-var tappableCacheUpdateTTL = func(id uint64, ttl time.Duration) { tappableCache.UpdateTTL(id, ttl) }
-
-// tappableCacheOnSave caches a new tappable, or refreshes the TTL when its expiry changed.
-func tappableCacheOnSave(t *Tappable, isNewRecord bool, now int64) {
-	expire := t.ExpireTimestamp.Int64
-	if isNewRecord {
-		tappableCache.Set(t.Id, t, tappableCacheTTL(t, now))
-	} else if expire != t.cachedExpire {
-		tappableCacheUpdateTTL(t.Id, tappableCacheTTL(t, now))
-	}
-	t.cachedExpire = expire
+// tappableCacheOnSave stamps the per-entry TTL. Set, not UpdateTTL: the
+// upsert re-caches a tappable evicted mid-save (see OtterCache).
+func tappableCacheOnSave(t *Tappable, now int64) {
+	tappableCache.Set(t.Id, t, tappableCacheTTL(t, now))
 }

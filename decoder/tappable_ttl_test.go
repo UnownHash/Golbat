@@ -1,10 +1,13 @@
 package decoder
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/guregu/null/v6"
+
+	"golbat/db"
 )
 
 func TestTappableCacheTTL(t *testing.T) {
@@ -27,47 +30,30 @@ func TestTappableCacheTTL(t *testing.T) {
 	}
 }
 
-// recordTappableTTLUpdates swaps tappableCacheUpdateTTL for a recorder for one test.
-func recordTappableTTLUpdates(t *testing.T) *[]time.Duration {
-	t.Helper()
-	var calls []time.Duration
-	orig := tappableCacheUpdateTTL
-	tappableCacheUpdateTTL = func(_ uint64, ttl time.Duration) { calls = append(calls, ttl) }
-	t.Cleanup(func() { tappableCacheUpdateTTL = orig })
-	return &calls
-}
-
-func TestTappableSaveExtendsCacheTTL(t *testing.T) {
+func TestTappableSaveRecachesEvicted(t *testing.T) {
 	const now = int64(1_700_000_000)
-	calls := recordTappableTTLUpdates(t)
 	ta := &Tappable{TappableData: TappableData{Id: 9001, ExpireTimestamp: null.IntFrom(now + 120)}}
 	t.Cleanup(func() { tappableCache.Delete(9001) })
 
-	tappableCacheOnSave(ta, true, now)
-	if len(*calls) != 0 {
-		t.Fatalf("UpdateTTL called %d times for a new record, want 0", len(*calls))
-	}
+	tappableCacheOnSave(ta, now)
+	tappableCache.Delete(9001) // evicted between the caller's cache get and its save
+	tappableCacheOnSave(ta, now)
 	if !tappableCache.Has(9001) {
-		t.Fatal("new tappable not cached")
-	}
-
-	ta.ExpireTimestamp = null.IntFrom(now + 1200)
-	tappableCacheOnSave(ta, false, now)
-	if len(*calls) != 1 || (*calls)[0] != 1260*time.Second {
-		t.Errorf("UpdateTTL calls = %v, want [1260s]", *calls)
+		t.Error("tappable evicted mid-save not re-cached by the save")
 	}
 }
 
-func TestTappableSaveNoTTLUpdateWhenExpireUnchanged(t *testing.T) {
-	const now = int64(1_700_000_000)
-	calls := recordTappableTTLUpdates(t)
-	ta := &Tappable{TappableData: TappableData{Id: 9002, ExpireTimestamp: null.IntFrom(now + 120)}}
+func TestTappableCleanSaveIndexesDbLoaded(t *testing.T) {
+	// a DB-loaded, unchanged tappable is clean; its save must still index it
+	ta := newIndexedTappable(9002, 11.1, 21.1)
+	tappableCache.Set(9002, ta, time.Minute)
 	t.Cleanup(func() { tappableCache.Delete(9002) })
+	if _, ok := tappableLookupCache.Load(9002); ok {
+		t.Fatal("setup: already indexed")
+	}
 
-	tappableCacheOnSave(ta, true, now)
-	ta.SetType("TAPPABLE_TYPE_BREAKFAST")
-	tappableCacheOnSave(ta, false, now)
-	if len(*calls) != 0 {
-		t.Errorf("UpdateTTL calls = %v, want none", *calls)
+	saveTappableRecord(context.Background(), db.DbDetails{}, ta)
+	if _, ok := tappableLookupCache.Load(9002); !ok {
+		t.Error("clean DB-loaded tappable not indexed")
 	}
 }

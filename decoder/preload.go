@@ -415,7 +415,6 @@ func preloadTappableRow(t *Tappable, now int64) bool {
 	if !t.ExpireTimestamp.Valid || t.ExpireTimestamp.Int64 <= now {
 		return false
 	}
-	t.cachedExpire = t.ExpireTimestamp.Int64
 	tappableCache.Set(t.Id, t, tappableCacheTTL(t, now))
 	tappablePreloadInsert(t)
 	return true

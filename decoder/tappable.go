@@ -44,8 +44,6 @@ type Tappable struct {
 	debug debugChangeAccumulator `db:"-"`
 
 	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
-
-	cachedExpire int64 `db:"-"` // expire_timestamp the current cache TTL was computed from
 }
 
 // IsDirty returns true if any field has been modified
