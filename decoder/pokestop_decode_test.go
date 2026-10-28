@@ -72,3 +72,97 @@ func TestUpdatePokestopFromQuestProtoTempEvoBranchResource(t *testing.T) {
 		t.Errorf("QuestRewards[0] = %+v, want type 20, amount 150, pokemon 150, temp evolution 2", got)
 	}
 }
+
+func TestQuestDistributionPokemonId(t *testing.T) {
+	tests := []struct {
+		templateId string
+		want       pogo.HoloPokemonId
+	}{
+		{"QUEST_POKEMON_ENCOUNTER_SINISTEA_HALLOWEEN_2026", pogo.HoloPokemonId_SINISTEA},
+		{"QUEST_POKEMON_ENCOUNTER_MR_MIME_EVENT", pogo.HoloPokemonId_MR_MIME},
+		{"QUEST_POKEMON_ENCOUNTER_MIME_JR", pogo.HoloPokemonId_MIME_JR},
+		{"QUEST_POKEMON_ENCOUNTER_NOT_A_SPECIES", pogo.HoloPokemonId_MISSINGNO},
+		{"QUEST_POKEMON_ENCOUNTER_MISSINGNO", pogo.HoloPokemonId_MISSINGNO},
+		{"SINISTEA_HALLOWEEN_2026", pogo.HoloPokemonId_MISSINGNO},
+		{"", pogo.HoloPokemonId_MISSINGNO},
+	}
+	for _, tt := range tests {
+		if got := questDistributionPokemonId(tt.templateId); got != tt.want {
+			t.Errorf("questDistributionPokemonId(%q) = %v, want %v", tt.templateId, got, tt.want)
+		}
+	}
+}
+
+func TestUpdatePokestopFromQuestProtoEncounterDistribution(t *testing.T) {
+	const templateId = "QUEST_POKEMON_ENCOUNTER_SINISTEA_HALLOWEEN_2026"
+	quest := func(templateId string) *pogo.FortSearchOutProto {
+		return &pogo.FortSearchOutProto{
+			ChallengeQuest: &pogo.ClientQuestProto{
+				Quest: &pogo.QuestProto{
+					Goal:       &pogo.QuestGoalProto{},
+					TemplateId: "QUEST_SINISTEA",
+					QuestRewards: []*pogo.QuestRewardProto{{
+						Type: pogo.QuestRewardProto_POKEMON_ENCOUNTER,
+						Reward: &pogo.QuestRewardProto_PokemonEncounter{
+							PokemonEncounter: &pogo.PokemonEncounterRewardProto{
+								Type: &pogo.PokemonEncounterRewardProto_PokemonEncounterDistribution{
+									PokemonEncounterDistribution: &pogo.PokemonEncounterDistributionRewardProto{
+										QuestDistributionTemplateId: templateId,
+									},
+								},
+								ShinyProbability: 1.0 / 128,
+							},
+						},
+					}},
+				},
+				QuestDisplay: &pogo.QuestDisplayProto{Description: "Catch a Sinistea"},
+			},
+		}
+	}
+
+	stop := &Pokestop{}
+	stop.updatePokestopFromQuestProto(quest(templateId), true)
+
+	if got := stop.QuestPokemonId.ValueOrZero(); got != 854 {
+		t.Errorf("QuestPokemonId = %d, want 854", got)
+	}
+	var rewards []struct {
+		Info struct {
+			PokemonId              int    `json:"pokemon_id"`
+			DistributionTemplateId string `json:"distribution_template_id"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal([]byte(stop.QuestRewards.ValueOrZero()), &rewards); err != nil {
+		t.Fatalf("unmarshal QuestRewards: %v", err)
+	}
+	if len(rewards) != 1 || rewards[0].Info.PokemonId != 854 || rewards[0].Info.DistributionTemplateId != templateId {
+		t.Errorf("QuestRewards = %+v, want pokemon 854 with template %s", rewards, templateId)
+	}
+
+	unresolved := &Pokestop{}
+	unresolved.updatePokestopFromQuestProto(quest("QUEST_POKEMON_ENCOUNTER_UNKNOWN"), true)
+	if unresolved.QuestPokemonId.Valid {
+		t.Errorf("QuestPokemonId = %d, want null for unresolved template", unresolved.QuestPokemonId.Int64)
+	}
+}
+
+func TestUpdatePokestopFromQuestProtoEncounterWithoutId(t *testing.T) {
+	stop := &Pokestop{}
+	stop.updatePokestopFromQuestProto(&pogo.FortSearchOutProto{
+		ChallengeQuest: &pogo.ClientQuestProto{
+			Quest: &pogo.QuestProto{
+				Goal: &pogo.QuestGoalProto{},
+				QuestRewards: []*pogo.QuestRewardProto{{
+					Type: pogo.QuestRewardProto_POKEMON_ENCOUNTER,
+					Reward: &pogo.QuestRewardProto_PokemonEncounter{
+						PokemonEncounter: &pogo.PokemonEncounterRewardProto{},
+					},
+				}},
+			},
+			QuestDisplay: &pogo.QuestDisplayProto{},
+		},
+	}, true)
+	if !stop.QuestPokemonId.Valid || stop.QuestPokemonId.Int64 != 0 {
+		t.Errorf("QuestPokemonId = %+v, want valid 0", stop.QuestPokemonId)
+	}
+}

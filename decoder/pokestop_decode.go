@@ -3,6 +3,7 @@ package decoder
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/guregu/null/v6"
@@ -292,9 +293,17 @@ func (stop *Pokestop) updatePokestopFromQuestProto(questProto *pogo.FortSearchOu
 					rewardPokemonId = null.IntFrom(132)
 				}
 			} else {
-				infoData["pokemon_id"] = int(info.GetPokemonId())
-				if isFirst {
-					rewardPokemonId = null.IntFrom(int64(info.GetPokemonId()))
+				pokemonId := info.GetPokemonId()
+				resolved := true
+				if dist := info.GetPokemonEncounterDistribution(); dist != nil {
+					templateId := dist.GetQuestDistributionTemplateId()
+					infoData["distribution_template_id"] = templateId
+					pokemonId = questDistributionPokemonId(templateId)
+					resolved = pokemonId != pogo.HoloPokemonId_MISSINGNO
+				}
+				infoData["pokemon_id"] = int(pokemonId)
+				if isFirst && resolved {
+					rewardPokemonId = null.IntFrom(int64(pokemonId))
 				}
 			}
 			if info.ShinyProbability > 0.0 {
@@ -559,4 +568,29 @@ func (stop *Pokestop) updatePokestopFromGetPokemonSizeContestEntryOutProto(conte
 
 	jsonString, _ := json.Marshal(j)
 	stop.SetShowcaseRankings(null.StringFrom(string(jsonString)))
+}
+
+const questDistributionPrefix = "QUEST_POKEMON_ENCOUNTER_"
+
+var unresolvedQuestDistributions sync.Map
+
+// questDistributionPokemonId resolves a distribution template id such as
+// QUEST_POKEMON_ENCOUNTER_SINISTEA_HALLOWEEN_2026 to its species by name,
+// taking the longest leading name match. Returns MISSINGNO if unresolved.
+func questDistributionPokemonId(templateId string) pogo.HoloPokemonId {
+	if rest, ok := strings.CutPrefix(templateId, questDistributionPrefix); ok {
+		parts := strings.Split(rest, "_")
+		for n := len(parts); n > 0; n-- {
+			if id, found := pogo.HoloPokemonId_value[strings.Join(parts[:n], "_")]; found && id != 0 {
+				return pogo.HoloPokemonId(id)
+			}
+		}
+	}
+	if templateId == "" {
+		return pogo.HoloPokemonId_MISSINGNO
+	}
+	if _, seen := unresolvedQuestDistributions.LoadOrStore(templateId, struct{}{}); !seen {
+		log.Warnf("[POKESTOP] Unresolved quest encounter distribution %q", templateId)
+	}
+	return pogo.HoloPokemonId_MISSINGNO
 }
