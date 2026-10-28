@@ -1,12 +1,15 @@
 package decoder
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strconv"
+)
 
 // ApiTappableResult is the API representation of a tappable. Nullable database
 // columns are represented as pointers (nil => JSON null) without omitempty so
 // every key is always present.
 type ApiTappableResult struct {
-	Id                      uint64           `json:"id" doc:"Tappable encounter ID"`
+	Id                      string           `json:"id" doc:"Tappable encounter ID (decimal string; exceeds 2^53)"`
 	Lat                     float64          `json:"lat" doc:"Latitude of the tappable"`
 	Lon                     float64          `json:"lon" doc:"Longitude of the tappable"`
 	FortId                  *string          `json:"fort_id" doc:"ID of the fort the tappable belongs to"`
@@ -26,7 +29,7 @@ type ApiTappableResult struct {
 func buildTappableResult(tappable *Tappable) ApiTappableResult {
 	fortId := tappable.FortId.Ptr()
 	return ApiTappableResult{
-		Id:                      tappable.Id,
+		Id:                      strconv.FormatUint(tappable.Id, 10),
 		Lat:                     tappable.Lat,
 		Lon:                     tappable.Lon,
 		FortId:                  fortId,

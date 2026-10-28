@@ -908,20 +908,26 @@ disable compression on the client, or compress both paths.
 
 ```json
 {
-  "id": 1234567890,
+  "id": "12345678901234567890",
   "lat": 40.7128,
   "lon": -74.0060,
-  "fort_id": "gym_or_pokestop_id",
+  "fort_id": null,
   "spawn_id": 987654321,
-  "type": "invasion",
-  "pokemon_id": 1,
-  "item_id": 1,
-  "count": 1,
+  "type": "TAPPABLE_TYPE_BREAKFAST",
+  "pokemon_id": null,
+  "reward_type": "pokemon_candy",
+  "item_id": null,
+  "reward_pokemon_id": 25,
+  "count": 6,
+  "rewards": [{"pokemon_candy": 25, "count": 6}],
   "expire_timestamp": 1234567890,
   "expire_timestamp_verified": true,
   "updated": 1234567800
 }
 ```
+
+- `id`: decimal string (encounter ids exceed 2^53).
+- `pokemon_id`: encounter species (encounter tappables); `reward_*`/`item_id`/`count` describe the first loot item; `rewards` holds all loot items as protojson.
 
 ---
 

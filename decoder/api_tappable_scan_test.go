@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -53,7 +54,11 @@ func scanIds(t *testing.T, p ApiTappableScan) (*ApiTappableScanResult, map[uint6
 	}
 	ids := map[uint64]bool{}
 	for _, r := range res.Tappables {
-		ids[r.Id] = true
+		id, err := strconv.ParseUint(r.Id, 10, 64)
+		if err != nil {
+			t.Fatalf("result id %q: %v", r.Id, err)
+		}
+		ids[id] = true
 	}
 	return res, ids
 }
