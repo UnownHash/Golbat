@@ -10,6 +10,11 @@ Golbat is a high-performance Go backend that receives raw protobuf data from Pok
 - **Test:** `go test ./decoder/` — the `decoder` package holds most logic and its `_test.go` files; `go test .` runs the root-package huma route tests. Some tests need the go-json build behavior: `go test -tags go_json ./...`.
 - **Lint:** `golangci-lint run` — CI enforces it (staticcheck included). Run it before pushing. Example: staticcheck `S1016` wants `ApiFoo(k)` conversion instead of a field-by-field literal when two structs have identical fields.
 
+## Docs
+
+- `api.md` — HTTP and gRPC API reference. Update it with any endpoint, request/response field or filter-semantics change.
+- `webhooks.md` — receiver-facing webhook spec (envelope, per-type firing conditions and payloads, accepted type strings). Update it with any webhook type, payload field or trigger change.
+
 ## Project Layout
 
 ```
