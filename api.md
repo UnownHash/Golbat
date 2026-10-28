@@ -247,7 +247,8 @@ OR over every clause.
 Range conditions (`{"min": .., "max": ..}`, here and in the fort and tappable
 filters) are inclusive. An omitted `min` is 0; an omitted or null `max` is
 unbounded (32767), as over gRPC. So `{"min": 90}` means 90 and up, and `{}`
-matches any value.
+matches any value. A PVP range (`pvp_little`/`pvp_great`/`pvp_ultra`) never
+matches a pokemon with no rank in that league, whatever its bounds.
 
 What follows from that:
 
