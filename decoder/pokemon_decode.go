@@ -1147,6 +1147,11 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+	// Minior's encounter stats belong to the player, not the shared spawn.
+	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+		pokemon.setUsernameIfStored(username)
+		return
+	}
 	pokemon.SetShiny(null.BoolFrom(proto.PokemonDisplay.Shiny))
 	pokemon.SetCp(null.IntFrom(int64(proto.Cp)))
 	pokemon.SetMove1(null.IntFrom(int64(proto.Move1)))
@@ -1365,6 +1370,10 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
+	// Do not restore player-specific Minior stats from an earlier encounter.
+	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+		return
+	}
 	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
 	// before deriving isBoosted from it (see narrowUint8). Out of range, the
 	// raw reading and the value that actually gets stored can classify
