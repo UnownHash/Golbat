@@ -229,6 +229,52 @@ Query pokemon with DNF (Disjunctive Normal Form) filters - more efficient filter
 
 **Response:** Array of [ApiPokemonResult](#apipokemonresult)
 
+#### Filter semantics (v2, v3 and gRPC)
+
+The `filters` list is **not** a flat OR over every clause. Clauses are grouped
+by the pokemon/form keys they list, and each pokemon is matched against exactly
+one group — the most specific one that exists for it:
+
+1. clauses listing its exact `{id, form}`;
+2. otherwise clauses listing its `id` with no form;
+3. otherwise clauses with no `pokemon` list — *everything else*.
+
+Within the selected group the clauses are OR'd, and the conditions inside a
+clause are AND'd (an OR of ANDs: the DNF). A less specific group never applies
+to a pokemon that has a more specific one. Fort filters are different: a plain
+OR over every clause.
+
+What follows from that:
+
+- **"Everything else" means it.** With
+  `[{"pokemon":[{"id":1}], "gender":[2], "iv":{"min":100,"max":100}}, {"iv":{"min":100,"max":100}}]`
+  you get female perfect Bulbasaur and every perfect pokemon *except*
+  Bulbasaur. A male perfect Bulbasaur is not returned: Bulbasaur has its own
+  group, so the second clause never applies to it.
+- **A shared clause that must also apply to a species with its own rule is
+  listed under that species too.** The client owns that merge; Golbat never
+  copies clauses between groups (done server-side it costs species × shared
+  clauses per request, before any scanning — see #417). "Female Bulbasaur,
+  plus every perfect pokemon including Bulbasaur" is
+  `[{"pokemon":[{"id":1}], "gender":[2]}, {"pokemon":[{"id":1}], "iv":{"min":100,"max":100}}, {"iv":{"min":100,"max":100}}]`.
+- **Hiding a species** is a clause for it that can never hold:
+  `{"pokemon":[{"id":710}], "iv":{"min":1,"max":0}}` hides Pumpkaboo while
+  `{"size":{"min":5,"max":5}}` still returns every other XXL pokemon.
+- **Forms.** `{"id":1,"form":0}` and `{"id":1}` are different keys: for a
+  form-0 Bulbasaur the exact key wins and the id-only clauses do not apply.
+  Forms belong to a species, so `"id":0` with a form can never match.
+- **An empty `filters` list matches nothing**; `[{}]` (one clause with no
+  conditions) matches every pokemon.
+- The `pokemon` array files one clause under several keys at once; it is
+  shorthand for repeating the clause.
+
+Why it works this way: a real filter is hundreds of per-species rules plus a
+few shared ones. Grouping lets Golbat pick the applicable clauses with a couple
+of map probes per candidate instead of evaluating every clause, and it is what
+makes "everything else" expressible at all — without negation, the alternative
+is enumerating the complement. The behaviour was introduced with the DNF
+filters in #134 and is discussed in #417.
+
 ---
 
 ### POST /api/pokemon/v3/scan
@@ -237,7 +283,8 @@ Query pokemon with advanced DNF filters, returns metadata about scan.
 
 **Authentication:** Required
 
-**Request Body:** Same as v2, with gender as array
+**Request Body:** Same as v2, with gender as array. Filter semantics as for v2
+(see above).
 
 **Response:**
 ```json
@@ -545,6 +592,8 @@ These endpoints are only available if `tuning.profile_routes` is enabled in conf
 Golbat serves a gRPC API on `grpc_port` (the same listener as raw ingest). The
 schema is `grpc/api.proto`, package `golbat_api`, service `GolbatApi`. Server
 reflection is enabled, so `grpcurl` and `ghz` work without the proto files.
+Pokemon scan `filters` follow the same grouping rules as the HTTP v2/v3
+endpoints (see "Filter semantics" above).
 
 **Message sizes:** fort scans can return up to `tuning.max_fort_results`
 results (default 9000) with JSON passthrough blobs attached, and easily

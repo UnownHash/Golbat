@@ -8,7 +8,7 @@ type ApiPokemonScan3 struct {
 	Min          ApiLatLon              `json:"min" doc:"Lower-left (minimum lat/lon) corner of the bounding box to scan."`
 	Max          ApiLatLon              `json:"max" doc:"Upper-right (maximum lat/lon) corner of the bounding box to scan."`
 	Limit        int                    `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default."`
-	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"List of filter clauses OR'd together; a pokemon matches if it satisfies any one clause."`
+	DnfFilters   []ApiPokemonDnfFilter3 `json:"filters" required:"false" doc:"Filter clauses. Clauses are grouped by the pokemon/form keys they list, and a pokemon is matched against the most specific group that exists for it: clauses listing its exact id+form, else clauses listing its id with no form, else the clauses with no pokemon list ('everything else'). Within that group a clause matches if all its conditions hold (an OR of ANDs). A less specific group never applies to a pokemon that has a more specific one, so a shared clause that should also apply to such a pokemon must be listed under its key as well. An empty list matches nothing; one clause with no conditions matches everything."`
 	UpdatedAfter int64                  `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
 }
 
@@ -25,7 +25,7 @@ func (r ApiPokemonScan3) GetLimit() int {
 }
 
 type ApiPokemonDnfFilter3 struct {
-	Pokemon []ApiPokemonDnfId    `json:"pokemon" required:"false" doc:"Pokemon/form ids this clause applies to; empty matches any pokemon. All other conditions in the clause are AND'd together."`
+	Pokemon []ApiPokemonDnfId    `json:"pokemon" required:"false" doc:"Pokemon/form keys this clause is filed under; empty files it under 'everything else', which applies only to pokemon with no clause of their own. All other conditions in the clause are AND'd together. A clause whose conditions can never hold (iv min 1, max 0) hides the listed pokemon entirely."`
 	Iv      *ApiPokemonDnfMinMax `json:"iv" required:"false" doc:"Inclusive IV percentage range; null means no IV constraint."`
 	AtkIv   *ApiPokemonDnfMinMax `json:"atk_iv" required:"false" doc:"Inclusive attack IV range; null means no attack IV constraint."`
 	DefIv   *ApiPokemonDnfMinMax `json:"def_iv" required:"false" doc:"Inclusive defense IV range; null means no defense IV constraint."`
