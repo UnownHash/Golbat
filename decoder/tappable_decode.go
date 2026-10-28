@@ -140,7 +140,8 @@ func (ta *Tappable) setRewards(r tappableRewards) {
 }
 
 func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, timestampMs int64) {
-	ta.SetExpireTimestampVerified(false)
+	// set once: a false-then-true flip through the setter marks every re-tap dirty
+	verified := false
 	if spawnId := ta.SpawnId.ValueOrZero(); spawnId != 0 {
 		spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "updateFromTappableEncounter")
 		if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
@@ -155,7 +156,7 @@ func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, tim
 				despawnOffset += 3600
 			}
 			ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
-			ta.SetExpireTimestampVerified(true)
+			verified = true
 		} else {
 			if unlock != nil {
 				unlock()
@@ -166,6 +167,7 @@ func (ta *Tappable) setExpireTimestamp(ctx context.Context, db db.DbDetails, tim
 		// we don't know any despawn times from lured/fort tappables
 		ta.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 	}
+	ta.SetExpireTimestampVerified(verified)
 }
 
 func (ta *Tappable) setUnknownTimestamp(now int64) {
