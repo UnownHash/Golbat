@@ -674,6 +674,8 @@ methods themselves are always gated by `api_secret`.
 | `ScanPokestops(FortScanRequest) → PokestopScanResponse` | `POST /api/pokestop/scan` |
 | `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
 | `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` — each type group takes its own `limit` (0 = server default); the response carries `gyms_stats` / `pokestops_stats` / `stations_stats` (`examined`, `limit_reached`) per type, and the top-level `limit_reached` is true when any type or the overall `limit` was reached |
+| `ScanTappables(TappableScanRequest) → TappableScanResponse` | `POST /api/tappable/scan` — not gated on `fort_in_memory`; empty `filters` = every tappable; unknown `reward_type` or negative id → `INVALID_ARGUMENT`; `rewards` is `rewards_json` |
+| `GetTappable(GetTappableRequest) → GetTappableResponse` | `GET /api/tappable/id/{tappable_id}`, batched; misses are omitted; capped at `tuning.max_tappable_results` ids per call (`INVALID_ARGUMENT` above it) |
 
 Every message mirrors the JSON request or response it is named after, field
 for field, with proto field names equal to the JSON keys. The scans run the

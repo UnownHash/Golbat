@@ -18,7 +18,7 @@ routes.go            — HTTP route handlers (raw ingest, API endpoints)
 raw_limiter.go       — Bounded raw-processing concurrency (semaphore + shed)
 decode.go            — Proto method dispatcher, GMO decoder
 grpc_server_raw.go   — gRPC raw proto receiver
-grpc_server_api.go   — GolbatApi gRPC service (pokemon + fort scans) and newGrpcServer()
+grpc_server_api.go   — GolbatApi gRPC service (pokemon, fort, tappable) and newGrpcServer()
 grpc_auth.go         — api_secret unary interceptor for GolbatApi methods
 decoder/
   main.go            — Cache/queue initialization, raw data types
@@ -74,14 +74,15 @@ overload instead of unbounded goroutine pileup on internal locks.
 ### gRPC API
 
 The same listener also serves `GolbatApi` (`grpc/api.proto`): `ScanPokemon`,
-`GetPokemon`, `ScanGyms`, `ScanPokestops`, `ScanStations`, `ScanForts`. Each
+`GetPokemon`, `ScanGyms`, `ScanPokestops`, `ScanStations`, `ScanForts`,
+`ScanTappables`, `GetTappable`. Each
 request converts to the HTTP request struct (`decoder/api_grpc_*.go`) and runs
 the same scan code as the Huma endpoint; results mirror the `Api*Result`
 structs field for field (`decoder/api_grpc_parity_test.go` fails if either
 side gains a field the other lacks). Auth is `api_secret` via the
 `x-golbat-secret` metadata key (`grpc_auth.go`), never `raw_bearer`. Fort
-scans return `FailedPrecondition` without `fort_in_memory`. The tappable scan
-(`POST /api/tappable/scan`) is HTTP only. Server reflection
+scans return `FailedPrecondition` without `fort_in_memory`; tappable scans
+are not gated. Server reflection
 is registered so `grpcurl`/`ghz` work without proto files.
 
 ### Dispatch (`decode.go`)
