@@ -299,7 +299,7 @@ Worker queue depths are exported every 10s as
 | `max_battle` | MaxBattle | `max_battle` |
 | `tappable` | Tappable | `tappable` |
 
-`tappable` covers reward tappables only, sent on a new or changed reward (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks.
+`tappable` covers reward tappables only, sent when a reward type is first recorded (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks. Payload follows the `pokemon` hook's field names (`webhooks.md`).
 
 ### Dispatch Flow
 

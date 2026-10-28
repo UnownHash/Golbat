@@ -52,7 +52,7 @@ func TestTappableCleanSaveIndexesDbLoaded(t *testing.T) {
 		t.Fatal("setup: already indexed")
 	}
 
-	saveTappableRecord(context.Background(), db.DbDetails{}, ta)
+	saveTappableRecord(context.Background(), db.DbDetails{}, ta, nil)
 	if _, ok := tappableLookupCache.Load(9002); !ok {
 		t.Error("clean DB-loaded tappable not indexed")
 	}

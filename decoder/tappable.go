@@ -45,7 +45,7 @@ type Tappable struct {
 
 	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
 
-	rewardChanged bool `db:"-"` // reward columns changed since the last save; drives the tappable webhook
+	rewardChanged bool `db:"-"` // reward type changed since the last save; drives the tappable webhook
 }
 
 // IsDirty returns true if any field has been modified

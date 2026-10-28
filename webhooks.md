@@ -26,6 +26,7 @@ document and the code disagree, the code wins — please update this document.
   - [weather](#weather)
   - [fort_update](#fort_update)
   - [max_battle](#max_battle)
+  - [tappable](#tappable)
 - [Configuration](#configuration)
 
 > Anchor links in this document use GitHub-flavored Markdown slugs that
@@ -99,7 +100,7 @@ Every message, regardless of type, is wrapped in this envelope:
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
-| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`. |
+| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`. |
 | `message` | object | Type-specific payload; see the sections below. |
 
 Area names are **not** included in the envelope — they are applied server-side
@@ -1175,6 +1176,46 @@ Fires when **any** of these is true:
 
 ---
 
+### tappable
+
+Sent when a reward is first recorded for a tappable (candy, items, stardust,
+…). Encounter tappables are not sent here: they arrive as [pokemon](#pokemon)
+webhooks with `seen_type` `tappable_encounter` / `tappable_lure_encounter`.
+
+**Source**: `decoder/tappable_webhook.go`, `tappableWebhookOnSave` (from `saveTappableRecord`).
+
+#### Firing conditions
+
+Fires when the tappable has a `reward_type` AND either:
+
+- the tappable is new, OR
+- its `reward_type` changed since the last save.
+
+Repeat taps with the same reward type send nothing, including fort/lure
+tappables whose `disappear_time` moves with every tap.
+
+#### Payload
+
+| JSON field                | Go type         | Description |
+|---------------------------|-----------------|-------------|
+| `encounter_id`            | string          | Tappable encounter ID, decimal (exceeds 2^53). |
+| `spawnpoint_id`           | string          | Spawnpoint ID as lowercase hex; `"None"` for fort tappables. |
+| `pokestop_id`             | string          | Fort ID for fort/lure tappables; `"None"` otherwise. |
+| `pokestop_name`           | `*string`       | Stop name; `null` without a stop, `"Unknown"` if the stop is not found. |
+| `latitude`                | float64         | Latitude (the request's location hint). |
+| `longitude`               | float64         | Longitude. |
+| `type`                    | string          | Tappable type, e.g. `TAPPABLE_TYPE_BREAKFAST`. |
+| `reward_type`             | null.String     | First loot item's kind: a `LootItemProto` field name (`item`, `stardust`, `pokecoin`, `pokemon_candy`, `experience`, `pokemon_egg`, `avatar_template_id`, `sticker_id`, `mega_energy_pokemon_id`, `xl_candy`, `follower_pokemon`, `neutral_avatar_template_id`, `neutral_avatar_item_template`, `neutral_avatar_item_display`, `temp_evo_pokemon_branch`). |
+| `item_id`                 | null.Int        | Item ID for `item` rewards. |
+| `reward_pokemon_id`       | null.Int        | Species for `pokemon_candy`, `xl_candy`, `mega_energy_pokemon_id`, `temp_evo_pokemon_branch`. |
+| `count`                   | null.Int        | Amount of the first loot item. |
+| `rewards`                 | json.RawMessage | All loot items as protojson (proto field names, numeric enums), e.g. `[{"pokemon_candy":25,"count":6}]`; `null` if none could be stored. |
+| `disappear_time`          | int64           | Unix seconds; `0` when unknown. Unverified for fort/lure tappables (tap time + 120 s) and for spawns with an unknown despawn (now + 20 min). |
+| `disappear_time_verified` | bool            | True when derived from a spawnpoint's known despawn second. |
+| `updated`                 | int64           | Unix seconds when Golbat last saved the record. |
+
+---
+
 ## Configuration
 
 Webhooks are configured in `config.toml`:
@@ -1216,5 +1257,6 @@ X-Custom-Header = "value"
 | `pokemon_no_iv`   | `pokemon`              | Only Pokémon without full IVs. |
 | `pokemon`         | `pokemon`              | Both IV and no-IV variants. |
 | `max_battle`      | `max_battle`           | Station Max Battle state. |
+| `tappable`        | `tappable`             | Reward tappables (candy, items, stardust, …). |
 
 Unknown type strings cause Golbat to fail to start with a config error.

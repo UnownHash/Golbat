@@ -90,7 +90,8 @@ func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, 
 	return tappable, func() { tappable.Unlock() }, nil
 }
 
-func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
+// pokestopName feeds the tappable webhook; resolve it before taking the tappable lock.
+func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable, pokestopName *string) {
 	// Skip save if not dirty and not new
 	if !tappable.IsDirty() && !tappable.IsNewRecord() {
 		// DB-loaded and unchanged: still needs its TTL and index
@@ -98,7 +99,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 			tappableCacheOnSave(tappable, time.Now().Unix())
 			tappableRtreeUpdateOnSave(tappable)
 		}
-		tappable.rewardChanged = false
+		tappable.rewardChanged = false // defensive: setRewards can't set it without dirtying
 		return
 	}
 
@@ -131,7 +132,7 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 	tappable.ClearDirty()
 	tappableCacheOnSave(tappable, now)
 	tappableRtreeUpdateOnSave(tappable)
-	tappableWebhookOnSave(tappable, isNewRecord)
+	tappableWebhookOnSave(tappable, isNewRecord, pokestopName)
 	if isNewRecord {
 		tappable.newRecord = false
 	}

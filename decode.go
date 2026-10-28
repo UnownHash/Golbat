@@ -803,6 +803,10 @@ func decodeTappable(ctx context.Context, request, data []byte, username string, 
 			return fmt.Sprintf("Failed to parse ProcessTappableProto %s", err)
 		}
 	}
+	// the request carries the encounter id, location and type
+	if request == nil || tappableRequest.EncounterId == 0 {
+		return "Ignored ProcessTappableOutProto without request"
+	}
 
 	if tappable.Status != pogo.ProcessTappableOutProto_SUCCESS {
 		return fmt.Sprintf("Ignored ProcessTappableOutProto non-success status %s", tappable.Status)
