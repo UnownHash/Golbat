@@ -99,6 +99,29 @@ func (s *grpcApiServer) ScanForts(ctx context.Context, in *pb.FortCombinedScanRe
 	return decoder.GrpcScanForts(in, dbDetails), nil
 }
 
+// ScanTappables is POST /api/tappable/scan. Not gated on fort_in_memory.
+func (s *grpcApiServer) ScanTappables(ctx context.Context, in *pb.TappableScanRequest) (*pb.TappableScanResponse, error) {
+	if err := requireBoundingBox(in.GetMin(), in.GetMax()); err != nil {
+		return nil, err
+	}
+	res, err := decoder.GrpcScanTappables(in)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	return res, nil
+}
+
+// GetTappable is the batched form of GET /api/tappable/id/{tappable_id}; ids
+// capped at tuning.max_tappable_results.
+func (s *grpcApiServer) GetTappable(ctx context.Context, in *pb.GetTappableRequest) (*pb.GetTappableResponse, error) {
+	if cap := config.Config.Tuning.MaxTappableResults; cap > 0 {
+		if n := len(in.GetIds()); n > cap {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("too many ids: %d > %d", n, cap))
+		}
+	}
+	return &pb.GetTappableResponse{Tappables: decoder.GrpcGetTappables(in.GetIds())}, nil
+}
+
 // newGrpcServer builds the one gRPC server Golbat listens on: raw ingest,
 // the GolbatApi service, and server reflection (so grpcurl/ghz work without
 // the proto files). srvMetrics is nil when Prometheus is disabled. The

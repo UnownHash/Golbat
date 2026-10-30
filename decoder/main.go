@@ -202,7 +202,7 @@ func initDataCache() {
 	tappableCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[uint64, *Tappable]{
 		Name:       "tappable",
 		DefaultTTL: 60 * time.Minute,
-		TouchOnHit: true,
+		TouchOnHit: false, // per-entry TTL from expire_timestamp (tappableCacheTTL)
 	})
 
 	weatherCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[int64, *Weather]{
@@ -240,6 +240,7 @@ func initDataCache() {
 	})
 	initPokemonRtree()
 	initFortRtree()
+	initTappableRtree()
 	initStationBattleCache()
 
 	incidentCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[string, *Incident]{

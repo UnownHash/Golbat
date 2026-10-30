@@ -19,7 +19,7 @@ type ApiPokemonDnfId struct {
 // like IV simply use the low end of that range.
 type ApiPokemonDnfMinMax struct {
 	Min int16 `json:"min" required:"false" doc:"Minimum value (inclusive). An omitted bound defaults to 0."`
-	Max int16 `json:"max" required:"false" doc:"Maximum value (inclusive). An omitted bound defaults to 0, so a range with only min can never match — send both bounds."`
+	Max int16 `json:"max" required:"false" doc:"Maximum value (inclusive). An omitted or null max is unbounded (32767)."`
 }
 
 func contains(s []int8, e int8) bool {

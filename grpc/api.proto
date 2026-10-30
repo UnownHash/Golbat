@@ -22,6 +22,10 @@ service GolbatApi {
   rpc ScanStations (FortScanRequest) returns (StationScanResponse) {}
   // POST /api/fort/scan
   rpc ScanForts (FortCombinedScanRequest) returns (FortScanResponse) {}
+  // POST /api/tappable/scan
+  rpc ScanTappables (TappableScanRequest) returns (TappableScanResponse) {}
+  // GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
+  rpc GetTappable (GetTappableRequest) returns (GetTappableResponse) {}
 }
 
 // ---- shared request pieces ----
@@ -32,7 +36,7 @@ message LatLon {
 }
 
 // Inclusive integer range. Unset min is 0; unset max is 32767 (no upper
-// bound). This differs from the JSON API, where an omitted max is 0.
+// bound), as an omitted or null max in the JSON API.
 message IntRange {
   optional int32 min = 1;
   optional int32 max = 2;
@@ -447,4 +451,60 @@ message FortScanResponse {
   FortTypeScanStats gyms_stats = 8;
   FortTypeScanStats pokestops_stats = 9;
   FortTypeScanStats stations_stats = 10;
+}
+
+// ---- tappables ----
+
+// Mirrors decoder.ApiTappableDnfFilter. An empty repeated field means no
+// constraint (proto3 cannot distinguish empty from absent). Reward fields
+// match the first loot item only.
+message TappableDnfFilter {
+  repeated string reward_type = 1;       // LootItemProto field names; unknown → INVALID_ARGUMENT
+  repeated int32 item_id = 2;
+  repeated int32 reward_pokemon_id = 3;
+  repeated int32 pokemon_id = 4;         // encounter tappables
+  IntRange count = 5;
+}
+
+message TappableScanRequest {
+  LatLon min = 1;
+  LatLon max = 2;
+  int32 limit = 3;                       // 0 = server default (tuning.max_tappable_results)
+  repeated TappableDnfFilter filters = 4; // empty = every tappable
+  optional int64 updated_after = 5;      // see PokemonScanRequest.updated_after
+}
+
+message TappableScanResponse {
+  repeated Tappable tappables = 1;
+  int32 examined = 2;
+  int32 skipped = 3;
+  int32 total = 4;
+  bool limit_reached = 5;
+}
+
+message GetTappableRequest {
+  repeated uint64 ids = 1 [jstype = JS_STRING];
+}
+
+message GetTappableResponse {
+  repeated Tappable tappables = 1;
+}
+
+// Mirrors decoder.ApiTappableResult.
+message Tappable {
+  uint64 id = 1 [jstype = JS_STRING];
+  double lat = 2;
+  double lon = 3;
+  optional string fort_id = 4;
+  optional int64 spawn_id = 5 [jstype = JS_STRING];
+  string type = 6;
+  optional int64 pokemon_id = 7;
+  optional string reward_type = 8;
+  optional int64 item_id = 9;
+  optional int64 reward_pokemon_id = 10;
+  optional int64 count = 11;
+  optional string rewards_json = 12;     // all loot items as protojson, as the JSON API's rewards
+  optional int64 expire_timestamp = 13;
+  bool expire_timestamp_verified = 14;
+  int64 updated = 15;
 }

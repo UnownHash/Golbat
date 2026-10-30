@@ -51,7 +51,7 @@ func TestBuildTappableResult_GoldenSnapshot(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	const want = `{"id":123456789,"lat":45.6789,"lon":-120.9876,"fort_id":"0123456789abcdef0123456789abcdef","spawn_id":null,"type":"item","pokemon_id":150,"reward_type":"item","item_id":1,"reward_pokemon_id":null,"count":null,"rewards":[{"item":1}],"expire_timestamp":1700001000,"expire_timestamp_verified":true,"updated":1699999999}`
+	const want = `{"id":"123456789","lat":45.6789,"lon":-120.9876,"fort_id":"0123456789abcdef0123456789abcdef","spawn_id":null,"type":"item","pokemon_id":150,"reward_type":"item","item_id":1,"reward_pokemon_id":null,"count":null,"rewards":[{"item":1}],"expire_timestamp":1700001000,"expire_timestamp_verified":true,"updated":1699999999}`
 
 	if string(got) != want {
 		t.Errorf("wire format changed.\n got: %s\nwant: %s", got, want)
@@ -76,5 +76,19 @@ func TestBuildTappableResult_AbsentFortIdSerializesAsNull(t *testing.T) {
 	}
 	if strings.Contains(string(got), `"fort_id":""`) {
 		t.Errorf("fort_id serialized as empty string instead of null: %s", got)
+	}
+}
+
+// TestBuildTappableResult_LargeIdIsExactString: encounter ids exceed 2^53, so
+// the id must reach JSON clients as an exact decimal string.
+func TestBuildTappableResult_LargeIdIsExactString(t *testing.T) {
+	tappable := goldenSnapshotTappable(t)
+	tappable.Id = 18446744073709551000
+	got, err := jsonenc.Marshal(BuildTappableResult(tappable))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(got), `"id":"18446744073709551000"`) {
+		t.Errorf("id not an exact string: %s", got)
 	}
 }

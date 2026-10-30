@@ -245,6 +245,12 @@ clause are AND'd (an OR of ANDs: the DNF). A less specific group never applies
 to a pokemon that has a more specific one. Fort filters are different: a plain
 OR over every clause.
 
+Range conditions (`{"min": .., "max": ..}`, here and in the fort and tappable
+filters) are inclusive. An omitted `min` is 0; an omitted or null `max` is
+unbounded (32767), as over gRPC. So `{"min": 90}` means 90 and up, and `{}`
+matches any value. A PVP range (`pvp_little`/`pvp_great`/`pvp_ultra`) never
+matches a pokemon with no rank in that league, whatever its bounds.
+
 What follows from that:
 
 - **"Everything else" means it.** With
@@ -530,6 +536,8 @@ Reload geofence boundaries and clear stats.
 
 Retrieve a tappable (invasions, research, etc.).
 
+Cache-only: a tappable is cached until 60 s past its `expire_timestamp` (60 min without one), then returns 404.
+
 **Authentication:** Required
 
 **Parameters:**
@@ -543,6 +551,70 @@ Retrieve a tappable (invasions, research, etc.).
 - 200: Tappable found
 - 400: Invalid ID
 - 404: Tappable not found
+
+### GET /api/tappable/available
+
+Distinct live reward options and encounter species, from the in-memory tappable index (no DB scan). Each entry can be sent back as a `/api/tappable/scan` filter clause.
+
+**Authentication:** Required
+
+**Response:**
+```json
+{
+  "rewards": [
+    {"reward_type": "item", "item_id": 1301, "reward_pokemon_id": null},
+    {"reward_type": "pokemon_candy", "item_id": null, "reward_pokemon_id": 25},
+    {"reward_type": "stardust", "item_id": null, "reward_pokemon_id": null}
+  ],
+  "encounters": [{"pokemon_id": 25}]
+}
+```
+
+- Rewards describe the first loot item. An option is reported until the latest expiry seen for it passes (tappables without an expiry: 60 min), so a replaced option can over-report briefly.
+- `features.tappable_scan` in `/api/status` is true on builds that have this and the scan.
+
+---
+
+### POST /api/tappable/scan
+
+Unexpired tappables within a bounding box, filtered by DNF clauses.
+
+**Authentication:** Required
+
+**Request:**
+```json
+{
+  "min": {"lat": 47.0, "lon": 8.0},
+  "max": {"lat": 47.5, "lon": 8.6},
+  "limit": 0,
+  "updated_after": 0,
+  "filters": [
+    {"reward_type": ["item"], "item_id": [1301]},
+    {"reward_type": ["pokemon_candy"], "reward_pokemon_id": [25]},
+    {"pokemon_id": [25]},
+    {"reward_type": ["stardust"], "count": {"min": 500}}
+  ]
+}
+```
+
+- `limit`: 0 = server default; clamped by `tuning.max_tappable_results`.
+- `updated_after`: as in the fort scans; applied after the scan and limit.
+- `filters`: clauses are OR'd, fields within a clause AND'd. Omitted/null list = no constraint; empty list = matches nothing. Omitted/empty `filters` matches every tappable.
+- `reward_type` values: `item`, `stardust`, `pokecoin`, `pokemon_candy`, `experience`, `pokemon_egg`, `avatar_template_id`, `sticker_id`, `mega_energy_pokemon_id`, `xl_candy`, `follower_pokemon`, `neutral_avatar_template_id`, `neutral_avatar_item_template`, `neutral_avatar_item_display`, `temp_evo_pokemon_branch`. Case-sensitive.
+- `pokemon_id` matches encounter tappables only; the reward fields match reward tappables only.
+- `count`: inclusive reward amount range, as fort `quest_reward_amount`; an omitted `max` is unbounded. Encounters have no count and never match.
+- Reward fields match the first loot item (`rewards[0]`) only.
+- Negative `item_id` / `reward_pokemon_id` / `pokemon_id` values → 400.
+- Served from memory. With `preload` off, tappables known before a restart appear once they are seen again.
+
+**Response:**
+```json
+{"tappables": [ApiTappableResult], "examined": 0, "skipped": 0, "total": 0, "limit_reached": false}
+```
+
+**Status Codes:**
+- 200: OK
+- 400: Unknown `reward_type` or negative id
 
 ---
 
@@ -632,6 +704,8 @@ methods themselves are always gated by `api_secret`.
 | `ScanPokestops(FortScanRequest) → PokestopScanResponse` | `POST /api/pokestop/scan` |
 | `ScanStations(FortScanRequest) → StationScanResponse` | `POST /api/station/scan` |
 | `ScanForts(FortCombinedScanRequest) → FortScanResponse` | `POST /api/fort/scan` — each type group takes its own `limit` (0 = server default); the response carries `gyms_stats` / `pokestops_stats` / `stations_stats` (`examined`, `limit_reached`) per type, and the top-level `limit_reached` is true when any type or the overall `limit` was reached |
+| `ScanTappables(TappableScanRequest) → TappableScanResponse` | `POST /api/tappable/scan` — not gated on `fort_in_memory`; empty `filters` = every tappable; unknown `reward_type` or negative id → `INVALID_ARGUMENT`; `rewards` is `rewards_json` |
+| `GetTappable(GetTappableRequest) → GetTappableResponse` | `GET /api/tappable/id/{tappable_id}`, batched; misses are omitted; capped at `tuning.max_tappable_results` ids per call (`INVALID_ARGUMENT` above it) |
 
 Every message mirrors the JSON request or response it is named after, field
 for field, with proto field names equal to the JSON keys. The scans run the
@@ -649,10 +723,7 @@ the serialisation differs.
   one clause with no conditions (`{}`) matches every pokemon. Fort scans
   differ (as in JSON): an empty `filters` list matches every fort of the type.
 - **`IntRange`**: an unset `min` is 0 and an unset `max` is 32767 (no upper
-  bound). In JSON an omitted `max` is 0. When timing gRPC against HTTP, send
-  both bounds (or neither) — a filter with only `min` selects `min..32767`
-  over gRPC but matches nothing over HTTP, so the two responses would differ
-  in size.
+  bound), the same as an omitted or null `max` in JSON.
 - **Repeated list filters** (team ids, raid levels, quest reward types, ...):
   an empty list means no constraint. proto3 cannot distinguish an empty list
   from an absent one, so the JSON "explicitly empty list matches nothing" case
@@ -868,20 +939,26 @@ disable compression on the client, or compress both paths.
 
 ```json
 {
-  "id": 1234567890,
+  "id": "12345678901234567890",
   "lat": 40.7128,
   "lon": -74.0060,
-  "fort_id": "gym_or_pokestop_id",
+  "fort_id": null,
   "spawn_id": 987654321,
-  "type": "invasion",
-  "pokemon_id": 1,
-  "item_id": 1,
-  "count": 1,
+  "type": "TAPPABLE_TYPE_BREAKFAST",
+  "pokemon_id": null,
+  "reward_type": "pokemon_candy",
+  "item_id": null,
+  "reward_pokemon_id": 25,
+  "count": 6,
+  "rewards": [{"pokemon_candy": 25, "count": 6}],
   "expire_timestamp": 1234567890,
   "expire_timestamp_verified": true,
   "updated": 1234567800
 }
 ```
+
+- `id`: decimal string (encounter ids exceed 2^53).
+- `pokemon_id`: encounter species (encounter tappables); `reward_*`/`item_id`/`count` describe the first loot item; `rewards` holds all loot items as protojson.
 
 ---
 
@@ -1100,4 +1177,5 @@ every timezone, including 45-minute offsets.
 | `tuning.extended_timeout` | Enable 30s timeout for raw processing |
 | `tuning.profile_routes` | Enable pprof debug endpoints |
 | `tuning.max_pokemon_results` | Max pokemon returned per query |
+| `tuning.max_tappable_results` | Max tappables returned per `/api/tappable/scan` (default 9000; `limits.max_tappable_results` in `/api/status`) |
 | `tuning.max_pokemon_distance` | Max distance between min/max points in searches |

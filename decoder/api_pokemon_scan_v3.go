@@ -80,9 +80,9 @@ func internalGetPokemonInArea3(retrieveParameters ApiPokemonScan3) ([]uint64, in
 			return false
 		}
 
-		if filter.Little != nil && (pvpLookup == nil || pvpLookup.Little < filter.Little.Min || pvpLookup.Little > filter.Little.Max) ||
-			filter.Great != nil && (pvpLookup == nil || pvpLookup.Great < filter.Great.Min || pvpLookup.Great > filter.Great.Max) ||
-			filter.Ultra != nil && (pvpLookup == nil || pvpLookup.Ultra < filter.Ultra.Min || pvpLookup.Ultra > filter.Ultra.Max) {
+		if filter.Little != nil && (pvpLookup == nil || !pvpRankInRange(pvpLookup.Little, filter.Little)) ||
+			filter.Great != nil && (pvpLookup == nil || !pvpRankInRange(pvpLookup.Great, filter.Great)) ||
+			filter.Ultra != nil && (pvpLookup == nil || !pvpRankInRange(pvpLookup.Ultra, filter.Ultra)) {
 			return false
 		}
 		return true

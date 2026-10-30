@@ -11,21 +11,25 @@ import (
 	"golbat/db"
 )
 
-// Preload loads forts, stations, non-expired station battles, active incidents, and recent spawnpoints from DB into cache.
+// Preload loads forts, stations, non-expired station battles, active incidents, recent spawnpoints and unexpired tappables from DB into cache.
 // If populateRtree is true, also builds the rtree index for forts.
 func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	startTime := time.Now()
 
 	var wg sync.WaitGroup
-	var pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount int32
+	var pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount, tappableCount int32
 
 	// Phase 1: Load forts and spawnpoints in parallel.
 	// Forts must be loaded before incidents so that the fort lookup cache
 	// has entries for incidents to update.
-	wg.Add(4)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		pokestopCount = preloadPokestops(dbDetails, populateRtree)
+	}()
+	go func() {
+		defer wg.Done()
+		tappableCount = preloadTappables(dbDetails)
 	}()
 	go func() {
 		defer wg.Done()
@@ -53,8 +57,8 @@ func Preload(dbDetails db.DbDetails, populateRtree bool) {
 	}()
 	wg.Wait()
 
-	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d station battles, %d incidents, %d spawnpoints in %v (rtree=%v)",
-		pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount, time.Since(startTime), populateRtree)
+	log.Infof("Preload: loaded %d pokestops, %d gyms, %d stations, %d station battles, %d incidents, %d spawnpoints, %d tappables in %v (rtree=%v)",
+		pokestopCount, gymCount, stationCount, stationBattleCount, incidentCount, spawnpointCount, tappableCount, time.Since(startTime), populateRtree)
 }
 
 // PreloadForts loads all forts from DB into cache.
@@ -363,4 +367,55 @@ func preloadSpawnpoints(dbDetails db.DbDetails) int32 {
 	wg.Wait()
 
 	return count
+}
+
+// preloadTappables loads unexpired tappables into the cache and the tappable tree.
+func preloadTappables(dbDetails db.DbDetails) int32 {
+	now := time.Now().Unix()
+	rows, err := dbDetails.GeneralDb.Queryx("SELECT "+tappableSelectColumns+" FROM tappable WHERE expire_timestamp > ?", now)
+	if err != nil {
+		log.Errorf("Preload: failed to query tappables - %s", err)
+		return 0
+	}
+	defer rows.Close()
+
+	numWorkers := runtime.NumCPU()
+	jobs := make(chan *Tappable, 100)
+	var wg sync.WaitGroup
+	var count int32
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for tappable := range jobs {
+				if preloadTappableRow(tappable, now) {
+					atomic.AddInt32(&count, 1)
+				}
+			}
+		}()
+	}
+
+	for rows.Next() {
+		var tappable Tappable
+		if err := rows.StructScan(&tappable); err != nil {
+			log.Errorf("Preload: tappable scan error - %s", err)
+			continue
+		}
+		jobs <- &tappable
+	}
+	close(jobs)
+	wg.Wait()
+
+	return count
+}
+
+// preloadTappableRow caches and indexes one unexpired tappable; false when skipped.
+func preloadTappableRow(t *Tappable, now int64) bool {
+	if !t.ExpireTimestamp.Valid || t.ExpireTimestamp.Int64 <= now {
+		return false
+	}
+	tappableCache.Set(t.Id, t, tappableCacheTTL(t, now))
+	tappablePreloadInsert(t)
+	return true
 }

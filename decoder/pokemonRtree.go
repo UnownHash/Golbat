@@ -373,6 +373,14 @@ func updatePokemonLookup(pokemon *Pokemon, changePvp bool, pvpResults map[string
 	return existed
 }
 
+// pvpNoRank marks a league with no rank; never matches a PVP range filter.
+const pvpNoRank int16 = 4096
+
+// pvpRankInRange reports whether a league rank satisfies r; pvpNoRank never does.
+func pvpRankInRange(rank int16, r *ApiPokemonDnfMinMax) bool {
+	return rank != pvpNoRank && rank >= r.Min && rank <= r.Max
+}
+
 func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.PokemonEntry) (PokemonPvpLookup, bool) {
 	if pvpResults == nil {
 		return PokemonPvpLookup{}, false
@@ -380,7 +388,7 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 
 	pvpStore := make(map[string]int16)
 	for key, value := range pvpResults {
-		var best int16 = 4096 // worst possible rank
+		var best = pvpNoRank
 		// This code actually calculates best in a level cap, which is no longer strictly necessary
 		// But will leave in this form to allow easy change to per-cap again later
 
@@ -393,7 +401,7 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 				}
 			}
 		}
-		if best != 4096 {
+		if best != pvpNoRank {
 			pvpStore[key] = best
 		}
 	}
@@ -402,7 +410,7 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 		if value, ok := pvpStore[leagueKey]; ok {
 			return value
 		}
-		return 4096
+		return pvpNoRank
 	}
 
 	return PokemonPvpLookup{
