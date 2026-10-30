@@ -6,7 +6,9 @@ COPY go.mod go.sum ./
 RUN if [ ! -f vendor/modules.txt ]; then go mod download; fi
 
 COPY . .
-RUN CGO_ENABLED=0 go build -tags go_json -o /go/bin/golbat
+# `thin`: trimmed pogo schema (pogo/vbase.thin.pb.go) — decode skips the fields
+# Golbat never reads. Same decoded values as the full schema; fewer allocations.
+RUN CGO_ENABLED=0 go build -tags go_json,thin -o /go/bin/golbat
 RUN mkdir /empty-dir
 
 # Now copy it into our base image.

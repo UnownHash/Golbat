@@ -1,3 +1,5 @@
+//go:build !thin
+
 //
 // Copyright 2016-2026 --=FurtiF=--.
 //
