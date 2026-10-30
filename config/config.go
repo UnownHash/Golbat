@@ -7,30 +7,59 @@ import (
 )
 
 type configDefinition struct {
-	Port                    int            `koanf:"port"`
-	GrpcPort                int            `koanf:"grpc_port"`
-	Webhooks                []Webhook      `koanf:"webhooks"`
-	Database                database       `koanf:"database"`
-	Logging                 logging        `koanf:"logging"`
-	Sentry                  sentry         `koanf:"sentry"`
-	Pyroscope               pyroscope      `koanf:"pyroscope"`
-	Prometheus              Prometheus     `koanf:"prometheus"`
-	PokemonMemoryOnly       bool           `koanf:"pokemon_memory_only"`
-	PokemonInternalToDb     bool           `koanf:"pokemon_internal_to_db"`
-	PreserveInMemoryPokemon bool           `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
-	StoreUsername           bool           `koanf:"store_username"`   // Persist the reporting account on the pokemon row (default off)
-	Preload                 bool           `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
-	FortInMemory            bool           `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
-	Cleanup                 cleanup        `koanf:"cleanup"`
-	RawBearer               string         `koanf:"raw_bearer"`
-	ApiSecret               string         `koanf:"api_secret"`
-	ApiDocs                 bool           `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
-	Pvp                     pvp            `koanf:"pvp"`
-	Koji                    koji           `koanf:"koji"`
-	Tuning                  tuning         `koanf:"tuning"`
-	Weather                 weather        `koanf:"weather"`
-	ScanRules               []scanRule     `koanf:"scan_rules"`
-	StatsIntervals          statsIntervals `koanf:"stats_intervals"`
+	Port                    int        `koanf:"port"`
+	GrpcPort                int        `koanf:"grpc_port"`
+	Webhooks                []Webhook  `koanf:"webhooks"`
+	Database                database   `koanf:"database"`
+	Logging                 logging    `koanf:"logging"`
+	Sentry                  sentry     `koanf:"sentry"`
+	Pyroscope               pyroscope  `koanf:"pyroscope"`
+	Prometheus              Prometheus `koanf:"prometheus"`
+	PokemonMemoryOnly       bool       `koanf:"pokemon_memory_only"`
+	PokemonInternalToDb     bool       `koanf:"pokemon_internal_to_db"`
+	PreserveInMemoryPokemon bool       `koanf:"preserve_pokemon"` // Save/restore pokemon cache on shutdown/startup
+	StoreUsername           bool       `koanf:"store_username"`   // Persist the reporting account on the pokemon row (default off)
+	Preload                 bool       `koanf:"preload"`          // Pre-load forts, stations, spawnpoints into cache on startup
+	FortInMemory            bool       `koanf:"fort_in_memory"`   // Keep forts in memory with rtree for spatial lookups
+	// DittoDerivation: mark a sighting as a Ditto when its encounter id
+	// derives one (see derive/encounter's DittoCandidateRoll and
+	// decoder.dittoCandidateThreshold), rather than waiting for a real
+	// encounter to confirm it via cross-boost scan history. Default true; it
+	// exists to switch the derivation off if the game's algorithm changes.
+	DittoDerivation bool `koanf:"ditto_derivation"`
+	// DittoPool overrides the published disguise pool when non-empty. Each
+	// entry is "<species>" or "<species>:<form>"; a bare species means that
+	// species' NORMAL form and form 0. See config.toml.example and InitDittoPool.
+	DittoPool []string `koanf:"ditto_pool"`
+	// DeriveIv: fill IVs, level, size and moves on a sighting by replaying the
+	// game's own PRNG from the encounter id, instead of leaving them absent
+	// until a real encounter arrives. Default true. Turning it off restores
+	// stock behaviour for those fields; despawn-time derivation is separate
+	// and unaffected.
+	DeriveIv bool `koanf:"derive_iv"`
+	// DeriveDespawn: give a pokemon or tappable at a spawnpoint with no
+	// observed despawn second an unverified expiry derived from its spawn id,
+	// instead of the 20-minute guess. Default true; it exists to switch the
+	// derivation off if the game's algorithm changes. Observed despawn
+	// seconds are used either way.
+	DeriveDespawn bool `koanf:"derive_despawn"`
+	// DerivationLog: emit one [DERIVE] line for each encounter where the
+	// derivation disagrees with what the game reported, or the Ditto signals
+	// disagree with each other. Off by default: it is an analysis corpus, not
+	// operational output.
+	// The Prometheus derivation_* counters and the [DITTO] unknown-disguise
+	// warning are independent of this and always on.
+	DerivationLog  bool           `koanf:"derivation_log"`
+	Cleanup        cleanup        `koanf:"cleanup"`
+	RawBearer      string         `koanf:"raw_bearer"`
+	ApiSecret      string         `koanf:"api_secret"`
+	ApiDocs        bool           `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
+	Pvp            pvp            `koanf:"pvp"`
+	Koji           koji           `koanf:"koji"`
+	Tuning         tuning         `koanf:"tuning"`
+	Weather        weather        `koanf:"weather"`
+	ScanRules      []scanRule     `koanf:"scan_rules"`
+	StatsIntervals statsIntervals `koanf:"stats_intervals"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {

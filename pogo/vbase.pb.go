@@ -91373,9 +91373,9 @@ var (
 		3: "WEB_AR_CAMERA_PERMISSION_DENIED_FAILURE",
 	}
 	ReportAdInteractionProto_WebArAdFailure_FailureType_value = map[string]int32{
-		"UNKNOWN":                                 0,
-		"WEB_AR_REWARD_FAILURE":                   1,
-		"WEB_AR_WEBVIEW_FAILURE":                  2,
+		"UNKNOWN":                0,
+		"WEB_AR_REWARD_FAILURE":  1,
+		"WEB_AR_WEBVIEW_FAILURE": 2,
 		"WEB_AR_CAMERA_PERMISSION_DENIED_FAILURE": 3,
 	}
 )

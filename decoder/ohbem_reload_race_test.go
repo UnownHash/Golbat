@@ -13,15 +13,12 @@ import (
 // QueryPvPRank reading the live masterfile maps. Run under -race this fails
 // unless reload publishes a fresh instance instead of mutating the live one.
 func TestReloadOhbemFromMasterFile_ConcurrentQuery(t *testing.T) {
-	oldPath := masterFileCachePath
 	oldPvp := config.Config.Pvp
 	defer func() {
-		masterFileCachePath = oldPath
 		config.Config.Pvp = oldPvp
 		ohbem.Store(nil) // other tests rely on ohbem being nil
 	}()
 
-	masterFileCachePath = "../pogo/master-latest-basics.json"
 	config.Config.Pvp.Enabled = true
 	config.Config.Pvp.LevelCaps = []int{50, 51}
 

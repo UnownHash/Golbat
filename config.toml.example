@@ -9,12 +9,54 @@ pokemon_memory_only = true  # Use in-memory storage for pokemon only
 # store_username: Persist the reporting account's username on the pokemon row (default off).
 # Off means pokemon webhooks report whichever account triggered the save, not the first account
 # to see the pokemon. It also affects saves with no triggering account at all — e.g. the
-# proactive IV re-save (weather_iv.go) always passes none — which previously fell back to the
-# stored (first-seen) username; with the option off there is nothing to fall back to, so those
-# webhooks now carry "username": null.
+# proactive IV re-save (weather_iv.go) always passes none. With the option off there is no
+# stored username to fall back to, so those webhooks carry "username": null.
 store_username = false
 preload = false         # preload: Pre-load objects into cache on startup (faster initial responses, but increases startup time)
 fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [experimental]
+# derive_iv: fill IVs, level, size and moves on a sighting by replaying the game's own
+# PRNG from the encounter id, rather than leaving them absent until a real encounter.
+# Default true. Turning it off restores stock behaviour for those fields — derived
+# despawn times are separate and are not affected. Note that with this on, almost every
+# Pokemon carries IVs, so a weather change sweeps the whole cell rather than the few
+# that had been encountered.
+derive_iv = true
+
+# derive_despawn: give a Pokemon or tappable at a spawnpoint whose despawn time has not been
+# observed an unverified despawn time derived from the spawnpoint id, rather than a 20-minute
+# guess. Default true; turn it off only if the game changes how despawn times are placed and
+# golbat has not yet been updated to match. Observed despawn times are used either way.
+derive_despawn = true
+
+# ditto_derivation: mark a sighting as a Ditto when its encounter id derives one, rather
+# than waiting for a real encounter to confirm it. The displayed species and form must also
+# be in ditto_pool below. Default true; turn it off only if the game changes how Ditto is
+# chosen and golbat has not yet been updated to match.
+ditto_derivation = true
+# ditto_pool: the disguises ditto_derivation treats as eligible. Leave it empty to use the published
+# pool, which golbat fetches at startup and every 6 hours, caches under cache/ditto-pool.json,
+# and falls back to a copy built into the binary when neither can be read.
+#
+# Any entries here override the published pool entirely. It is still fetched and cached while
+# an override is in force, and each refresh logs how it differs from your list, so you can see
+# when it has caught up and remove yours.
+#
+# Each entry is "<species>" or "<species>:<form>". A bare species means that species' NORMAL
+# form and form 0, the two spellings the game reports for an ordinary disguise and the
+# published pool lists — an ordinary Growlithe is a disguise, a Hisuian Growlithe is not, and
+# they differ only by form. Name a form to match that form alone. A species with no
+# NORMAL form at all (Lycanroc, Squawkabilly) must name its form, e.g. "931:2987"; a bare entry
+# for one is refused at startup.
+ditto_pool = []
+# derivation_log: emit one [DERIVE] line for each encounter where a derived value (IVs,
+# level, size, moves) disagrees with what the game reported, an observed move is outside
+# the pool the derivation draws from, or the Ditto signals conflict — the roll marking
+# what detectDitto refutes, detectDitto confirming a Ditto the roll did not fire for, or
+# the stats showing a Ditto where the roll did not fire. Each line says why in
+# logged_because. Agreements are counted, not logged. Read it with tools/derivecheck.py.
+# The Prometheus derivation_* counters and the [DITTO] unknown-disguise warning do not
+# depend on this and are always on.
+derivation_log = false
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"

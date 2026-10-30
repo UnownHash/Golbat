@@ -40,6 +40,12 @@ func (col *noopCollector) UpdateRaidCount([]geo.AreaName, int64)                
 func (col *noopCollector) UpdateFortCount([]geo.AreaName, string, string)        {}
 func (col *noopCollector) UpdateIncidentCount([]geo.AreaName)                    {}
 func (col *noopCollector) IncDuplicateEncounters(bool)                           {}
+func (col *noopCollector) IncDespawnWrapClamped()                                {}
+func (col *noopCollector) IncDerivationChecked(string)                           {}
+func (col *noopCollector) IncDerivationDisagreed(string)                         {}
+func (col *noopCollector) IncDerivationMoveMismatch(string)                      {}
+func (col *noopCollector) IncDerivationBoostBranchDivergence(string)             {}
+func (col *noopCollector) IncDespawnPhaseDiverged()                              {}
 func (col *noopCollector) IncDbQuery(string, error)                              {}
 func (col *noopCollector) SetGyms(int8, bool, float64)                           {}
 func (col *noopCollector) SetRaids(int64, float64)                               {}

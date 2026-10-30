@@ -150,9 +150,7 @@ func TestNullSeenTypeUnmarshalNullIsInert(t *testing.T) {
 // The enum has been widened three times (migrations 3, 43, 45), so a newer
 // binary can write a value a rollback or a lagging replica on this binary
 // doesn't know yet — routine, not exceptional, for a mixed deployment. An
-// earlier round of this PR made Scan error here, reasoning that silently
-// storing a wrong code would corrupt scan statistics — correct for the
-// write side, wrong for this one: an error here fails the row load, which
+// error here would fail the row load, which
 // leaves getOrCreatePokemonRecord's cache entry stuck marked newRecord, so
 // every subsequent sighting retries and fails the same load and that
 // pokemon silently stops being processed for as long as the deployment is
@@ -234,22 +232,21 @@ func TestNullSeenTypeValueOutOfRange(t *testing.T) {
 	}
 }
 
-// TestScanUnknownSeenTypeIsInertInTheDecodeSwitches is the regression for
-// the degrade landing on SeenTypeCodeUnset. Unset is not an inert value: it
-// means "never set", and two decode switches treat that as licence to fill
-// the record in. Reaching them with a seen_type this binary merely doesn't
-// recognise — the exact mixed-deployment case the degrade exists for —
-// turned a read failure into active damage:
+// TestScanUnknownSeenTypeIsInertInTheDecodeSwitches checks that an
+// unrecognised seen_type degrades to SeenTypeCodeUnknown, not
+// SeenTypeCodeUnset. Unset is not an inert value: it means "never set", and
+// two decode switches treat that as licence to fill the record in. Reaching
+// them with a seen_type this binary merely doesn't recognise — the exact
+// mixed-deployment case the degrade exists for — would turn a read failure
+// into active damage:
 //
-//   - updateFromWild's `case Unset, Cell, NearbyStop` rewrote the newer
-//     binary's value to "wild" and persisted the downgrade over it.
-//   - updateFromNearby's `case Unset, Cell` set overrideLatLon, replacing
-//     the record's precise coordinates with the pokestop's.
+//   - updateFromWild's `case Unset, Cell, NearbyStop` would rewrite the newer
+//     binary's value to "wild" and persist the downgrade over it.
+//   - updateFromNearby's `case Unset, Cell` would set overrideLatLon,
+//     replacing the record's precise coordinates with the pokestop's.
 //
-// Pre-PR main held the unknown value as an opaque string, so every switch
-// fell through to default and the record round-tripped unharmed. Unknown
-// restores that: it equals none of the eight real codes, so it reaches no
-// case in either switch.
+// Unknown equals none of the eight real codes, so it reaches no case in
+// either switch and the record round-trips unharmed.
 func TestScanUnknownSeenTypeIsInertInTheDecodeSwitches(t *testing.T) {
 	// Scanned, not constructed: the degrade is the thing under test, and a
 	// hand-built SeenTypeFrom(SeenTypeCodeUnknown) would assert nothing
@@ -387,6 +384,28 @@ func captureStandardLoggerMessages(t *testing.T) func() string {
 	}
 }
 
+// captureStandardLoggerHook is captureStandardLoggerMessages' structural
+// sibling, for tests that need entry levels or have to parse a payload out of
+// each message rather than just match text.
+//
+// Both use ReplaceHooks with a t.Cleanup restore rather than
+// logrustest.NewGlobal, which calls logrus.AddHook: logrus exposes no way to
+// remove a hook, and Hook.Reset only empties Entries without unregistering,
+// so a NewGlobal hook stays attached to the global logger for the rest of the
+// binary and keeps accumulating every later test's output. ReplaceHooks also
+// isolates the test, since only this hook is attached while it runs.
+func captureStandardLoggerHook(t *testing.T) *logrustest.Hook {
+	t.Helper()
+
+	hook := new(logrustest.Hook)
+	hooks := make(log.LevelHooks)
+	hooks.Add(hook)
+	previous := log.StandardLogger().ReplaceHooks(hooks)
+	t.Cleanup(func() { log.StandardLogger().ReplaceHooks(previous) })
+
+	return hook
+}
+
 // resetSeenTypeScanWarnThrottle clears the shared throttle so a test's own
 // Scan is guaranteed to log rather than being suppressed by a warning an
 // earlier test emitted in the same second.
@@ -472,11 +491,9 @@ func TestSetSeenTypeRefusesCodesWithNoStringForm(t *testing.T) {
 	}
 }
 
-// TestIsSeenFromTappableMatchesItsName pins the predicate that used to return
-// the negation of what it was called. Its one caller inverted it at the same
-// time, so the behavior is unchanged — this is here so a future inversion of
-// either half alone fails rather than silently downgrading a tappable
-// encounter to a plain one and losing the attribution.
+// TestIsSeenFromTappableMatchesItsName pins the predicate to its name, so an
+// inversion of it or of its caller alone fails rather than silently
+// downgrading a tappable encounter to a plain one and losing the attribution.
 func TestIsSeenFromTappableMatchesItsName(t *testing.T) {
 	tappable := map[SeenTypeCode]bool{
 		SeenTypeCodeTappableEncounter:     true,

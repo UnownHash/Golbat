@@ -48,9 +48,6 @@ func UpdatePokemonRecordWithDiskEncounterProto(ctx context.Context, db db.DbDeta
 	}
 
 	encounterId := uint64(request.EncounterId)
-	if encounterId == 0 {
-		return "Disk encounter request without encounter id"
-	}
 	if displayId := uint64(encounter.Pokemon.GetPokemonDisplay().GetDisplayId()); displayId != 0 && displayId != encounterId {
 		log.Warnf("[POKEMON] Disk encounter id mismatch: request %d display %d", encounterId, displayId)
 	}
@@ -97,7 +94,13 @@ func UpdatePokemonRecordWithTappableEncounter(ctx context.Context, db db.DbDetai
 	defer unlock()
 
 	pokemon.updatePokemonFromTappableEncounterProto(ctx, db, request, encounter, username, timestampMs)
-	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, time.Now().Unix(), username)
+	// timestampMs, not time.Now: the same value this function already hands
+	// the line above, and what UpdatePokemonRecordWithEncounterProto passes
+	// its own save. It stamps FirstSeenTimestamp, which resolveDespawnExpiry
+	// then compares against an expiry computed from a proto timestamp — so a
+	// host clock here is the one value in that comparison not coming from the
+	// game.
+	savePokemonRecordAsAtTime(ctx, db, pokemon, true, true, true, timestampMs/1000, username)
 	// updateEncounterStats() should only be called for encounters, and called
 	// even if we have the pokemon record already.
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), encounter: true})
