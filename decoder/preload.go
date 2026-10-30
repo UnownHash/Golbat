@@ -343,8 +343,7 @@ func preloadSpawnpoints(dbDetails db.DbDetails) int32 {
 		go func() {
 			defer wg.Done()
 			for spawnpoint := range jobs {
-				// Add to cache
-				spawnpointCache.Set(spawnpoint.Id, spawnpoint, 0) // 0 = use default TTL
+				cachePreloadedSpawnpoint(spawnpoint)
 
 				c := atomic.AddInt32(&count, 1)
 				if c%10000 == 0 {
@@ -418,4 +417,10 @@ func preloadTappableRow(t *Tappable, now int64) bool {
 	tappableCache.Set(t.Id, t, tappableCacheTTL(t, now))
 	tappablePreloadInsert(t)
 	return true
+}
+
+// Sync the lock-free mirrors first, or every sighting takes the lock.
+func cachePreloadedSpawnpoint(spawnpoint *Spawnpoint) {
+	spawnpoint.syncFastFields()
+	spawnpointCache.Set(spawnpoint.Id, spawnpoint, 0) // 0 = use default TTL
 }
