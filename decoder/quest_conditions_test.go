@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"reflect"
 	"sync"
 	"testing"
 
@@ -193,4 +194,58 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 		t.Fatalf("leaked count entry %+v = %d", k, count)
 		return false
 	})
+}
+
+// newTempEvoBranchStop builds a pokestop whose AR quest slot rewards Charizard
+// mega energy of the given type, with the rewards JSON shaped as decode writes
+// it.
+func newTempEvoBranchStop(id FortId, rewardType int64, rewards string) *Pokestop {
+	return &Pokestop{PokestopData: PokestopData{
+		Id:                id,
+		Lat:               1.0,
+		Lon:               2.0,
+		QuestRewardType:   null.IntFrom(rewardType),
+		QuestRewardAmount: null.IntFrom(20),
+		QuestPokemonId:    null.IntFrom(6),
+		QuestRewards:      null.StringFrom(rewards),
+		QuestTitle:        null.StringFrom("catch_x"),
+		QuestTarget:       null.IntFrom(3),
+	}}
+}
+
+// TestQuestConditions_TempEvolution checks that temp evo branch mega energy
+// rewards are counted per temp evolution, read from the rewards JSON, while
+// other reward types carry none.
+func TestQuestConditions_TempEvolution(t *testing.T) {
+	initQuestConditions()
+
+	megaX := newTempEvoBranchStop(mustFortId(t, "00000000000000000000000000000001"), 20,
+		`[{"type":20,"info":{"amount":20,"pokemon_id":6,"temp_evolution":2}}]`)
+	megaY := newTempEvoBranchStop(mustFortId(t, "00000000000000000000000000000002"), 20,
+		`[{"type":20,"info":{"amount":20,"pokemon_id":6,"temp_evolution":3}}]`)
+	mega := newTempEvoBranchStop(mustFortId(t, "00000000000000000000000000000003"), 12,
+		`[{"type":12,"info":{"amount":20,"pokemon_id":6}}]`)
+	updatePokestopLookup(megaX)
+	updatePokestopLookup(megaY)
+	updatePokestopLookup(mega)
+
+	counts := func() map[[2]int16]int {
+		m := map[[2]int16]int{}
+		for _, r := range GetAvailableQuestConditions() {
+			m[[2]int16{r.RewardType, int16(r.TempEvolutionId)}] = r.Count
+		}
+		return m
+	}
+	want := map[[2]int16]int{{20, 2}: 1, {20, 3}: 1, {12, 0}: 1}
+	if got := counts(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+
+	// A temp evolution change on the same fort moves its count.
+	megaX.QuestRewards = null.StringFrom(`[{"type":20,"info":{"amount":20,"pokemon_id":6,"temp_evolution":3}}]`)
+	updatePokestopLookup(megaX)
+	want = map[[2]int16]int{{20, 3}: 2, {12, 0}: 1}
+	if got := counts(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("after change: want %v, got %v", want, got)
+	}
 }
