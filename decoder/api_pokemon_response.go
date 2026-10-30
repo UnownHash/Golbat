@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"golbat/config"
 	"time"
 
 	"github.com/UnownHash/gohbem"
@@ -23,14 +24,10 @@ type ApiPvpEntry struct {
 // ApiPvpRankings holds the PVP rankings per league.
 //
 // The league fields use omitempty so a league with no ranking is dropped from
-// the JSON. This matches the historical wire format, which emitted a dynamic
-// map[string][]gohbem.PokemonEntry from QueryPvPRank that only included a league
-// key when that league had entries. So a pokemon ranked only in Great serializes
-// as `"pvp":{"great":[...]}` and a pokemon with no rankings as `"pvp":{}`. Using
-// a fixed struct (rather than a map) keeps a stable, documentable OpenAPI schema
-// that still lists all three leagues. (The only difference from the old map is the
-// fully-disabled case: the map was `"pvp":null` when ohbem was nil, where this
-// emits `"pvp":{}`.)
+// the JSON: a pokemon ranked only in Great serializes as
+// `"pvp":{"great":[...]}`, and one with no rankings, or with ohbem disabled,
+// as `"pvp":{}`. A fixed struct (rather than a map) keeps a stable,
+// documentable OpenAPI schema that still lists all three leagues.
 type ApiPvpRankings struct {
 	Little []ApiPvpEntry `json:"little,omitempty" doc:"PVP rankings for the Little league (CP cap 500)"`
 	Great  []ApiPvpEntry `json:"great,omitempty" doc:"PVP rankings for the Great league (CP cap 1500)"`
@@ -58,8 +55,8 @@ type ApiPvpRankings struct {
 // that describes all four honestly, and the JSON is unaffected either way: an
 // integer renders the same regardless of the surrounding Go type's width.
 //
-// Widening the Go type is what drops the `minimum: 0` huma used to infer from
-// uint32, so all four carry an explicit `minimum:"0"` tag instead. The bound
+// huma infers `minimum: 0` only from an unsigned type, so all four carry an
+// explicit `minimum:"0"` tag instead. The bound
 // is real — every one of them is backed by an unsigned column — and losing it
 // was a side effect of the widening rather than part of the point, so the tag
 // puts it back and gets first_seen_timestamp and changed a floor they never
@@ -166,10 +163,13 @@ func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 }
 
 // buildApiPvpRankings queries ohbem for PVP rankings. Returns a zero value when
-// PVP is disabled (no ohbem instance) or on query error.
+// PVP is disabled or on query error.
+//
+// Both conditions are checked: ohbem is also built for CP whenever derivation
+// is on, so a non-nil instance does not mean PVP was asked for.
 func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 	o := ohbem.Load()
-	if o == nil {
+	if o == nil || !config.Config.Pvp.Enabled {
 		return ApiPvpRankings{}
 	}
 	pvp, err := o.QueryPvPRank(int(pokemon.PokemonId),

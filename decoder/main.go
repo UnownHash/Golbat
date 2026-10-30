@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand/v2"
@@ -70,9 +71,8 @@ var webhooksSender webhooksSenderInterface
 // ordered: Go initializes package-level variables in dependency order, and
 // dependency analysis follows function calls, so any other variable in this
 // package whose initializer reaches getStatsCollector is ordered after this
-// one. Seeding from init() would not give that — package-level variable
-// initializers all run before init() does — which is what the comment here
-// used to claim it did.
+// one. Seeding from init() would not give that: package-level variable
+// initializers all run before init() does.
 var statsCollector = newSeededStatsCollector()
 
 func newSeededStatsCollector() *atomic.Pointer[stats_collector.StatsCollector] {
@@ -85,12 +85,9 @@ func newSeededStatsCollector() *atomic.Pointer[stats_collector.StatsCollector] {
 // getStatsCollector returns the current StatsCollector. Never nil:
 // statsCollector is seeded with a noop collector in its own initializer at
 // package load, and SetStatsCollector later swaps in the real one once main()
-// has read config. Before that seeding was added, callers on paths that could
-// run before SetStatsCollector (e.g. the eviction-drop hook InitDataCache
-// wires up, which main() calls well before SetStatsCollector — see main.go)
-// had to nil-check or risk a nil-interface panic; StartWorkerBacklogReporter's
-// ticker did, DroppedEvictionsHook did not. Seeding closes that window for
-// both, so nothing here needs to treat nil as a meaningful state anymore.
+// has read config. Paths that can run before SetStatsCollector — e.g. the
+// eviction-drop hook InitDataCache wires up, which main() calls well before
+// SetStatsCollector — therefore need no nil check.
 func getStatsCollector() stats_collector.StatsCollector {
 	return *statsCollector.Load()
 }
@@ -112,10 +109,10 @@ var getMapFortsCache *ottercache.OtterCache[FortId, *pogo.GetMapFortsOutProto_Fo
 var ProactiveIVSwitchSem chan bool
 
 // ohbem readers Load() once per operation and take no lock, so the instance
-// behind the pointer must never be mutated once published — gohbem's
-// LoadPokemonData unmarshals into the live masterfile maps in place, which
-// raced with QueryPvPRank as a fatal concurrent map read/write in production.
-// Reloads build a fresh instance and Store() it instead.
+// behind the pointer must never be mutated once published — unmarshalling a
+// masterfile into a live instance's maps races with QueryPvPRank as a fatal
+// concurrent map read/write. Reloads build a fresh instance (see
+// loadOhbemFromMasterFile) and Store() it instead.
 var ohbem atomic.Pointer[gohbem.Ohbem]
 
 func init() {
@@ -270,30 +267,31 @@ func initDataCache() {
 	})
 }
 
+// InitialiseOhbem builds the CP/PVP calculator.
+//
+// Needed for PVP ranking, and for CP on ANY record whose stats were derived:
+// derivation produces IVs and a level, and CP is computed from them by
+// recomputeCpIfNeeded, which does nothing at all when this is nil. Gated on
+// pvp.enabled alone, every derived pokemon would have full IVs and no CP.
+//
+// The level caps are a PVP concern; CalculateCp does not read them, so a
+// derivation-only deployment does not need them configured.
 func InitialiseOhbem() {
-	if config.Config.Pvp.Enabled {
-		log.Info("Initialising Ohbem for PVP")
-		if len(config.Config.Pvp.LevelCaps) == 0 {
-			log.Errorf("PVP level caps not configured")
+	if config.Config.Pvp.Enabled || config.Config.DeriveIv {
+		if config.Config.Pvp.Enabled {
+			log.Info("Initialising Ohbem for PVP")
+			if len(config.Config.Pvp.LevelCaps) == 0 {
+				log.Errorf("PVP level caps not configured")
+				return
+			}
+		} else {
+			log.Info("Initialising Ohbem for derived CP (pvp disabled)")
+		}
+		o := newOhbemInstance()
+		if err := loadOhbemFromMasterFile(o); err != nil {
+			log.Errorf("ohbem: %v", err)
 			return
 		}
-		cacheFileLocation := masterFileCachePath
-		o := newOhbemInstance()
-
-		if err := o.LoadPokemonData(cacheFileLocation); err != nil {
-			log.Warnf("ohbem.LoadPokemonData from cache failed: %v", err)
-			if errFetch := o.FetchPokemonData(); errFetch != nil {
-				log.Warnf("ohbem.FetchPokemonData failed: %v", errFetch)
-				if errFallback := o.LoadPokemonData("pogo/master-latest-basics.json"); errFallback != nil {
-					log.Errorf("ohbem.LoadPokemonData from fallback failed: %v", errFallback)
-					return
-				}
-				log.Warnf("ohbem.LoadPokemonData loaded from pogo/master-latest-basics.json instead.")
-			} else if errSave := o.SavePokemonData(cacheFileLocation); errSave != nil {
-				log.Warnf("ohbem.SavePokemonData to cache failed: %v", errSave)
-			}
-		}
-
 		ohbem.Store(o)
 	}
 }
@@ -317,7 +315,7 @@ func newOhbemInstance() *gohbem.Ohbem {
 
 	o := &gohbem.Ohbem{Leagues: leagues, LevelCaps: config.Config.Pvp.LevelCaps,
 		IncludeHundosUnderCap: config.Config.Pvp.IncludeHundosUnderCap,
-		MasterFileCachePath:   masterFileCachePath, Logger: &gohbemLogger{}}
+		Logger:                &gohbemLogger{}}
 	switch config.Config.Pvp.RankingComparator {
 	case "prefer_higher_cp":
 		o.RankingComparator = gohbem.RankingComparatorPreferHigherCp
@@ -329,17 +327,34 @@ func newOhbemInstance() *gohbem.Ohbem {
 	return o
 }
 
+// loadOhbemFromMasterFile gives an Ohbem the masterfile golbat already holds,
+// rather than having it read or fetch a copy of its own: one document, from
+// whichever source masterFile loaded it from, including the bundled one. The
+// bundled copy stands in when golbat has not loaded one, which only tests do.
+func loadOhbemFromMasterFile(o *gohbem.Ohbem) error {
+	data := masterFile.current()
+	if data == nil {
+		data = pogo.BundledMasterFile
+	}
+	if err := json.Unmarshal(data, &o.PokemonData); err != nil {
+		return fmt.Errorf("loading the masterfile: %w", err)
+	}
+	o.PokemonData.Initialized = true
+	o.ClearCache()
+	return nil
+}
+
 func reloadOhbemFromMasterFile() {
 	if ohbem.Load() == nil {
 		return
 	}
 	o := newOhbemInstance()
-	if err := o.LoadPokemonData(masterFileCachePath); err != nil {
+	if err := loadOhbemFromMasterFile(o); err != nil {
 		log.Warnf("ohbem reload from MasterFile failed: %v", err)
 		return
 	}
 	ohbem.Store(o)
-	log.Infof("ohbem reloaded from MasterFile cache")
+	log.Infof("ohbem reloaded from MasterFile")
 }
 
 const floatTolerance = 0.000001
@@ -395,23 +410,20 @@ func SetStatsCollector(collector stats_collector.StatsCollector) {
 var statsCollectorSet atomic.Bool
 
 // InitWriteBehindQueue initializes the typed write-behind queues. It must be
-// called after SetStatsCollector, and now says so rather than only documenting
-// it.
+// called after SetStatsCollector, and enforces that.
 //
 // The requirement is real because the collector is passed by value: the queues
 // keep whatever InitTypedQueues was handed, so calling this first hands them
 // the noop seed permanently and every write-behind metric silently reads zero
-// for the life of the process. That used to fail loudly instead — the
-// pre-seeding collector was nil, so the first batch flush panicked — and
-// trading a panic for silence is a bad trade for a boot-ordering mistake that
-// is always a programming error. Check it where the ordering is required.
+// for the life of the process. Silence is the wrong failure for a
+// boot-ordering mistake that is always a programming error, so it is checked
+// where the ordering is required.
 //
-// Note for anyone maintaining a fork with its own main(): this is a new crash
-// mode. golbat's main() calls SetStatsCollector before this (see main.go), so
-// the panic is unreachable here, but a main() that ordered the two the other
-// way round used to boot with silently dead write-behind metrics and now
-// fails at startup instead. Swapping the two calls is the fix, not removing
-// this check.
+// Note for anyone maintaining a fork with its own main(): golbat's main()
+// calls SetStatsCollector before this (see main.go), so the panic is
+// unreachable here, but a main() ordering the two the other way round fails
+// at startup rather than booting with silently dead write-behind metrics.
+// Swapping the two calls is the fix, not removing this check.
 func InitWriteBehindQueue(ctx context.Context, dbDetails db.DbDetails) {
 	if !statsCollectorSet.Load() {
 		log.Panic("decoder.InitWriteBehindQueue called before decoder.SetStatsCollector: the write-behind queues would keep the noop collector for the life of the process")

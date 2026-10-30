@@ -193,3 +193,56 @@ func TestOtherSpeciesKeepsEncounterStats(t *testing.T) {
 		t.Fatal("ordinary unchanged-weather encounter data changed")
 	}
 }
+
+// Derivation must not invent stats for Minior either: neither IVs and level
+// on a first sighting, nor size and moves on a record whose IVs are present.
+func TestDeriveSkipsMinior(t *testing.T) {
+	p := miniorTestPokemon()
+	p.deriveIvIfAbsent()
+	assertMiniorStatsNull(t, p)
+
+	p = miniorTestPokemon()
+	p.AtkIv = null.ValueFrom(uint8(15))
+	p.deriveSizeAndMovesIfAbsent()
+	if p.Size.Valid || p.Move1.Valid || p.Move2.Valid {
+		t.Errorf("derived size/moves for Minior: %+v", p.PokemonData)
+	}
+}
+
+// A spawn that displays as Minior after being seen as another species must
+// not keep that species' IVs, level or CP; an ordinary species change still
+// keeps its IVs.
+func TestSpeciesChangeIntoMiniorClearsStats(t *testing.T) {
+	withStats := func() *Pokemon {
+		p := miniorTestPokemon()
+		p.newRecord = false
+		p.PokemonId = int16(pogo.HoloPokemonId_PIKACHU)
+		p.Form = null.ValueFrom(uint16(pogo.PokemonDisplayProto_PIKACHU_NORMAL))
+		p.AtkIv = null.ValueFrom(uint8(15))
+		p.DefIv = null.ValueFrom(uint8(14))
+		p.StaIv = null.ValueFrom(uint8(13))
+		p.Iv = null.ValueFrom(float32(93.3))
+		p.Level = null.ValueFrom(uint8(30))
+		p.Cp = null.ValueFrom(uint16(900))
+		return p
+	}
+
+	p := withStats()
+	p.setPokemonDisplay(int16(pogo.HoloPokemonId_MINIOR), &pogo.PokemonDisplayProto{
+		Form: pogo.PokemonDisplayProto_MINIOR_METEOR_BLUE, Gender: 3, WeatherBoostedCondition: 1,
+	})
+	if p.PokemonId != int16(pogo.HoloPokemonId_MINIOR) {
+		t.Fatalf("PokemonId = %d, want Minior", p.PokemonId)
+	}
+	if p.AtkIv.Valid || p.DefIv.Valid || p.StaIv.Valid || p.Iv.Valid || p.Level.Valid || p.Cp.Valid {
+		t.Errorf("Minior kept the previous species' stats: %+v", p.PokemonData)
+	}
+
+	p = withStats()
+	p.setPokemonDisplay(int16(pogo.HoloPokemonId_RAICHU), &pogo.PokemonDisplayProto{
+		Form: pogo.PokemonDisplayProto_RAICHU_NORMAL, Gender: 3, WeatherBoostedCondition: 1,
+	})
+	if !p.AtkIv.Valid || !p.Level.Valid {
+		t.Errorf("ordinary species change dropped IVs/level: %+v", p.PokemonData)
+	}
+}

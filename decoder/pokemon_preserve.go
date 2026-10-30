@@ -92,6 +92,14 @@ func PreservePokemonToDatabase(dbDetails db.DbDetails) {
 			return true
 		}
 
+		// Provenance lives outside PokemonData (dittoRollMarked is an
+		// unexported field on Pokemon), so it reaches the snapshot only
+		// through GolbatInternal. Re-marshal a roll-marked record first, or
+		// restart loses how its Ditto identity was reached and its first
+		// encounter resets a prediction nothing had contradicted.
+		if pokemon.dittoRollMarked {
+			pokemon.rewriteGolbatInternal()
+		}
 		batch = append(batch, pokemon.PokemonData)
 		if len(batch) >= preserveBatchSize {
 			batches <- batch
@@ -135,16 +143,10 @@ func PreloadPreservedPokemon(dbDetails db.DbDetails) int32 {
 			defer wg.Done()
 			currentTime := time.Now().Unix()
 			for pokemon := range jobs {
-				// Only restore pokemon with verified despawns. Unverified
-				// expire timestamps are guesses, and remainingDuration now
-				// always returns a positive (jittered) duration for them, so
-				// the ttl<=0 check below no longer filters them out the way
-				// the old DefaultTTL(=0) sentinel did.
-				if !pokemon.ExpireTimestampVerified {
-					continue
-				}
-
-				// Calculate remaining TTL
+				// Every unexpired pokemon is restored, verified or not (the
+				// query above excludes expired rows): a derived expiry is as
+				// good an answer as it was before the restart, and a guess is
+				// still the best one there is.
 				ttl := pokemon.remainingDuration(currentTime)
 				if ttl <= 0 {
 					continue

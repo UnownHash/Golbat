@@ -81,6 +81,15 @@ func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, 
 				tappable.Unlock()
 				return nil, nil, err
 			}
+			// No existing row: this Tappable is genuinely new, both to this
+			// process and to the database, so "now" is a real lower bound on
+			// its lifetime — see Tappable.firstSeen's doc comment. Guarded
+			// on firstSeen == 0 so a retry of this same load (newRecord
+			// stays true until the first save clears it, in
+			// saveTappableRecord) can't stomp an already-established value.
+			if tappable.firstSeen == 0 {
+				tappable.firstSeen = time.Now().Unix()
+			}
 		} else {
 			// We loaded from DB
 			tappable.newRecord = false

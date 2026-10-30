@@ -261,6 +261,52 @@ var (
 		},
 		[]string{"sameacct"},
 	)
+	despawnWrapClamped = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_wrap_clamped_total",
+			Help:      "Verified despawns whose +3600 wraparound implied an impossible lifetime and were clamped to an expiry the record did not already hold. Re-confirmations of an unchanged value are not counted.",
+		},
+	)
+	derivationChecked = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "derivation_checked_total",
+			Help:      "Real encounters whose observed stats were compared against a fresh encounter-id derivation, by sighting path. Strong Pokemon are excluded.",
+		},
+		[]string{"path"},
+	)
+	derivationDisagreed = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "derivation_disagreed_total",
+			Help:      "Checked encounters whose observed stats did not match the derivation, by sighting path. Should sit at approximately zero; a rising rate means the derivation has stopped matching the game.",
+		},
+		[]string{"path"},
+	)
+	derivationMoveMismatch = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "derivation_move_mismatch_total",
+			Help:      "Checked encounters whose observed moves did not match the derivation, by sighting path. A subset of derivation_disagreed_total, broken out so a move-specific regression is visible on its own.",
+		},
+		[]string{"path"},
+	)
+	derivationBoostBranchDivergence = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "derivation_boost_branch_divergence_total",
+			Help:      "Checked encounters whose observed IVs matched the opposite weather-boost branch, by sighting path. These are correctly-explained Dittos, not derivation failures, and are not counted in derivation_disagreed_total.",
+		},
+		[]string{"path"},
+	)
+	despawnPhaseDiverged = prometheus.NewCounter(
+		prometheus.CounterOpts{
+			Namespace: ns,
+			Name:      "despawn_phase_diverged_total",
+			Help:      "TTH sightings whose despawn instant is more than 2s away, modulo the half hour, from the phase derived from their spawnpoint id. Expect a small steady trickle; a step change, or a rate approaching the TTH sighting rate, means the phase algorithm has stopped matching the game.",
+		},
+	)
 	dbQueries = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: ns,
@@ -657,6 +703,30 @@ func (col *promCollector) IncDuplicateEncounters(sameAccount bool) {
 	duplicateEncounters.WithLabelValues(v).Inc()
 }
 
+func (col *promCollector) IncDespawnWrapClamped() {
+	despawnWrapClamped.Inc()
+}
+
+func (col *promCollector) IncDerivationChecked(path string) {
+	derivationChecked.WithLabelValues(path).Inc()
+}
+
+func (col *promCollector) IncDerivationDisagreed(path string) {
+	derivationDisagreed.WithLabelValues(path).Inc()
+}
+
+func (col *promCollector) IncDerivationMoveMismatch(path string) {
+	derivationMoveMismatch.WithLabelValues(path).Inc()
+}
+
+func (col *promCollector) IncDerivationBoostBranchDivergence(path string) {
+	derivationBoostBranchDivergence.WithLabelValues(path).Inc()
+}
+
+func (col *promCollector) IncDespawnPhaseDiverged() {
+	despawnPhaseDiverged.Inc()
+}
+
 func (col *promCollector) IncDbQuery(query string, err error) {
 	var status string
 
@@ -842,7 +912,8 @@ func initPrometheus() {
 
 		verifiedPokemonTTL, verifiedPokemonTTLCounter, raidCount, fortCount, incidentCount, maxBattleCount, fortChange,
 		fieldClamped,
-		duplicateEncounters, dbQueries,
+		duplicateEncounters, despawnWrapClamped, dbQueries,
+		derivationChecked, derivationDisagreed, derivationMoveMismatch, derivationBoostBranchDivergence, despawnPhaseDiverged,
 
 		gyms, incidents, pokemons, lures, quests, raids,
 
