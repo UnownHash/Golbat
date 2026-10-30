@@ -20,6 +20,11 @@ The branch classification is computed here from derived_unboosted,
 derived_boosted and the observed values rather than read from `ditto_branch`,
 which has no size_only class.
 
+Strong (mighty) encounters are reported apart, in section 7: golbat logs every
+one of them, agreeing or not, so that section has real agreement rates. Rows
+from before golbat derived strong Pokemon carry no "model" field; their strong
+values are recomputed here with the strong walk.
+
 Adding a check: give Analysis a new accumulator in __init__, update it in
 add(), and print it from report(). Nothing else needs to change.
 """
@@ -30,6 +35,85 @@ WEATHER = {0: "NONE", 1: "CLEAR", 2: "RAINY", 3: "PARTLY_CLOUDY",
            4: "OVERCAST", 5: "WINDY", 6: "SNOW", 7: "FOG"}
 THRESHOLD = 0.02          # nextFloat() < 0.02f — see decoder/ditto_roll.go
 SAMPLE_CAP = 8            # examples retained per anomaly class
+ENCOUNTER_XOR = 0x18ADE5CD737B
+STRONG_SKIP = 5           # leading advances of the strong walk golbat uses
+FIT_SKIPS = range(0, 13)  # leading-advance counts tried on a strong mismatch
+# Pumpkaboo and Gourgeist show a size fixed by form; see derive/encounter.
+FORM_SIZES = {2641: 2, 2642: 3, 2643: 4, 2644: 5, 2645: 2, 2646: 3, 2647: 4, 2648: 5}
+
+
+class JavaRandom:
+    """The parts of java.util.Random the strong walk needs, bit-exact."""
+    MASK = (1 << 48) - 1
+
+    def __init__(self, seed):
+        self.state = (seed ^ 0x5DEECE66D) & self.MASK
+
+    def next(self, bits):
+        self.state = (self.state * 0x5DEECE66D + 0xB) & self.MASK
+        return self.state >> (48 - bits)
+
+    def next_int(self, bound):
+        if bound & (bound - 1) == 0:
+            return (bound * self.next(31)) >> 31
+        while True:
+            bits = self.next(31)
+            val = bits % bound
+            if bits - val + (bound - 1) < 1 << 31:   # Java's signed-overflow test
+                return val
+
+    def next_double(self):
+        return ((self.next(26) << 27) + self.next(27)) / float(1 << 53)
+
+    def skip_gaussian(self):
+        # Polar method; only how many advances it takes matters here.
+        while True:
+            v1, v2 = 2 * self.next_double() - 1, 2 * self.next_double() - 1
+            if 0 < v1 * v1 + v2 * v2 < 1:
+                return
+
+
+STRONG_SIZE_CUT = 0.8     # strong size roll: XL below, XXL at or above
+
+
+def strong_size_class(roll):
+    return 4 if roll < STRONG_SIZE_CUT else 5
+
+
+def strong_walk(encounter_id, boosted, form=0, skip=STRONG_SKIP):
+    """(attack, defense, stamina, level, size) by the strong walk, with skip
+    leading advances. Mirrors encounter.ForStrong at skip=5."""
+    r = JavaRandom((int(encounter_id) ^ ENCOUNTER_XOR) & ((1 << 64) - 1))
+    for _ in range(skip):
+        r.next(32)
+    ivs = tuple(r.next_int(3) + 13 for _ in range(3))
+    level = r.next_int(5) + (41 if boosted else 36)
+    r.skip_gaussian()
+    size = strong_size_class(r.next_double())
+    return ivs + (level, FORM_SIZES.get(form, size))
+
+
+PRIOR_LABELS = {
+    "none": "(none: first seen at encounter)",
+    "unknown": "(unknown: reloaded since)",
+}
+PRIOR_UNAVAILABLE = "(unavailable: logged before prior_source)"
+
+
+def prior_source(row):
+    """How the record was seen before this encounter. Rows written before
+    golbat logged prior_source say nothing about it, which is not the same as
+    a first sighting."""
+    src = row.get("prior_source")
+    if src is None:
+        return PRIOR_UNAVAILABLE
+    return PRIOR_LABELS.get(src, src)
+
+
+def strong_fit(encounter_id, boosted, obs):
+    """The leading-advance counts whose strong walk gives the observed IVs and
+    level, or () when none does: on a mismatch, which skip the game used."""
+    return tuple(k for k in FIT_SKIPS if strong_walk(encounter_id, boosted, skip=k)[:4] == obs[:4])
 
 
 def open_any(path):
@@ -219,6 +303,18 @@ class Analysis:
         # absent and ratios over them are meaningless.
         self.logged_because = collections.Counter()
         self.disagreements_only = False
+        # Strong (mighty) encounters, all of them: see add_strong.
+        self.strong = collections.Counter()
+        self.strong_moves = collections.Counter()
+        self.strong_fit = collections.Counter()
+        self.strong_by_species = collections.Counter()
+        self.strong_move_bad_by = collections.Counter()   # (species, form, quick, charged) -> n
+        # Strong encounters by how the record was seen before, and whether
+        # that sighting said strong: (prior_source label, prior_is_strong) -> n.
+        self.strong_prior = collections.Counter()
+        # Every encounter whose strong flag contradicted the previous
+        # sighting, either way: (prior_source label, encounter is strong) -> n.
+        self.strong_changed = collections.Counter()
 
     def in_pool(self, row):
         if self.pool is None:
@@ -240,6 +336,16 @@ class Analysis:
             for r in reasons:
                 self.logged_because[r] += 1
         self.paths[row.get("path")] += 1
+
+        if "strong_changed" in (reasons or ()):
+            self.strong_changed[(prior_source(row), bool(row.get("is_strong")))] += 1
+        if row.get("is_strong"):
+            self.add_strong(row)
+            return
+        if reasons == ["strong_changed"]:
+            # Logged only for the flag change, which is counted above; it is
+            # not a derivation disagreement.
+            return
 
         branch = classify_branch(row)
         self.branch[branch] += 1
@@ -343,6 +449,123 @@ class Analysis:
             if (roll or 1.0) < THRESHOLD:
                 self.opposite_low_roll += 1
 
+    def add_strong(self, row):
+        """Score one strong encounter against the strong walk.
+
+        A row golbat derived with the strong walk (model "strong") is read as
+        logged, moves included. An older row was derived with the ordinary
+        walk; its IVs, level and size are recomputed here, and its moves are
+        not comparable.
+        """
+        st = self.strong
+        st["rows"] += 1
+        sp = (row.get("displayed_species"), row.get("form"))
+        self.strong_prior[(prior_source(row), row.get("prior_is_strong"))] += 1
+
+        obs = observed(row)
+        if None in obs:
+            st["not_comparable"] += 1
+            return
+        eid = row.get("encounter_id")
+        boosted = bool(row.get("weather_boosted_condition"))
+        if row.get("model") == "strong":
+            expected = derived(row, boosted)
+        else:
+            st["recomputed"] += 1
+            expected = strong_walk(eid, boosted, row.get("form") or 0)
+
+        if comparable(obs, expected):
+            st["exact"] += 1
+        elif obs[:4] == expected[:4]:
+            st["size_only"] += 1
+            self.sample("strong_size_only", row)
+        else:
+            st["wrong"] += 1
+            self.strong_by_species[sp] += 1
+            fit = strong_fit(eid, boosted, obs)
+            for k in fit or ("none",):
+                self.strong_fit[k] += 1
+            self.sample("strong_wrong", dict(row, _expected=expected, _fit=fit))
+
+        d1, d2 = row.get("derived_move_1"), row.get("derived_move_2")
+        o1, o2 = row.get("observed_move_1"), row.get("observed_move_2")
+        if row.get("model") == "strong" and None not in (d1, d2, o1, o2) and (d1, d2) != (0, 0) and o1 and o2:
+            self.strong_moves["comparable"] += 1
+            if (d1, d2) == (o1, o2):
+                self.strong_moves["both"] += 1
+            else:
+                self.strong_moves["quick wrong" if d2 == o2 else "charged wrong" if d1 == o1 else "both wrong"] += 1
+                self.strong_move_bad_by[sp + (o1, o2)] += 1
+
+    def _report_strong(self):
+        self._section("7. STRONG (MIGHTY) POKEMON  (every strong encounter is logged)")
+        st = self.strong
+        if not st["rows"] and not self.strong_changed:
+            print("    no strong encounters logged.")
+            return
+        comparable = st["exact"] + st["size_only"] + st["wrong"]
+        print(f"    strong encounters: {st['rows']:,}")
+        for label, key in (("exact", "exact"), ("size only (IVs+level ok)", "size_only"),
+                           ("IVs or level WRONG", "wrong")):
+            print(f"    {label:24} {st[key]:7,}  {pct(st[key], comparable):6.2f}%  {bar(st[key], comparable)}")
+        if st["not_comparable"]:
+            print(f"    {'not comparable':24} {st['not_comparable']:7,}   (no observed IVs)")
+        if st["recomputed"]:
+            print(f"    {st['recomputed']:,} row(s) predate strong derivation; their strong values were recomputed here.")
+        mv = self.strong_moves
+        if mv["comparable"]:
+            print("\n    moves (not derived for strong Pokemon: an event can fix them, and a fixed")
+            print("    slot takes no draw; shown to see whether a list of fixed moves would let them be):")
+            print(f"    draw matches observed {mv['both']:7,} / {mv['comparable']:,}   {pct(mv['both'], mv['comparable']):6.2f}%")
+            for shape in ("quick wrong", "charged wrong", "both wrong"):
+                if mv[shape]:
+                    print(f"        {shape:16} {mv[shape]:7,}")
+            if self.strong_move_bad_by:
+                print("    where the draw missed, by species and observed pair (an event-fixed move")
+                print("    shows as one species holding the same observed move):")
+                for (sp, form, a, b), n in self.strong_move_bad_by.most_common(12):
+                    print(f"        species {sp:5} form {form:5}  observed {a:4}/{b:4}   x{n:,}")
+
+        if st["wrong"]:
+            print(f"\n    wrong rows each leading-advance count would explain (golbat uses {STRONG_SKIP};")
+            print("    a row can fit more than one):")
+            for k, n in self.strong_fit.most_common():
+                label = "none fits" if k == "none" else f"{k} advances"
+                print(f"        {label:16} {n:7,} / {st['wrong']:,}")
+            print("    One count other than 5 across most rows: the walk's skip is wrong, fix STRONG_SKIP")
+            print("    and encounter.ForStrong. 'none fits': the IV or level draw itself differs.")
+            print("    Until fixed, set derive_strong = false.")
+            print("\n    wrong, by species/form:")
+            for (sp, form), n in self.strong_by_species.most_common(10):
+                print(f"        species {sp:5} form {form:5}   x{n:,}")
+            for row in self.samples["strong_wrong"]:
+                print(f"    WRONG  id={row.get('encounter_id')} sp {row.get('displayed_species')} "
+                      f"wbc={row.get('weather_boosted_condition')} obs={observed(row)} "
+                      f"derived={row['_expected']} fits={row['_fit'] or 'none'}")
+        for row in self.samples["strong_size_only"]:
+            print(f"    SIZE ONLY  id={row.get('encounter_id')} sp {row.get('displayed_species')} "
+                  f"observed size={row.get('observed_size')}")
+
+        if self.strong_prior:
+            print("\n    how each strong encounter was seen before, and whether that sighting said strong:")
+            print(f"        {'prior sighting':32} {'said strong':>12} {'said not':>10}")
+            types = sorted({t for t, _ in self.strong_prior})
+            for t in types:
+                yes, no = self.strong_prior[(t, True)], self.strong_prior[(t, False)]
+                if t in (PRIOR_LABELS["none"], PRIOR_UNAVAILABLE):
+                    print(f"        {t:42} {self.strong_prior[(t, None)]:>7,} encounters")
+                    continue
+                flag = "   <- does not carry the flag" if no and not yes else ""
+                print(f"        {t:32} {yes:>12,} {no:>10,}{flag}")
+            print("    A Pokemon last seen through a source that said 'not strong' was shown")
+            print("    with ordinary-walk values until the encounter corrected them.")
+
+        if self.strong_changed:
+            print("\n    encounters that contradicted the previous sighting's strong flag:")
+            for (t, strong), n in self.strong_changed.most_common():
+                direction = "seen ordinary, encountered strong" if strong else "seen strong, encountered ordinary"
+                print(f"        {str(t):20} {direction:36} x{n:,}")
+
     # ---------------------------------------------------------------- report
     def report(self):
         rule = "=" * 72
@@ -354,6 +577,7 @@ class Analysis:
             print("  This corpus holds DISAGREEMENTS ONLY: agreeing encounters are counted in the")
             print("  derivation_* metrics, not logged. Percentages below are of logged rows, and")
             print("  the roll's precision, recall and uniformity cannot be computed from it.")
+            print("  Strong encounters are the exception: all are logged, in section 7.")
 
         self._section("1. DERIVATION vs OBSERVED")
         comparable = sum(v for k, v in self.branch.items() if k != "unknown")
@@ -364,7 +588,7 @@ class Analysis:
             n = self.branch[key]
             print(f"    {label:24} {n:7,}  {pct(n, comparable):6.2f}%  {bar(n, comparable)}")
         if self.branch["unknown"]:
-            print(f"    {'not comparable':24} {self.branch['unknown']:7,}   (strong, or no observed IVs)")
+            print(f"    {'not comparable':24} {self.branch['unknown']:7,}   (no observed IVs; strong rows are in section 7)")
         moves = self.moves_comparable
         if moves:
             print(f"\n    quick move   {self.quick_ok:7,} / {moves:,}   {pct(self.quick_ok, moves):6.2f}%")
@@ -450,6 +674,8 @@ class Analysis:
                   f"id={row.get('encounter_id')}")
         if not found:
             print("    none.")
+
+        self._report_strong()
         print()
 
     def as_json(self):
@@ -478,6 +704,15 @@ class Analysis:
                                       for (sp, fm), n in self.opposite_out_pool.most_common()],
             },
             "weather_boosted_condition": {str(k): v for k, v in self.wbc.items()},
+            "strong": {
+                **dict(self.strong),
+                "moves": dict(self.strong_moves),
+                "fit": {str(k): v for k, v in self.strong_fit.items()},
+                "prior": [{"prior_source": t, "prior_is_strong": p, "count": n}
+                          for (t, p), n in self.strong_prior.most_common()],
+                "changed": [{"prior_source": t, "encounter_strong": st, "count": n}
+                            for (t, st), n in self.strong_changed.most_common()],
+            },
             "ditto_pool": self.pool_source,
             "ditto_refuted": [{"species": sp, "form": fm, "count": e["n"],
                                "in_pool_now": (sp, fm) in self.pool if self.pool is not None else None}

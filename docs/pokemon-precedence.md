@@ -77,7 +77,8 @@ derivation off `detectDitto` is the only source.
 if !config.Config.DeriveIv {
     return
 }
-if pokemon.IsStrong.ValueOrZero() {
+strong := pokemon.IsStrong.ValueOrZero()
+if !deriveStrongAllowed(strong) { // strong needs derive_strong as well
     return
 }
 if pokemon.AtkIv.Valid {
@@ -90,10 +91,15 @@ if pokemon.AtkIv.Valid {
 
 `AtkIv.Valid` is what makes the encounter win: stored IVs are kept, and only
 an absent size or move is filled (a display change clears those but not the
-IVs). `IsStrong` is an **exclusion, not precedence** — derivation must not
-run at all: strong Pokémon IVs are unaffected by weather (`repopulateIv`'s
-`isBoostedMatches || isStrong`; `detectDitto` enforces the same), while the
-derivation implements the ordinary boost mechanic.
+IVs). `IsStrong` picks the walk, not the precedence: a strong (mighty) Pokémon
+is derived with `encounter.ForStrong` — IVs 13–15 that do not move with
+weather, level 36–40 or 41–45 boosted, size XL or XXL only — and only while
+`derive_strong` is on (default). Its IVs being weather-independent is what
+`repopulateIv`'s `isBoostedMatches || isStrong` and `detectDitto` already
+assumed. Its **moves are not derived**: an event can fix a strong species'
+move (often outside its pool), and a fixed slot takes no draw, so the drawn
+indices cannot be trusted without a list of the fixed moves. `checkDerivation`
+logs every strong encounter, moves included, without scoring the moves.
 
 A known Ditto is derived, on its own boost branch rather than its disguise's
 (`statsBoosted`): a caught Ditto is boosted only in `PP`.
@@ -183,10 +189,9 @@ a record already flagged `IsDitto`:
   that lost the scan history, which is persisted only with
   `pokemon_internal_to_db`; the snapshot is taken before an encounter in
   progress writes its own `seen_type`, so a first encounter still marks.
-- `pokemon.IsStrong` — the same exclusion `deriveIvIfAbsent` applies. Whether
-  a strong Pokémon can be a Ditto is not known either way; the derivation
-  models the ordinary boost mechanic, and there is no evidence it describes a
-  strong one. It matters more here than there, because marking is
+- `pokemon.IsStrong` — whether a strong Pokémon can be a Ditto is not known
+  either way, and the Ditto rule reads the ordinary walk's advance 3; there is
+  no evidence it describes a strong one. Marking would also be
   **terminal** — `detectDitto` returns on `scan.Strong` before any
   Ditto logic runs, so no later encounter takes the identity back
 - not in `ditto_pool` — the game only substitutes for eligible species, so the
@@ -209,7 +214,7 @@ IVs/level/size match:
 | `expected` | matches the branch the proto implies — the ordinary case |
 | `opposite` | matches the other branch — a Ditto indicator |
 | `neither` | matches no branch — a genuine derivation failure |
-| `unknown` | not comparable — a strong Pokemon, excluded from derivation |
+| `unknown` | not comparable — a strong Pokemon, outside the Ditto comparison |
 
 `opposite` arises because the IVs an encounter REPORTS follow the Ditto's own
 boost state, not its disguise's: in `PARTLY_CLOUDY` the Ditto is boosted while

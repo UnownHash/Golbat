@@ -124,6 +124,20 @@ type Pokemon struct {
 	// pokemon_internal_to_db is on.
 	dittoRollMarked bool `db:"-" json:"-"`
 
+	// displaySource is the kind of sighting that last applied a display —
+	// and with it IsStrong — named by the seen type that sighting would
+	// give (SeenType itself records coverage: a wild record keeps it when a
+	// nearby sighting updates its display). Unset on a record loaded from
+	// the database or a preserved cache until its next sighting. Read only
+	// for the [DERIVE] prior_source field (see priorSighting).
+	//
+	// Temporary: it exists only to find out whether every sighting source
+	// (nearby especially) carries is_strong_pokemon. Once derivecheck's
+	// section 7 shows strong_changed staying at zero through a mighty event,
+	// remove it, priorSighting, strong_changed and the prior_* log fields.
+	// It sits in padding before oldValues, so Pokemon does not grow.
+	displaySource SeenTypeCode `db:"-" json:"-"`
+
 	// debug accumulates per-field change descriptions for dbDebugLog, one
 	// aggregated log line per save (see pokemon_state.go). Its type is
 	// debugChangeAccumulator, defined once per build tag in db_debug.go /

@@ -199,7 +199,7 @@ var unparseableSpawnpointIds util.DropReporter
 // the proto is at 0,0 and the id does not decode: the sighting cannot be
 // placed and the caller must drop it. Callers therefore run it before any
 // other mutation of the record.
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) bool {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool, source SeenTypeCode) bool {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
@@ -225,7 +225,7 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
-	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
+	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay, source)
 	return true
 }
 
@@ -325,7 +325,7 @@ func (pokemon *Pokemon) applySightingDerivation() {
 // record untouched, when the sighting cannot be placed (see addWildPokemon);
 // the caller must then skip the save.
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
-	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true) {
+	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true, SeenTypeCodeWild) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -360,7 +360,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetSeenType(SeenTypeCodeLureWild)
 
 		if mapPokemon.Data.PokemonDisplay != nil {
-			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
+			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay, SeenTypeCodeLureWild)
 			pokemon.applySightingDerivation()
 			pokemon.recomputeCpIfNeeded(ctx, db, weather)
 			// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
@@ -421,7 +421,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	// no stats to go stale, and the display is read once, at creation.
 	if config.Config.DeriveIv && pokemon.SeenType.Code == SeenTypeCodeLureWild && mapPokemon.Data.PokemonDisplay != nil {
 		wasDirty := pokemon.dirty
-		pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
+		pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay, SeenTypeCodeLureWild)
 		// A display change clears size and moves, and with the weather
 		// unchanged nothing else refills them; derivation does, as on the
 		// wild and nearby paths.
@@ -538,6 +538,13 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
+	// A strong Pokemon's moves are left for an encounter: an event can fix
+	// them, which the draw cannot know (see encounter.ForStrong). The Draw
+	// says which walk it is, rather than the record, because repopulateIv
+	// derives for a strong flag the record has not stored yet.
+	if v.Strong {
+		return
+	}
 	if pokemon.Move1.Valid && pokemon.Move2.Valid {
 		return
 	}
@@ -566,10 +573,11 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 // always advance the generator equally, but not when the boosted branch's
 // nextInt(12) hits Java's rejection path.
 func (pokemon *Pokemon) deriveSizeAndMovesIfAbsent() {
-	if !config.Config.DeriveIv || pokemon.IsStrong.ValueOrZero() || hasPlayerSpecificStats(pokemon.PokemonId) {
+	strong := pokemon.IsStrong.ValueOrZero()
+	if !config.Config.DeriveIv || !deriveStrongAllowed(strong) || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
-	v := encounter.For(uint64(pokemon.Id), pokemon.statsBoosted(), int32(int64OrZero(pokemon.Form)))
+	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
 	if !pokemon.Size.Valid {
 		pokemon.SetSize(null.IntFrom(int64(v.Size)))
 	}
@@ -602,9 +610,14 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	// that, Lat/Lon are 0,0 and the lookup misses the batch weather and goes
 	// to the database under the pokemon lock. The paths that keep an existing
 	// location call it first, since that location is already the right one.
+	// The display's own source, whatever seen type the record keeps.
+	nearbySource := SeenTypeCodeCell
+	if nearbyPokemon.FortId != "" {
+		nearbySource = SeenTypeCodeNearbyStop
+	}
 	applyDisplay := func() {
 		pokemon.SetIsEvent(0)
-		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
+		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay, nearbySource)
 		pokemon.applySightingDerivation()
 		pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	}
@@ -1850,12 +1863,8 @@ func (pokemon *Pokemon) downgradeEncounterSeenType() {
 // judge coverage and decide what still needs scanning. See
 // TestDeriveIvLeavesSeenTypeAlone.
 //
-// Strong Pokemon are skipped: the ordinary boosted-floor mechanic this
-// function models does not apply to them (see repopulateIv's
-// isBoostedMatches || isStrong branch and detectDitto's CompressedIv
-// invariant across boost states for a strong scan), so deriving for one would
-// write IVs indistinguishable from real ones but wrong. See
-// TestDeriveIvIfAbsentSkipsStrongPokemon.
+// Strong Pokemon are derived with their own walk (encounter.ForStrong), and
+// only while derive_strong is on. See TestDeriveIvIfAbsentDerivesStrongPokemon.
 //
 // A known Ditto is derived on its own boost rule rather than its disguise's
 // (statsBoosted). See TestDeriveIvIfAbsentDerivesAKnownDittoOnItsOwnBranch.
@@ -1866,7 +1875,8 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	if !config.Config.DeriveIv {
 		return
 	}
-	if pokemon.IsStrong.ValueOrZero() {
+	strong := pokemon.IsStrong.ValueOrZero()
+	if !deriveStrongAllowed(strong) {
 		return
 	}
 	// A player-specific species has no spawn-level stats to derive. See
@@ -1886,8 +1896,15 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 		return
 	}
 
-	v := encounter.For(uint64(pokemon.Id), pokemon.statsBoosted(), int32(int64OrZero(pokemon.Form)))
+	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
 	pokemon.applyDerivedValues(v)
+}
+
+// deriveStrongAllowed reports whether a record may be derived given whether
+// it is strong: an ordinary one always, a strong one only with derive_strong
+// on. derive_iv is checked separately.
+func deriveStrongAllowed(strong bool) bool {
+	return !strong || config.Config.DeriveStrong
 }
 
 // statsBoosted is the boost branch the record's own stats follow, read from
@@ -1975,8 +1992,30 @@ func hasPlayerSpecificStats(pokemonId int16) bool {
 	return pokemonId == int16(pogo.HoloPokemonId_MINIOR)
 }
 
-// caller should setPokemonDisplay prior to calling this
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
+// priorSighting is how a record was last seen, captured by an encounter
+// before it applies its own display. See checkDerivation.
+type priorSighting struct {
+	// Seen: the record had a display before this encounter. IsStrong is set
+	// with every display and persisted, so its validity is the test.
+	Seen bool
+	// Strong is that display's strong flag.
+	Strong bool
+	// Source is the kind of sighting that applied it (displaySource), unset
+	// when the record was reloaded since.
+	Source SeenTypeCode
+}
+
+func (pokemon *Pokemon) priorSighting() priorSighting {
+	return priorSighting{
+		Seen:   pokemon.IsStrong.Valid,
+		Strong: pokemon.IsStrong.ValueOrZero(),
+		Source: pokemon.displaySource,
+	}
+}
+
+// caller should setPokemonDisplay prior to calling this, and pass the
+// priorSighting it captured before doing so.
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string, prior priorSighting) {
 	// Minior's encounter stats belong to the player, not the shared spawn.
 	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		pokemon.setUsernameIfStored(username)
@@ -2175,7 +2214,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// DisplayPokemonId reflect this sighting's ground truth, but compares
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
-	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto), prior)
 
 	// Normally a no-op: it returns immediately once Cp is set, which the proto
 	// almost always does. It earns its place when the proto did not report one
@@ -2191,7 +2230,8 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 // with the record untouched, when the encounter's wild proto cannot be
 // placed (see addWildPokemon); the caller must then skip the save.
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) bool {
-	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false) {
+	prior := pokemon.priorSighting()
+	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false, SeenTypeCodeEncounter) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -2202,7 +2242,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	if !pokemon.isSeenFromTappable() {
 		pokemon.SetSeenType(SeenTypeCodeEncounter)
 	}
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username, prior)
 
 	if !pokemon.CellId.Valid {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -2231,13 +2271,15 @@ func (pokemon *Pokemon) isSeenFromTappable() bool {
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
+	prior := pokemon.priorSighting()
 	pokemon.SetIsEvent(0)
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay, SeenTypeCodeLureEncounter)
 	pokemon.SetSeenType(SeenTypeCodeLureEncounter)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username, prior)
 }
 
 func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
+	prior := pokemon.priorSighting()
 	pokemon.SetIsEvent(0)
 	pokemon.SetLat(request.LocationHintLat)
 	pokemon.SetLon(request.LocationHintLng)
@@ -2267,12 +2309,17 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
+	displaySource := SeenTypeCodeTappableEncounter
+	if request.GetLocation().GetSpawnpointId() == "" && request.GetLocation().GetFortId() != "" {
+		displaySource = SeenTypeCodeTappableLureEncounter
+	}
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay, displaySource)
 	// addEncounterPokemon adopts the username at the end of its own updates.
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username, prior)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
+func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto, source SeenTypeCode) {
+	pokemon.displaySource = source
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
@@ -2407,18 +2454,15 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	// not move with weather, so the other state's scan IS its scan.
 	usableScan := matchingScan != nil && (isBoostedMatches || isStrong)
 	var oldAtk, oldDef, oldSta int64
-	if !usableScan && config.Config.DeriveIv && !isStrong {
+	if !usableScan && config.Config.DeriveIv && deriveStrongAllowed(isStrong) {
 		// Derive for the state actually being asked about — the encounter id
 		// is unchanged and isBoosted above already accounts for Ditto.
 		//
-		// Strong Pokemon are excluded: a strong Pokemon's IVs are unaffected
-		// by weather (see the isBoostedMatches || isStrong branch below, and
-		// detectDitto's identical CompressedIv requirement across boost states
-		// for a strong scan), so the ordinary boosted-floor derivation in
-		// encounter.For would write IVs that cannot occur for one. Whether a
-		// strong Pokemon's true values are the unboosted derivation with the
-		// level shift applied separately is an open question. Until it is
-		// answered, no data beats wrong data.
+		// isStrong, not the stored flag, picks the walk: this sighting may be
+		// the one that turns the record strong or ordinary, and the stored
+		// flag is updated only after this returns. A strong record reaches
+		// here only with no scan of either boost state, since a strong scan
+		// of the other state is usable (its IVs do not move with weather).
 		//
 		// derive_iv gates the branch rather than only applyDerivedValues:
 		// with derivation off that call writes nothing, and this arm would
@@ -2427,7 +2471,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		//
 		// The encounter's stats no longer stand, so an encounter record goes
 		// back to wild, as it does when the stats are cleared.
-		v := encounter.For(uint64(pokemon.Id), isBoosted, int32(int64OrZero(pokemon.Form)))
+		v := encounter.Derive(uint64(pokemon.Id), isBoosted, isStrong, int32(int64OrZero(pokemon.Form)))
 		pokemon.applyDerivedValues(v)
 		pokemon.downgradeEncounterSeenType()
 		pokemon.SetCp(null.NewInt(0, false))

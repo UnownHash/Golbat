@@ -57,7 +57,7 @@ func TestMiniorEncounterSetsNoStats(t *testing.T) {
 		t.Run(form.String(), func(t *testing.T) {
 			p := miniorTestPokemon()
 			p.SetForm(null.IntFrom(int64(form)))
-			p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, form), "tester")
+			p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, form), "tester", priorSighting{})
 			assertMiniorStatsNull(t, p)
 			if p.PokemonId != int16(pogo.HoloPokemonId_MINIOR) || p.Form.ValueOrZero() != uint16(form) {
 				t.Error("Minior identity/form changed")
@@ -86,7 +86,7 @@ func TestMiniorGuardsDoNotCleanExistingStats(t *testing.T) {
 	p.Level = null.ValueFrom(uint8(20))
 	p.AtkIv = null.ValueFrom(uint8(15))
 	before := p.PokemonData
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "", priorSighting{})
 	p.repopulateIv(int64(pogo.GameplayWeatherProto_NONE), false)
 	if !reflect.DeepEqual(before, p.PokemonData) {
 		t.Fatal("go-forward guards should neither clear nor overwrite existing stats")
@@ -116,7 +116,7 @@ func TestMiniorLureAndTappableEncounters(t *testing.T) {
 func TestMiniorApiStatsNullAfterEncounter(t *testing.T) {
 	lureTestSetup(t)
 	p := miniorTestPokemon()
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester", priorSighting{})
 	data, err := json.Marshal(buildApiPokemonResult(p))
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +139,7 @@ func TestMiniorEncounterPublishesNoIvSpawn(t *testing.T) {
 	sink := lureTestSetup(t)
 	p := miniorTestPokemon()
 	before := p.PokemonData
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_MINIOR, 0), "tester", priorSighting{})
 	savePokemonRecordAsAtTime(context.Background(), db.DbDetails{}, p, false, false, true, time.Now().Unix(), "tester")
 	assertMiniorStatsNull(t, p)
 	if p.Lat != before.Lat || p.Lon != before.Lon || p.SpawnId != before.SpawnId ||
@@ -180,7 +180,7 @@ func TestMiniorEncounterPublishesNoIvSpawn(t *testing.T) {
 
 func TestOtherSpeciesKeepsEncounterStats(t *testing.T) {
 	p := &Pokemon{PokemonData: PokemonData{PokemonId: 25, Weather: null.ValueFrom(uint8(1))}, newRecord: true}
-	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_PIKACHU, 0), "tester")
+	p.addEncounterPokemon(context.Background(), db.DbDetails{}, miniorTestEncounter(pogo.HoloPokemonId_PIKACHU, 0), "tester", priorSighting{})
 	if !p.AtkIv.Valid || p.AtkIv.ValueOrZero() != 10 || !p.DefIv.Valid || !p.StaIv.Valid ||
 		!p.Iv.Valid || !p.Cp.Valid || !p.Level.Valid || !p.Move1.Valid || !p.Move2.Valid ||
 		!p.Height.Valid || !p.Weight.Valid || !p.Size.Valid || !p.Shiny.Valid || len(p.scanHistory) == 0 {
@@ -230,7 +230,7 @@ func TestSpeciesChangeIntoMiniorClearsStats(t *testing.T) {
 	p := withStats()
 	p.setPokemonDisplay(int16(pogo.HoloPokemonId_MINIOR), &pogo.PokemonDisplayProto{
 		Form: pogo.PokemonDisplayProto_MINIOR_METEOR_BLUE, Gender: 3, WeatherBoostedCondition: 1,
-	})
+	}, SeenTypeCodeWild)
 	if p.PokemonId != int16(pogo.HoloPokemonId_MINIOR) {
 		t.Fatalf("PokemonId = %d, want Minior", p.PokemonId)
 	}
@@ -241,7 +241,7 @@ func TestSpeciesChangeIntoMiniorClearsStats(t *testing.T) {
 	p = withStats()
 	p.setPokemonDisplay(int16(pogo.HoloPokemonId_RAICHU), &pogo.PokemonDisplayProto{
 		Form: pogo.PokemonDisplayProto_RAICHU_NORMAL, Gender: 3, WeatherBoostedCondition: 1,
-	})
+	}, SeenTypeCodeWild)
 	if !p.AtkIv.Valid || !p.Level.Valid {
 		t.Errorf("ordinary species change dropped IVs/level: %+v", p.PokemonData)
 	}

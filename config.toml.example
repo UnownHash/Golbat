@@ -22,6 +22,12 @@ fort_in_memory = false  # fort_in_memory: Keep forts in memory for api lookups [
 # that had been encountered.
 derive_iv = true
 
+# derive_strong: with derive_iv on, also fill in strong (mighty) Pokemon's IVs, level and size,
+# which the game rolls differently from ordinary ones. Their moves are left for an encounter,
+# since events can fix them. Default true; turn it off if tools/derivecheck.py reports strong
+# disagreements.
+derive_strong = true
+
 # derive_despawn: give a Pokemon or tappable at a spawnpoint whose despawn time has not been
 # observed an unverified despawn time derived from the spawnpoint id, rather than a 20-minute
 # guess. Default true; turn it off only if the game changes how despawn times are placed and
