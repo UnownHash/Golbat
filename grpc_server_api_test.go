@@ -202,3 +202,32 @@ func TestGrpcApiFortScansRequireFortInMemory(t *testing.T) {
 		t.Errorf("pokemon scan must work without fort_in_memory: %v", err)
 	}
 }
+
+func TestGrpcApiTappables(t *testing.T) {
+	withTestConfig(t, "", false)
+	client := pb.NewGolbatApiClient(startGrpcTestServer(t, nil))
+	ctx := context.Background()
+
+	if _, err := client.ScanTappables(ctx, &pb.TappableScanRequest{Min: testBox.min, Max: testBox.max}); err != nil {
+		t.Errorf("ScanTappables (fort_in_memory off): %v, want OK", err)
+	}
+	for name, req := range map[string]*pb.TappableScanRequest{
+		"missing box":         {},
+		"unknown reward_type": {Min: testBox.min, Max: testBox.max, Filters: []*pb.TappableDnfFilter{{RewardType: []string{"Item"}}}},
+	} {
+		if _, err := client.ScanTappables(ctx, req); status.Code(err) != codes.InvalidArgument {
+			t.Errorf("ScanTappables %s: %v, want InvalidArgument", name, err)
+		}
+	}
+
+	res, err := client.GetTappable(ctx, &pb.GetTappableRequest{Ids: []uint64{123456789}})
+	if err != nil || len(res.GetTappables()) != 0 {
+		t.Errorf("GetTappable unknown id: %v, %d results; want OK, 0", err, len(res.GetTappables()))
+	}
+	prevMaxT := config.Config.Tuning.MaxTappableResults
+	config.Config.Tuning.MaxTappableResults = 2
+	t.Cleanup(func() { config.Config.Tuning.MaxTappableResults = prevMaxT })
+	if _, err := client.GetTappable(ctx, &pb.GetTappableRequest{Ids: []uint64{1, 2, 3}}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("GetTappable over cap: %v, want InvalidArgument", err)
+	}
+}

@@ -29,6 +29,7 @@ const (
 	MaxBattle
 	RaidLobby
 	MaxBattleLobby
+	Tappable
 	// this magically becomes the number of types we have
 	webhookTypesLength
 )
@@ -48,6 +49,7 @@ func init() {
 	webhookTypeToPayloadType[MaxBattle] = "max_battle"
 	webhookTypeToPayloadType[RaidLobby] = "raid_lobby"
 	webhookTypeToPayloadType[MaxBattleLobby] = "max_battle_lobby"
+	webhookTypeToPayloadType[Tappable] = "tappable"
 
 	// if we add more types, make sure one has added everything here
 	for _, str := range webhookTypeToPayloadType {
@@ -71,6 +73,7 @@ var webhookConfigStringToType = map[string][]WebhookType{
 	"max_battle":       []WebhookType{MaxBattle},
 	"raid_lobby":       []WebhookType{RaidLobby},
 	"max_battle_lobby": []WebhookType{MaxBattleLobby},
+	"tappable":         []WebhookType{Tappable},
 }
 
 type webhook struct {

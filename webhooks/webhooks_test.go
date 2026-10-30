@@ -338,3 +338,12 @@ func TestWebhooksFull(t *testing.T) {
 	sender.Flush()
 	comparePayloads()
 }
+
+func TestTappableWebhookType(t *testing.T) {
+	if got := webhookConfigStringToType["tappable"]; len(got) != 1 || got[0] != Tappable {
+		t.Errorf(`webhookConfigStringToType["tappable"] = %v, want [Tappable]`, got)
+	}
+	if got := webhookTypeToPayloadType[Tappable]; got != "tappable" {
+		t.Errorf("payload type = %q, want tappable", got)
+	}
+}

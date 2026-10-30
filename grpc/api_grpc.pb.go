@@ -25,6 +25,8 @@ const (
 	GolbatApi_ScanPokestops_FullMethodName = "/golbat_api.GolbatApi/ScanPokestops"
 	GolbatApi_ScanStations_FullMethodName  = "/golbat_api.GolbatApi/ScanStations"
 	GolbatApi_ScanForts_FullMethodName     = "/golbat_api.GolbatApi/ScanForts"
+	GolbatApi_ScanTappables_FullMethodName = "/golbat_api.GolbatApi/ScanTappables"
+	GolbatApi_GetTappable_FullMethodName   = "/golbat_api.GolbatApi/GetTappable"
 )
 
 // GolbatApiClient is the client API for GolbatApi service.
@@ -49,6 +51,10 @@ type GolbatApiClient interface {
 	ScanStations(ctx context.Context, in *FortScanRequest, opts ...grpc.CallOption) (*StationScanResponse, error)
 	// POST /api/fort/scan
 	ScanForts(ctx context.Context, in *FortCombinedScanRequest, opts ...grpc.CallOption) (*FortScanResponse, error)
+	// POST /api/tappable/scan
+	ScanTappables(ctx context.Context, in *TappableScanRequest, opts ...grpc.CallOption) (*TappableScanResponse, error)
+	// GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
+	GetTappable(ctx context.Context, in *GetTappableRequest, opts ...grpc.CallOption) (*GetTappableResponse, error)
 }
 
 type golbatApiClient struct {
@@ -119,6 +125,26 @@ func (c *golbatApiClient) ScanForts(ctx context.Context, in *FortCombinedScanReq
 	return out, nil
 }
 
+func (c *golbatApiClient) ScanTappables(ctx context.Context, in *TappableScanRequest, opts ...grpc.CallOption) (*TappableScanResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TappableScanResponse)
+	err := c.cc.Invoke(ctx, GolbatApi_ScanTappables_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *golbatApiClient) GetTappable(ctx context.Context, in *GetTappableRequest, opts ...grpc.CallOption) (*GetTappableResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTappableResponse)
+	err := c.cc.Invoke(ctx, GolbatApi_GetTappable_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GolbatApiServer is the server API for GolbatApi service.
 // All implementations must embed UnimplementedGolbatApiServer
 // for forward compatibility.
@@ -141,6 +167,10 @@ type GolbatApiServer interface {
 	ScanStations(context.Context, *FortScanRequest) (*StationScanResponse, error)
 	// POST /api/fort/scan
 	ScanForts(context.Context, *FortCombinedScanRequest) (*FortScanResponse, error)
+	// POST /api/tappable/scan
+	ScanTappables(context.Context, *TappableScanRequest) (*TappableScanResponse, error)
+	// GET /api/tappable/id/{tappable_id}, batched. Misses are omitted; match by id.
+	GetTappable(context.Context, *GetTappableRequest) (*GetTappableResponse, error)
 	mustEmbedUnimplementedGolbatApiServer()
 }
 
@@ -168,6 +198,12 @@ func (UnimplementedGolbatApiServer) ScanStations(context.Context, *FortScanReque
 }
 func (UnimplementedGolbatApiServer) ScanForts(context.Context, *FortCombinedScanRequest) (*FortScanResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ScanForts not implemented")
+}
+func (UnimplementedGolbatApiServer) ScanTappables(context.Context, *TappableScanRequest) (*TappableScanResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ScanTappables not implemented")
+}
+func (UnimplementedGolbatApiServer) GetTappable(context.Context, *GetTappableRequest) (*GetTappableResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTappable not implemented")
 }
 func (UnimplementedGolbatApiServer) mustEmbedUnimplementedGolbatApiServer() {}
 func (UnimplementedGolbatApiServer) testEmbeddedByValue()                   {}
@@ -298,6 +334,42 @@ func _GolbatApi_ScanForts_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GolbatApi_ScanTappables_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TappableScanRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolbatApiServer).ScanTappables(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GolbatApi_ScanTappables_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolbatApiServer).ScanTappables(ctx, req.(*TappableScanRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GolbatApi_GetTappable_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTappableRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GolbatApiServer).GetTappable(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GolbatApi_GetTappable_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GolbatApiServer).GetTappable(ctx, req.(*GetTappableRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GolbatApi_ServiceDesc is the grpc.ServiceDesc for GolbatApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -328,6 +400,14 @@ var GolbatApi_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ScanForts",
 			Handler:    _GolbatApi_ScanForts_Handler,
+		},
+		{
+			MethodName: "ScanTappables",
+			Handler:    _GolbatApi_ScanTappables_Handler,
+		},
+		{
+			MethodName: "GetTappable",
+			Handler:    _GolbatApi_GetTappable_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

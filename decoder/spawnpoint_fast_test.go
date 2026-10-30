@@ -50,9 +50,12 @@ func TestDespawnSecFastMirror(t *testing.T) {
 
 // applyVerifiedDespawn is shared by the lock-free and locked paths; pin the
 // second-of-hour wraparound math.
+//
+// The fixture instant is 10:50:00 UTC, so secondOfHour (unix % 3600) is 3000
+// — on every machine, regardless of process timezone, since despawnSecondOfHour
+// does not read one.
 func TestApplyVerifiedDespawn(t *testing.T) {
-	// timestamp at 10:50:00 UTC => secondOfHour = 3000
-	ts := int64(1751799000000) // 2025-07-06 10:50:00 UTC
+	ts := time.Date(2025, 7, 6, 10, 50, 0, 0, time.UTC).UnixMilli()
 	cases := []struct {
 		despawnSec int
 		wantOffset int64
@@ -264,4 +267,36 @@ func TestAddWildPokemonPlacement(t *testing.T) {
 			t.Errorf("dropped encounter mutated the record: dirty=%t seenType=%v cell=%v", p.IsDirty(), p.SeenType, p.CellId)
 		}
 	})
+}
+
+// Preload skips the load paths that sync the lock-free mirrors, but a
+// preloaded spawnpoint must still skip its lock when nothing changes.
+func TestPreloadedSpawnpointTakesFastPaths(t *testing.T) {
+	const spawnId = 8855336329721
+	now := time.Now()
+	sp := &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1200), LastSeen: now.Unix()}}
+	cachePreloadedSpawnpoint(sp)
+	defer spawnpointCache.Delete(spawnId)
+
+	sp.Lock("TestPreloadedSpawnpointTakesFastPaths")
+	defer sp.Unlock()
+
+	p := &Pokemon{}
+	p.SetSpawnId(null.IntFrom(spawnId))
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		wild := &pogo.WildPokemonProto{SpawnPointId: "80dcb2d21f9", Latitude: 10.5, Longitude: 20.5}
+		spawnpointUpdateFromWild(context.Background(), db.DbDetails{}, wild, now.UnixMilli())
+		p.setExpireTimestampFromSpawnpoint(context.Background(), db.DbDetails{}, now.UnixMilli(), true)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("sighting of a preloaded spawnpoint blocked on its lock")
+	}
+	if !p.ExpireTimestampVerified {
+		t.Error("preloaded despawn second did not verify the pokemon's expiry")
+	}
 }

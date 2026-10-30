@@ -11,15 +11,14 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	"golbat/db"
-
-	"golbat/ottercache"
 )
+
+const tappableSelectColumns = "id, lat, lon, fort_id, spawn_id, type, pokemon_id, reward_type, item_id, reward_pokemon_id, count, rewards, expire_timestamp, expire_timestamp_verified, updated"
 
 func loadTappableFromDatabase(ctx context.Context, db db.DbDetails, id uint64, tappable *Tappable) error {
 	return timedDbQuery("loadTappableFromDatabase", db.GeneralDb, func() error {
 		err := db.GeneralDb.GetContext(ctx, tappable,
-			`SELECT id, lat, lon, fort_id, spawn_id, type, pokemon_id, reward_type, item_id, reward_pokemon_id, count, rewards, expire_timestamp, expire_timestamp_verified, updated
-         FROM tappable WHERE id = ?`, strconv.FormatUint(id, 10))
+			"SELECT "+tappableSelectColumns+" FROM tappable WHERE id = ?", strconv.FormatUint(id, 10))
 		getStatsCollector().IncDbQuery("select tappable", err)
 		return err
 	})
@@ -81,6 +80,15 @@ func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, 
 				tappable.Unlock()
 				return nil, nil, err
 			}
+			// No existing row: this Tappable is genuinely new, both to this
+			// process and to the database, so "now" is a real lower bound on
+			// its lifetime — see Tappable.firstSeen's doc comment. Guarded
+			// on firstSeen == 0 so a retry of this same load (newRecord
+			// stays true until the first save clears it, in
+			// saveTappableRecord) can't stomp an already-established value.
+			if tappable.firstSeen == 0 {
+				tappable.firstSeen = time.Now().Unix()
+			}
 		} else {
 			// We loaded from DB
 			tappable.newRecord = false
@@ -91,9 +99,16 @@ func getOrCreateTappableRecord(ctx context.Context, db db.DbDetails, id uint64, 
 	return tappable, func() { tappable.Unlock() }, nil
 }
 
-func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable) {
+// pokestopName feeds the tappable webhook; resolve it before taking the tappable lock.
+func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tappable, pokestopName *string) {
 	// Skip save if not dirty and not new
 	if !tappable.IsDirty() && !tappable.IsNewRecord() {
+		// DB-loaded and unchanged: still needs its TTL and index
+		if _, indexed := tappableLookupCache.Load(tappable.Id); !indexed {
+			tappableCacheOnSave(tappable, time.Now().Unix())
+			tappableRtreeUpdateOnSave(tappable)
+		}
+		tappable.rewardChanged = false // defensive: setRewards can't set it without dirtying
 		return
 	}
 
@@ -124,8 +139,10 @@ func saveTappableRecord(ctx context.Context, details db.DbDetails, tappable *Tap
 		tappable.debug.reset()
 	}
 	tappable.ClearDirty()
+	tappableCacheOnSave(tappable, now)
+	tappableRtreeUpdateOnSave(tappable)
+	tappableWebhookOnSave(tappable, isNewRecord, pokestopName)
 	if isNewRecord {
-		tappableCache.Set(tappable.Id, tappable, ottercache.DefaultTTL)
 		tappable.newRecord = false
 	}
 }

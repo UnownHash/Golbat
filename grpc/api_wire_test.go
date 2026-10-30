@@ -13,7 +13,7 @@ func TestGolbatApiServiceShape(t *testing.T) {
 	if svc == nil {
 		t.Fatal("GolbatApi service missing from grpc/api.proto")
 	}
-	want := []string{"ScanPokemon", "GetPokemon", "ScanGyms", "ScanPokestops", "ScanStations", "ScanForts"}
+	want := []string{"ScanPokemon", "GetPokemon", "ScanGyms", "ScanPokestops", "ScanStations", "ScanForts", "ScanTappables", "GetTappable"}
 	if got := svc.Methods().Len(); got != len(want) {
 		t.Fatalf("GolbatApi has %d methods, want %d", got, len(want))
 	}
@@ -53,5 +53,25 @@ func TestPokemonWireRoundTripPreservesPresence(t *testing.T) {
 	}
 	if got := out.GetPvp().GetGreat(); len(got) != 1 || got[0].GetRank() != 1 {
 		t.Errorf("pvp great = %v, want one rank-1 entry", got)
+	}
+}
+
+// A tappable round trip keeps the 64-bit id exact and unset optionals unset.
+func TestTappableWireRoundTripPreservesPresence(t *testing.T) {
+	count := int64(6)
+	in := &Tappable{Id: 18446744073709551000, Type: "TAPPABLE_TYPE_BREAKFAST", Count: &count}
+	b, err := proto.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Tappable
+	if err := proto.Unmarshal(b, &out); err != nil {
+		t.Fatal(err)
+	}
+	if out.Id != 18446744073709551000 || out.GetCount() != 6 {
+		t.Fatalf("scalars mismatch: %+v", &out)
+	}
+	if out.ItemId != nil || out.PokemonId != nil || out.RewardsJson != nil {
+		t.Error("unset optionals must stay unset after a round trip")
 	}
 }

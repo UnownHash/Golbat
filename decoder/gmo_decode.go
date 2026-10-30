@@ -138,6 +138,43 @@ func UpdateStationBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 	}
 }
 
+// retryMissingDerivedFields gives a pokemon's derived fields one more chance,
+// on a sighting the significant-update gate above has decided not to
+// re-decode: CP, and the moves and size derivation fills.
+//
+// Each is filled only when absent, and the only things that fill them are the
+// sighting updates. So a field that failed to fill once never gets another
+// chance on its own — the pokemon spends the rest of its life showing IVs with
+// nothing beside them, long after whatever caused it is gone. Anything
+// transient does that: ohbem not yet built when the first sighting landed, a
+// masterfile briefly unreadable or not yet carrying the species or its move
+// pools.
+//
+// Both sighting paths need this. nearbySignificantUpdate skips a pokemon at a
+// pokestop when nothing about it moved, so without this a nearby pokemon's
+// fields would never be retried at all.
+//
+// The cost is a few bool reads per skipped sighting when nothing is missing,
+// and nothing at all with derive_iv off, where a pokemon that was never
+// encountered has no IVs to derive from.
+//
+// Only on the skipped-update branch: a sighting that could not be placed
+// leaves the record untouched, and saving it here would be the save
+// updateFromWild and updateFromNearby just declined.
+func retryMissingDerivedFields(ctx context.Context, db db.DbDetails, pokemon *Pokemon, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, updateTime int64, username string) {
+	// A Ditto never reaches here — its stored species (132) never matches the
+	// disguise a GMO reports, so the gate always re-decodes it.
+	if pokemon.AtkIv.Valid && (!pokemon.Move1.Valid || !pokemon.Move2.Valid || !pokemon.Size.Valid) {
+		pokemon.deriveSizeAndMovesIfAbsent()
+	}
+	if !pokemon.Cp.Valid {
+		pokemon.recomputeCpIfNeeded(ctx, db, weather)
+	}
+	if pokemon.IsDirty() {
+		savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
+	}
+}
+
 func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, wildPokemonList []RawWildPokemonData, nearbyPokemonList []RawNearbyPokemonData, mapPokemonList []RawMapPokemonData, weather []*pogo.ClientWeatherProto, username string) {
 	weatherLookup := make(map[int64]pogo.GameplayWeatherProto_WeatherCondition)
 	for _, weatherProto := range weather {
@@ -162,6 +199,8 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 				if pokemon.updateFromWild(ctx, db, wild.Data, int64(wild.Cell), weatherLookup, wild.Timestamp, username) {
 					savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
 				}
+			} else {
+				retryMissingDerivedFields(ctx, db, pokemon, weatherLookup, updateTime, username)
 			}
 			unlock()
 		}
@@ -180,8 +219,10 @@ func UpdatePokemonBatch(ctx context.Context, db db.DbDetails, scanParameters Sca
 		updateTime := nearby.Timestamp / 1000
 		if pokemon.isNewRecord() || pokemon.nearbySignificantUpdate(nearby.Data, updateTime) {
 			if pokemon.updateFromNearby(ctx, db, nearby.Data, int64(nearby.Cell), weatherLookup, nearby.Timestamp, username) {
-				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, nearby.Timestamp/1000, username)
+				savePokemonRecordAsAtTime(ctx, db, pokemon, false, true, true, updateTime, username)
 			}
+		} else {
+			retryMissingDerivedFields(ctx, db, pokemon, weatherLookup, updateTime, username)
 		}
 
 		unlock()

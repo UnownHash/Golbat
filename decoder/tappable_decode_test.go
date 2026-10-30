@@ -2,7 +2,9 @@ package decoder
 
 import (
 	"context"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/guregu/null/v6"
 
@@ -239,5 +241,43 @@ func TestTappableDecodeOnlyUnknownLootClearsColumns(t *testing.T) {
 	if ta.RewardType.Valid || ta.ItemId.Valid || ta.Count.Valid || ta.Rewards.Valid {
 		t.Errorf("columns/rewards disagree after unknown loot: type %v item %v count %v rewards %v",
 			ta.RewardType, ta.ItemId, ta.Count, ta.Rewards)
+	}
+}
+
+func decodeTappableAt(t *testing.T, ta *Tappable, loc *pogo.TappableLocation, timestampMs int64) {
+	t.Helper()
+	out := &pogo.ProcessTappableOutProto{Reward: []*pogo.LootProto{{LootItem: []*pogo.LootItemProto{
+		{Type: &pogo.LootItemProto_Item{Item: pogo.Item_ITEM_RARE_CANDY}, Count: 1},
+	}}}}
+	req := &pogo.ProcessTappableProto{EncounterId: 42, TappableTypeId: "TAPPABLE_TYPE_BREAKFAST", Location: loc}
+	ta.updateFromProcessTappableProto(context.Background(), db.DbDetails{}, out, req, timestampMs)
+}
+
+func TestTappableVerifiedSpawnRetapNotDirty(t *testing.T) {
+	const spawnId = int64(0x7a11ab1e)
+	spawnpointCache.Set(spawnId, &Spawnpoint{SpawnpointData: SpawnpointData{Id: spawnId, DespawnSec: null.IntFrom(1800)}}, time.Minute)
+	t.Cleanup(func() { spawnpointCache.Delete(spawnId) })
+	loc := &pogo.TappableLocation{LocationId: &pogo.TappableLocation_SpawnpointId{SpawnpointId: strconv.FormatInt(spawnId, 16)}}
+
+	ta := &Tappable{}
+	decodeTappableAt(t, ta, loc, 1700000000000)
+	if !ta.ExpireTimestampVerified || !ta.ExpireTimestamp.Valid {
+		t.Fatalf("first decode: verified %v expire %v, want verified and set", ta.ExpireTimestampVerified, ta.ExpireTimestamp)
+	}
+	ta.ClearDirty()
+	decodeTappableAt(t, ta, loc, 1700000000000)
+	if ta.IsDirty() {
+		t.Error("re-tap with the same known despawn marked the tappable dirty")
+	}
+}
+
+func TestTappableFortRetapStillDirty(t *testing.T) {
+	loc := &pogo.TappableLocation{LocationId: &pogo.TappableLocation_FortId{FortId: "0123456789abcdef0123456789abcdef"}}
+	ta := &Tappable{}
+	decodeTappableAt(t, ta, loc, 1700000000000)
+	ta.ClearDirty()
+	decodeTappableAt(t, ta, loc, 1700000005000)
+	if !ta.IsDirty() {
+		t.Error("fort re-tap 5 s later not dirty; its expiry moved")
 	}
 }

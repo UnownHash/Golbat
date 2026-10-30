@@ -25,11 +25,7 @@ import (
 // alignment forces exactly 4 bytes of mandatory padding immediately before
 // it (offset 172->176), and every other ordering pays those same 4 bytes
 // somewhere else instead (e.g. as trailing padding at the very end), not
-// zero. See TestPokemonEntitySizes's comment for the full breakdown and the
-// history behind this number (it dropped from 280 when task 5 narrowed
-// SeenType out of the pointer group, then from 256 when task 8 moved
-// PokestopId — 17 inline, 1-byte-aligned bytes — out of the pointer group
-// into this one); that test guards the 248 result — if it fails after you
+// zero. TestPokemonEntitySizes guards the 248 result — if it fails after you
 // add a field, read its doc comment before touching the constant.
 //
 // Types are narrowed to the actual column widths. Verify any change against
@@ -107,13 +103,34 @@ type Pokemon struct {
 	dirty     bool `db:"-"` // Not persisted - tracks if object needs saving
 	newRecord bool `db:"-"`
 
+	// dittoRollMarked is true exactly while IsDitto is true because the
+	// roll-marking rule (maybeMarkDittoFromRoll; config ditto_derivation/ditto_pool)
+	// set it, rather than detectDitto's multi-scan confirmation. A roll-marked
+	// record has IsDitto set with no scan history, which detectDitto otherwise
+	// treats as an error; its missing-history branch checks this flag and
+	// keeps the mark, because a single boost state cannot verify a Ditto and
+	// that is not evidence against one. See detectDitto for the mechanics.
+	// Once real cross-boost history exists, detectDitto's evidence-based logic
+	// runs as usual and may clear the mark.
+	//
+	// SetIsDitto(false) clears it unconditionally, at the choke point every
+	// path that un-Dittos a record goes through (resetDittoAttributes and
+	// setPokemonDisplay's re-disguise branch), which is what keeps "true only
+	// while IsDitto is true" an invariant.
+	//
+	// It is not a column or an API field: it is provenance for the current
+	// IsDitto value, and is persisted only inside GolbatInternal (see
+	// scanHistoryToProto), so it survives a reload when
+	// pokemon_internal_to_db is on.
+	dittoRollMarked bool `db:"-" json:"-"`
+
 	// debug accumulates per-field change descriptions for dbDebugLog, one
 	// aggregated log line per save (see pokemon_state.go). Its type is
 	// debugChangeAccumulator, defined once per build tag in db_debug.go /
 	// db_debug_off.go: a real `[]string`-backed accumulator when built with
 	// -tags dbdebug, and a zero-sized stub otherwise — so production builds
-	// carry no bytes for it, unlike the [24]byte slice header this field
-	// used to be unconditionally. It is placed here, before oldValues, not
+	// carry no bytes for it, where an unconditional []string would cost a
+	// 24-byte slice header. It is placed here, before oldValues, not
 	// last: a zero-sized field placed last forces Go to add a word of
 	// padding to keep a past-the-end pointer valid, which would cancel this
 	// saving.
@@ -128,13 +145,17 @@ type PokemonOldValues struct {
 	Weather   null.Value[uint8]
 	Cp        null.Value[uint16]
 	SeenType  NullSeenType
-	Lat       float64
-	Lon       float64
+	// ExpiryVerified and Expiry (0 when unset) are the expiry as it was. A
+	// bool and a uint32 rather than the null.Value and its flag, so both sit
+	// in the padding before Lat and the struct stays 32 bytes.
+	ExpiryVerified bool
+	Expiry         uint32
+	Lat            float64
+	Lon            float64
 }
 
 // The pokemon table's current shape is the composition of sql/1_rdmdb_tables.up.sql
-// and every migration after it. Notable divergences from the original CREATE TABLE
-// that used to be reproduced here:
+// and every migration after it. Notable divergences from the original CREATE TABLE:
 //   - iv is a plain nullable float(5,2), not a generated column (sql/11_ivchanges.up.sql)
 //   - seen_type is an eight-value enum (sql/45_tappables_seen_type_lure.up.sql)
 //   - size is tinyint unsigned; the original double column was renamed to height
@@ -155,13 +176,55 @@ func (pokemon *Pokemon) ClearDirty() {
 // Call this after loading from cache/DB but before modifications
 func (pokemon *Pokemon) snapshotOldValues() {
 	pokemon.oldValues = PokemonOldValues{
-		PokemonId: pokemon.PokemonId,
-		Weather:   pokemon.Weather,
-		Cp:        pokemon.Cp,
-		SeenType:  pokemon.SeenType,
-		Lat:       pokemon.Lat,
-		Lon:       pokemon.Lon,
+		PokemonId:      pokemon.PokemonId,
+		Weather:        pokemon.Weather,
+		Cp:             pokemon.Cp,
+		SeenType:       pokemon.SeenType,
+		Lat:            pokemon.Lat,
+		Lon:            pokemon.Lon,
+		ExpiryVerified: pokemon.ExpireTimestampVerified,
+		Expiry:         pokemon.ExpireTimestamp.ValueOrZero(),
 	}
+}
+
+// expiryNewsForConsumers reports whether the expiry changed in a way a
+// webhook consumer has to hear about. Consumers hide a pokemon when its
+// expiry arrives, verified or not, so they need:
+//   - the flag changing — a guess or derivation becoming a verified time, or
+//     the reverse;
+//   - a verified time moving;
+//   - a derived expiry that had already passed moving forward: the pokemon
+//     was presumed gone and is still there, as a 60-minute pokemon re-derived
+//     to its next half hour is;
+//   - a guess replaced by a derived expiry, as when a pokemon first seen
+//     nearby, with no spawn id, is then seen wild at a spawnpoint whose
+//     despawn has not been observed. The guess can be twenty minutes out
+//     either way.
+//
+// An unverified expiry moving before it arrives is not news: nothing has
+// acted on it yet. Nor is a guess (see hasSpawnpointExpiry) being extended
+// after it passes: that happens every ten minutes for as long as the pokemon
+// is listed, and says nothing about when it despawns.
+func (pokemon *Pokemon) expiryNewsForConsumers(now int64) bool {
+	old := pokemon.oldValues
+	cur := pokemon.ExpireTimestamp.ValueOrZero()
+	if old.ExpiryVerified != pokemon.ExpireTimestampVerified {
+		return true
+	}
+	if old.Expiry == cur {
+		return false
+	}
+	if pokemon.ExpireTimestampVerified {
+		return true
+	}
+	if !pokemon.hasSpawnpointExpiry() || old.Expiry == 0 {
+		return false
+	}
+	// A guess is never on the spawnpoint's derived phase; a derivation is.
+	if !onDerivedPhase(pokemon.SpawnId.ValueOrZero(), int64(old.Expiry)) {
+		return true
+	}
+	return int64(old.Expiry) <= now && cur > old.Expiry
 }
 
 // Lock acquires the Pokemon's mutex with caller tracking
@@ -214,19 +277,13 @@ func (pokemon *Pokemon) Unlock() {
 // the rate tracks sightings for every label alike. Two label values can be
 // compared directly.
 //
-// This used to be a split: atk_iv/def_iv/sta_iv counted once per value that
-// actually reached the record, because calculateIv clamped below its
-// comparison, while every setter-owned field counted once per call. That
-// ended when calculateIv was made to clamp once and feed the comparison,
-// the stores and the Iv sum from the same values — the comparison needs the
-// clamped values, so the clamp had to move above it. The split is gone, not
-// relocated; nothing counts per-store any more.
+// Every field counts once per call, IV fields included: calculateIv clamps
+// once and feeds the comparison, the stores and the Iv sum from the same
+// values, so nothing counts per-store.
 //
-// What the IV labels count *over* did change at the same time: clampIv's
-// ceiling is 15, not 255, so atk_iv/def_iv/sta_iv now fire on any reading
-// that is not a legal IV rather than only on one that is not a legal byte.
-// A step change in those three series across that deploy is that, not a
-// regression.
+// What the IV labels count *over* is narrower than the rest: clampIv's
+// ceiling is 15, not 255, so atk_iv/def_iv/sta_iv fire on any reading that
+// is not a legal IV rather than only on one that is not a legal byte.
 //
 // Note this is the opposite policy to null.Value[T]'s Scan (via sql.Null[T]),
 // which rejects out-of-range values outright. That is deliberate: a bad value
@@ -375,10 +432,8 @@ func nullBoolFrom(v null.Bool) null.Value[bool] {
 // collector interface (UpdateVerifiedTtl), which is shared with non-pokemon
 // callers and speaks guregu/null throughout.
 //
-// The webhook payload used to widen through here too, to keep webhook bytes
-// identical to before the struct-packing PR. The maintainer judged that
-// requirement misattributed, so PokemonWebhook's IV/stat fields now hold
-// the narrowed types directly — see the doc comment on PokemonWebhook.
+// The webhook payload does not widen through here: PokemonWebhook's IV/stat
+// fields hold the narrowed types directly — see its doc comment.
 func nullIntFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) null.Int {
 	if !n.Valid {
 		return null.Int{}
@@ -411,7 +466,7 @@ func int64PtrFromUint[T ~uint8 | ~uint16 | ~uint32](n null.Value[T]) *int64 {
 // only to replace a standalone cast; it must never appear inside an
 // arithmetic expression.
 //
-// The reason is the exact shape of a real bug: int64(a.ValueOrZero()) -
+// The hazard has an exact shape: int64(a.ValueOrZero()) -
 // int64(b.ValueOrZero()) is correct (each operand is cast to the signed
 // width before the subtraction runs), but
 // int64(a.ValueOrZero() - b.ValueOrZero()) wraps whenever b > a, because
@@ -777,8 +832,7 @@ func (pokemon *Pokemon) SetMove2(v null.Int) {
 // stored and incoming value are already float32 by the time they're
 // compared, so sub-float32-precision jitter has already been collapsed by
 // clampFloat32 itself, and two "same" readings land on the identical float32
-// bit pattern. Dropping the tolerance was a deliberate simplification, not
-// an oversight — flag it for review if a case turns up where it isn't.
+// bit pattern, and no tolerance is needed.
 func (pokemon *Pokemon) SetHeight(v null.Float) {
 	next := clampFloat32(v)
 	if pokemon.Height != next {
@@ -803,10 +857,9 @@ func (pokemon *Pokemon) SetWeight(v null.Float) {
 	}
 }
 
-// SetIv sets the overall IV percentage. Unlike the other narrowed setters,
-// callers previously wrote pokemon.Iv directly (see calculateIv/clearIv in
-// pokemon_decode.go); routing it through a setter here closes that gap so it
-// gets clamping and dirty tracking like everything else.
+// SetIv sets the overall IV percentage, with the same clamping and dirty
+// tracking as the other narrowed setters. Its callers are calculateIv and
+// clearIv (pokemon_decode.go).
 func (pokemon *Pokemon) SetIv(v null.Float) {
 	next := clampFloat32(v)
 	if pokemon.Iv != next {
@@ -830,6 +883,12 @@ func (pokemon *Pokemon) SetSize(v null.Int) {
 }
 
 func (pokemon *Pokemon) SetIsDitto(v bool) {
+	if !v {
+		// Keeps "dittoRollMarked implies IsDitto" (see dittoRollMarked).
+		// Outside the change check below, so clearing an already-false
+		// IsDitto clears the mark too.
+		pokemon.dittoRollMarked = false
+	}
 	if pokemon.IsDitto != v {
 		if dbDebugEnabled {
 			pokemon.debug.recordChange(fmt.Sprintf("IsDitto:%t->%t", pokemon.IsDitto, v))
@@ -885,10 +944,9 @@ func (pokemon *Pokemon) SetUpdated(v null.Int) {
 // SetChanged stores a Unix timestamp into the changed column, an unsigned
 // int. It clamps through clampUint32 exactly like SetUpdated, its twin.
 //
-// It used to convert with a bare uint32(v) on the reasoning that timestamps
-// fit uint32 until 2106. That is true of the values this is *called* with,
-// but it is the wrong argument for this setter: SetSpawnId and SetCellId
-// convert bare because their fields are int64-wide and a conversion there
+// A bare uint32(v) would be wrong here, though timestamps do fit uint32 until
+// 2106: that holds for the values this is *called* with, not for the setter.
+// SetSpawnId and SetCellId convert bare because their fields are int64-wide and a conversion there
 // cannot truncate at all, whereas changed is 32 bits and a bare conversion
 // wraps rather than saturates. Routing it through the shared clamp also
 // gives the field a golbat_field_clamped_total label, so the impossible

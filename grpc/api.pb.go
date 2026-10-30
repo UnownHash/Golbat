@@ -74,7 +74,7 @@ func (x *LatLon) GetLon() float64 {
 }
 
 // Inclusive integer range. Unset min is 0; unset max is 32767 (no upper
-// bound). This differs from the JSON API, where an omitted max is 0.
+// bound), as an omitted or null max in the JSON API.
 type IntRange struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Min           *int32                 `protobuf:"varint,1,opt,name=min,proto3,oneof" json:"min,omitempty"`
@@ -3405,6 +3405,482 @@ func (x *FortScanResponse) GetStationsStats() *FortTypeScanStats {
 	return nil
 }
 
+// Mirrors decoder.ApiTappableDnfFilter. An empty repeated field means no
+// constraint (proto3 cannot distinguish empty from absent). Reward fields
+// match the first loot item only.
+type TappableDnfFilter struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RewardType      []string               `protobuf:"bytes,1,rep,name=reward_type,json=rewardType,proto3" json:"reward_type,omitempty"` // LootItemProto field names; unknown → INVALID_ARGUMENT
+	ItemId          []int32                `protobuf:"varint,2,rep,packed,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	RewardPokemonId []int32                `protobuf:"varint,3,rep,packed,name=reward_pokemon_id,json=rewardPokemonId,proto3" json:"reward_pokemon_id,omitempty"`
+	PokemonId       []int32                `protobuf:"varint,4,rep,packed,name=pokemon_id,json=pokemonId,proto3" json:"pokemon_id,omitempty"` // encounter tappables
+	Count           *IntRange              `protobuf:"bytes,5,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TappableDnfFilter) Reset() {
+	*x = TappableDnfFilter{}
+	mi := &file_grpc_api_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TappableDnfFilter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TappableDnfFilter) ProtoMessage() {}
+
+func (x *TappableDnfFilter) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TappableDnfFilter.ProtoReflect.Descriptor instead.
+func (*TappableDnfFilter) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *TappableDnfFilter) GetRewardType() []string {
+	if x != nil {
+		return x.RewardType
+	}
+	return nil
+}
+
+func (x *TappableDnfFilter) GetItemId() []int32 {
+	if x != nil {
+		return x.ItemId
+	}
+	return nil
+}
+
+func (x *TappableDnfFilter) GetRewardPokemonId() []int32 {
+	if x != nil {
+		return x.RewardPokemonId
+	}
+	return nil
+}
+
+func (x *TappableDnfFilter) GetPokemonId() []int32 {
+	if x != nil {
+		return x.PokemonId
+	}
+	return nil
+}
+
+func (x *TappableDnfFilter) GetCount() *IntRange {
+	if x != nil {
+		return x.Count
+	}
+	return nil
+}
+
+type TappableScanRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Min           *LatLon                `protobuf:"bytes,1,opt,name=min,proto3" json:"min,omitempty"`
+	Max           *LatLon                `protobuf:"bytes,2,opt,name=max,proto3" json:"max,omitempty"`
+	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`                                         // 0 = server default (tuning.max_tappable_results)
+	Filters       []*TappableDnfFilter   `protobuf:"bytes,4,rep,name=filters,proto3" json:"filters,omitempty"`                                      // empty = every tappable
+	UpdatedAfter  *int64                 `protobuf:"varint,5,opt,name=updated_after,json=updatedAfter,proto3,oneof" json:"updated_after,omitempty"` // see PokemonScanRequest.updated_after
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TappableScanRequest) Reset() {
+	*x = TappableScanRequest{}
+	mi := &file_grpc_api_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TappableScanRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TappableScanRequest) ProtoMessage() {}
+
+func (x *TappableScanRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TappableScanRequest.ProtoReflect.Descriptor instead.
+func (*TappableScanRequest) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *TappableScanRequest) GetMin() *LatLon {
+	if x != nil {
+		return x.Min
+	}
+	return nil
+}
+
+func (x *TappableScanRequest) GetMax() *LatLon {
+	if x != nil {
+		return x.Max
+	}
+	return nil
+}
+
+func (x *TappableScanRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *TappableScanRequest) GetFilters() []*TappableDnfFilter {
+	if x != nil {
+		return x.Filters
+	}
+	return nil
+}
+
+func (x *TappableScanRequest) GetUpdatedAfter() int64 {
+	if x != nil && x.UpdatedAfter != nil {
+		return *x.UpdatedAfter
+	}
+	return 0
+}
+
+type TappableScanResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tappables     []*Tappable            `protobuf:"bytes,1,rep,name=tappables,proto3" json:"tappables,omitempty"`
+	Examined      int32                  `protobuf:"varint,2,opt,name=examined,proto3" json:"examined,omitempty"`
+	Skipped       int32                  `protobuf:"varint,3,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	Total         int32                  `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	LimitReached  bool                   `protobuf:"varint,5,opt,name=limit_reached,json=limitReached,proto3" json:"limit_reached,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TappableScanResponse) Reset() {
+	*x = TappableScanResponse{}
+	mi := &file_grpc_api_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TappableScanResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TappableScanResponse) ProtoMessage() {}
+
+func (x *TappableScanResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TappableScanResponse.ProtoReflect.Descriptor instead.
+func (*TappableScanResponse) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *TappableScanResponse) GetTappables() []*Tappable {
+	if x != nil {
+		return x.Tappables
+	}
+	return nil
+}
+
+func (x *TappableScanResponse) GetExamined() int32 {
+	if x != nil {
+		return x.Examined
+	}
+	return 0
+}
+
+func (x *TappableScanResponse) GetSkipped() int32 {
+	if x != nil {
+		return x.Skipped
+	}
+	return 0
+}
+
+func (x *TappableScanResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *TappableScanResponse) GetLimitReached() bool {
+	if x != nil {
+		return x.LimitReached
+	}
+	return false
+}
+
+type GetTappableRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ids           []uint64               `protobuf:"varint,1,rep,packed,name=ids,proto3" json:"ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTappableRequest) Reset() {
+	*x = GetTappableRequest{}
+	mi := &file_grpc_api_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTappableRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTappableRequest) ProtoMessage() {}
+
+func (x *GetTappableRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTappableRequest.ProtoReflect.Descriptor instead.
+func (*GetTappableRequest) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *GetTappableRequest) GetIds() []uint64 {
+	if x != nil {
+		return x.Ids
+	}
+	return nil
+}
+
+type GetTappableResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tappables     []*Tappable            `protobuf:"bytes,1,rep,name=tappables,proto3" json:"tappables,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTappableResponse) Reset() {
+	*x = GetTappableResponse{}
+	mi := &file_grpc_api_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTappableResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTappableResponse) ProtoMessage() {}
+
+func (x *GetTappableResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTappableResponse.ProtoReflect.Descriptor instead.
+func (*GetTappableResponse) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GetTappableResponse) GetTappables() []*Tappable {
+	if x != nil {
+		return x.Tappables
+	}
+	return nil
+}
+
+// Mirrors decoder.ApiTappableResult.
+type Tappable struct {
+	state                   protoimpl.MessageState `protogen:"open.v1"`
+	Id                      uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Lat                     float64                `protobuf:"fixed64,2,opt,name=lat,proto3" json:"lat,omitempty"`
+	Lon                     float64                `protobuf:"fixed64,3,opt,name=lon,proto3" json:"lon,omitempty"`
+	FortId                  *string                `protobuf:"bytes,4,opt,name=fort_id,json=fortId,proto3,oneof" json:"fort_id,omitempty"`
+	SpawnId                 *int64                 `protobuf:"varint,5,opt,name=spawn_id,json=spawnId,proto3,oneof" json:"spawn_id,omitempty"`
+	Type                    string                 `protobuf:"bytes,6,opt,name=type,proto3" json:"type,omitempty"`
+	PokemonId               *int64                 `protobuf:"varint,7,opt,name=pokemon_id,json=pokemonId,proto3,oneof" json:"pokemon_id,omitempty"`
+	RewardType              *string                `protobuf:"bytes,8,opt,name=reward_type,json=rewardType,proto3,oneof" json:"reward_type,omitempty"`
+	ItemId                  *int64                 `protobuf:"varint,9,opt,name=item_id,json=itemId,proto3,oneof" json:"item_id,omitempty"`
+	RewardPokemonId         *int64                 `protobuf:"varint,10,opt,name=reward_pokemon_id,json=rewardPokemonId,proto3,oneof" json:"reward_pokemon_id,omitempty"`
+	Count                   *int64                 `protobuf:"varint,11,opt,name=count,proto3,oneof" json:"count,omitempty"`
+	RewardsJson             *string                `protobuf:"bytes,12,opt,name=rewards_json,json=rewardsJson,proto3,oneof" json:"rewards_json,omitempty"` // all loot items as protojson, as the JSON API's rewards
+	ExpireTimestamp         *int64                 `protobuf:"varint,13,opt,name=expire_timestamp,json=expireTimestamp,proto3,oneof" json:"expire_timestamp,omitempty"`
+	ExpireTimestampVerified bool                   `protobuf:"varint,14,opt,name=expire_timestamp_verified,json=expireTimestampVerified,proto3" json:"expire_timestamp_verified,omitempty"`
+	Updated                 int64                  `protobuf:"varint,15,opt,name=updated,proto3" json:"updated,omitempty"`
+	unknownFields           protoimpl.UnknownFields
+	sizeCache               protoimpl.SizeCache
+}
+
+func (x *Tappable) Reset() {
+	*x = Tappable{}
+	mi := &file_grpc_api_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Tappable) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Tappable) ProtoMessage() {}
+
+func (x *Tappable) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_api_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Tappable.ProtoReflect.Descriptor instead.
+func (*Tappable) Descriptor() ([]byte, []int) {
+	return file_grpc_api_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *Tappable) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *Tappable) GetLat() float64 {
+	if x != nil {
+		return x.Lat
+	}
+	return 0
+}
+
+func (x *Tappable) GetLon() float64 {
+	if x != nil {
+		return x.Lon
+	}
+	return 0
+}
+
+func (x *Tappable) GetFortId() string {
+	if x != nil && x.FortId != nil {
+		return *x.FortId
+	}
+	return ""
+}
+
+func (x *Tappable) GetSpawnId() int64 {
+	if x != nil && x.SpawnId != nil {
+		return *x.SpawnId
+	}
+	return 0
+}
+
+func (x *Tappable) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *Tappable) GetPokemonId() int64 {
+	if x != nil && x.PokemonId != nil {
+		return *x.PokemonId
+	}
+	return 0
+}
+
+func (x *Tappable) GetRewardType() string {
+	if x != nil && x.RewardType != nil {
+		return *x.RewardType
+	}
+	return ""
+}
+
+func (x *Tappable) GetItemId() int64 {
+	if x != nil && x.ItemId != nil {
+		return *x.ItemId
+	}
+	return 0
+}
+
+func (x *Tappable) GetRewardPokemonId() int64 {
+	if x != nil && x.RewardPokemonId != nil {
+		return *x.RewardPokemonId
+	}
+	return 0
+}
+
+func (x *Tappable) GetCount() int64 {
+	if x != nil && x.Count != nil {
+		return *x.Count
+	}
+	return 0
+}
+
+func (x *Tappable) GetRewardsJson() string {
+	if x != nil && x.RewardsJson != nil {
+		return *x.RewardsJson
+	}
+	return ""
+}
+
+func (x *Tappable) GetExpireTimestamp() int64 {
+	if x != nil && x.ExpireTimestamp != nil {
+		return *x.ExpireTimestamp
+	}
+	return 0
+}
+
+func (x *Tappable) GetExpireTimestampVerified() bool {
+	if x != nil {
+		return x.ExpireTimestampVerified
+	}
+	return false
+}
+
+func (x *Tappable) GetUpdated() int64 {
+	if x != nil {
+		return x.Updated
+	}
+	return 0
+}
+
 var File_grpc_api_proto protoreflect.FileDescriptor
 
 const file_grpc_api_proto_rawDesc = "" +
@@ -3941,7 +4417,62 @@ const file_grpc_api_proto_rawDesc = "" +
 	"gyms_stats\x18\b \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\tgymsStats\x12F\n" +
 	"\x0fpokestops_stats\x18\t \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\x0epokestopsStats\x12D\n" +
 	"\x0estations_stats\x18\n" +
-	" \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\rstationsStats2\xe8\x03\n" +
+	" \x01(\v2\x1d.golbat_api.FortTypeScanStatsR\rstationsStats\"\xc4\x01\n" +
+	"\x11TappableDnfFilter\x12\x1f\n" +
+	"\vreward_type\x18\x01 \x03(\tR\n" +
+	"rewardType\x12\x17\n" +
+	"\aitem_id\x18\x02 \x03(\x05R\x06itemId\x12*\n" +
+	"\x11reward_pokemon_id\x18\x03 \x03(\x05R\x0frewardPokemonId\x12\x1d\n" +
+	"\n" +
+	"pokemon_id\x18\x04 \x03(\x05R\tpokemonId\x12*\n" +
+	"\x05count\x18\x05 \x01(\v2\x14.golbat_api.IntRangeR\x05count\"\xec\x01\n" +
+	"\x13TappableScanRequest\x12$\n" +
+	"\x03min\x18\x01 \x01(\v2\x12.golbat_api.LatLonR\x03min\x12$\n" +
+	"\x03max\x18\x02 \x01(\v2\x12.golbat_api.LatLonR\x03max\x12\x14\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x127\n" +
+	"\afilters\x18\x04 \x03(\v2\x1d.golbat_api.TappableDnfFilterR\afilters\x12(\n" +
+	"\rupdated_after\x18\x05 \x01(\x03H\x00R\fupdatedAfter\x88\x01\x01B\x10\n" +
+	"\x0e_updated_after\"\xbb\x01\n" +
+	"\x14TappableScanResponse\x122\n" +
+	"\ttappables\x18\x01 \x03(\v2\x14.golbat_api.TappableR\ttappables\x12\x1a\n" +
+	"\bexamined\x18\x02 \x01(\x05R\bexamined\x12\x18\n" +
+	"\askipped\x18\x03 \x01(\x05R\askipped\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x05R\x05total\x12#\n" +
+	"\rlimit_reached\x18\x05 \x01(\bR\flimitReached\"*\n" +
+	"\x12GetTappableRequest\x12\x14\n" +
+	"\x03ids\x18\x01 \x03(\x04B\x020\x01R\x03ids\"I\n" +
+	"\x13GetTappableResponse\x122\n" +
+	"\ttappables\x18\x01 \x03(\v2\x14.golbat_api.TappableR\ttappables\"\x84\x05\n" +
+	"\bTappable\x12\x12\n" +
+	"\x02id\x18\x01 \x01(\x04B\x020\x01R\x02id\x12\x10\n" +
+	"\x03lat\x18\x02 \x01(\x01R\x03lat\x12\x10\n" +
+	"\x03lon\x18\x03 \x01(\x01R\x03lon\x12\x1c\n" +
+	"\afort_id\x18\x04 \x01(\tH\x00R\x06fortId\x88\x01\x01\x12\"\n" +
+	"\bspawn_id\x18\x05 \x01(\x03B\x020\x01H\x01R\aspawnId\x88\x01\x01\x12\x12\n" +
+	"\x04type\x18\x06 \x01(\tR\x04type\x12\"\n" +
+	"\n" +
+	"pokemon_id\x18\a \x01(\x03H\x02R\tpokemonId\x88\x01\x01\x12$\n" +
+	"\vreward_type\x18\b \x01(\tH\x03R\n" +
+	"rewardType\x88\x01\x01\x12\x1c\n" +
+	"\aitem_id\x18\t \x01(\x03H\x04R\x06itemId\x88\x01\x01\x12/\n" +
+	"\x11reward_pokemon_id\x18\n" +
+	" \x01(\x03H\x05R\x0frewardPokemonId\x88\x01\x01\x12\x19\n" +
+	"\x05count\x18\v \x01(\x03H\x06R\x05count\x88\x01\x01\x12&\n" +
+	"\frewards_json\x18\f \x01(\tH\aR\vrewardsJson\x88\x01\x01\x12.\n" +
+	"\x10expire_timestamp\x18\r \x01(\x03H\bR\x0fexpireTimestamp\x88\x01\x01\x12:\n" +
+	"\x19expire_timestamp_verified\x18\x0e \x01(\bR\x17expireTimestampVerified\x12\x18\n" +
+	"\aupdated\x18\x0f \x01(\x03R\aupdatedB\n" +
+	"\n" +
+	"\b_fort_idB\v\n" +
+	"\t_spawn_idB\r\n" +
+	"\v_pokemon_idB\x0e\n" +
+	"\f_reward_typeB\n" +
+	"\n" +
+	"\b_item_idB\x14\n" +
+	"\x12_reward_pokemon_idB\b\n" +
+	"\x06_countB\x0f\n" +
+	"\r_rewards_jsonB\x13\n" +
+	"\x11_expire_timestamp2\x90\x05\n" +
 	"\tGolbatApi\x12P\n" +
 	"\vScanPokemon\x12\x1e.golbat_api.PokemonScanRequest\x1a\x1f.golbat_api.PokemonScanResponse\"\x00\x12M\n" +
 	"\n" +
@@ -3949,7 +4480,9 @@ const file_grpc_api_proto_rawDesc = "" +
 	"\bScanGyms\x12\x1b.golbat_api.FortScanRequest\x1a\x1b.golbat_api.GymScanResponse\"\x00\x12P\n" +
 	"\rScanPokestops\x12\x1b.golbat_api.FortScanRequest\x1a .golbat_api.PokestopScanResponse\"\x00\x12N\n" +
 	"\fScanStations\x12\x1b.golbat_api.FortScanRequest\x1a\x1f.golbat_api.StationScanResponse\"\x00\x12P\n" +
-	"\tScanForts\x12#.golbat_api.FortCombinedScanRequest\x1a\x1c.golbat_api.FortScanResponse\"\x00B\"Z github.com/unownhash/golbat/grpcb\x06proto3"
+	"\tScanForts\x12#.golbat_api.FortCombinedScanRequest\x1a\x1c.golbat_api.FortScanResponse\"\x00\x12T\n" +
+	"\rScanTappables\x12\x1f.golbat_api.TappableScanRequest\x1a .golbat_api.TappableScanResponse\"\x00\x12P\n" +
+	"\vGetTappable\x12\x1e.golbat_api.GetTappableRequest\x1a\x1f.golbat_api.GetTappableResponse\"\x00B\"Z github.com/unownhash/golbat/grpcb\x06proto3"
 
 var (
 	file_grpc_api_proto_rawDescOnce sync.Once
@@ -3963,7 +4496,7 @@ func file_grpc_api_proto_rawDescGZIP() []byte {
 	return file_grpc_api_proto_rawDescData
 }
 
-var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_grpc_api_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_grpc_api_proto_goTypes = []any{
 	(*LatLon)(nil),                  // 0: golbat_api.LatLon
 	(*IntRange)(nil),                // 1: golbat_api.IntRange
@@ -3991,6 +4524,12 @@ var file_grpc_api_proto_goTypes = []any{
 	(*PokestopScanResponse)(nil),    // 23: golbat_api.PokestopScanResponse
 	(*StationScanResponse)(nil),     // 24: golbat_api.StationScanResponse
 	(*FortScanResponse)(nil),        // 25: golbat_api.FortScanResponse
+	(*TappableDnfFilter)(nil),       // 26: golbat_api.TappableDnfFilter
+	(*TappableScanRequest)(nil),     // 27: golbat_api.TappableScanRequest
+	(*TappableScanResponse)(nil),    // 28: golbat_api.TappableScanResponse
+	(*GetTappableRequest)(nil),      // 29: golbat_api.GetTappableRequest
+	(*GetTappableResponse)(nil),     // 30: golbat_api.GetTappableResponse
+	(*Tappable)(nil),                // 31: golbat_api.Tappable
 }
 var file_grpc_api_proto_depIdxs = []int32{
 	2,  // 0: golbat_api.PokemonDnfFilter.pokemon:type_name -> golbat_api.DnfId
@@ -4040,23 +4579,33 @@ var file_grpc_api_proto_depIdxs = []int32{
 	15, // 44: golbat_api.FortScanResponse.gyms_stats:type_name -> golbat_api.FortTypeScanStats
 	15, // 45: golbat_api.FortScanResponse.pokestops_stats:type_name -> golbat_api.FortTypeScanStats
 	15, // 46: golbat_api.FortScanResponse.stations_stats:type_name -> golbat_api.FortTypeScanStats
-	4,  // 47: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
-	6,  // 48: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
-	13, // 49: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
-	13, // 50: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
-	13, // 51: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
-	16, // 52: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
-	5,  // 53: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
-	7,  // 54: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
-	22, // 55: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
-	23, // 56: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
-	24, // 57: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
-	25, // 58: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
-	53, // [53:59] is the sub-list for method output_type
-	47, // [47:53] is the sub-list for method input_type
-	47, // [47:47] is the sub-list for extension type_name
-	47, // [47:47] is the sub-list for extension extendee
-	0,  // [0:47] is the sub-list for field type_name
+	1,  // 47: golbat_api.TappableDnfFilter.count:type_name -> golbat_api.IntRange
+	0,  // 48: golbat_api.TappableScanRequest.min:type_name -> golbat_api.LatLon
+	0,  // 49: golbat_api.TappableScanRequest.max:type_name -> golbat_api.LatLon
+	26, // 50: golbat_api.TappableScanRequest.filters:type_name -> golbat_api.TappableDnfFilter
+	31, // 51: golbat_api.TappableScanResponse.tappables:type_name -> golbat_api.Tappable
+	31, // 52: golbat_api.GetTappableResponse.tappables:type_name -> golbat_api.Tappable
+	4,  // 53: golbat_api.GolbatApi.ScanPokemon:input_type -> golbat_api.PokemonScanRequest
+	6,  // 54: golbat_api.GolbatApi.GetPokemon:input_type -> golbat_api.GetPokemonRequest
+	13, // 55: golbat_api.GolbatApi.ScanGyms:input_type -> golbat_api.FortScanRequest
+	13, // 56: golbat_api.GolbatApi.ScanPokestops:input_type -> golbat_api.FortScanRequest
+	13, // 57: golbat_api.GolbatApi.ScanStations:input_type -> golbat_api.FortScanRequest
+	16, // 58: golbat_api.GolbatApi.ScanForts:input_type -> golbat_api.FortCombinedScanRequest
+	27, // 59: golbat_api.GolbatApi.ScanTappables:input_type -> golbat_api.TappableScanRequest
+	29, // 60: golbat_api.GolbatApi.GetTappable:input_type -> golbat_api.GetTappableRequest
+	5,  // 61: golbat_api.GolbatApi.ScanPokemon:output_type -> golbat_api.PokemonScanResponse
+	7,  // 62: golbat_api.GolbatApi.GetPokemon:output_type -> golbat_api.GetPokemonResponse
+	22, // 63: golbat_api.GolbatApi.ScanGyms:output_type -> golbat_api.GymScanResponse
+	23, // 64: golbat_api.GolbatApi.ScanPokestops:output_type -> golbat_api.PokestopScanResponse
+	24, // 65: golbat_api.GolbatApi.ScanStations:output_type -> golbat_api.StationScanResponse
+	25, // 66: golbat_api.GolbatApi.ScanForts:output_type -> golbat_api.FortScanResponse
+	28, // 67: golbat_api.GolbatApi.ScanTappables:output_type -> golbat_api.TappableScanResponse
+	30, // 68: golbat_api.GolbatApi.GetTappable:output_type -> golbat_api.GetTappableResponse
+	61, // [61:69] is the sub-list for method output_type
+	53, // [53:61] is the sub-list for method input_type
+	53, // [53:53] is the sub-list for extension type_name
+	53, // [53:53] is the sub-list for extension extendee
+	0,  // [0:53] is the sub-list for field type_name
 }
 
 func init() { file_grpc_api_proto_init() }
@@ -4077,13 +4626,15 @@ func file_grpc_api_proto_init() {
 	file_grpc_api_proto_msgTypes[19].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[20].OneofWrappers = []any{}
 	file_grpc_api_proto_msgTypes[21].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[27].OneofWrappers = []any{}
+	file_grpc_api_proto_msgTypes[31].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grpc_api_proto_rawDesc), len(file_grpc_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
