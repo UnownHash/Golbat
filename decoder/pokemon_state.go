@@ -158,7 +158,11 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 
 	changePvpField := false
 	var pvpResults map[string][]gohbem.PokemonEntry
-	if o := ohbem.Load(); o != nil {
+	// Pvp.Enabled as well as a non-nil instance: ohbem is also built for CP
+	// whenever derivation is on, so its presence does not imply PVP was
+	// asked for. Without this, turning PVP off would still rank, cache,
+	// persist and serve — on every derived sighting, which is all of them.
+	if o := ohbem.Load(); o != nil && config.Config.Pvp.Enabled {
 		// Calculating PVP data - check for changes in pokemon properties that affect PVP rankings
 		// For new records, always calculate; for existing, check if relevant fields changed
 		shouldCalculatePvp := pokemon.AtkIv.Valid && (pokemon.isNewRecord() || pokemon.IsDirty())
@@ -198,8 +202,14 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	isNewRecord := pokemon.isNewRecord()
 
 	if writeDB && !config.Config.PokemonMemoryOnly {
-		// Prepare internal data if needed (must happen before queueing)
-		if isEncounter && config.Config.PokemonInternalToDb {
+		// Prepare internal data if needed (must happen before queueing).
+		//
+		// Roll-marked records too, not only encounters: dittoRollMarked
+		// travels in GolbatInternal and is set on a SIGHTING, before any
+		// encounter exists, which is exactly when it needs persisting (an
+		// encounter settles identity). A sighting has no scan history, so
+		// this marshals one boolean, and only for roll-marked records.
+		if config.Config.PokemonInternalToDb && (isEncounter || pokemon.dittoRollMarked) {
 			pokemon.rewriteGolbatInternal()
 		}
 
@@ -268,7 +278,7 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	// Webhooks and stats happen immediately (not queued)
 	areas := MatchStatsGeofenceWithCell(pokemon.Lat, pokemon.Lon, uint64(pokemon.CellId.ValueOrZero()))
 	if webhook {
-		createPokemonWebhooks(ctx, db, pokemon, areas, username)
+		createPokemonWebhooks(ctx, db, pokemon, areas, username, now)
 	}
 	enqueuePokemonStatsEvent(pokemonStatsEvent{snap: pokemon.statsSnapshot(username), areas: areas, now: now})
 
@@ -372,15 +382,9 @@ func pokemonWriteDB(db db.DbDetails, pokemon *Pokemon, isNewRecord bool) error {
 }
 
 // PokemonWebhook's IV/stat fields hold the same narrowed types as
-// PokemonData rather than widening back to guregu/null's int64/float64. The
-// widening used to happen at the payload boundary (nullIntFromUint /
-// nullFloatFromFloat32) to keep webhook bytes identical to before the
-// struct-packing PR; the maintainer judged that requirement misattributed —
-// webhook consumers are this project's call, not a wire contract this code
-// owes byte-identity to. Once the float fields were narrowed for that
-// reason, narrowing the int fields alongside them keeps the struct
-// consistent: every field mirrors its storage width, and none goes through
-// a widen-for-no-reason step the others don't.
+// PokemonData rather than widening back to guregu/null's int64/float64:
+// every field mirrors its storage width. The JSON a consumer receives is the
+// same number either way.
 type PokemonWebhook struct {
 	SpawnpointId          string              `json:"spawnpoint_id"`
 	PokestopId            string              `json:"pokestop_id"`
@@ -419,11 +423,25 @@ type PokemonWebhook struct {
 	Pvp                   json.RawMessage     `json:"pvp"`
 }
 
-func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName, username string) {
+func createPokemonWebhooks(ctx context.Context, db db.DbDetails, pokemon *Pokemon, areas []geo.AreaName, username string, now int64) {
+	// seen_type moving into or out of an encounter type is compared as well
+	// as species, weather and CP: it says whether the stats were observed.
+	// With derivation on, the IVs are filled in on the first sighting, so an
+	// upgrade to encounter can confirm them without moving species, weather
+	// or CP, and without this the consumer would keep showing them as
+	// unconfirmed for the rest of the pokemon's life. Other seen_type changes,
+	// such as nearby to wild, are not news.
+	//
+	// So is the expiry, when the change is one a consumer acts on — see
+	// expiryNewsForConsumers. A 60-minute pokemon's derived expiry is half an
+	// hour early, and a consumer that never hears it moved hides a catchable
+	// pokemon while the database and API show the right time.
 	if pokemon.isNewRecord() ||
 		pokemon.oldValues.PokemonId != pokemon.PokemonId ||
 		pokemon.oldValues.Weather != pokemon.Weather ||
-		pokemon.oldValues.Cp != pokemon.Cp {
+		pokemon.oldValues.Cp != pokemon.Cp ||
+		encounteredSeenType(pokemon.oldValues.SeenType.Code) != encounteredSeenType(pokemon.SeenType.Code) ||
+		pokemon.expiryNewsForConsumers(now) {
 
 		spawnpointId := "None"
 		if pokemon.SpawnId.Valid {

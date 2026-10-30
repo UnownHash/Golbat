@@ -19,6 +19,25 @@ type WeatherUpdate struct {
 
 var boostedWeatherLookup = []uint8{0, 8, 16, 32, 16, 2, 8, 4, 128, 64, 2, 4, 2, 4, 32, 64, 32, 128, 16}
 
+// weatherBoosts reports whether a findBoostedWeathers mask covers this weather.
+//
+// The mask is a bitmask of weather conditions, so membership is
+// `mask & (1 << weather)` and the parentheses are load-bearing. Written inline
+// as `mask&uint8(1)<<weather` it means something else entirely: Go gives << and
+// & equal precedence and associates them left to right, so that parses as
+// `(mask & 1) << weather`. Every value in boostedWeatherLookup is a power of
+// two from 2 upwards, so bit 0 is never set, so `mask & 1` is always 0 — and
+// the test is false for every species under every weather.
+//
+// The bounds check matters: a negative shift count panics in Go, and this runs
+// inside the weather sweep over every pokemon in a cell.
+func weatherBoosts(mask uint8, weather int32) bool {
+	if weather < 0 || weather > 7 {
+		return false
+	}
+	return mask&(uint8(1)<<uint(weather)) != 0
+}
+
 func findBoostedWeathers(data MasterFileData, pokemonId, form int16) (result uint8) {
 	pokemon, ok := data.Pokemon[int(pokemonId)]
 	if !ok {
@@ -40,6 +59,38 @@ func findBoostedWeathers(data MasterFileData, pokemonId, form int16) (result uin
 		result |= boostedWeatherLookup[t]
 	}
 	return
+}
+
+// displayedWeatherCondition returns the weather_boosted_condition that belongs
+// in the weather COLUMN for this record under cellWeather — the value the game
+// itself would report for what the record DISPLAYS.
+//
+// For anything but a disguised Ditto that is ownCondition, the caller's own
+// findBoostedWeathers answer for the record's species, returned unchanged.
+//
+// A disguised Ditto is the exception, and the reason this function exists. Its
+// PokemonId is 132, so ownCondition describes a Normal type, not the disguise.
+// The column must hold the disguise's condition: an overworld client matches a
+// sighting on the species and weather it can see, both of which are the
+// disguise's, so storing the Ditto's own state there would make the record
+// unmatchable. The same value is what repopulateIv takes for a Ditto, since a
+// caught Ditto is boosted only in PP (see dittoCaughtBoosted), and
+// recomputeCpIfNeeded reads the column to find the 0P case (Ditto boosted,
+// disguise not) and compute the disguise's CP from unboosted values.
+//
+// An undisguised Ditto — a real wild one, IsDitto false or no DisplayPokemonId —
+// displays as itself, so its own condition is already the displayed one.
+func displayedWeatherCondition(data MasterFileData, pokemon *Pokemon, cellWeather int32, ownCondition int64) int64 {
+	if !pokemon.IsDitto || !pokemon.DisplayPokemonId.Valid {
+		return ownCondition
+	}
+	disguiseBoosted := findBoostedWeathers(data,
+		int16(pokemon.DisplayPokemonId.ValueOrZero()),
+		int16(int64OrZero(pokemon.DisplayPokemonForm)))
+	if weatherBoosts(disguiseBoosted, cellWeather) {
+		return narrowUint8(int64(cellWeather))
+	}
+	return int64(pogo.GameplayWeatherProto_NONE)
 }
 
 func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate WeatherUpdate, toDB bool, timestamp int64) {
@@ -88,7 +139,7 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		// adjacent lines, and the cheap lookup-cache skip would then disagree
 		// with the entity comparison about what "unchanged" means.
 		var newWeather int64
-		if boostedWeathers&uint8(1)<<weatherUpdate.NewWeather != 0 {
+		if weatherBoosts(boostedWeathers, weatherUpdate.NewWeather) {
 			newWeather = narrowUint8(int64(weatherUpdate.NewWeather))
 		}
 		// The lookup and the entity spell "no weather" differently: the
@@ -105,16 +156,31 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 		if storedWeather < 0 {
 			storedWeather = 0
 		}
-		if newWeather == storedWeather {
+		// This skip cannot decide anything for a Ditto. newWeather describes
+		// species 132 — findBoostedWeathers ran on the record's own PokemonId
+		// — while the stored column carries its DISGUISE's condition, which is
+		// what a Ditto's stats actually follow. The two are different
+		// quantities, so agreeing or disagreeing says nothing about whether
+		// there is work to do. Resolving the disguise's condition needs
+		// DisplayPokemonId and therefore the lock; Dittos are rare, so take it
+		// and let the guard below, which can see both, decide.
+		if pokemonLookup.PokemonLookup.PokemonId != int16(pogo.HoloPokemonId_DITTO) && newWeather == storedWeather {
 			return true
 		}
 
 		pokemon, unlock, _ := peekPokemonRecordReadOnly(pokemonId, "ProactiveIVSwitch")
 		if pokemon != nil {
 			pokemonLocked++
-			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == int64OrZero(pokemon.Form)) && newWeather != int64OrZero(pokemon.Weather) && int64OrZero(pokemon.ExpireTimestamp) >= startUnix && int64OrZero(pokemon.Updated) < timestamp {
+			if pokemonLookup.PokemonLookup.PokemonId == pokemon.PokemonId && (pokemon.IsDitto || int64(pokemonLookup.PokemonLookup.Form) == int64OrZero(pokemon.Form)) && (pokemon.IsDitto || newWeather != int64OrZero(pokemon.Weather)) && int64OrZero(pokemon.ExpireTimestamp) >= startUnix && int64OrZero(pokemon.Updated) < timestamp {
+				// For a Ditto, newWeather describes species 132 — Normal, so
+				// boosted by partly cloudy — and that is NOT what its stats
+				// follow. A caught Ditto is boosted only in PP, where the
+				// weather boosts its DISGUISE as well, so the disguise's
+				// condition drives both the stats and the column. See
+				// displayedWeatherCondition.
+				storedCondition := displayedWeatherCondition(data, pokemon, weatherUpdate.NewWeather, newWeather)
 				pokemon.snapshotOldValues()
-				pokemon.repopulateIv(newWeather, pokemon.IsStrong.ValueOrZero())
+				pokemon.repopulateIv(storedCondition, pokemon.IsStrong.ValueOrZero())
 				if !pokemon.Cp.Valid {
 					// Deliberately SetWeather, not a bare pokemon.Weather = ...
 					// field assignment: SetWeather marks the entity dirty, which
@@ -126,16 +192,29 @@ func ProactiveIVSwitch(ctx context.Context, db db.DbDetails, weatherUpdate Weath
 					// inside it would never run, leaving the R-tree scan lookup
 					// (PokemonLookup.Weather) stale while the entity's own field
 					// had already changed. Going through the setter closes that
-					// gap. Confirmed intentional in review.
-					pokemon.SetWeather(null.IntFrom(newWeather))
+					// gap.
+					pokemon.SetWeather(null.IntFrom(storedCondition))
+					// The CELL's weather, not a boost condition: the only reader
+					// is recomputeCpIfNeeded's Ditto arm, and it asks whether the
+					// cell is PARTLY_CLOUDY.
 					pokemon.recomputeCpIfNeeded(ctx, db, map[int64]pogo.GameplayWeatherProto_WeatherCondition{
-						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(newWeather),
+						weatherUpdate.S2CellId: pogo.GameplayWeatherProto_WeatherCondition(weatherUpdate.NewWeather),
 					})
 					savePokemonRecordAsAtTime(ctx, db, pokemon, false, toDB && pokemon.Cp.Valid, pokemon.Cp.Valid, timestamp, "")
 					pokemonUpdated++
 					if pokemon.Cp.Valid {
 						pokemonCpUpdated++
 					}
+				} else if storedCondition != int64OrZero(pokemon.Weather) {
+					// The boosting condition changed without the boost state
+					// changing — RAINY to WINDY over a Gyarados, which both
+					// boost, or RAINY to SNOW over a Ditto's Water disguise.
+					// repopulateIv rightly kept the IVs and CP, but the
+					// condition the API and webhooks report is stale, so it is
+					// written and saved.
+					pokemon.SetWeather(null.IntFrom(storedCondition))
+					savePokemonRecordAsAtTime(ctx, db, pokemon, false, toDB, true, timestamp, "")
+					pokemonUpdated++
 				}
 			}
 			unlock()

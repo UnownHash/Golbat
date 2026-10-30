@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
+	"golbat/config"
 	"golbat/db"
+	"golbat/derive/despawn"
+	"golbat/derive/encounter"
 	"golbat/geo"
 	"golbat/grpc"
 	"golbat/pogo"
@@ -38,6 +40,25 @@ func (pokemon *Pokemon) populateInternal() {
 		return
 	}
 	pokemon.scanHistory = scanHistoryFromProto(&internal)
+
+	// Restore how this record's Ditto identity was reached. Without it a
+	// reloaded roll-marked record keeps IsDitto but looks like a
+	// detectDitto-confirmed one with no history — the shape detectDitto's
+	// missing-history branch resets, discarding a prediction nothing had
+	// contradicted. Only ever present when pokemon_internal_to_db wrote it;
+	// a deployment that leaves that off loses the distinction on reload,
+	// which is tolerable because a pokemon lives at most an hour.
+	//
+	// Conditional on IsDitto, because the serialised bytes outlive the live
+	// flag. SetIsDitto(false) clears dittoRollMarked, but it does not rewrite
+	// GolbatInternal, and an empty scanHistory still passes the guard above —
+	// so a display change that cleared the mark would have it restored by the
+	// next hydration, and a later independent confirmation would then be
+	// recorded as roll_only. The invariant this field documents is that it is
+	// true only while IsDitto is, which makes IsDitto the authority here.
+	if internal.GetDittoRollMarked() && pokemon.IsDitto {
+		pokemon.dittoRollMarked = true
+	}
 }
 
 func (pokemon *Pokemon) locateScan(isStrong bool, isBoosted bool) (*pokemonScan, bool) {
@@ -70,13 +91,35 @@ func (pokemon *Pokemon) locateAllScans() (unboosted, boosted, strong *pokemonSca
 	return
 }
 
+// hadCrossBoostScanHistory reports whether this record's scan history
+// (hydrated from GolbatInternal if needed) currently holds both an unboosted
+// and a boosted non-strong scan — the condition under which detectDitto's
+// "unboostedScan != nil && boostedScan != nil" branch decides Ditto-ness from
+// evidence rather than guessing.
+//
+// It feeds the ditto_detect log field (derivationLogPayload.DittoDetect),
+// which records whether detectDitto's "not a Ditto" conclusion was backed by
+// that evidence. It must be called where addEncounterPokemon takes its other
+// pre-detectDitto snapshots (observedScan, wasRollMarked), not from
+// checkDerivation/logDerivationOutcome: by then this encounter's own scan is
+// in scanHistory, and a record with only one boost state in its prior
+// history would be reported as having cross-boost evidence whenever this
+// encounter landed in the other state — the false "rejected" that
+// ditto_detect's no_evidence state exists to rule out. Pinned by
+// TestLogDerivationOutcomeDittoDetectNoEvidenceWithSingleBoostStateHistory.
+func (pokemon *Pokemon) hadCrossBoostScanHistory() bool {
+	unboosted, boosted, _ := pokemon.locateAllScans()
+	return unboosted != nil && boosted != nil
+}
+
 func (pokemon *Pokemon) isNewRecord() bool {
 	return pokemon.newRecord
 }
 
 const (
-	// pokemonUnverifiedTTL (+ jitter) replaces the flat cache-default TTL
-	// for pokemon without a verified despawn. The jitter spreads
+	// pokemonUnverifiedTTL (+ jitter) is used instead of the flat
+	// cache-default TTL for pokemon whose expiry is a guess (see
+	// hasSpawnpointExpiry). The jitter spreads
 	// restart-synchronized cohorts (preload + cold-cache ingest all
 	// stamped in the same few minutes) so their expiry an hour later
 	// arrives as a stream of tree deletes and eviction events rather than
@@ -85,9 +128,36 @@ const (
 	pokemonUnverifiedTTLJitter = 10 * time.Minute
 )
 
-func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
+// derivedExpiryCacheGrace is how long a record is kept past a DERIVED expiry.
+// A pokemon listed again past that expiry is re-derived and its lifetime
+// recomputed, and one evicted first is re-derived correctly as a new record,
+// so this only has to cover a normal rescan interval — enough to keep an
+// encountered 60-minute pokemon's observed values when it turns up again.
+const derivedExpiryCacheGrace = 5 * 60
+
+// hasSpawnpointExpiry reports whether the record's expiry came from its
+// spawnpoint — a stored despawn_sec (verified) or a derivation from the spawn
+// id — rather than being a guess. With derive_despawn on, every record with a
+// spawn id gets its expiry one of those two ways; those without one
+// (nearby-only, a lure seen before its GMO) carry a guess. With it off, an
+// unverified expiry is always a guess.
+func (pokemon *Pokemon) hasSpawnpointExpiry() bool {
+	return pokemon.ExpireTimestamp.Valid &&
+		(pokemon.ExpireTimestampVerified || (pokemon.SpawnId.Valid && config.Config.DeriveDespawn))
+}
+
+// expiryCacheGrace is how long past its expiry a record stays cached.
+func (pokemon *Pokemon) expiryCacheGrace() int64 {
 	if pokemon.ExpireTimestampVerified {
-		timeLeft := 60 + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now
+		return 60
+	}
+	return derivedExpiryCacheGrace
+}
+
+func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
+	if pokemon.hasSpawnpointExpiry() {
+		grace := pokemon.expiryCacheGrace()
+		timeLeft := grace + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now
 		if timeLeft > 60 {
 			return time.Duration(timeLeft) * time.Second
 		}
@@ -99,12 +169,12 @@ func (pokemon *Pokemon) remainingDuration(now int64) time.Duration {
 }
 
 // encounterStatsDuration is the TTL for the encounter-dedup stats cache.
-// Distinct from the pokemon-cache TTL: past-despawn and unverified entries
+// Distinct from the pokemon-cache TTL: past-despawn and guessed-expiry entries
 // must keep the cache's full default window so late or retried protos still
 // deduplicate instead of inflating per-area encounter/shiny stats.
 func (pokemon *Pokemon) encounterStatsDuration(now int64) time.Duration {
-	if pokemon.ExpireTimestampVerified {
-		if timeLeft := 60 + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now; timeLeft > 60 {
+	if pokemon.hasSpawnpointExpiry() {
+		if timeLeft := pokemon.expiryCacheGrace() + int64(pokemon.ExpireTimestamp.ValueOrZero()) - now; timeLeft > 60 {
 			return time.Duration(timeLeft) * time.Second
 		}
 	}
@@ -174,7 +244,14 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
 		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
 		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender)) ||
-		(!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time)
+		(!pokemon.ExpireTimestampVerified && int64OrZero(pokemon.ExpireTimestamp) < time) ||
+		// A sighting that carries the real despawn time confirms an
+		// unverified one. spawnpointUpdateFromWild has just stored it, and
+		// the pokemon must be decoded to pick it up; an unchanged display with
+		// a future expiry would otherwise keep it unverified until it passed.
+		(!pokemon.ExpireTimestampVerified && wildHasTTH(wildPokemon)) ||
+		// A pool refresh can make an unchanged record eligible for the roll.
+		pokemon.rollWouldMark()
 }
 
 // nearbySignificantUpdate returns true if the wild pokemon is significantly different from the current pokemon and
@@ -205,8 +282,43 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 		return true
 	}
 
+	// A pool refresh can make an unchanged record eligible for the roll.
+	if pokemon.rollWouldMark() {
+		return true
+	}
+
 	// if it's at a nearby stop, or encounter and no other details have changed update is not worthwhile
 	return false
+}
+
+// applySightingDerivation runs the roll-marking-then-derive pair that every
+// sighting path needs. maybeMarkDittoFromRoll runs first so that
+// deriveIvIfAbsent derives for the identity the record has settled on —
+// the Ditto's own values once the roll has marked it — rather than writing
+// the disguise's values for marking to replace.
+//
+// Both halves read the display the sighting has just applied — PokemonId,
+// Form, and Weather, the boost condition the game reports for the displayed
+// species. Callers must therefore invoke this after setPokemonDisplay or
+// addWildPokemon, and before recomputeCpIfNeeded, which needs the IVs it
+// fills in. TestUpdateFromWildMarksDittoAndDerivesItsOwnValues covers the
+// whole sequence through the real entry point.
+func (pokemon *Pokemon) applySightingDerivation() {
+	wasDitto := pokemon.IsDitto
+	cpBefore := pokemon.cpInputs()
+	pokemon.maybeMarkDittoFromRoll()
+	// A record the roll has just marked may already hold values derived for
+	// its disguise — a species added to the pool after it was first seen.
+	// Marking replaces its IVs and level with the Ditto's and keeps the
+	// disguise's moves, which a Ditto carries. CP is cleared when marking
+	// actually moved the IVs or level, so the recompute that follows every
+	// sighting describes them — CP is latched, and a valid one would
+	// otherwise be published unchanged. With derive_iv off marking moves
+	// nothing, and a CP observed earlier is kept.
+	if pokemon.IsDitto && !wasDitto && pokemon.cpInputs() != cpBefore {
+		pokemon.SetCp(null.NewInt(0, false))
+	}
+	pokemon.deriveIvIfAbsent()
 }
 
 // updateFromWild applies a GMO wild sighting. It returns false, with the
@@ -221,6 +333,7 @@ func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wil
 	case SeenTypeCodeUnset, SeenTypeCodeCell, SeenTypeCodeNearbyStop:
 		pokemon.SetSeenType(SeenTypeCodeWild)
 	}
+	pokemon.applySightingDerivation()
 	pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUsernameIfStored(username)
@@ -248,6 +361,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 
 		if mapPokemon.Data.PokemonDisplay != nil {
 			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
+			pokemon.applySightingDerivation()
 			pokemon.recomputeCpIfNeeded(ctx, db, weather)
 			// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
 			// shiny = mapPokemon.pokemonDisplay.shiny
@@ -267,8 +381,9 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		return true
 	}
 
-	// Existing record: the GMO contributes only what it alone knows — the
-	// verified despawn time. Never touch encounter data and never downgrade
+	// Existing record: the GMO contributes what it alone knows — the
+	// verified despawn time — plus the cell and, for a lure_wild record, the
+	// display (below). Never touch encounter data and never downgrade
 	// lure_encounter to lure_wild.
 	switch pokemon.SeenType.Code {
 	case SeenTypeCodeLureWild, SeenTypeCodeLureEncounter:
@@ -287,6 +402,36 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetCellId(null.IntFrom(int64(mapPokemon.Cell)))
 		changed = true
 	}
+	// A lure pokemon that has never been encountered carries DERIVED IVs,
+	// level, size and moves, and those belong to one boost branch. The
+	// new-record branch above is the only place this path reads the display,
+	// so without this a weather flip leaves values that are now wrong and,
+	// by design, indistinguishable from scanned ones.
+	//
+	// LureWild only: a lure_encounter record holds real encounter data, which
+	// this path must never touch or downgrade. setPokemonDisplay reaches
+	// repopulateIv, which no-ops when the boost state has not moved, so a
+	// repeat sighting stays a genuine no-op and `changed` stays false.
+	//
+	// ProactiveIVSwitch covers the same flip when proactive_iv_switching is
+	// on (the default) by sweeping the cache; this is what makes the record
+	// correct when it is off, and is idempotent alongside it.
+	//
+	// Only with derive_iv on: without derivation a lure_wild record carries
+	// no stats to go stale, and the display is read once, at creation.
+	if config.Config.DeriveIv && pokemon.SeenType.Code == SeenTypeCodeLureWild && mapPokemon.Data.PokemonDisplay != nil {
+		wasDirty := pokemon.dirty
+		pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
+		// A display change clears size and moves, and with the weather
+		// unchanged nothing else refills them; derivation does, as on the
+		// wild and nearby paths.
+		pokemon.applySightingDerivation()
+		pokemon.recomputeCpIfNeeded(ctx, db, weather)
+		if pokemon.dirty && !wasDirty {
+			changed = true
+		}
+	}
+
 	pokemon.setUsernameIfStored(username)
 	return changed
 }
@@ -298,13 +443,10 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 //
 // The clamp happens once, up front, and the three clamped values are the
 // only thing read afterwards: the comparison, the stores and the Iv sum all
-// come from them, so they cannot disagree. Two earlier shapes of this
-// function could. Comparing the stored (clamped) IVs against the raw a/d/s
-// never converged, so an out-of-range encounter re-wrote and re-dirtied the
-// record forever. Fixing only that half left the other: Iv was still the
-// raw sum divided by .45 while the columns held the clamped values, and the
-// convergence fix made the mismatch permanent by reporting "unchanged"
-// from then on.
+// come from them, so they cannot disagree. Comparing the stored (clamped)
+// IVs against the raw a/d/s instead would never converge — an out-of-range
+// encounter would re-write and re-dirty the record forever — and an Iv
+// computed from the raw sum would disagree with the clamped columns.
 //
 // The clamp is clampIv, not clampUint8: 15 rather than the tinyint's 255.
 // That is what bounds Iv. iv is float(5,2) unsigned and tops out at 999.99,
@@ -320,14 +462,14 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 // Clamping above the comparison also moves atk_iv/def_iv/sta_iv onto the
 // same golbat_field_clamped_total rate as every other field — one count per
 // call rather than one per value that reached the record. See clampUint's
-// doc comment, which used to describe the two rates separately.
+// doc comment.
 func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 	atk := clampIv(null.IntFrom(a), "atk_iv")
 	def := clampIv(null.IntFrom(d), "def_iv")
 	sta := clampIv(null.IntFrom(s), "sta_iv")
 
-	// Comparing the whole null.Value covers the previously separate
-	// !Valid checks: an unset field never equals a clamped one.
+	// Comparing the whole null.Value covers validity too: an unset field
+	// never equals a clamped one.
 	if pokemon.AtkIv != atk || pokemon.DefIv != def || pokemon.StaIv != sta {
 		pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv = atk, def, sta
 		// .45 is 45/100, and 45 is 3 * maxIvPerStat — the same ceiling the
@@ -336,6 +478,102 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 		pokemon.SetIv(null.FloatFrom(float64(int64OrZero(atk)+int64OrZero(def)+int64OrZero(sta)) / .45))
 		pokemon.dirty = true
 	}
+}
+
+// applyDerivedValues writes one encounter.For Draw onto this record: IVs (via
+// calculateIv), Level and Size, then continues the same Draw's walk (via
+// Draw.MoveIndices) for move_1/move_2. It is the single derive-then-write
+// sequence shared by maybeMarkDittoFromRoll, deriveIvIfAbsent and
+// repopulateIv's re-derive branch, so the three cannot diverge in what they
+// write. repopulateIv resets CP/PVP itself after calling this; that reset
+// belongs to a boost-state flip, not to applying a derived value.
+//
+// v is taken by value because MoveIndices advances its embedded generator
+// state; the caller's copy is unaffected.
+//
+// Moves are derived for pokemon.PokemonId/Form as they stand, which at every
+// call site is the species/form being derived for, except that a Ditto's are
+// derived for its disguise (see applyDerivedMoves).
+//
+// When the species/form's move pools do not resolve (unknown species, empty
+// pool, or an uninitialized masterfile — the same Initialized guard
+// disguiseBoostedWeathers uses), move_1/move_2 are left untouched rather than
+// guessed: a wrong move is indistinguishable from an observed one downstream.
+// Pool resolution is derivedMoves (derive_validation.go), shared with
+// checkDerivation so the two cannot resolve different pools for the same
+// species/form.
+func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
+	// The gate lives here rather than at the three call sites because this is
+	// the only place derived IVs, level, size or moves are written. A caller
+	// that forgets the check cannot write them anyway.
+	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
+		return
+	}
+
+	pokemon.calculateIv(int64(v.Attack), int64(v.Defense), int64(v.Stamina))
+	pokemon.SetLevel(null.IntFrom(int64(v.Level)))
+
+	// Size and moves are filled only when absent, unlike the IVs and level
+	// above. clearIv drops the IVs on a weather flip it cannot match but
+	// deliberately leaves move_1, move_2 and size alone, so a record reaching
+	// here after a flip still carries the ones the game actually reported.
+	// Overwriting an observed move with a derived one is the worst case this
+	// package has: the game GRANTS moves outside the pool the derivation draws
+	// from (event and legacy moves), so for that population the derived value
+	// is known to be wrong — checkDerivation refuses to even score it, via
+	// moveOutOfPool. A derived value is indistinguishable from an observed one
+	// once written, so the observation must win.
+	if !pokemon.Size.Valid {
+		pokemon.SetSize(null.IntFrom(int64(v.Size)))
+	}
+
+	pokemon.applyDerivedMoves(v)
+}
+
+// applyDerivedMoves fills whichever move slots are absent from the draw. It is
+// the moves half of applyDerivedValues, on its own so that a record whose
+// identity has just changed can have its moves re-derived without its IVs
+// and level being touched — see resetDittoAttributes.
+func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
+	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
+		return
+	}
+	if pokemon.Move1.Valid && pokemon.Move2.Valid {
+		return
+	}
+	// A Ditto carries its disguise's moves, which is what an encounter
+	// reports for it, and what you catch when the disguise is shiny.
+	species, form := pokemon.PokemonId, int16(int64OrZero(pokemon.Form))
+	if pokemon.IsDitto {
+		species, form = int16(pokemon.DisplayPokemonId.ValueOrZero()), int16(pokemon.DisplayPokemonForm.ValueOrZero())
+	}
+	moves := derivedMoves(&v, species, form)
+	if !moves.Resolved {
+		return
+	}
+	if !pokemon.Move1.Valid {
+		pokemon.SetMove1(null.IntFrom(int64(moves.Move1)))
+	}
+	if !pokemon.Move2.Valid {
+		pokemon.SetMove2(null.IntFrom(int64(moves.Move2)))
+	}
+}
+
+// deriveSizeAndMovesIfAbsent fills whichever of size and moves are absent, for
+// the species and form the record displays, under the same exclusions as
+// deriveIvIfAbsent, on a record whose IVs are already settled. The draw is
+// taken on the record's own boost branch: the two branches' IV draws almost
+// always advance the generator equally, but not when the boosted branch's
+// nextInt(12) hits Java's rejection path.
+func (pokemon *Pokemon) deriveSizeAndMovesIfAbsent() {
+	if !config.Config.DeriveIv || pokemon.IsStrong.ValueOrZero() || hasPlayerSpecificStats(pokemon.PokemonId) {
+		return
+	}
+	v := encounter.For(uint64(pokemon.Id), pokemon.statsBoosted(), int32(int64OrZero(pokemon.Form)))
+	if !pokemon.Size.Valid {
+		pokemon.SetSize(null.IntFrom(int64(v.Size)))
+	}
+	pokemon.applyDerivedMoves(v)
 }
 
 // gmoCellLevel is the S2 level of the cells a GetMapObjects response is
@@ -350,9 +588,24 @@ const gmoCellLevel = 15
 // once the pokestop is known. A pokemon already placed more precisely (wild,
 // encounter, lure) keeps its location and takes only the display.
 func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, nearbyPokemon *pogo.NearbyPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
+	// applyDisplay runs on every path that applies the sighting and on none
+	// that refuses it, which is why derivation lives here rather than at the
+	// end of the function: derived values are part of a sighting being
+	// applied, and the paths that return false leave the record untouched for
+	// the caller to skip. Within it the order is fixed — the display that
+	// derivation reads, then derivation, then the CP that needs the IVs it
+	// fills in.
+	//
+	// It runs AFTER the record's coordinates are settled. recomputeCpIfNeeded
+	// resolves a Ditto's cell weather from Lat/Lon, so on the placement path
+	// below it is called once the location is set; on a new record before
+	// that, Lat/Lon are 0,0 and the lookup misses the batch weather and goes
+	// to the database under the pokemon lock. The paths that keep an existing
+	// location call it first, since that location is already the right one.
 	applyDisplay := func() {
 		pokemon.SetIsEvent(0)
 		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
+		pokemon.applySightingDerivation()
 		pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	}
 
@@ -407,7 +660,6 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 		lon = s2cell.CapBound().RectBound().Center().Lng.Degrees()
 	}
 
-	applyDisplay()
 	pokemon.SetSeenType(seenType)
 	if seenType == SeenTypeCodeNearbyStop {
 		pokemon.SetPokestopId(fortId)
@@ -424,6 +676,7 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	pokemon.SetCellId(null.IntFrom(cellId))
 	pokemon.setUnknownTimestamp(timestampMs / 1000)
 	pokemon.setUsernameIfStored(username)
+	applyDisplay()
 	return true
 }
 
@@ -586,11 +839,9 @@ func (n NullSeenType) IsZero() bool { return !n.Valid }
 // This is deliberately asymmetric with Value below. The seen_type enum has
 // been widened three times (migrations 3, 43, 45); a newer binary can write
 // a value this one's ParseSeenType doesn't recognise yet — a rollback or a
-// lagging replica during a mixed deployment, both routine. An earlier round
-// of this PR made Scan error on that case, reasoning that silently storing
-// a wrong code would corrupt scan statistics. That reasoning weighs the
-// write side correctly but not the read side: an error here fails the row
-// load, which leaves getOrCreatePokemonRecord's cache entry stuck marked
+// lagging replica during a mixed deployment, both routine. Erroring on that
+// case would protect scan statistics from a wrong code, but an error here
+// fails the row load, which leaves getOrCreatePokemonRecord's cache entry stuck marked
 // newRecord — every subsequent sighting retries and fails the same load, so
 // that pokemon silently stops being processed for as long as the
 // deployment is mixed. Degrading avoids that: the row loads with seen_type
@@ -743,49 +994,255 @@ func (pokemon *Pokemon) setExpireTimestampFromSpawnpoint(ctx context.Context, db
 		return
 	}
 
-	pokemon.ExpireTimestampVerified = false
-
-	// Lock-free fast path: this runs once per wild/nearby pokemon and needs
-	// only the spawnpoint's despawn second. The atomic mirror avoids the
-	// entity mutex entirely — readers no longer queue behind writers that
-	// hold it across DB loads. Mirror not yet synced (0) falls through to
-	// the locked path below.
+	// A stored despawn second was observed (a TTH sighting), so it is used
+	// whenever present. Cached and synced with no stored value: nothing to
+	// look up, derive.
 	if sp, ok := spawnpointCache.Get(spawnId); ok {
 		if despawnSecond, known, synced := sp.DespawnSecFast(); synced {
 			if known {
 				pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
 			} else {
-				pokemon.setUnknownTimestamp(timestampMs / 1000)
+				pokemon.applyDerivedDespawn(spawnId, timestampMs, trustworthyTimestamp)
 			}
 			return
 		}
 	}
 
-	spawnPoint, unlock, _ := getSpawnpointRecord(ctx, db, spawnId, "setExpireTimestampFromSpawnpoint")
+	// Cache miss or mid-load. The table holds every spawnpoint's row, so a
+	// miss may be hiding a stored value worth loading.
+	spawnPoint, unlock, err := getSpawnpointRecord(ctx, db, spawnId, "setExpireTimestampFromSpawnpoint")
+	lookupFailed := spawnpointLookupFailed(spawnPoint, err)
 	if spawnPoint != nil && spawnPoint.DespawnSec.Valid {
 		despawnSecond := int(spawnPoint.DespawnSec.ValueOrZero())
 		unlock()
-
 		pokemon.applyVerifiedDespawn(despawnSecond, timestampMs)
-	} else {
-		if unlock != nil {
-			unlock()
+		return
+	}
+	if unlock != nil {
+		unlock()
+	}
+	// A failed lookup is not an unknown despawn. The row may hold the
+	// despawn time a record's verified expiry came from — a restored record
+	// meeting a cold cache and a database timeout — and deriving would
+	// replace it with an unverified prediction half an hour early for an
+	// hour-long spawn. An expiry still in the future is kept; derivation
+	// answers only when there is nothing usable.
+	if lookupFailed && pokemon.ExpireTimestamp.Valid && int64OrZero(pokemon.ExpireTimestamp) > timestampMs/1000 {
+		return
+	}
+
+	pokemon.applyDerivedDespawn(spawnId, timestampMs, trustworthyTimestamp)
+}
+
+// applyDerivedDespawn sets this pokemon's expiry from its spawn id alone.
+//
+// The despawn position within any half hour is a function of the spawn id, so
+// the next occurrence of that position after the sighting is the answer for
+// every spawnpoint whose pokemon live half an hour — roughly 94% of them — and
+// half an hour early for the rest.
+//
+// It is written UNVERIFIED, which is what corrects the rest. A pokemon still
+// listed after an unverified expiry is re-admitted by wildSignificantUpdate,
+// and deriving again from that later sighting lands on the next half hour. No
+// despawn time is written to the spawnpoint: only a sighting that shows the
+// real despawn (spawnpointUpdateFromWild's TTH) does that, so a stored
+// despawn_sec is always observed, never inferred.
+//
+// An untrustworthy timestamp — an encounter's receipt time, which can trail
+// the game's clock — does not replace an expiry already derived for this
+// spawnpoint unless that expiry passed more than despawnClockSkewTolerance
+// ago. Deriving from a receipt that arrived just after the despawn would move
+// a pokemon the game still showed half an hour on. A guess (a nearby or
+// pre-GMO lure sighting's) is not on the spawnpoint's phase, and is replaced.
+//
+// With no such expiry, a receipt time derives like any other: the pokemon was
+// there when the game served it, so a phase moment more than
+// derivedDespawnTolerance before the receipt is its spawn, not its despawn.
+//
+// With derive_despawn off it sets the guess setUnknownTimestamp sets instead.
+// This is the only place a derived pokemon expiry is written, so the gate
+// lives here.
+func (pokemon *Pokemon) applyDerivedDespawn(spawnId int64, timestampMs int64, trustworthyTimestamp bool) {
+	nowSec := timestampMs / 1000
+	if !config.Config.DeriveDespawn {
+		pokemon.setUnknownTimestamp(nowSec)
+		pokemon.SetExpireTimestampVerified(false)
+		return
+	}
+	if !trustworthyTimestamp && pokemon.ExpireTimestamp.Valid {
+		existing := int64OrZero(pokemon.ExpireTimestamp)
+		if existing >= nowSec-despawnClockSkewTolerance && onDerivedPhase(spawnId, existing) {
+			return
 		}
-		pokemon.setUnknownTimestamp(timestampMs / 1000)
+	}
+	next := deriveExpiry(spawnId, nowSec)
+	// A derived expiry never moves backward. Deriving from a later sighting
+	// gives the same or a later occurrence, so an earlier one comes only from
+	// a sighting older than the last — a delayed GMO — which would undo a
+	// 60-minute pokemon's correction and drop a live pokemon at an expiry
+	// that has passed.
+	if pokemon.ExpireTimestamp.Valid && !pokemon.ExpireTimestampVerified {
+		if existing := int64OrZero(pokemon.ExpireTimestamp); existing > next && onDerivedPhase(spawnId, existing) {
+			return
+		}
+	}
+	pokemon.SetExpireTimestamp(null.IntFrom(next))
+	pokemon.SetExpireTimestampVerified(false)
+}
+
+// spawnpointLookupFailed reports whether getSpawnpointRecord failed to say
+// whether the spawnpoint has a stored despawn time, as opposed to saying it
+// has none. Besides an error, that is a cached spawnpoint whose despawn was
+// never synced: the placeholder getOrCreateSpawnpointRecord leaves behind when
+// its database read fails, which getSpawnpointRecord returns from the cache
+// with no error. One known to have no row is synced.
+func spawnpointLookupFailed(spawnPoint *Spawnpoint, err error) bool {
+	if err != nil {
+		return true
+	}
+	if spawnPoint == nil {
+		return false
+	}
+	_, _, synced := spawnPoint.DespawnSecFast()
+	return !synced
+}
+
+// derivedDespawnTolerance is how far past a derived expiry a sighting may be
+// and still be taken as that same despawn. The derived second can differ from
+// the game's by a couple of seconds, and both sides are truncated to whole
+// seconds, so a pokemon on a half-hour spawnpoint can be listed a moment after
+// its derived expiry. Without this, that moment would move it half an hour on
+// and show it long after it had gone.
+const derivedDespawnTolerance = 5
+
+// deriveExpiry is the derived expiry for a sighting at nowSec: the next
+// occurrence of the spawnpoint's phase, counting one up to
+// derivedDespawnTolerance in the past as the current one.
+func deriveExpiry(spawnId int64, nowSec int64) int64 {
+	return despawn.NextOccurrence(spawnId, time.Unix(nowSec-derivedDespawnTolerance, 0)).Unix()
+}
+
+// onDerivedPhase reports whether expiry falls exactly on this spawnpoint's
+// derived despawn position — that is, whether it was derived for it rather
+// than guessed.
+func onDerivedPhase(spawnId int64, expiry int64) bool {
+	return despawn.NextOccurrence(spawnId, time.Unix(expiry-1, 0)).Unix() == expiry
+}
+
+// despawnClockSkewTolerance is how far apart resolveDespawnExpiry's two
+// timestamps may be before their difference is treated as a real phantom hour
+// rather than as a disagreement about the time.
+//
+// Both sides should be the game's own clock. expiry is computed from the
+// caller's timestampMs, which every caller threads from a proto, and
+// firstSeen is stamped by savePokemonRecordAsAtTime from the timestamp its
+// caller was given — also a proto value on the GMO and encounter paths. So
+// the tolerance is not absorbing an inherent difference between machines; it
+// covers a record whose firstSeen was stamped from the host clock, or any
+// path that stamps one that way. It is bounded only by an hour, since a
+// difference approaching 3600 is indistinguishable from the phantom hour it
+// exists to catch.
+const despawnClockSkewTolerance = 120
+
+// despawnSecondOfHour returns the absolute second-of-hour used by all
+// despawn_sec writers and readers, independent of the process timezone.
+//
+// Rows holding the local second-of-hour agree with this in every
+// whole-hour UTC offset, since a whole-hour shift changes neither minute nor
+// second; rows written in a half-hour or 45-minute zone differ by 1800s or
+// 900s.
+func despawnSecondOfHour(unixSec int64) int {
+	return int(unixSec % 3600)
+}
+
+// resolveDespawnExpiry converts a spawnpoint despawn second-of-hour into an
+// absolute expiry for a sighting at nowSec, wrapping a negative offset
+// forward by an hour, then clamping that wrap when it can be PROVEN wrong: no
+// encounter or tappable lives longer than an hour, so an expiry landing more
+// than 3600+despawnClockSkewTolerance seconds past a known firstSeen is a
+// phantom hour, not a real one.
+//
+// Shared by Pokemon.applyVerifiedDespawn and Tappable.applyVerifiedDespawn so
+// the offset/wrap/clamp arithmetic exists in exactly one place.
+//
+// firstSeen == 0 means "no lower bound available" and must NEVER clamp:
+// Pokemon's FirstSeenTimestamp is 0 during a new record's first decode
+// (clamping there would destroy a genuinely-59m59s-away expiry), and a
+// Tappable's in-memory-only firstSeen is 0 whenever this process has not
+// itself created the record fresh (see Tappable.firstSeen's doc comment for
+// why a DB-reloaded tappable has no such bound).
+//
+// clamped reports only whether the wrap fired here — NOT whether the caller
+// should count it. A clamp is counted only when it changes the stored expiry
+// (see countDespawnWrapClamp); that depends on each caller's previously-stored
+// ExpireTimestamp, so it stays caller-side.
+func resolveDespawnExpiry(despawnSecond int, nowSec int64, firstSeen int64) (expiry int64, clamped bool) {
+	secondOfHour := despawnSecondOfHour(nowSec)
+
+	despawnOffset := despawnSecond - secondOfHour
+	if despawnOffset < 0 {
+		despawnOffset += 3600
+	}
+
+	expiry = nowSec + int64(despawnOffset)
+
+	// Both timestamps should be the game's own: expiry from the caller's
+	// timestampMs, firstSeen from the value savePokemonRecordAsAtTime was
+	// given. despawnClockSkewTolerance covers a record stamped from the host
+	// clock.
+	//
+	// A legitimate clamp can land slightly in the past — a Pokemon seen in the
+	// instant it despawns — but not far into it. We are looking at this
+	// Pokemon now, so its true expiry is at or just behind the present; a
+	// clamped result an hour behind means the two clocks disagreed rather
+	// than that an hour was phantom. The two errors are not equal: too long
+	// shows a Pokemon briefly after it has gone, while too short hides a
+	// catchable one and drops it to the corpse TTL, so where the inputs
+	// cannot be reconciled the unclamped value is the safer wrong answer.
+	if firstSeen > 0 && expiry-firstSeen > 3600+despawnClockSkewTolerance && expiry-3600 > nowSec-despawnClockSkewTolerance {
+		expiry -= 3600
+		clamped = true
+	}
+
+	return expiry, clamped
+}
+
+// countDespawnWrapClamp records a wrap clamp only when it actually corrects
+// the record. A record re-decoded after its despawn — a Ditto, whose stored
+// species never matches the disguise a GMO reports, passes the wild gate on
+// every GMO — clamps back to the identical value each time. Counting those
+// would bury real clamps under a baseline of re-confirmations.
+func countDespawnWrapClamp(clamped, priorValid bool, prior, expiry int64) {
+	if clamped && (!priorValid || prior != expiry) {
+		getStatsCollector().IncDespawnWrapClamped()
 	}
 }
 
 // applyVerifiedDespawn converts a spawnpoint despawn second-of-hour into a
 // verified expire timestamp for this pokemon.
 func (pokemon *Pokemon) applyVerifiedDespawn(despawnSecond int, timestampMs int64) {
-	date := time.Unix(timestampMs/1000, 0)
-	secondOfHour := date.Second() + date.Minute()*60
+	nowSec := timestampMs / 1000
 
-	despawnOffset := despawnSecond - secondOfHour
-	if despawnOffset < 0 {
-		despawnOffset += 3600
+	// A sighting just past a verified despawn on this same phase is a late
+	// sighting of that despawn, not a new one: despawn_sec is stored to within
+	// SetDespawnSec's 2s tolerance, so the game can list a pokemon a moment
+	// past it. Recomputing from there wraps forward an hour, and the clamp
+	// misses a pokemon first seen within two minutes of its despawn. Only a
+	// PASSED expiry is held: an hour-late one still in the future is replaced,
+	// which is how a sighting before the despawn corrects an encounter whose
+	// receipt time wrapped it.
+	if pokemon.ExpireTimestampVerified && pokemon.ExpireTimestamp.Valid {
+		stored := int64OrZero(pokemon.ExpireTimestamp)
+		if stored < nowSec && despawnSecondOfHour(stored) == despawnSecond {
+			return
+		}
 	}
-	pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(despawnOffset)))
+
+	expiry, clamped := resolveDespawnExpiry(despawnSecond, nowSec, int64(pokemon.FirstSeenTimestamp))
+
+	countDespawnWrapClamp(clamped, pokemon.ExpireTimestamp.Valid, int64OrZero(pokemon.ExpireTimestamp), expiry)
+
+	pokemon.SetExpireTimestamp(null.IntFrom(expiry))
 	pokemon.SetExpireTimestampVerified(true)
 }
 
@@ -818,6 +1275,20 @@ func (pokemon *Pokemon) setDittoAttributes(mode string, isDitto bool, old, new *
 		log.Debugf("[POKEMON] %d: %s not Ditto found %s -> %s", pokemon.Id, mode, old, new)
 	}
 }
+
+// markDittoFromRoll is setDittoAttributes(mode, true, old, new) plus setting
+// dittoRollMarked — the single place the flag is set, as SetIsDitto(false) is
+// the single place it is cleared (see the field's doc comment). Every other
+// setDittoAttributes(..., true, ...) call is detectDitto's evidence-based
+// confirmation, which must NOT set dittoRollMarked, so the flag stays out of
+// setDittoAttributes. Any path that marks a Ditto by prediction rather than
+// scan evidence must call this, not setDittoAttributes directly, or the
+// provenance flag the audit log depends on is silently not set.
+func (pokemon *Pokemon) markDittoFromRoll(mode string, old, new *pokemonScan) {
+	pokemon.setDittoAttributes(mode, true, old, new)
+	pokemon.dittoRollMarked = true
+}
+
 func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *pokemonScan) (*pokemonScan, error) {
 	log.Debugf("[POKEMON] %d: %s Ditto was reset %s (%s) -> %s", pokemon.Id, mode, old, aux, new)
 	pokemon.SetIsDitto(false)
@@ -828,28 +1299,148 @@ func (pokemon *Pokemon) resetDittoAttributes(mode string, old, aux, new *pokemon
 	return new, checkScans(old, new)
 }
 
-// As far as I'm concerned, wild Ditto only depends on species but not costume/gender/form
+// maybeMarkDittoFromRoll implements roll-based Ditto marking (config
+// ditto_derivation/ditto_pool): when this sighting's displayed species and form are
+// in the pool and the encounter id's roll (encounter.DittoCandidateRoll, see
+// dittoSuspectRoll) fires, it marks the record as a Ditto and derives the
+// Ditto's own IVs.
+//
+// The boost branch comes from pokemon.Weather — the condition the game
+// reports for the DISPLAYED species — through dittoCaughtBoosted, not from
+// the cell's weather; see dittoCaughtBoosted for why no cell lookup is
+// needed.
+//
+// ORDERING IS LOAD-BEARING. Every call site (applySightingDerivation,
+// addEncounterPokemon) must call this after the sighting's display has been
+// applied (setPokemonDisplay / addWildPokemon), so PokemonId/Form/Weather
+// reflect this sighting. In addEncounterPokemon it must precede detectDitto,
+// so detectDitto sees dittoRollMarked and takes its keep branch rather than
+// treating a first-ever encounter as an unmarked record with missing
+// history, and must precede the scanHistory append (see the call site).
+//
+// Does nothing when ditto_derivation is off, the record is already a Ditto (by
+// roll or by detectDitto — the roll only marks a record nothing has
+// concluded about), the record is strong, the record already has scan
+// history, the display is not in the pool, or the roll does not fire.
+//
+// The scan-history guard exists because detectDitto's history-present
+// branches (those that find a boostedScan or unboostedScan) assume any history
+// on an IsDitto record is the Ditto's own, and uses it to recover the Ditto's
+// IVs across boost states. Roll-marking a record with earlier non-Ditto
+// history would hand that branch the disguise's scans and corrupt the
+// recovery; the missing-history branch only runs when history is empty.
+// Observation outranks prediction: detectDitto is authoritative over any
+// record it has real data about. See TestMaybeMarkDittoFromRollScanHistoryGate.
+func (pokemon *Pokemon) maybeMarkDittoFromRoll() {
+	if !pokemon.rollWouldMark() {
+		return
+	}
+
+	pokemon.markDittoFromRoll("roll", nil, nil)
+
+	// setPokemonDisplay has already stored this sighting's reported condition,
+	// which is all dittoCaughtBoosted needs. Form is always 0: setDittoAttributes
+	// above set it, and encounter.For reads form only for the Pumpkaboo/
+	// Gourgeist size override, which cannot apply to a Ditto.
+	v := encounter.For(uint64(pokemon.Id), dittoCaughtBoosted(int64OrZero(pokemon.Weather)), 0)
+	pokemon.applyDerivedValues(v)
+}
+
+// rollWouldMark reports whether maybeMarkDittoFromRoll would mark this record
+// as it stands. The wild and nearby significance checks use it too: a pool
+// refresh can add a species a cached record already displays, and an
+// unchanged sighting of it is otherwise skipped for the rest of its life
+// without the roll being asked. The cheap tests come first, so a skipped
+// sighting of a species outside the pool costs a map lookup.
+func (pokemon *Pokemon) rollWouldMark() bool {
+	// IsStrong excludes a strong Pokemon, for the same reason deriveIvIfAbsent
+	// and repopulateIv's re-derive branch do: the ordinary boosted-floor model
+	// behind applyDerivedValues below does not describe a strong Pokemon's
+	// stats. Without this, a pool species arriving strong gets marked on the
+	// roll's own 2% and then written ordinary IVs and a level that cannot
+	// occur for it — and nothing takes the identity back, because detectDitto
+	// returns on `scan.Strong` before any Ditto logic runs. repopulateIv's
+	// Ditto arm calls that combination unhandleable outright ("Strong
+	// Ditto???"); this is what stops it being created.
+	if !config.Config.DittoDerivation || pokemon.IsDitto || pokemon.IsStrong.ValueOrZero() {
+		return false
+	}
+	// A record that has been encountered before has already been through
+	// detectDitto, which is the authority on it. Its scan history says so in
+	// memory, but is persisted only with pokemon_internal_to_db; the
+	// encounter's seen_type is always persisted, so a refuted record reloaded
+	// without its history is not marked again — which would overwrite the IVs
+	// and moves the encounter observed. oldValues is snapshotted when the lock
+	// is taken, before an encounter in progress writes its own seen_type, so
+	// a first encounter still marks.
+	if encounteredSeenType(pokemon.oldValues.SeenType.Code) {
+		return false
+	}
+	// pokemon.Form, not DisplayPokemonForm: this runs before the record is
+	// marked, so both still describe the DISGUISE. A Ditto only wears a
+	// species' normal form, so the form is half the membership test — without
+	// it the roll fires on 2% of the variants too.
+	if !inDittoPool(pokemon.PokemonId, int16(int64OrZero(pokemon.Form))) {
+		return false
+	}
+	// The roll before the history check: it is a few generator steps, where
+	// the history check may decode GolbatInternal.
+	if !dittoSuspectRoll(encounter.DittoCandidateRoll(uint64(pokemon.Id))) {
+		return false
+	}
+	// populateInternal (not a bare len(pokemon.scanHistory) check) so a
+	// record freshly loaded from the database — GolbatInternal bytes
+	// present, but not yet lazily decoded into scanHistory in memory — is
+	// still correctly seen as having history. It is a no-op once
+	// scanHistory is already populated, so this costs nothing on the
+	// common (already-hydrated or genuinely-new) path.
+	pokemon.populateInternal()
+	return len(pokemon.scanHistory) == 0
+}
+
+// dittoDisguises holds the disguises — species AND form — detectDitto has
+// confirmed from scan evidence since golbat started, with when each was last
+// confirmed. It is empty at every start.
 var dittoDisguises sync.Map
 
+// knownDittoDisguise is detectDitto's prior for the two transitions its
+// evidence cannot settle (BN>[0P] and 0N>[B0]): whether a scan shows a known
+// disguise. Species AND form, as for the roll: a Ditto only wears a species'
+// NORMAL form, so a Hisuian Growlithe is not a known disguise because an
+// ordinary one is. The pool in force answers from startup; a disguise
+// confirmed since start counts too, since a confirmation is the stronger
+// evidence and the pool can lag the game.
+func knownDittoDisguise(scan *pokemonScan) bool {
+	key := dittoPoolEntry{pokemonId: int16(scan.Pokemon), form: int16(scan.Form)}
+	if dittoPoolLookup.Load().has(key) {
+		return true
+	}
+	_, confirmed := dittoDisguises.Load(key)
+	return confirmed
+}
+
+// confirmDitto records a disguise detectDitto has confirmed from scan
+// evidence, and logs the first confirmation of each species and form since
+// start. That line separates the two cases worth separating: a disguise the
+// pool already lists, which is corroboration, and one it does not, which is
+// either a change in the game the pool has not caught up with or a
+// detection worth checking — the same question logUnknownDittoDisguise asks
+// from the derivation side.
 func confirmDitto(scan *pokemonScan) {
 	now := time.Now()
-	lastSeen, exists := dittoDisguises.Swap(scan.Pokemon, now)
-	if exists {
+	key := dittoPoolEntry{pokemonId: int16(scan.Pokemon), form: int16(scan.Form)}
+	if lastSeen, exists := dittoDisguises.Swap(key, now); exists {
 		log.Debugf("[DITTO] Disguise %s reseen after %s", scan, now.Sub(lastSeen.(time.Time)))
-	} else {
-		var sb strings.Builder
-		sb.WriteString("[DITTO] New disguise ")
-		sb.WriteString(scan.String())
-		sb.WriteString(" found. Current disguises ")
-		dittoDisguises.Range(func(disguise, lastSeen interface{}) bool {
-			sb.WriteString(strconv.FormatInt(int64(disguise.(int32)), 10))
-			sb.WriteString(" (")
-			sb.WriteString(now.Sub(lastSeen.(time.Time)).String())
-			sb.WriteString(") ")
-			return true
-		})
-		log.Info(sb.String())
+		return
 	}
+	if inDittoPool(key.pokemonId, key.form) {
+		log.Infof("[DITTO] Confirmed a Ditto disguised as %s from scan history — in the ditto pool. "+
+			"First confirmation of this disguise since start.", key)
+		return
+	}
+	log.Warnf("[DITTO] Confirmed a Ditto disguised as %s from scan history — NOT in the ditto pool. "+
+		"Confirm in game; if genuine, report it for the published pool. %s Scan: %s",
+		key, dittoPoolAddAdvice(fmt.Sprintf("%d:%d", key.pokemonId, key.form)), scan)
 }
 
 // detectDitto returns the IV/level set that should be used for persisting to db/seen if caught.
@@ -890,6 +1481,94 @@ func (pokemon *Pokemon) detectDitto(scan *pokemonScan) (*pokemonScan, error) {
 			unboostedLevel = boostedScan.Level - 5
 		} else if unboostedScan != nil {
 			unboostedLevel = unboostedScan.Level
+		} else if pokemon.dittoRollMarked {
+			// A roll-mark is a PREDICTION (see dittoRollMarked), not
+			// detectDitto's own confirmation, so a roll-marked record has
+			// no history at its first encounter by construction — not the
+			// unexpected condition the error below flags.
+			//
+			// This branch must not reset the record. Resetting is right
+			// when an encounter CONTRADICTS the prediction; missing history
+			// only means a single boost state CANNOT VERIFY a Ditto, which
+			// is not evidence against one. Treating "unable to verify" as
+			// "refuted" would discard every roll-mark at its first
+			// encounter, and a single-boost-state encounter says no more
+			// about Ditto-ness than the roll did.
+			//
+			// So IsDitto and dittoRollMarked stay set, unless the values
+			// below refute the mark, and scan is returned with a nil error
+			// (or nil caught set in 0P) so the caller appends it to
+			// scanHistory as usual. A later encounter finds history and runs
+			// the evidence-based logic below, which can still reset the
+			// record. Pinned by
+			// TestDetectDittoKeepsRollMarkedRecordOnMissingHistory,
+			// TestDetectDittoStillReturnsErrorForGenuineMissingHistory
+			// (a detectDitto-confirmed Ditto with no history still errors),
+			// and TestDetectDittoRollMarkedRecordWithHistoryUsesNormalDittoLogic
+			// (a roll-marked record with history is unaffected).
+			//
+			// scan.Weather is reclassified to the DITTO's boost state before
+			// returning, the same normalisation the evidence-based branches
+			// below perform for a Ditto they settle. The field arrives
+			// holding weather_boosted_condition, which the game reports for
+			// the DISPLAYED species, while the values beside it were rolled
+			// for a Normal-type Ditto — boosted only by PARTLY_CLOUDY, which
+			// scan.CellWeather carries. locateAllScans files a stored scan by
+			// this field alone, so leaving the disguise's value on it would
+			// file a boosted observation as the unboosted one, and the next
+			// encounter would compare a boosted level against an unboosted
+			// expectation and reset a Ditto that nothing had contradicted.
+			if rollMarkRefutedByStats(uint64(pokemon.Id), scan) {
+				return pokemon.resetDittoAttributes("roll", nil, nil, scan)
+			}
+			if scan.CellWeather == int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY) {
+				// Unless the observation refutes it. In partly cloudy weather
+				// a real Ditto is seen boosted, and a boosted roll cannot
+				// produce a level at or below 5 or any IV below 4 —
+				// MustBeUnboosted is exactly that test. Values like these are
+				// positive evidence against the prediction, not the absence of
+				// evidence this branch exists to tolerate, so the mark goes
+				// rather than being filed as boosted history that later
+				// encounters would then agree with.
+				//
+				// A species left in ditto_pool after it stopped being eligible
+				// is how this arises: the roll fires on 2% of its encounters
+				// and nothing else contradicts it.
+				if scan.MustBeUnboosted() {
+					return pokemon.resetDittoAttributes("roll", nil, nil, scan)
+				}
+				// The cell is partly cloudy, so the Ditto is SEEN boosted
+				// either way — but PP and 0P differ in what was observed, and
+				// what separates them is whether the game reported a boost for
+				// the DISGUISE too. Read before the normalisation below
+				// overwrites it.
+				disguiseBoosted := scan.Weather == int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+				scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+				if !disguiseBoosted {
+					// 0P. The Ditto is caught UNBOOSTED and nothing here
+					// observed those values — no history, which is why this
+					// branch exists — so the honest caughtIv is none at all.
+					// The caller then keeps the level adjustment and clears
+					// the IVs. scan still goes to history, filed as boosted.
+					return nil, nil
+				}
+				// PP. The weather boosts the disguise as well, so a caught
+				// Ditto is boosted and these observed stats ARE the caught
+				// set. Definitive; hand them back rather than subtracting five
+				// levels from data the game just gave us.
+			} else {
+				// Symmetric refutation. Outside partly cloudy a Ditto is never
+				// boosted, so an observation that can only be boosted — level
+				// 31-35, which MustBeBoosted is exactly — refutes the
+				// prediction as surely as a sub-floor value does inside it.
+				// Filed as unboosted history instead, it becomes the
+				// expectation and later encounters agree with it.
+				if scan.MustBeBoosted() {
+					return pokemon.resetDittoAttributes("roll", nil, nil, scan)
+				}
+				scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
+			}
+			return scan, nil
 		} else {
 			_, _ = pokemon.resetDittoAttributes("?", nil, nil, scan)
 			return scan, errors.New("missing past scans; Ditto will be reset")
@@ -1014,8 +1693,8 @@ func (pokemon *Pokemon) detectDitto(scan *pokemonScan) (*pokemonScan, error) {
 				} else {
 					// in case of BN>0P, we set Ditto to be a hidden 0P state, hoping we rediscover later
 					// setting 0P Ditto would also mean that we have a Ditto with unconfirmed IV which is a bad idea
-					if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
-						if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
+					if knownDittoDisguise(scan) {
+						if !knownDittoDisguise(matchingScan) {
 							// this guess is most likely to be correct except when Ditto pool just rerolled
 							pokemon.setDittoAttributes("BN>[0P] or B0>0N", true, matchingScan, scan)
 							scan.Weather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
@@ -1076,8 +1755,8 @@ func (pokemon *Pokemon) detectDitto(scan *pokemonScan) (*pokemonScan, error) {
 				scan.Confirmed = true
 			} else {
 				// same rationale as BN>0P or B0>[0N]
-				if _, possible := dittoDisguises.Load(scan.Pokemon); possible {
-					if _, possible := dittoDisguises.Load(matchingScan.Pokemon); !possible {
+				if knownDittoDisguise(scan) {
+					if !knownDittoDisguise(matchingScan) {
 						// this guess is most likely to be correct except when Ditto pool just rerolled
 						pokemon.setDittoAttributes("0N>[B0] or 0P>BN", true, matchingScan, scan)
 						scan.Weather = int32(pogo.GameplayWeatherProto_NONE)
@@ -1134,21 +1813,172 @@ func (pokemon *Pokemon) clearIv(cp bool) {
 	pokemon.StaIv = null.Value[uint8]{}
 	pokemon.SetIv(null.Float{})
 	if cp {
-		switch pokemon.SeenType.Code {
-		case SeenTypeCodeLureEncounter:
-			pokemon.SetSeenType(SeenTypeCodeLureWild)
-		case SeenTypeCodeEncounter:
-			pokemon.SetSeenType(SeenTypeCodeWild)
-		}
+		pokemon.downgradeEncounterSeenType()
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
 	}
 }
 
+// downgradeEncounterSeenType returns an encounter or lure_encounter record to
+// wild or lure_wild, for when the stats an encounter observed no longer stand:
+// a weather flip has cleared them, or replaced them with derived values.
+func (pokemon *Pokemon) downgradeEncounterSeenType() {
+	switch pokemon.SeenType.Code {
+	case SeenTypeCodeLureEncounter:
+		pokemon.SetSeenType(SeenTypeCodeLureWild)
+	case SeenTypeCodeEncounter:
+		pokemon.SetSeenType(SeenTypeCodeWild)
+	}
+}
+
+// deriveIvIfAbsent fills in this pokemon's stats from its encounter id when we
+// do not already have real ones.
+//
+// The boost branch is not inferred: PokemonDisplayProto states it and golbat
+// stores it as pokemon.Weather, so the result is exact rather than estimated.
+// Values are written exactly as an encounter writes them — that is deliberate,
+// and it is what lets every existing consumer benefit unchanged.
+//
+// Callers must invoke this only after the sighting's display has already
+// been applied (setPokemonDisplay / addWildPokemon), so pokemon.Weather and
+// pokemon.Form hold the values THIS sighting carried rather than whatever
+// was stored from a previous one. See TestUpdateFromWildDerivesUsingTheSightingsWeather.
+//
+// seen_type is deliberately left untouched: it records how the pokemon was
+// SEEN, not what we know about it. Upgrading it to encounter/lure_encounter
+// would assert a scan that never happened, and consumers read seen_type to
+// judge coverage and decide what still needs scanning. See
+// TestDeriveIvLeavesSeenTypeAlone.
+//
+// Strong Pokemon are skipped: the ordinary boosted-floor mechanic this
+// function models does not apply to them (see repopulateIv's
+// isBoostedMatches || isStrong branch and detectDitto's CompressedIv
+// invariant across boost states for a strong scan), so deriving for one would
+// write IVs indistinguishable from real ones but wrong. See
+// TestDeriveIvIfAbsentSkipsStrongPokemon.
+//
+// A known Ditto is derived on its own boost rule rather than its disguise's
+// (statsBoosted). See TestDeriveIvIfAbsentDerivesAKnownDittoOnItsOwnBranch.
+func (pokemon *Pokemon) deriveIvIfAbsent() {
+	// !DeriveIv is checked here as well as in applyDerivedValues, to skip the
+	// generator walk rather than discard it. applyDerivedValues remains the
+	// guard; this one only saves the work.
+	if !config.Config.DeriveIv {
+		return
+	}
+	if pokemon.IsStrong.ValueOrZero() {
+		return
+	}
+	// A player-specific species has no spawn-level stats to derive. See
+	// TestDeriveSkipsMinior.
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
+		return
+	}
+	// IVs already settled — by an encounter, or derived on an earlier
+	// sighting — are kept. A display change (species, form or costume) clears
+	// size and moves but not the IVs, so those are filled on their own:
+	// without this a Pokemon that changed display would carry its IVs with no
+	// size or moves until a weather change or a real encounter.
+	if pokemon.AtkIv.Valid {
+		if !pokemon.Size.Valid || !pokemon.Move1.Valid || !pokemon.Move2.Valid {
+			pokemon.deriveSizeAndMovesIfAbsent()
+		}
+		return
+	}
+
+	v := encounter.For(uint64(pokemon.Id), pokemon.statsBoosted(), int32(int64OrZero(pokemon.Form)))
+	pokemon.applyDerivedValues(v)
+}
+
+// statsBoosted is the boost branch the record's own stats follow, read from
+// the condition the game reported for the displayed species. For an ordinary
+// Pokemon that is any boost at all. For a known Ditto the reported condition
+// describes the disguise, and the Ditto's own stats follow dittoCaughtBoosted.
+func (pokemon *Pokemon) statsBoosted() bool {
+	if pokemon.IsDitto {
+		return dittoCaughtBoosted(int64OrZero(pokemon.Weather))
+	}
+	return int64OrZero(pokemon.Weather) != int64(pogo.GameplayWeatherProto_NONE)
+}
+
+// weatherFromThisHour reports whether a weather record was received in the
+// same clock hour as nowSec. The game changes weather on the hour, so a record
+// from an earlier hour no longer describes the cell.
+func weatherFromThisHour(weather *Weather, nowSec int64) bool {
+	return weather.UpdatedMs/1000 >= nowSec-nowSec%3600
+}
+
+// dittoBoostFromObservedValues reads a Ditto's boost state off the encounter
+// itself, for when the weather cache could not supply the cell's.
+//
+// The observed values are the Ditto's own, and a Ditto is Normal-typed — so it
+// is boosted exactly when the cell is PARTLY_CLOUDY, and the derived branch its
+// values match answers both questions at once.
+//
+// ok is false when both branches match (they coincide for this encounter id) or
+// neither does (the derivation does not describe this encounter). Neither case
+// supports a conclusion, and a guess here is stored as though it were observed.
+//
+// Form is 0 because that is what setDittoAttributes stores for a Ditto, and
+// encounter.For reads form only for the Pumpkaboo/Gourgeist size override,
+// which cannot apply to one.
+func dittoBoostFromObservedValues(encounterId uint64, scan *pokemonScan) (boosted, ok bool) {
+	observed := encounter.Values{Attack: scan.Attack, Defense: scan.Defense, Stamina: scan.Stamina, Level: scan.Level}
+	hi := boostBranchValuesMatch(observed, encounter.For(encounterId, true, 0).Values)
+	lo := boostBranchValuesMatch(observed, encounter.For(encounterId, false, 0).Values)
+	if hi == lo {
+		return false, false
+	}
+	return hi, true
+}
+
+// rollMarkRefutedByStats reports whether an encounter's observed stats show a
+// roll-marked record is not a Ditto. A Ditto's reported stats follow its own
+// boost — boosted exactly when the cell is partly cloudy — and anything
+// else's follow the boost the game reports for the displayed species. Where
+// the two differ, stats that match the disguise's branch are positive
+// evidence against the mark: the two branches' levels always differ by five,
+// so no stats match both. Where the two agree, the encounter cannot tell, and
+// the mark stands.
+//
+// scan.Weather must still be the reported condition and scan.CellWeather the
+// cell's. A cell weather inferred from these same stats by
+// dittoBoostFromObservedValues assumes a Ditto, so it always agrees with the
+// mark: with the cell unknown, nothing is refuted.
+func rollMarkRefutedByStats(encounterId uint64, scan *pokemonScan) bool {
+	dittoBoosted := scan.CellWeather == int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+	disguiseBoosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
+	if dittoBoosted == disguiseBoosted {
+		return false
+	}
+	observed := encounter.Values{Attack: scan.Attack, Defense: scan.Defense, Stamina: scan.Stamina, Level: scan.Level}
+	return boostBranchValuesMatch(observed, encounter.For(encounterId, disguiseBoosted, 0).Values)
+}
+
+// cpInputs is what a computed CP depends on, beyond the species and form a
+// display change already resets it for. CP is latched — recomputed only when
+// absent — so wherever these can change and nothing reports a replacement
+// CP, the caller compares a snapshot and clears CP if they moved.
+type cpInputs struct {
+	atk, def, sta null.Value[uint8]
+	level         null.Value[uint8]
+}
+
+func (pokemon *Pokemon) cpInputs() cpInputs {
+	return cpInputs{pokemon.AtkIv, pokemon.DefIv, pokemon.StaIv, pokemon.Level}
+}
+
+// hasPlayerSpecificStats reports whether a species' encounter stats belong to
+// the player rather than the shared spawn. Minior's do: its IVs, level, CP,
+// moves and size are neither observed onto the record nor derived for it.
+func hasPlayerSpecificStats(pokemonId int16) bool {
+	return pokemonId == int16(pogo.HoloPokemonId_MINIOR)
+}
+
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	// Minior's encounter stats belong to the player, not the shared spawn.
-	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		pokemon.setUsernameIfStored(username)
 		return
 	}
@@ -1172,12 +2002,29 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		Gender:      int32(proto.PokemonDisplay.Gender),
 		Form:        int32(proto.PokemonDisplay.Form),
 	}
-	if scan.CellWeather == int32(pogo.GameplayWeatherProto_NONE) {
-		weather, unlock, err := peekWeatherRecord(weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon), "addEncounterPokemon")
+	// cellWeatherKnown distinguishes "scan.CellWeather is NONE because that
+	// was observed" from "scan.CellWeather is NONE because nothing is known".
+	// It is true when the display already reports a boost or when
+	// peekWeatherRecord finds this hour's weather (even NONE); a failed
+	// lookup, or a cached record from an earlier hour, leaves it false.
+	cellWeatherKnown := scan.CellWeather != int32(pogo.GameplayWeatherProto_NONE)
+	if !cellWeatherKnown {
+		cellId := weatherCellIdFromLatLon(pokemon.Lat, pokemon.Lon)
+		weather, unlock, err := peekWeatherRecord(cellId, "addEncounterPokemon")
 		if weather == nil || !weather.GameplayCondition.Valid {
 			log.Warnf("Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
+		} else if !weatherFromThisHour(weather, time.Now().Unix()) {
+			// Weather changes on the hour, and the cache keeps an entry up to
+			// an hour, so just past the hour it can hold the previous one.
+			// That is not evidence about this encounter's cell: a stale CLEAR
+			// would refute a roll-marked Ditto seen boosted in partly cloudy.
+			// Left unknown, the observed values settle it instead (see
+			// dittoBoostFromObservedValues). Compared against the processing
+			// time: encounters are decoded within seconds of receipt, so this
+			// can misjudge only the first seconds past the hour.
 		} else {
 			scan.CellWeather = int32(weather.GameplayCondition.Int64)
+			cellWeatherKnown = true
 		}
 		if unlock != nil {
 			unlock()
@@ -1191,17 +2038,116 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		scan.Level = int32(199.99995231630976*proto.CpMultiplier - 117.55996066890287)
 	}
 
+	// Roll-marking runs on the encounter path too: an encounter can be the
+	// first time a record is seen, with no sighting path having run
+	// maybeMarkDittoFromRoll.
+	//
+	// ORDERING IS LOAD-BEARING (see maybeMarkDittoFromRoll). It must run
+	// before detectDitto, so detectDitto sees dittoRollMarked and takes its
+	// keep branch. It must also run before scanHistory gains this
+	// encounter's scan (the append after detectDitto, below), or
+	// maybeMarkDittoFromRoll's scan-history gate would always see that scan
+	// and never mark on this path. Here scanHistory holds only PRIOR scans,
+	// so a first-ever encounter marks and a record with prior history does
+	// not. See TestAddEncounterPokemonMarksFirstEncounterOfPoolSpeciesFromRoll
+	// and TestAddEncounterPokemonWithPriorHistoryDoesNotMarkFromRoll.
+	pokemon.maybeMarkDittoFromRoll()
+
+	// Snapshot the raw display before detectDitto can rewrite it: a value
+	// copy, so nothing detectDitto does to scan (it mutates
+	// scan.Weather/Confirmed in place, and for a Ditto caughtIv can be a
+	// different, previously-stored scan) reaches it. This is what the game
+	// displayed, which is what encounter.For predicts — see checkDerivation.
+	observedScan := scan
+
+	// Snapshotted after maybeMarkDittoFromRoll, so it sees a mark this call
+	// just made, and before detectDitto, whose evidence-based branches can
+	// clear dittoRollMarked; a read afterwards would be wrong for exactly the
+	// sightings this audits. See checkDerivation's wasRollMarked parameter.
+	//
+	// Hydrate first. dittoRollMarked lives in GolbatInternal, so on a record
+	// loaded from the database or a preserved cache it reads false until
+	// populateInternal has run, and nothing else here guarantees that:
+	// setPokemonDisplay skips hydration when the boost state is unchanged,
+	// and maybeMarkDittoFromRoll returns at its first guard because IsDitto
+	// is already true. Unhydrated, a reloaded roll-mark would be recorded as
+	// an independent detectDitto confirmation, the inflation derivecheck's
+	// roll_only column exists to prevent.
+	pokemon.populateInternal()
+	wasRollMarked := pokemon.dittoRollMarked
+
+	// Captured before detectDitto for the same reason: it feeds
+	// checkDerivation's ditto_detect log field, which needs what
+	// detectDitto's locateAllScans is about to see, before this encounter's
+	// scan is appended. See hadCrossBoostScanHistory.
+	hadDetectEvidence := pokemon.hadCrossBoostScanHistory()
+
+	// Snapshotted for the same reason as the two above: detectDitto runs
+	// next and may clear IsDitto. A record that was a Ditto and is not one
+	// afterwards has been actively REFUTED, which detectDitto can do from a
+	// single prior scan through its 0N and BN branches — cases where
+	// hadDetectEvidence is false, so without this they would be logged as
+	// "no evidence" when they are the clearest evidence there is. That
+	// under-counts false positives, the one direction that flatters the roll
+	// rule.
+	wasDitto := pokemon.IsDitto
+
+	// detectDitto files a Ditto's scan by scan.CellWeather, and a cache miss
+	// leaves that at its NONE default — indistinguishable from an observed
+	// NONE, so a boosted Ditto would be filed as an unboosted one, and on a
+	// roll-marked record with no history it would be REFUTED: the keep
+	// branch reads NONE as "not partly cloudy", where a level of 31-35 is
+	// impossible for a Ditto. See dittoBoostFromObservedValues for what
+	// settles it instead.
+	//
+	// It runs for a roll-marked record whether or not derive_iv is on. The
+	// mark rests on the same derivation, so consulting it again adds no
+	// trust that was not already extended; withholding it turns a cache miss
+	// into evidence against a prediction the operator asked for.
+	if !cellWeatherKnown && pokemon.IsDitto && (config.Config.DeriveIv || wasRollMarked) {
+		if boosted, ok := dittoBoostFromObservedValues(uint64(pokemon.Id), &scan); ok {
+			if boosted {
+				scan.CellWeather = int32(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
+			} else {
+				scan.CellWeather = int32(pogo.GameplayWeatherProto_NONE)
+			}
+		}
+	}
+
 	caughtIv, err := pokemon.detectDitto(&scan)
 	if err != nil {
 		caughtIv = &scan
 		log.Errorf("[POKEMON] Unexpected %d: %s", pokemon.Id, err)
 	}
-	if caughtIv == nil { // this can only happen for a 0P Ditto
-		pokemon.SetLevel(null.IntFrom(int64(scan.Level - 5)))
-		pokemon.clearIv(false)
-	} else {
+	// The encounter is definitive wherever it actually answers the question.
+	// caughtIv IS that answer: detectDitto returns the Ditto you would CATCH,
+	// recovered from real observations, and for anything that is not a Ditto
+	// it is this encounter's own scan. So it wins whenever it exists.
+	//
+	// It does not always exist. In 0P the encounter reports the SEEN set —
+	// boosted, because the Ditto under the disguise is Normal-typed — while
+	// the Ditto you catch is unboosted, and nothing observed those values: a
+	// roll-marked record has no history, which is why that branch returns no
+	// caught set at all. Derivation can supply it exactly, so it does, and
+	// only there.
+	//
+	// Failing both, the 0P answer is a level adjustment and cleared IVs: the
+	// caught level is knowable from the observed one, the IVs are not.
+	//
+	// Only IVs and level in the derived case: size and moves came from the
+	// proto above, and the encounter is the better source for both.
+	switch {
+	case caughtIv != nil:
 		pokemon.SetLevel(null.IntFrom(int64(caughtIv.Level)))
 		pokemon.calculateIv(int64(caughtIv.Attack), int64(caughtIv.Defense), int64(caughtIv.Stamina))
+	case config.Config.DeriveIv && pokemon.IsDitto:
+		caught := encounter.For(uint64(pokemon.Id),
+			dittoCaughtBoosted(int64OrZero(pokemon.Weather)), 0).Values
+		pokemon.SetLevel(null.IntFrom(int64(caught.Level)))
+		pokemon.calculateIv(int64(caught.Attack), int64(caught.Defense), int64(caught.Stamina))
+	default: // 0P with no derivation to fall back on
+		pokemon.SetLevel(null.IntFrom(int64(scan.Level - 5)))
+		pokemon.clearIv(false)
 	}
 	if err == nil {
 		newScans := make([]*pokemonScan, len(pokemon.scanHistory)+1)
@@ -1223,6 +2169,20 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 		pokemon.scanHistory = make([]*pokemonScan, 1)
 		pokemon.scanHistory[0] = &scan
 	}
+
+	// Every real encounter is a labelled test case for the derivation
+	// (decoder/derive_validation.go). Runs after detectDitto so is_ditto and
+	// DisplayPokemonId reflect this sighting's ground truth, but compares
+	// against observedScan — captured before detectDitto ran — not the
+	// (possibly Ditto-rewritten) pokemon record.
+	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+
+	// Normally a no-op: it returns immediately once Cp is set, which the proto
+	// almost always does. It earns its place when the proto did not report one
+	// — the encounter's own IVs and level are right there, and nothing else on
+	// this path would ever fill it. nil weather because the map is read only
+	// by the Ditto arm, which falls through to the record's own values.
+	pokemon.recomputeCpIfNeeded(ctx, db, nil)
 
 	pokemon.setUsernameIfStored(username)
 }
@@ -1252,16 +2212,20 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	return true
 }
 
+// encounteredSeenType reports whether a seen type records a real encounter.
+func encounteredSeenType(code SeenTypeCode) bool {
+	switch code {
+	case SeenTypeCodeEncounter, SeenTypeCodeLureEncounter,
+		SeenTypeCodeTappableEncounter, SeenTypeCodeTappableLureEncounter:
+		return true
+	}
+	return false
+}
+
 // isSeenFromTappable reports whether the pokemon's seen type is one of the
-// two tappable ones.
-//
-// It used to return the negation of that under this same name, with its only
-// call site reading `if pokemon.isSeenFromTappable() { SetSeenType(Encounter) }`
-// — which is to say, overwriting the tappable seen type exactly when the
-// pokemon was not seen from a tappable. The behavior was right and the name
-// was backwards, so a reader who trusted the name and "fixed" the call site
-// would have destroyed tappable attribution. Both were inverted together; the
-// behavior is unchanged.
+// two tappable ones. Its call site overwrites the seen type when this is
+// FALSE, so tappable attribution depends on the sense here being read
+// correctly.
 func (pokemon *Pokemon) isSeenFromTappable() bool {
 	return pokemon.SeenType.Code == SeenTypeCodeTappableEncounter || pokemon.SeenType.Code == SeenTypeCodeTappableLureEncounter
 }
@@ -1345,6 +2309,24 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			pokemon.SetMove2(null.NewInt(0, false))
 			pokemon.SetCp(null.NewInt(0, false))
 			pokemon.SetShiny(null.NewBool(false, false))
+			// A Ditto's IVs and level were taken on the Ditto's own boost rule
+			// (boosted only in PP), which is not the new identity's: in any
+			// other boosting weather the two branches differ. With derivation
+			// on they are cleared so the sighting derives the new identity's;
+			// with it off there is nothing to replace them, and they are kept.
+			if pokemon.IsDitto && config.Config.DeriveIv {
+				pokemon.clearIv(false)
+				pokemon.SetLevel(null.NewInt(0, false))
+			}
+			// IVs and level otherwise survive a display change, so a spawn
+			// first seen (and derived or encountered) as another species that
+			// now displays as Minior would keep that identity's stats, and
+			// have a Minior CP recomputed from them. Minior's stats are the
+			// player's, so they are dropped rather than carried over.
+			if hasPlayerSpecificStats(pokemonId) {
+				pokemon.clearIv(true)
+				pokemon.SetLevel(null.NewInt(0, false))
+			}
 			pokemon.SetIsDitto(false)
 			pokemon.SetDisplayPokemonId(null.NewInt(0, false))
 			pokemon.SetDisplayPokemonForm(null.NewInt(0, false))
@@ -1363,15 +2345,29 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	pokemon.SetGender(null.IntFrom(int64(display.Gender)))
 	pokemon.SetCostume(null.IntFrom(int64(display.Costume)))
 	if !pokemon.isNewRecord() {
+		// This passes the DISPLAY's reported condition, which is also what
+		// repopulateIv's Ditto arm expects: it resolves the caught boost state
+		// through dittoCaughtBoosted, which needs no cell weather.
 		pokemon.repopulateIv(int64(display.WeatherBoostedCondition), display.IsStrongPokemon)
 	}
+	// The DISPLAY's weather is what gets stored, for a Ditto as for anything
+	// else: the record's weather and CP describe what a map shows — the
+	// disguise — while its IVs and level describe what you actually catch,
+	// which for a Ditto in PARTLY_CLOUDY is boosted. The two halves answer
+	// different questions and deliberately disagree.
+	//
+	// recomputeCpIfNeeded depends on this: its Ditto arm resolves cell weather
+	// only when the stored weather is NONE, and computes CP for
+	// DisplayPokemonId. Storing the Ditto's own boost state here would skip
+	// that and produce CP for the wrong thing.
 	pokemon.SetWeather(null.IntFrom(int64(display.WeatherBoostedCondition)))
 	pokemon.SetIsStrong(null.BoolFrom(display.IsStrongPokemon))
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
-	// Do not restore player-specific Minior stats from an earlier encounter.
-	if pokemon.PokemonId == int16(pogo.HoloPokemonId_MINIOR) {
+	// Do not restore player-specific Minior stats from an earlier encounter,
+	// nor derive them for the new weather.
+	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
 	// pokemon.Weather holds the narrowed reading, so narrow the incoming one
@@ -1391,16 +2387,54 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		pokemon.clearIv(true)
 		return
 	} else {
-		isBoosted = weather == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY)
-		// both Ditto and disguise are boosted and Ditto was not boosted: none -> boosted
-		// or both Ditto and disguise were boosted and Ditto is not boosted: boosted -> none
-		if int64OrZero(pokemon.Weather) == int64(pogo.GameplayWeatherProto_PARTLY_CLOUDY) == isBoosted {
+		// Both sides read the same quantity, the reported condition: stored on
+		// the record by the previous sighting, and passed in by this one.
+		isBoosted = dittoCaughtBoosted(weather)
+		if dittoCaughtBoosted(int64OrZero(pokemon.Weather)) == isBoosted {
 			return
 		}
 	}
 	matchingScan, isBoostedMatches := pokemon.locateScan(isStrong, isBoosted)
+	// locateScan does not return nil when it has only the OTHER boost state's
+	// scan — it returns that one with isBoostedMatches false. For an ordinary
+	// Pokemon that is not a scan for this state at all: the game rolls
+	// different IVs and a different level per boost state, which is the whole
+	// reason this function has work to do. Treating it as a usable scan sends
+	// the flip down the branch below, which clears the IVs and keeps only a
+	// ±5 level estimate — while the derivation could supply both exactly.
+	//
+	// A strong Pokemon is the exception and keeps the fallback: its stats do
+	// not move with weather, so the other state's scan IS its scan.
+	usableScan := matchingScan != nil && (isBoostedMatches || isStrong)
 	var oldAtk, oldDef, oldSta int64
-	if matchingScan == nil {
+	if !usableScan && config.Config.DeriveIv && !isStrong {
+		// Derive for the state actually being asked about — the encounter id
+		// is unchanged and isBoosted above already accounts for Ditto.
+		//
+		// Strong Pokemon are excluded: a strong Pokemon's IVs are unaffected
+		// by weather (see the isBoostedMatches || isStrong branch below, and
+		// detectDitto's identical CompressedIv requirement across boost states
+		// for a strong scan), so the ordinary boosted-floor derivation in
+		// encounter.For would write IVs that cannot occur for one. Whether a
+		// strong Pokemon's true values are the unboosted derivation with the
+		// level shift applied separately is an open question. Until it is
+		// answered, no data beats wrong data.
+		//
+		// derive_iv gates the branch rather than only applyDerivedValues:
+		// with derivation off that call writes nothing, and this arm would
+		// then clear CP and PVP alone, leaving the PREVIOUS boost state's IVs
+		// and level valid for the new one.
+		//
+		// The encounter's stats no longer stand, so an encounter record goes
+		// back to wild, as it does when the stats are cleared.
+		v := encounter.For(uint64(pokemon.Id), isBoosted, int32(int64OrZero(pokemon.Form)))
+		pokemon.applyDerivedValues(v)
+		pokemon.downgradeEncounterSeenType()
+		pokemon.SetCp(null.NewInt(0, false))
+		pokemon.SetPvp(null.NewString("", false))
+	} else if matchingScan == nil {
+		// Nothing stored and nothing derivable: clear, which is what
+		// derivation-off keeps.
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {
@@ -1445,6 +2479,11 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	}
 }
 
+// cellWeatherMissDrops rate-limits recomputeCpIfNeeded's weather-lookup
+// warning. The batch weather map is consulted first and normally answers; this
+// covers the fallback that takes the weather record lock.
+var cellWeatherMissDrops util.DropReporter
+
 func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition) {
 	o := ohbem.Load()
 	if pokemon.Cp.Valid || o == nil {
@@ -1463,9 +2502,14 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 			if !found {
 				record, unlock, err := getWeatherRecordReadOnly(ctx, db, cellId, "recomputeCpIfNeeded")
 				if err != nil || record == nil || !record.GameplayCondition.Valid {
-					log.Warnf("[POKEMON] Failed to obtain weather for Pokemon %d: %s", pokemon.Id, err)
+					// Rate-limited: a roll-marked Ditto reaches this arm from
+					// every GMO batch, so a cell whose weather is not held
+					// locally would otherwise warn once per sighting.
+					cellWeatherMissDrops.Report(func(dropped int64) {
+						log.Warnf("[POKEMON] %d Ditto CP recomputes could not obtain cell weather, most recently Pokemon %d at cell %d: %v",
+							dropped, pokemon.Id, cellId, err)
+					})
 				} else {
-					log.Warnf("[POKEMON] Weather not found locally for %d at %d", pokemon.Id, cellId)
 					cellWeather = pogo.GameplayWeatherProto_WeatherCondition(record.GameplayCondition.Int64)
 					found = true
 				}
@@ -1485,23 +2529,38 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 		displayPokemon = int(pokemon.PokemonId)
 		displayPokemonForm = int(pokemon.Form.ValueOrZero())
 	}
-	var cp int
-	var err error
-	if shouldOverrideIv {
-		if overrideIv == nil {
-			return
-		}
+	var atk, def, sta int
+	var level float64
+	// overrideIv != nil, not just shouldOverrideIv: a roll-marked Ditto has no
+	// scan history by construction, so in 0P the unboosted observation this
+	// arm looks for does not exist. Falling through to the record's own values
+	// is correct, not merely a fallback: they are the CAUGHT set, which in 0P
+	// is the unboosted one — the values overrideIv would have supplied.
+	if shouldOverrideIv && overrideIv != nil {
 		// You should see boosted IV for 0P Ditto
-		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
-			int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina), float64(overrideIv.Level))
+		atk, def, sta = int(overrideIv.Attack), int(overrideIv.Defense), int(overrideIv.Stamina)
+		level = float64(overrideIv.Level)
 	} else {
 		if !pokemon.AtkIv.Valid || !pokemon.Level.Valid {
 			return
 		}
-		cp, err = o.CalculateCp(displayPokemon, displayPokemonForm, 0,
-			int(pokemon.AtkIv.ValueOrZero()), int(pokemon.DefIv.ValueOrZero()), int(pokemon.StaIv.ValueOrZero()),
-			float64(pokemon.Level.ValueOrZero()))
+		atk, def, sta = int(pokemon.AtkIv.ValueOrZero()), int(pokemon.DefIv.ValueOrZero()), int(pokemon.StaIv.ValueOrZero())
+		level = float64(pokemon.Level.ValueOrZero())
 	}
+	// Level 0 is not a level, and ohbem does not treat it as one: it indexes
+	// its CP multiplier table at level*2-2 and panics with "index out of range
+	// [-2]". Nothing in the decode path recovers, so this would take the
+	// goroutine down rather than lose one CP.
+	//
+	// Zero is reachable without anything looking wrong. SetLevel clamps into
+	// uint8, so any adjustment below 1 — addEncounterPokemon's scan.Level-5 on
+	// the 0P arm, repopulateIv's newLevel -= 5, or a cp_multiplier low enough
+	// that cpMultiplierToLevel itself goes negative — stores a VALID 0 rather
+	// than an absent one, and passes the Valid checks above.
+	if level < 1 {
+		return
+	}
+	cp, err := o.CalculateCp(displayPokemon, displayPokemonForm, 0, atk, def, sta, level)
 	if err == nil {
 		pokemon.SetCp(null.IntFrom(int64(cp)))
 	} else {
