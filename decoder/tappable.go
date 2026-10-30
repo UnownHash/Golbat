@@ -43,7 +43,8 @@ type Tappable struct {
 	// saving this type exists for.
 	debug debugChangeAccumulator `db:"-"`
 
-	newRecord bool `db:"-"` // Not persisted - tracks if this is a new record
+	newRecord     bool `db:"-"` // Not persisted - tracks if this is a new record
+	rewardChanged bool `db:"-"` // reward type changed since the last save; drives the tappable webhook
 
 	// firstSeen is a lower bound on this Tappable's lifetime, used only by
 	// resolveDespawnExpiry (pokemon_decode.go): no tappable lives longer than

@@ -132,6 +132,9 @@ var lootItemTypeOneof = (&pogo.LootItemProto{}).ProtoReflect().Descriptor().Oneo
 
 // setRewards sets all reward fields together, so none is left from a previous decode.
 func (ta *Tappable) setRewards(r tappableRewards) {
+	if ta.RewardType != r.Type {
+		ta.rewardChanged = true
+	}
 	ta.SetRewardType(r.Type)
 	ta.SetItemId(r.ItemId)
 	ta.SetRewardPokemonId(r.PokemonId)
