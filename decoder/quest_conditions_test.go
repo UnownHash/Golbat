@@ -232,7 +232,7 @@ func TestQuestConditions_TempEvolution(t *testing.T) {
 	counts := func() map[[2]int16]int {
 		m := map[[2]int16]int{}
 		for _, r := range GetAvailableQuestConditions() {
-			m[[2]int16{r.RewardType, r.TempEvolution}] = r.Count
+			m[[2]int16{r.RewardType, int16(r.TempEvolutionId)}] = r.Count
 		}
 		return m
 	}

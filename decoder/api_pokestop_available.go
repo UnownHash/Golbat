@@ -9,16 +9,16 @@ import (
 // pokestops, with how many forts offer it. Sourced solely from the maintained
 // quest-conditions map (Task 3) — FortLookup itself omits title/target.
 type ApiPokestopQuestAvailable struct {
-	WithAr        bool   `json:"with_ar" doc:"True for the AR quest slot, false for the no-AR slot"`
-	RewardType    int16  `json:"reward_type" doc:"Quest reward type (pogo enum: 1=xp, 2=item, 3=stardust, 4=candy, 7=pokemon, 9=xl_candy, 12=mega_energy, …)"`
-	ItemId        int16  `json:"item_id" doc:"Item id when reward_type is item (2), else 0"`
-	Amount        int16  `json:"amount" doc:"Reward amount for stardust/xp/mega-energy rewards, else 0"`
-	PokemonId     int16  `json:"pokemon_id" doc:"Reward pokemon id for candy/xl-candy/pokemon/mega rewards, else 0"`
-	FormId        int16  `json:"form_id" doc:"Reward pokemon form id, else 0"`
-	TempEvolution int16  `json:"temp_evolution" doc:"Reward temp evolution for temp evo branch mega energy rewards (reward_type 20), else 0"`
-	Title         string `json:"title" doc:"Quest title/template string, for the advanced title/target sub-filter"`
-	Target        int32  `json:"target" doc:"Quest target count"`
-	Count         int    `json:"count" doc:"Number of resident forts currently offering this exact reward+title+target"`
+	WithAr          bool   `json:"with_ar" doc:"True for the AR quest slot, false for the no-AR slot"`
+	RewardType      int16  `json:"reward_type" doc:"Quest reward type (pogo enum: 1=xp, 2=item, 3=stardust, 4=candy, 7=pokemon, 9=xl_candy, 12=mega_energy, …)"`
+	ItemId          int16  `json:"item_id" doc:"Item id when reward_type is item (2), else 0"`
+	Amount          int16  `json:"amount" doc:"Reward amount for stardust/xp/mega-energy rewards, else 0"`
+	PokemonId       int16  `json:"pokemon_id" doc:"Reward pokemon id for candy/xl-candy/pokemon/mega rewards, else 0"`
+	FormId          int16  `json:"form_id" doc:"Reward pokemon form id, else 0"`
+	TempEvolutionId int8   `json:"temp_evolution_id" doc:"Temp evolution (mega/primal) id of the reward for temp evo branch mega energy (reward_type 20), else 0"`
+	Title           string `json:"title" doc:"Quest title/template string, for the advanced title/target sub-filter"`
+	Target          int32  `json:"target" doc:"Quest target count"`
+	Count           int    `json:"count" doc:"Number of resident forts currently offering this exact reward (including temp evolution) + title + target"`
 }
 
 // ApiPokestopInvasionAvailable is one distinct active invasion (grunt/leader/
