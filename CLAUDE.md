@@ -296,15 +296,19 @@ Worker queue depths are exported every 10s as
 | `pokemon` | Both IV types | `pokemon` |
 | `gym` | GymDetails | `gym_details` |
 | `raid` | Raid | `raid` |
+| `raid_lobby` | RaidLobby | `raid_lobby` |
 | `quest` | Quest | `quest` |
 | `pokestop` | Pokestop | `pokestop` |
 | `invasion` | Invasion | `invasion` |
 | `weather` | Weather | `weather` |
 | `fort_update` | FortUpdate | `fort_update` |
 | `max_battle` | MaxBattle | `max_battle` |
+| `max_battle_lobby` | MaxBattleLobby | `max_battle_lobby` |
 | `tappable` | Tappable | `tappable` |
 
 `tappable` covers reward tappables only, sent when a reward type is first recorded (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks. Payload follows the `pokemon` hook's field names (`webhooks.md`).
+
+`raid_lobby` / `max_battle_lobby` fire on every push-gateway lobby player-count message (`decode_push_gateway.go`) for a known gym/station; the lobby fields are in-memory only, never persisted.
 
 ### Dispatch Flow
 

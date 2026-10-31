@@ -20,12 +20,14 @@ document and the code disagree, the code wins — please update this document.
   - [pokemon (PokemonIV / PokemonNoIV)](#pokemon)
   - [gym_details](#gym_details)
   - [raid](#raid)
+  - [raid_lobby](#raid_lobby)
   - [pokestop](#pokestop)
   - [quest](#quest)
   - [invasion](#invasion)
   - [weather](#weather)
   - [fort_update](#fort_update)
   - [max_battle](#max_battle)
+  - [max_battle_lobby](#max_battle_lobby)
   - [tappable](#tappable)
 - [Configuration](#configuration)
 
@@ -100,7 +102,7 @@ Every message, regardless of type, is wrapped in this envelope:
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
-| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`. |
+| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `raid_lobby`, `max_battle_lobby`, `tappable`. |
 | `message` | object | Type-specific payload; see the sections below. |
 
 Area names are **not** included in the envelope — they are applied server-side
@@ -605,6 +607,34 @@ Example:
   { "timeslot": 1744132500000, "going_count": 8, "maybe_count": 2 }
 ]
 ```
+
+---
+
+### raid_lobby
+
+Sent when a push-gateway `raid_lobby_player_count` message reports the player count of a
+raid lobby.
+
+**Source**: `decoder/gym_state.go`, `UpdateGymRaidLobby` (from `decodePushGateway` in
+`decode_push_gateway.go`, fed by `/raw` entries with a `message_type`).
+
+#### Firing conditions
+
+Fires on every `raid_lobby_player_count` message for a gym Golbat already knows (in
+cache or DB). Messages for an unknown gym are dropped, since there is no
+location to match areas against. Nothing is compared against the previous
+value, so repeated counts are sent again. The lobby fields are kept in memory
+only and are never written to the database.
+
+#### Payload
+
+| JSON field          | Go type | Description |
+|---------------------|---------|-------------|
+| `id`                | string  | Gym ID. |
+| `latitude`          | float64 | Latitude. |
+| `longitude`         | float64 | Longitude. |
+| `player_count`      | int64   | Players currently in the lobby. |
+| `lobby_join_end_ms` | int64   | Unix **milliseconds** when the lobby stops accepting joins (`lobby_join_end_ms`). |
 
 ---
 
@@ -1176,6 +1206,34 @@ Fires when **any** of these is true:
 
 ---
 
+### max_battle_lobby
+
+Sent when a push-gateway `bread_lobby_player_count` message reports the player count of a
+Max Battle lobby.
+
+**Source**: `decoder/station_state.go`, `UpdateStationBattleLobby` (from `decodePushGateway` in
+`decode_push_gateway.go`, fed by `/raw` entries with a `message_type`).
+
+#### Firing conditions
+
+Fires on every `bread_lobby_player_count` message for a station Golbat already knows (in
+cache or DB). Messages for an unknown station are dropped, since there is no
+location to match areas against. Nothing is compared against the previous
+value, so repeated counts are sent again. The lobby fields are kept in memory
+only and are never written to the database.
+
+#### Payload
+
+| JSON field          | Go type | Description |
+|---------------------|---------|-------------|
+| `id`                | string  | Station ID. |
+| `latitude`          | float64 | Latitude. |
+| `longitude`         | float64 | Longitude. |
+| `player_count`      | int64   | Players currently in the lobby. |
+| `lobby_join_end_ms` | int64   | Unix **milliseconds** when the lobby stops accepting joins (`bread_lobby_join_end_ms`). |
+
+---
+
 ### tappable
 
 Sent when a reward is first recorded for a tappable (candy, items, stardust,
@@ -1248,6 +1306,7 @@ X-Custom-Header = "value"
 |-------------------|------------------------|--------|
 | `gym`             | `gym_details`          | Gym team/slots/battle changes. |
 | `raid`            | `raid`                 | Raid spawns and changes. |
+| `raid_lobby`      | `raid_lobby`           | Raid lobby player counts (push gateway). |
 | `quest`           | `quest`                | Quests (both AR and non-AR). |
 | `pokestop`        | `pokestop`             | Lure and power-up changes. |
 | `invasion`        | `invasion`             | Team Rocket invasions. |
@@ -1257,6 +1316,7 @@ X-Custom-Header = "value"
 | `pokemon_no_iv`   | `pokemon`              | Only Pokémon without full IVs. |
 | `pokemon`         | `pokemon`              | Both IV and no-IV variants. |
 | `max_battle`      | `max_battle`           | Station Max Battle state. |
+| `max_battle_lobby`| `max_battle_lobby`     | Max Battle lobby player counts (push gateway). |
 | `tappable`        | `tappable`             | Reward tappables (candy, items, stardust, …). |
 
 Unknown type strings cause Golbat to fail to start with a config error.
