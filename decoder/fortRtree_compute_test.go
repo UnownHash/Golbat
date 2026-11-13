@@ -8,7 +8,7 @@ import (
 	"github.com/puzpuzpuz/xsync/v4"
 )
 
-// updatePokestopLookup (pokestop entity lock) and
+// fortRtreeUpdatePokestopOnSave (pokestop entity lock) and
 // updatePokestopIncidentLookup (incident entity lock) update the same
 // fortLookupCache key from different lock domains, each preserving the
 // other's fields. With plain Load->Store the pair could interleave and
@@ -17,7 +17,7 @@ import (
 // halves' latest writes must be present.
 func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
 	fortLookupCache = xsync.NewMap[FortId, FortLookup]()
-	initQuestConditions() // updatePokestopLookup reconciles quest conditions
+	initQuestConditions()
 
 	const idStr = "00000000000000000000000000000001"
 	id := mustFortId(t, idStr)
@@ -33,12 +33,12 @@ func TestFortLookupConcurrentPokestopAndIncidentWriters(t *testing.T) {
 	}}
 
 	for i := 0; i < 2000; i++ {
-		fortLookupCache.Delete(id)
-		updatePokestopLookup(stop) // seed entry (as a fort save would)
+		removeFortIndex(POKESTOP, id)
+		fortRtreeUpdatePokestopOnSave(stop)
 
 		var wg sync.WaitGroup
 		wg.Add(2)
-		go func() { defer wg.Done(); updatePokestopLookup(stop) }()
+		go func() { defer wg.Done(); fortRtreeUpdatePokestopOnSave(stop) }()
 		go func() { defer wg.Done(); updatePokestopIncidentLookup(id, inc) }()
 		wg.Wait()
 

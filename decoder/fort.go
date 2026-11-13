@@ -196,7 +196,8 @@ func UpdateFortRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetail
 		return false, fmt.Sprintf("Error: unparseable fort id %q", mapFort.Id)
 	}
 
-	// when we miss, we check the gym, if again, we save it in cache for 5 minutes (in gym part)
+	// Resolve the active type. Either table can retain the deleted row
+	// from a conversion. Cache the metadata if neither type is active.
 	status, output := UpdatePokestopRecordWithGetMapFortsOutProto(ctx, db, fortId, mapFort)
 	if !status {
 		status, output = UpdateGymRecordWithGetMapFortsOutProto(ctx, db, fortId, mapFort)

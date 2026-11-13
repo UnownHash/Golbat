@@ -62,6 +62,9 @@ func UpdateGymRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDetails
 		return false, ""
 	}
 	defer unlock()
+	if gym.Deleted {
+		return false, ""
+	}
 
 	gym.updateGymFromGetMapFortsOutProto(fortId, mapFort, false)
 	saveGymRecord(ctx, db, gym)

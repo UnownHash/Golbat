@@ -58,23 +58,30 @@ func TestUpdatePokemonLookupReportsExisted(t *testing.T) {
 // deferFortEviction must not touch lookup/tree state when the entry is
 // already gone (deleted fort) or owned by a converted counterpart.
 func TestDeferFortEvictionGuards(t *testing.T) {
-	id := mustFortId(t, "00000000000000000000000000000001")
+	id := mustFortId(t, "00000000000000000000000000000d07")
 
 	// Absent lookup: no-op (and no panic / unpaired enqueue).
 	fortLookupCache.Delete(id)
-	deferFortEviction(POKESTOP, id, 8.5, 9.5)
+	deferFortEviction(POKESTOP, id)
 
 	// Type mismatch (pokestop→gym conversion): the gym owns the entry now.
 	fortLookupCache.Store(id, FortLookup{FortType: GYM, Lat: 8.5, Lon: 9.5})
 	defer fortLookupCache.Delete(id)
 
-	deferFortEviction(POKESTOP, id, 8.5, 9.5)
+	deferFortEviction(POKESTOP, id)
 	if fl, ok := fortLookupCache.Load(id); !ok || fl.FortType != GYM {
 		t.Error("stale pokestop eviction removed the live gym's lookup entry")
 	}
 
+	gymCache.Set(id, &Gym{GymData: GymData{Id: id, Lat: 8.5, Lon: 9.5}}, time.Minute)
+	deferFortEviction(GYM, id)
+	if _, ok := fortLookupCache.Load(id); !ok {
+		t.Error("late eviction removed the recached gym's lookup entry")
+	}
+	gymCache.Delete(id)
+
 	// Matching type: cleanup proceeds.
-	deferFortEviction(GYM, id, 8.5, 9.5)
+	deferFortEviction(GYM, id)
 	if _, ok := fortLookupCache.Load(id); ok {
 		t.Error("matching-type eviction did not remove the lookup entry")
 	}

@@ -44,3 +44,19 @@ func TestFlushFortTreeEvictionsRemovesPoints(t *testing.T) {
 		}
 	}
 }
+
+func TestFlushFortTreeEvictionsPreservesReindexedFort(t *testing.T) {
+	id := mustFortId(t, "00000000000000000000000000000d04")
+	const lat, lon = 12.5, 13.5
+	gym := &Gym{GymData: GymData{Id: id, Lat: lat, Lon: lon}}
+	fortRtreeUpdateGymOnSave(gym)
+	t.Cleanup(func() { removeFortIndex(GYM, id) })
+
+	flushFortTreeEvictions([]treeEvictionEntry[FortId]{{id: id, lat: lat, lon: lon}})
+	for _, found := range GetFortsInBounds(lat-.01, lon-.01, lat+.01, lon+.01) {
+		if found == id {
+			return
+		}
+	}
+	t.Fatal("queued eviction removed the reindexed gym")
+}

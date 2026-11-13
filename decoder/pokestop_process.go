@@ -105,6 +105,9 @@ func UpdatePokestopRecordWithGetMapFortsOutProto(ctx context.Context, db db.DbDe
 		return false, ""
 	}
 	defer unlock()
+	if pokestop.Deleted {
+		return false, ""
+	}
 
 	pokestop.updatePokestopFromGetMapFortsOutProto(fortId, mapFort)
 	savePokestopRecord(ctx, db, pokestop)
