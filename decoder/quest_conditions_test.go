@@ -59,7 +59,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	stop := newQuestStop(stopId, "catch_x", 3)
 
 	// Load / first lookup -> +1.
-	updatePokestopLookup(stop)
+	fortRtreeUpdatePokestopOnSave(stop)
 	if got := GetAvailableQuestConditions(); len(got) != 1 || got[0].Count != 1 || got[0].Title != "catch_x" {
 		t.Fatalf("after load: want 1 entry count=1 title=catch_x, got %+v", got)
 	}
@@ -67,7 +67,7 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	// Quest change on the same fort -> old key removed, new key added, still one entry.
 	stop.QuestTitle = null.StringFrom("catch_y")
 	stop.QuestTarget = null.IntFrom(7)
-	updatePokestopLookup(stop)
+	fortRtreeUpdatePokestopOnSave(stop)
 	got := GetAvailableQuestConditions()
 	if len(got) != 1 {
 		t.Fatalf("after change: want exactly 1 entry, got %+v", got)
@@ -83,21 +83,21 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	const stop2IdStr = "00000000000000000000000000000002"
 	stop2Id := mustFortId(t, stop2IdStr)
 	stop2 := newQuestStop(stop2Id, "catch_y", 7)
-	updatePokestopLookup(stop2)
+	fortRtreeUpdatePokestopOnSave(stop2)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 2 {
 		t.Fatalf("after second fort: want catch_y/target=7 count=2, got %+v", got)
 	}
 
 	// Evict fort 1 -> back to count 1.
-	deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
+	deferFortEviction(POKESTOP, stopId)
 	got = GetAvailableQuestConditions()
 	if r, ok := findCondition(got, "catch_y", 7); !ok || r.Count != 1 {
 		t.Fatalf("after evict fort1: want catch_y/target=7 count=1, got %+v", got)
 	}
 
 	// Evict fort 2 -> empty, and its tracker entry gone.
-	deferFortEviction(POKESTOP, stop2Id, stop2.Lat, stop2.Lon)
+	deferFortEviction(POKESTOP, stop2Id)
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
 		t.Fatalf("after evict fort2: want 0 entries, got %+v", got)
 	}
@@ -106,10 +106,8 @@ func TestQuestConditions_Lifecycle(t *testing.T) {
 	}
 }
 
-// TestQuestConditions_DeleteAndConversion covers the two non-eviction removal
-// paths: a deleted pokestop (via fortRtreeUpdatePokestopOnSave's Deleted branch)
-// and a pokestop that converts to a gym (its stale contribution must be dropped
-// when the old pokestop finally evicts).
+// TestQuestConditions_DeleteAndConversion checks that a fort stops contributing
+// quest conditions as soon as it is deleted or converted to a gym.
 func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	initQuestConditions()
 
@@ -117,7 +115,7 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 	const delIdStr = "00000000000000000000000000000001"
 	delId := mustFortId(t, delIdStr)
 	del := newQuestStop(delId, "spin_x", 4)
-	updatePokestopLookup(del)
+	fortRtreeUpdatePokestopOnSave(del)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("delete setup: want 1 entry")
 	}
@@ -127,26 +125,21 @@ func TestQuestConditions_DeleteAndConversion(t *testing.T) {
 		t.Fatalf("after delete: want 0 entries, got %+v", got)
 	}
 
-	// Conversion path: fort is a pokestop with a quest, then its FortLookup
-	// entry is overwritten by a gym. The pokestop's contribution lingers until
-	// its own eviction fires (FortType mismatch), which must still drop it.
 	const convIdStr = "00000000000000000000000000000002"
 	convId := mustFortId(t, convIdStr)
 	conv := newQuestStop(convId, "battle_x", 2)
-	updatePokestopLookup(conv)
+	fortRtreeUpdatePokestopOnSave(conv)
 	if len(GetAvailableQuestConditions()) != 1 {
 		t.Fatalf("conversion setup: want 1 entry")
 	}
 	gym := &Gym{GymData: GymData{Id: conv.Id, Lat: conv.Lat, Lon: conv.Lon}}
-	updateGymLookup(gym) // overwrites FortLookup[id] to GYM; count still stale here
-	// Stale pokestop eviction: FortLookup is now GYM (mismatch) but the quest
-	// contribution must still be removed.
-	deferFortEviction(POKESTOP, convId, conv.Lat, conv.Lon)
+	fortRtreeUpdateGymOnSave(gym)
+	t.Cleanup(func() { removeFortIndex(GYM, convId) })
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
-		t.Fatalf("after conversion+evict: want 0 entries, got %+v", got)
+		t.Fatalf("after conversion: want 0 entries, got %+v", got)
 	}
 	if _, ok := questFortKeys.Load(convId); ok {
-		t.Fatalf("after conversion+evict: tracker entry should be gone")
+		t.Fatal("quest tracker entry survived conversion")
 	}
 }
 
@@ -169,8 +162,8 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for i := 0; i < iterations; i++ {
-				updatePokestopLookup(stop)
-				deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
+				fortRtreeUpdatePokestopOnSave(stop)
+				deferFortEviction(POKESTOP, stopId)
 			}
 		}()
 	}
@@ -178,7 +171,7 @@ func TestQuestConditions_ConcurrentReconcile(t *testing.T) {
 
 	// Quiesce: the last operation on the fort is an eviction, so it must net to
 	// empty regardless of the interleavings above.
-	deferFortEviction(POKESTOP, stopId, stop.Lat, stop.Lon)
+	deferFortEviction(POKESTOP, stopId)
 
 	if got := GetAvailableQuestConditions(); len(got) != 0 {
 		t.Fatalf("after concurrent storm + final evict: want 0 entries, got %+v", got)
@@ -225,9 +218,9 @@ func TestQuestConditions_TempEvolution(t *testing.T) {
 		`[{"type":20,"info":{"amount":20,"pokemon_id":6,"temp_evolution":3}}]`)
 	mega := newTempEvoBranchStop(mustFortId(t, "00000000000000000000000000000003"), 12,
 		`[{"type":12,"info":{"amount":20,"pokemon_id":6}}]`)
-	updatePokestopLookup(megaX)
-	updatePokestopLookup(megaY)
-	updatePokestopLookup(mega)
+	fortRtreeUpdatePokestopOnSave(megaX)
+	fortRtreeUpdatePokestopOnSave(megaY)
+	fortRtreeUpdatePokestopOnSave(mega)
 
 	counts := func() map[[2]int16]int {
 		m := map[[2]int16]int{}
@@ -243,7 +236,7 @@ func TestQuestConditions_TempEvolution(t *testing.T) {
 
 	// A temp evolution change on the same fort moves its count.
 	megaX.QuestRewards = null.StringFrom(`[{"type":20,"info":{"amount":20,"pokemon_id":6,"temp_evolution":3}}]`)
-	updatePokestopLookup(megaX)
+	fortRtreeUpdatePokestopOnSave(megaX)
 	want = map[[2]int16]int{{20, 3}: 2, {12, 0}: 1}
 	if got := counts(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("after change: want %v, got %v", want, got)

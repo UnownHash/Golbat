@@ -56,3 +56,26 @@ func TestDeletedFortsNotIndexedOnLoad(t *testing.T) {
 		}
 	})
 }
+
+func TestDeletedPokestopDoesNotRemoveConvertedGym(t *testing.T) {
+	id := mustFortId(t, "00000000000000000000000000000d06")
+	const lat, lon = 15.5, 16.5
+	gym := &Gym{GymData: GymData{Id: id, Lat: lat, Lon: lon}}
+	fortRtreeUpdateGymOnSave(gym)
+	t.Cleanup(func() { removeFortIndex(GYM, id) })
+
+	fortRtreeUpdatePokestopOnSave(&Pokestop{PokestopData: PokestopData{
+		Id: id, Lat: lat, Lon: lon, Deleted: true,
+	}})
+
+	lookup, found := GetFortLookup(id)
+	if !found || lookup.FortType != GYM {
+		t.Fatal("saving the deleted pokestop removed the gym lookup")
+	}
+	for _, found := range GetFortsInBounds(lat-.01, lon-.01, lat+.01, lon+.01) {
+		if found == id {
+			return
+		}
+	}
+	t.Fatal("saving the deleted pokestop removed the gym from the tree")
+}

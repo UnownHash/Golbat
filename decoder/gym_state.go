@@ -90,12 +90,12 @@ func GetGymRecordReadOnly(ctx context.Context, db db.DbDetails, fortId FortId, c
 		// Only called if key doesn't exist - our Gym wins
 		return &dbGym
 	})
+	gym.Lock(caller)
 	if !found && config.Config.FortInMemory {
 		// Index out here — the GetOrSetFunc closure runs under the cache
 		// shard's write lock and must not take the fort tree mutex.
 		fortRtreeUpdateGymOnGet(&dbGym)
 	}
-	gym.Lock(caller)
 	return gym, func() { gym.Unlock() }, nil
 }
 

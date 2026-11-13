@@ -101,109 +101,127 @@ func initFortRtree() {
 	// Pokestop/gym/station cache keys are all FortId natively, so eviction
 	// callbacks hand the key straight to the FortId-keyed eviction path.
 	if config.Config.FortInMemory {
-		pokestopCache.OnEviction(func(_ FortId, p *Pokestop, _ ottercache.EvictionReason) {
-			deferFortEviction(POKESTOP, p.Id, p.Lat, p.Lon)
+		pokestopCache.OnEviction(func(id FortId, _ *Pokestop, _ ottercache.EvictionReason) {
+			deferFortEviction(POKESTOP, id)
 		})
-		gymCache.OnEviction(func(_ FortId, g *Gym, _ ottercache.EvictionReason) {
-			deferFortEviction(GYM, g.Id, g.Lat, g.Lon)
+		gymCache.OnEviction(func(id FortId, _ *Gym, _ ottercache.EvictionReason) {
+			deferFortEviction(GYM, id)
 		})
 	}
 
-	stationCache.OnEviction(func(stationId FortId, s *Station, _ ottercache.EvictionReason) {
+	stationCache.OnEviction(func(stationId FortId, _ *Station, _ ottercache.EvictionReason) {
 		clearStationBattleState(stationId)
 		if config.Config.FortInMemory {
-			deferFortEviction(STATION, stationId, s.Lat, s.Lon)
+			deferFortEviction(STATION, stationId)
 		}
 	})
 }
 
-// genericUpdateFort handles rtree updates for fort location changes and deletions.
-func genericUpdateFort(id FortId, lat float64, lon float64, deleted bool) {
-	oldFort, inMap := fortLookupCache.Load(id)
+// storeFortIndex serializes ownership changes with removals from the shared
+// spatial index. The entity's caller holds its record lock, or is preloading.
+func storeFortIndex(id FortId, next FortLookup, onlyIfMissing bool, questKeys []questConditionKey) bool {
+	fortTreeMutex.Lock()
+	defer fortTreeMutex.Unlock()
 
-	if deleted {
-		if inMap {
-			fortLookupCache.Delete(id)
-			removeFortFromTree(id, oldFort.Lat, oldFort.Lon)
+	old, found := fortLookupCache.Load(id)
+	if found && onlyIfMissing {
+		return false
+	}
+
+	if !found || old.Lat != next.Lat || old.Lon != next.Lon {
+		if found {
+			point := [2]float64{old.Lon, old.Lat}
+			fortTree.Delete(point, point, id)
 		}
-		return
+		point := [2]float64{next.Lon, next.Lat}
+		// An eviction may have removed the lookup before its tree delete
+		// runs. Replace that leftover point when restoring at the same spot.
+		fortTree.Delete(point, point, id)
+		fortTree.Insert(point, point, id)
 	}
 
-	if !inMap {
-		addFortToTree(id, lat, lon)
-	} else if lat != oldFort.Lat || lon != oldFort.Lon {
-		removeFortFromTree(id, oldFort.Lat, oldFort.Lon)
-		addFortToTree(id, lat, lon)
-	}
-}
-
-// fortRtreeUpdatePokestopOnSave updates rtree and lookup cache when a pokestop is saved
-func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
-	genericUpdateFort(pokestop.Id, pokestop.Lat, pokestop.Lon, pokestop.Deleted)
-	if !pokestop.Deleted {
-		updatePokestopLookup(pokestop)
+	if next.FortType == POKESTOP {
+		// Incident writers use the lookup's per-key lock independently of
+		// the tree. Keep their fields when refreshing an existing PokéStop.
+		fortLookupCache.Compute(id, func(current FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
+			if loaded && current.FortType == POKESTOP {
+				next.Incidents = current.Incidents
+			}
+			return next, xsync.UpdateOp
+		})
+		reconcileFortQuestConditions(id, questKeys)
 	} else {
-		// A deleted pokestop drops out of the lookup cache (genericUpdateFort
-		// above) without a matching updatePokestopLookup, so reconcile its
-		// quest contribution to zero here.
-		removeFortQuestConditions(pokestop.Id)
+		fortLookupCache.Store(id, next)
+		if found && old.FortType == POKESTOP {
+			removeFortQuestConditions(id)
+		}
+	}
+	return true
+}
+
+// removeFortIndexLocked removes the lookup only when it still belongs to kind.
+// The caller holds fortTreeMutex through removal or enqueue of the tree point.
+func removeFortIndexLocked(kind FortType, id FortId) (FortLookup, bool) {
+	current, found := fortLookupCache.Load(id)
+	if !found || current.FortType != kind {
+		return FortLookup{}, false
+	}
+	if kind == POKESTOP {
+		removeFortQuestConditions(id)
+	}
+	fortLookupCache.Delete(id)
+	return current, true
+}
+
+func removeFortIndex(kind FortType, id FortId) {
+	fortTreeMutex.Lock()
+	defer fortTreeMutex.Unlock()
+
+	if old, removed := removeFortIndexLocked(kind, id); removed {
+		point := [2]float64{old.Lon, old.Lat}
+		fortTree.Delete(point, point, id)
 	}
 }
 
-// fortRtreeUpdateGymOnSave updates rtree and lookup cache when a gym is saved
-func fortRtreeUpdateGymOnSave(gym *Gym) {
-	genericUpdateFort(gym.Id, gym.Lat, gym.Lon, gym.Deleted)
-	if !gym.Deleted {
-		updateGymLookup(gym)
-	}
-}
-
-// fortRtreeUpdateStationOnSave updates rtree and lookup cache when a station is saved
-func fortRtreeUpdateStationOnSave(station *Station) {
-	genericUpdateFort(station.Id, station.Lat, station.Lon, false)
-	updateStationLookup(station)
-}
-
-// fortRtreeUpdatePokestopOnGet updates rtree when a pokestop is loaded from DB (cache miss)
-func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
-	// A deleted row still carries its enabled flag and quest fields, and the
-	// load-by-id query has no deleted filter, so indexing one here would put a
-	// deleted fort into the lookup cache and the tree as a live fort, where
-	// fort scans would return it. The save path already skips deleted forts;
-	// match it.
+// fortRtreeUpdatePokestopOnSave updates rtree and lookup cache when a pokestop is saved.
+func fortRtreeUpdatePokestopOnSave(pokestop *Pokestop) {
 	if pokestop.Deleted {
+		removeFortIndex(POKESTOP, pokestop.Id)
 		return
 	}
-	_, inMap := fortLookupCache.Load(pokestop.Id)
-	if !inMap {
-		addFortToTree(pokestop.Id, pokestop.Lat, pokestop.Lon)
-		updatePokestopLookup(pokestop)
-	}
+	updatePokestopLookup(pokestop, false)
 }
 
-// fortRtreeUpdateGymOnGet updates rtree when a gym is loaded from DB (cache miss)
-func fortRtreeUpdateGymOnGet(gym *Gym) {
-	// See fortRtreeUpdatePokestopOnGet.
+// fortRtreeUpdateGymOnSave updates rtree and lookup cache when a gym is saved.
+func fortRtreeUpdateGymOnSave(gym *Gym) {
 	if gym.Deleted {
+		removeFortIndex(GYM, gym.Id)
 		return
 	}
-	_, inMap := fortLookupCache.Load(gym.Id)
-	if !inMap {
-		addFortToTree(gym.Id, gym.Lat, gym.Lon)
-		updateGymLookup(gym)
+	updateGymLookup(gym, false)
+}
+
+func fortRtreeUpdateStationOnSave(station *Station) {
+	updateStationLookupWithBattles(station.Id, station, getKnownStationBattles(station.Id, time.Now().Unix()), false)
+}
+
+func fortRtreeUpdatePokestopOnGet(pokestop *Pokestop) {
+	if !pokestop.Deleted {
+		updatePokestopLookup(pokestop, true)
 	}
 }
 
-// fortRtreeUpdateStationOnGet updates rtree when a station is loaded from DB (cache miss)
+func fortRtreeUpdateGymOnGet(gym *Gym) {
+	if !gym.Deleted {
+		updateGymLookup(gym, true)
+	}
+}
+
 func fortRtreeUpdateStationOnGet(station *Station) {
-	_, inMap := fortLookupCache.Load(station.Id)
-	if !inMap {
-		addFortToTree(station.Id, station.Lat, station.Lon)
-		updateStationLookup(station)
-	}
+	updateStationLookupWithBattles(station.Id, station, getKnownStationBattles(station.Id, time.Now().Unix()), true)
 }
 
-func updatePokestopLookup(pokestop *Pokestop) {
+func updatePokestopLookup(pokestop *Pokestop, onlyIfMissing bool) {
 	id := pokestop.Id
 
 	var showcaseFocus *ApiShowcaseFocus
@@ -216,63 +234,36 @@ func updatePokestopLookup(pokestop *Pokestop) {
 		}
 	}
 
-	// Atomic per-key read-modify-write via Compute: this writer (under the
-	// POKESTOP entity lock) and updatePokestopIncidentLookup (under the
-	// INCIDENT entity lock) update the same key from different lock domains,
-	// each preserving the other's fields. A plain Load->Store pair can
-	// interleave and clobber. Keep the callback to field copies — the
-	// showcase-rankings JSON parse is hoisted out.
-	fortLookupCache.Compute(id, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
-		nl := FortLookup{
-			FortType:                   POKESTOP,
-			Lat:                        pokestop.Lat,
-			Lon:                        pokestop.Lon,
-			IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
-			LureId:                     pokestop.LureId,
-			LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
-			QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
-			QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
-			QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
-			QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
-			QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
-			QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
-			QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
-			QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
-			QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
-			QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
-			ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
-			ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
-			ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-			ShowcaseRankingStandard:    int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
-			ShowcaseBuddyMinLevel:      showcaseBuddyMinLevel,
-			ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
-		}
-		if loaded {
-			nl.Incidents = existing.Incidents // preserve the incident writer's slice
-		}
-		return nl, xsync.UpdateOp
-	})
-
-	observePokestop(&FortLookup{
-		LureId:                  pokestop.LureId,
-		LureExpireTimestamp:     pokestop.LureExpireTimestamp.ValueOrZero(),
-		ContestPokemonId:        int16(pokestop.ShowcasePokemon.ValueOrZero()),
-		ContestPokemonForm:      int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
-		ContestPokemonType:      int8(pokestop.ShowcasePokemonType.ValueOrZero()),
-		ShowcaseRankingStandard: int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
-		ShowcaseBuddyMinLevel:   showcaseBuddyMinLevel,
-		ShowcaseExpiry:          pokestop.ShowcaseExpiry.ValueOrZero(),
-	}, showcaseFocus, time.Now().Unix())
-
-	// This is the sole writer of a pokestop's FortLookup entry, so it is also
-	// the single place quest-condition counts are reconciled: it fires on
-	// cache-miss load, every save (incl. quest change), and startup preload.
-	// FortLookup omits quest title/target, so the previous keys are recovered
-	// from questFortKeys rather than the overwritten FortLookup.
-	reconcileFortQuestConditions(id, questConditionKeysFromPokestop(pokestop))
+	lookup := FortLookup{
+		FortType:                   POKESTOP,
+		Lat:                        pokestop.Lat,
+		Lon:                        pokestop.Lon,
+		IsArScanEligible:           pokestop.ArScanEligible.ValueOrZero() == 1,
+		LureId:                     pokestop.LureId,
+		LureExpireTimestamp:        pokestop.LureExpireTimestamp.ValueOrZero(),
+		QuestNoArRewardType:        int16(pokestop.QuestRewardType.ValueOrZero()),
+		QuestNoArRewardAmount:      int16(pokestop.QuestRewardAmount.ValueOrZero()),
+		QuestNoArRewardItemId:      int16(pokestop.QuestItemId.ValueOrZero()),
+		QuestNoArRewardPokemonId:   int16(pokestop.QuestPokemonId.ValueOrZero()),
+		QuestNoArRewardPokemonForm: int16(pokestop.QuestPokemonFormId.ValueOrZero()),
+		QuestArRewardType:          int16(pokestop.AlternativeQuestRewardType.ValueOrZero()),
+		QuestArRewardAmount:        int16(pokestop.AlternativeQuestRewardAmount.ValueOrZero()),
+		QuestArRewardItemId:        int16(pokestop.AlternativeQuestItemId.ValueOrZero()),
+		QuestArRewardPokemonId:     int16(pokestop.AlternativeQuestPokemonId.ValueOrZero()),
+		QuestArRewardPokemonForm:   int16(pokestop.AlternativeQuestPokemonFormId.ValueOrZero()),
+		ContestPokemonId:           int16(pokestop.ShowcasePokemon.ValueOrZero()),
+		ContestPokemonForm:         int16(pokestop.ShowcasePokemonForm.ValueOrZero()),
+		ContestPokemonType:         int8(pokestop.ShowcasePokemonType.ValueOrZero()),
+		ShowcaseRankingStandard:    int8(pokestop.ShowcaseRankingStandard.ValueOrZero()),
+		ShowcaseBuddyMinLevel:      showcaseBuddyMinLevel,
+		ShowcaseExpiry:             pokestop.ShowcaseExpiry.ValueOrZero(),
+	}
+	if storeFortIndex(id, lookup, onlyIfMissing, questConditionKeysFromPokestop(pokestop)) {
+		observePokestop(&lookup, showcaseFocus, time.Now().Unix())
+	}
 }
 
-func updateGymLookup(gym *Gym) {
+func updateGymLookup(gym *Gym, onlyIfMissing bool) {
 	id := gym.Id
 	now := time.Now().Unix()
 	fl := FortLookup{
@@ -289,15 +280,12 @@ func updateGymLookup(gym *Gym) {
 		RaidPokemonForm:      int16(gym.RaidPokemonForm.ValueOrZero()),
 		RaidPokemonEvolution: int8(gym.RaidPokemonEvolution.ValueOrZero()),
 	}
-	fortLookupCache.Store(id, fl)
-	observeRaid(&fl, now)
+	if storeFortIndex(id, fl, onlyIfMissing, nil) {
+		observeRaid(&fl, now)
+	}
 }
 
-func updateStationLookup(station *Station) {
-	updateStationLookupWithBattles(station.Id, station, getKnownStationBattles(station.Id, time.Now().Unix()))
-}
-
-func updateStationLookupWithBattles(id FortId, station *Station, stationBattles []StationBattleData) {
+func updateStationLookupWithBattles(id FortId, station *Station, stationBattles []StationBattleData, onlyIfMissing bool) {
 	battles := buildFortLookupStationBattlesFromSlice(stationBattles)
 	lookup := FortLookup{
 		FortType:              STATION,
@@ -311,8 +299,9 @@ func updateStationLookupWithBattles(id FortId, station *Station, stationBattles 
 		StationStartTimestamp: uint32(max(station.StartTime, 0)),
 	}
 	applyTopStationBattleToFortLookup(&lookup, stationBattles)
-	fortLookupCache.Store(id, lookup)
-	observeStationBattles(&lookup, time.Now().Unix())
+	if storeFortIndex(id, lookup, onlyIfMissing, nil) {
+		observeStationBattles(&lookup, time.Now().Unix())
+	}
 }
 
 // updatePokestopIncidentLookup upserts the observed incident into a pokestop's FortLookup
@@ -334,10 +323,10 @@ func updatePokestopIncidentLookup(pokestopId FortId, incident *Incident) {
 		ExpireTimestamp: incident.ExpirationTime,
 	}
 	observeInvasion(&updated, now)
-	// Atomic per-key read-modify-write via Compute — see updatePokestopLookup
-	// for the cross-lock-domain clobber this prevents.
+	// Incident updates run outside fortTreeMutex. Compute serializes this
+	// write with storeFortIndex, which preserves Incidents on PokéStop refresh.
 	fortLookupCache.Compute(pokestopId, func(existing FortLookup, loaded bool) (FortLookup, xsync.ComputeOp) {
-		if !loaded {
+		if !loaded || existing.FortType != POKESTOP {
 			return existing, xsync.CancelOp
 		}
 		out := existing.Incidents[:0:0] // fresh backing array; never mutate a shared slice in place
@@ -361,62 +350,44 @@ func updatePokestopIncidentLookup(pokestopId FortId, incident *Incident) {
 	})
 }
 
-func addFortToTree(id FortId, lat float64, lon float64) {
-	fortTreeMutex.Lock()
-	fortTree.Insert([2]float64{lon, lat}, [2]float64{lon, lat}, id)
-	fortTreeMutex.Unlock()
-}
-
 var fortTreeEvictor *treeEvictor[FortId]
 
-// flushFortTreeEvictions: see flushTreeEvictions.
 func flushFortTreeEvictions(entries []treeEvictionEntry[FortId]) {
-	flushTreeEvictions(&fortTreeMutex, &fortTree, entries)
-}
-
-// deferFortEviction is the eviction-callback cleanup path: lookup cache is
-// cleared inline (lock-free) so scans skip the fort immediately, tree
-// removal is batched. Eviction callbacks arrive on the cache dispatcher
-// goroutine — async relative to fort saves and genericUpdateFort's
-// synchronous cleanup — so guard before touching shared state:
-//   - lookup entry already gone → a deleted fort; genericUpdateFort already
-//     removed the tree point, and enqueueing an unpaired delete here could
-//     erase the point of a fort restored in the meantime.
-//   - lookup entry belongs to a different fort type → the fort converted
-//     (pokestop↔gym) and this is the stale counterpart's cache entry
-//     expiring; the live counterpart owns the lookup and tree point now.
-func deferFortEviction(expected FortType, fortId FortId, lat, lon float64) {
-	// A pokestop leaving the cache must drop its quest-condition contribution
-	// whether its FortLookup entry is still the resident pokestop one (matched,
-	// deleted just below), was overwritten by a converted gym/station
-	// counterpart (mismatch), or is already gone (deleted). questFortKeys only
-	// ever holds pokestop entries, so this is a no-op miss for gyms/stations and
-	// for pokestops already reconciled to no-quest. Because deferFortEviction
-	// deletes the matched FortLookup entry, removing the count here keeps the
-	// aggregate in lockstep with lookup-cache membership.
-	if expected == POKESTOP {
-		removeFortQuestConditions(fortId)
-	}
-
-	fl, ok := fortLookupCache.Load(fortId)
-	if !ok || fl.FortType != expected {
-		return
-	}
-	fortLookupCache.Delete(fortId)
-	// Non-blocking for the same reason as the pokemon eviction callback:
-	// the cache's eviction dispatcher must never park on a full channel.
-	fortTreeEvictor.TryEnqueue(fortId, lat, lon)
-}
-
-func removeFortFromTree(fortId FortId, lat, lon float64) {
 	fortTreeMutex.Lock()
-	beforeLen := fortTree.Len()
-	fortTree.Delete([2]float64{lon, lat}, [2]float64{lon, lat}, fortId)
-	afterLen := fortTree.Len()
-	fortTreeMutex.Unlock()
+	defer fortTreeMutex.Unlock()
 
-	if beforeLen != afterLen+1 {
-		log.Debugf("FortRtree - removing %s, lat %f lon %f size %d->%d", fortId, lat, lon, beforeLen, afterLen)
+	for _, entry := range entries {
+		if current, found := fortLookupCache.Load(entry.id); found && current.Lat == entry.lat && current.Lon == entry.lon {
+			continue // A live record reclaimed this point since the delete was queued.
+		}
+		point := [2]float64{entry.lon, entry.lat}
+		fortTree.Delete(point, point, entry.id)
+	}
+}
+
+// Cache callbacks are dispatched asynchronously. A newer cache entry may
+// already exist by the time the old one's eviction is delivered.
+func deferFortEviction(kind FortType, id FortId) {
+	fortTreeMutex.Lock()
+	defer fortTreeMutex.Unlock()
+
+	switch kind {
+	case POKESTOP:
+		if pokestopCache.Has(id) {
+			return
+		}
+	case GYM:
+		if gymCache.Has(id) {
+			return
+		}
+	case STATION:
+		if stationCache.Has(id) {
+			return
+		}
+	}
+
+	if old, removed := removeFortIndexLocked(kind, id); removed {
+		fortTreeEvictor.TryEnqueue(id, old.Lat, old.Lon)
 	}
 }
 

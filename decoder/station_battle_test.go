@@ -362,7 +362,7 @@ func TestUpdateStationLookupUsesTopBattleForFlatFields(t *testing.T) {
 		testStationBattle(station.Id, 1, 1, now-60, now+1800, 527),
 		testStationBattle(station.Id, 2, 2, now-60, now+3600, 133),
 	})
-	updateStationLookupWithBattles(stationId, station, getKnownStationBattles(station.Id, now))
+	updateStationLookupWithBattles(stationId, station, getKnownStationBattles(station.Id, now), false)
 
 	lookup, ok := fortLookupCache.Load(stationId)
 	if !ok {

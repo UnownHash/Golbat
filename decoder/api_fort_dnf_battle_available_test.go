@@ -92,7 +92,7 @@ func TestUpdateStationLookupCarriesAvailabilityFields(t *testing.T) {
 	}}
 	t.Cleanup(func() { fortLookupCache.Delete(id) })
 
-	updateStationLookupWithBattles(id, station, nil)
+	updateStationLookupWithBattles(id, station, nil, false)
 
 	fl, ok := fortLookupCache.Load(id)
 	if !ok {
