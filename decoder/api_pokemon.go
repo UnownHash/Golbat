@@ -122,8 +122,8 @@ func SearchPokemon(request ApiPokemonSearch) ([]*ApiPokemonResult, error) {
 				results = append(results, pokemonId)
 				pokemonMatched++
 
-				if pokemonMatched > maxPokemon {
-					log.Infof("SearchPokemon - result would exceed maximum size (%d), stopping scan", maxPokemon)
+				if pokemonMatched >= maxPokemon {
+					log.Infof("SearchPokemon - reached maximum size (%d), stopping scan", maxPokemon)
 					return false
 				}
 			}

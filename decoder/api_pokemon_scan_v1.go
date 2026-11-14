@@ -221,8 +221,8 @@ func GetPokemonInArea(retrieveParameters ApiPokemonScan) []*ApiPokemonResult {
 					seen[pokemonId] = struct{}{}
 					returnKeys = append(returnKeys, pokemonId)
 					pokemonMatched++
-					if pokemonMatched > maxPokemon {
-						log.Infof("GetPokemonInArea - result would exceed maximum size (%d), stopping scan", maxPokemon)
+					if pokemonMatched >= maxPokemon {
+						log.Infof("GetPokemonInArea - reached maximum size (%d), stopping scan", maxPokemon)
 						return false
 					}
 				}
