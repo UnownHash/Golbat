@@ -92,6 +92,19 @@ func questsHeldHasARTask(quests_held any) *bool {
 	return &res
 }
 
+// rawTimestampMs reads the optional timestamp_ms field of a /raw body decoded
+// into map[string]interface{}, where encoding/json stores every JSON number
+// as float64. It reports false for a missing, non-numeric or non-positive
+// value, leaving the receive time in place.
+func rawTimestampMs(v interface{}) (int64, bool) {
+	f, ok := v.(float64)
+	if !ok {
+		return 0, false
+	}
+	ts := int64(f)
+	return ts, ts > 0
+}
+
 func Raw(c *gin.Context) {
 	var w http.ResponseWriter = c.Writer
 	r := c.Request
@@ -103,6 +116,7 @@ func Raw(c *gin.Context) {
 		if authHeader != "Bearer "+config.Config.RawBearer {
 			statsCollector.IncRawRequests("error", "auth")
 			log.Errorf("Raw: Incorrect authorisation received (%s)", authHeader)
+			c.AbortWithStatus(http.StatusUnauthorized)
 			return
 		}
 	}
@@ -211,11 +225,8 @@ func Raw(c *gin.Context) {
 				lonTarget, _ = v.(float64)
 			}
 
-			if v := raw["timestamp_ms"]; v != nil {
-				ts, _ := v.(int64)
-				if ts > 0 {
-					dataReceivedTimestamp = ts
-				}
+			if ts, ok := rawTimestampMs(raw["timestamp_ms"]); ok {
+				dataReceivedTimestamp = ts
 			}
 
 			if rawNebula, ok := raw["nebula_contents"].([]any); ok {

@@ -53,8 +53,7 @@ Authorization: Bearer your_raw_bearer_token
 ```
 
 This is only enforced if `raw_bearer` is configured. A request with a wrong or
-missing token is logged and dropped; the response is an empty `200`, not a
-401. For the gRPC `SubmitRawProto` see [gRPC raw ingest](#grpc-raw-ingest).
+missing token is logged and rejected with an empty `401`. For the gRPC `SubmitRawProto` see [gRPC raw ingest](#grpc-raw-ingest).
 
 ---
 
@@ -242,7 +241,7 @@ Accept raw protobuf data from scanning clients.
 | `scan_context` | Selects the scan rules (`ScanParameters`) applied to this request. |
 | `lat_target`, `lon_target` | Where the device is scanning. |
 | `have_ar` | Default AR eligibility for every `contents` entry. Decides whether a quest is stored as the AR (`quest_*`) or non-AR (`alternative_quest_*`) quest. |
-| `timestamp_ms` | Accepted but has no effect: the JSON number never passes the integer type check, so the receive time is used. (The gRPC `timestamp` field does take effect.) |
+| `timestamp_ms` | Optional receive time override in unix milliseconds; used when > 0, otherwise the receive time is used. |
 | `contents[]` | Game protos. The payload is read from `payload` or `data`, the method number from `type` or `method` (a `pogo.Method` value). `request` is the base64 request proto, needed by methods whose response alone is not enough. A per-entry `have_ar` overrides the top-level one. Entries missing a payload or method are skipped. |
 | `nebula_contents[]` | Nebula (battle backend) calls. Only the `invasion` context is processed: endpoint `get-state` (a `BattleStateOutProto`) updates the incident's lineup; `get-time` and `send-player-event` are accepted and ignored. Other endpoints or contexts are logged and dropped. Not level-gated. |
 | `push_contents[]` | Push-gateway messages. `message_type` is the `PushGatewayMessage` oneof case and `payload` the whole marshalled `pogo.PushGatewayMessage`, base64. `raid_lobby_player_count` updates a gym's raid lobby count and join deadline; `bread_lobby_player_count` does the same for a station's max battle lobby. Other types are ignored without being parsed. Not level-gated. |
@@ -259,6 +258,7 @@ the account name is `Pogodroid`, the level is 30, the first non-zero
 
 **Response:**
 - 201 Created: accepted; processing happens asynchronously.
+- 401 Unauthorized: `raw_bearer` is set and the `Authorization` header is not `Bearer <raw_bearer>`.
 - 422 Unprocessable Entity: the body could not be decoded (empty body).
 
 **Notes:**

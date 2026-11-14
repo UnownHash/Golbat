@@ -27,6 +27,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	grpcprom "github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus"
 	"github.com/jmoiron/sqlx"
+	"github.com/prometheus/client_golang/prometheus"
 	log "github.com/sirupsen/logrus"
 	ginlogrus "github.com/toorop/gin-logrus"
 )
@@ -330,6 +331,9 @@ func main() {
 						grpcprom.WithHistogramBuckets(cfg.Prometheus.BucketSize),
 					),
 				)
+				// Exported on /metrics via the default registry, alongside
+				// the stats_collector metrics.
+				prometheus.MustRegister(srvMetrics)
 			}
 
 			s := newGrpcServer(srvMetrics)
