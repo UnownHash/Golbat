@@ -16,13 +16,14 @@ import (
 func init() {
 	InitDataCache()
 
-	// Apply derive_iv's and derive_despawn's shipped defaults. The test binary
+	// Apply derive_iv's, derive_strong's and derive_despawn's shipped defaults. The test binary
 	// never reads a config file, so without this the package would exercise
 	// both derivations switched off while production ships them on. Tests
 	// that care about the off case set the flag themselves. ditto_derivation
 	// is left at Go's zero value (off): tests that exercise the roll switch it
 	// on with withDittoDerivation.
 	config.Config.DeriveIv = true
+	config.Config.DeriveStrong = true
 	config.Config.DeriveDespawn = true
 }
 

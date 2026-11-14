@@ -52,14 +52,67 @@ func TestRepopulateIvDerivesInsteadOfClearing(t *testing.T) {
 	}
 }
 
-// A strong Pokemon's IVs do not move with weather (repopulateIv's own
-// "isBoostedMatches || isStrong" branch, and detectDitto's requirement that
-// CompressedIv be identical across boost states for a strong scan). So on a
-// flip with no matching scan, a strong Pokemon's IVs are cleared to await a
-// rescan, not derived: encounter.For models the ordinary boosted-IV-floor
-// mechanic, which does not apply here, and a wrong derived value is
-// indistinguishable from a real one and so unrecoverable.
-func TestRepopulateIvClearsStrongPokemonInsteadOfDeriving(t *testing.T) {
+// A sighting that turns a record strong, with no scan for the strong state,
+// re-derives it with the strong walk — the incoming flag picks the walk, not
+// the stored one, which is updated only after repopulateIv returns. The
+// values are ForStrong's for 8429844873227918432, boosted.
+func TestRepopulateIvDerivesWhenARecordTurnsStrong(t *testing.T) {
+	p := &Pokemon{}
+	p.Id = Uint64Str(8429844873227918432)
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	p.calculateIv(6, 0, 11) // the ordinary unboosted derivation
+	p.SetLevel(null.IntFrom(5))
+
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), true)
+
+	got := [4]uint8{p.AtkIv.ValueOrZero(), p.DefIv.ValueOrZero(), p.StaIv.ValueOrZero(), p.Level.ValueOrZero()}
+	if want := [4]uint8{15, 14, 14, 42}; got != want {
+		t.Fatalf("atk/def/sta/level = %v, want ForStrong's %v", got, want)
+	}
+}
+
+// And back: a record that stops being strong is re-derived with the ordinary
+// walk (For's unboosted values for the same id).
+func TestRepopulateIvDerivesWhenARecordStopsBeingStrong(t *testing.T) {
+	p := &Pokemon{}
+	p.Id = Uint64Str(8429844873227918432)
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetIsStrong(null.BoolFrom(true))
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	p.calculateIv(15, 14, 14)
+	p.SetLevel(null.IntFrom(37))
+
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_NONE), false)
+
+	got := [4]uint8{p.AtkIv.ValueOrZero(), p.DefIv.ValueOrZero(), p.StaIv.ValueOrZero(), p.Level.ValueOrZero()}
+	if want := [4]uint8{6, 0, 11, 5}; got != want {
+		t.Fatalf("atk/def/sta/level = %v, want For's %v", got, want)
+	}
+}
+
+// A derived strong record keeps its IVs across a weather flip and moves its
+// level by 5, which the strong walk gives by construction.
+func TestRepopulateIvRederivesAStrongRecordOnAWeatherFlip(t *testing.T) {
+	p := &Pokemon{}
+	p.Id = Uint64Str(8429844873227918432)
+	p.SetSeenType(SeenTypeCodeWild)
+	p.SetIsStrong(null.BoolFrom(true))
+	p.SetWeather(null.IntFrom(int64(pogo.GameplayWeatherProto_NONE)))
+	p.deriveIvIfAbsent()
+
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), true)
+
+	got := [4]uint8{p.AtkIv.ValueOrZero(), p.DefIv.ValueOrZero(), p.StaIv.ValueOrZero(), p.Level.ValueOrZero()}
+	if want := [4]uint8{15, 14, 14, 42}; got != want {
+		t.Fatalf("atk/def/sta/level = %v, want %v", got, want)
+	}
+}
+
+// With derive_strong off, a flip into strong with no matching scan clears
+// rather than deriving.
+func TestRepopulateIvClearsStrongPokemonWhenDeriveStrongOff(t *testing.T) {
+	withDeriveStrong(t, false)
 	p := &Pokemon{}
 	p.Id = Uint64Str(8429844873227918432)
 	p.SetSeenType(SeenTypeCodeEncounter)
@@ -67,16 +120,10 @@ func TestRepopulateIvClearsStrongPokemonInsteadOfDeriving(t *testing.T) {
 	p.calculateIv(6, 0, 11)
 	p.SetLevel(null.IntFrom(5))
 
-	// Flip to a boosting weather AND to strong at once (isStrong param true,
-	// stored IsStrong false) with no scan history for the strong+boosted
-	// state — matchingScan is nil either way.
 	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), true)
 
-	if p.AtkIv.Valid {
-		t.Fatalf("AtkIv = %v, want invalid — a strong Pokemon must be cleared, not derived", p.AtkIv)
-	}
-	if p.Level.Valid {
-		t.Fatalf("Level = %v, want invalid — a strong Pokemon must be cleared, not derived", p.Level)
+	if p.AtkIv.Valid || p.Level.Valid {
+		t.Fatalf("AtkIv = %v, Level = %v, want both invalid with derive_strong off", p.AtkIv, p.Level)
 	}
 }
 
