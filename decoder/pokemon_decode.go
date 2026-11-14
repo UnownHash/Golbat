@@ -1867,8 +1867,7 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	if !deriveStrongAllowed(strong) {
 		return
 	}
-	// A player-specific species has no spawn-level stats to derive. See
-	// TestDeriveSkipsMinior.
+	// A player-specific species has no spawn-level stats to derive.
 	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
@@ -1974,15 +1973,23 @@ func (pokemon *Pokemon) cpInputs() cpInputs {
 }
 
 // hasPlayerSpecificStats reports whether a species' encounter stats belong to
-// the player rather than the shared spawn. Minior's do: its IVs, level, CP,
+// the player rather than the shared spawn, in which case its IVs, level, CP,
 // moves and size are neither observed onto the record nor derived for it.
+//
+// No species is currently in that position. Minior was (#426): its encounter
+// stats differed per player, so #426 and the derivation gates below suppressed
+// them. Minior's stats are spawn-level again — the same for every player — so
+// it is treated like any other species and the guard is off. The function and
+// its call sites are kept as the single switch to flip if a species behaves
+// that way again.
 func hasPlayerSpecificStats(pokemonId int16) bool {
-	return pokemonId == int16(pogo.HoloPokemonId_MINIOR)
+	return false
 }
 
 // caller should setPokemonDisplay prior to calling this
 func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
-	// Minior's encounter stats belong to the player, not the shared spawn.
+	// A player-specific species' encounter stats belong to the player, not
+	// the shared spawn, so none of them are recorded.
 	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		pokemon.setUsernameIfStored(username)
 		return
@@ -2325,9 +2332,10 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 			}
 			// IVs and level otherwise survive a display change, so a spawn
 			// first seen (and derived or encountered) as another species that
-			// now displays as Minior would keep that identity's stats, and
-			// have a Minior CP recomputed from them. Minior's stats are the
-			// player's, so they are dropped rather than carried over.
+			// now displays as a player-specific one would keep that identity's
+			// stats, and have a CP recomputed from them for the new species.
+			// Player-specific stats are the player's, so they are dropped
+			// rather than carried over.
 			if hasPlayerSpecificStats(pokemonId) {
 				pokemon.clearIv(true)
 				pokemon.SetLevel(null.NewInt(0, false))
@@ -2370,8 +2378,8 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 }
 
 func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
-	// Do not restore player-specific Minior stats from an earlier encounter,
-	// nor derive them for the new weather.
+	// Do not restore a player-specific species' stats from an earlier
+	// encounter, nor derive them for the new weather.
 	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
