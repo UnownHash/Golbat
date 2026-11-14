@@ -49,18 +49,13 @@ type ApiPvpRankings struct {
 // FirstSeenTimestamp and Changed are all uint32 in storage but int64 here,
 // because Huma derives the OpenAPI format from the Go type and advertises a
 // uint32 as format: int32. A generated client's int32 overflows in January
-// 2038, well inside what the uint32 columns can hold, and the four fields did
-// not even agree with each other about it — first_seen_timestamp was already
-// int64 while expire_timestamp and updated were int32. int64 is the one width
-// that describes all four honestly, and the JSON is unaffected either way: an
-// integer renders the same regardless of the surrounding Go type's width.
+// 2038, well inside what the uint32 columns can hold. int64 describes all four
+// honestly, and the JSON is unaffected either way: an integer renders the same
+// regardless of the surrounding Go type's width.
 //
 // huma infers `minimum: 0` only from an unsigned type, so all four carry an
-// explicit `minimum:"0"` tag instead. The bound
-// is real — every one of them is backed by an unsigned column — and losing it
-// was a side effect of the widening rather than part of the point, so the tag
-// puts it back and gets first_seen_timestamp and changed a floor they never
-// advertised in the first place.
+// explicit `minimum:"0"` tag instead. The bound is real: every one of them is
+// backed by an unsigned column.
 //
 // FirstSeenTimestamp and Changed are assigned via a bare int64(...) cast in
 // buildApiPokemonResult below; ExpireTimestamp and Updated are nullable, so
@@ -80,7 +75,7 @@ type ApiPokemonResult struct {
 	Lat                     float64        `json:"lat" doc:"Latitude of the pokemon"`
 	Lon                     float64        `json:"lon" doc:"Longitude of the pokemon"`
 	Weight                  *float32       `json:"weight" doc:"Weight of the pokemon"`
-	Size                    *uint8         `json:"size" doc:"Size value of the pokemon"`
+	Size                    *uint8         `json:"size" doc:"Size class of the pokemon (1 XXS, 2 XS, 3 M, 4 XL, 5 XXL)"`
 	Height                  *float32       `json:"height" doc:"Height of the pokemon"`
 	ExpireTimestamp         *int64         `json:"expire_timestamp" minimum:"0" doc:"Unix timestamp when the pokemon despawns"`
 	Updated                 *int64         `json:"updated" minimum:"0" doc:"Unix timestamp when the record was last updated"`
@@ -104,22 +99,21 @@ type ApiPokemonResult struct {
 	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
 	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
 	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
-	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen (wild, encounter, nearby_stop, nearby_cell)"`
+	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen: wild, encounter, nearby_stop, nearby_cell, lure_wild, lure_encounter, tappable_encounter or tappable_lure_encounter. encounter/lure_encounter mean the stats came from a real encounter; derived stats keep the sighting's type."`
 	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
 	Username                *string        `json:"username" doc:"Username of the account that reported the pokemon"`
-	Capture1                *float64       `json:"capture_1" doc:"Base capture rate with one ball"`
-	Capture2                *float64       `json:"capture_2" doc:"Base capture rate with two balls"`
-	Capture3                *float64       `json:"capture_3" doc:"Base capture rate with three balls"`
-	Pvp                     ApiPvpRankings `json:"pvp" doc:"PVP rankings for the pokemon"`
-	IsEvent                 int8           `json:"is_event" doc:"Whether the pokemon is part of an event"`
+	Capture1                *float64       `json:"capture_1" doc:"Not populated; always null"`
+	Capture2                *float64       `json:"capture_2" doc:"Not populated; always null"`
+	Capture3                *float64       `json:"capture_3" doc:"Not populated; always null"`
+	Pvp                     ApiPvpRankings `json:"pvp" doc:"PVP rankings for the pokemon, computed per request; an empty object when PVP is disabled or the pokemon has no ranking"`
+	IsEvent                 int8           `json:"is_event" doc:"Not populated; always 0"`
 }
 
 // buildApiPokemonResult builds an ApiPokemonResult from a cached Pokemon.
 //
-// PARITY: Capture1, Capture2, Capture3 and IsEvent are intentionally left unset.
-// The pre-Huma builder never populated these, so the JSON emits capture_1/2/3:
-// null and is_event: 0. Replicating that preserves wire compatibility — do not
-// populate them without coordinating a wire change.
+// PARITY: Capture1, Capture2, Capture3 and IsEvent are intentionally left unset,
+// so the JSON always emits capture_1/2/3: null and is_event: 0. Clients depend
+// on that wire shape — do not populate them without coordinating a wire change.
 func buildApiPokemonResult(pokemon *Pokemon) ApiPokemonResult {
 	pokestopId := pokemon.PokestopId.Ptr()
 	return ApiPokemonResult{
@@ -197,10 +191,10 @@ func buildApiPvpRankings(pokemon *Pokemon) ApiPvpRankings {
 // pokemon together with the spatial-index candidate counts.
 type ApiPokemonScanResultV3 struct {
 	Pokemon      []ApiPokemonResult `json:"pokemon" doc:"Matched pokemon"`
-	Examined     int                `json:"examined" doc:"Candidates examined from the spatial index"`
-	Skipped      int                `json:"skipped" doc:"Candidates skipped (expired or filtered)"`
-	Total        int                `json:"total" doc:"Total candidates in the bounding box"`
-	LimitReached bool               `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
+	Examined     int                `json:"examined" doc:"Points visited in the spatial index within the bounding box, matched or not"`
+	Skipped      int                `json:"skipped" doc:"Examined points with no lookup-cache entry (being evicted), which were not filtered"`
+	Total        int                `json:"total" doc:"Total points in the whole pokemon spatial index at scan time (not just the bounding box)"`
+	LimitReached bool               `json:"limit_reached" doc:"Whether the matched list reached the effective result limit. Measured before expired pokemon and updated_after are dropped, so it can be true on a short page."`
 }
 
 // GetPokemonInArea2Clean runs the v2 rtree/DNF search and returns a bare array of

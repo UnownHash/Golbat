@@ -19,11 +19,11 @@ var k = koanf.New(".")
 
 // DefaultConfigPath is used when no config file is given on the command line.
 // A missing file at this path is not an error: the whole config can be supplied
-// through GOLBAT_* environment variables instead.
+// through GOLBAT.* environment variables (e.g. GOLBAT.DATABASE.USER) instead.
 const DefaultConfigPath = "config.toml"
 
 // ReadConfig loads configuration from defaults, then the TOML file at
-// configPath, then GOLBAT_* environment variables, each layer overriding the
+// configPath, then GOLBAT.* environment variables, each layer overriding the
 // previous one. Pass DefaultConfigPath for the standard location.
 func ReadConfig(configPath string) (configDefinition, error) {
 	// Default values

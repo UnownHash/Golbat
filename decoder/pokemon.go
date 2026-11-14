@@ -684,7 +684,7 @@ var seenTypeSetWarns util.DropReporter
 func (pokemon *Pokemon) SetUsername(v null.String) {
 	if pokemon.Username != v {
 		pokemon.Username = v
-		//pokemon.dirty = true
+		// Does not mark the record dirty on its own.
 	}
 }
 

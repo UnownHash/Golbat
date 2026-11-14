@@ -8,26 +8,37 @@ Golbat is a high-performance Go backend that receives raw protobuf data from Pok
 
 - **Build:** `go build -tags go_json ./...` — the `go_json` tag is required (selects the go-json codec).
 - **Test:** `go test ./decoder/` — the `decoder` package holds most logic and its `_test.go` files; `go test .` runs the root-package huma route tests. Some tests need the go-json build behavior: `go test -tags go_json ./...`.
-- **Lint:** `golangci-lint run` — CI enforces it (staticcheck included). Run it before pushing. Example: staticcheck `S1016` wants `ApiFoo(k)` conversion instead of a field-by-field literal when two structs have identical fields.
+- **Lint:** `make lint` — runs `golangci-lint run` over every package except the generated `pogo/` (linting its ~437k-line `vbase.pb.go` as a root package dominates lint time; it is still type-checked as a dependency). CI (`.github/workflows/lint.yml`) lints the same package list and enforces it (staticcheck included). Run it before pushing. Example: staticcheck `S1016` wants `ApiFoo(k)` conversion instead of a field-by-field literal when two structs have identical fields.
 
 ## Docs
 
 - `api.md` — HTTP and gRPC API reference. Update it with any endpoint, request/response field or filter-semantics change.
 - `webhooks.md` — receiver-facing webhook spec (envelope, per-type firing conditions and payloads, accepted type strings). Update it with any webhook type, payload field or trigger change.
+- `docs/design/` — dated design records for significant changes (index in `docs/design/README.md`). They preserve original intent and are not kept current; code and this file are the source of truth. Add one for a change whose rationale a future maintainer would need.
 
 ## Project Layout
 
 ```
-main.go              — HTTP/gRPC server setup, route registration
-routes.go            — HTTP route handlers (raw ingest, API endpoints)
+main.go              — Startup (config, DB + migrations, caches, preload), HTTP/gRPC server setup
+routes.go            — gin handlers: raw ingest (/raw), v1 pokemon scan, health
+routes_huma.go       — Huma (OpenAPI 3.1) /api operations; most of the HTTP API
+huma_api.go          — Huma config, go-json serializer, api_secret security scheme
+routes_huma_logging.go — Optional request/response body logging for Huma routes
+routes_huma_draft.go — draftBadge for endpoints without stable consumers
 raw_limiter.go       — Bounded raw-processing concurrency (semaphore + shed)
+raw_bufpool.go       — Pooled payload buffers for base64 decoding on /raw
 decode.go            — Proto method dispatcher, GMO decoder
-grpc_server_raw.go   — gRPC raw proto receiver
+decode_nebula.go     — Nebula-context message dispatch (decodeNebula)
+decode_push_gateway.go — Push-gateway message dispatch (decodePushGateway)
+grpc_server_raw.go   — gRPC raw proto receiver (SubmitRawProto)
 grpc_server_api.go   — GolbatApi gRPC service (pokemon, fort, tappable) and newGrpcServer()
-grpc_auth.go         — api_secret unary interceptor for GolbatApi methods
+grpc_auth.go         — api_secret unary/stream interceptors for GolbatApi methods
+grpc_stats.go        — Per-RPC debug timing log (grpc stats.Handler)
+deviceList.go        — Device location cache for /api/devices
 decoder/
   main.go            — Cache/queue initialization, raw data types
-  sharded_cache.go   — Generic sharded TTL cache
+  preload.go         — Startup bulk load of forts, spawnpoints, tappables, incidents, station battles
+  pokemon_preserve.go — Shutdown save / startup restore of memory-only pokemon
   scanarea.go        — ScanParameters and scan rule matching
   gmo_decode.go      — Batch processors (forts, pokemon, weather, stations)
   <entity>.go        — Struct definition, setters with dirty tracking
@@ -36,25 +47,53 @@ decoder/
   <entity>_process.go — High-level proto processing (FortDetails, encounters, etc.)
   api_<entity>.go    — API result structs, scan endpoints, DNF filters
   api_grpc_<entity>.go — proto ⇄ Api struct converters and Grpc* entry points
+  api_status.go      — /api/status feature flags and effective limits
+  fortid.go          — FortId value type (fort id key; string only at boundaries)
   pokemonRtree.go    — Pokemon spatial index + lookup cache
   fortRtree.go       — Fort spatial index + lookup cache
+  tappableRtree.go   — Tappable spatial index + lookup cache
+  fort_availability.go — Maintained max-expiry availability indexes for forts
+  tappable_availability.go — Same for tappable rewards/species
+  quest_conditions.go — Maintained quest option counts (reconcile, not max-expiry)
   fort_tracker.go    — In-memory fort lifecycle tracking via S2 cells (async worker)
   rtree_evictor.go   — Ordered tree-mutation worker (batched inserts/deletes)
   stats.go           — Stats aggregation worker, area stats, geofence reload
+  geography.go       — Geofence loading/reload (Koji or file)
+  weather_consensus.go — Multi-account weather voting before publishing a change
+  weather_iv.go      — Proactive IV switching on weather change
+  masterfile.go      — Masterfile (species/forms/moves) as a remote document
+  remote_file.go     — Fetch + disk cache + embedded fallback for remote JSON files
+  ditto_roll.go, ditto_pool_remote.go — Ditto disguise pool and marking rule
+  derive_validation.go — Checks in-process encounter derivation against real encounters
+  spawnpoint_repair.go — Startup repair of spawnpoints stored at 0,0
   db_timing.go       — timedDbQuery alias for under-lock DB loads
   tracked_mutex.go   — Lock contention instrumentation
   writebehind/       — Write-behind queue implementation
   writebehind_batch.go — Queue initialization and batch flush SQL
+ottercache/          — OtterCache: hardened adapter over otter v2 (all caches)
+derive/              — Pure derivations from game ids: despawn time, encounter
+                       values (java.util.Random replay in javarandom/)
 webhooks/
   webhook.go         — Webhook types, config parsing, HTTP dispatch
   sender.go          — Thread-safe message batching and sending
-config/              — TOML config parsing
+config/              — TOML config parsing and defaults (reader.go)
 db/                  — Database connection details, query helpers; timing.go
                        wraps DB calls with [DB_SLOW] logging + duration histogram
 geo/                 — Geofence loading, R-tree matching; geofence_compiled.go
                        (cached-bounds point-in-polygon), s2_lookup.go (S2 cell
                        fast path for area matching)
+grpc/                — Golbat's own .proto files and generated code (raw receiver,
+                       GolbatApi, internal pokemon state)
+pogo/                — Generated game protos (vbase); never lint or hand-edit
+jsonenc/             — JSON codec switch (go-json with the go_json tag)
+stats_collector/     — Prometheus metrics (no-op collector when disabled)
+encounter_cache/     — Short-lived cache of encounter stats by encounter id
+external/            — Pyroscope and Sentry integration
+tz/                  — Timezone lookup from coordinates
+sql/                 — Numbered golang-migrate migrations, applied at startup
+tools/               — Offline helpers (derivecheck.py summarizes [DERIVE] logs)
 util/                — Small shared helpers (DropReporter, etc.)
+docs/design/         — Design records (see Docs)
 ```
 
 ## Raw Message Processing
@@ -63,11 +102,14 @@ util/                — Small shared helpers (DropReporter, etc.)
 
 Messages arrive via two paths:
 
-1. **HTTP POST `/raw`** (`routes.go`): Accepts JSON with base64-encoded protobuf payloads. Supports both Pogodroid format (array of `{payload, type}`) and standard format (object with `contents[]`, `username`, `trainerlvl`, etc.). Returns 201 immediately; processing happens in a background goroutine with a 5s timeout.
+1. **HTTP POST `/raw`** (`routes.go`): Accepts JSON with base64-encoded protobuf payloads. Supports both Pogodroid format (array of `{payload, type}`) and standard format (object with `contents[]`, `username`, `trainerlvl`, etc.). Returns 201 immediately; processing happens in a background goroutine with a 5s per-message timeout (30s with `tuning.extended_timeout`).
 
-2. **gRPC `SubmitRawProto`** (`grpc_server_raw.go`): Accepts `RawProtoRequest` with binary proto payloads in `Contents[]`. Same async processing pattern.
+2. **gRPC `SubmitRawProto`** (`grpc_server_raw.go`, `grpc/raw_receiver.proto`): Accepts `RawProtoRequest` with binary proto payloads in `Contents[]`. Same async processing pattern.
 
-Both paths normalize into `ProtoData` structs and call `decode()`.
+Both paths normalize method-tagged payloads into `ProtoData` structs and call `decode()`. Both also accept two other payload kinds in the same request:
+
+- **Nebula contents** (`nebula_contents`): endpoint-addressed payloads with a typed context (e.g. an invasion's fort and incident id), normalized into `NebulaData` and routed by `decodeNebula()` (`decode_nebula.go`).
+- **Push-gateway contents** (`push_contents`): marshalled `PushGatewayMessage`s with a `message_type`, routed by `decodePushGateway()` (`decode_push_gateway.go`); unknown types are skipped before unmarshalling.
 
 Processing concurrency is bounded (`raw_limiter.go`): a semaphore of
 `tuning.raw_processing_concurrency` slots (default min(4×CPU, 96)) with a
@@ -145,43 +187,43 @@ type Pokestop struct {
 
 ### Entities
 
-| Entity | Cache Key | Cache Type | Queue Key | ID Type |
-|--------|-----------|------------|-----------|---------|
-| Pokestop | FortId | Sharded | FortId | FortId |
-| Gym | FortId | Sharded | FortId | FortId |
-| Pokemon | uint64 (encounter ID) | Sharded | uint64 | uint64 |
-| Station | FortId | Sharded | FortId | FortId |
-| Spawnpoint | int64 (spawn ID) | Sharded | int64 | int64 |
-| Incident | string (incident ID) | TTL | string | string |
-| Weather | int64 (S2 cell ID) | TTL | — | int64 |
-| Route | string (route ID) | TTL | string | string |
-| Tappable | uint64 (encounter ID) | Otter (per-entry TTL) | uint64 | uint64 |
+Every entity cache is an `OtterCache` (see Caching). "Touch" is the per-cache touch-on-hit flag.
+
+| Entity | Cache Key | Cache TTL | Touch | Queue Key | ID Type |
+|--------|-----------|-----------|-------|-----------|---------|
+| Pokestop | FortId | per-entry, jittered | yes | FortId | FortId |
+| Gym | FortId | per-entry, jittered | yes | FortId | FortId |
+| Pokemon | uint64 (encounter ID) | per-entry (despawn) | no | uint64 | uint64 |
+| Station | FortId | per-entry, jittered | yes | FortId | FortId |
+| Spawnpoint | int64 (spawn ID) | 60 min | yes | int64 | int64 |
+| Incident | string (incident ID) | 60 min | yes | string | string |
+| Weather | int64 (S2 cell ID) | 60 min | yes | — | int64 |
+| Route | string (route ID) | 60 min | yes | string | string |
+| Tappable | uint64 (encounter ID) | per-entry (expiry) | no | uint64 | uint64 |
 
 ## Caching
 
-### OtterCache (hot entities)
+### OtterCache
 
-High-contention entities (pokestop, gym, station, spawnpoint, pokemon — plus the encounter stats cache) use `OtterCache[K, V]` (`ottercache/cache.go`), a hardened adapter over otter v2 (Caffeine-style: lock-free reads, hierarchical timing-wheel expiry). The adapter bakes in two non-negotiable behaviors: eviction events are re-dispatched to a single bounded-queue dispatcher goroutine (otter's default is a goroutine per event, and raw inline delivery could deadlock handlers that take entity locks), and only Expired/Deleted causes reach handlers (otter fires Replacement on overwriting live entries, which Golbat does routinely — a Replacement event reaching the eviction guards would enqueue bogus tree deletes). Per-entry TTLs ride on the value (otter has no per-call TTL); touch-on-hit is a per-cache flag choosing `ExpiryAccessingFunc` (forts, spawnpoints — reads reset the entry's own TTL, ~free via the timer wheel) vs `ExpiryWritingFunc` (pokemon — TTL encodes despawn time, must never extend on read). No sharding: the table is internally concurrent (`tuning.cache_shards` is obsolete).
+Every cache uses `OtterCache[K, V]` (`ottercache/cache.go`), a hardened adapter over otter v2 (Caffeine-style: lock-free reads, hierarchical timing-wheel expiry). The adapter bakes in two non-negotiable behaviors: eviction events are re-dispatched to a single bounded-queue dispatcher goroutine (otter's default is a goroutine per event, and raw inline delivery could deadlock handlers that take entity locks), and only Expired/Deleted causes reach handlers (otter fires Replacement on overwriting live entries, which Golbat does routinely — a Replacement event reaching the eviction guards would enqueue bogus tree deletes). Per-entry TTLs ride on the value (otter has no per-call TTL); touch-on-hit is a per-cache flag choosing `ExpiryAccessingFunc` (forts, spawnpoints — reads reset the entry's own TTL, ~free via the timer wheel) vs `ExpiryWritingFunc` (pokemon — TTL encodes despawn time, must never extend on read). There is no sharding: the table is internally concurrent, and there is no shard-count setting.
 
 **Cache construction must happen after config load.** `decoder.InitDataCache()` (idempotent) is called from `main()` once config is read — fort TTLs and eviction-callback registration depend on config, so nothing in package `init()` may build caches or read `config.Config`. Test binaries construct caches via `init_test.go` files.
 
-### Singleton caches
-
-Lower-contention entities (incident, weather, route, tappable, player, s2cell, device) use unsharded `OtterCache` instances too — the whole codebase is on one cache model (ttlcache is no longer a dependency).
+Besides the entity caches above there are player, s2cell, weather-consensus and GetMapForts caches (`decoder/main.go`), the device location cache (`deviceList.go`) and the encounter stats cache (`encounter_cache/`).
 
 ### Configuration
 
-- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter spreads a restart cohort's expiry so downstream work (tree deletes, tracker events, DB reloads) arrives as a stream, not a burst (with otter there is no reader-blocking sweep; jitter survives as burst smoothing).
-- **Pokemon cache**: per-entry TTL from `remainingDuration` with `DisableTouchOnHit = true` — verified despawns get despawn time + 60 s (clamped to 1 minute once at/past despawn), unverified get 55–65 min with per-pokemon jitter.
+- **Fort caches**: jittered per-entry TTL (`fortCacheEntryTTL`): ~60–70 min normally, 25–27 h when `config.Config.FortInMemory` is enabled (keeps forts resident for R-tree operations). Jitter spreads a restart cohort's expiry so downstream work (tree deletes, tracker events, DB reloads) arrives as a stream, not a burst.
+- **Pokemon cache**: per-entry TTL from `remainingDuration`, `TouchOnHit: false`. A pokemon whose expiry comes from its spawnpoint (verified, or derived from the spawn id with `derive_despawn`) stays until expiry + grace (60 s verified, 5 min derived), clamped to 1 minute once at/past despawn. Others get 55–65 min with per-pokemon jitter.
 - **Tappable cache**: per-entry TTL `expire_timestamp` + 60 s (1 min floor), 60 min without an expiry, no touch-on-hit (`tappableCacheTTL`); every save `Set`s it (re-caches a tappable evicted mid-save), including a clean DB-loaded one not yet indexed.
-- **All other caches**: 60-minute TTL (weather consensus: 2 hours).
+- **All other caches**: 60-minute TTL (weather consensus: 2 hours; GetMapForts: 5 minutes).
 
 ### Eviction Callbacks and the Tree Writer
 
 Fort, pokemon and tappable caches register eviction callbacks that clean up the lookup-cache entry inline and hand the R-tree mutation to an ordered batching worker (`decoder/rtree_evictor.go`). Important facts about this path:
 
 - Eviction callbacks arrive on each cache's single dispatcher goroutine (see `ottercache/cache.go`) and can race with saves. The pokemon callback takes the entity lock and skips cleanup if the pokemon was re-cached. The fort callback holds `fortTreeMutex` while checking the type's cache and the shared lookup. It skips cleanup if the fort is cached again, the lookup is gone, or another fort type owns the entry.
-- **All runtime pokemon tree mutations go through the writer** — new-record inserts, position moves (delete+insert pairs), rehydration inserts, the eviction-race self-heal, and eviction deletes. Savers holding entity locks never touch `pokemonTreeMutex` (production dumps once showed 90+ savers convoyed there); only the worker and the ~1/s scan-snapshot refresh acquire it. Enqueue order is apply order; deletes match on (coords, id) so stale duplicates are no-ops; the rtree is a multiset so duplicate inserts self-correct. Startup preload uses direct inserts (pre-traffic) to avoid flooding the queue.
+- **All runtime pokemon tree mutations go through the writer** — new-record inserts, position moves (delete+insert pairs), rehydration inserts, the eviction-race self-heal, and eviction deletes. Savers holding entity locks never touch `pokemonTreeMutex` (savers queued on it behind eviction drains and copy-on-write clones freeze every decoder; see `docs/design/2026-07-04-eviction-lock-contention.md`); only the worker and the ~1/s scan-snapshot refresh acquire it. Enqueue order is apply order; deletes match on (coords, id) so stale duplicates are no-ops; the rtree is a multiset so duplicate inserts self-correct. Startup preload uses direct inserts (pre-traffic) to avoid flooding the queue.
 - **Fort saves** hold the entity lock while `storeFortIndex` takes `fortTreeMutex` to refresh the lookup on every save and update the tree on insert or move. Record deletions remove the point directly. Cache evictions queue a delete, which `flushFortTreeEvictions` skips if a live record has reclaimed the point.
 - Mutations apply in batches (~512 per tree-mutex acquisition), so the tree may briefly hold a ghost point (harmless — scans consult the lookup cache) or a duplicate point for a re-added id (scan paths dedupe matched ids).
 - A save that finds its lookup entry missing re-queues the tree insert (`savePokemonRecordAsAtTime`), self-healing the eviction/re-add race.
@@ -239,11 +281,11 @@ Each entity type has a `TypedQueue[K, T]` that batches and coalesces writes:
 
 2. **Dispatch**: A processing loop checks for entries whose `ReadyAt` time has passed, moves them to a batch buffer.
 
-3. **Flush**: When the batch reaches `BatchSize` (default 50) or `BatchTimeout` (default 100ms) elapses, the batch is flushed via a bulk `INSERT ... ON DUPLICATE KEY UPDATE` SQL statement. Before flushing, entries are sorted by key for deterministic lock ordering, which avoids deadlocks when two batches touch overlapping rows. Queue keys are `comparable`, not `cmp.Ordered` (`FortId` is a fixed-width struct, which no ordered constraint admits), so each queue supplies an explicit `KeyCompare func(a, b K) int` — `cmp.Compare` for scalar keys, `FortId.Compare` for fort ids. `FortId.Compare` orders identically to the varchar column, so this sort — and the deadlock avoidance it gives — is unchanged from when fort ids were strings.
+3. **Flush**: When the batch reaches `BatchSize` (`tuning.write_behind_batch_size`, default 50) or `BatchTimeout` (`tuning.write_behind_batch_timeout`, default 100ms) elapses, the batch is flushed via a bulk `INSERT ... ON DUPLICATE KEY UPDATE` SQL statement. Before flushing, entries are sorted by key for deterministic lock ordering, which avoids deadlocks when two batches touch overlapping rows. Queue keys are `comparable`, not `cmp.Ordered` (`FortId` is a fixed-width struct, which no ordered constraint admits), so each queue supplies an explicit `KeyCompare func(a, b K) int` — `cmp.Compare` for scalar keys, `FortId.Compare` for fort ids. `FortId.Compare` orders identically to the varchar column, so the flush order matches the database's key order.
 
-4. **Concurrency**: All queues share a `SharedLimiter` that caps total concurrent DB writers (default 50). This prevents overwhelming the database connection pool.
+4. **Concurrency**: All queues share a `SharedLimiter` that caps total concurrent DB writers (`tuning.write_behind_worker_count`, default 16). This prevents overwhelming the database connection pool.
 
-5. **Deadlock retry**: MySQL deadlock errors (1213) trigger up to 3 retries with exponential backoff.
+5. **Deadlock retry**: MySQL deadlock errors (1213) trigger up to 3 retries with linear backoff (50/100/150 ms).
 
 ### Pokemon Delay
 
@@ -255,18 +297,16 @@ Wild and nearby pokemon use a 30-second write delay (`wildPokemonDelay`). When a
 
 #### Connection Split
 
-`DbDetails` holds two connection pools:
-- **`PokemonDb`**: Dedicated pool for the pokemon table (highest write volume).
-- **`GeneralDb`**: Everything else (forts, incidents, weather, routes, etc.).
+`DbDetails` has two handles: **`PokemonDb`** for the pokemon table and **`GeneralDb`** for everything else. `main.go` currently assigns the same `*sqlx.DB` pool to both, so they share one pool (`database.max_pool`, default 100). Keep using the right handle: the pokemon write-behind queue and pokemon queries go through `PokemonDb`, so the split can be restored without touching call sites.
 
 ## Decode-Path Workers
 
-Work that would otherwise serialize the 96 decode goroutines on a global
+Work that would otherwise serialize the decode goroutines (up to 96 by default) on a global
 lock runs on dedicated single-worker pipelines fed by channels:
 
 | Worker | Channel | Full-channel behavior |
 |--------|---------|----------------------|
-| Tree writer (`rtree_evictor.go`) | 262144 | Blocking send (tree mutations must not be lost) |
+| Tree writers (`rtree_evictor.go`) | 262144 pokemon, 65536 fort/tappable | Savers: blocking send (bounded by the raw limiter). Eviction callbacks: `TryEnqueue`, drop + log (a dropped delete leaves a ghost point that scans tolerate) |
 | Stats aggregation (`stats.go`) | 262144 | **Drop + count** (stats are loss-tolerant) |
 | Fort tracker (`fort_tracker.go`) | 8192 | **Drop + count** (staleness needs an hour of absence) |
 
@@ -303,6 +343,8 @@ Worker queue depths are exported every 10s as
 | `weather` | Weather | `weather` |
 | `fort_update` | FortUpdate | `fort_update` |
 | `max_battle` | MaxBattle | `max_battle` |
+| `raid_lobby` | RaidLobby | `raid_lobby` |
+| `max_battle_lobby` | MaxBattleLobby | `max_battle_lobby` |
 | `tappable` | Tappable | `tappable` |
 
 `tappable` covers reward tappables only, sent when a reward type is first recorded (`rewardChanged`, set in `setRewards`); encounter tappables go out as `pokemon` webhooks. Payload follows the `pokemon` hook's field names (`webhooks.md`).
@@ -341,24 +383,24 @@ FortTracker
 ### Detection Flow
 
 1. Each GMO response contains S2 cell IDs and the forts within them.
-2. `CheckRemovedForts()` calls `ProcessCellUpdate()` for each cell.
+2. `CheckRemovedForts()` queues the GMO's cell contents to the tracker worker, which calls `ProcessCellUpdate()` for each cell.
 3. For each cell, forts in the previous state but NOT in the current GMO are candidates for removal.
-4. If a fort has been missing for longer than `staleThreshold` (default 1 hour), it's marked as stale and deleted via `clearGymWithLock`/`clearPokestopWithLock`.
+4. If a fort has been missing for longer than `staleThreshold` (`cleanup.forts_stale_threshold`, default 1 hour) and for at least `cleanup.forts_min_miss_count` cell scans (default 1), it's marked as stale and deleted via `clearFortWithLock`.
 5. If a pokestop ID appears in the gym set (or vice versa), it's detected as a type conversion — the old type is marked deleted (but not removed from the tracker).
 
 ### API
 
-- `GET /api/fort-tracker/cell/:cell_id` — returns forts in an S2 cell
-- `GET /api/fort-tracker/forts/:fort_id` — returns a fort's cell and last-seen timestamp
+- `GET /api/fort-tracker/cell/{cell_id}` — returns forts in an S2 cell
+- `GET /api/fort-tracker/forts/{fort_id}` — returns a fort's cell and last-seen timestamp
 
 ## Spatial Indexes (R-trees)
 
 ### Two-Level Architecture
 
-Both pokemon and fort spatial queries use the same two-level pattern to avoid holding entity locks during search:
+Pokemon, fort and tappable spatial queries use the same two-level pattern to avoid holding entity locks during search:
 
 1. **R-tree** (`rtree.RTreeG`): Maps `[lon, lat]` points to entity IDs. Provides fast bounding-box searches.
-2. **Lookup cache** (`xsync.MapOf`): Maps entity IDs to lightweight structs containing only the fields needed for filter matching. Lock-free concurrent reads.
+2. **Lookup cache** (`xsync.Map`): Maps entity IDs to lightweight structs containing only the fields needed for filter matching. Lock-free concurrent reads.
 
 This separation means a scan of 100,000 pokemon in a bounding box only touches the R-tree and lookup cache — no entity mutexes are acquired until the final step of building API results for the matched subset.
 
@@ -389,11 +431,11 @@ This separation means a scan of 100,000 pokemon in a bounding box only touches t
 - **Pokestop**: lure, quest rewards (both AR and non-AR), incident data, contest data
 - **Station**: battle level/pokemon/timestamps
 
-Enabled by `config.Config.FortInMemory`. Fort cache TTL is extended to 25 hours to keep entries resident.
+Enabled by `config.Config.FortInMemory`. Fort cache TTL is extended to 25–27 hours to keep entries resident.
 
 **Incident data** on FortLookup is updated separately via `updatePokestopIncidentLookup()` because incidents load after pokestops during preload, and incident updates come through a different code path than pokestop updates.
 
-**Scaling caveat (fort scans are low-traffic today):** this section used to pre-scope interning fort IDs to dense integers as the lever for pokemon-like scan volumes — the weakness being ~35-byte string keys hashed per Load, key-compared per bucket walk, and stored as entries in the R-tree itself (pointer-laden tree nodes; ~2M string objects in every GC mark). That lever was evaluated and a different one taken instead: fort IDs are now `decoder.FortId`, a 17-byte `comparable` value type (`struct{ Guid [16]byte; Suffix uint8 }`) used directly as the cache key, map key, and R-tree payload, with string conversion pushed to the DB/JSON/webhook boundaries. That removes the string hashing, the per-bucket key compares, and the GC-visible key pointers this caveat described, without a global intern table. Interning fort IDs to dense integers on top of the value type remains available if fort scans ever do become hot enough to matter. See `docs/superpowers/specs/2026-08-18-fortid-value-type-design.md` for the full design record.
+**Fort id representation (fort scans are low-traffic today):** fort IDs are `decoder.FortId`, a 17-byte `comparable` value type (`struct{ Guid [16]byte; Suffix uint8 }`) used directly as the cache key, map key, and R-tree payload, with string conversion at the DB/JSON/webhook boundaries. Compared with string keys this avoids hashing ~35-byte strings per Load, comparing them per bucket walk, and holding ~2M pointer-carrying string objects in the R-tree for every GC mark, without a global intern table. If fort scans ever reach pokemon-like volumes, interning fort IDs to dense integers on top of the value type is the next lever. Design record: `docs/design/2026-08-18-fortid-value-type-design.md`.
 
 ### Scanning and DNF Filters
 
@@ -443,7 +485,7 @@ The `/api/{pokestop,gym,station}/available` and combined `/api/fort/available` e
 - Each fort update function (`updatePokestopLookup` → lures/showcases, `updatePokestopIncidentLookup` → invasions, `updateGymLookup` → raids, `updateStationLookupWithBattles` → battles) calls an `observe*` that records each active option's *latest* expiry in a small `xsync.Map[optionKey, maxExpiry]` (atomic keep-larger; already-expired observations ignored). These hooks fire during preload too, warming the maps at startup.
 - Reads (`GetAvailable*`) use the strong `Map.Range` (not `RangeRelaxed`), emit keys with `exp > now`, and **prune-on-read conditionally** (`Compute` delete-if-still-`<= now`, never a blind `Delete`, so a concurrent refresh isn't dropped).
 - **Quests are the exception**: a quest can be *retracted* mid-life (`RemoveQuestsWithinGeofence`, event swap) while its daily `quest_expiry` is still hours away — max-expiry is monotonic and can't retract — so quests use the `reconcile` count aggregate (`questConditionCount` / `reconcileFortQuestConditions`), never the index. `GetAvailablePokestops` sources quests from `GetAvailableQuestConditions()`.
-- Accepted trade-off: no periodic reconcile sweep, so a replaced option (egg→hatch, grunt confirm) can over-report until its own expiry passes — bounded and self-healing. Design: `docs/superpowers/specs/2026-07-17-maintained-fort-availability-design.md`.
+- Accepted trade-off: no periodic reconcile sweep, so a replaced option (egg→hatch, grunt confirm) can over-report until its own expiry passes — bounded and self-healing. Design: `docs/design/2026-07-17-maintained-fort-availability-design.md`.
 
 ## Geofence Matching
 
@@ -471,13 +513,12 @@ reload) instead of failing startup.
 
 ## Preload
 
-On startup, `Preload()` bulk-loads entities from the database into caches. Order matters when `FortInMemory` is enabled:
+Startup (`main.go`) creates the fort tracker (`InitFortTracker`), repairs spawnpoints stored at 0,0 (`RepairZeroLocationSpawnpoints`), then picks one of three loads (`decoder/preload.go`):
 
-1. Pokestops → populates cache + fort R-tree
-2. Gyms → populates cache + fort R-tree
-3. Stations → populates cache + fort R-tree
-4. Incidents → **must load after pokestops** because `updatePokestopIncidentLookup` needs existing fort R-tree entries
-5. Pokemon → populates cache + pokemon R-tree
-6. Tappables (Phase 1, parallel with forts) → unexpired rows only, cache + tappable R-tree
+- **`preload = true`** → `Preload(db, fort_in_memory)`, in two phases:
+  1. In parallel: non-deleted pokestops and gyms (cache, fort tracker, and the fort R-tree + lookup when `fort_in_memory`), stations (cache, plus R-tree when `fort_in_memory`), recently seen spawnpoints, and unexpired tappables (cache + tappable R-tree, always).
+  2. In parallel, once phase 1 is done: non-expired station battles (need `stationCache`) and active incidents (**must follow pokestops**: `updatePokestopIncidentLookup` needs the pokestop's `FortLookup` entry).
+- **`preload = false`, `fort_in_memory = true`** → `PreloadForts`: pokestops, gyms and stations in parallel with the R-tree, then station battles. No incidents, spawnpoints or tappables.
+- **Neither** → `LoadFortsFromDB` loads only the fort tracker's minimal data.
 
-Fort tracker is initialized from the preloaded fort data.
+Pokemon are not part of these. With `pokemon_memory_only` and `preserve_pokemon`, pokemon are written to the database on shutdown (unless skipped via the API) and `PreloadPreservedPokemon` restores the unexpired ones (cache + pokemon R-tree, direct inserts) after the preload above.

@@ -69,8 +69,8 @@ func TestCompileFenceFlattensGeometryCollection(t *testing.T) {
 }
 
 // TestNormaliseFenceFromBytesRejectsNonAreaGeometry: a fence must be an area.
-// Point and line bodies used to reach the database and match nothing (or a
-// stop at the exact coordinate); they are rejected at the parse boundary now.
+// Point and line bodies would reach the database and match nothing (or a
+// stop at the exact coordinate), so they are rejected at the parse boundary.
 func TestNormaliseFenceFromBytesRejectsNonAreaGeometry(t *testing.T) {
 	for _, body := range []string{
 		`{"type":"Point","coordinates":[1,2]}`,

@@ -198,7 +198,7 @@ func TestPokemonFullRowRoundTrip(t *testing.T) {
 		// doc comment. A plain positive value like this one round-trips
 		// under either type, so it doesn't exercise that boundary, but it
 		// does prove the chosen type binds and scans correctly end to end
-		// against the real column, which nothing here previously did.
+		// against the real column.
 		SpawnId:  null.ValueFrom(int64(424242)),
 		AtkIv:    null.ValueFrom(uint8(15)),
 		DefIv:    null.ValueFrom(uint8(14)),

@@ -20,9 +20,9 @@ import (
 const emptyScanBody = `{"min":{"latitude":0,"longitude":0},"max":{"latitude":1,"longitude":1},"limit":10,"filters":[]}`
 
 // TestHumaScanEndpointsE2E exercises the full HTTP pipeline (binding, auth,
-// status, serialization) for the migrated v2/v3 pokemon scan endpoints without
-// a database. It guards wire-compatibility: the legacy responses had no
-// `$schema` field, so Huma's schema-link transformer must stay disabled.
+// status, serialization) for the v2/v3 pokemon scan endpoints without a
+// database. It guards wire-compatibility: responses carry no `$schema` field,
+// so Huma's schema-link transformer must stay disabled.
 func TestHumaScanEndpointsE2E(t *testing.T) {
 	prev := config.Config.ApiSecret
 	config.Config.ApiSecret = "topsecret"
@@ -76,8 +76,8 @@ func TestHumaScanEndpointsE2E(t *testing.T) {
 }
 
 // TestHumaScanAcceptsLatLonSpellings verifies the bounding box accepts both the
-// canonical lat/lon (used by other Golbat endpoints) and the legacy
-// latitude/longitude spelling. Before the ApiLatLon fix, lat/lon got a 422.
+// canonical lat/lon (used by other Golbat endpoints) and the
+// latitude/longitude alias.
 func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
 	prev := config.Config.ApiSecret
 	config.Config.ApiSecret = "topsecret"
@@ -102,8 +102,7 @@ func TestHumaScanAcceptsLatLonSpellings(t *testing.T) {
 }
 
 // TestHumaScanAcceptsPartialRanges verifies a DNF range with only one bound
-// passes schema validation, as the legacy gin BindJSON did (the missing bound
-// binds to 0).
+// passes schema validation (the missing bound binds to 0).
 func TestHumaScanAcceptsPartialRanges(t *testing.T) {
 	prev := config.Config.ApiSecret
 	config.Config.ApiSecret = ""
@@ -147,8 +146,7 @@ func TestPokemonReadEndpoints(t *testing.T) {
 	})
 
 	t.Run("search-pokemon center-only body passes validation", func(t *testing.T) {
-		// Legacy mode: min/max omitted, results ordered by distance from center
-		// within a small default radius.
+		// min/max omitted: results are ordered by distance from center.
 		body := `{"center":{"lat":0,"lon":0},"searchIds":[25]}`
 		resp := api.Post("/api/pokemon/search", strings.NewReader(body))
 		if resp.Code != http.StatusAccepted {

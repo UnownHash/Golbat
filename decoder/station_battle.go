@@ -44,8 +44,8 @@ type FortLookupStationBattle struct {
 	BattlePokemonForm  int16
 }
 
-// FortLookupIncident is one active incident on a pokestop (slot1 only — slots 2/3 are
-// unused). Mirrors FortLookupStationBattle; FortLookup.Incidents holds all active
+// FortLookupIncident is one active incident on a pokestop, including all three
+// grunt lineup slots. Mirrors FortLookupStationBattle; FortLookup.Incidents holds all active
 // incidents on a stop so concurrent incidents (e.g. an invasion + a showcase) don't
 // clobber one another.
 type FortLookupIncident struct {

@@ -11,13 +11,6 @@ import (
 )
 
 func UpdateFortBatch(ctx context.Context, db db.DbDetails, scanParameters ScanParameters, p []RawFortData) {
-	// Logic is:
-	// 1. Filter out pokestops that are unchanged (last modified time)
-	// 2. Fetch current stops from database
-	// 3. Generate batch of inserts as needed (with on duplicate saveGymRecord)
-
-	//var stopsToModify []string
-
 	for _, fort := range p {
 		fortId, ok := ParseFortId(fort.Data.FortId)
 		if !ok {

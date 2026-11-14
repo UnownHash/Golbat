@@ -2,9 +2,9 @@ package db
 
 import "testing"
 
-// TestStatsCollectorIsSeeded pins the invariant the nil checks in timing.go
-// used to stand in for: statsCollector is never nil, so db/pokestop.go and
-// db/stats.go can call straight through the way they already did.
+// TestStatsCollectorIsSeeded pins the invariant that statsCollector is never
+// nil, so callers such as timing.go and stats.go call it without nil
+// checks.
 func TestStatsCollectorIsSeeded(t *testing.T) {
 	if statsCollector == nil {
 		t.Fatal("db.statsCollector is nil at package load; the noop seed is gone")

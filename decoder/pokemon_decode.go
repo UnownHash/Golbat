@@ -364,7 +364,6 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 			pokemon.applySightingDerivation()
 			pokemon.recomputeCpIfNeeded(ctx, db, weather)
 			// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
-			// shiny = mapPokemon.pokemonDisplay.shiny
 		} else {
 			log.Warnf("[POKEMON] MapPokemonProto missing PokemonDisplay for %d", pokemon.Id)
 		}

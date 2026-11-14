@@ -17,7 +17,7 @@ type ApiStationResult struct {
 	StartTime                 int64                    `json:"start_time" doc:"Unix timestamp when the station becomes active"`
 	EndTime                   int64                    `json:"end_time" doc:"Unix timestamp when the station expires"`
 	CooldownComplete          int64                    `json:"cooldown_complete" doc:"Unix timestamp when the station cooldown completes"`
-	IsBattleAvailable         bool                     `json:"is_battle_available" doc:"Whether a battle is currently available at the station"`
+	IsBattleAvailable         bool                     `json:"is_battle_available" doc:"The station's is_battle_available flag as last decoded; it does not by itself mean a battle is running (check battle_end / battles)"`
 	IsInactive                bool                     `json:"is_inactive" doc:"Whether the station is inactive"`
 	Updated                   int64                    `json:"updated" doc:"Unix timestamp when the record was last updated"`
 	BattleLevel               *int64                   `json:"battle_level" doc:"Level of the current (top) battle"`

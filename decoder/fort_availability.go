@@ -5,7 +5,7 @@ import "github.com/puzpuzpuz/xsync/v4"
 // Maintained max-expiry availability index. Each map holds, per distinct filter
 // option, the latest expiry timestamp seen on any resident fort. Availability
 // reads the maps instead of scanning fortLookupCache; see
-// docs/superpowers/specs/2026-07-17-maintained-fort-availability-design.md.
+// docs/design/2026-07-17-maintained-fort-availability-design.md.
 //
 // Quests are NOT here — they can be retracted mid-life (geofence clear, event
 // swap) which a monotonic max-expiry cannot express, so they keep the reconcile

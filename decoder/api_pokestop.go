@@ -26,7 +26,7 @@ type ApiPokestopResult struct {
 	QuestRewardType               *int64                `json:"quest_reward_type" doc:"Reward type of the AR quest (generated from quest_rewards[0].type)"`
 	QuestItemId                   *int64                `json:"quest_item_id" doc:"Item id of the AR quest reward, if an item reward"`
 	QuestRewardAmount             *int64                `json:"quest_reward_amount" doc:"Reward amount of the AR quest"`
-	QuestPokemonId                *int64                `json:"quest_pokemon_id" doc:"Pokemon id of the AR quest reward, if a pokemon/candy reward"`
+	QuestPokemonId                *int64                `json:"quest_pokemon_id" doc:"Pokemon id of the AR quest reward, for pokemon encounter, candy, XL candy, mega energy and temp evo branch rewards"`
 	QuestPokemonFormId            *int64                `json:"quest_pokemon_form_id" doc:"Form id of the AR quest reward pokemon, if a pokemon reward"`
 	QuestConditions               *json.RawMessage      `json:"quest_conditions" doc:"Conditions of the AR quest as native JSON; null when no quest"`
 	QuestRewards                  *json.RawMessage      `json:"quest_rewards" doc:"Rewards of the AR quest as native JSON (array of {type, info}); null when no quest"`
@@ -49,7 +49,7 @@ type ApiPokestopResult struct {
 	AlternativeQuestRewardType    *int64                `json:"alternative_quest_reward_type" doc:"Reward type of the non-AR quest (generated from alternative_quest_rewards[0].type)"`
 	AlternativeQuestItemId        *int64                `json:"alternative_quest_item_id" doc:"Item id of the non-AR quest reward, if an item reward"`
 	AlternativeQuestRewardAmount  *int64                `json:"alternative_quest_reward_amount" doc:"Reward amount of the non-AR quest"`
-	AlternativeQuestPokemonId     *int64                `json:"alternative_quest_pokemon_id" doc:"Pokemon id of the non-AR quest reward, if a pokemon/candy reward"`
+	AlternativeQuestPokemonId     *int64                `json:"alternative_quest_pokemon_id" doc:"Pokemon id of the non-AR quest reward, for pokemon encounter, candy, XL candy, mega energy and temp evo branch rewards"`
 	AlternativeQuestPokemonFormId *int64                `json:"alternative_quest_pokemon_form_id" doc:"Form id of the non-AR quest reward pokemon, if a pokemon reward"`
 	AlternativeQuestConditions    *json.RawMessage      `json:"alternative_quest_conditions" doc:"Conditions of the non-AR quest as native JSON; null when no quest"`
 	AlternativeQuestRewards       *json.RawMessage      `json:"alternative_quest_rewards" doc:"Rewards of the non-AR quest as native JSON (array of {type, info}); null when no quest"`
@@ -64,7 +64,7 @@ type ApiPokestopResult struct {
 	ShowcaseRankingStandard       *int64                `json:"showcase_ranking_standard" doc:"Ranking standard of the showcase contest"`
 	ShowcaseExpiry                *int64                `json:"showcase_expiry" doc:"Unix timestamp when the showcase contest expires"`
 	ShowcaseRankings              *json.RawMessage      `json:"showcase_rankings" doc:"Rankings of the most recent showcase contest as native JSON. Retained after the contest ends rather than cleared, so gate on showcase_expiry for liveness. Null only until the pokestop's first observed showcase."`
-	Invasions                     []ApiPokestopIncident `json:"invasions,omitempty" doc:"Active incidents; present when the pokestop has active incidents (always attempted on by-id, on scans only when with_incidents is set)"`
+	Invasions                     []ApiPokestopIncident `json:"invasions,omitempty" doc:"Active (unexpired) incidents; omitted when there are none. Attached on by-id reads and, on scans, only when with_incidents is set; both need fort_in_memory, since incidents are resolved through the in-memory fort index."`
 }
 
 func buildPokestopResult(stop *Pokestop) ApiPokestopResult {

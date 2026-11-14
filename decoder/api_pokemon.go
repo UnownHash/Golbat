@@ -18,7 +18,7 @@ const earthRadiusKm = 6371
 type ApiPokemonAvailableResult struct {
 	PokemonId int16 `json:"id" doc:"Pokedex id"`
 	Form      int16 `json:"form" doc:"Form id"`
-	Count     int   `json:"count" doc:"Number currently in the cache"`
+	Count     int   `json:"count" doc:"Number of cached pokemon with this id and form"`
 }
 
 func GetAvailablePokemon() []*ApiPokemonAvailableResult {
@@ -39,11 +39,11 @@ func GetAvailablePokemon() []*ApiPokemonAvailableResult {
 // Pokemon search
 
 type ApiPokemonSearch struct {
-	Min       ApiLatLon `json:"min" required:"false" doc:"Lower-left (minimum lat/lon) corner of the bounding box to search. Omit together with max for a center-only search with a small default radius."`
-	Max       ApiLatLon `json:"max" required:"false" doc:"Upper-right (maximum lat/lon) corner of the bounding box to search. Omit together with min for a center-only search with a small default radius."`
-	Center    ApiLatLon `json:"center" required:"false" doc:"Center point used to order results by distance. Defaults to the zero coordinate."`
-	Limit     int       `json:"limit" required:"false" doc:"Maximum number of results to return. 0 means use the configured maximum."`
-	SearchIds []int16   `json:"searchIds" required:"false" doc:"Pokemon ids to match. A pokemon is returned only if its id is in this list."`
+	Min       ApiLatLon `json:"min" required:"false" doc:"One corner of the search box. The box does not clip results: its size sets how far from center the search walks, and min and max must be no more than tuning.max_pokemon_distance km apart (400 otherwise). Omit together with max to use a fixed default radius."`
+	Max       ApiLatLon `json:"max" required:"false" doc:"The opposite corner of the search box; see min."`
+	Center    ApiLatLon `json:"center" required:"false" doc:"Point the search walks outward from; results are ordered nearest first. Defaults to the zero coordinate."`
+	Limit     int       `json:"limit" required:"false" doc:"Maximum number of results to return; 0 uses the server default. Clamped by tuning.max_pokemon_results."`
+	SearchIds []int16   `json:"searchIds" required:"false" doc:"Pokedex ids to match; a pokemon is returned only if its id is in this list. Required (400 when missing)."`
 }
 
 func calculateHypotenuse(a, b float64) float64 {

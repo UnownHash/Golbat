@@ -20,22 +20,21 @@ import (
 
 // OtterCache adapts otter v2 (Caffeine-style: lock-free reads, hierarchical
 // timing-wheel expiry, bounded maintenance) to the cache API Golbat's entity
-// layer was built against. It replaces ShardedCache for the hot entity
-// caches: otter's table is internally concurrent, so sharding, TTL-jitter-
-// as-cohort-defense, and hysteresis touch all become unnecessary.
+// layer uses. otter's table is internally concurrent, so no sharding is
+// needed, and touch-on-hit is cheap enough to run on every read.
 //
 // The adapter is HARDENED by construction — two otter behaviors are unsafe
 // for Golbat and are not configurable here:
 //
 //  1. Deletion events are re-dispatched from OnAtomicDeletion to a single
 //     dispatcher goroutine via a bounded queue. otter's OnDeletion DEFAULT
-//     executor is `go fn()` per event (the goroutine-per-eviction shape
-//     that produced the ed50bf8 incident), and raw OnAtomicDeletion runs
+//     executor is `go fn()` per event (a mass expiry would spawn one
+//     goroutine per evicted entry), and raw OnAtomicDeletion runs
 //     inline under otter's internal synchronization — a handler taking an
 //     entity lock there deadlocks against a saver holding that entity lock
 //     while writing to the same cache. The dispatcher holds no cache
-//     internals, so handlers keep the exact ttlcache-era semantics: async,
-//     may take entity locks, guarded against races. Queue overflow drops
+//     internals, so handlers are async, may take entity locks, and are
+//     guarded against races. Queue overflow drops
 //     the event with once-per-second accounting (evictions are
 //     drop-tolerant: ghost tree points are already handled).
 //  2. Only CauseExpiration and CauseInvalidation reach the handler.
@@ -45,8 +44,7 @@ import (
 //     entity with the cache default TTL, and the save's Set stamps the
 //     real per-entry TTL over it (despawn-derived pokemon TTLs, jittered
 //     fort TTLs). A Replacement event reaching the eviction guards would
-//     enqueue a bogus tree delete for a live entity on every save.
-//     ttlcache fired nothing on overwrite; parity is kept. (Set rather
+//     enqueue a bogus tree delete for a live entity on every save. (Set rather
 //     than UpdateTTL on the save paths is deliberate: its upsert arm
 //     re-caches an entity evicted mid-save, without which the save's
 //     lookup/tree self-heal would leak entries the already-fired eviction
@@ -175,8 +173,8 @@ func (oc *OtterCache[K, V]) Has(key K) bool {
 	return ok
 }
 
-// Set stores value with the given TTL; ttl <= 0 uses the cache default
-// (matches ttlcache.DefaultTTL semantics at existing call sites).
+// Set stores value with the given TTL; ttl <= 0 (e.g. DefaultTTL) uses the
+// cache default.
 func (oc *OtterCache[K, V]) Set(key K, value V, ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = oc.defaultTTL

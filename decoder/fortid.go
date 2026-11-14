@@ -41,7 +41,7 @@ var FortIdParseDrops util.DropReporter
 // two fort-tracker maps) plus once per cached pokemon. As a fixed-width
 // value this is 17 pointer-free bytes that live inline in whatever holds
 // them — measured at 2M forts: ~28% less GC mark time and 5.3M fewer heap
-// objects. See docs/superpowers/specs/2026-08-18-fortid-value-type-design.md.
+// objects. See docs/design/2026-08-18-fortid-value-type-design.md.
 //
 // The zero value is the absent/"None" sentinel, which is why ParseFortId
 // refuses to produce it: FortId replaces null.String on optional fields,
@@ -210,14 +210,12 @@ func (f FortId) MarshalText() ([]byte, error) {
 }
 
 // Ptr returns nil for the zero value (absent fort) and a pointer to the
-// canonical string form otherwise. Named to mirror null.String.Ptr(),
-// which every FortId field replaced — callers that used to write
-// pokemon.PokestopId.Ptr() keep the same call shape. Centralizing this
-// (rather than each site writing `if f.Valid() { s := f.String(); ... }`)
-// makes "absent fort serializes as JSON null, never \"\"" a property of
-// the type: a call site can no longer accidentally write an unconditional
-// `s := f.String(); p = &s`, which would emit "" instead of null for an
-// absent fort.
+// canonical string form otherwise. Named to mirror null.String.Ptr().
+// Centralizing this (rather than each site writing
+// `if f.Valid() { s := f.String(); ... }`) makes "absent fort serializes as
+// JSON null, never \"\"" a property of the type: call sites never write an
+// unconditional `s := f.String(); p = &s`, which would emit "" instead of
+// null for an absent fort.
 func (f FortId) Ptr() *string {
 	if !f.Valid() {
 		return nil

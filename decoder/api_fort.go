@@ -14,7 +14,7 @@ import (
 type ApiFortScan struct {
 	Min           ApiLatLon          `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
 	Max           ApiLatLon          `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
-	Limit         int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default."`
+	Limit         int                `json:"limit" required:"false" doc:"Max results to return; 0 uses the server default. Clamped by tuning.max_fort_results."`
 	DnfFilters    []ApiFortDnfFilter `json:"filters" required:"false" doc:"OR'd filter clauses; a fort matches if it satisfies any one clause. Omitting this array (or sending it empty/null) matches ALL forts of the requested type. Within a clause, a list-typed condition applies only when present: omit or send null for no constraint — an explicitly empty inner list matches nothing."`
 	WithIncidents bool               `json:"with_incidents" required:"false" doc:"Pokestop only: when true, each pokestop result includes its active incidents (invasions). Ignored for gym/station."`
 	UpdatedAfter  int64              `json:"updated_after" required:"false" minimum:"0" doc:"Only return entities whose updated timestamp is strictly newer than this unix time; 0 or omitted returns everything. Applied when the response is built, after the spatial scan, DNF matching and result limit, so examined/skipped/total and limit_reached describe the scan and a response may come back short or empty. An entity that expires, is deleted, or stops matching the filters simply disappears from later responses, so poll with a broad filter and reconcile locally; updated has one-second resolution, so pass max(updated) - 1 from the previous response and expect the boundary second to be re-delivered."`
@@ -43,7 +43,7 @@ type ApiFortTypeScanStats struct {
 type ApiFortCombinedScan struct {
 	Min           ApiLatLon             `json:"min" doc:"SW (minimum lat/lon) corner of the bounding box."`
 	Max           ApiLatLon             `json:"max" doc:"NE (maximum lat/lon) corner of the bounding box."`
-	Limit         int                   `json:"limit" required:"false" doc:"Max results to return across all types; 0 uses the server default."`
+	Limit         int                   `json:"limit" required:"false" doc:"Max results to return across all types; 0 uses the server default. Clamped by tuning.max_fort_results. The walk stops when this many forts have been accepted in total."`
 	WithIncidents bool                  `json:"with_incidents" required:"false" doc:"When true, each pokestop result includes its active incidents (invasions)."`
 	Gyms          *ApiFortTypeScanGroup `json:"gyms" required:"false" doc:"Include gyms, filtered by this group's clauses. Omitted or null excludes gyms (unless all three groups are omitted)."`
 	Pokestops     *ApiFortTypeScanGroup `json:"pokestops" required:"false" doc:"Include pokestops, filtered by this group's clauses. Omitted or null excludes pokestops (unless all three groups are omitted)."`
@@ -65,7 +65,7 @@ func combinedFortMatches(p *ApiFortCombinedScan, fl *FortLookup, now int64) bool
 		g = p.Stations
 	}
 	if g == nil {
-		// legacy bare-probe: all groups omitted = every type matches
+		// bare bbox probe: all groups omitted = every type matches
 		return p.Gyms == nil && p.Pokestops == nil && p.Stations == nil
 	}
 	if len(g.DnfFilters) == 0 {
@@ -80,7 +80,7 @@ func combinedFortMatches(p *ApiFortCombinedScan, fl *FortLookup, now int64) bool
 }
 
 type ApiFortDnfFilter struct {
-	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"When true, only match forts that are AR scan eligible; null means no AR eligibility constraint."`
+	IsArScanEligible *bool `json:"is_ar_scan_eligible" required:"false" doc:"Any non-null value restricts the clause to AR scan eligible forts (false behaves like true; there is no 'not eligible' selector). Null means no AR eligibility constraint."`
 
 	// Gym
 	AvailableSlots      *ApiFortDnfMinMax `json:"available_slots" required:"false" doc:"Gym only: inclusive range of open defender slots; null means no slot constraint."`
@@ -90,18 +90,18 @@ type ApiFortDnfFilter struct {
 	RaidTempEvolutionId []int8            `json:"raid_temp_evolution_id" required:"false" doc:"Gym only: allowed raid boss temp evolution (mega/primal) ids; 0 selects base-form bosses. Omitted or null means no temp evolution constraint. Only matches gyms with an active raid."`
 
 	// Pokestop - unified quest (matches AR or no-AR)
-	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; omitted or null means no lure constraint."`
+	LureId             []int16           `json:"lure_id" required:"false" doc:"Pokestop only: allowed active lure module ids; omitted or null means no lure constraint. Only matches pokestops with an unexpired lure."`
 	QuestRewardType    []int16           `json:"quest_reward_type" required:"false" doc:"Pokestop only: allowed quest reward types; matched against either the AR or no-AR quest. Omitted or null means no reward type constraint."`
 	QuestRewardAmount  *ApiFortDnfMinMax `json:"quest_reward_amount" required:"false" doc:"Pokestop only: inclusive quest reward amount range; matched against either the AR or no-AR quest. Null means no reward amount constraint."`
 	QuestRewardItemId  []int16           `json:"quest_reward_item_id" required:"false" doc:"Pokestop only: allowed quest reward item ids; matched against either the AR or no-AR quest. Omitted or null means no reward item constraint."`
 	QuestRewardPokemon []ApiDnfId        `json:"quest_reward_pokemon" required:"false" doc:"Pokestop only: allowed quest reward pokemon/form pairs; matched against either the AR or no-AR quest. Omitted or null means no reward pokemon constraint."`
 
 	// Pokestop - incident
-	IncidentDisplayType []int8  `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; omitted or null means no incident display type constraint."`
-	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint."`
+	IncidentDisplayType []int8  `json:"incident_display_type" required:"false" doc:"Pokestop only: allowed incident display types; omitted or null means no incident display type constraint. With incident_character, both must hold on the same unexpired incident."`
+	IncidentCharacter   []int16 `json:"incident_character" required:"false" doc:"Pokestop only: allowed incident character ids; omitted or null means no incident character constraint. Only unexpired incidents match."`
 
 	// Pokestop - contest
-	ContestPokemon         []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint."`
+	ContestPokemon         []ApiDnfId               `json:"contest_pokemon" required:"false" doc:"Pokestop only: allowed contest focus pokemon/form pairs; omitted or null means no contest pokemon constraint. Only matches unexpired showcases, as do all contest_* fields."`
 	ContestPokemonType     []int8                   `json:"contest_pokemon_type" required:"false" doc:"Pokestop only: allowed contest pokemon types; omitted or null means no contest type constraint."`
 	ContestFocus           []ApiFortDnfContestFocus `json:"contest_focus" required:"false" doc:"Pokestop only: allowed structured contest focuses. Currently supports exact Buddy minimum levels. Omitted or null means no structured focus constraint; an empty list matches nothing."`
 	ContestRankingStandard []int8                   `json:"contest_ranking_standard" required:"false" doc:"Pokestop only: allowed showcase ranking standards; 0 selects showcases whose standard is unknown. Omitted or null means no ranking standard constraint."`
@@ -136,26 +136,26 @@ type ApiFortDnfMinMax struct {
 
 type ApiGymScanResult struct {
 	Gyms         []*ApiGymResult `json:"gyms" doc:"Matching gyms within the bounding box."`
-	Examined     int             `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Examined     int             `json:"examined" doc:"Number of forts (of every type) examined during the spatial scan."`
 	Skipped      int             `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
 	Total        int             `json:"total" doc:"Total number of forts in the spatial index at scan time."`
-	LimitReached bool            `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
+	LimitReached bool            `json:"limit_reached" doc:"Whether the matched result list reached the effective result limit (measured before updated_after is applied)"`
 }
 
 type ApiPokestopScanResult struct {
 	Pokestops    []*ApiPokestopResult `json:"pokestops" doc:"Matching pokestops within the bounding box."`
-	Examined     int                  `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Examined     int                  `json:"examined" doc:"Number of forts (of every type) examined during the spatial scan."`
 	Skipped      int                  `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
 	Total        int                  `json:"total" doc:"Total number of forts in the spatial index at scan time."`
-	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the matched result list reached the effective result limit (measured before updated_after is applied)"`
 }
 
 type ApiStationScanResult struct {
 	Stations     []*ApiStationResult `json:"stations" doc:"Matching stations within the bounding box."`
-	Examined     int                 `json:"examined" doc:"Number of forts examined during the spatial scan."`
+	Examined     int                 `json:"examined" doc:"Number of forts (of every type) examined during the spatial scan."`
 	Skipped      int                 `json:"skipped" doc:"Number of forts skipped because they were not found in the lookup cache."`
 	Total        int                 `json:"total" doc:"Total number of forts in the spatial index at scan time."`
-	LimitReached bool                `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit"`
+	LimitReached bool                `json:"limit_reached" doc:"Whether the matched result list reached the effective result limit (measured before updated_after is applied)"`
 }
 
 type ApiFortCombinedScanResult struct {

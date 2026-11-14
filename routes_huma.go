@@ -39,7 +39,7 @@ func registerHumaRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokemon/v2/scan",
 		Summary:       "Search pokemon in a bounding box (v2, DNF filters)",
-		Description:   "Returns pokemon within [min,max] matching any DNF filter clause. Clauses are OR'd; conditions within a clause are AND'd. Returns a bare array.",
+		Description:   "Returns unexpired pokemon within [min,max] that match the filters, as a bare array, up to limit (clamped by tuning.max_pokemon_results). Filters are not a flat OR: clauses are grouped by the pokemon/form keys they list, and each pokemon is matched only against the most specific group that exists for it (exact id+form, else id with any form, else the clauses with no pokemon list). Within that group a clause matches when all its conditions hold. See the filters field and api.md \"Filter semantics\".",
 		Tags:          []string{"Pokemon"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -52,7 +52,7 @@ func registerHumaRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokemon/v3/scan",
 		Summary:       "Search pokemon in a bounding box (v3, DNF filters)",
-		Description:   "Returns pokemon within [min,max] matching any DNF filter clause. Clauses are OR'd; conditions within a clause are AND'd. Returns counts plus the matched array.",
+		Description:   "Returns unexpired pokemon within [min,max] that match the filters, up to limit (clamped by tuning.max_pokemon_results), with the scan counters and limit_reached. Filters are not a flat OR: clauses are grouped by the pokemon/form keys they list, and each pokemon is matched only against the most specific group that exists for it (exact id+form, else id with any form, else the clauses with no pokemon list). Within that group a clause matches when all its conditions hold. Gender is a list of allowed values (v2 uses a range). Supports updated_after. See the filters field and api.md \"Filter semantics\".",
 		Tags:          []string{"Pokemon"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -71,7 +71,7 @@ func registerStatusRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/status",
 		Summary:       "Server status: enabled features and scan limits",
-		Description:   "Reports which optional Golbat features are enabled (e.g. fort_in_memory), the server's effective scan result caps, and which optional DNF filter fields this build supports (filters), so map consumers can detect capabilities and clamp request limits without probing gated endpoints.",
+		Description:   "Reports which optional Golbat features are enabled (e.g. fort_in_memory), the server's effective scan result caps, and which optional DNF filter and /available fields this build supports (filters), so map consumers can detect capabilities and clamp request limits without probing gated endpoints. Not gated on fort_in_memory. The key set is a stable contract for map consumers: keys are only ever added.",
 		Tags:          []string{"Status"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -95,7 +95,7 @@ func registerPokemonReadRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokemon/search",
 		Summary:       "Search pokemon by id within a bounding box",
-		Description:   "Returns pokemon within [min,max] whose id is in searchIds, ordered by distance from center. Returns a bare array.",
+		Description:   "Walks the pokemon index outward from center, nearest first, and returns the pokemon whose id is in searchIds as a bare array, up to limit (clamped by tuning.max_pokemon_results). min and max do not clip the results to a box: they set how far from center the walk goes, and must be no more than tuning.max_pokemon_distance km apart. 400 when searchIds is missing or the box is too large.",
 		Tags:          []string{"Pokemon"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -112,7 +112,7 @@ func registerPokemonReadRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/pokemon/id/{pokemon_id}",
 		Summary:       "Get a single pokemon by encounter id",
-		Description:   "Returns the pokemon with the given encounter id, or 404 if not present in the cache.",
+		Description:   "Returns the pokemon with the given encounter id from the in-memory cache (no database fallback), or 404 if it is not cached.",
 		Tags:          []string{"Pokemon"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -129,7 +129,7 @@ func registerPokemonReadRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/pokemon/available",
 		Summary:       "List currently available pokemon",
-		Description:   "Returns the distinct pokemon id/form combinations currently in the cache with their counts.",
+		Description:   "Returns each distinct pokemon id/form currently in the in-memory pokemon index, with how many cached pokemon have it. Unordered; null when nothing is cached.",
 		Tags:          []string{"Pokemon"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -172,16 +172,16 @@ type stationAvailableOutput struct {
 }
 
 // registerFortScanRoutes registers the four in-memory fort scan operations
-// plus the pokestop-available, gym-available and station-available
-// aggregates. These are gated by config.Config.FortInMemory and return 503
-// when disabled.
+// and the four fort availability operations (pokestop, gym, station and the
+// combined fort). All of them are gated by config.Config.FortInMemory and
+// return 503 when it is disabled.
 func registerFortScanRoutes(api huma.API) {
 	gymOp := huma.Operation{
 		OperationID:   "scan-gyms",
 		Method:        http.MethodPost,
 		Path:          "/api/gym/scan",
 		Summary:       "Search gyms in a bounding box (DNF filters)",
-		Description:   "Returns gyms within [min,max] matching any DNF filter clause.",
+		Description:   "Returns gyms within [min,max] from the in-memory fort index. Matching is a plain OR over the filter clauses (conditions within a clause are AND'd); omitted, null or empty filters match every gym. Up to limit results (0 = server default; clamped by tuning.max_fort_results). Supports updated_after. Requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -199,7 +199,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokestop/scan",
 		Summary:       "Search pokestops in a bounding box (DNF filters)",
-		Description:   "Returns pokestops within [min,max] matching any DNF filter clause.",
+		Description:   "Returns pokestops within [min,max] from the in-memory fort index. Matching is a plain OR over the filter clauses (conditions within a clause are AND'd); omitted, null or empty filters match every pokestop. Up to limit results (0 = server default; clamped by tuning.max_fort_results). Supports updated_after. Requires fort_in_memory (503 otherwise). Set with_incidents to attach active incidents.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -217,7 +217,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/station/scan",
 		Summary:       "Search stations in a bounding box (DNF filters)",
-		Description:   "Returns stations within [min,max] matching any DNF filter clause.",
+		Description:   "Returns stations within [min,max] from the in-memory fort index. Matching is a plain OR over the filter clauses (conditions within a clause are AND'd); omitted, null or empty filters match every station. Up to limit results (0 = server default; clamped by tuning.max_fort_results). Supports updated_after. Requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -235,7 +235,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/fort/scan",
 		Summary:       "Search all fort types in a bounding box (DNF filters)",
-		Description:   "Returns the requested fort types within [min,max] in a single rtree traversal. Each present group (gyms/pokestops/stations) opts its type in with its own DNF clause set; omitted groups are excluded. Omitting all three groups returns everything.",
+		Description:   "Returns the requested fort types within [min,max] in a single walk of the in-memory fort index. Each present group (gyms/pokestops/stations) opts its type in with its own clauses (a plain OR; omitted, null or empty matches every fort of the type) and its own limit; omitted groups are excluded, and omitting all three returns every type. A type stops accepting matches at its limit while the walk keeps filling the others; the top-level limit caps the total. Per-type counters are in gyms_stats/pokestops_stats/stations_stats. Supports updated_after. Requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -253,7 +253,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/pokestop/available",
 		Summary:       "List currently available pokestop rewards/invasions/lures/showcases",
-		Description:   "Returns everything currently available on resident pokestops — distinct quest rewards (with title/target conditions), invasions, lures and showcases — from the in-memory fort cache, no DB scan. Whole-instance; requires fort_in_memory (503 otherwise). Presence-oriented: only quest entries carry `count` (the number of resident forts offering that exact reward+title+target); invasions/lures/showcases are distinct-option lists with no count. Consumers typically use the distinct tuples to build filter options.",
+		Description:   "Returns the distinct options currently available on resident pokestops — quest rewards (with title/target), invasions, lures and showcases — for building filter options. Whole-instance; no fort or DB scan. Lures, invasions and showcases are read from maintained max-expiry indexes: an option is listed until the latest expiry seen for it passes, so a replaced option can over-report until then. Quests come from a maintained per-fort count aggregate, and only quest entries carry `count` (the number of resident pokestops offering that exact reward + temp evolution + title + target in that slot). Requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Pokestop"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -271,7 +271,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/gym/available",
 		Summary:       "List currently available gym raid options",
-		Description:   "Distinct active raid levels/bosses/eggs on resident gyms, from the in-memory fort cache (no DB scan). Team/slot filter keys are generated statically by consumers, so they are not returned here. Whole-instance; requires fort_in_memory (503 otherwise).",
+		Description:   "Distinct raid level/boss/egg options on resident gyms, read from a maintained max-expiry index (no fort or DB scan): an option is listed until the latest raid end seen for it passes. Team/slot filter keys are generated statically by consumers, so they are not returned here. Whole-instance; requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -289,7 +289,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/fort/available",
 		Summary:       "List available options for all fort types in one pass",
-		Description:   "Pokestop, gym, and station availability aggregates (same shapes as the per-type /available endpoints) assembled from the maintained availability indexes (no fort scan) — use this instead of three per-type calls when refreshing everything. Whole-instance; requires fort_in_memory (503 otherwise).",
+		Description:   "Pokestop, gym and station availability (same shapes and sources as the per-type /available endpoints: maintained max-expiry indexes, plus the quest count aggregate) in one response, with no fort or DB scan — use this instead of three per-type calls when refreshing everything. Whole-instance; requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -307,7 +307,7 @@ func registerFortScanRoutes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/station/available",
 		Summary:       "List currently available station battle options",
-		Description:   "Distinct active (battle level, pokemon) options on resident stations, from the in-memory fort cache (no DB scan). Whole-instance; requires fort_in_memory (503 otherwise).",
+		Description:   "Distinct (battle level, pokemon, form) options on resident stations, read from a maintained max-expiry index (no fort or DB scan): an option is listed until the latest battle end seen for it passes. Whole-instance; requires fort_in_memory (503 otherwise).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -324,9 +324,8 @@ func registerFortScanRoutes(api huma.API) {
 // maxQueryIDs caps the number of ids accepted by the by-id batch query endpoints.
 const maxQueryIDs = 500
 
-// dedupeIDs parses each id, dropping unparseable and duplicate ids while
-// preserving order. Subsumes the previous id == "" filter — ParseFortId
-// rejects "" too. Callers MUST cap the raw input length against
+// dedupeIDs parses each id, dropping unparseable (including empty) and
+// duplicate ids while preserving order. Callers MUST cap the raw input length against
 // maxQueryIDs before calling this — parsing can only shrink the list
 // (drop malformed/duplicate entries), so checking the cap on its output
 // would let a request full of malformed ids dodge the limit entirely.
@@ -409,7 +408,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/gym/query",
 		Summary:       "Fetch gyms by id",
-		Description:   "Returns the gyms with the given ids (max 500, deduplicated). Unknown ids are omitted.",
+		Description:   "Returns the gyms with the given ids (max 500 ids, else 413; duplicates and malformed ids are dropped). Reads through to the database on a cache miss; unknown ids are omitted. Does not require fort_in_memory.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -455,7 +454,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/station/query",
 		Summary:       "Fetch stations by id",
-		Description:   "Returns the stations with the given ids (max 500, deduplicated). Unknown ids are omitted.",
+		Description:   "Returns the stations with the given ids (max 500 ids, else 413; duplicates and malformed ids are dropped). Reads through to the database on a cache miss; unknown ids are omitted. Does not require fort_in_memory.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -501,7 +500,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/gym/search",
 		Summary:       "Search gyms by name, description, or location",
-		Description:   "Returns gyms matching the AND'd filter conditions, up to limit (default 500, max 10000).",
+		Description:   "Searches the database for enabled gyms matching every condition of every filter (all AND'd), ordered by id, up to limit (default 500, max 10000). At least one filter is required (400). location_distance needs distance > 0 and is capped at 500000 m; out-of-range coordinates are 400. 504 if the 5 s query budget runs out.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -512,9 +511,9 @@ func registerTier3Routes(api huma.API) {
 			return nil, huma.Error400BadRequest("filters array is required")
 		}
 
-		// Validate filters and clamp distance to 500km. Note: the legacy handler's
-		// clamp assigned to a range-loop copy and never took effect, so this clamp
-		// is a deliberate behavior change — distances over 500km now actually clamp.
+		// Validate filters and clamp distance to 500km. The clamp writes through
+		// the slice index (filter := &search.Filters[i]); clamping a range-loop
+		// copy would silently leave the request unclamped.
 		for i := range search.Filters {
 			filter := &search.Filters[i]
 			if filter.LocationDistance != nil {
@@ -546,8 +545,8 @@ func registerTier3Routes(api huma.API) {
 			}
 		}
 
-		// Limit defaulting: default 500, cap 10000. The legacy handler used a
-		// *int (nil/<=0 => default); here a missing/zero/negative limit defaults.
+		// Limit defaulting: a missing, zero or negative limit means 500; the
+		// cap is 10000.
 		if search.Limit <= 0 {
 			search.Limit = 500
 		}
@@ -597,7 +596,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/gym/id/{gym_id}",
 		Summary:       "Get a single gym by id",
-		Description:   "Returns the gym with the given fort id, or 404 if not present.",
+		Description:   "Returns the gym with the given fort id, reading through to the database on a cache miss, or 404 if it does not exist (or the id is malformed). Does not require fort_in_memory.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -628,7 +627,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/station/id/{station_id}",
 		Summary:       "Get a single station by id",
-		Description:   "Returns the station with the given id, or 404 if not present.",
+		Description:   "Returns the station with the given id, reading through to the database on a cache miss, or 404 if it does not exist (or the id is malformed). Does not require fort_in_memory.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -659,7 +658,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/pokestop/id/{fort_id}",
 		Summary:       "Get a single pokestop by id",
-		Description:   "Returns the pokestop with the given fort id, or 404 if not present in the cache.",
+		Description:   "Returns the pokestop with the given fort id from the in-memory cache (no database fallback), or 404 if it is not cached. Active incidents are attached as invasions when fort_in_memory is enabled (they are resolved through the in-memory fort index).",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -696,7 +695,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/tappable/id/{tappable_id}",
 		Summary:       "Get a single tappable by encounter id",
-		Description:   "Returns the tappable with the given encounter id, or 404 if not present in the cache.",
+		Description:   "Returns the tappable with the given encounter id from the in-memory cache (no database fallback), or 404 if it is not cached. A tappable stays cached until 60 s past its expire_timestamp (60 min without one).",
 		Tags:          []string{"Tappable"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -720,7 +719,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/tappable/scan",
 		Summary:       "Search tappables in a bounding box (DNF filters)",
-		Description:   "Returns unexpired tappables within [min,max] matching any DNF filter clause. 400 on an unknown reward_type.",
+		Description:   "Returns unexpired tappables within [min,max] from the in-memory tappable index. Matching is a plain OR over the filter clauses (fields within a clause are AND'd); omitted, null or empty filters match every tappable. Up to limit results (0 = server default; clamped by tuning.max_tappable_results). Supports updated_after. Not gated on fort_in_memory. 400 on an unknown reward_type or a negative id.",
 		Tags:          []string{"Tappable"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -740,7 +739,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/tappable/available",
 		Summary:       "List currently available tappable reward options and encounter species",
-		Description:   "Distinct live (reward_type, item_id, reward_pokemon_id) options and encounter species from the in-memory tappable index (no DB scan). An option can be reported until its own expiry passes.",
+		Description:   "Distinct live (reward_type, item_id, reward_pokemon_id) options and encounter species, read from a maintained max-expiry index (no tappable or DB scan). An option is listed until the latest expiry seen for it passes (60 min for tappables without an expiry), so a replaced option can over-report until then. Not gated on fort_in_memory.",
 		Tags:          []string{"Tappable"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -756,7 +755,7 @@ func registerTier3Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/pokestop-positions",
 		Summary:       "List pokestop positions within a geofence",
-		Description:   "Returns the positions of pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
+		Description:   "Returns the id and position of every enabled pokestop in the database within the supplied geofence (a GeoJSON Polygon/MultiPolygon/GeometryCollection of polygons, a Feature with one, or a Golbat {\"fence\":[{lat,lon},...]} object). 400 for any other body.",
 		Tags:          []string{"Fort"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -798,7 +797,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/quest-status",
 		Summary:       "Quest status within a geofence",
-		Description:   "Returns quest completion status for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
+		Description:   "Counts the non-deleted, enabled pokestops in the database within the supplied geofence (total) and how many of them hold an AR quest (ar_quests) and a non-AR quest (no_ar_quests). The geofence is a GeoJSON Polygon/MultiPolygon/GeometryCollection of polygons, a Feature with one, or a Golbat fence object; 400 for any other body. A database error returns all zeros.",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -817,7 +816,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/clear-quests",
 		Summary:       "Clear quests within a geofence",
-		Description:   "Deletes quests for pokestops within the supplied geofence (a polygon geometry, a feature with one, or a Golbat fence).",
+		Description:   "Clears the AR and non-AR quests of every pokestop within the supplied geofence (a GeoJSON Polygon/MultiPolygon/GeometryCollection of polygons, a Feature with one, or a Golbat fence object; 400 for any other body). 500 if clearing fails or exceeds its 10 s budget.",
 		Tags:          []string{"Quest"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -847,7 +846,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/devices/all",
 		Summary:       "List all known devices",
-		Description:   "Returns the last-known location for every device that has submitted data.",
+		Description:   "Returns, keyed by device uuid, the last location and scan context reported by every device whose raw submissions carried a uuid and a non-zero lat/lon target within the last cleanup.device_hours hours.",
 		Tags:          []string{"Devices"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -863,7 +862,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/fort-tracker/cell/{cell_id}",
 		Summary:       "Forts within an S2 cell",
-		Description:   "Returns the pokestops and gyms the fort tracker has seen within the given S2 cell.",
+		Description:   "Returns the pokestop and gym ids the fort tracker holds for the given S2 cell (the GMO map cell id, decimal) and the cell's last-seen time in unix milliseconds. 404 when the tracker has no such cell.",
 		Tags:          []string{"FortTracker"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -885,7 +884,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/fort-tracker/forts/{fort_id}",
 		Summary:       "Fort tracker info for a fort",
-		Description:   "Returns the S2 cell and last-seen timestamp the fort tracker holds for the given fort id.",
+		Description:   "Returns the S2 cell, last-seen time (unix milliseconds) and type (is_gym) the fort tracker holds for the given fort id. 404 when the tracker does not hold the fort or the id is malformed.",
 		Tags:          []string{"FortTracker"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -915,7 +914,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/reload-geojson",
 		Summary:       "Reload geofences and clear stats",
-		Description:   "Reloads geofences from the configured source and clears area statistics.",
+		Description:   "Reloads geofences from the configured source (Koji or file) and clears the area statistics. Always returns ok; reload errors are only logged.",
 		Tags:          []string{"Admin"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -925,7 +924,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/reload-geojson",
 		Summary:       "Reload geofences and clear stats",
-		Description:   "Reloads geofences from the configured source and clears area statistics.",
+		Description:   "Reloads geofences from the configured source (Koji or file) and clears the area statistics. Always returns ok; reload errors are only logged.",
 		Tags:          []string{"Admin"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusAccepted,
@@ -945,7 +944,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodGet,
 		Path:          "/api/skip-preserve-pokemon",
 		Summary:       "Skip pokemon preservation on shutdown",
-		Description:   "Sets a flag so pokemon are not preserved to the database on shutdown.",
+		Description:   "Sets a flag so the in-memory pokemon are not written to the database on the next shutdown (only relevant with pokemon_memory_only and preserve_pokemon). The flag cannot be cleared except by restarting.",
 		Tags:          []string{"Admin"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,
@@ -955,7 +954,7 @@ func registerTier4Routes(api huma.API) {
 		Method:        http.MethodPost,
 		Path:          "/api/skip-preserve-pokemon",
 		Summary:       "Skip pokemon preservation on shutdown",
-		Description:   "Sets a flag so pokemon are not preserved to the database on shutdown.",
+		Description:   "Sets a flag so the in-memory pokemon are not written to the database on the next shutdown (only relevant with pokemon_memory_only and preserve_pokemon). The flag cannot be cleared except by restarting.",
 		Tags:          []string{"Admin"},
 		Security:      []map[string][]string{{securitySchemeName: {}}},
 		DefaultStatus: http.StatusOK,

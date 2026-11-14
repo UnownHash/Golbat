@@ -69,7 +69,7 @@ url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
 bearer_token = "secret"
 
 [cleanup]
-pokemon = true                  # Keep pokemon table is kept nice and short
+pokemon = true                  # Remove expired pokemon from the pokemon table
 incidents = true                # Remove incidents after expiry
 station_battles = true          # Remove station battles after expiry
 quests = true                   # Remove quests after expiry
@@ -112,8 +112,10 @@ level_caps = [50, 51]           # Level caps used in PVP rankings
 [[webhooks]]
 url = "http://localhost:4201"
 # types if specified can be...
-# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update", "max_battle", "tappable"]
-# "pokemon" includes both with ivs and without. "pokemon_iv" will only be encountered pokemon. "pokemon_no_iv" may be nearby pokemon that have not been encountered (yet).
+# types = ["pokemon", "pokemon_iv", "pokemon_no_iv", "gym", "invasion", "quest", "pokestop", "raid", "weather", "fort_update", "max_battle", "tappable", "raid_lobby", "max_battle_lobby"]
+# "pokemon" includes both with ivs and without. "pokemon_iv" is pokemon whose three IVs are known, from an encounter
+# or derived from the encounter id (derive_iv). "pokemon_no_iv" is pokemon whose IVs are not known (yet).
+# See webhooks.md for every type's payload and firing conditions.
 
 #[[webhooks]]
 #url = "http://localhost:4202"
@@ -168,7 +170,8 @@ proactive_iv_switching_to_db = false # Write proactive IV changes to database (d
 # Scan rules allow controlling which game objects are processed based on area or scanner context.
 # Rules are processed in order - first match applies.
 # Available options: pokemon, wild_pokemon, nearby_pokemon, nearby_cell_pokemon, weather, cells,
-#                   pokestops, gyms, stations, tappables, proactive_iv_switching
+#                   pokestops, gyms, stations, tappables, proactive_iv_switching, proactive_iv_switching_to_db
+# (the two proactive_iv_switching options default to the [weather] settings above)
 #
 # Example: Disable nearby pokemon in MainArea, allow everything from Scout context, disable all pokemon elsewhere
 

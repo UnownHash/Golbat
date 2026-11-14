@@ -18,7 +18,6 @@ func (incident *Incident) updateFromPokestopIncidentDisplay(pokestopDisplay *pog
 	}
 	characterDisplay := pokestopDisplay.GetCharacterDisplay()
 	if characterDisplay != nil {
-		// team := pokestopDisplay.Open
 		incident.SetStyle(int16(characterDisplay.Style))
 		incident.SetCharacter(int16(characterDisplay.Character))
 	} else {

@@ -98,15 +98,6 @@ type IncidentWebhook struct {
 	Lineup                  []webhookLineup `json:"lineup"`
 }
 
-//->   `id` varchar(35) NOT NULL,
-//->   `pokestop_id` varchar(35) NOT NULL,
-//->   `start` int unsigned NOT NULL,
-//->   `expiration` int unsigned NOT NULL,
-//->   `display_type` smallint unsigned NOT NULL,
-//->   `style` smallint unsigned NOT NULL,
-//->   `character` smallint unsigned NOT NULL,
-//->   `updated` int unsigned NOT NULL,
-
 // IsDirty returns true if any field has been modified
 func (incident *Incident) IsDirty() bool {
 	return incident.dirty
