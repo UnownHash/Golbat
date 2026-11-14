@@ -11,7 +11,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// server is used to implement helloworld.GreeterServer.
+// grpcRawServer implements the RawProto gRPC service (SubmitRawProto),
+// the binary-proto counterpart of the HTTP /raw ingest endpoint.
 type grpcRawServer struct {
 	pb.UnimplementedRawProtoServer
 }

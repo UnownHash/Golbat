@@ -300,15 +300,14 @@ func schemaTypeContains(t any, want string) bool {
 }
 
 // TestApiPokemonResultSchemaWidths pins the OpenAPI type/format/minimum for a
-// representative sample of ApiPokemonResult's fields. This PR narrowed 19
-// fields' type/format and added `minimum: 0` to 16 of them (see
-// api_pokemon_response.go's doc comment on ApiPokemonResult); nothing
-// previously failed if a future width change silently altered the public
-// schema, since TestOpenAPISpecIsDiscoverable only checks that the string
-// "ApiPokemonResult" appears in the spec, not any field's shape. This does
-// not cover all 19 — one representative of each width, plus all four
-// timestamps (which are deliberately wider than storage, and had to agree
-// with each other), is enough to trip on the next regression.
+// representative sample of ApiPokemonResult's fields (see
+// api_pokemon_response.go's doc comment on ApiPokemonResult), so a width
+// change cannot silently alter the public schema —
+// TestOpenAPISpecIsDiscoverable only checks that the string
+// "ApiPokemonResult" appears in the spec, not any field's shape. One
+// representative of each width, plus all four timestamps (which are
+// deliberately wider than storage, and must agree with each other), is
+// enough to trip on a regression.
 func TestApiPokemonResultSchemaWidths(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -355,11 +354,10 @@ func TestApiPokemonResultSchemaWidths(t *testing.T) {
 		// all four advertise int64 — a *uint32 would be advertised as int32,
 		// which a generated client overflows in January 2038 (see
 		// ApiPokemonResult's doc comment). Widening the Go type drops the
-		// unsignedness huma used to infer from it, so all four carry an
+		// unsignedness huma would infer from it, so all four carry an
 		// explicit `minimum:"0"` tag to put the real floor back. The two that
 		// are nullable and the two that are not must agree on both the width
-		// and the bound; they agreed on neither before, and that is what this
-		// pins.
+		// and the bound; this pins that.
 		{"expire_timestamp", "integer", "int64", true},
 		{"updated", "integer", "int64", true},
 		{"first_seen_timestamp", "integer", "int64", true},

@@ -40,9 +40,9 @@ func newHumaConfig(version string) huma.Config {
 
 	// Disable Huma's schema-link transformer (DefaultConfig adds it via CreateHooks).
 	// It injects a `$schema` field into object responses and a `Link: rel="describedBy"`
-	// header, which would diverge from the legacy v2/v3 wire format. The OpenAPI docs
-	// at /docs and /openapi.json are unaffected — they come from the spec, not this
-	// response transformer.
+	// header; clients of the v2/v3 pokemon scans and the other JSON endpoints expect
+	// response bodies without that field. The OpenAPI docs at /docs and /openapi.json
+	// are unaffected — they come from the spec, not this response transformer.
 	cfg.CreateHooks = nil
 
 	// The docs endpoints are served without the api secret; api_docs = false

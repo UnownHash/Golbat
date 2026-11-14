@@ -420,9 +420,6 @@ func Raw(c *gin.Context) {
 	statsCollector.IncRawRequests("ok", "")
 	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 	w.WriteHeader(http.StatusCreated)
-	//if err := json.NewEncoder(w).Encode(t); err != nil {
-	//	panic(err)
-	//}
 }
 
 func AuthRequired() gin.HandlerFunc {

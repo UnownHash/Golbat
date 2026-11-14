@@ -26,11 +26,7 @@ type treeEvictionEntry[K comparable] struct {
 }
 
 // treeEvictor defers R-tree mutations out of cache-eviction callbacks and
-// saver hot paths. (Historically: ttlcache ran each eviction callback on
-// its own goroutine, so a mass-expiry sweep spawned thousands of goroutines
-// contending for the global tree write lock — the convoy that froze savers
-// holding entity locks. OtterCache now delivers evictions on one dispatcher
-// goroutine, but the batching worker remains the single tree writer.)
+// saver hot paths, and is the single writer of its tree.
 // Enqueue collapses mutations to a channel send; a single worker drains the
 // channel and applies batches so the tree mutex is taken once per
 // ~batchSize items by one goroutine.
@@ -71,10 +67,7 @@ func newTreeEvictor[K comparable](name string, capacity, batchSize int, flush fu
 // (savers: capped by the raw-processing limiter). Eviction callbacks use
 // TryEnqueue and drop on a full channel instead: they arrive on the
 // cache's single eviction dispatcher, and blocking that goroutine stalls
-// ALL eviction delivery for the cache. (Historically this was far worse —
-// ttlcache ran one goroutine per evicted item, and a blocking send here
-// parked millions of them holding entity locks during a mass expiry; the
-// overnight incident behind commit ed50bf8.) A dropped delete leaves a
+// ALL eviction delivery for the cache. A dropped delete leaves a
 // ghost tree point, which scans already tolerate (candidates are verified
 // against the lookup cache, cleaned inline before the enqueue).
 func (e *treeEvictor[K]) Enqueue(id K, lat, lon float64) {

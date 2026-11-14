@@ -12,23 +12,32 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-[go 1.24](https://go.dev/doc/install)
+[Go 1.26](https://go.dev/doc/install) and MariaDB (MySQL may work but is not tested).
 
 # Instructions
 
 1. copy `config.toml.example` to `config.toml`
-2. `go run .`
+2. `go run -tags go_json .`
+
+The `go_json` build tag is required: it selects the JSON codec Golbat is built
+with (`make` passes it for you).
 
 Golbat reads `config.toml` from the working directory by default. To load a
 different file, pass `-c` or `--config`:
 
 ```
-go run . --config /etc/golbat/config.toml
+go run -tags go_json . --config /etc/golbat/config.toml
 ```
 
 The default `config.toml` is optional - without it Golbat starts on built-in
-defaults plus any `GOLBAT_*` environment variables. A file passed with
+defaults plus any `GOLBAT.*` environment variables. A file passed with
 `-c`/`--config` must exist, otherwise startup fails.
+
+Environment variables override the file. The name is `GOLBAT.` followed by
+the config key path in upper case, with `.` between sections, e.g.
+`GOLBAT.DATABASE.ADDRESS` or `GOLBAT.CLEANUP.STATION_BATTLES`. Array-of-table
+sections take an index: `GOLBAT.WEBHOOKS.0.URL`, `GOLBAT.SCAN_RULES.1.CONTEXT`;
+list values are comma separated. See `docker-compose.yml.example`.
 
 ## Run in pm2
 
@@ -44,8 +53,14 @@ defaults plus any `GOLBAT_*` environment variables. A file passed with
 
 # Configuration of data source
 
-The data source should be configured to send to Golbat's 
-URL which will be `http://ip:port/raw`
+The data source should be configured to send to Golbat's
+URL which will be `http://ip:port/raw` (or the gRPC `SubmitRawProto` service
+on `grpc_port`).
+
+# API and webhooks
+
+- [api.md](api.md) — HTTP and gRPC API reference.
+- [webhooks.md](webhooks.md) — webhook types, firing conditions and payloads.
 
 # Scan Rules
 
@@ -70,10 +85,15 @@ Here the main area would not process nearby pokemon. Messages arriving in 'scout
 pokemon - any pokemon processing (disables spawnpoints also)  
 wild_pokemon - process wild pokemon from GMO  
 nearby_pokemon - process nearby pokemon from GMO  
+nearby_cell_pokemon - process nearby pokemon with no pokestop, placed at the S2 cell centre (off unless a rule sets it to true)  
 weather - process weather in GMO  
 gyms - process gyms in GMO  
 pokestops - process pokestops in GMO  
-cells - process cell updates (disabling this also disables automatic fort clearance)
+stations - process Max Battle stations  
+tappables - process tappables  
+cells - process cell updates (disabling this also disables automatic fort clearance)  
+proactive_iv_switching - recalculate pokemon IVs when the weather changes  
+proactive_iv_switching_to_db - also write those recalculated IVs to the database
 
 # PvP
 Extra configurations for PvP are available in the `pvp` section of the config file.
@@ -86,7 +106,7 @@ level_caps = [50, 51]
 ranking_comparator = "prefer_higher_cp"
 ```
 
-# Game objects supported support
+# Supported game objects
 
 The file [protos.md](protos.md) contains a list of the protos that are decoded by Golbat
 

@@ -132,7 +132,7 @@ func TestStatsSnapshotCarriesThreadedUsername(t *testing.T) {
 	}
 }
 
-// Review round 1 defect: the live (reporting) account must win over the
+// The live (reporting) account must win over the
 // stored one even with the option on. Stored is a first-wins value — it
 // freezes on whichever account happened to see the pokemon first — so once
 // a second account reports the same pokemon, preferring stored corrupts the

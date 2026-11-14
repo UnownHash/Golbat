@@ -233,7 +233,7 @@ func BuildGymResult(gym *Gym) ApiGymResult {
 
 type ApiGymSearch struct {
 	Limit   int                  `json:"limit" required:"false" doc:"Maximum number of gyms to return (default 500, max 10000)"`
-	Filters []ApiGymSearchFilter `json:"filters" required:"false" doc:"Filter clauses; conditions within a clause are AND'd. At least one clause is required."`
+	Filters []ApiGymSearchFilter `json:"filters" required:"false" doc:"Filters; every condition of every filter is AND'd, so a second filter narrows the result rather than widening it. Only enabled gyms are returned. At least one filter is required (400 otherwise)."`
 }
 
 type LocationDistance struct {
@@ -245,13 +245,14 @@ type LocationDistance struct {
 }
 
 type ApiGymSearchFilter struct {
-	Name             *string           `json:"name" required:"false" doc:"Optional gym name substring to match"`
-	Description      *string           `json:"description" required:"false" doc:"Optional gym description substring to match"`
+	Name             *string           `json:"name" required:"false" doc:"Optional gym name substring to match (SQL LIKE); blank is ignored"`
+	Description      *string           `json:"description" required:"false" doc:"Optional gym description substring to match (SQL LIKE); blank is ignored"`
 	LocationDistance *LocationDistance `json:"location_distance" required:"false" doc:"Optional geographic radius search"`
 	Bbox             *geo.Bbox         `json:"bbox" required:"false" doc:"Optional bounding box search"`
 }
 
-// SearchGymsAPI searches for gyms using the new API structure with AND filters
+// SearchGymsAPI returns the ids of enabled gyms matching every condition of
+// every filter (all AND'd), ordered by id, up to search.Limit.
 func SearchGymsAPI(
 	ctx context.Context,
 	dbDetails db.DbDetails,

@@ -84,8 +84,8 @@ func getPokemonRecordReadOnly(ctx context.Context, db db.DbDetails, encounterId 
 	}, dbPokemon.remainingDuration(time.Now().Unix()))
 	if !found {
 		// Our dbPokemon won the insert. Index it out here — the GetOrSetFunc
-		// closure runs under the cache shard's write lock and must not take
-		// the tree mutex (tree-lock-under-shard-lock inversion).
+		// closure runs under the cache's internal per-key synchronization and
+		// must not take the tree mutex.
 		pokemonRtreeUpdatePokemonOnGet(&dbPokemon)
 	}
 	pokemon.Lock(caller)

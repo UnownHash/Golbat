@@ -35,7 +35,7 @@ type ApiTappableScanResult struct {
 	Examined     int                  `json:"examined" doc:"Tappables examined during the spatial scan."`
 	Skipped      int                  `json:"skipped" doc:"Tappables skipped because they were not found in the lookup cache."`
 	Total        int                  `json:"total" doc:"Total tappables in the spatial index at scan time."`
-	LimitReached bool                 `json:"limit_reached" doc:"Whether the pre-filtered result list reached the effective result limit."`
+	LimitReached bool                 `json:"limit_reached" doc:"Whether the matched result list reached the effective result limit (measured before updated_after is applied)."`
 }
 
 // tappableDnfCompiled is a clause with reward_type names resolved; has*

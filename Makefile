@@ -1,16 +1,22 @@
 FLAGS = go_json
 
-# Alternative to switch in the sonic json library
-
-#ARCH=$(shell arch)
-#ifeq ($(ARCH),x86_64)
-#FLAGS := sonic
-#else
-#FLAGS := go_json
-#endif
-
 golbat: FORCE
 	go build -tags $(FLAGS) golbat
+
+# --- Lint -------------------------------------------------------------------
+# pogo/ is a generated package (vbase.pb.go is ~437k lines). Linting it as a
+# root package dominates lint time (minutes, mostly `unused` and staticcheck)
+# and can only ever report generated code, so lint every package except it.
+# pogo is still loaded and type-checked as a dependency of the others.
+# CI (.github/workflows/lint.yml) passes the same package list.
+LINT_PKGS = $(shell go list -f '{{.Dir}}' ./... | grep -v '/pogo$$')
+
+lint: FORCE  ## golangci-lint every package except the generated pogo/
+	golangci-lint run $(LINT_PKGS)
+
+# --- Protobuf bindings --------------------------------------------------------
+proto: FORCE  ## regenerate grpc/*.pb.go (needs protoc + protoc-gen-go[-grpc])
+	sh update_grpc.sh
 
 # --- Profile-guided optimization --------------------------------------------
 # Go (>= 1.21) automatically applies ./default.pgo when building the golbat

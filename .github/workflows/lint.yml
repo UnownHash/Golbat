@@ -19,7 +19,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: List lint targets
+        # Every package except the generated pogo/ (~437k lines): linting it
+        # as a root package takes minutes and can only report generated code.
+        # It is still type-checked as a dependency. Same list as `make lint`.
+        run: echo "LINT_PKGS=$(go list -f '{{.Dir}}' ./... | grep -v '/pogo$' | tr '\n' ' ')" >> "$GITHUB_ENV"
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.12.2
+          args: ${{ env.LINT_PKGS }}

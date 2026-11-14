@@ -1,4 +1,3 @@
-version: '3.7'
 services:
   golbat:
     image: ghcr.io/unownhash/golbat:main
@@ -28,6 +27,8 @@ services:
 
       - GOLBAT.CLEANUP.POKEMON=true
       - GOLBAT.CLEANUP.INCIDENTS=true
+      - GOLBAT.CLEANUP.STATION_BATTLES=true
+      - GOLBAT.CLEANUP.TAPPABLES=true
       - GOLBAT.CLEANUP.QUESTS=true
       - GOLBAT.CLEANUP.STATS=true
       - GOLBAT.CLEANUP.STATS_DAYS=7

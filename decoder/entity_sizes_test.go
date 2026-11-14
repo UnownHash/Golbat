@@ -11,7 +11,7 @@ import (
 //
 // Pokemon is cached in the millions, so staying under this is the entire point
 // of the packing work in
-// docs/superpowers/specs/2026-08-16-pokemon-struct-packing-design.md.
+// docs/design/2026-08-16-pokemon-struct-packing-design.md.
 // TestPokemonUnderGCThreshold below is the acceptance test that enforces it.
 const gcSizeThreshold = 512
 

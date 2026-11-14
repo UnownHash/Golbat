@@ -666,18 +666,16 @@ type fortTrackerEvent struct {
 	cellForts map[uint64]*FortTrackerGMOContents
 }
 
-// fortTrackerEvents feeds the single tracker worker. Decoders used to run
-// ProcessCellUpdate inline, all serializing on the tracker's global mutex
-// (a goroutine dump showed 27 of 96 decoders parked on it). Staleness
-// detection is hour-granularity work — there is no reason for it to be
-// synchronous in the decode path. One worker owns all tracker writes.
+// fortTrackerEvents feeds the single tracker worker, so decoders never
+// serialize on the tracker's global mutex. Staleness detection is
+// hour-granularity work — there is no reason for it to be synchronous in
+// the decode path. One worker owns all tracker writes.
 var fortTrackerEvents = make(chan fortTrackerEvent, 8192)
 
 func fortTrackerWorker() {
 	for ev := range fortTrackerEvents {
-		// Bound each event's DB work: the decode path used to lend its 5s
-		// deadline to these deletes; without one, a single hung query would
-		// wedge staleness detection instance-wide until restart.
+		// Bound each event's DB work: without a deadline, a single hung
+		// query would wedge staleness detection instance-wide until restart.
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		checkRemovedForts(ctx, ev.dbDetails, ev.cellForts)
 		cancel()

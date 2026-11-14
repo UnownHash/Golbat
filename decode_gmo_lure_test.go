@@ -9,7 +9,7 @@ import (
 	"golbat/pogo"
 )
 
-// Live-derived regression fixture (PR #391 review): current clients deliver
+// Live-derived regression fixture: current clients deliver
 // lure pokemon in the repeated fort.ActiveFortPokemon wrapper while the
 // singular fort.ActivePokemon stays nil — 17k captured GMOs contained zero
 // singular occurrences. The nested MapPokemonProto carries zero lat/lon on

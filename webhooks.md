@@ -27,6 +27,8 @@ document and the code disagree, the code wins — please update this document.
   - [fort_update](#fort_update)
   - [max_battle](#max_battle)
   - [tappable](#tappable)
+  - [raid_lobby](#raid_lobby)
+  - [max_battle_lobby](#max_battle_lobby)
 - [Configuration](#configuration)
 
 > Anchor links in this document use GitHub-flavored Markdown slugs that
@@ -44,12 +46,12 @@ Golbat delivers webhooks over HTTP:
 - **Method**: `POST`
 - **Content-Type**: `application/json`
 - **Header**: `X-Golbat: hey!`
-- **Additional headers**: any entries from the webhook's `header_map` config
+- **Additional headers**: any entries from the webhook's `headers` config
 - **Body**: a JSON array of [envelopes](#envelope)
 - **URL**: as configured per webhook in `config.toml`
 
-Golbat batches messages and flushes them on a configurable interval (default
-1 second). A single POST can contain many envelopes, possibly of different
+Golbat batches messages and flushes them every second (the interval is not
+configurable). A single POST can contain many envelopes, possibly of different
 types. The receiver MUST accept the array form and iterate.
 
 The response body is read and discarded. Any 2xx/3xx/4xx/5xx response is
@@ -100,7 +102,7 @@ Every message, regardless of type, is wrapped in this envelope:
 
 | Field     | Type   | Description |
 |-----------|--------|-------------|
-| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`. |
+| `type`    | string | One of: `pokemon`, `gym_details`, `raid`, `quest`, `pokestop`, `invasion`, `weather`, `fort_update`, `max_battle`, `tappable`, `raid_lobby`, `max_battle_lobby`. |
 | `message` | object | Type-specific payload; see the sections below. |
 
 Area names are **not** included in the envelope — they are applied server-side
@@ -111,7 +113,7 @@ A single POST body looks like:
 ```json
 [
   { "type": "pokemon",     "message": { ... } },
-  { "type": "pokemon_iv",  "message": { ... } },
+  { "type": "pokemon",     "message": { ... } },
   { "type": "raid",        "message": { ... } },
   { "type": "fort_update", "message": { ... } }
 ]
@@ -184,7 +186,7 @@ Each webhook is geofenced before sending. The relevant entity's location
 (usually latitude/longitude, with an optional S2 cell-ID fast path) is matched
 against configured geofences, producing a list of `AreaName{Parent, Name}`
 entries. The receiver sees only the envelopes whose area list intersects its
-configured `area_names` and is not excluded by `exclude_areas`.
+configured `areas` and is not excluded by `exclude_areas`.
 
 Configuration:
 
@@ -192,26 +194,27 @@ Configuration:
 [[webhooks]]
 url = "https://example.com/hook"
 types = ["pokemon", "raid"]
-area_names = ["SanFrancisco/*"]
+areas = ["SanFrancisco/*"]
 exclude_areas = ["SanFrancisco/Tenderloin"]
 ```
 
-Both `area_names` and `exclude_areas` support wildcards via
+Both `areas` and `exclude_areas` support wildcards via
 `geo.AreaMatchWithWildcards`:
 
-- Empty (`area_names = []` or omitted): receive all areas.
+- Empty (`areas = []` or omitted): receive all areas.
 - `"Parent/*"`: all subareas of `Parent`.
+- `"*/Name"`, or a bare `"Name"`: area `Name` under any parent.
 - `"Parent/Name"`: exact match.
 
 `exclude_areas` suppresses messages from the listed geofences. It is evaluated
-**before** the `area_names` inclusion check, so when the same area appears in
+**before** the `areas` inclusion check, so when the same area appears in
 both lists the exclusion wins. Concretely, a message is delivered only if:
 
 1. it does **not** match any entry in `exclude_areas`, **and**
-2. either `area_names` is empty/omitted, **or** the message matches at least
-   one entry in `area_names`.
+2. either `areas` is empty/omitted, **or** the message matches at least
+   one entry in `areas`.
 
-`exclude_areas` can be used on its own (without `area_names`) to receive
+`exclude_areas` can be used on its own (without `areas`) to receive
 everything except a small block-list of areas.
 
 Entities with no matching areas still produce webhook messages internally, but
@@ -241,6 +244,17 @@ The webhook fires when **any** of these is true:
 - `PokemonId` changed since the last snapshot.
 - `Weather` changed.
 - `Cp` changed.
+- `seen_type` moved into or out of an encounter type (`encounter`,
+  `lure_encounter`, `tappable_encounter`, `tappable_lure_encounter`). With IV
+  derivation on, IVs are filled in on the first sighting, so an encounter can
+  confirm them without changing species, weather or CP. Other `seen_type`
+  changes (e.g. `nearby_*` → `wild`) do not fire on their own.
+- The despawn time changed in a way a consumer acts on
+  (`expiryNewsForConsumers` in `decoder/pokemon.go`): `disappear_time_verified`
+  flipped; a verified time moved; a guessed time was replaced by one derived
+  from the spawnpoint; or a derived time that had already passed moved
+  forward. An unverified time moving before it arrives, or a guess being
+  extended after it passes, does not fire.
 
 IV vs no-IV routing:
 
@@ -255,18 +269,21 @@ if pokemon.AtkIv.Valid && pokemon.DefIv.Valid && pokemon.StaIv.Valid {
 Configuration type strings:
 
 - `"pokemon"` — subscribe to both IV and NoIV.
-- `"pokemon_iv"` — only after all three IVs are known.
+- `"pokemon_iv"` — only Pokémon with all three IVs known, whether from an
+  encounter or derived from the encounter id (`derive_iv`, on by default).
+  `seen_type` tells the two apart: derived IVs carry a non-encounter
+  `seen_type`.
 - `"pokemon_no_iv"` — only while IVs are still unknown.
 
 #### Idempotency / deduplication
 
 Consumers must idempotently process each envelope: the same `encounter_id`
-typically fires multiple times in flight order `nearby_cell` → `wild` →
-`encounter`, and refires whenever `pokemon_id`, `weather`, or `cp` changes.
-The recommended deduplication key is `encounter_id` plus a stat fingerprint
-(`cp`, `weather`, `pokemon_id`); using `encounter_id` alone will mute
-legitimate re-notifications when a previously-no-IV spawn becomes
-encountered.
+typically fires several times over its life (first sighting, then encounter),
+and refires on any of the conditions above. The recommended deduplication key
+is `encounter_id` plus a fingerprint of the trigger fields (`pokemon_id`,
+`weather`, `cp`, whether `seen_type` is an encounter type, `disappear_time`,
+`disappear_time_verified`); using `encounter_id` alone will mute legitimate
+re-notifications, such as a spawn becoming encountered.
 
 #### Payload
 
@@ -366,10 +383,10 @@ costume, gender, atkIv, defIv, staIv, level)` from
 `github.com/UnownHash/gohbem` and stores the JSON-encoded result. The
 envelope emits it verbatim as `json.RawMessage`.
 
-The top-level is a map keyed by league name. Keys come from Golbat's gohbem
-configuration (`pvp_leagues` in `config.toml`); common keys are `"little"`,
-`"great"`, `"ultra"`, and `"master"`, but any configured league name may
-appear.
+The top-level is a map keyed by league name. The leagues are fixed in
+`newOhbemInstance` (`decoder/main.go`): `"little"` (500 CP), `"great"`
+(1500 CP) and `"ultra"` (2500 CP). The level caps ranked come from
+`[pvp] level_caps`. `pvp` is only computed when `[pvp] enabled` is true.
 
 Each value is an array of `PokemonEntry` objects (from
 `gohbem@v0.12.0/structs.go`):
@@ -616,15 +633,16 @@ Sent when a lure or community power-up starts or changes on a pokestop.
 
 #### Firing conditions
 
-Fires when either:
+The setters flag the pokestop for a webhook (`pokestopWebhookRequired`), which
+the next save sends and clears. It is flagged when any of these changes,
+including from unset on a new pokestop:
 
-- Pokestop is new AND (`LureId != 0` OR `PowerUpEndTimestamp != 0` OR `ShowcaseExpiry` is set), OR
-- Pokestop is not new AND:
-  - `LureExpireTimestamp` changed AND `LureId != 0`, OR
-  - `PowerUpEndTimestamp` changed, OR
-  - `ShowcaseExpiry` changed, OR
-  - `ShowcaseFocus` changed, OR
-  - The rank-1 contest entry's score or `pokemon_id` changed.
+- `LureId` changes to a non-zero value, or `LureExpireTimestamp` changes while
+  `LureId != 0`;
+- `PowerUpEndTimestamp` changes;
+- `ShowcaseExpiry` changes;
+- `ShowcaseFocus` changes;
+- the rank-1 contest entry's score or `pokemon_id` changes.
 
 Note: a lure *expiring* (transitioning `LureId` from non-zero back to 0) does
 not fire this webhook because the lure clause's `LureId != 0` check gates
@@ -637,7 +655,7 @@ send time).
 This webhook type multiplexes three independent event classes that share a
 single envelope:
 
-- **Lure** — fires on `lure_expiration` change while `lure_id != 0`.
+- **Lure** — fires on a new non-zero `lure_id`, or a `lure_expiration` change while `lure_id != 0`.
 - **Community power-up** — fires on `power_up_end_timestamp` change.
 - **Showcase** — fires on `showcase_expiry` change, `showcase_focus` change,
   or rank-1 leaderboard movement (rank-1 score or `pokemon_id` differs from
@@ -945,19 +963,19 @@ Changes to slot 2 or slot 3 alone do **not** fire the webhook.
 | `character`                 | int16           | Same value as `grunt_type`. Source: `pogo.EnumWrapper_InvasionCharacter`. |
 | `updated`                   | int64           | Unix seconds when Golbat last saved the record. |
 | `confirmed`                 | bool            | Whether the lineup is verified. |
-| `lineup`                    | array           | Array of up to 3 `{slot, pokemon_id, form}` entries. Empty array `[]` if slot 1 is unknown. |
+| `lineup`                    | array \| null   | Array of up to 3 `{slot, pokemon_id, form}` entries, one per slot whose species is known. `null` when no slot is known. |
 
 Each `lineup` entry:
 
 | Field        | Type     | Description |
 |--------------|----------|-------------|
 | `slot`       | uint8    | `1`, `2`, or `3`. |
-| `pokemon_id` | null.Int | Pokédex ID of the Pokémon in this slot. `null` if unknown. |
+| `pokemon_id` | null.Int | Pokédex ID of the Pokémon in this slot. Always set (unknown slots are omitted). |
 | `form`       | null.Int | Form ID. `null` if unknown. |
 
-> Note: when slot 1 is known, all three slots are emitted (with `null` fields
-> for unknown slots). When slot 1 is unknown, `lineup` is `[]` and the other
-> slots are omitted.
+> Note: slots whose species is unknown (e.g. reserves not yet revealed) are
+> omitted rather than emitted with `null` fields, so a lineup can list slot 1
+> alone, or slots 1 and 3.
 
 ---
 
@@ -1020,8 +1038,8 @@ themselves.
 
 ### fort_update
 
-Sent when a fort (pokestop, gym, or station) is created, has its metadata
-edited, or is removed.
+Sent when a pokestop or gym is created, has its metadata edited, or is
+removed. Stations do not send `fort_update`.
 
 **Source**: `decoder/fort.go`, `CreateFortWebHooks`. Called by
 `createPokestopFortWebhooks`, `createGymFortWebhooks`, and the fort-tracker
@@ -1036,7 +1054,7 @@ The payload has three variants distinguished by `change_type`:
 
 #### Firing conditions
 
-- **new**: a pokestop, gym, or station is seen for the first time.
+- **new**: a pokestop or gym is seen for the first time.
 - **edit**: any of name, description, image URL path, or location differ
   between the old snapshot and the current state. At least one of the
   following changes must produce a non-empty `edit_types`, otherwise no
@@ -1052,8 +1070,9 @@ The payload has three variants distinguished by `change_type`:
 - **removal**: the fort-tracker detected the fort has been absent from its S2
   cell for longer than the stale threshold.
 
-Pokestop↔gym conversions are reported as a `removal` of the old type followed
-by a `new` of the new type, not as an `edit`.
+A pokestop↔gym conversion is not an `edit`. The old type is marked deleted
+without a `removal` webhook; the new type sends `new` if Golbat has no record
+of the fort as that type yet.
 
 #### Payload
 
@@ -1069,7 +1088,7 @@ The nested `FortWebhook` object:
 | JSON field    | Go type   | Description |
 |---------------|-----------|-------------|
 | `id`          | string    | Fort ID. |
-| `type`        | string    | `"pokestop"`, `"gym"`, or `"station"`. |
+| `type`        | string    | `"pokestop"` or `"gym"`. |
 | `name`        | *string   | Fort name. `null` if not set. |
 | `description` | *string   | Fort description. `null` if not set. |
 | `image_url`   | *string   | Fort photo URL. `null` if not set. |
@@ -1117,7 +1136,7 @@ The internal `CellId` field is **not** serialized (Go tag `json:"-"`).
   "type": "fort_update",
   "message": {
     "change_type": "removal",
-    "old": { "id": "...", "type": "station", ... }
+    "old": { "id": "...", "type": "pokestop", ... }
   }
 }
 ```
@@ -1128,25 +1147,26 @@ The internal `CellId` field is **not** serialized (Go tag `json:"-"`).
 
 Sent when a station's Max Battle (Dynamax battle) state changes.
 
-**Source**: `decoder/station_state.go`, `createStationWebhooks`.
+**Source**: `decoder/station_state.go`, `createStationWebhooksWithBattles`
+(from `saveStationRecord`).
+
+A station can hold several battles at once. On each save Golbat takes the
+station's known battles that have not ended (`battle_end > now`), sorted by
+`battle_end` ascending; the first is the *top* battle.
 
 #### Firing conditions
 
-Fires when **any** of these is true:
+Fires only when the station has at least one unexpired battle, AND any of
+these is true:
 
-- Station is new, OR
-- `BattlePokemonId.Valid == true` AND at least one of the following changed:
-  - `EndTime`
-  - `BattleEnd`
-  - `BattlePokemonId`
-  - `BattlePokemonForm`
-  - `BattlePokemonCostume`
-  - `BattlePokemonGender`
-  - `BattlePokemonBreadMode`
+- the station is new;
+- the station's `EndTime` changed;
+- the battle list changed: battle count, any battle's fields (seed, level,
+  start/end, Pokémon, moves, stamina, CP multiplier) or which battle is on
+  top.
 
-> Note: the firing condition requires `BattlePokemonId.Valid` for the
-> non-new-record path. A station that transitions from having a battle to
-> having none will **not** emit a webhook for that transition.
+> Note: a station whose last battle ends or disappears sends no webhook for
+> that transition.
 
 #### Payload
 
@@ -1159,9 +1179,9 @@ Fires when **any** of these is true:
 | `start_time`               | int64    | Unix seconds when the station opened. |
 | `end_time`                 | int64    | Unix seconds when the station closes. |
 | `is_battle_available`      | bool     | Whether a Max Battle is currently available. |
-| `battle_level`             | null.Int | Max Battle level 1–6. |
-| `battle_start`             | null.Int | Unix seconds when the battle window opens. |
-| `battle_end`               | null.Int | Unix seconds when the battle window closes. |
+| `battle_level`             | null.Int | Top battle's level 1–6. |
+| `battle_start`             | null.Int | Unix seconds when the top battle's window opens. |
+| `battle_end`               | null.Int | Unix seconds when the top battle's window closes. |
 | `battle_pokemon_id`        | null.Int | Pokédex ID of the boss. |
 | `battle_pokemon_form`      | null.Int | Boss form ID. |
 | `battle_pokemon_costume`   | null.Int | Boss costume ID. |
@@ -1172,7 +1192,27 @@ Fires when **any** of these is true:
 | `battle_pokemon_move_2`    | null.Int | Boss charged-move ID. |
 | `total_stationed_pokemon`  | null.Int | Total Pokémon stationed at the location. |
 | `total_stationed_gmax`     | null.Int | Total Gigantamax Pokémon stationed. |
-| `updated`                  | int64    | Unix seconds when Golbat last saved the record. |
+| `battles`                  | array    | Every unexpired battle, top first. See below. Always present when the webhook fires (omitted only when empty). |
+| `updated`                  | int64    | Unix seconds of the save that sent the webhook. |
+
+The `battle_*` fields above are the top battle's. Each `battles` entry:
+
+| JSON field                     | Go type    | Description |
+|--------------------------------|------------|-------------|
+| `bread_battle_seed`            | int64      | Battle seed. Omitted when `0`. |
+| `battle_level`                 | int16      | Battle level. |
+| `battle_start`                 | int64      | Unix seconds when the battle window opens. |
+| `battle_end`                   | int64      | Unix seconds when the battle window closes. |
+| `battle_pokemon_id`            | null.Int   | Boss Pokédex ID. |
+| `battle_pokemon_form`          | null.Int   | Boss form ID. |
+| `battle_pokemon_costume`       | null.Int   | Boss costume ID. |
+| `battle_pokemon_gender`        | null.Int   | Boss gender enum. |
+| `battle_pokemon_alignment`     | null.Int   | Boss alignment enum. |
+| `battle_pokemon_bread_mode`    | null.Int   | Dynamax/Gigantamax mode enum. |
+| `battle_pokemon_move_1`        | null.Int   | Boss fast-move ID. |
+| `battle_pokemon_move_2`        | null.Int   | Boss charged-move ID. |
+| `battle_pokemon_stamina`       | null.Int   | Boss stamina. |
+| `battle_pokemon_cp_multiplier` | null.Float | Boss CP multiplier. |
 
 ---
 
@@ -1216,31 +1256,84 @@ tappables whose `disappear_time` moves with every tap.
 
 ---
 
+### raid_lobby
+
+Sent for each raid-lobby player count Golbat receives for a known gym.
+
+**Source**: `decoder/gym_state.go`, `UpdateGymRaidLobby`, fed by push-gateway
+`raid_lobby_player_count` messages (`decode_push_gateway.go`; see
+[protos.md](protos.md)).
+
+#### Firing conditions
+
+- Every `raid_lobby_player_count` message for a gym Golbat knows (in cache or
+  database) sends one webhook; there is no change detection, so repeated
+  counts repeat the webhook.
+- Messages for an unknown gym are dropped, since there is no location to
+  geofence.
+
+The count and join deadline are kept in memory only (not written to the
+database).
+
+#### Payload
+
+| JSON field          | Go type | Description |
+|---------------------|---------|-------------|
+| `id`                | string  | Gym fort ID. |
+| `latitude`          | float64 | Gym latitude. |
+| `longitude`         | float64 | Gym longitude. |
+| `player_count`      | int64   | Players in the raid lobby. |
+| `lobby_join_end_ms` | int64   | **Unix milliseconds** when the lobby stops accepting players. |
+
+---
+
+### max_battle_lobby
+
+The Max Battle counterpart of [raid_lobby](#raid_lobby): sent for each lobby
+player count Golbat receives for a known station.
+
+**Source**: `decoder/station_state.go`, `UpdateStationBattleLobby`, fed by
+push-gateway `bread_lobby_player_count` messages.
+
+#### Firing conditions
+
+Same as `raid_lobby`: one webhook per message for a station Golbat knows (in
+cache or database), no change detection, unknown stations dropped, and the
+values are kept in memory only.
+
+#### Payload
+
+| JSON field          | Go type | Description |
+|---------------------|---------|-------------|
+| `id`                | string  | Station ID. |
+| `latitude`          | float64 | Station latitude. |
+| `longitude`         | float64 | Station longitude. |
+| `player_count`      | int64   | Players in the battle lobby. |
+| `lobby_join_end_ms` | int64   | **Unix milliseconds** when the lobby stops accepting players. |
+
+---
+
 ## Configuration
 
-Webhooks are configured in `config.toml`:
+Webhooks are configured in `config.toml`. Messages are flushed every second;
+the interval is not configurable.
 
 ```toml
-webhook_interval = "1s"   # how often to flush; default 1s
-
 [[webhooks]]
 url = "https://example.com/hook"
 types = ["pokemon", "raid", "fort_update"]
-area_names = ["SanFrancisco/*"]
+areas = ["SanFrancisco/*"]
 exclude_areas = ["SanFrancisco/Tenderloin"]
-
-[webhooks.header_map]
-Authorization = "Bearer secret"
-X-Custom-Header = "value"
+headers = ["Authorization:Bearer secret", "X-Custom-Header:value"]
 ```
 
 | Setting            | Required | Meaning |
 |--------------------|----------|---------|
 | `url`              | yes      | HTTP(S) endpoint. Must include scheme. |
 | `types`            | no       | Array of type strings (see below). Omit or empty to receive everything. |
-| `area_names`       | no       | Area filter; omit or empty to receive all areas. |
-| `exclude_areas`    | no       | Areas to suppress; evaluated before `area_names`. If an area appears in both lists, the exclusion wins. Supports the same wildcard syntax as `area_names`. |
-| `header_map`       | no       | Extra HTTP headers to set on every POST. |
+| `areas`            | no       | Area filter; omit or empty to receive all areas. See [Area filtering](#area-filtering). |
+| `exclude_areas`    | no       | Areas to suppress; evaluated before `areas`. If an area appears in both lists, the exclusion wins. Supports the same wildcard syntax as `areas`. |
+| `headers`          | no       | Extra HTTP headers to set on every POST, each a `"Name:Value"` string. An entry must contain exactly one `:`, so a value containing a colon is rejected (logged at startup and skipped). |
 
 ### Accepted type strings
 
@@ -1249,14 +1342,16 @@ X-Custom-Header = "value"
 | `gym`             | `gym_details`          | Gym team/slots/battle changes. |
 | `raid`            | `raid`                 | Raid spawns and changes. |
 | `quest`           | `quest`                | Quests (both AR and non-AR). |
-| `pokestop`        | `pokestop`             | Lure and power-up changes. |
+| `pokestop`        | `pokestop`             | Lure, power-up and showcase changes. |
 | `invasion`        | `invasion`             | Team Rocket invasions. |
 | `weather`         | `weather`              | Weather cell changes. |
 | `fort_update`     | `fort_update`          | Fort create/edit/remove. |
-| `pokemon_iv`      | `pokemon`              | Only Pokémon with all three IVs known. |
+| `pokemon_iv`      | `pokemon`              | Only Pokémon with all three IVs known (encountered or derived). |
 | `pokemon_no_iv`   | `pokemon`              | Only Pokémon without full IVs. |
 | `pokemon`         | `pokemon`              | Both IV and no-IV variants. |
 | `max_battle`      | `max_battle`           | Station Max Battle state. |
 | `tappable`        | `tappable`             | Reward tappables (candy, items, stardust, …). |
+| `raid_lobby`      | `raid_lobby`           | Raid-lobby player counts. |
+| `max_battle_lobby`| `max_battle_lobby`     | Max Battle lobby player counts. |
 
 Unknown type strings cause Golbat to fail to start with a config error.

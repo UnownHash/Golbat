@@ -105,7 +105,7 @@ func TestNullSeenTypeJSON(t *testing.T) {
 // safe sentinel. MarshalJSON collapses both invalid codes to null, so a
 // record whose seen_type degraded to Unknown is indistinguishable on the
 // wire from one that was never set. A decoder has to pick one, and Unset is
-// the code this PR proved destructive: it is what updateFromWild's
+// the destructive choice: it is what updateFromWild's
 // `case Unset, Cell, NearbyStop` and updateFromNearby's `case Unset, Cell`
 // act on (see TestScanUnknownSeenTypeIsInertInTheDecodeSwitches). Nothing in
 // production unmarshals this type today — the type is exported and is the

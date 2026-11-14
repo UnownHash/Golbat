@@ -109,8 +109,8 @@ func getPokestopRecordReadOnly(ctx context.Context, db db.DbDetails, fortId Fort
 	})
 	pokestop.Lock(caller)
 	if !found && config.Config.FortInMemory {
-		// Index out here — the GetOrSetFunc closure runs under the cache
-		// shard's write lock and must not take the fort tree mutex.
+		// Index out here — the GetOrSetFunc closure runs under the cache's
+		// internal per-key synchronization and must not take the fort tree mutex.
 		fortRtreeUpdatePokestopOnGet(&dbPokestop)
 	}
 	return pokestop, func() { pokestop.Unlock() }, nil

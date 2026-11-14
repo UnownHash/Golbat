@@ -28,8 +28,8 @@ type questConditionKey struct {
 }
 
 // ApiQuestConditionResult is the endpoint-facing view of one quest option and
-// how many resident forts currently offer it. Consumed by the available
-// endpoint (Task 4).
+// how many resident forts currently offer it. Consumed by
+// GET /api/pokestop/available.
 type ApiQuestConditionResult struct {
 	WithAr          bool   `json:"with_ar"`
 	RewardType      int16  `json:"reward_type"`
@@ -197,8 +197,8 @@ func removeFortQuestConditions(fortId FortId) {
 }
 
 // GetAvailableQuestConditions returns the distinct quest options currently
-// offered by resident forts, with per-option counts. Consumed by the available
-// endpoint (Task 4).
+// offered by resident forts, with per-option counts. Consumed by
+// GET /api/pokestop/available.
 func GetAvailableQuestConditions() []ApiQuestConditionResult {
 	var out []ApiQuestConditionResult
 	questConditionCount.Range(func(k questConditionKey, count int64) bool {

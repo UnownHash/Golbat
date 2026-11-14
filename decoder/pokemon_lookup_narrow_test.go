@@ -9,15 +9,12 @@ import (
 )
 
 // TestPokemonLookupSizes pins the scan-filter structs' layout. PokemonLookup
-// is loaded once per candidate on every scan — 15-20M/s in production
-// profiles, 14% of CPU (see PokemonLookupCacheItem's doc comment) — and it is
-// stored inline in the lookup map, so its width is a direct multiplier on
-// that path's cache pressure. Widening a field here is not free; if this test
-// fails, that is the change to justify, not the number to update.
-//
-// PokemonLookup used to carry two dead bytes: Xxs and Xxl were neither
-// written by updatePokemonLookup nor read by any filter (the XXS/XXL filters
-// read Size instead — api_pokemon_scan_v1.go). They have been removed.
+// is loaded once per candidate on every scan (see PokemonLookupCacheItem's
+// doc comment) and it is stored inline in the lookup map, so its width is a
+// direct multiplier on that path's cache pressure. Widening a field here is
+// not free; if this test fails, that is the change to justify, not the
+// number to update. (The XXS/XXL filters read Size; there are no separate
+// Xxs/Xxl lookup fields.)
 func TestPokemonLookupSizes(t *testing.T) {
 	for name, tc := range map[string]struct {
 		got, want uintptr
@@ -32,14 +29,14 @@ func TestPokemonLookupSizes(t *testing.T) {
 	}
 }
 
-// TestLookupNarrowingNeverAliasesTheSentinel is the regression test for the
-// bug these helpers exist for: a stored value at its column's ceiling used to
-// be converted straight into the lookup's signed slot, and int8(255) is -1 —
-// the "no value" sentinel every DNF filter checks against. A pokemon with a
-// clamped field silently dropped out of every filtered scan.
+// TestLookupNarrowingNeverAliasesTheSentinel pins the bug these helpers exist
+// for: converting a stored value at its column's ceiling straight into the
+// lookup's signed slot gives int8(255) == -1 — the "no value" sentinel every
+// DNF filter checks against — so a pokemon with a clamped field would
+// silently drop out of every filtered scan.
 //
 // The ceiling is only the loudest case. Everything from 128 (or 32768) up
-// converted to some negative number and failed every `>= Min` comparison, so
+// converts to some negative number and fails every `>= Min` comparison, so
 // the assertions below sweep the whole aliasing range, not just the ceiling.
 func TestLookupNarrowingNeverAliasesTheSentinel(t *testing.T) {
 	for _, v := range []uint8{128, 200, 254, math.MaxUint8} {
@@ -93,12 +90,12 @@ func TestLookupFormNeverAliasesTheWildcardKey(t *testing.T) {
 	}
 }
 
-// TestLookupIvHandlesLegacyOutOfRangePercentages covers the field the review's
-// table missed and the only one with a trigger that does not need a protocol
-// change. iv is float(5,2) unsigned, so the column holds up to 999.99: a row
-// written before clampIv capped each stat at 15 can carry iv = 566.67 from a
-// single stat stored at the tinyint's 255. int8(566) is 54 and int8(384) is
-// -128, so the old conversion turned a perfect-looking row into a low or
+// TestLookupIvHandlesLegacyOutOfRangePercentages covers iv, the only field
+// with a trigger that does not need a protocol change. iv is float(5,2)
+// unsigned, so the column holds up to 999.99: a row written before clampIv
+// capped each stat at 15 can carry iv = 566.67 from a single stat stored at
+// the tinyint's 255. int8(566) is 54 and int8(384) is
+// -128, so a direct conversion would turn a perfect-looking row into a low or
 // absent one.
 func TestLookupIvHandlesLegacyOutOfRangePercentages(t *testing.T) {
 	for _, v := range []float32{128, 200, 384, 566.67, 999.99} {

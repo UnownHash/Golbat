@@ -1,5 +1,8 @@
 version: "2"
 
+# Run via `make lint` (or pass the same package list): a bare
+# `golangci-lint run` also analyses the generated pogo/ package as a root and
+# takes several minutes longer on a cold cache.
 run:
   build-tags:
     - go_json
@@ -26,8 +29,12 @@ linters:
         - (*encoding/json.Decoder).Decode
 
   exclusions:
-    paths:
-      - pogo/  # generated protobuf package; excluded to avoid whole-program analysis timeout
+    # Drop reports from files carrying a "Code generated ... DO NOT EDIT."
+    # header (pogo/vbase.pb.go, grpc/*.pb.go). This is the v2 default; it is
+    # spelled out because it only filters reports — it does not skip
+    # analysis. To keep lint fast, `make lint` and CI also leave the
+    # generated pogo package out of the lint targets.
+    generated: strict
     rules:
       # Entity access pattern: each entity type provides peek*Record /
       # get*RecordReadOnly / get*RecordForUpdate even when not currently

@@ -128,8 +128,8 @@ func init() {
 var initDataCacheOnce sync.Once
 
 // InitDataCache constructs all entity caches and spatial-index plumbing.
-// Must be called from main() AFTER config is loaded — cache shard counts,
-// fort TTLs, and fort eviction-callback registration all read config.
+// Must be called from main() AFTER config is loaded — fort TTLs and fort
+// eviction-callback registration both read config.
 // (Package init() is too early: it runs before config.ReadConfig().)
 func InitDataCache() {
 	initDataCacheOnce.Do(initDataCache)
@@ -148,10 +148,8 @@ func (cl *gohbemLogger) Print(message string) {
 // fortCacheEntryTTL is the per-entry TTL for pokestop/gym/station cache
 // inserts. Jittered so a restart's preload cohort (stamped within minutes)
 // doesn't expire as one mass burst of downstream work — tree deletes,
-// fort-tracker events, DB reload churn. (With otter there is no
-// reader-blocking sweep to defend against; the jitter survives purely as
-// burst smoothing.) Touch-on-hit refreshes each entry to its own jittered
-// TTL, so actively-seen forts never expire.
+// fort-tracker events, DB reload churn. Touch-on-hit refreshes each entry
+// to its own jittered TTL, so actively-seen forts never expire.
 func fortCacheEntryTTL() time.Duration {
 	if config.Config.FortInMemory {
 		return 25*time.Hour + rand.N(2*time.Hour)
@@ -160,7 +158,6 @@ func fortCacheEntryTTL() time.Duration {
 }
 
 func initDataCache() {
-	// Sharded caches for high-concurrency tables
 	// When fort_in_memory is enabled, extend TTL to 25 hours so that the
 	// rtree stays populated between daily quest resets.
 	fortCacheTTL := 60 * time.Minute
@@ -176,7 +173,7 @@ func initDataCache() {
 
 	// Fort caches: touch-on-hit keeps actively-seen forts resident past
 	// their (jittered, set-at-save) TTLs; otter touches via the timing
-	// wheel, so per-read touch is ~free (no hysteresis workaround needed).
+	// wheel, so per-read touch is ~free.
 	pokestopCache = ottercache.NewOtterCache(ottercache.OtterCacheConfig[FortId, *Pokestop]{
 		Name:       "pokestop",
 		DefaultTTL: fortCacheTTL,

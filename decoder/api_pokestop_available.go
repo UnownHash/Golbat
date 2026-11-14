@@ -7,23 +7,25 @@ import (
 // ApiPokestopQuestAvailable is one distinct quest option (reward + title +
 // target, AR/no-AR distinguished by WithAr) currently offered by resident
 // pokestops, with how many forts offer it. Sourced solely from the maintained
-// quest-conditions map (Task 3) — FortLookup itself omits title/target.
+// quest-conditions aggregate (questConditionCount) — FortLookup itself omits
+// title/target.
 type ApiPokestopQuestAvailable struct {
 	WithAr          bool   `json:"with_ar" doc:"True for the AR quest slot, false for the no-AR slot"`
 	RewardType      int16  `json:"reward_type" doc:"Quest reward type (pogo enum: 1=xp, 2=item, 3=stardust, 4=candy, 7=pokemon, 9=xl_candy, 12=mega_energy, …)"`
 	ItemId          int16  `json:"item_id" doc:"Item id when reward_type is item (2), else 0"`
-	Amount          int16  `json:"amount" doc:"Reward amount for stardust/xp/mega-energy rewards, else 0"`
-	PokemonId       int16  `json:"pokemon_id" doc:"Reward pokemon id for candy/xl-candy/pokemon/mega rewards, else 0"`
-	FormId          int16  `json:"form_id" doc:"Reward pokemon form id, else 0"`
+	Amount          int16  `json:"amount" doc:"Reward amount (item count, stardust, xp, candy, XL candy, mega energy, pokecoins or stickers); 0 for rewards without an amount"`
+	PokemonId       int16  `json:"pokemon_id" doc:"Reward pokemon id for pokemon encounter, candy, XL candy, mega energy and temp evo branch mega energy rewards, else 0"`
+	FormId          int16  `json:"form_id" doc:"Form id of a pokemon encounter reward, else 0"`
 	TempEvolutionId int8   `json:"temp_evolution_id" doc:"Temp evolution (mega/primal) id of the reward for temp evo branch mega energy (reward_type 20), else 0"`
 	Title           string `json:"title" doc:"Quest title/template string, for the advanced title/target sub-filter"`
 	Target          int32  `json:"target" doc:"Quest target count"`
-	Count           int    `json:"count" doc:"Number of resident forts currently offering this exact reward (including temp evolution) + title + target"`
+	Count           int    `json:"count" doc:"Number of resident pokestops currently offering this exact reward (including temp evolution) + title + target in this quest slot (with_ar)"`
 }
 
-// ApiPokestopInvasionAvailable is one distinct active invasion (grunt/leader/
-// showcase character + slot1 reward) currently present on resident
-// pokestops, with how many forts carry it. Sourced from FortLookup.Incidents.
+// ApiPokestopInvasionAvailable is one distinct active incident signature
+// (character, display type, confirmation and confirmed lineup) on resident
+// pokestops. Read from the maintained invasion max-expiry index
+// (fort_availability.go); it carries no count.
 type ApiPokestopInvasionAvailable struct {
 	Character      int16  `json:"character" doc:"Invasion character id (grunt/leader/giovanni); 0 for non-rocket displays"`
 	DisplayType    int16  `json:"display_type" doc:"Incident display type (1-4 rocket, 7 goldstop, 8 kecleon, 9 showcase/contest)"`
@@ -63,14 +65,14 @@ type ApiAvailablePokestops struct {
 	// filters; add new ones there, never here.
 	ShowcaseFocusFilter bool                           `json:"showcase_focus_filter" doc:"Deprecated: use filters.showcase_focus on /api/status. Present because ReactMap requires it on this response."`
 	Quests              []ApiPokestopQuestAvailable    `json:"quests" doc:"Distinct quest reward + title/target options currently offered"`
-	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active invasion signatures"`
-	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids"`
-	Showcases           []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcase focuses"`
+	Invasions           []ApiPokestopInvasionAvailable `json:"invasions" doc:"Distinct active incident signatures (no count)"`
+	Lures               []ApiPokestopLureAvailable     `json:"lures" doc:"Distinct active lure module ids (no count)"`
+	Showcases           []ApiPokestopShowcaseAvailable `json:"showcases" doc:"Distinct active showcases (no count)"`
 }
 
 // buildAvailablePokestops assembles the pokestop availability snapshot from
-// the maintained lure/showcase/invasion indexes and the maintained
-// quest-conditions aggregate (quests unchanged) — no fort scan, no logging.
+// the maintained lure/showcase/invasion max-expiry indexes and the maintained
+// quest-conditions count aggregate — no fort scan, no logging.
 // Shared by GetAvailablePokestops (which logs its own line for the per-type
 // endpoint) and GetAvailableForts (which folds these counts into its single
 // combined log line instead of logging again here).
@@ -89,7 +91,7 @@ func buildAvailablePokestops(now int64) *ApiAvailablePokestops {
 }
 
 // GetAvailablePokestops reads the maintained lure/showcase/invasion indexes and
-// the maintained quest-conditions aggregate (quests unchanged) — no fort scan.
+// the maintained quest-conditions aggregate — no fort scan.
 func GetAvailablePokestops(now int64) *ApiAvailablePokestops {
 	res := buildAvailablePokestops(now)
 	log.Infof("available-pokestops: %d quests, %d invasions, %d lures, %d showcases (maintained)",

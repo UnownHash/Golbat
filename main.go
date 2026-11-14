@@ -78,8 +78,8 @@ func main() {
 	)
 
 	// Construct entity caches now that config is loaded. Must run before any
-	// other decoder call (config drives cache shard counts, fort TTLs, and
-	// fort eviction-callback registration).
+	// other decoder call (config drives fort TTLs and fort eviction-callback
+	// registration).
 	decoder.InitDataCache()
 
 	// Load the Ditto disguise pool: the published one, or ditto_pool from
@@ -158,43 +158,11 @@ func main() {
 
 	decoder.SetKojiUrl(cfg.Koji.Url, cfg.Koji.BearerToken)
 
-	//if cfg.LegacyInMemory {
-	//	// Initialise in memory db
-	//	inMemoryDb, err = sqlx.Open("sqlite3", ":memory:")
-	//	if err != nil {
-	//		log.Fatal(err)
-	//		return
-	//	}
-	//
-	//	inMemoryDb.SetMaxOpenConns(1)
-	//
-	//	pingErr = inMemoryDb.Ping()
-	//	if pingErr != nil {
-	//		log.Fatal(pingErr)
-	//		return
-	//	}
-	//
-	//	// Create database
-	//	content, fileErr := ioutil.ReadFile("sql/sqlite/create.sql")
-	//
-	//	if fileErr != nil {
-	//		log.Fatal(err)
-	//	}
-	//
-	//	inMemoryDb.MustExec(string(content))
-	//
-	//	dbDetails = db2.DbDetails{
-	//		PokemonDb:       inMemoryDb,
-	//		UsePokemonCache: false,
-	//		GeneralDb:       db,
-	//	}
-	//} else {
 	dbDetails = db2.DbDetails{
 		PokemonDb:       db,
 		UsePokemonCache: true,
 		GeneralDb:       db,
 	}
-	//}
 
 	// Create the web server.
 	gin.SetMode(gin.ReleaseMode)

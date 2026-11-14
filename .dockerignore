@@ -4,3 +4,12 @@ config.toml
 cache/
 logs/
 golbat
+.git
+.github
+docs
+testdata
+*.md
+default.pgo.tmp
+golbat-vm-dashboard.json
+docker-compose.yml*
+config.toml.example

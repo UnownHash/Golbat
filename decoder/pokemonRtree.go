@@ -17,13 +17,10 @@ import (
 )
 
 // PokemonLookupCacheItem holds the scan-filter data INLINE BY VALUE.
-// The scan path loads one of these per candidate (15-20M/s in production
-// profiles, 14% of CPU); with pointer fields each candidate cost up to
-// three dependent DRAM misses (map node -> lookup -> pvp) and the map
-// carried 2 heap objects per entry (20M pointees, 1.4x this structure's
-// GC mark cost — see cachebench/lookup_bench_test.go: inline layout is
-// 3.2x faster at production concurrency). Validity flags replace the nil
-// checks.
+// The scan path loads one of these per candidate, so pointer fields would
+// cost up to three dependent memory loads per candidate (map node -> lookup
+// -> pvp) and add two heap objects per entry for the GC to mark. Validity
+// flags stand in for nil checks.
 type PokemonLookupCacheItem struct {
 	PokemonLookup    PokemonLookup
 	PokemonPvpLookup PokemonPvpLookup
@@ -389,8 +386,8 @@ func calculatePokemonPvpLookup(pokemon *Pokemon, pvpResults map[string][]gohbem.
 	pvpStore := make(map[string]int16)
 	for key, value := range pvpResults {
 		var best = pvpNoRank
-		// This code actually calculates best in a level cap, which is no longer strictly necessary
-		// But will leave in this form to allow easy change to per-cap again later
+		// Best rank across all configured level caps (an entry counts for a
+		// cap if it was ranked at that cap, or capped at or below it).
 
 		for _, levelCap := range config.Config.Pvp.LevelCaps {
 			for _, entry := range value {

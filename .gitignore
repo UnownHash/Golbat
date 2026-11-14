@@ -22,6 +22,10 @@ docker-compose.yml
 /cache/*
 /golbat
 /geojson/*
-vbase.proto
+/vbase.proto
 __debug_bin
 __pycache__/
+
+# make pgo-capture scratch output and ad-hoc profiles
+/default.pgo.tmp
+*.pprof

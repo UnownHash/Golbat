@@ -11,9 +11,9 @@ import (
 
 // ApiLatLon is an API coordinate. It accepts the canonical {"lat":..,"lon":..}
 // form used by the other Golbat endpoints, and also the longer
-// {"latitude":..,"longitude":..} spelling for backward compatibility (the shape
-// the internal geo.Location previously exposed). Internally it converts to
-// geo.Location via Location().
+// {"latitude":..,"longitude":..} spelling — the shape geo.Location's untagged
+// fields produce and the v1 pokemon scan takes, so clients built against that
+// shape work unchanged. Internally it converts to geo.Location via Location().
 type ApiLatLon struct {
 	Lat float64 `json:"lat"`
 	Lon float64 `json:"lon"`

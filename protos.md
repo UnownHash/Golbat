@@ -149,9 +149,6 @@ Aggregate RSVP counts per location. Gated by `ProcessGyms`. Any location
 whose `maybe_count` and `going_count` are both zero has its RSVP data
 cleared on the gym. Non-`SUCCESS` results are ignored.
 
-> Note: this method was previously ignored but is now processed. The earlier
-> behaviour is obsolete.
-
 ## Social actions
 
 The master `ClientAction_CLIENT_ACTION_PROXY_SOCIAL_ACTION` proto is decoded
@@ -166,6 +163,43 @@ Only `COMPLETED` and `COMPLETED_AND_REASSIGNED` responses are processed.
   in the request.
 
 Other social actions are counted as `ok/unknown` and left unprocessed.
+
+## Nebula battle messages
+
+Alongside `contents`, a raw submission can carry `nebula_contents`: battle
+messages, each with an `endpoint`, a response payload, an optional request
+payload, a `battle_id` and a typed context. Over HTTP `/raw` (object form)
+each entry has `endpoint`, base64 `payload` and `request`, `battle_id`, and
+`context: {"invasion": {"fort_id": "...", "incident_id": "..."}}`; over gRPC
+the same fields are `NebulaContent` in `grpc/raw_receiver.proto`. Source:
+`decode_nebula.go`.
+
+- **Invasion context, `get-state`** → the payload is a `BattleStateOutProto`;
+  its lineup is written to the incident (created if not yet known), which
+  can fire an `invasion` webhook.
+- **Invasion context, `get-time` / `send-player-event`** → ignored.
+- Any other endpoint, or an entry with no recognised context, is logged and
+  skipped.
+
+Nebula entries are not subject to the trainer-level check or scan rules.
+
+## Push-gateway messages
+
+A raw submission can also carry `push_contents`: push-gateway messages
+forwarded verbatim, each a `message_type` (the oneof case name) and a
+marshalled `PushGatewayMessage` payload (base64 over HTTP `/raw`,
+`PushGatewayContent` over gRPC). Source: `decode_push_gateway.go`.
+
+- `raid_lobby_player_count` → updates the gym's raid-lobby player count and
+  join deadline in memory (no database write) and sends a `raid_lobby`
+  webhook.
+- `bread_lobby_player_count` → the same for a Max Battle station, sending a
+  `max_battle_lobby` webhook.
+
+The gym or station must already be known to Golbat (cache or database);
+messages for an unknown fort are dropped. Other message types are ignored
+without being parsed. Push-gateway entries are not subject to the
+trainer-level check or scan rules.
 
 ## Explicitly ignored methods
 
