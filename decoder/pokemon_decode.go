@@ -1973,15 +1973,12 @@ func (pokemon *Pokemon) cpInputs() cpInputs {
 }
 
 // hasPlayerSpecificStats reports whether a species' encounter stats belong to
-// the player rather than the shared spawn, in which case its IVs, level, CP,
-// moves and size are neither observed onto the record nor derived for it.
+// the player rather than the shared spawn. For such a species, IVs, level, CP,
+// moves and size are neither observed onto the record nor derived for it, and
+// a spawn whose display changes to it drops the previous species' stats.
 //
-// No species is currently in that position. Minior was (#426): its encounter
-// stats differed per player, so #426 and the derivation gates below suppressed
-// them. Minior's stats are spawn-level again — the same for every player — so
-// it is treated like any other species and the guard is off. The function and
-// its call sites are kept as the single switch to flip if a species behaves
-// that way again.
+// No species currently qualifies. Minior is the prior example (#426); to
+// suppress a species again, return true for its id here.
 func hasPlayerSpecificStats(pokemonId int16) bool {
 	return false
 }

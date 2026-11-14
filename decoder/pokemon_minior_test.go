@@ -14,10 +14,10 @@ import (
 	"github.com/guregu/null/v6"
 )
 
-// Minior's encounter stats were player-specific for a while (#426) and were
-// suppressed everywhere — observation, derivation and carry-over. They are
-// spawn-level again, so Minior is treated like any other species; these tests
-// pin that, i.e. that hasPlayerSpecificStats no longer excludes it.
+// These tests pin that Minior is handled like any other species: its
+// encounter stats are recorded, derived and carried over. Minior is the prior
+// example of a species with player-specific stats (#426); see
+// hasPlayerSpecificStats.
 
 func miniorTestPokemon() *Pokemon {
 	p := &Pokemon{PokemonData: PokemonData{
