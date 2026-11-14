@@ -199,7 +199,7 @@ var unparseableSpawnpointIds util.DropReporter
 // the proto is at 0,0 and the id does not decode: the sighting cannot be
 // placed and the caller must drop it. Callers therefore run it before any
 // other mutation of the record.
-func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool, source SeenTypeCode) bool {
+func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, timestampMs int64, trustworthyTimestamp bool) bool {
 	if wildPokemon.EncounterId != uint64(pokemon.Id) {
 		panic("Unmatched EncounterId")
 	}
@@ -225,7 +225,7 @@ func (pokemon *Pokemon) addWildPokemon(ctx context.Context, db db.DbDetails, wil
 	pokemon.SetSpawnId(null.IntFrom(spawnId))
 
 	pokemon.setExpireTimestampFromSpawnpoint(ctx, db, timestampMs, trustworthyTimestamp)
-	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay, source)
+	pokemon.setPokemonDisplay(int16(wildPokemon.Pokemon.PokemonId), wildPokemon.Pokemon.PokemonDisplay)
 	return true
 }
 
@@ -325,7 +325,7 @@ func (pokemon *Pokemon) applySightingDerivation() {
 // record untouched, when the sighting cannot be placed (see addWildPokemon);
 // the caller must then skip the save.
 func (pokemon *Pokemon) updateFromWild(ctx context.Context, db db.DbDetails, wildPokemon *pogo.WildPokemonProto, cellId int64, weather map[int64]pogo.GameplayWeatherProto_WeatherCondition, timestampMs int64, username string) bool {
-	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true, SeenTypeCodeWild) {
+	if !pokemon.addWildPokemon(ctx, db, wildPokemon, timestampMs, true) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -360,7 +360,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 		pokemon.SetSeenType(SeenTypeCodeLureWild)
 
 		if mapPokemon.Data.PokemonDisplay != nil {
-			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay, SeenTypeCodeLureWild)
+			pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
 			pokemon.applySightingDerivation()
 			pokemon.recomputeCpIfNeeded(ctx, db, weather)
 			// The mapPokemon and nearbyPokemon GMOs don't contain actual shininess.
@@ -421,7 +421,7 @@ func (pokemon *Pokemon) updateFromMap(ctx context.Context, db db.DbDetails, mapP
 	// no stats to go stale, and the display is read once, at creation.
 	if config.Config.DeriveIv && pokemon.SeenType.Code == SeenTypeCodeLureWild && mapPokemon.Data.PokemonDisplay != nil {
 		wasDirty := pokemon.dirty
-		pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay, SeenTypeCodeLureWild)
+		pokemon.setPokemonDisplay(int16(mapPokemon.Data.PokedexTypeId), mapPokemon.Data.PokemonDisplay)
 		// A display change clears size and moves, and with the weather
 		// unchanged nothing else refills them; derivation does, as on the
 		// wild and nearby paths.
@@ -538,13 +538,6 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
-	// A strong Pokemon's moves are left for an encounter: an event can fix
-	// them, which the draw cannot know (see encounter.ForStrong). The Draw
-	// says which walk it is, rather than the record, because repopulateIv
-	// derives for a strong flag the record has not stored yet.
-	if v.Strong {
-		return
-	}
 	if pokemon.Move1.Valid && pokemon.Move2.Valid {
 		return
 	}
@@ -610,14 +603,9 @@ func (pokemon *Pokemon) updateFromNearby(ctx context.Context, db db.DbDetails, n
 	// that, Lat/Lon are 0,0 and the lookup misses the batch weather and goes
 	// to the database under the pokemon lock. The paths that keep an existing
 	// location call it first, since that location is already the right one.
-	// The display's own source, whatever seen type the record keeps.
-	nearbySource := SeenTypeCodeCell
-	if nearbyPokemon.FortId != "" {
-		nearbySource = SeenTypeCodeNearbyStop
-	}
 	applyDisplay := func() {
 		pokemon.SetIsEvent(0)
-		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay, nearbySource)
+		pokemon.setPokemonDisplay(int16(nearbyPokemon.PokedexNumber), nearbyPokemon.PokemonDisplay)
 		pokemon.applySightingDerivation()
 		pokemon.recomputeCpIfNeeded(ctx, db, weather)
 	}
@@ -1992,30 +1980,8 @@ func hasPlayerSpecificStats(pokemonId int16) bool {
 	return pokemonId == int16(pogo.HoloPokemonId_MINIOR)
 }
 
-// priorSighting is how a record was last seen, captured by an encounter
-// before it applies its own display. See checkDerivation.
-type priorSighting struct {
-	// Seen: the record had a display before this encounter. IsStrong is set
-	// with every display and persisted, so its validity is the test.
-	Seen bool
-	// Strong is that display's strong flag.
-	Strong bool
-	// Source is the kind of sighting that applied it (displaySource), unset
-	// when the record was reloaded since.
-	Source SeenTypeCode
-}
-
-func (pokemon *Pokemon) priorSighting() priorSighting {
-	return priorSighting{
-		Seen:   pokemon.IsStrong.Valid,
-		Strong: pokemon.IsStrong.ValueOrZero(),
-		Source: pokemon.displaySource,
-	}
-}
-
-// caller should setPokemonDisplay prior to calling this, and pass the
-// priorSighting it captured before doing so.
-func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string, prior priorSighting) {
+// caller should setPokemonDisplay prior to calling this
+func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails, proto *pogo.PokemonProto, username string) {
 	// Minior's encounter stats belong to the player, not the shared spawn.
 	if hasPlayerSpecificStats(pokemon.PokemonId) {
 		pokemon.setUsernameIfStored(username)
@@ -2214,7 +2180,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// DisplayPokemonId reflect this sighting's ground truth, but compares
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
-	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto), prior)
+	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
 
 	// Normally a no-op: it returns immediately once Cp is set, which the proto
 	// almost always does. It earns its place when the proto did not report one
@@ -2230,8 +2196,7 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 // with the record untouched, when the encounter's wild proto cannot be
 // placed (see addWildPokemon); the caller must then skip the save.
 func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.EncounterOutProto, username string, timestampMs int64) bool {
-	prior := pokemon.priorSighting()
-	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false, SeenTypeCodeEncounter) {
+	if !pokemon.addWildPokemon(ctx, db, encounterData.Pokemon, timestampMs, false) {
 		return false
 	}
 	pokemon.SetIsEvent(0)
@@ -2242,7 +2207,7 @@ func (pokemon *Pokemon) updatePokemonFromEncounterProto(ctx context.Context, db 
 	if !pokemon.isSeenFromTappable() {
 		pokemon.SetSeenType(SeenTypeCodeEncounter)
 	}
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username, prior)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon.Pokemon, username)
 
 	if !pokemon.CellId.Valid {
 		centerCoord := s2.LatLngFromDegrees(pokemon.Lat, pokemon.Lon)
@@ -2271,15 +2236,13 @@ func (pokemon *Pokemon) isSeenFromTappable() bool {
 }
 
 func (pokemon *Pokemon) updatePokemonFromDiskEncounterProto(ctx context.Context, db db.DbDetails, encounterData *pogo.DiskEncounterOutProto, username string) {
-	prior := pokemon.priorSighting()
 	pokemon.SetIsEvent(0)
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay, SeenTypeCodeLureEncounter)
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	pokemon.SetSeenType(SeenTypeCodeLureEncounter)
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username, prior)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
 func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Context, db db.DbDetails, request *pogo.ProcessTappableProto, encounterData *pogo.TappableEncounterProto, username string, timestampMs int64) {
-	prior := pokemon.priorSighting()
 	pokemon.SetIsEvent(0)
 	pokemon.SetLat(request.LocationHintLat)
 	pokemon.SetLon(request.LocationHintLng)
@@ -2309,17 +2272,12 @@ func (pokemon *Pokemon) updatePokemonFromTappableEncounterProto(ctx context.Cont
 		pokemon.SetExpireTimestamp(null.IntFrom(int64(timestampMs)/1000 + int64(120)))
 		pokemon.SetExpireTimestampVerified(false)
 	}
-	displaySource := SeenTypeCodeTappableEncounter
-	if request.GetLocation().GetSpawnpointId() == "" && request.GetLocation().GetFortId() != "" {
-		displaySource = SeenTypeCodeTappableLureEncounter
-	}
-	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay, displaySource)
+	pokemon.setPokemonDisplay(int16(encounterData.Pokemon.PokemonId), encounterData.Pokemon.PokemonDisplay)
 	// addEncounterPokemon adopts the username at the end of its own updates.
-	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username, prior)
+	pokemon.addEncounterPokemon(ctx, db, encounterData.Pokemon, username)
 }
 
-func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto, source SeenTypeCode) {
-	pokemon.displaySource = source
+func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.PokemonDisplayProto) {
 	if !pokemon.isNewRecord() {
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16

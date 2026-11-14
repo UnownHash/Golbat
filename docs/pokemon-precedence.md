@@ -96,10 +96,11 @@ is derived with `encounter.ForStrong` — IVs 13–15 that do not move with
 weather, level 36–40 or 41–45 boosted, size XL or XXL only — and only while
 `derive_strong` is on (default). Its IVs being weather-independent is what
 `repopulateIv`'s `isBoostedMatches || isStrong` and `detectDitto` already
-assumed. Its **moves are not derived**: an event can fix a strong species'
-move (often outside its pool), and a fixed slot takes no draw, so the drawn
-indices cannot be trusted without a list of the fixed moves. `checkDerivation`
-logs every strong encounter, moves included, without scoring the moves.
+assumed. Its moves are derived from the same walk. As with ordinary spawns
+during events, an event can pin a strong species' move (often outside its
+pool) or shift its level, and those values stay wrong until an encounter
+corrects them. `checkDerivation` scores strong encounters like any other and
+logs them only when they disagree, building the corpus for a later fix.
 
 A known Ditto is derived, on its own boost branch rather than its disguise's
 (`statsBoosted`): a caught Ditto is boosted only in `PP`.

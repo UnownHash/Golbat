@@ -95,10 +95,9 @@ func TestDeriveIvIfAbsentDerivesStrongPokemon(t *testing.T) {
 	}
 }
 
-// A strong Pokemon gets its walk's XL/XXL size but no moves, even with
-// resolvable pools: an event can fix a strong species' moves, which the draw
-// cannot know. The ordinary record beside it, same id, does get moves.
-func TestDeriveIvIfAbsentLeavesStrongMovesForAnEncounter(t *testing.T) {
+// A strong Pokemon gets its walk's XL/XXL size and the moves its own walk
+// draws; the ordinary record beside it, same id, gets the ordinary walk's.
+func TestDeriveIvIfAbsentDerivesStrongMoves(t *testing.T) {
 	withMasterFileData(t, MasterFileData{
 		Initialized: true,
 		Pokemon: map[int]MasterFilePokemon{
@@ -116,15 +115,18 @@ func TestDeriveIvIfAbsentLeavesStrongMovesForAnEncounter(t *testing.T) {
 
 		p.deriveIvIfAbsent()
 
+		draw := encounter.Derive(eid, false, strong, 0)
+		want := derivedMoves(&draw, 1, 0)
+		if !want.Resolved {
+			t.Fatal("pools did not resolve")
+		}
+		if !p.Move1.Valid || !p.Move2.Valid || int32(p.Move1.ValueOrZero()) != want.Move1 || int32(p.Move2.ValueOrZero()) != want.Move2 {
+			t.Errorf("strong=%v: moves %v/%v, want %d/%d", strong, p.Move1, p.Move2, want.Move1, want.Move2)
+		}
 		if strong {
-			if p.Move1.Valid || p.Move2.Valid {
-				t.Errorf("strong: moves %v/%v, want both absent", p.Move1, p.Move2)
-			}
 			if got := p.Size.ValueOrZero(); got != uint8(encounter.SizeXXL) {
 				t.Errorf("strong: size %d, want XXL", got)
 			}
-		} else if !p.Move1.Valid || !p.Move2.Valid {
-			t.Errorf("ordinary: moves %v/%v, want both derived", p.Move1, p.Move2)
 		}
 	}
 }

@@ -38,8 +38,8 @@ type configDefinition struct {
 	// and unaffected.
 	DeriveIv bool `koanf:"derive_iv"`
 	// DeriveStrong: with DeriveIv on, also derive strong (mighty) Pokemon's
-	// IVs, level and size, whose walk differs from an ordinary encounter's
-	// (encounter.ForStrong); their moves are never derived. Default true. Off
+	// IVs, level, size and moves, whose walk differs from an ordinary
+	// encounter's (encounter.ForStrong). Default true. Off
 	// leaves a strong Pokemon's values absent until a real encounter, as
 	// before; checkDerivation still scores the walk either way.
 	DeriveStrong bool `koanf:"derive_strong"`

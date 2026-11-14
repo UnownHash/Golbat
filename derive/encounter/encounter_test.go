@@ -437,9 +437,6 @@ func TestForStrongBranchesDifferOnlyInLevel(t *testing.T) {
 		if u.Size != SizeXL && u.Size != SizeXXL {
 			t.Fatalf("id %d: strong size %d, want XL or XXL", id, u.Size)
 		}
-		if !u.Strong || For(id, false, 0).Strong {
-			t.Fatalf("id %d: Draw.Strong must be set by ForStrong only", id)
-		}
 		shifted := u.Values
 		shifted.Level += 5
 		if b.Values != shifted {

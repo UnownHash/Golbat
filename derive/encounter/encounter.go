@@ -51,10 +51,6 @@ type Draw struct {
 
 	// moveIndicesDrawn guards MoveIndices against a second call.
 	moveIndicesDrawn bool
-
-	// Strong is whether this Draw is ForStrong's. A strong encounter's moves
-	// are not derived (see ForStrong), so a caller writing moves checks it.
-	Strong bool
 }
 
 // For derives one encounter's Values in a single walk, returning a Draw that
@@ -102,10 +98,11 @@ func For(encounterID uint64, weatherBoosted bool, form int32) Draw {
 // them and the boosted level is the unboosted one plus 5.
 //
 // The move indices continue the walk as for an ordinary encounter and match
-// where the game draws them, but an event can fix a strong species' move —
-// often outside its pool — and a fixed slot takes no draw, shifting the
-// other. Without a list of the fixed moves the indices cannot be trusted, so
-// callers do not write moves from a strong Draw (see Draw.Strong).
+// where the game draws them. An event can fix (pin) a strong species' move,
+// often outside its pool; a pinned slot takes no draw, so a pinned quick move
+// shifts the charged draw into the quick move's position. Such moves are
+// wrong until an encounter corrects them, as event moves are for ordinary
+// spawns; checkDerivation logs them so a pin list can be built from the logs.
 //
 // Checked against a scanner export of GO Wild Area 2025 (44,078 strong
 // encounters) and two further datasets.
@@ -137,7 +134,6 @@ func ForStrong(encounterID uint64, weatherBoosted bool, form int32) Draw {
 		Values:    v,
 		DittoRoll: dittoRoll,
 		gen:       *r,
-		Strong:    true,
 	}
 }
 
