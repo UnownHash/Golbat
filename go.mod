@@ -6,7 +6,7 @@ toolchain go1.26.0
 
 require (
 	github.com/Depado/ginprom v1.8.3
-	github.com/UnownHash/gohbem v0.12.0
+	github.com/UnownHash/gohbem v0.13.1
 	github.com/danielgtaylor/huma/v2 v2.38.0
 	github.com/getsentry/sentry-go v0.46.2
 	github.com/gin-gonic/gin v1.12.0
