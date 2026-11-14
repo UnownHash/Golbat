@@ -49,6 +49,7 @@ type ApiGymDefender struct {
 	Alignment             int     `json:"alignment,omitempty" doc:"Alignment"`
 	Badge                 int     `json:"badge,omitempty" doc:"Badge"`
 	Background            *int64  `json:"background,omitempty" doc:"Background id"`
+	TradedTimeMs          int64   `json:"traded_time_ms,omitempty" doc:"Unix ms the pokemon was traded; omitted if never traded"`
 	DeployedMs            int64   `json:"deployed_ms,omitempty" doc:"Deployment duration (ms)"`
 	DeployedTime          int64   `json:"deployed_time,omitempty" doc:"Approx unix deploy time"`
 	BattlesWon            int32   `json:"battles_won" doc:"Battles won"`

@@ -467,7 +467,7 @@ Fires when **any** of these is true:
 
 #### defenders structure
 
-Built by `updateGymFromGymGetStatusProto` in `decoder/gym_decode.go`. The
+Built by `updateGymFromGymInfoOutProto` in `decoder/gym_decode.go`. The
 value is a JSON array, one entry per defending Pokémon in the order Niantic
 reports them. Populated from `METHOD_GYM_GET_INFO` responses.
 
@@ -500,6 +500,7 @@ reports them. Populated from `METHOD_GYM_GET_INFO` responses.
 | `alignment`                | int     | Alignment enum (shadow / purified / normal). Omitted when `0`. |
 | `badge`                    | int     | Pokémon badge / ribbon enum. Omitted when `0`. |
 | `background`               | int64 \| null | Display-background ID. Omitted when not set. |
+| `traded_time_ms`           | int64   | Unix milliseconds when the Pokémon was traded. Omitted when `0` (never traded). |
 | `deployed_ms`              | int64   | Milliseconds since the Pokémon was deployed to the gym. Omitted when `0`. |
 | `deployed_time`            | int64   | Approximate Unix seconds of deployment (`now - deployed_ms`). Omitted when `0`. |
 | `battles_won`              | int32   | Defence battles won. Always present. |
