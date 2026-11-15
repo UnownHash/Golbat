@@ -61,6 +61,11 @@ func ReadConfig(configPath string) (configDefinition, error) {
 			MaxAge:            30,
 			Compress:          true,
 		},
+		DerivationEvents: derivationEvents{
+			Dir:           "logs",
+			BucketMinutes: 15,
+			RetainDays:    14,
+		},
 		Cleanup: cleanup{
 			Pokemon:        true,
 			Quests:         true,

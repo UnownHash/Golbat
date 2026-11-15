@@ -188,12 +188,13 @@ func main() {
 	// Derivation needs ohbem too: CP is computed from the derived IVs and
 	// level, so without it a derived pokemon has IVs but no CP.
 	needsOhbem := cfg.Pvp.Enabled || cfg.DeriveIv
-	// DeriveIv resolves move pools through the masterfile, and DerivationLog
-	// resolves the disguise's boosted weathers through it. Both paths check
+	// DeriveIv resolves move pools through the masterfile, DerivationLog
+	// resolves the disguise's boosted weathers through it, and
+	// DerivationEvents checks moves against the pools. All paths check
 	// its Initialized guard and silently skip their work when it was never
 	// loaded.
 	needsMasterfile := needsOhbem || cfg.Weather.ProactiveIVSwitching ||
-		cfg.DeriveIv || cfg.DerivationLog
+		cfg.DeriveIv || cfg.DerivationLog || cfg.DerivationEvents.Enabled
 	if needsMasterfile {
 		if err := decoder.EnsureMasterFileData(); err != nil {
 			log.Fatalf("Unable to initialise MasterFile: %v", err)

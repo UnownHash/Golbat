@@ -40,3 +40,19 @@ func TestReadConfigLoadsExplicitPath(t *testing.T) {
 		t.Errorf("Port = %d, want 12345 from %s", cfg.Port, path)
 	}
 }
+
+func TestDerivationEventsDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.toml")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := ReadConfig(path)
+	if err != nil {
+		t.Fatalf("ReadConfig(%s): %v", path, err)
+	}
+	de := cfg.DerivationEvents
+	if de.Enabled || de.Dir != "logs" || de.BucketMinutes != 15 || de.RetainDays != 14 {
+		t.Errorf("DerivationEvents = %+v, want disabled, logs, 15, 14", de)
+	}
+}
