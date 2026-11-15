@@ -61,7 +61,7 @@ func readEventLines(t *testing.T, path string) []map[string]any {
 	if err != nil {
 		t.Fatalf("open %s: %v", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var r interface{ Read([]byte) (int, error) } = f
 	if strings.HasSuffix(path, ".gz") {
 		gz, err := gzip.NewReader(f)
