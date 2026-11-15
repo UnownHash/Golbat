@@ -460,3 +460,33 @@ func TestDrawDispatchesOnStrong(t *testing.T) {
 		t.Fatal("Derive(strong=true) is not ForStrong")
 	}
 }
+
+func TestSizeRollClassifies(t *testing.T) {
+	for id := uint64(1); id < 5000; id++ {
+		d := For(id*7919, false, 0)
+		if d.SizeRoll < 0 || d.SizeRoll >= 1 {
+			t.Fatalf("roll %v out of range", d.SizeRoll)
+		}
+		if classifySize(d.SizeRoll) != d.Size {
+			t.Fatalf("id %d: class %d != Size %d", id, classifySize(d.SizeRoll), d.Size)
+		}
+		s := ForStrong(id*7919, false, 0)
+		want := SizeXXL
+		if s.SizeRoll < strongSizeCut {
+			want = SizeXL
+		}
+		if s.Size != want {
+			t.Fatalf("strong id %d mismatch", id)
+		}
+	}
+}
+
+func TestFormFixesSize(t *testing.T) {
+	if !FormFixesSize(2641) || FormFixesSize(0) {
+		t.Fatal("FormFixesSize")
+	}
+	d := For(12345, false, 2644)
+	if d.SizeRoll == 0 {
+		t.Fatal("fixed-size form must still report its roll")
+	}
+}
