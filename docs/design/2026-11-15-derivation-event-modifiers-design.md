@@ -1,6 +1,6 @@
 # Derivation Event Modifiers — Prototype Design
 
-> **Status:** Approved for prototype (2026-11-15). Not yet built.
+> **Status:** Prototype built (branch t3/encounter-override-heuristics); not merged.
 
 - **Date:** 2026-11-15
 - **Scope:** an opt-in Golbat output plus an offline replay script. Nothing
@@ -211,3 +211,13 @@ recommended fixed Dragonite encounter rule.
 - **Late corrections:** should webhooks be re-sent once an effect is
   confirmed?
 - **Minimum encounter rule:** what detection delay is acceptable?
+- **move_pin agreements by coincidence:** a pin to an in-pool move agrees
+  with the derivation about 1 time in pool-size, and summaries do not
+  record which move agreed, so the agreement gate and the end count can
+  misfire for sparsely seen species. Follow-up: per-slot observed-move
+  counts in summaries.
+- **Scopes have no location:** a regional event (e.g. a Safari at one
+  venue) is diluted by agreements for the same scope everywhere else.
+- **size_cutoffs end needs a near-cut roll:** it ends only on a roll in the
+  disputed region, so a rare species' size modifier may stay active long
+  after the event.
