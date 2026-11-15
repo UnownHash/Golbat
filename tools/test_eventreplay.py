@@ -227,6 +227,60 @@ class DetectorTest(unittest.TestCase):
                      size_roll=0.003))
         self.assertEqual(mod.contradictions, 1)
 
+    def size_event(self):
+        """A Rattata 1/2 cut moved up: XXS observed at 0.008-0.011."""
+        det = Detector(Params())
+        trs = feed_all(det, [dev(T0 + i, pokemon_id=19, form=45, strong=False,
+                                 size="disagree", obs_size=1, der_size=2,
+                                 size_roll=r)
+                             for i, r in enumerate((0.008, 0.009, 0.011))])
+        return det, trs[0].modifier
+
+    def test_size_cutoff_survives_far_agreements(self):
+        det, mod = self.size_event()
+        for b in range(1, 40):
+            trs = det.feed(summ(T0 + b * BUCKET, pokemon_id=19, form=45,
+                                strong=False, ok=200, n=200,
+                                size_rolls={"2": [0.015, 0.028],
+                                            "3": [0.03, 0.97]}))
+            self.assertEqual(trs, [])
+        self.assertEqual(mod.status, "candidate")
+        self.assertIn(mod, det.active())
+        self.assertEqual(mod.effect["boundaries"], {"1/2": [0.011, 0.015]})
+
+    def test_size_cutoff_ends_on_base_classified_roll(self):
+        det, mod = self.size_event()
+        # XS at 0.006 inside the bucket of the last deviation: not yet.
+        self.assertEqual(det.feed(summ(T0, pokemon_id=19, form=45,
+                                       strong=False, ok=1, n=1,
+                                       size_rolls={"2": [0.006, 0.02]})), [])
+        self.assertEqual(mod.status, "candidate")
+        trs = det.feed(summ(T0 + BUCKET, pokemon_id=19, form=45, strong=False,
+                            ok=1, n=1, size_rolls={"2": [0.006, 0.02]}))
+        self.assertEqual([(t.state, t.ts) for t in trs],
+                         [("ended", T0 + 2 * BUCKET)])
+        self.assertEqual((mod.status, mod.end), ("ended", T0 + 2 * BUCKET))
+
+    def test_size_cutoff_moved_down_ends(self):
+        det = Detector(Params())
+        trs = feed_all(det, [dev(T0 + i, size="disagree", obs_size=5,
+                                 der_size=4, size_roll=r)
+                             for i, r in enumerate((0.70, 0.75, 0.78))])
+        mod = trs[0].modifier
+        self.assertEqual(det.feed(summ(T0 + BUCKET, ok=9, n=9,
+                                       size_rolls={"4": [0.1, 0.65]})), [])
+        trs = det.feed(summ(T0 + 2 * BUCKET, ok=9, n=9,
+                            size_rolls={"4": [0.1, 0.72]}))
+        self.assertEqual([t.state for t in trs], ["ended"])
+        self.assertEqual(mod.end, T0 + 3 * BUCKET)
+
+    def test_candidate_confirms_at_once_when_start_reaches_confirm(self):
+        det = Detector(Params(start=3, confirm=3))
+        trs = feed_all(det, [dev(T0 + i, ivs="disagree") for i in range(3)])
+        self.assertEqual([(t.state, t.ts) for t in trs],
+                         [("candidate", T0 + 2), ("confirmed", T0 + 2)])
+        self.assertEqual(trs[0].modifier.status, "confirmed")
+
     def test_size_cutoff_strong(self):
         det = Detector(Params())
         trs = feed_all(det, [dev(T0 + i, size="disagree", obs_size=5,
@@ -267,6 +321,15 @@ class ReaderTest(unittest.TestCase):
         with (gzip.open(p, "wb") if gz else open(p, "wb")) as f:
             f.write(data)
         return p
+
+    def test_corrupt_gzip_body(self):
+        p = self.path("bad.gz")
+        with open(p, "wb") as f:
+            f.write(gzip.compress(b"x")[:10] + b"\xff" * 64)
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(list(read_records([p])), [])
+        self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
 
     def test_merge_order(self):
         # Day file 2 holds a summary for a bucket that straddled midnight;

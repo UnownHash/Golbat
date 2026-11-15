@@ -41,8 +41,8 @@ part of a scope.
   it] on the raw roll, from the deviations plus summary size_rolls since the
   effect started, listing only boundaries whose interval excludes the base
   cut (0.004/0.029/0.971/0.996; strong: 0.8 between XL and XXL). A
-  deviation that would empty an interval is a contradiction. null is an
-  unbounded end.
+  deviation that would empty an interval is a contradiction, and summary
+  rolls that would are left out. null is an unbounded end.
 - unexplained: IVs disagree, i.e. the walk itself did not match, so the
   other dimensions say nothing. Per species, no effect payload.
 
@@ -53,17 +53,28 @@ Lifecycle, with the thresholds as Params:
   the dimension in scope since the first of them; a summary bucket counts
   when it starts at or after that deviation. size_cutoffs skips that test
   since a moved cut leaves most rolls agreeing.
-- confirmed: `confirm` matching deviations with no contradiction.
+- confirmed: `confirm` matching deviations with no contradiction (at once,
+  with the candidate, when `start` >= `confirm`).
 - ended: after the last matching deviation, summaries for the scope whose
   bucket starts after it add up to `end` agreements on the dimension with
   no matching deviation in between. The transition time is that summary's
   bucket end. A later matching deviation starts a new candidate cycle.
+- size_cutoffs ends differently: a moved cut leaves most rolls agreeing, so
+  agreement counts would end it during every quiet spell. It ends only on
+  contrary evidence: a summary (bucket starting after the last matching
+  deviation) with a roll in the disputed region of a listed boundary that is
+  classified by the base cut. For a cut moved up ([lo, hi] with lo >= base
+  cut), a class above the boundary with its min roll in [base cut, lo); for
+  a cut moved down (hi < base cut), a class at or below it with its max roll
+  in [hi, base cut). One such roll suffices: the derivation is
+  deterministic, so the base cut must be back.
 """
 import gzip
 import heapq
 import json
 import sys
-from collections import deque
+import zlib
+from collections import Counter, deque
 from dataclasses import dataclass, field
 from typing import Iterator
 
@@ -122,7 +133,7 @@ def _file_records(path: str) -> Iterator[dict]:
                 elif (kind == "summary" and "bucket" in rec
                       and "bucket_seconds" in rec):
                     yield rec
-        except (EOFError, OSError) as e:  # truncated or corrupt gzip
+        except (EOFError, OSError, zlib.error) as e:  # truncated/corrupt gzip
             warn(f"stream ends early ({e})")
 
 
@@ -173,10 +184,16 @@ class _Track:
     gate: bool          # agreements since the first pending deviation reset it
     min_species: int = 1
     pending: deque = field(default_factory=deque)  # (ts, species, roll, class)
+    species: Counter = field(default_factory=Counter)  # over pending
     mod: Modifier | None = None
     last_match: int = 0
     end_ok: int = 0
     rolls: dict = field(default_factory=dict)  # size class -> [min, max]
+
+
+def _clear_pending(t):
+    t.pending.clear()
+    t.species.clear()
 
 
 def _species(rec):
@@ -322,12 +339,17 @@ class Detector:
         """Count one matching deviation for t; returns its transitions."""
         p = self.p
         if t.mod is None:
-            t.pending.append((ts, _species(rec), roll,
+            sp = _species(rec)
+            t.pending.append((ts, sp, roll,
                               rec.get("observed", {}).get("size")))
+            t.species[sp] += 1
             while t.pending and t.pending[0][0] < ts - p.window:
-                t.pending.popleft()
-            species = {s for _, s, _, _ in t.pending}
-            if len(t.pending) < p.start or len(species) < t.min_species:
+                old = t.pending.popleft()[1]
+                t.species[old] -= 1
+                if not t.species[old]:
+                    del t.species[old]
+            if (len(t.pending) < p.start
+                    or len(t.species) < t.min_species):
                 return []
             mod = Modifier(type=t.type, scope=dict(t.scope),
                            effect=dict(t.effect), status="candidate",
@@ -338,10 +360,14 @@ class Detector:
                 for _, _, r, cls in t.pending:
                     _add_roll(t.rolls, cls, r, r)
                 mod.effect = _size_effect(t.rolls, t.scope["strong"])
-            t.pending.clear()
+            _clear_pending(t)
             t.mod, t.last_match, t.end_ok = mod, ts, 0
             self._mods.append(mod)
-            return [Transition(ts, off, "candidate", mod)]
+            out = [Transition(ts, off, "candidate", mod)]
+            if mod.observations >= p.confirm:
+                mod.status = "confirmed"
+                out.append(Transition(ts, off, "confirmed", mod))
+            return out
 
         mod = t.mod
         mod.observations += 1
@@ -382,30 +408,69 @@ class Detector:
                 if t.mod is None:
                     if (t.gate and ok > 0 and t.pending
                             and bucket >= t.pending[0][0]):
-                        t.pending.clear()
+                        _clear_pending(t)
                     continue
-                if t.type == "size_cutoffs" and bucket >= t.mod.start:
-                    self._summary_rolls(t, rec.get("size_rolls"))
+                if t.type == "size_cutoffs":
+                    rolls = _parse_rolls(rec.get("size_rolls"))
+                    if (bucket > t.last_match
+                            and _base_classified(t, rolls)):
+                        out.append(self._end(t, bucket_end, off))
+                    elif bucket >= t.mod.start:
+                        self._summary_rolls(t, rolls)
+                    continue
                 if bucket <= t.last_match:
                     continue
                 t.end_ok += ok
                 if t.end_ok >= self.p.end:
-                    mod = t.mod
-                    mod.status, mod.end = "ended", bucket_end
-                    t.mod, t.end_ok = None, 0
-                    out.append(Transition(bucket_end, off, "ended", mod))
+                    out.append(self._end(t, bucket_end, off))
         return out
 
-    def _summary_rolls(self, t, size_rolls):
-        for cls, r in (size_rolls or {}).items():
-            if r is None:
-                continue
-            try:
-                cls = int(cls)
-            except ValueError:
-                continue
-            _add_roll(t.rolls, cls, r[0], r[1])
-        t.mod.effect = _size_effect(t.rolls, t.scope["strong"])
+    @staticmethod
+    def _end(t, ts, off):
+        mod = t.mod
+        mod.status, mod.end = "ended", ts
+        t.mod, t.end_ok = None, 0
+        return Transition(ts, off, "ended", mod)
+
+    @staticmethod
+    def _summary_rolls(t, rolls):
+        """Merge a summary's rolls into t's evidence, leaving out a class
+        whose range would empty an interval."""
+        strong = t.scope["strong"]
+        for cls, (lo, hi) in rolls.items():
+            trial = {c: list(r) for c, r in t.rolls.items()}
+            _add_roll(trial, cls, lo, hi)
+            if _empty_intervals(trial, strong) <= _empty_intervals(t.rolls,
+                                                                   strong):
+                t.rolls = trial
+        t.mod.effect = _size_effect(t.rolls, strong)
+
+
+def _parse_rolls(size_rolls):
+    """A summary's size_rolls as {class: (min, max)}, bad entries out."""
+    out = {}
+    for cls, r in (size_rolls or {}).items():
+        try:
+            out[int(cls)] = (float(r[0]), float(r[1]))
+        except (TypeError, ValueError, IndexError):
+            continue
+    return out
+
+
+def _base_classified(t, rolls):
+    """Whether rolls hold one in a listed boundary's disputed region that
+    the base cut classifies, i.e. the moved cut is gone."""
+    cuts = STRONG_CUTS if t.scope["strong"] else BASE_CUTS
+    for name, (lo, hi) in t.mod.effect["boundaries"].items():
+        cut, below = cuts[name], int(name.split("/")[0])
+        for cls, (rmin, rmax) in rolls.items():
+            if (cls > below and lo is not None and lo >= cut
+                    and cut <= rmin < lo):
+                return True  # cut moved up, a roll under it seen above
+            if (cls <= below and hi is not None and hi < cut
+                    and hi <= rmax < cut):
+                return True  # cut moved down, a roll over it seen below
+    return False
 
 
 def main() -> int:
