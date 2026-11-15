@@ -734,3 +734,58 @@ func TestDeriveEventsWriterRemovesOrphanGzipTemp(t *testing.T) {
 		t.Errorf("recompressed rows = %v", rows)
 	}
 }
+
+// deriveEventsGolden is the writer output tools/test_eventreplay.py reads,
+// pinning the file format both sides depend on.
+const deriveEventsGolden = "../tools/testdata/derive-events-golden.jsonl"
+
+// TestDeriveEventsGolden compares a small real output (one deviation, one
+// summary with size_rolls) with the committed golden byte for byte. Set
+// GOLBAT_WRITE_GOLDEN=1 to rewrite the golden after an intended format
+// change. The salt and clock are fixed, so the output is deterministic.
+func TestDeriveEventsGolden(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "derive-events.salt"),
+		[]byte("00112233445566778899aabbccddeeff\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	clock := &testClock{time.Date(2026, 7, 15, 10, 3, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	dev := agreeingEventCheck(clock.t)
+	dev.SpawnID = int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.501, -0.141)).Parent(20))
+	dev.FirstSeen = uint32(clock.t.Unix() - 120)
+	dev.Check.Observed.Level = 40
+	dev.Check.Move2 = 999 // outside the charged pool
+	dev.Agree.Level, dev.Agree.Charged = dimDisagree, dimDisagree
+	w.handle(dev)
+	ok := agreeingEventCheck(clock.t.Add(time.Minute))
+	ok.Check.SizeRoll = 0.9801
+	w.handle(ok)
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(eventsFile(dir, clock.t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if os.Getenv("GOLBAT_WRITE_GOLDEN") == "1" {
+		if err := os.MkdirAll(filepath.Dir(deriveEventsGolden), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(deriveEventsGolden, got, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("wrote %s", deriveEventsGolden)
+		return
+	}
+	want, err := os.ReadFile(deriveEventsGolden)
+	if err != nil {
+		t.Fatalf("%v (GOLBAT_WRITE_GOLDEN=1 writes it)", err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("writer output differs from %s (GOLBAT_WRITE_GOLDEN=1 rewrites it after an intended change)\ngot:\n%s\nwant:\n%s",
+			deriveEventsGolden, got, want)
+	}
+}
