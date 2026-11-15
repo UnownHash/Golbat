@@ -97,9 +97,11 @@ Fields (names indicative):
   opposite boost branch's derived values
 - `observed_move_1/2`, `derived_move_1/2`, `move_1_in_pool`, `move_2_in_pool`
 - `size_roll`: the raw `Double()` the size class was cut from
-- `cell`: level-10 parent (~10 km; coarse by design) of the server's level-15
-  map cell stored on the pokemon (`CellId`), lat/lon only as fallback. The
-  level can be raised later if effects prove venue-specific.
+- `cell`: level-14 parent (~1 km) of the server's level-15 map cell stored on
+  the pokemon (`CellId`), lat/lon only as fallback. Level 14 is the level at
+  which the game partitions regional spawn differences, so regional effects
+  stay attributable. Trade-off: a shared events file locates encounters to
+  ~1 km (an earlier draft used level 10, ~10 km).
 - `spawn_id`, `first_seen` (UTC) — to test spawn-time vs encounter-time
   effect boundaries
 - `account`: salted hash of the username — to test ticket/account-bound
@@ -125,7 +127,7 @@ lines, ~10–30 MB/day before gzip. Bucket length configurable.
 
 ### 4.3 Timezone
 
-`utc_offset` from `tz.SearchTimezone` at the level-10 cell → location →
+`utc_offset` from `tz.SearchTimezone` at the level-14 cell → location →
 offset at `ts`. Cached per cell so it is not a polygon lookup per encounter.
 
 ## 5. Script: `tools/eventreplay.py`

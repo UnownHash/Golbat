@@ -18,7 +18,7 @@
 - A move outside its pool is a **deviation** in this log (unlike `checkDerivation`'s "no opinion").
 - Every check counts in the summary, deviations included.
 - Default bucket 15 minutes; default retention 14 days; feature off by default.
-- Location in records is an S2 **level-10** cell id only; accounts only as a salted hash; never raw username or lat/lon.
+- Location in records is an S2 **level-14** cell id only; accounts only as a salted hash; never raw username or lat/lon.
 - Script: Python standard library only; must read plain and gzip files and tolerate a truncated final line / truncated gzip stream.
 - Go verification runs in Docker if Go isn't on PATH:
   `docker run --rm -v "$PWD":/src -w /src -v gomod:/go/pkg/mod -v gobuild:/root/.cache/go-build golang:1.26 go test -tags go_json ./derive/... ./decoder/ ./config/`
@@ -212,7 +212,7 @@ Behaviour decisions:
 - File `dir/derive-events-YYYY-MM-DD.jsonl` (UTC date of the write), opened `O_APPEND|O_CREATE`, `bufio.Writer` flushed after each bucket flush and on close.
 - Day change: close, gzip the previous file to `.jsonl.gz` in a goroutine, remove the plain file after a successful gzip; delete `derive-events-*` files older than `retainDays`. At construction, gzip any plain file whose date is before today.
 - Bucket = `ev.Time.UTC().Truncate(bucket)`; an event for a later bucket flushes the current one first; an event for an earlier bucket is counted in the current one (cross-goroutine skew is milliseconds).
-- Cell: `s2.CellID(ev.CellID).Parent(10)` — the parent of the server's level-15 map cell; only when `CellID` is 0 fall back to `s2.CellIDFromLatLng(...).Parent(10)`. Written as the cell token. Level 10 is a named constant (`deriveEventsCellLevel`) so it can change later.
+- Cell: `s2.CellID(ev.CellID).Parent(14)` — the parent of the server's level-15 map cell (level 14 ≈ 1 km, the level regional spawn differences are partitioned at); only when `CellID` is 0 fall back to `s2.CellIDFromLatLng(...).Parent(14)`. Written as the cell token. Level 14 is a named constant (`deriveEventsCellLevel`) so it can change later.
 - UTC offset: cached per level-10 cell, `*time.Location` from `tz.SearchTimezone` at the cell centre (`""` or load error → UTC); offset = `ev.Time.In(loc)` zone offset in minutes. No cell id and lat/lon both 0 → offset 0, cell `""`.
 - Salt: `dir/derive-events.salt`, 16 random bytes hex, created if missing; `account` = first 12 hex chars of sha256(salt ‖ username); empty username → `""`.
 

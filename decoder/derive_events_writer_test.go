@@ -349,11 +349,21 @@ func TestDeriveEventsCellFromServerCell(t *testing.T) {
 	ev := agreeingEventCheck(time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC))
 	ev.CellID = int64(l15)
 	d := onlyDeviation(t, ev)
-	if want := l15.Parent(deriveEventsCellLevel).ToToken(); d["cell"] != want {
+	if want := l15.Parent(14).ToToken(); d["cell"] != want { // level 14 pinned: regional spawn partition
 		t.Errorf("cell = %v, want %s", d["cell"], want)
 	}
 	if d["utc_offset"] != 540.0 {
 		t.Errorf("utc_offset = %v, want 540 (Asia/Tokyo)", d["utc_offset"])
+	}
+}
+
+func TestDeriveEventsCellCoarserThanLevelFallsBack(t *testing.T) {
+	// A level-12 cell id cannot yield a level-14 parent: lat/lon is used.
+	ev := agreeingEventCheck(time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC))
+	ev.CellID = int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(35.68, 139.76)).Parent(12))
+	d := onlyDeviation(t, ev)
+	if want := s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.5, -0.12)).Parent(14).ToToken(); d["cell"] != want {
+		t.Errorf("cell = %v, want %s (lat/lon fallback)", d["cell"], want)
 	}
 }
 
