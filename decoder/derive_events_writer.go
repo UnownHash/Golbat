@@ -39,7 +39,7 @@ const (
 	deriveEventsSaltFile   = "derive-events.salt"
 	deriveEventsDayLayout  = "2006-01-02"
 	// deriveEventsQueueSize is the capacity of the writer's events channel.
-	deriveEventsQueueSize = 8192
+	deriveEventsQueueSize = 65536
 	// deriveEventsOpenRetry is how long the writer drops lines after failing
 	// to open the day's file before trying again.
 	deriveEventsOpenRetry = time.Minute
@@ -571,7 +571,7 @@ var deriveEventsDrops util.DropReporter
 
 // InitDerivationEvents starts the derivation events log if
 // config.Config.DerivationEvents.Enabled. It is a no-op when disabled; on
-// error it logs and leaves the log disabled — a bad events dir must not
+// error it returns it (the caller logs) and leaves the log disabled — a bad events dir must not
 // stop Golbat.
 func InitDerivationEvents() error {
 	cfg := config.Config.DerivationEvents
@@ -581,7 +581,6 @@ func InitDerivationEvents() error {
 	w, err := newDeriveEventsWriter(cfg.Dir, time.Duration(cfg.BucketMinutes)*time.Minute,
 		cfg.RetainDays, time.Now)
 	if err != nil {
-		log.Errorf("[DERIVE_EVENTS] disabled: %v", err)
 		return err
 	}
 	w.start()

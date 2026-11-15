@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/geo/s2"
+	log "github.com/sirupsen/logrus"
 	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"golbat/derive/encounter"
@@ -506,7 +507,10 @@ func TestSubmitDerivationEventDropsWhenFull(t *testing.T) {
 	t.Cleanup(func() { derivationEventsWriter = prev })
 	deriveEventsDrops.Reset()
 	hook := logtest.NewGlobal()
-	t.Cleanup(hook.Reset)
+	t.Cleanup(func() {
+		hook.Reset()
+		log.StandardLogger().ReplaceHooks(make(log.LevelHooks))
+	})
 
 	done := make(chan struct{})
 	go func() {
