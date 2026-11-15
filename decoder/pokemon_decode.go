@@ -2183,7 +2183,12 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// DisplayPokemonId reflect this sighting's ground truth, but compares
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
-	pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+	chk := pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
+	if derivationEventsWriter != nil {
+		if ev, ok := newDeriveEventCheck(pokemon, &observedScan, chk, username, time.Now()); ok {
+			submitDerivationEvent(ev)
+		}
+	}
 
 	// Normally a no-op: it returns immediately once Cp is set, which the proto
 	// almost always does. It earns its place when the proto did not report one

@@ -65,6 +65,8 @@ decoder/
   remote_file.go     — Fetch + disk cache + embedded fallback for remote JSON files
   ditto_roll.go, ditto_pool_remote.go — Ditto disguise pool and marking rule
   derive_validation.go — Checks in-process encounter derivation against real encounters
+  derive_events.go   — Builds one per-encounter derivation check record (per-dimension agreement)
+  derive_events_writer.go — Opt-in derivation events log (`derivation_events` config): deviation rows + per-bucket summaries, async writer
   spawnpoint_repair.go — Startup repair of spawnpoints stored at 0,0
   db_timing.go       — timedDbQuery alias for under-lock DB loads
   tracked_mutex.go   — Lock contention instrumentation
@@ -91,7 +93,8 @@ encounter_cache/     — Short-lived cache of encounter stats by encounter id
 external/            — Pyroscope integration
 tz/                  — Timezone lookup from coordinates
 sql/                 — Numbered golang-migrate migrations, applied at startup
-tools/               — Offline helpers (derivecheck.py summarizes [DERIVE] logs)
+tools/               — Offline helpers (derivecheck.py summarizes [DERIVE] logs;
+                       eventreplay.py replays the derivation events log, proposing event modifiers)
 util/                — Small shared helpers (DropReporter, etc.)
 docs/design/         — Design records (see Docs)
 ```
