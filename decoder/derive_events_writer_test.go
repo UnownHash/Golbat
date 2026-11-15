@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -597,5 +598,139 @@ func TestDerivationEventsFlushDrainsAndLateSubmitIsSafe(t *testing.T) {
 	}
 	if !strings.Contains(string(data), `"kind":"summary"`) {
 		t.Fatalf("flush did not write the summary: %s", data)
+	}
+}
+
+// A Golbat spawn id is an S2 level-20 cell (~10 m), so the raw id would
+// locate an encounter far more precisely than the level-14 cell: it is
+// written as a salted hash, like the account.
+func TestDeriveEventsSpawnIDHashed(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 3, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	spawn := int64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.501, -0.141)).Parent(20))
+	for i, id := range []int64{spawn, spawn, 0} {
+		ev := deviatingEventCheck(clock.t.Add(time.Duration(i) * time.Second))
+		ev.SpawnID = id
+		w.handle(ev)
+	}
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := eventsFile(dir, clock.t)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), strconv.FormatInt(spawn, 10)) {
+		t.Errorf("file contains the raw spawn id %d:\n%s", spawn, raw)
+	}
+	devs := rowsOfKind(readEventLines(t, path), "deviation")
+	if len(devs) != 3 {
+		t.Fatalf("got %d deviations, want 3", len(devs))
+	}
+	a, _ := devs[0]["spawn_id"].(string)
+	b, _ := devs[1]["spawn_id"].(string)
+	if len(a) != 12 || a != b {
+		t.Errorf("spawn_id hashes %v / %v, want equal 12-char strings", devs[0]["spawn_id"], devs[1]["spawn_id"])
+	}
+	if devs[2]["spawn_id"] != "" {
+		t.Errorf("spawn_id 0 = %v, want \"\"", devs[2]["spawn_id"])
+	}
+}
+
+// Cells in one zone share one *time.Location: time.LoadLocation returns a
+// fresh copy each call, so caching it per cell would hold one zone table
+// per cell.
+func TestDeriveEventsZoneSharedAcrossCells(t *testing.T) {
+	clock := &testClock{time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, t.TempDir(), clock)
+	defer func() { _ = w.close() }()
+
+	var cells []s2.CellID
+	for _, ll := range [][2]float64{{51.5, -0.12}, {51.45, -0.3}} {
+		ev := agreeingEventCheck(clock.t)
+		ev.Lat, ev.Lon = ll[0], ll[1]
+		w.locate(ev)
+		cells = append(cells, s2.CellIDFromLatLng(s2.LatLngFromDegrees(ll[0], ll[1])).Parent(deriveEventsCellLevel))
+	}
+	if cells[0] == cells[1] {
+		t.Fatal("test points share a cell")
+	}
+	a, b := w.zones[cells[0]], w.zones[cells[1]]
+	if a == nil || a.String() != "Europe/London" || a != b {
+		t.Errorf("zones = %p (%v) / %p (%v), want one shared Europe/London", a, a, b, b)
+	}
+}
+
+// A write error is sticky in bufio, so the writer gives up the file, drops
+// what was buffered and reopens after the open-retry throttle: a transient
+// ENOSPC recovers instead of losing every later line.
+func TestDeriveEventsWriterRecoversFromWriteError(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	w.handle(deviatingEventCheck(clock.t)) // opens the file; one line buffered
+	if w.file == nil {
+		t.Fatal("file not opened")
+	}
+	_ = w.file.Close() // every later write to it fails
+	w.flushBucket()    // deviation + summary buffered; the flush fails
+	if w.file != nil || w.buf != nil {
+		t.Fatal("writer kept the failed file")
+	}
+	if w.droppedLines != 2 || !w.openRetryAt.Equal(clock.t.Add(deriveEventsOpenRetry)) {
+		t.Fatalf("droppedLines/openRetryAt = %d/%v, want 2/%v", w.droppedLines, w.openRetryAt,
+			clock.t.Add(deriveEventsOpenRetry))
+	}
+
+	clock.t = clock.t.Add(30 * time.Second)
+	w.handle(deviatingEventCheck(clock.t)) // inside the throttle: dropped
+	if w.droppedLines != 3 || w.file != nil {
+		t.Fatalf("droppedLines = %d, file %v; want 3, none", w.droppedLines, w.file)
+	}
+
+	clock.t = clock.t.Add(deriveEventsOpenRetry)
+	w.handle(deviatingEventCheck(clock.t)) // reopens and writes
+	if err := w.close(); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if w.droppedLines != 0 || !w.openRetryAt.IsZero() {
+		t.Errorf("outage not reset: %d/%v", w.droppedLines, w.openRetryAt)
+	}
+	if devs := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "deviation"); len(devs) != 1 {
+		t.Errorf("got %d deviations after recovery, want 1", len(devs))
+	}
+}
+
+// A crash mid-gzip leaves a .gz.tmp beside the still-present plain file;
+// startup removes it (the plain file is recompressed).
+func TestDeriveEventsWriterRemovesOrphanGzipTemp(t *testing.T) {
+	dir := t.TempDir()
+	today := time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)
+	withPlain := eventsFile(dir, today.AddDate(0, 0, -2))
+	orphan := eventsFile(dir, today.AddDate(0, 0, -3)) + ".gz.tmp" // its plain file is gone
+	if err := os.WriteFile(withPlain, []byte(`{"kind":"summary","checked":1}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{withPlain + ".gz.tmp", orphan} {
+		if err := os.WriteFile(p, []byte("partial"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := newTestDeriveEventsWriter(t, dir, &testClock{today})
+	w.waitCompress()
+	_ = w.close()
+
+	for _, p := range []string{withPlain + ".gz.tmp", orphan} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s not removed (err %v)", p, err)
+		}
+	}
+	if rows := readEventLines(t, withPlain+".gz"); len(rows) != 1 {
+		t.Errorf("recompressed rows = %v", rows)
 	}
 }

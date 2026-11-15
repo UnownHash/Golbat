@@ -77,14 +77,20 @@ type deriveEventsWriter struct {
 	bucketStart time.Time // zero when no bucket is open
 	summaries   map[deriveEventsSummaryKey]*deriveEventsSummary
 
-	zones map[s2.CellID]*time.Location // per deriveEventsCellLevel cell
+	// zones caches each deriveEventsCellLevel cell's location; locations
+	// holds one per zone name, so cells in one zone share it
+	// (time.LoadLocation returns a fresh copy of the zone table each call).
+	zones     map[s2.CellID]*time.Location
+	locations map[string]*time.Location
 
-	// While the day's file cannot be opened, lines are dropped and the open
-	// is retried at most once per deriveEventsOpenRetry, so a missing or
-	// unwritable dir logs once a minute, not once per line.
-	openRetryAt  time.Time // zero when not in an open-failure outage
-	openFailures int       // failed opens in the current outage
+	// While the day's file cannot be opened or written, lines are dropped
+	// and the open is retried at most once per deriveEventsOpenRetry, so a
+	// missing or unwritable dir, or a full disk, logs once a minute, not
+	// once per line.
+	openRetryAt  time.Time // zero when not in an outage
+	openFailures int       // failed opens and writes in the current outage
 	droppedLines int       // lines dropped in the current outage
+	buffered     int       // lines in buf not yet flushed to the file
 
 	compressing sync.WaitGroup
 }
@@ -147,7 +153,7 @@ type deriveEventsDeviation struct {
 	Boosted       bool          `json:"boosted"`
 	Weather       int32         `json:"weather"`
 	Cell          string        `json:"cell"`
-	SpawnID       int64         `json:"spawn_id"`
+	SpawnID       string        `json:"spawn_id"` // salted hash; a raw spawn id is a ~10 m S2 cell
 	FirstSeen     uint32        `json:"first_seen"`
 	Account       string        `json:"account"`
 	Observed      derivedBranch `json:"observed"`
@@ -204,8 +210,10 @@ func newDeriveEventsWriter(dir string, bucket time.Duration, retainDays int,
 		events:    make(chan deriveEventCheck, deriveEventsQueueSize),
 		summaries: make(map[deriveEventsSummaryKey]*deriveEventsSummary),
 		zones:     make(map[s2.CellID]*time.Location),
+		locations: make(map[string]*time.Location),
 	}
 	w.prune()
+	w.removeGzipTemps()
 	today := now().UTC().Format(deriveEventsDayLayout)
 	for _, f := range w.listFiles() {
 		if f.plain && f.day < today {
@@ -242,12 +250,27 @@ func loadDeriveEventsSalt(path string) ([]byte, error) {
 // accountHash is the first 12 hex chars of sha256(salt ‖ username): stable
 // per account within one dir, unlinkable to the username without the salt.
 func (w *deriveEventsWriter) accountHash(username string) string {
-	if username == "" {
+	return w.saltedHash(username)
+}
+
+// spawnHash is accountHash's scheme over the decimal spawn id, "" for 0. A
+// Golbat spawn id is an S2 level-20 cell id (~10 m), so the raw id would
+// locate the encounter far more precisely than the record's level-14 cell.
+func (w *deriveEventsWriter) spawnHash(id int64) string {
+	if id == 0 {
+		return ""
+	}
+	return w.saltedHash(strconv.FormatInt(id, 10))
+}
+
+// saltedHash is the first 12 hex chars of sha256(salt ‖ s), "" for "".
+func (w *deriveEventsWriter) saltedHash(s string) string {
+	if s == "" {
 		return ""
 	}
 	h := sha256.New()
 	h.Write(w.salt)
-	h.Write([]byte(username))
+	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
@@ -320,7 +343,7 @@ func (w *deriveEventsWriter) deviationRow(ev deriveEventCheck, cell string, offs
 		Kind: "deviation", Ts: ev.Time.Unix(), UTCOffset: offset, EncounterID: ev.EncounterID,
 		PokemonID: ev.PokemonID, Form: ev.Form, Costume: ev.Costume,
 		Strong: ev.Strong, Boosted: ev.Boosted, Weather: ev.Weather, Cell: cell,
-		SpawnID: ev.SpawnID, FirstSeen: ev.FirstSeen, Account: w.accountHash(ev.Account),
+		SpawnID: w.spawnHash(ev.SpawnID), FirstSeen: ev.FirstSeen, Account: w.accountHash(ev.Account),
 		Observed: newDerivedBranch(c.Observed), Derived: newDerivedBranch(c.Derived),
 		Opposite: newDerivedBranch(c.Opposite), SizeRoll: c.SizeRoll,
 		ObservedMove1: c.Move1, ObservedMove2: c.Move2,
@@ -354,16 +377,28 @@ func (w *deriveEventsWriter) locate(ev deriveEventCheck) (string, int32) {
 	loc, ok := w.zones[cell]
 	if !ok {
 		centre := s2.LatLngFromPoint(cell.Point())
-		loc = time.UTC
-		if name := tz.SearchTimezone(centre.Lat.Degrees(), centre.Lng.Degrees()); name != "" {
-			if l, err := time.LoadLocation(name); err == nil {
-				loc = l
-			}
-		}
+		loc = w.location(tz.SearchTimezone(centre.Lat.Degrees(), centre.Lng.Degrees()))
 		w.zones[cell] = loc
 	}
 	_, offset := ev.Time.In(loc).Zone()
 	return cell.ToToken(), int32(offset / 60)
+}
+
+// location returns the shared *time.Location for a zone name, UTC for ""
+// or a name that does not load.
+func (w *deriveEventsWriter) location(name string) *time.Location {
+	if name == "" {
+		return time.UTC
+	}
+	loc, ok := w.locations[name]
+	if !ok {
+		var err error
+		if loc, err = time.LoadLocation(name); err != nil {
+			loc = time.UTC
+		}
+		w.locations[name] = loc
+	}
+	return loc
 }
 
 // tick flushes the open bucket once the clock has passed its end, so an idle
@@ -393,11 +428,36 @@ func (w *deriveEventsWriter) flushBucket() {
 	}
 	clear(w.summaries)
 	w.bucketStart = time.Time{}
-	if w.buf != nil {
-		if err := w.buf.Flush(); err != nil {
-			log.Warnf("[DERIVE_EVENTS] write %s: %v", w.file.Name(), err)
-		}
+	w.flushFile()
+}
+
+// flushFile writes the buffered lines to the file. On an error it gives
+// the file up (see writeFailed).
+func (w *deriveEventsWriter) flushFile() {
+	if w.buf == nil {
+		return
 	}
+	if err := w.buf.Flush(); err != nil {
+		w.writeFailed(err)
+		return
+	}
+	w.buffered = 0
+}
+
+// writeFailed handles a write or flush error. bufio errors are sticky, so
+// the buffer could never write again: the file is closed, its unflushed
+// lines are counted as dropped and the day's file is reopened after
+// deriveEventsOpenRetry, as for a failed open, so a transient error such as
+// ENOSPC recovers. A line cut short by the error stays in the file; the
+// reader skips undecodable lines.
+func (w *deriveEventsWriter) writeFailed(err error) {
+	name := w.file.Name()
+	w.droppedLines += w.buffered
+	_ = w.closeFile() // fails with the same sticky error; the fd is still released
+	w.openFailures++
+	w.openRetryAt = w.now().Add(deriveEventsOpenRetry)
+	log.Warnf("[DERIVE_EVENTS] write %s: %v (%d lines dropped so far; reopening in %s)",
+		name, err, w.droppedLines, deriveEventsOpenRetry)
 }
 
 func boolCompare(a, b bool) int {
@@ -422,7 +482,7 @@ func (w *deriveEventsWriter) closeFile() error {
 		return nil
 	}
 	err := errors.Join(w.buf.Flush(), w.file.Close())
-	w.file, w.buf, w.day = nil, nil, ""
+	w.file, w.buf, w.day, w.buffered = nil, nil, "", 0
 	return err
 }
 
@@ -446,7 +506,10 @@ func (w *deriveEventsWriter) writeLine(v any) {
 		w.droppedLines++
 		return
 	}
-	_, _ = w.buf.Write(append(data, '\n')) // bufio errors are sticky; reported on Flush
+	w.buffered++
+	if _, err := w.buf.Write(append(data, '\n')); err != nil {
+		w.writeFailed(err)
+	}
 }
 
 // rollover closes the previous day's file, gzips it in the background,
@@ -512,6 +575,22 @@ func (w *deriveEventsWriter) listFiles() []deriveEventsFile {
 		files = append(files, deriveEventsFile{filepath.Join(w.dir, e.Name()), day, plain})
 	}
 	return files
+}
+
+// removeGzipTemps deletes the .gz.tmp files a gzip interrupted by a crash
+// left behind. The plain file is removed only after its gzip is complete,
+// so it is still there and is recompressed.
+func (w *deriveEventsWriter) removeGzipTemps() {
+	temps, err := filepath.Glob(filepath.Join(w.dir, deriveEventsFilePrefix+"*.gz.tmp"))
+	if err != nil {
+		log.Warnf("[DERIVE_EVENTS] list %s: %v", w.dir, err)
+		return
+	}
+	for _, p := range temps {
+		if err := os.Remove(p); err != nil {
+			log.Warnf("[DERIVE_EVENTS] remove %s: %v", p, err)
+		}
+	}
 }
 
 // prune deletes event files dated more than retainDays before today.

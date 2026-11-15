@@ -102,10 +102,14 @@ Fields (names indicative):
   which the game partitions regional spawn differences, so regional effects
   stay attributable. Trade-off: a shared events file locates encounters to
   ~1 km (an earlier draft used level 10, ~10 km).
-- `spawn_id`, `first_seen` (UTC) — to test spawn-time vs encounter-time
-  effect boundaries
+- `spawn_id` (salted hash, same scheme as `account`: a raw Golbat spawn id
+  is an S2 level-20 cell, ~10 m), `first_seen` (UTC) — to test spawn-time
+  vs encounter-time effect boundaries
 - `account`: salted hash of the username — to test ticket/account-bound
   effects without recording usernames
+
+The salt is the file `derive-events.salt` in the events `dir`; it must
+never be shared with the events files, or the hashes can be reversed.
 
 ### 4.2 `summary` record
 
