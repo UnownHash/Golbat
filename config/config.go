@@ -54,17 +54,20 @@ type configDefinition struct {
 	// operational output.
 	// The Prometheus derivation_* counters and the [DITTO] unknown-disguise
 	// warning are independent of this and always on.
-	DerivationLog  bool           `koanf:"derivation_log"`
-	Cleanup        cleanup        `koanf:"cleanup"`
-	RawBearer      string         `koanf:"raw_bearer"`
-	ApiSecret      string         `koanf:"api_secret"`
-	ApiDocs        bool           `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
-	Pvp            pvp            `koanf:"pvp"`
-	Koji           koji           `koanf:"koji"`
-	Tuning         tuning         `koanf:"tuning"`
-	Weather        weather        `koanf:"weather"`
-	ScanRules      []scanRule     `koanf:"scan_rules"`
-	StatsIntervals statsIntervals `koanf:"stats_intervals"`
+	DerivationLog bool `koanf:"derivation_log"`
+	// DerivationEvents: opt-in on-disk log of derivation deviations and
+	// per-bucket agreement summaries, separate from DerivationLog.
+	DerivationEvents derivationEvents `koanf:"derivation_events"`
+	Cleanup          cleanup          `koanf:"cleanup"`
+	RawBearer        string           `koanf:"raw_bearer"`
+	ApiSecret        string           `koanf:"api_secret"`
+	ApiDocs          bool             `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
+	Pvp              pvp              `koanf:"pvp"`
+	Koji             koji             `koanf:"koji"`
+	Tuning           tuning           `koanf:"tuning"`
+	Weather          weather          `koanf:"weather"`
+	ScanRules        []scanRule       `koanf:"scan_rules"`
+	StatsIntervals   statsIntervals   `koanf:"stats_intervals"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
@@ -83,6 +86,15 @@ func (configDefinition configDefinition) GetPrometheus() Prometheus {
 type koji struct {
 	Url         string `koanf:"url"`
 	BearerToken string `koanf:"bearer_token"`
+}
+
+// derivationEvents configures the derivation events log: JSON-lines files, one
+// per UTC day, holding each deviation plus per-bucket agreement summaries.
+type derivationEvents struct {
+	Enabled       bool   `koanf:"enabled"`
+	Dir           string `koanf:"dir"`            // output directory, default "logs"
+	BucketMinutes int    `koanf:"bucket_minutes"` // summary bucket width, default 15
+	RetainDays    int    `koanf:"retain_days"`    // days of files kept, default 14
 }
 
 type cleanup struct {
