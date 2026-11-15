@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Replay golbat's derivation events log and propose event modifiers.
 
-    python3 tools/eventreplay.py events/2026-11-14.jsonl.gz events/2026-11-15.jsonl
-    python3 tools/eventreplay.py events/*.jsonl* --emit-modifiers mods.json
-    python3 tools/eventreplay.py events/* --at 2026-11-15T12:00:00Z --emit-modifiers mods.json
-    python3 tools/eventreplay.py events/* --simulate-sampling pct=5,min_per_hour=1
-    python3 tools/eventreplay.py events/* --start 3 --confirm 10 --end 20 --window 1800
+    python3 tools/eventreplay.py logs/derive-events-2026-11-14.jsonl.gz logs/derive-events-2026-11-15.jsonl
+    python3 tools/eventreplay.py logs/derive-events-*.jsonl* --emit-modifiers mods.json
+    python3 tools/eventreplay.py logs/derive-events-*.jsonl* --at 2026-11-15T12:00:00Z --emit-modifiers mods.json
+    python3 tools/eventreplay.py logs/derive-events-*.jsonl* --simulate-sampling pct=5,min_per_hour=1
+    python3 tools/eventreplay.py logs/derive-events-*.jsonl* --start 3 --confirm 10 --end 20 --window 1800
 
-Inputs are the files golbat writes with derivation events logging on: JSON
+Inputs are the files golbat writes with derivation events logging on
+(dir/derive-events-YYYY-MM-DD.jsonl[.gz], dir from [derivation_events]): JSON
 lines, one file per UTC day, older days gzipped. Plain and gzip files can be
 mixed (gzip is recognised by its magic bytes, not the name), in any order.
 Two record kinds are read; anything else is skipped:
