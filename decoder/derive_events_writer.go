@@ -22,7 +22,9 @@ import (
 	"github.com/golang/geo/s2"
 	log "github.com/sirupsen/logrus"
 
+	"golbat/config"
 	"golbat/tz"
+	"golbat/util"
 )
 
 // deriveEventsCellLevel is the S2 level of the only location a record
@@ -61,6 +63,12 @@ type deriveEventsWriter struct {
 
 	// events is drained by run; closing it makes run close the writer.
 	events chan deriveEventCheck
+	// submitMu orders submit against shutdown: submit sends under the read
+	// lock and shutdown closes events under the write lock after setting
+	// closed, so a send can never reach a closed channel.
+	submitMu sync.RWMutex
+	closed   bool
+	done     chan struct{} // closed when run returns; nil if run was never started
 
 	file *os.File
 	buf  *bufio.Writer
@@ -552,4 +560,89 @@ func gzipDeriveEventsFile(path string) error {
 		return err
 	}
 	return os.Remove(path)
+}
+
+// derivationEventsWriter is the process-wide writer; nil means the log is
+// disabled. It is set once by InitDerivationEvents at startup, before any
+// encounter is decoded, and not written afterwards.
+var derivationEventsWriter *deriveEventsWriter
+
+var deriveEventsDrops util.DropReporter
+
+// InitDerivationEvents starts the derivation events log if
+// config.Config.DerivationEvents.Enabled. It is a no-op when disabled; on
+// error it logs and leaves the log disabled — a bad events dir must not
+// stop Golbat.
+func InitDerivationEvents() error {
+	cfg := config.Config.DerivationEvents
+	if !cfg.Enabled {
+		return nil
+	}
+	w, err := newDeriveEventsWriter(cfg.Dir, time.Duration(cfg.BucketMinutes)*time.Minute,
+		cfg.RetainDays, time.Now)
+	if err != nil {
+		log.Errorf("[DERIVE_EVENTS] disabled: %v", err)
+		return err
+	}
+	w.start()
+	derivationEventsWriter = w
+	log.Infof("[DERIVE_EVENTS] writing to %s", cfg.Dir)
+	return nil
+}
+
+// FlushDerivationEvents stops accepting events, waits for the writer to
+// drain its queue, write the open bucket and close its file. It is a no-op
+// when the log is disabled, and safe to call twice.
+func FlushDerivationEvents() {
+	if w := derivationEventsWriter; w != nil {
+		w.shutdown()
+	}
+}
+
+// submitDerivationEvent hands ev to the writer without ever blocking the
+// decode path. It is a no-op when the log is disabled or shutting down; a
+// full queue drops the event, reported at most once a second.
+func submitDerivationEvent(ev deriveEventCheck) {
+	if w := derivationEventsWriter; w != nil {
+		w.submit(ev)
+	}
+}
+
+// start runs the writer's loop on its own goroutine.
+func (w *deriveEventsWriter) start() {
+	w.done = make(chan struct{})
+	go func() {
+		defer close(w.done)
+		w.run()
+	}()
+}
+
+// submit queues ev without blocking; see submitDerivationEvent.
+func (w *deriveEventsWriter) submit(ev deriveEventCheck) {
+	w.submitMu.RLock()
+	defer w.submitMu.RUnlock()
+	if w.closed {
+		return
+	}
+	select {
+	case w.events <- ev:
+	default:
+		deriveEventsDrops.Report(func(dropped int64) {
+			log.Warnf("[DERIVE_EVENTS] dropped %d events (queue full)", dropped)
+		})
+	}
+}
+
+// shutdown refuses further submits, closes the channel (making run drain
+// and close the writer) and waits for run to finish. Idempotent.
+func (w *deriveEventsWriter) shutdown() {
+	w.submitMu.Lock()
+	if !w.closed {
+		w.closed = true
+		close(w.events)
+	}
+	w.submitMu.Unlock()
+	if w.done != nil {
+		<-w.done
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golang/geo/s2"
+	logtest "github.com/sirupsen/logrus/hooks/test"
 
 	"golbat/derive/encounter"
 )
@@ -485,5 +486,72 @@ func TestDeriveEventsWriterOpenFailureThrottled(t *testing.T) {
 	}
 	if devs := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "deviation"); len(devs) != 1 {
 		t.Errorf("got %d deviations after recovery, want 1", len(devs))
+	}
+}
+
+func TestSubmitDerivationEventDisabledIsNoop(t *testing.T) {
+	prev := derivationEventsWriter
+	derivationEventsWriter = nil
+	t.Cleanup(func() { derivationEventsWriter = prev })
+	submitDerivationEvent(agreeingEventCheck(time.Unix(1_700_000_000, 0)))
+	FlushDerivationEvents() // also a no-op
+}
+
+func TestSubmitDerivationEventDropsWhenFull(t *testing.T) {
+	clock := &testClock{t: time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, t.TempDir(), clock)
+	w.events = make(chan deriveEventCheck, 1) // no reader
+	prev := derivationEventsWriter
+	derivationEventsWriter = w
+	t.Cleanup(func() { derivationEventsWriter = prev })
+	deriveEventsDrops.Reset()
+	hook := logtest.NewGlobal()
+	t.Cleanup(hook.Reset)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 3 {
+			submitDerivationEvent(agreeingEventCheck(clock.t))
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("submit blocked on a full queue")
+	}
+	// One event fits; the first drop is reported immediately after Reset.
+	if len(w.events) != 1 {
+		t.Fatalf("queued = %d, want 1", len(w.events))
+	}
+	var logged bool
+	for _, e := range hook.AllEntries() {
+		logged = logged || strings.Contains(e.Message, "[DERIVE_EVENTS] dropped")
+	}
+	if !logged {
+		t.Fatal("drop was not reported")
+	}
+}
+
+func TestDerivationEventsFlushDrainsAndLateSubmitIsSafe(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{t: time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+	w.start()
+	prev := derivationEventsWriter
+	derivationEventsWriter = w
+	t.Cleanup(func() { derivationEventsWriter = prev })
+
+	submitDerivationEvent(agreeingEventCheck(clock.t))
+	FlushDerivationEvents()
+	submitDerivationEvent(agreeingEventCheck(clock.t)) // must not panic
+	FlushDerivationEvents()                            // idempotent
+
+	data, err := os.ReadFile(filepath.Join(dir, "derive-events-2026-11-15.jsonl"))
+	if err != nil {
+		t.Fatalf("read events file: %v", err)
+	}
+	if !strings.Contains(string(data), `"kind":"summary"`) {
+		t.Fatalf("flush did not write the summary: %s", data)
 	}
 }

@@ -213,6 +213,9 @@ func main() {
 			log.Warnf("MasterFile watcher failed: %v", err)
 		}
 	}
+	if err := decoder.InitDerivationEvents(); err != nil {
+		log.Errorf("[DERIVE_EVENTS] derivation events log disabled: %v", err)
+	}
 	decoder.LoadStatsGeofences()
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
 	initRawProcessingLimiter()
@@ -440,6 +443,7 @@ func main() {
 
 	log.Info("go routines have exited, flushing write-behind queue...")
 	decoder.FlushWriteBehindQueue()
+	decoder.FlushDerivationEvents()
 
 	// Preserve in-memory pokemon if enabled and not skipped via API
 	if cfg.PreserveInMemoryPokemon && cfg.PokemonMemoryOnly {
