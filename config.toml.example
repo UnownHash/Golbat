@@ -66,8 +66,9 @@ derivation_log = false
 
 # derivation_events: opt-in. Writes one JSON-lines file per UTC day into dir, holding each
 # deviation plus per-bucket agreement summaries. Read it with tools/eventreplay.py. Records
-# contain only ~1 km (level-14 S2 cell) locations and salted account hashes, never raw usernames or
-# coordinates. Files older than retain_days are removed.
+# contain only ~1 km (level-14 S2 cell) locations and salted hashes of account and spawn id, never
+# raw usernames, spawn ids (~10 m cells) or coordinates. The salt is dir/derive-events.salt: never
+# share it with the files, or the hashes can be reversed. Files older than retain_days are removed.
 [derivation_events]
 enabled = false
 dir = "logs"

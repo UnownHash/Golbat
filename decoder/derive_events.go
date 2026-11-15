@@ -104,7 +104,7 @@ type deriveEventCheck struct {
 	Strong, Boosted                   bool
 	CellID                            int64   // the server's level-15 map cell (Pokemon.CellId); 0 = none
 	Lat, Lon                          float64 // fallback when CellID is 0; never written
-	SpawnID                           int64   // 0 = none
+	SpawnID                           int64   // 0 = none; hashed by the writer, never written raw
 	FirstSeen                         uint32  // 0 = unknown (set only in savePokemonRecord)
 	Account                           string  // raw; hashed by the writer, never written raw
 	Check                             derivationCheck
