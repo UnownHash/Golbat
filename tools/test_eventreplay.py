@@ -1,7 +1,8 @@
-"""Tests for tools/eventreplay.py (reader and detector).
+"""Tests for tools/eventreplay.py (reader, detector, CLI and outputs).
 
     python3 -m unittest discover -s tools -p 'test_*.py' -v
 """
+import calendar
 import contextlib
 import gzip
 import io
@@ -13,7 +14,9 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import eventreplay  # noqa: E402
-from eventreplay import Detector, Params, read_records  # noqa: E402
+from eventreplay import (Detector, Modifier, Params, SamplingRule,  # noqa: E402
+                         Transition, compare_runs, format_transition,
+                         modifiers_json, read_records, thin)
 
 T0 = 1_763_200_800  # 2025-11-15T10:00:00Z, a bucket boundary
 BUCKET = 900
@@ -305,6 +308,225 @@ class DetectorTest(unittest.TestCase):
         trs = feed_all(det, [dev(T0 + i, ivs="disagree", utc_offset=-300)
                              for i in range(3)])
         self.assertEqual(trs[0].utc_offset, -300)
+
+
+def replay(recs, params=None):
+    det = Detector(params or Params())
+    return feed_all(det, recs), det
+
+
+def move_event(hours=5, per_hour=6):
+    """A charged-move pin on strong 959/3272 lasting `hours`, `per_hour`
+    deviations an hour 2 min apart, with plain agreement summaries between
+    and agreements after the event."""
+    recs = []
+    for h in range(hours):
+        for i in range(per_hour):
+            recs.append(dev(T0 + h * 3600 + i * 120, charged="disagree",
+                            obs_move_2=494))
+        for b in range(4):
+            recs.append(summ(T0 + h * 3600 + b * BUCKET, ok=0, n=per_hour,
+                             dims=("ivs",)))
+    for b in range(8):
+        recs.append(summ(T0 + hours * 3600 + b * BUCKET, ok=30, n=30))
+    recs.sort(key=eventreplay.order_key)
+    return recs
+
+
+class OutputTest(unittest.TestCase):
+    def test_format_transition(self):
+        ts = calendar.timegm((2026, 11, 15, 10, 3, 12))
+        mod = Modifier(type="move_pin",
+                       scope={"strong": True, "pokemon_id": 959,
+                              "form": 3272},
+                       effect={"type": "move_pin", "slot": "charged",
+                               "move": 494},
+                       status="candidate", start=ts - 60, observations=3)
+        self.assertEqual(
+            format_transition(Transition(ts, 0, "candidate", mod)),
+            "2026-11-15T10:03:12Z (local 10:03 +00:00) CANDIDATE move_pin "
+            "charged=494 scope=strong 959/3272 obs=3 contra=0")
+        mod2 = Modifier(type="level_offset", scope={"strong": True},
+                        effect={"type": "level_offset", "delta": -2},
+                        status="confirmed", start=ts, observations=10,
+                        contradictions=1)
+        self.assertEqual(
+            format_transition(Transition(ts, -330, "confirmed", mod2)),
+            "2026-11-15T10:03:12Z (local 04:33 -05:30) CONFIRMED "
+            "level_offset delta=-2 scope=all-strong obs=10 contra=1")
+        mod3 = Modifier(type="unexplained",
+                        scope={"strong": False, "pokemon_id": 19, "form": 45},
+                        effect={"type": "unexplained"}, status="ended",
+                        start=ts, end=ts, observations=4)
+        self.assertEqual(
+            format_transition(Transition(ts, 60, "ended", mod3)),
+            "2026-11-15T10:03:12Z (local 11:03 +01:00) ENDED unexplained "
+            "scope=19/45 obs=4 contra=0")
+
+    def test_modifiers_json_shape(self):
+        start = calendar.timegm((2026, 11, 15, 10, 0, 0))
+        active = Modifier(type="move_pin",
+                          scope={"strong": True, "pokemon_id": 959,
+                                 "form": 3272},
+                          effect={"type": "move_pin", "slot": "charged",
+                                  "move": 494},
+                          status="confirmed", start=start,
+                          observations=412)
+        broad = Modifier(type="level_offset", scope={"strong": True},
+                         effect={"type": "level_offset", "delta": 5},
+                         status="candidate", start=start, observations=5,
+                         contradictions=1)
+        ended = Modifier(type="unexplained",
+                         scope={"strong": False, "pokemon_id": 19,
+                                "form": 45},
+                         effect={"type": "unexplained"}, status="ended",
+                         start=start, end=start + 900, observations=3)
+        out = modifiers_json([active, broad, ended], start + 3600)
+        json.dumps(out)  # serialisable
+        self.assertEqual(set(out), {"version", "generated_at", "modifiers"})
+        self.assertEqual(out["version"], 1)
+        self.assertEqual(out["generated_at"], "2026-11-15T11:00:00Z")
+        self.assertEqual(len(out["modifiers"]), 2, "ended ones are omitted")
+        m = out["modifiers"][0]
+        self.assertEqual(set(m), {"id", "scope", "window", "effect",
+                                  "status", "evidence"})
+        self.assertEqual(m["id"], "2026-11-15-move_pin-strong-959-3272-"
+                                  "charged-494")
+        self.assertEqual(m["scope"], {"strong": True,
+                                      "pokemon": [{"id": 959,
+                                                   "form": 3272}]})
+        self.assertEqual(m["window"], {"start": "2026-11-15T10:00:00Z",
+                                       "end": None, "time_basis": "utc"})
+        self.assertEqual(m["effect"], {"type": "move_pin", "slot": "charged",
+                                       "move": 494})
+        self.assertEqual(m["status"], "confirmed")
+        self.assertEqual(m["evidence"], {"observations": 412,
+                                         "contradictions": 0})
+        b = out["modifiers"][1]
+        self.assertEqual(b["scope"], {"strong": True})
+        self.assertEqual(b["id"], "2026-11-15-level_offset-all-strong-delta+5")
+        self.assertEqual(b["evidence"], {"observations": 5,
+                                         "contradictions": 1})
+
+
+class SamplingTest(unittest.TestCase):
+    def test_thin_full_rate_is_identity(self):
+        recs = move_event()
+        self.assertEqual(list(thin(iter(recs),
+                                   SamplingRule(pct=100, min_per_hour=0))),
+                         recs)
+
+    def test_thin_keeps_minimum_and_scales_counts(self):
+        recs = move_event(hours=3, per_hour=6)
+        got = list(thin(iter(recs), SamplingRule(pct=0, min_per_hour=2)))
+        devs = [r for r in got if r["kind"] == "deviation"]
+        self.assertEqual(len(devs), 6, "two per hour, the first two")
+        self.assertEqual([d["ts"] for d in devs],
+                         [T0 + h * 3600 + i * 120 for h in range(3)
+                          for i in range(2)])
+        for r in got:
+            if r["kind"] != "summary":
+                continue
+            for d in ("ivs", "level", "size", "quick", "charged"):
+                self.assertLessEqual(r[d]["ok"], r[d]["n"])
+            self.assertLessEqual(r["checked"], 30)
+        # pct=0: only the per-hour minimum survives. In the event's hours
+        # the two kept deviations are bucket 0's first checks; the other
+        # buckets count nothing.
+        self.assertEqual([r["checked"] for r in got
+                          if r["kind"] == "summary"
+                          and r["bucket"] < T0 + 3 * 3600],
+                         [2, 0, 0, 0] * 3)
+        # After the event: two checks an hour, all in the first bucket.
+        after = [r["checked"] for r in got if r["kind"] == "summary"
+                 and r["bucket"] >= T0 + 3 * 3600]
+        self.assertEqual(after, [2, 0, 0, 0, 2, 0, 0, 0])
+
+    def test_sampling_reports_delay_or_missed(self):
+        recs = move_event()
+        full, _ = replay(recs)
+        rows = compare_runs(full, replay(list(thin(
+            iter(recs), SamplingRule(pct=0, min_per_hour=1))))[0])
+        pin = [r for r in rows if r["type"] == "move_pin"]
+        self.assertEqual(len(pin), 1)
+        self.assertTrue(pin[0]["start"] == "missed" or pin[0]["start"] > 0,
+                        pin[0])
+
+        rows = compare_runs(full, replay(list(thin(
+            iter(recs), SamplingRule(pct=100, min_per_hour=1))))[0])
+        pin = [r for r in rows if r["type"] == "move_pin"]
+        self.assertEqual(len(pin), 1)
+        self.assertEqual((pin[0]["start"], pin[0]["confirm"], pin[0]["end"]),
+                         (0, 0, 0))
+        self.assertEqual(pin[0]["scope"],
+                         {"strong": True, "pokemon_id": 959, "form": 3272})
+        self.assertEqual(pin[0]["effect"],
+                         {"type": "move_pin", "slot": "charged", "move": 494})
+
+    def test_sampling_delays_detection(self):
+        # Half the deviations: candidate and confirm come later, not never.
+        recs = move_event(hours=5, per_hour=10)
+        full, _ = replay(recs)
+        rows = compare_runs(full, replay(list(thin(
+            iter(recs), SamplingRule(pct=50, min_per_hour=1, seed=3))))[0])
+        pin = [r for r in rows if r["type"] == "move_pin"][0]
+        self.assertGreaterEqual(pin["start"], 0)
+        self.assertGreater(pin["confirm"], 0)
+
+
+class MainTest(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.dir.cleanup)
+        self.file = os.path.join(self.dir.name, "events.jsonl")
+        with open(self.file, "w") as f:
+            for r in move_event():
+                f.write(json.dumps(r) + "\n")
+
+    def run_main(self, *args):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                code = eventreplay.main([self.file, *args])
+            except SystemExit as e:
+                code = e.code
+        return code, out.getvalue(), err.getvalue()
+
+    def test_main_prints_timeline(self):
+        code, out, _ = self.run_main()
+        self.assertEqual(code, 0)
+        states = [l.split()[4] for l in out.splitlines()]
+        self.assertEqual(states, ["CANDIDATE", "CONFIRMED", "ENDED"])
+
+    def test_main_emit_modifiers(self):
+        path = os.path.join(self.dir.name, "mods.json")
+        # Mid-event (--at): the pin is active and emitted.
+        code, _, _ = self.run_main("--emit-modifiers", path,
+                                   "--at", "2025-11-15T12:00:00Z")
+        self.assertEqual(code, 0)
+        with open(path) as f:
+            got = json.load(f)
+        self.assertEqual(got["generated_at"], "2025-11-15T12:00:00Z")
+        self.assertEqual([m["effect"] for m in got["modifiers"]],
+                         [{"type": "move_pin", "slot": "charged",
+                           "move": 494}])
+        # At the end of the run it has ended, so nothing is emitted.
+        code, _, _ = self.run_main("--emit-modifiers", path)
+        self.assertEqual(code, 0)
+        with open(path) as f:
+            self.assertEqual(json.load(f)["modifiers"], [])
+
+    def test_main_simulate_sampling(self):
+        code, out, _ = self.run_main("--simulate-sampling",
+                                     "pct=100,min_per_hour=1")
+        self.assertEqual(code, 0)
+        self.assertIn("move_pin", out)
+        self.assertIn("charged=494", out)
+
+    def test_main_rejects_unknown_sampling_key(self):
+        code, _, err = self.run_main("--simulate-sampling", "pct=5,bogus=1")
+        self.assertEqual(code, 2)
+        self.assertIn("bogus", err)
 
 
 class ReaderTest(unittest.TestCase):
