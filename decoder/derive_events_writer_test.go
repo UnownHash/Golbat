@@ -206,6 +206,46 @@ func TestDeriveEventsWriterSummaryCounts(t *testing.T) {
 	}
 }
 
+// A check whose IVs disagree means the walk did not match the encounter, so
+// its size roll is noise: it is still counted in size ok/n but must not
+// reach size_rolls, where one stray roll would look like a size boundary
+// moving back.
+func TestDeriveEventsWriterSizeRollsSkipIVDisagree(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 1, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	ok := agreeingEventCheck(clock.t)
+	ok.Check.SizeRoll = 0.85
+	w.handle(ok)
+	noise := agreeingEventCheck(clock.t.Add(time.Minute))
+	noise.Check.Observed.Attack = 1
+	noise.Check.Observed.Size = 4
+	noise.Check.SizeRoll = 0.72
+	noise.Agree.IVs = dimDisagree
+	noise.Agree.Size = dimDisagree
+	w.handle(noise)
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	sums := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "summary")
+	if len(sums) != 1 {
+		t.Fatalf("got %d summaries, want 1", len(sums))
+	}
+	s := sums[0]
+	if sz := s["size"].(map[string]any); sz["ok"] != 1.0 || sz["n"] != 2.0 {
+		t.Errorf("size = %v, want ok 1 n 2", sz)
+	}
+	rolls := s["size_rolls"].(map[string]any)
+	if len(rolls) != 1 {
+		t.Errorf("size_rolls = %v, want only the IV-agreeing roll", rolls)
+	}
+	if r := rolls["4"].([]any); r[0] != 0.85 || r[1] != 0.85 {
+		t.Errorf("size_rolls = %v, want [0.85 0.85]", rolls)
+	}
+}
+
 func TestDeriveEventsWriterTickFlushesIdleBucket(t *testing.T) {
 	dir := t.TempDir()
 	clock := &testClock{time.Date(2026, 11, 15, 10, 1, 0, 0, time.UTC)}
