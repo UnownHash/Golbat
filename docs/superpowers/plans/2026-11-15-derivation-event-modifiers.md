@@ -4,7 +4,7 @@
 
 **Goal:** An opt-in Golbat "derivation events" log (exact deviations + 15-minute agreement summaries) and a streaming replay script that proposes, confirms and ends event modifiers (level offset, move pin, size cutoffs, unexplained) as the data unfolds.
 
-**Architecture:** `checkDerivation` returns what it computed; the encounter path turns that into a `deriveEventCheck` and does a non-blocking send to a single writer goroutine. The writer aggregates summaries per UTC bucket, writes deviation rows immediately, resolves UTC offset per S2 L10 cell, and writes one JSON-lines file per UTC day (gzipped on rollover). `tools/eventreplay.py` (stdlib only) merges files in time order and runs a detector state machine, printing transitions, emitting modifier JSON, and optionally simulating thinned sampling.
+**Architecture:** `checkDerivation` returns what it computed; the encounter path turns that into a `deriveEventCheck` and does a non-blocking send to a single writer goroutine. The writer aggregates summaries per UTC bucket, writes deviation rows immediately, resolves UTC offset per S2 L14 cell, and writes one JSON-lines file per UTC day (gzipped on rollover). `tools/eventreplay.py` (stdlib only) merges files in time order and runs a detector state machine, printing transitions, emitting modifier JSON, and optionally simulating thinned sampling.
 
 **Tech Stack:** Go 1.26 (`go_json` tag), `github.com/golang/geo/s2`, `golbat/tz`; Python 3.12 stdlib + `unittest`.
 
@@ -194,7 +194,7 @@ func (w *deriveEventsWriter) run()                       // drains channel + 1-m
 
 ```jsonc
 {"kind":"deviation","ts":1763200000,"utc_offset":0,"encounter_id":"158…","pokemon_id":959,"form":3272,"costume":0,
- "strong":true,"boosted":false,"weather":5,"cell":"<s2 L10 token>","spawn_id":0,"first_seen":0,"account":"a1b2c3d4e5f6",
+ "strong":true,"boosted":false,"weather":5,"cell":"<s2 L14 token>","spawn_id":0,"first_seen":0,"account":"a1b2c3d4e5f6",
  "observed":{"attack":13,"defense":13,"stamina":15,"level":38,"size":4},
  "derived":{...},"opposite":{...},"size_roll":0.9734,
  "observed_move_1":350,"observed_move_2":494,"derived_move_1":350,"derived_move_2":268,
@@ -213,7 +213,7 @@ Behaviour decisions:
 - Day change: close, gzip the previous file to `.jsonl.gz` in a goroutine, remove the plain file after a successful gzip; delete `derive-events-*` files older than `retainDays`. At construction, gzip any plain file whose date is before today.
 - Bucket = `ev.Time.UTC().Truncate(bucket)`; an event for a later bucket flushes the current one first; an event for an earlier bucket is counted in the current one (cross-goroutine skew is milliseconds).
 - Cell: `s2.CellID(ev.CellID).Parent(14)` — the parent of the server's level-15 map cell (level 14 ≈ 1 km, the level regional spawn differences are partitioned at); only when `CellID` is 0 fall back to `s2.CellIDFromLatLng(...).Parent(14)`. Written as the cell token. Level 14 is a named constant (`deriveEventsCellLevel`) so it can change later.
-- UTC offset: cached per level-10 cell, `*time.Location` from `tz.SearchTimezone` at the cell centre (`""` or load error → UTC); offset = `ev.Time.In(loc)` zone offset in minutes. No cell id and lat/lon both 0 → offset 0, cell `""`.
+- UTC offset: cached per level-14 cell, `*time.Location` from `tz.SearchTimezone` at the cell centre (`""` or load error → UTC); offset = `ev.Time.In(loc)` zone offset in minutes. No cell id and lat/lon both 0 → offset 0, cell `""`.
 - Salt: `dir/derive-events.salt`, 16 random bytes hex, created if missing; `account` = first 12 hex chars of sha256(salt ‖ username); empty username → `""`.
 
 - [ ] **Step 1: Failing tests** (all use `t.TempDir()` and an injected clock):
@@ -224,7 +224,7 @@ Behaviour decisions:
   - `TestDeriveEventsWriterAppendsAndCompressesLeftovers` — pre-create today's file with one line and a plain file dated 3 days ago → after construction + one write, today's file has 2+ lines; old one is gzipped.
   - `TestDeriveEventsWriterRetention` — a file dated `retainDays+1` ago is deleted on rollover.
   - `TestDeriveEventsUTCOffsetUnknownLocation` — `CellID` 0 and lat/lon 0 → `utc_offset:0`, `cell:""`.
-  - `TestDeriveEventsCellFromServerCell` — a level-15 `CellID` → `cell` is the token of its level-10 parent, even when lat/lon point elsewhere.
+  - `TestDeriveEventsCellFromServerCell` — a level-15 `CellID` → `cell` is the token of its level-14 parent, even when lat/lon point elsewhere.
   - `TestDeriveEventsUTCOffsetLondonSummer` — lat 51.5, lon −0.12, time in July → `utc_offset:60`.
   - `TestDeriveEventsAccountHashStable` — same username twice → same 12-char hash; salt file reused by a second writer in the same dir.
   - `TestDeriveEventsWriterInitBadDir` — dir is a regular file → constructor returns error.
