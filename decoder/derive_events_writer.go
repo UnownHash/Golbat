@@ -26,9 +26,11 @@ import (
 )
 
 // deriveEventsCellLevel is the S2 level of the only location a record
-// carries: coarse enough not to pinpoint a spawn, fine enough to tell a
-// regional event from a global one.
-const deriveEventsCellLevel = 10
+// carries. Level 14 (~1 km) matches how the game partitions regional spawn
+// differences, so a regional effect is attributable to its cells. The cost:
+// a shared events file reveals where encounters happened to about 1 km
+// (the earlier level 10 was ~10 km).
+const deriveEventsCellLevel = 14
 
 const (
 	deriveEventsFilePrefix = "derive-events-"
@@ -67,7 +69,7 @@ type deriveEventsWriter struct {
 	bucketStart time.Time // zero when no bucket is open
 	summaries   map[deriveEventsSummaryKey]*deriveEventsSummary
 
-	zones map[s2.CellID]*time.Location // per level-10 cell
+	zones map[s2.CellID]*time.Location // per deriveEventsCellLevel cell
 
 	// While the day's file cannot be opened, lines are dropped and the open
 	// is retried at most once per deriveEventsOpenRetry, so a missing or
@@ -326,7 +328,7 @@ func deriveEventsInPool(moves derivedMoveResult, pool []int, move int32) bool {
 	return !moves.Resolved || move == 0 || moveInPool(pool, move)
 }
 
-// locate returns ev's level-10 cell token and UTC offset in minutes. The cell
+// locate returns ev's deriveEventsCellLevel cell token and UTC offset in minutes. The cell
 // is the parent of the server's level-15 map cell; lat/lon is used only when
 // there is no valid cell id. With neither, the answer is ("", 0).
 func (w *deriveEventsWriter) locate(ev deriveEventCheck) (string, int32) {
