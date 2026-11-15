@@ -2,6 +2,10 @@
 """Replay golbat's derivation events log and propose event modifiers.
 
     python3 tools/eventreplay.py events/2026-11-14.jsonl.gz events/2026-11-15.jsonl
+    python3 tools/eventreplay.py events/*.jsonl* --emit-modifiers mods.json
+    python3 tools/eventreplay.py events/* --at 2026-11-15T12:00:00Z --emit-modifiers mods.json
+    python3 tools/eventreplay.py events/* --simulate-sampling pct=5,min_per_hour=1
+    python3 tools/eventreplay.py events/* --start 3 --confirm 10 --end 20 --window 1800
 
 Inputs are the files golbat writes with derivation events logging on: JSON
 lines, one file per UTC day, older days gzipped. Plain and gzip files can be
@@ -69,14 +73,52 @@ Lifecycle, with the thresholds as Params:
   a cut moved down (hi < base cut), a class at or below it with its max roll
   in [hi, base cut). One such roll suffices: the derivation is
   deterministic, so the base cut must be back.
+
+Outputs:
+
+- By default, the timeline: one line per transition as it happens, with the
+  UTC time, the local time at the record that caused it (its utc_offset),
+  the state, type, effect, scope and the evidence counts at that moment:
+    2026-11-15T10:03:12Z (local 10:03 +00:00) CANDIDATE move_pin charged=494 scope=strong 959/3272 obs=3 contra=0
+  A scope prints as "strong 959/3272", "959/3272" (not strong) or
+  "all-strong".
+- --emit-modifiers PATH writes the active (candidate and confirmed)
+  modifiers as shareable JSON (version 1; design record §6), as of the end
+  of the run, or of --at, which stops the replay at that time. Scope is
+  {"strong": s} or {"strong": s, "pokemon": [{"id": p, "form": f}]}; the
+  window is UTC (time_basis "utc") from the cycle's first matching
+  deviation, end null; generated_at is the replay's time (--at, else the
+  last record's). The id is <start date>-<type>-<scope>-<effect>, e.g.
+  2026-11-15-move_pin-strong-959-3272-charged-494.
+- --simulate-sampling pct=P,min_per_hour=K[,seed=S] replays the files twice,
+  in full and thinned to what a scanner sampling encounters at P% with a
+  minimum of K per (pokemon_id, form, strong) per UTC hour would have
+  logged, and prints per effect (cycle of the full run) how much later the
+  thinned run saw its start, confirmation and end: seconds, "missed" when it
+  never did, "-" when the full run did not either.
+
+Thinning is an approximation from the logged counts, not a resample of
+encounters. Per (pokemon_id, form, strong) per UTC hour, the first
+min_per_hour deviation rows are kept and later ones with probability
+pct/100. A summary's checks share that hourly minimum: with `remaining` the
+minimum left at its bucket's start (deviations of the bucket count as its
+first checks), each dimension's n and `checked` become
+min(n, remaining) + Binomial(n - min(n, remaining), pct/100), and ok is the
+number of agreements among the kept checks, drawn hypergeometrically.
+size_rolls are kept as they are, so size_cutoffs end detection (contrary
+rolls) is not thinned and its end delays read optimistic. The draws use
+Python's random seeded with `seed`, so a run is reproducible.
 """
+import argparse
 import gzip
 import heapq
 import json
+import random
 import sys
 import zlib
 from collections import Counter, deque
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 from typing import Iterator
 
 GZIP_MAGIC = b"\x1f\x8b"
@@ -474,17 +516,351 @@ def _base_classified(t, rolls):
     return False
 
 
-def main() -> int:
-    """Minimal driver: print every transition. The full CLI comes later."""
-    det = Detector(Params())
-    for rec in read_records(sys.argv[1:]):
-        for t in det.feed(rec):
-            m = t.modifier
-            print(t.ts, t.state.upper(), m.type, json.dumps(m.effect),
-                  json.dumps(m.scope),
-                  f"obs={m.observations} contra={m.contradictions}")
+# --- timeline and modifier JSON ---------------------------------------------
+
+def _iso(ts: int) -> str:
+    return datetime.fromtimestamp(ts, timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+def _num(v) -> str:
+    return "-" if v is None else f"{v:g}"
+
+
+def _scope_text(scope: dict) -> str:
+    if "pokemon_id" not in scope:
+        return "all-strong" if scope["strong"] else "all"
+    sp = f"{scope['pokemon_id']}/{scope['form']}"
+    return f"strong {sp}" if scope["strong"] else sp
+
+
+def _effect_text(effect: dict) -> str:
+    """The effect's payload, "" for unexplained."""
+    t = effect["type"]
+    if t == "move_pin":
+        return f"{effect['slot']}={effect['move']}"
+    if t == "level_offset":
+        return f"delta={effect['delta']:+d}"
+    if t == "size_cutoffs":
+        b = effect.get("boundaries") or {}
+        return " ".join(f"{name}=[{_num(lo)},{_num(hi)}]"
+                        for name, (lo, hi) in sorted(b.items())
+                        ) or "boundaries=none"
+    return ""
+
+
+def format_transition(t: Transition) -> str:
+    """One timeline line; see the module docstring."""
+    m = t.modifier
+    off = t.utc_offset
+    local = datetime.fromtimestamp(t.ts, timezone.utc) + timedelta(minutes=off)
+    sign = "-" if off < 0 else "+"
+    parts = [_iso(t.ts),
+             f"(local {local:%H:%M} {sign}{abs(off) // 60:02d}:"
+             f"{abs(off) % 60:02d})",
+             t.state.upper(), m.type, _effect_text(m.effect),
+             f"scope={_scope_text(m.scope)}",
+             f"obs={m.observations} contra={m.contradictions}"]
+    return " ".join(p for p in parts if p)
+
+
+def _modifier_id(m: Modifier) -> str:
+    sc = m.scope
+    if "pokemon_id" in sc:
+        scope = f"{sc['pokemon_id']}-{sc['form']}"
+        if sc["strong"]:
+            scope = "strong-" + scope
+    else:
+        scope = "all-strong" if sc["strong"] else "all"
+    e = m.effect
+    if m.type == "move_pin":
+        effect = f"{e['slot']}-{e['move']}"
+    elif m.type == "level_offset":
+        effect = f"delta{e['delta']:+d}"
+    elif m.type == "size_cutoffs":
+        effect = "-".join(n.replace("/", "_")
+                          for n in sorted(e.get("boundaries") or {}))
+    else:
+        effect = ""
+    return "-".join(p for p in (_iso(m.start)[:10], m.type, scope, effect)
+                    if p)
+
+
+def modifiers_json(mods: list[Modifier], generated_at: int) -> dict:
+    """The shareable snapshot (design record §6) of the active modifiers in
+    mods; ended ones are left out."""
+    out = []
+    for m in mods:
+        if m.status not in ACTIVE:
+            continue
+        scope = {"strong": m.scope["strong"]}
+        if "pokemon_id" in m.scope:
+            scope["pokemon"] = [{"id": m.scope["pokemon_id"],
+                                 "form": m.scope["form"]}]
+        out.append({
+            "id": _modifier_id(m),
+            "scope": scope,
+            "window": {"start": _iso(m.start), "end": None,
+                       "time_basis": "utc"},
+            "effect": dict(m.effect),
+            "status": m.status,
+            "evidence": {"observations": m.observations,
+                         "contradictions": m.contradictions},
+        })
+    return {"version": 1, "generated_at": _iso(generated_at),
+            "modifiers": out}
+
+
+# --- sampling simulation ----------------------------------------------------
+
+DIMS = ("ivs", "level", "size", "quick", "charged")
+
+
+@dataclass
+class SamplingRule:
+    pct: float          # percent of encounters sampled past the minimum
+    min_per_hour: int   # always sampled per (pokemon_id, form, strong) hour
+    seed: int = 1
+
+
+def _binomial(rng, n, p):
+    if p >= 1:
+        return n
+    if p <= 0:
+        return 0
+    return sum(rng.random() < p for _ in range(n))
+
+
+def _hypergeom(rng, ok, n, k):
+    """Successes in k draws without replacement from n holding ok."""
+    if k >= n:
+        return ok
+    got = 0
+    for i in range(k):
+        if rng.random() * (n - i) < ok - got:
+            got += 1
+    return got
+
+
+def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
+    """records as a sampling scanner would have logged them; see the module
+    docstring. Changed records are copies; pct=100 yields them unchanged."""
+    rng = random.Random(rule.seed)
+    p = rule.pct / 100
+    # (pokemon_id, form, strong, hour) -> [minimum used by summaries, ts of
+    # deviations kept by the minimum and not yet covered by a summary]
+    quota: dict = {}
+    newest = None
+    for rec in records:
+        if rec["kind"] == "deviation":
+            hour = rec["ts"] // 3600
+        else:
+            hour = rec["bucket"] // 3600
+        if newest is None or hour > newest:
+            newest = hour
+            for k in [k for k in quota if k[3] < newest - 2]:
+                del quota[k]
+        key = (rec["pokemon_id"], rec["form"], bool(rec["strong"]), hour)
+        q = quota.setdefault(key, [0, []])
+
+        if rec["kind"] == "deviation":
+            if q[0] + len(q[1]) < rule.min_per_hour:
+                q[1].append(rec["ts"])
+                yield rec
+            elif rng.random() < p:
+                yield rec
+            continue
+
+        # A summary covers its bucket's deviations: they count as its first
+        # checks, inside its share of the minimum, not on top of it.
+        lo, hi = rec["bucket"], rec["bucket"] + rec["bucket_seconds"]
+        q[1] = [ts for ts in q[1] if not lo <= ts < hi]
+        remaining = max(0, rule.min_per_hour - q[0] - len(q[1]))
+        out = dict(rec)
+        for d in DIMS:
+            c = rec.get(d)
+            if not isinstance(c, dict):
+                continue
+            n, ok = c.get("n", 0), c.get("ok", 0)
+            base = min(n, remaining)
+            kept = base + _binomial(rng, n - base, p)
+            out[d] = {**c, "n": kept, "ok": _hypergeom(rng, ok, n, kept)}
+        checked = rec.get("checked", 0)
+        base = min(checked, remaining)
+        out["checked"] = base + _binomial(rng, checked - base, p)
+        q[0] += base
+        yield out
+
+
+def _effect_key(m: Modifier) -> str:
+    """The detector's track key for m's effect: a size_cutoffs effect
+    changes while it runs, so only its type identifies it."""
+    effect = {"type": m.type} if m.type == "size_cutoffs" else m.effect
+    return json.dumps(effect, sort_keys=True)
+
+
+def _cycles(transitions: list[Transition]) -> list[dict]:
+    """One entry per modifier cycle with its transition times, in start
+    order."""
+    by_mod: dict = {}
+    for t in transitions:
+        c = by_mod.setdefault(id(t.modifier), {
+            "mod": t.modifier,
+            "key": (t.modifier.type, _scope_key(t.modifier.scope),
+                    _effect_key(t.modifier)),
+            "candidate": None, "confirmed": None, "ended": None})
+        c[t.state] = t.ts
+    return sorted(by_mod.values(), key=lambda c: c["candidate"])
+
+
+def compare_runs(full: list[Transition],
+                 sampled: list[Transition]) -> list[dict]:
+    """Per cycle of the full run, the delay in seconds of the sampled run's
+    start (candidate), confirm and end: "missed" when the sampled run never
+    saw it, None when the full run did not either. A cycle is matched by
+    the first unused sampled cycle of the same type, scope and effect whose
+    active span overlaps it."""
+    inf = float("inf")
+    pool = _cycles(sampled)
+    used = set()
+    rows = []
+    for f in _cycles(full):
+        f_end = f["ended"] if f["ended"] is not None else inf
+        match = None
+        for i, s in enumerate(pool):
+            s_end = s["ended"] if s["ended"] is not None else inf
+            if (i not in used and s["key"] == f["key"]
+                    and s["candidate"] <= f_end and f["candidate"] <= s_end):
+                match = s
+                used.add(i)
+                break
+        row = {"type": f["mod"].type, "scope": dict(f["mod"].scope),
+               "effect": dict(f["mod"].effect), "at": f["candidate"]}
+        for name, state in (("start", "candidate"), ("confirm", "confirmed"),
+                            ("end", "ended")):
+            if f[state] is None:
+                row[name] = None
+            elif match is None or match[state] is None:
+                row[name] = "missed"
+            else:
+                row[name] = match[state] - f[state]
+        rows.append(row)
+    return rows
+
+
+def _delay_text(v) -> str:
+    if v is None:
+        return "-"
+    return v if isinstance(v, str) else f"{v:+d}s"
+
+
+def _print_comparison(rows: list[dict], out) -> None:
+    head = ("full_start", "type", "scope", "effect", "start", "confirm",
+            "end")
+    table = [head] + [
+        (_iso(r["at"]), r["type"], _scope_text(r["scope"]),
+         _effect_text(r["effect"]) or "-", _delay_text(r["start"]),
+         _delay_text(r["confirm"]), _delay_text(r["end"])) for r in rows]
+    widths = [max(len(row[i]) for row in table) for i in range(len(head))]
+    for row in table:
+        print("  ".join(c.ljust(w) for c, w in zip(row, widths)).rstrip(),
+              file=out)
+
+
+# --- CLI --------------------------------------------------------------------
+
+def _parse_time(s: str) -> int:
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not an ISO 8601 time: {s!r}")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def _parse_rule(s: str) -> SamplingRule:
+    fields = {"pct": float, "min_per_hour": int, "seed": int}
+    got = {}
+    for part in s.split(","):
+        k, sep, v = part.partition("=")
+        k = k.strip()
+        if not sep or k not in fields:
+            raise argparse.ArgumentTypeError(
+                f"unknown key {k!r} in {s!r} (keys: pct, min_per_hour, seed)")
+        try:
+            got[k] = fields[k](v)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"bad value for {k}: {v!r}")
+    missing = [k for k in ("pct", "min_per_hour") if k not in got]
+    if missing:
+        raise argparse.ArgumentTypeError(f"missing {', '.join(missing)}")
+    return SamplingRule(**got)
+
+
+def _replay(records, params, at, on_transition=None):
+    """Feeds records up to at (None: all); returns the detector, its
+    transitions and the time of the last record fed."""
+    det, trs, last = Detector(params), [], None
+    for rec in records:
+        t = order_key(rec)[0]
+        if at is not None and t > at:
+            break
+        last = t
+        for tr in det.feed(rec):
+            trs.append(tr)
+            if on_transition:
+                on_transition(tr)
+    return det, trs, last
+
+
+def main(argv: list[str]) -> int:
+    d = Params()
+    ap = argparse.ArgumentParser(
+        prog="eventreplay.py", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("files", nargs="+", metavar="FILE",
+                    help="events files, plain or gzip, any order")
+    ap.add_argument("--start", type=int, default=d.start,
+                    help=f"deviations to become a candidate ({d.start})")
+    ap.add_argument("--confirm", type=int, default=d.confirm,
+                    help=f"deviations to confirm ({d.confirm})")
+    ap.add_argument("--end", type=int, default=d.end,
+                    help=f"agreements to end ({d.end})")
+    ap.add_argument("--window", type=int, default=d.window,
+                    help=f"seconds the start deviations fall within "
+                         f"({d.window})")
+    ap.add_argument("--emit-modifiers", metavar="PATH",
+                    help="write the active modifiers as JSON")
+    ap.add_argument("--at", type=_parse_time, metavar="ISO8601",
+                    help="stop the replay at this time (naive = UTC)")
+    ap.add_argument("--simulate-sampling", type=_parse_rule,
+                    metavar="pct=P,min_per_hour=K[,seed=S]",
+                    help="compare detection under thinned sampling instead "
+                         "of printing the timeline (approximation: see "
+                         "above; size end detection is not thinned)")
+    args = ap.parse_args(argv)
+    params = Params(start=args.start, confirm=args.confirm, end=args.end,
+                    window=args.window)
+
+    if args.simulate_sampling:
+        det, full, last = _replay(read_records(args.files), params, args.at)
+        _, sampled, _ = _replay(
+            thin(read_records(args.files), args.simulate_sampling),
+            params, args.at)
+        _print_comparison(compare_runs(full, sampled), sys.stdout)
+    else:
+        det, _, last = _replay(
+            read_records(args.files), params, args.at,
+            lambda tr: print(format_transition(tr)))
+
+    if args.emit_modifiers:
+        when = args.at if args.at is not None else (last or 0)
+        with open(args.emit_modifiers, "w") as f:
+            json.dump(modifiers_json(det.active(), when), f, indent=2)
+            f.write("\n")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
