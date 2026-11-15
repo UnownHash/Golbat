@@ -89,7 +89,9 @@ Outputs:
   window is UTC (time_basis "utc") from the cycle's first matching
   deviation, end null; generated_at is the replay's time (--at, else the
   last record's). The id is <start date>-<type>-<scope>-<effect>, e.g.
-  2026-11-15-move_pin-strong-959-3272-charged-494.
+  2026-11-15-move_pin-strong-959-3272-charged-494; size_cutoffs and
+  unexplained have no effect part (a size effect's boundaries grow while
+  it runs, and its id must stay the same).
 - --simulate-sampling pct=P,min_per_hour=K[,seed=S] replays the files twice,
   in full and thinned to what a scanner sampling encounters at P% with a
   minimum of K per (pokemon_id, form, strong) per UTC hour would have
@@ -104,7 +106,10 @@ pct/100. A summary's checks share that hourly minimum: with `remaining` the
 minimum left at its bucket's start (deviations of the bucket count as its
 first checks), each dimension's n and `checked` become
 min(n, remaining) + Binomial(n - min(n, remaining), pct/100), and ok is the
-number of agreements among the kept checks, drawn hypergeometrically.
+number of agreements among the kept checks, drawn hypergeometrically. The
+summary's deviations kept by the minimum are among the kept checks as
+themselves: where one disagrees on a dimension, that kept check is a
+disagreement, and ok is drawn over the rest.
 size_rolls are kept as they are, so size_cutoffs end detection (contrary
 rolls) is not thinned and its end delays read optimistic. The draws use
 Python's random seeded with `seed`, so a run is reproducible.
@@ -577,10 +582,9 @@ def _modifier_id(m: Modifier) -> str:
         effect = f"{e['slot']}-{e['move']}"
     elif m.type == "level_offset":
         effect = f"delta{e['delta']:+d}"
-    elif m.type == "size_cutoffs":
-        effect = "-".join(n.replace("/", "_")
-                          for n in sorted(e.get("boundaries") or {}))
     else:
+        # size_cutoffs too: its boundaries grow while the cycle runs, and
+        # the id must not change with them.
         effect = ""
     return "-".join(p for p in (_iso(m.start)[:10], m.type, scope, effect)
                     if p)
@@ -647,8 +651,9 @@ def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
     docstring. Changed records are copies; pct=100 yields them unchanged."""
     rng = random.Random(rule.seed)
     p = rule.pct / 100
-    # (pokemon_id, form, strong, hour) -> [minimum used by summaries, ts of
-    # deviations kept by the minimum and not yet covered by a summary]
+    # (pokemon_id, form, strong, hour) -> [minimum used by summaries,
+    # deviations kept by the minimum and not yet covered by a summary, as
+    # (ts, boosted, utc_offset, dimensions they disagree on)]
     quota: dict = {}
     newest = None
     for rec in records:
@@ -665,16 +670,24 @@ def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
 
         if rec["kind"] == "deviation":
             if q[0] + len(q[1]) < rule.min_per_hour:
-                q[1].append(rec["ts"])
+                agree = rec.get("agree") or {}
+                q[1].append((rec["ts"], bool(rec.get("boosted")),
+                             rec.get("utc_offset", 0),
+                             frozenset(d for d in DIMS
+                                       if agree.get(d) == "disagree")))
                 yield rec
             elif rng.random() < p:
                 yield rec
             continue
 
-        # A summary covers its bucket's deviations: they count as its first
-        # checks, inside its share of the minimum, not on top of it.
+        # A summary covers its bucket's deviations with its own boosted and
+        # utc_offset: they count as its first checks, inside its share of
+        # the minimum, not on top of it.
         lo, hi = rec["bucket"], rec["bucket"] + rec["bucket_seconds"]
-        q[1] = [ts for ts in q[1] if not lo <= ts < hi]
+        own = (bool(rec.get("boosted")), rec.get("utc_offset", 0))
+        covered = [d for d in q[1]
+                   if lo <= d[0] < hi and (d[1], d[2]) == own]
+        q[1] = [d for d in q[1] if d not in covered]
         remaining = max(0, rule.min_per_hour - q[0] - len(q[1]))
         out = dict(rec)
         for d in DIMS:
@@ -684,7 +697,11 @@ def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
             n, ok = c.get("n", 0), c.get("ok", 0)
             base = min(n, remaining)
             kept = base + _binomial(rng, n - base, p)
-            out[d] = {**c, "n": kept, "ok": _hypergeom(rng, ok, n, kept)}
+            # Kept deviations disagreeing on d are kept disagreements, not
+            # draws; base >= forced, as they are among its first checks.
+            forced = min(kept, sum(1 for dv in covered if d in dv[3]))
+            out[d] = {**c, "n": kept,
+                      "ok": _hypergeom(rng, ok, n - forced, kept - forced)}
         checked = rec.get("checked", 0)
         base = min(checked, remaining)
         out["checked"] = base + _binomial(rng, checked - base, p)
