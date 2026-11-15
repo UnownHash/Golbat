@@ -409,6 +409,28 @@ class OutputTest(unittest.TestCase):
                                          "contradictions": 1})
 
 
+class ModifierIdTest(unittest.TestCase):
+    def test_size_cutoffs_id_stable_while_growing(self):
+        # A size_cutoffs effect gains boundaries as evidence arrives; its id
+        # must not change with them, or one cycle reads as two modifiers.
+        det = Detector(Params())
+        feed_all(det, [dev(T0 + i, pokemon_id=19, form=45, strong=False,
+                           size="disagree", obs_size=1, der_size=2,
+                           size_roll=r)
+                       for i, r in enumerate((0.008, 0.009, 0.011))])
+        first = modifiers_json(det.active(), T0 + 10)["modifiers"]
+        feed_all(det, [dev(T0 + 20 + i, pokemon_id=19, form=45, strong=False,
+                           size="disagree", obs_size=5, der_size=4,
+                           size_roll=r) for i, r in enumerate((0.98, 0.985))])
+        second = modifiers_json(det.active(), T0 + 30)["modifiers"]
+        self.assertEqual(len(first), 1)
+        self.assertEqual(len(second), 1)
+        self.assertNotEqual(first[0]["effect"], second[0]["effect"],
+                            "the boundaries must have grown")
+        self.assertEqual(first[0]["id"], second[0]["id"])
+        self.assertEqual(first[0]["id"], "2025-11-15-size_cutoffs-19-45")
+
+
 class SamplingTest(unittest.TestCase):
     def test_thin_full_rate_is_identity(self):
         recs = move_event()
@@ -441,6 +463,18 @@ class SamplingTest(unittest.TestCase):
         after = [r["checked"] for r in got if r["kind"] == "summary"
                  and r["bucket"] >= T0 + 3 * 3600]
         self.assertEqual(after, [2, 0, 0, 0, 2, 0, 0, 0])
+
+    def test_thin_quota_deviation_not_counted_as_agreement(self):
+        # The one check the hourly minimum keeps is the deviation, which
+        # disagrees on charged: the thinned summary must not report it as
+        # an agreement.
+        recs = [dev(T0 + 60, charged="disagree", obs_move_2=494),
+                summ(T0, ok=9, n=10, dims=("charged",))]
+        for seed in range(20):
+            got = list(thin(iter(recs), SamplingRule(pct=0, min_per_hour=1,
+                                                     seed=seed)))
+            s = [r for r in got if r["kind"] == "summary"][0]
+            self.assertEqual(s["charged"], {"ok": 0, "n": 1}, f"seed {seed}")
 
     def test_sampling_reports_delay_or_missed(self):
         recs = move_event()
