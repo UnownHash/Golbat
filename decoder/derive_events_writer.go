@@ -546,7 +546,7 @@ func gzipDeriveEventsFile(path string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }() // read-only; nothing to lose
 	tmp := path + ".gz.tmp"
 	dst, err := os.Create(tmp)
 	if err != nil {
