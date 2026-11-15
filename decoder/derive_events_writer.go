@@ -128,7 +128,10 @@ type deriveEventsSummary struct {
 	Quick   deriveEventsDimCount `json:"quick"`
 	Charged deriveEventsDimCount `json:"charged"`
 	// SizeRolls is [min, max] of the raw size roll, keyed by the OBSERVED
-	// size class, over checks where size had an opinion.
+	// size class, over checks where size had an opinion and the IVs agreed.
+	// When the IVs disagree the walk did not match the encounter, so its
+	// roll is noise; one such roll would read as a size boundary moving.
+	// Those checks still count in Size.
 	SizeRolls map[string]*[2]float64 `json:"size_rolls"`
 }
 
@@ -296,7 +299,7 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 	s.Size.add(ev.Agree.Size)
 	s.Quick.add(ev.Agree.Quick)
 	s.Charged.add(ev.Agree.Charged)
-	if ev.Agree.Size != dimNoOpinion {
+	if ev.Agree.Size != dimNoOpinion && ev.Agree.IVs == dimAgree {
 		class := strconv.Itoa(int(ev.Check.Observed.Size))
 		roll := ev.Check.SizeRoll
 		if r := s.SizeRolls[class]; r == nil {

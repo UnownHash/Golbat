@@ -14,7 +14,8 @@ Two record kinds are read; anything else is skipped:
 - `summary`: per bucket (15 min by default) and (pokemon_id, form, strong,
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
-  deviations' too. Ordered by bucket end (`bucket` + `bucket_seconds`): a
+  deviations' too, except that size_rolls come only from checks whose IVs
+  agreed (when the walk did not match, its roll is noise). Ordered by bucket end (`bucket` + `bucket_seconds`): a
   summary means "this bucket is complete", and one for a bucket straddling
   UTC midnight can sit in the next day's file.
 
