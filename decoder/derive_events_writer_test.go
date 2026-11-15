@@ -77,6 +77,9 @@ func readEventLines(t *testing.T, path string) []map[string]any {
 		}
 		rows = append(rows, row)
 	}
+	if err := sc.Err(); err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
 	return rows
 }
 
@@ -305,7 +308,6 @@ func TestDeriveEventsWriterRetention(t *testing.T) {
 	}
 }
 
-// onlyDeviation writes one deviating ev and returns its row.
 // deviatingEventCheck is agreeingEventCheck with a level deviation, so it is
 // written as soon as it is handled.
 func deviatingEventCheck(ts time.Time) deriveEventCheck {
@@ -314,6 +316,7 @@ func deviatingEventCheck(ts time.Time) deriveEventCheck {
 	return ev
 }
 
+// onlyDeviation writes one deviating ev and returns its row.
 func onlyDeviation(t *testing.T, ev deriveEventCheck) map[string]any {
 	t.Helper()
 	dir := t.TempDir()
@@ -388,9 +391,11 @@ func TestDeriveEventsAccountHashStable(t *testing.T) {
 		t.Errorf("second writer hash %q, want %q (salt not reused)", got, a)
 	}
 	_ = w2.close()
-	if other := newTestDeriveEventsWriter(t, t.TempDir(), clock); other.accountHash("trainer") == a {
+	other := newTestDeriveEventsWriter(t, t.TempDir(), clock)
+	if other.accountHash("trainer") == a {
 		t.Errorf("fresh salt produced the same hash")
 	}
+	_ = other.close()
 }
 
 func TestDeriveEventsWriterInitBadDir(t *testing.T) {
@@ -425,5 +430,50 @@ func TestDeriveEventsWriterRunDrainsChannel(t *testing.T) {
 	<-done // run closes the writer on channel close
 	if rows := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "summary"); len(rows) != 1 {
 		t.Errorf("got %d summaries after run, want 1", len(rows))
+	}
+}
+
+func TestDeriveEventsWriterOpenFailureThrottled(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "events")
+	clock := &testClock{time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	// Replace the dir with a regular file: neither MkdirAll nor the open can
+	// succeed until it is restored.
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for range 50 {
+		w.handle(deviatingEventCheck(clock.t))
+	}
+	if w.openFailures != 1 || w.droppedLines != 50 {
+		t.Fatalf("openFailures/droppedLines = %d/%d, want 1/50 (one attempt per window)",
+			w.openFailures, w.droppedLines)
+	}
+
+	// Restored, but still inside the retry window: still dropping.
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	clock.t = clock.t.Add(30 * time.Second)
+	w.handle(deviatingEventCheck(clock.t))
+	if w.openFailures != 1 || w.droppedLines != 51 {
+		t.Fatalf("retried inside the window: openFailures/droppedLines = %d/%d", w.openFailures, w.droppedLines)
+	}
+
+	// Past the window: the open is retried, recreates the dir and succeeds.
+	clock.t = clock.t.Add(deriveEventsOpenRetry)
+	w.handle(deviatingEventCheck(clock.t))
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+	if w.openFailures != 0 || w.droppedLines != 0 {
+		t.Errorf("outage not reset: %d/%d", w.openFailures, w.droppedLines)
+	}
+	if devs := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "deviation"); len(devs) != 1 {
+		t.Errorf("got %d deviations after recovery, want 1", len(devs))
 	}
 }

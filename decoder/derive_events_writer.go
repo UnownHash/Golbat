@@ -36,6 +36,9 @@ const (
 	deriveEventsDayLayout  = "2006-01-02"
 	// deriveEventsQueueSize is the capacity of the writer's events channel.
 	deriveEventsQueueSize = 8192
+	// deriveEventsOpenRetry is how long the writer drops lines after failing
+	// to open the day's file before trying again.
+	deriveEventsOpenRetry = time.Minute
 )
 
 // deriveEventsWriter owns the derivation events log: it appends one
@@ -65,6 +68,13 @@ type deriveEventsWriter struct {
 	summaries   map[deriveEventsSummaryKey]*deriveEventsSummary
 
 	zones map[s2.CellID]*time.Location // per level-10 cell
+
+	// While the day's file cannot be opened, lines are dropped and the open
+	// is retried at most once per deriveEventsOpenRetry, so a missing or
+	// unwritable dir logs once a minute, not once per line.
+	openRetryAt  time.Time // zero when not in an open-failure outage
+	openFailures int       // failed opens in the current outage
+	droppedLines int       // lines dropped in the current outage
 
 	compressing sync.WaitGroup
 }
@@ -413,9 +423,14 @@ func (w *deriveEventsWriter) writeLine(v any) {
 	}
 	today := w.now().UTC().Format(deriveEventsDayLayout)
 	if w.day != today {
+		if !w.openRetryAt.IsZero() && w.now().Before(w.openRetryAt) {
+			w.droppedLines++
+			return
+		}
 		w.rollover(today)
 	}
 	if w.buf == nil {
+		w.droppedLines++
 		return
 	}
 	_, _ = w.buf.Write(append(data, '\n')) // bufio errors are sticky; reported on Flush
@@ -433,10 +448,23 @@ func (w *deriveEventsWriter) rollover(today string) {
 		w.prune()
 	}
 	path := filepath.Join(w.dir, deriveEventsFilePrefix+today+".jsonl")
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	// MkdirAll again so a dir deleted or remounted after startup recovers.
+	err := os.MkdirAll(w.dir, 0o755)
+	var f *os.File
+	if err == nil {
+		f, err = os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	}
 	if err != nil {
-		log.Warnf("[DERIVE_EVENTS] open %s: %v", path, err)
+		w.openFailures++
+		w.openRetryAt = w.now().Add(deriveEventsOpenRetry)
+		log.Warnf("[DERIVE_EVENTS] open %s: %v (%d lines dropped so far; retrying in %s)",
+			path, err, w.droppedLines, deriveEventsOpenRetry)
 		return
+	}
+	if !w.openRetryAt.IsZero() {
+		log.Infof("[DERIVE_EVENTS] opened %s after %d failed attempts; %d lines dropped",
+			path, w.openFailures, w.droppedLines)
+		w.openRetryAt, w.openFailures, w.droppedLines = time.Time{}, 0, 0
 	}
 	w.file, w.buf, w.day = f, bufio.NewWriter(f), today
 }
