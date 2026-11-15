@@ -632,5 +632,55 @@ class ReaderTest(unittest.TestCase):
                          [T0 + 5, T0 + 15])
 
 
+GOLDEN = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                      "testdata", "derive-events-golden.jsonl")
+
+
+class GoldenTest(unittest.TestCase):
+    """testdata/derive-events-golden.jsonl is real Go writer output
+    (TestDeriveEventsGolden pins it byte for byte), so this checks the
+    script reads the format the writer produces."""
+
+    def test_golden_reads_and_feeds_detector(self):
+        recs = list(read_records([GOLDEN]))
+        self.assertEqual([r["kind"] for r in recs], ["deviation", "summary"])
+        d, s = recs
+        # The deviation fields the detector reads.
+        self.assertIsInstance(d["ts"], int)
+        self.assertEqual((d["pokemon_id"], d["form"], d["strong"],
+                          d["utc_offset"]), (959, 3272, True, 60))
+        self.assertEqual(d["agree"], {"ivs": "agree", "level": "disagree",
+                                      "size": "agree", "quick": "agree",
+                                      "charged": "disagree"})
+        self.assertEqual(d["observed"]["level"] - d["derived"]["level"], 2)
+        self.assertEqual((d["observed"]["size"], d["size_roll"]), (4, 0.9734))
+        self.assertEqual((d["observed_move_1"], d["observed_move_2"]),
+                         (350, 999))
+        self.assertIsInstance(d["spawn_id"], str)  # opaque salted hash
+        self.assertEqual(len(d["spawn_id"]), 12)
+        # The summary fields it reads.
+        self.assertEqual(s["bucket_seconds"], 900)
+        self.assertEqual(eventreplay.order_key(s)[0],
+                         s["bucket"] + s["bucket_seconds"])
+        for dim, ok in (("ivs", 2), ("level", 1), ("size", 2), ("quick", 2),
+                        ("charged", 1)):
+            self.assertEqual(s[dim], {"ok": ok, "n": 2}, dim)
+        self.assertEqual(eventreplay._parse_rolls(s["size_rolls"]),
+                         {4: (0.9734, 0.9801)})
+
+        # One deviation per track: pending, below the start threshold.
+        det = Detector(Params())
+        self.assertEqual(feed_all(det, recs), [])
+        det = Detector(Params(start=1, confirm=1))
+        trs = feed_all(det, recs)
+        self.assertEqual(
+            sorted((t.modifier.type, json.dumps(t.modifier.effect,
+                                                sort_keys=True))
+                   for t in trs if t.state == "candidate"),
+            [("level_offset", '{"delta": 2, "type": "level_offset"}'),
+             ("move_pin",
+              '{"move": 999, "slot": "charged", "type": "move_pin"}')])
+
+
 if __name__ == "__main__":
     unittest.main()
