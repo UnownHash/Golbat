@@ -2536,10 +2536,6 @@ func (pokemon *Pokemon) recomputeCpIfNeeded(ctx context.Context, db db.DbDetails
 				}
 			}
 		}
-	} else if pokemon.hasDerivedDisplay() {
-		// CP is what the map and encounter show: the Meteor form's.
-		displayPokemon = int(pokemon.DisplayPokemonId.ValueOrZero())
-		displayPokemonForm = int(pokemon.DisplayPokemonForm.ValueOrZero())
 	} else {
 		displayPokemon = int(pokemon.PokemonId)
 		displayPokemonForm = int(pokemon.Form.ValueOrZero())

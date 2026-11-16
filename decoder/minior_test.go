@@ -107,9 +107,8 @@ func TestMiniorCoreNotDerived(t *testing.T) {
 	})
 }
 
-// CP is the Meteor form's, as the map and encounter show it; base stats differ
-// from the cores'.
-func TestDerivedMiniorCpUsesMeteorForm(t *testing.T) {
+// CP uses the core form's base stats, which differ from the Meteor form's.
+func TestDerivedMiniorCpUsesCoreForm(t *testing.T) {
 	withOhbem(t)
 	p := miniorTestPokemon()
 	p.setPokemonDisplay(miniorId, meteorDisplay())
@@ -118,15 +117,15 @@ func TestDerivedMiniorCpUsesMeteorForm(t *testing.T) {
 	p.Cp = null.Value[uint16]{}
 	p.recomputeCpIfNeeded(context.Background(), db.DbDetails{}, nil)
 
-	want, err := ohbem.Load().CalculateCp(int(miniorId), int(miniorMeteor), 0, 10, 11, 12, 20)
+	want, err := ohbem.Load().CalculateCp(int(miniorId), int(wantCore(uint64(p.Id))), 0, 10, 11, 12, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
-	core, _ := ohbem.Load().CalculateCp(int(miniorId), int(wantCore(uint64(p.Id))), 0, 10, 11, 12, 20)
-	if want == core {
+	meteor, _ := ohbem.Load().CalculateCp(int(miniorId), int(miniorMeteor), 0, 10, 11, 12, 20)
+	if want == meteor {
 		t.Fatal("test needs Meteor and core CP to differ")
 	}
 	if int(p.Cp.ValueOrZero()) != want {
-		t.Errorf("CP = %d, want Meteor CP %d (core %d)", p.Cp.ValueOrZero(), want, core)
+		t.Errorf("CP = %d, want core CP %d (Meteor %d)", p.Cp.ValueOrZero(), want, meteor)
 	}
 }

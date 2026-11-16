@@ -1919,8 +1919,8 @@ caught. With `derive_iv` on, the colour is picked from the first
 walked cumulatively over a hard-coded table (green 5%, then yellow 95%;
 `miniorCores` in `decoder/minior.go`). `form` is the core colour,
 `display_pokemon_id`/`display_pokemon_form` are Minior/`MINIOR_METEOR`.
-CP is the Meteor form's (what the map and encounter show); PvP ranks use
-the core form. Golbat never sees a catch, so the colour is not
+CP and PvP ranks use the core form's base stats, as the game does for the
+encounter and the caught Pokemon. Golbat never sees a catch, so the colour is not
 validated; an event with other colours or weights needs a code change.
 
 ### What is not derived, and why
