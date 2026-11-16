@@ -240,7 +240,7 @@ func (pokemon *Pokemon) wildSignificantUpdate(wildPokemon *pogo.WildPokemonProto
 	return pokemon.SeenType.Code == SeenTypeCodeCell ||
 		pokemon.SeenType.Code == SeenTypeCodeNearbyStop ||
 		pokemon.PokemonId != int16(wildPokemon.Pokemon.PokemonId) ||
-		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		pokemon.shownForm() != narrowUint16(int64(pokemonDisplay.Form)) ||
 		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
 		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
 		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender)) ||
@@ -263,7 +263,7 @@ func (pokemon *Pokemon) nearbySignificantUpdate(wildPokemon *pogo.NearbyPokemonP
 	// Narrowed on both sides, as in wildSignificantUpdate above. The species
 	// is PokedexNumber: PokemonDisplay.DisplayId carries the encounter id.
 	pokemonChanged := pokemon.PokemonId != int16(wildPokemon.PokedexNumber) ||
-		int64OrZero(pokemon.Form) != narrowUint16(int64(pokemonDisplay.Form)) ||
+		pokemon.shownForm() != narrowUint16(int64(pokemonDisplay.Form)) ||
 		int64OrZero(pokemon.Weather) != narrowUint8(int64(pokemonDisplay.WeatherBoostedCondition)) ||
 		int64OrZero(pokemon.Costume) != narrowUint8(int64(pokemonDisplay.Costume)) ||
 		int64OrZero(pokemon.Gender) != narrowUint8(int64(pokemonDisplay.Gender))
@@ -2285,7 +2285,7 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 		// If we would like to support detect A/B spawn in the future, fill in more code here from Chuck
 		var oldId int16
 		var oldForm null.Value[uint16]
-		if pokemon.IsDitto {
+		if pokemon.IsDitto || pokemon.hasDerivedDisplay() {
 			oldId = int16(pokemon.DisplayPokemonId.ValueOrZero())
 			oldForm = pokemon.DisplayPokemonForm
 		} else {
@@ -2345,12 +2345,17 @@ func (pokemon *Pokemon) setPokemonDisplay(pokemonId int16, display *pogo.Pokemon
 	if pokemon.isNewRecord() || !pokemon.IsDitto {
 		pokemon.SetPokemonId(pokemonId)
 	}
-	if pokemon.IsDitto {
+	switch {
+	case pokemon.IsDitto:
 		pokemon.SetDisplayPokemonForm(null.IntFrom(int64(display.Form)))
 		pokemon.SetForm(null.IntFrom(0))
-	} else {
+	case pokemon.hasDerivedDisplay():
+		// Unchanged display (a change cleared it above): keep the derived form.
+		pokemon.SetDisplayPokemonForm(null.IntFrom(int64(display.Form)))
+	default:
 		pokemon.SetForm(null.IntFrom(int64(display.Form)))
 	}
+	pokemon.deriveMiniorCore()
 	pokemon.SetGender(null.IntFrom(int64(display.Gender)))
 	pokemon.SetCostume(null.IntFrom(int64(display.Costume)))
 	if !pokemon.isNewRecord() {

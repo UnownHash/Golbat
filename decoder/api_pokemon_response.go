@@ -96,8 +96,8 @@ type ApiPokemonResult struct {
 	Changed                 int64          `json:"changed" minimum:"0" doc:"Unix timestamp when the pokemon last changed"`
 	CellId                  *int64         `json:"cell_id" doc:"S2 cell ID the pokemon belongs to"`
 	ExpireTimestampVerified bool           `json:"expire_timestamp_verified" doc:"Whether the despawn timestamp is verified"`
-	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Displayed pokemon ID (e.g. for Ditto disguises)"`
-	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Displayed pokemon form"`
+	DisplayPokemonId        *uint16        `json:"display_pokemon_id" doc:"Pokemon ID the map shows when it differs from what is caught"`
+	DisplayPokemonForm      *uint16        `json:"display_pokemon_form" doc:"Form the map shows; for a derived Minior, MINIOR_METEOR while form is the core colour"`
 	IsDitto                 bool           `json:"is_ditto" doc:"Whether the pokemon is a disguised Ditto"`
 	SeenType                *string        `json:"seen_type" doc:"How the pokemon was seen: wild, encounter, nearby_stop, nearby_cell, lure_wild, lure_encounter, tappable_encounter or tappable_lure_encounter. encounter/lure_encounter mean the stats came from a real encounter; derived stats keep the sighting's type."`
 	Shiny                   *bool          `json:"shiny" doc:"Whether the pokemon is shiny"`
