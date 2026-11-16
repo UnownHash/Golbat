@@ -319,8 +319,8 @@ re-notifications, such as a spawn becoming encountered.
 | `capture_3`               | float64           | **Currently always `0.0`.** Same caveat as `capture_1`. |
 | `shiny`                   | null.Value[bool]    | Shiny flag. |
 | `username`                | null.String       | Trainer username of the scanner. |
-| `display_pokemon_id`      | null.Value[uint16]  | Apparent Pokédex ID for disguised Pokémon (Ditto). |
-| `display_pokemon_form`    | null.Value[uint16]  | Apparent form for disguised Pokémon. |
+| `display_pokemon_id`      | null.Value[uint16]  | Pokédex ID the map shows when it differs from what is caught. |
+| `display_pokemon_form`    | null.Value[uint16]  | Form the map shows. For a derived Minior this is `MINIOR_METEOR` and `form` is the core colour it turns into when caught (`derive_iv`). |
 | `is_event`                | int8              | Event flag (part of the composite primary key with `encounter_id`). |
 | `seen_type`               | NullSeenType      | How Golbat learned about this Pokémon. See [seen_type values](#seen_type-values). |
 | `pvp`                     | json.RawMessage   | PvP league rankings produced by gohbem's `QueryPvPRank`. See [pvp structure](#pvp-structure). `null` when IVs are not yet known. |

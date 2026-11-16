@@ -1911,6 +1911,18 @@ non-Dittos of pool species, smallest roll 0.0353. The exact cutoff between
 0.0199940 and 0.02 has not been observed, and neither has the game's rate
 during a Ditto event.
 
+### Minior core colour
+
+A wild Minior shows `MINIOR_METEOR` and turns into a core colour when
+caught. With `derive_iv` on, the colour is picked from the first
+`nextFloat()` of `java.util.Random` seeded with the encounter id (no xor),
+walked cumulatively over a hard-coded table (green 5%, then yellow 95%;
+`miniorCores` in `decoder/minior.go`). `form` is the core colour,
+`display_pokemon_id`/`display_pokemon_form` are Minior/`MINIOR_METEOR`.
+CP is the Meteor form's (what the map and encounter show); PvP ranks use
+the core form. Golbat never sees a catch, so the colour is not
+validated; an event with other colours or weights needs a code change.
+
 ### What is not derived, and why
 
 **Strong Pokemon are excluded from all of the above, entirely.** Golbat
