@@ -119,6 +119,10 @@ included**, so the script never reconciles two sources.
 
 - `kind: "summary"`, `bucket` (UTC start), key fields above
 - `checked`
+- `seen`: first sightings (new pokemon records) in the bucket, encountered
+  or not. A row may carry sightings only (`checked` 0). Sightings show a
+  scope still spawning whatever the encounter rate, which the unseen end
+  (§5) relies on under sampling.
 - per-dimension agreement counts: `ivs_ok`, `level_ok`, `size_ok`,
   `quick_ok`, `charged_ok` (per dimension so a move-only effect doesn't make
   level look wrong)
@@ -155,8 +159,8 @@ evidence and confirms faster; narrow when some members contradict.
 
 **Lifecycle:** `candidate` (a few consistent deviations, no contradicting
 agreements in the window) → `confirmed` → `ended` (agreements on that
-dimension return for the scope), or when the scope goes unseen (no check for
-an hour; ended at the time it was last seen). Each transition printed with timestamp (UTC
+dimension return for the scope), or when the scope goes unseen (no check or
+sighting for an hour; ended at the time it was last seen). Each transition printed with timestamp (UTC
 and local), scope, evidence counts. Thresholds are parameters, tuned on live
 data.
 
@@ -229,6 +233,11 @@ recommended fixed Dragonite encounter rule.
   then the strong forms stopped spawning. No agreements could ever end the
   pins, which is why the unseen end was added. The unseen rule cannot tell
   "event over" from "scope rarely seen"; the timeout is a parameter.
+  Simulated sampling at 10 encounters per species-hour and 0% beyond
+  ended the 635 pin 37 minutes early when only encounters counted as
+  seen, so summaries now count sightings too.
+- **Sightings lag spawns:** a spawn first sighted after the event ended
+  still counts, so an unseen end can land a bucket late.
 - **Which encounters to sample:** every effect observed so far except the
   Rattata size change applied to strong Pokemon only. Strong Pokemon may
   warrant full encounters with a lower rate elsewhere.

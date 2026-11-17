@@ -109,6 +109,27 @@ type deriveEventCheck struct {
 	Account                           string  // raw; hashed by the writer, never written raw
 	Check                             derivationCheck
 	Agree                             dimAgreement
+	// Sighting marks a first sighting of a pokemon rather than an encounter
+	// check: it counts only in its summary's Seen, never as a check.
+	Sighting bool
+}
+
+// newDeriveEventSighting builds the log entry for the first sighting of p
+// (a new record), keyed as its encounter check would be. Sightings need no
+// encounter, so they show a scope still spawning (or gone) whatever the
+// scanner's encounter rate.
+func newDeriveEventSighting(p *Pokemon, now time.Time) deriveEventCheck {
+	return deriveEventCheck{
+		Time:      now,
+		PokemonID: int32(p.PokemonId),
+		Form:      int32(p.Form.ValueOrZero()),
+		Strong:    p.IsStrong.ValueOrZero(),
+		Boosted:   p.statsBoosted(),
+		CellID:    p.CellId.ValueOrZero(),
+		Lat:       p.Lat,
+		Lon:       p.Lon,
+		Sighting:  true,
+	}
 }
 
 // newDeriveEventCheck builds the log entry for one encounter, from the same
