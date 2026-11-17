@@ -1582,6 +1582,8 @@ Scan requests also accept `{"latitude": .., "longitude": ..}`.
   `0`; they are kept for wire compatibility and never populated.
 - `pvp` is computed per request: one list per league (`little`, `great`,
   `ultra`) that has a ranking, `{}` when PVP is disabled or there is none.
+  Entries mean the same as in the webhook's `pvp` (`webhooks.md`, "pvp
+  structure"), including the Mega and battle-only form entries.
 
 ### ApiPokestopResult
 
@@ -1919,9 +1921,12 @@ caught. With `derive_iv` on, the colour is picked from the first
 walked cumulatively over a hard-coded table (green 5%, then yellow 95%;
 `miniorCores` in `decoder/minior.go`). `form` is the core colour,
 `display_pokemon_id`/`display_pokemon_form` are Minior/`MINIOR_METEOR`.
-CP and PvP ranks use the core form's base stats, as the game does for the
-encounter and the caught Pokemon. Golbat never sees a catch, so the colour is not
-validated; an event with other colours or weights needs a code change.
+CP uses the core form's base stats, as the game does for the encounter and the
+caught Pokemon. PvP ranks the core form, plus `MINIOR_METEOR` (3380) entries at
+the level and CP Minior fights at, since a caught Minior enters battle as
+Meteor (`webhooks.md`, "Battle-only forms"). Golbat never sees a catch, so the
+colour is not validated; an event with other colours or weights needs a code
+change.
 
 ### What is not derived, and why
 

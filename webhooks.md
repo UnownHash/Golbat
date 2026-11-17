@@ -389,16 +389,16 @@ The top-level is a map keyed by league name. The leagues are fixed in
 `[pvp] level_caps`. `pvp` is only computed when `[pvp] enabled` is true.
 
 Each value is an array of `PokemonEntry` objects (from
-`gohbem@v0.12.0/structs.go`):
+`gohbem@v0.13.1/structs.go`):
 
 | Field        | Type    | Description |
 |--------------|---------|-------------|
 | `pokemon`    | int     | Pokédex ID of the ranked form — may differ from the current `pokemon_id` if an evolution was projected. |
-| `form`       | int     | Form ID. Omitted (`omitempty`) when `0`. |
-| `evolution`  | int     | Temporary-evolution (mega/primal) ID. Omitted when `0`. |
-| `cap`        | float64 | **Level** cap applied when computing this entry (e.g. `40`, `50`). The field is declared `float64` in the Go source (`gohbem@v0.12.0/structs.go:78`), but all values ever assigned to it come from `Ohbem.LevelCaps []int` or the `MaxLevel = 100` constant — so in practice it is always a whole integer, and JSON emits it as one (`50`, not `50.0`). `0` means no level cap was applied. Omitted when `0`. |
+| `form`       | int     | Form ID. Omitted (`omitempty`) when `0`. For a battle-only form entry (below) this is the form it fights as, not the stored form. |
+| `evolution`  | int     | Temporary-evolution (mega/primal) ID. Omitted when `0`. Megas and Primals are ranked in every league at the level the game scales them down to; `little` has no Little Cup rules, so they appear there too. |
+| `cap`        | float64 | **Level** cap applied when computing this entry (e.g. `40`, `50`). The field is declared `float64` in the Go source (`gohbem@v0.13.1/structs.go:78`), but all values ever assigned to it come from `Ohbem.LevelCaps []int` or the `MaxLevel = 100` constant — so in practice it is always a whole integer, and JSON emits it as one (`50`, not `50.0`). `0` means no level cap was applied. Omitted when `0`. |
 | `value`      | float64 | Comparator score used for ranking — typically `⌊Attack × Defense × Stamina⌋`. Omitted when `0`. |
-| `level`      | float64 | Level (half-level allowed, e.g. `29.5`) at which the Pokémon maximises `value` for this league. |
+| `level`      | float64 | Level (half-level allowed, e.g. `29.5`) at which the Pokémon maximises `value` for this league: the level to power it up to. For a Mega/Primal or battle-only form entry, the level it fights at instead. |
 | `cp`         | int     | CP at `level`. Omitted when `0`. |
 | `percentage` | float64 | Rank value as a fraction of the best possible (0.0–1.0). |
 | `rank`       | int16   | Integer rank within the league (1 = best). |
@@ -408,6 +408,21 @@ Each value is an array of `PokemonEntry` objects (from
 > output) with `League.Cap` (the **CP** cap, an `int` in the gohbem
 > configuration struct at `structs.go:43`). They share the name but are
 > different quantities.
+
+A level cap the Pokémon is already above gives no entry. Mega and Primal
+entries are kept when it is the CP cap, not the level cap, that holds them
+below the Pokémon's level, since the game scales them down.
+
+**Battle-only forms.** A Pokémon that changes form in battle (`ibfc` in the
+masterfile) gets extra entries for the form it fights as when the query is for
+the stored form: Aegislash Blade (2640) for Shield, Honedge and Doublade, and
+`MINIOR_METEOR` (3380) for a Minior core. They have `evolution` `0`, so they
+count toward a league's best rank like any other entry. `level` and `cp` are
+what the form fights at; `value` uses its attack and defense at that level with
+the stored form's HP. The level to power up to is in the stored form's entry
+with the same `cap`. A derived Minior (see `api.md`, "Minior core colour") is
+stored as its core, so it gets Meteor entries; with `derive_iv` off it stays
+`MINIOR_METEOR`, which is ranked as if it were the caught form.
 
 Example:
 
