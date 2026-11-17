@@ -230,6 +230,51 @@ class DetectorTest(unittest.TestCase):
                      size_roll=0.003))
         self.assertEqual(mod.contradictions, 1)
 
+    def test_size_cutoff_rattata_shift(self):
+        # The observed Rattata event: the two lower cuts moved up by 0.008
+        # (XXS < 0.012, XS < 0.037), the upper cuts unchanged. Uniform rolls,
+        # logged as the writer would: a deviation where the classes differ,
+        # every IV-agreeing roll in its bucket's size_rolls.
+        import random as _random
+        rng = _random.Random(7)
+        game = (0.012, 0.037, 0.971, 0.996)
+        base = (0.004, 0.029, 0.971, 0.996)
+
+        def cls(roll, cuts):
+            return 1 + sum(roll >= c for c in cuts)
+
+        recs = []
+        for b in range(8):
+            rolls, n = {}, 0
+            for i in range(1500):
+                ts = T0 + b * BUCKET + i * BUCKET // 1500
+                r = rng.random()
+                obs, der = cls(r, game), cls(r, base)
+                lo_hi = rolls.setdefault(str(obs), [r, r])
+                lo_hi[0], lo_hi[1] = min(lo_hi[0], r), max(lo_hi[1], r)
+                n += 1
+                if obs != der:
+                    recs.append(dev(ts, pokemon_id=19, form=45, strong=False,
+                                    size="disagree", obs_size=obs,
+                                    der_size=der, size_roll=r))
+            recs.append(summ(T0 + b * BUCKET, pokemon_id=19, form=45,
+                             strong=False, ok=n, n=n, size_rolls=rolls))
+        recs.sort(key=eventreplay.order_key)
+        trs, det = replay(recs)
+        mods = find(det.active(), "size_cutoffs")
+        self.assertEqual(len(mods), 1)
+        mod = mods[0]
+        self.assertEqual(mod.status, "confirmed")
+        self.assertEqual(mod.contradictions, 0)
+        bounds = mod.effect["boundaries"]
+        self.assertEqual(set(bounds), {"1/2", "2/3"},
+                         "upper cuts agree with the base and are not listed")
+        for name, cut in (("1/2", 0.012), ("2/3", 0.037)):
+            lo, hi = bounds[name]
+            self.assertTrue(lo < cut <= hi, (name, lo, hi))
+            self.assertLess(hi - lo, 0.001, (name, lo, hi))
+        self.assertNotIn("ended", [t.state for t in trs])
+
     def size_event(self):
         """A Rattata 1/2 cut moved up: XXS observed at 0.008-0.011."""
         det = Detector(Params())
