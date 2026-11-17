@@ -310,6 +310,60 @@ class DetectorTest(unittest.TestCase):
         self.assertEqual(trs[0].utc_offset, -300)
 
 
+class UnseenEndTest(unittest.TestCase):
+    def _pin_until(self, last):
+        """A charged pin on strong 959/3272 from T0 to last, then only
+        other species: the event-only form stops spawning."""
+        recs = [dev(t, charged="disagree", obs_move_2=494)
+                for t in range(T0, last + 1, 60)]
+        recs += [summ(T0 + 8 * BUCKET + b * BUCKET, pokemon_id=19, form=0,
+                      strong=False, ok=50, n=50) for b in range(8)]
+        recs.sort(key=eventreplay.order_key)
+        return recs
+
+    def test_ends_at_last_seen_when_scope_vanishes(self):
+        last = T0 + 1800
+        trs, det = replay(self._pin_until(last))
+        self.assertEqual([t.state for t in trs],
+                         ["candidate", "confirmed", "ended"])
+        end = trs[-1]
+        self.assertEqual((end.ts, end.modifier.end, end.modifier.end_reason),
+                         (last, last, "unseen"))
+        self.assertIn("by=unseen", format_transition(end))
+        self.assertEqual(det.active(), [])
+
+    def test_agreements_keep_scope_seen(self):
+        # Agreements on the slot during quiet spells keep it alive, below
+        # the `end` count; nothing ends.
+        recs = [dev(T0 + i, charged="disagree", obs_move_2=494)
+                for i in range(10)]
+        recs += [summ(T0 + b * BUCKET, ok=1, n=1, dims=("charged",))
+                 for b in range(1, 12)]
+        recs.sort(key=eventreplay.order_key)
+        trs, det = replay(recs)
+        self.assertEqual([t.state for t in trs], ["candidate", "confirmed"])
+        self.assertEqual(len(det.active()), 1)
+
+    def test_no_end_before_unseen_passes(self):
+        last = T0 + 1800
+        recs = [r for r in self._pin_until(last)
+                if eventreplay.order_key(r)[0] <= last + 3600]
+        trs, _ = replay(recs)
+        self.assertEqual([t.state for t in trs], ["candidate", "confirmed"])
+
+    def test_new_cycle_after_unseen_end(self):
+        last = T0 + 600
+        recs = self._pin_until(last)
+        later = T0 + 3 * 3600
+        recs += [dev(later + i, charged="disagree", obs_move_2=494)
+                 for i in range(3)]
+        recs.sort(key=eventreplay.order_key)
+        trs, _ = replay(recs)
+        self.assertEqual([t.state for t in trs],
+                         ["candidate", "confirmed", "ended", "candidate"])
+        self.assertIsNot(trs[-1].modifier, trs[0].modifier)
+
+
 def replay(recs, params=None):
     det = Detector(params or Params())
     return feed_all(det, recs), det
