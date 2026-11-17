@@ -64,6 +64,18 @@ ditto_pool = []
 # depend on this and are always on.
 derivation_log = false
 
+# derivation_events: opt-in. Writes one JSON-lines file per UTC day into dir, holding each
+# deviation plus per-bucket agreement summaries. Read it with tools/eventreplay.py. Records
+# contain only ~1 km (level-14 S2 cell) locations and salted hashes of account and spawn id, never
+# raw usernames, spawn ids (~10 m cells) or coordinates. The salt is dir/derive-events.salt: never
+# share it with the files, or the hashes can be reversed. Files older than retain_days are removed.
+# Enabling it reserves ~20 MB for the event queue.
+[derivation_events]
+enabled = false
+dir = "logs"
+bucket_minutes = 15
+retain_days = 14
+
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
 bearer_token = "secret"

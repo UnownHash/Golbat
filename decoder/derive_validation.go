@@ -36,7 +36,11 @@ import (
 // moves included, and logged like any other only when it disagrees. An event
 // can pin a strong species' move or shift its level; those disagreements are
 // accepted on sight and kept in the log as the corpus for a later fix.
-func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int32, move2 int32, path string, wasRollMarked bool, hadDetectEvidence bool) {
+//
+// It returns what it computed (see derivationCheck) for the derivation
+// events log; the counters and logging above do not depend on the caller
+// using it.
+func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int32, move2 int32, path string, wasRollMarked bool, hadDetectEvidence bool) derivationCheck {
 	encounterID := uint64(pokemon.Id)
 	boosted := scan.Weather != int32(pogo.GameplayWeatherProto_NONE)
 	derived := encounter.Derive(encounterID, boosted, scan.Strong, scan.Form)
@@ -164,6 +168,18 @@ func (pokemon *Pokemon) checkDerivation(scan *pokemonScan, size int32, move1 int
 			ObservedMove2:     move2,
 			LoggedBecause:     loggedBecause,
 		})
+	}
+
+	return derivationCheck{
+		Observed: observed,
+		Derived:  derived.Values,
+		Opposite: oppositeValues,
+		SizeRoll: derived.SizeRoll,
+		Moves:    moves,
+		Move1:    move1,
+		Move2:    move2,
+		Branch:   branch,
+		Boosted:  boosted,
 	}
 }
 

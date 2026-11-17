@@ -22,3 +22,4 @@ decisions that replaced parts of it.
 | 2026-09-09 | [gRPC API](2026-09-09-grpc-api-design.md) | `GolbatApi` gRPC service mirroring the HTTP scans with protobuf results. | Implemented (#404) |
 | 2026-10-28 | [Tappable scan API](2026-10-28-tappable-scan-api-design.md) | Tappable R-tree, DNF scan endpoint and per-entry cache TTL. | Implemented (#430) |
 | 2026-10-28 | [Tappable webhook](2026-10-28-tappable-webhook-design.md) | `tappable` webhook for reward tappables. | Implemented (#431) |
+| 2026-11-15 | [Derivation event modifiers](2026-11-15-derivation-event-modifiers-design.md) | Opt-in event-analysis log (deviations + summarised agreements) and a replay script that detects event modifiers to derivation. | Prototype |
