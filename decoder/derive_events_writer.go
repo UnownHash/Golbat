@@ -49,7 +49,7 @@ const (
 // deviation row per check that disagreed on any dimension, and one summary
 // row per (pokemon_id, form, strong, boosted, utc_offset) per bucket with
 // per-dimension agreement counts — every check counts there, deviations
-// included. Files are dir/derive-events-YYYY-MM-DD.jsonl by UTC write date;
+// included — and the bucket's first-sighting count. Files are dir/derive-events-YYYY-MM-DD.jsonl by UTC write date;
 // a finished day is gzipped and files past retainDays are deleted.
 //
 // Everything but the background gzip runs on one goroutine (run, or a test
@@ -127,6 +127,9 @@ type deriveEventsSummary struct {
 	Boosted       bool   `json:"boosted"`
 	UTCOffset     int32  `json:"utc_offset"`
 	Checked       int    `json:"checked"`
+	// Seen counts first sightings (new pokemon records) in the bucket,
+	// encountered or not.
+	Seen int `json:"seen"`
 
 	IVs     deriveEventsDimCount `json:"ivs"`
 	Level   deriveEventsDimCount `json:"level"`
@@ -296,7 +299,7 @@ func (w *deriveEventsWriter) run() {
 }
 
 // handle counts ev in its bucket's summary and, if it deviates, writes its
-// deviation row. An event for a later bucket flushes the current one first;
+// deviation row; a sighting only counts in Seen. An event for a later bucket flushes the current one first;
 // one for an earlier bucket (cross-goroutine skew) counts in the current one.
 func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 	b := ev.Time.UTC().Truncate(w.bucket)
@@ -315,6 +318,10 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 			Strong: ev.Strong, Boosted: ev.Boosted, UTCOffset: offset,
 			SizeRolls: make(map[string]*[2]float64)}
 		w.summaries[key] = s
+	}
+	if ev.Sighting {
+		s.Seen++
+		return
 	}
 	s.Checked++
 	s.IVs.add(ev.Agree.IVs)

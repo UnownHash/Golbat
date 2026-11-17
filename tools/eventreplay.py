@@ -74,9 +74,12 @@ Lifecycle, with the thresholds as Params:
   a cut moved down (hi < base cut), a class at or below it with its max roll
   in [hi, base cut). One such roll suffices: the derivation is
   deterministic, so the base cut must be back.
-- Every type also ends when its scope goes unseen: no check of the scope
-  (a deviation row, or a summary with an agreement on the dimension) for
-  `unseen` seconds. The transition time is when the scope was last seen,
+- Every type also ends when its scope goes unseen: nothing of the scope (a
+  deviation row, or a summary with an agreement on the dimension or a first
+  sighting, "seen") for `unseen` seconds. Sightings need no encounter, so
+  with them the rule works at any encounter rate; files from before the
+  writer counted sightings have only checks, which a sampling scanner
+  leaves hours apart. The transition time is when the scope was last seen,
   so it prints late and out of time order. Event-only forms (strong
   Pokemon that spawn only during the event) vanish when it ends and never
   produce the agreements the rules above wait for. A sparsely seen scope
@@ -119,6 +122,7 @@ number of agreements among the kept checks, drawn hypergeometrically. The
 summary's deviations kept by the minimum are among the kept checks as
 themselves: where one disagrees on a dimension, that kept check is a
 disagreement, and ok is drawn over the rest.
+seen (sightings) is kept as it is: sighting needs no encounter.
 size_rolls are kept as they are, so size_cutoffs end detection (contrary
 rolls) is not thinned and its end delays read optimistic. The draws use
 Python's random seeded with `seed`, so a run is reproducible.
@@ -491,9 +495,10 @@ class Detector:
         for sc in scopes:
             for t in self._by_scope.get(_scope_key(sc), ()):
                 ok = (rec.get(t.dim) or {}).get("ok", 0)
-                if t.mod is not None and ok > 0 and bucket_end > t.last_seen:
-                    # Agreements leave no row of their own: seen at some
-                    # point in the bucket, so at its end.
+                seen = ok > 0 or rec.get("seen", 0) > 0
+                if t.mod is not None and seen and bucket_end > t.last_seen:
+                    # Agreements and sightings leave no row of their own:
+                    # seen at some point in the bucket, so at its end.
                     t.last_seen, t.last_off = bucket_end, off
                 if t.mod is None:
                     if (t.gate and ok > 0 and t.pending

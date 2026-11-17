@@ -207,6 +207,45 @@ func TestDeriveEventsWriterSummaryCounts(t *testing.T) {
 	}
 }
 
+// A first sighting counts only in seen: a bucket of sightings alone writes
+// a summary with checked 0, and sightings never touch the dimension counts.
+func TestDeriveEventsWriterSightingsCountSeen(t *testing.T) {
+	dir := t.TempDir()
+	clock := &testClock{time.Date(2026, 11, 15, 10, 1, 0, 0, time.UTC)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	w.handle(agreeingEventCheck(clock.t))
+	for i := range 3 {
+		ev := agreeingEventCheck(clock.t.Add(time.Duration(i) * time.Minute))
+		ev.Sighting = true
+		w.handle(ev)
+	}
+	other := agreeingEventCheck(clock.t)
+	other.PokemonID, other.Form, other.Strong, other.Sighting = 19, 0, false, true
+	w.handle(other)
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	sums := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "summary")
+	if len(sums) != 2 {
+		t.Fatalf("got %d summaries, want 2", len(sums))
+	}
+	rat, tink := sums[0], sums[1] // sorted by pokemon_id
+	if rat["pokemon_id"] != 19.0 || rat["seen"] != 1.0 || rat["checked"] != 0.0 {
+		t.Errorf("sighting-only summary = %v", rat)
+	}
+	if lv := rat["level"].(map[string]any); lv["n"] != 0.0 {
+		t.Errorf("sighting counted as a check: level = %v", lv)
+	}
+	if tink["seen"] != 3.0 || tink["checked"] != 1.0 {
+		t.Errorf("seen/checked = %v/%v, want 3/1", tink["seen"], tink["checked"])
+	}
+	if lv := tink["level"].(map[string]any); lv["n"] != 1.0 {
+		t.Errorf("level = %v, want n 1", lv)
+	}
+}
+
 // A check whose IVs disagree means the walk did not match the encounter, so
 // its size roll is noise: it is still counted in size ok/n but must not
 // reach size_rolls, where one stray roll would look like a size boundary
@@ -762,6 +801,9 @@ func TestDeriveEventsGolden(t *testing.T) {
 	ok := agreeingEventCheck(clock.t.Add(time.Minute))
 	ok.Check.SizeRoll = 0.9801
 	w.handle(ok)
+	seen := agreeingEventCheck(clock.t.Add(2 * time.Minute))
+	seen.Sighting = true
+	w.handle(seen)
 	if err := w.close(); err != nil {
 		t.Fatal(err)
 	}

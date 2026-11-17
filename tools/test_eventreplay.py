@@ -344,6 +344,22 @@ class UnseenEndTest(unittest.TestCase):
         self.assertEqual([t.state for t in trs], ["candidate", "confirmed"])
         self.assertEqual(len(det.active()), 1)
 
+    def test_sightings_keep_scope_seen(self):
+        # Encountered once an hour (sampling), but still spawning: the
+        # sightings keep the pin active until they stop.
+        recs = [dev(T0 + i, charged="disagree", obs_move_2=494)
+                for i in range(10)]
+        recs += [summ(T0 + b * BUCKET, ok=0, n=0) | {"seen": 40}
+                 for b in range(1, 8)]
+        recs += [summ(T0 + b * BUCKET, pokemon_id=19, form=0, strong=False,
+                      ok=50, n=50) for b in range(8, 16)]
+        recs.sort(key=eventreplay.order_key)
+        trs, _ = replay(recs)
+        self.assertEqual([t.state for t in trs],
+                         ["candidate", "confirmed", "ended"])
+        self.assertEqual((trs[-1].ts, trs[-1].modifier.end_reason),
+                         (T0 + 8 * BUCKET, "unseen"))
+
     def test_no_end_before_unseen_passes(self):
         last = T0 + 1800
         recs = [r for r in self._pin_until(last)
@@ -714,6 +730,7 @@ class GoldenTest(unittest.TestCase):
         self.assertEqual(len(d["spawn_id"]), 12)
         # The summary fields it reads.
         self.assertEqual(s["bucket_seconds"], 900)
+        self.assertEqual(s["seen"], 1)
         self.assertEqual(eventreplay.order_key(s)[0],
                          s["bucket"] + s["bucket_seconds"])
         for dim, ok in (("ivs", 2), ("level", 1), ("size", 2), ("quick", 2),
