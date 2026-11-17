@@ -502,6 +502,35 @@ class ModifierIdTest(unittest.TestCase):
 
 
 class SamplingTest(unittest.TestCase):
+    def test_tz_key_uses_local_hour_and_offset(self):
+        # At UTC+30 min, local hours start at :30 UTC, and a second offset
+        # has its own minimum.
+        recs = [summ(T0 + b * BUCKET, ok=10, n=10, utc_offset=30)
+                for b in range(4)]
+        recs += [summ(T0, ok=10, n=10, utc_offset=60)]
+        recs.sort(key=eventreplay.order_key)
+        got = list(thin(iter(recs), SamplingRule(pct=0, min_per_hour=10)))
+        by = [(r["utc_offset"], r["bucket"], r["checked"]) for r in got]
+        self.assertEqual(sorted(by), sorted([
+            (30, T0, 10), (30, T0 + BUCKET, 0),          # local 10:30 hour
+            (30, T0 + 2 * BUCKET, 10), (30, T0 + 3 * BUCKET, 0),  # 11:30
+            (60, T0, 10)]))
+        glob = list(thin(iter(recs), SamplingRule(pct=0, min_per_hour=10,
+                                                  key="global")))
+        self.assertEqual(sum(r["checked"] for r in glob), 10,
+                         "one UTC-hour minimum shared by both offsets")
+
+    def test_strong_pct_and_cost(self):
+        recs = [summ(T0, ok=100, n=100),
+                summ(T0, pokemon_id=19, form=0, strong=False, ok=100, n=100)]
+        cost = eventreplay.SamplingCost()
+        got = list(thin(iter(recs), SamplingRule(pct=0, min_per_hour=0,
+                                                 strong_pct=100), cost))
+        self.assertEqual({r["pokemon_id"]: r["checked"] for r in got},
+                         {959: 100, 19: 0})
+        self.assertEqual((cost.checked, cost.kept, cost.strong_checked,
+                          cost.strong_kept), (200, 100, 100, 100))
+
     def test_thin_full_rate_is_identity(self):
         recs = move_event()
         self.assertEqual(list(thin(iter(recs),
@@ -626,6 +655,11 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("move_pin", out)
         self.assertIn("charged=494", out)
+        self.assertIn("encounters kept:", out)
+        code, _, _ = self.run_main(
+            "--simulate-sampling",
+            "pct=5,min_per_hour=12,strong_pct=20,key=global")
+        self.assertEqual(code, 0)
 
     def test_main_rejects_unknown_sampling_key(self):
         code, _, err = self.run_main("--simulate-sampling", "pct=5,bogus=1")

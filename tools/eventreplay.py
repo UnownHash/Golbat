@@ -104,17 +104,22 @@ Outputs:
   2026-11-15-move_pin-strong-959-3272-charged-494; size_cutoffs and
   unexplained have no effect part (a size effect's boundaries grow while
   it runs, and its id must stay the same).
-- --simulate-sampling pct=P,min_per_hour=K[,seed=S] replays the files twice,
-  in full and thinned to what a scanner sampling encounters at P% with a
-  minimum of K per (pokemon_id, form, strong) per UTC hour would have
-  logged, and prints per effect (cycle of the full run) how much later the
-  thinned run saw its start, confirmation and end: seconds, "missed" when it
-  never did, "-" when the full run did not either.
+- --simulate-sampling pct=P,min_per_hour=K[,seed=S][,strong_pct=Q]
+  [,key=tz|global] replays the files twice, in full and thinned to what a
+  scanner sampling encounters at P% (Q% for strong pokemon) with a minimum
+  of K per key per hour would have logged, and prints per effect (cycle of
+  the full run) how much later the thinned run saw its start, confirmation
+  and end: seconds, "missed" when it never did, "-" when the full run did
+  not either. key=tz (default) keys the minimum by (pokemon_id, form,
+  strong, utc_offset) per local hour; key=global by (pokemon_id, form,
+  strong) per UTC hour. A last line gives the encounters the rule keeps, of
+  those the files hold, overall and for strong pokemon. A scanner keying
+  its minimum per area would keep more; the files carry no area.
 
 Thinning is an approximation from the logged counts, not a resample of
-encounters. Per (pokemon_id, form, strong) per UTC hour, the first
+encounters. Per key per hour, the first
 min_per_hour deviation rows are kept and later ones with probability
-pct/100. A summary's checks share that hourly minimum: with `remaining` the
+pct/100 (strong_pct/100 for strong). A summary's checks share that hourly minimum: with `remaining` the
 minimum left at its bucket's start (deviations of the bucket count as its
 first checks), each dimension's n and `checked` become
 min(n, remaining) + Binomial(n - min(n, remaining), pct/100), and ok is the
@@ -672,8 +677,23 @@ DIMS = ("ivs", "level", "size", "quick", "charged")
 @dataclass
 class SamplingRule:
     pct: float          # percent of encounters sampled past the minimum
-    min_per_hour: int   # always sampled per (pokemon_id, form, strong) hour
+    min_per_hour: int   # always sampled per key per hour
     seed: int = 1
+    strong_pct: float | None = None  # pct for strong pokemon; None = pct
+    # "tz": key (pokemon_id, form, strong, utc_offset) per LOCAL hour, as a
+    # scanner keying its minimum by timezone; "global": (pokemon_id, form,
+    # strong) per UTC hour.
+    key: str = "tz"
+
+
+@dataclass
+class SamplingCost:
+    """Encounters a rule keeps: kept / checked, of the encounters the full
+    log holds (an encounter-everything scanner's)."""
+    checked: int = 0
+    kept: int = 0
+    strong_checked: int = 0
+    strong_kept: int = 0
 
 
 def _binomial(rng, n, p):
@@ -695,27 +715,37 @@ def _hypergeom(rng, ok, n, k):
     return got
 
 
-def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
+def thin(records: Iterator[dict], rule: SamplingRule,
+         cost: SamplingCost | None = None) -> Iterator[dict]:
     """records as a sampling scanner would have logged them; see the module
-    docstring. Changed records are copies; pct=100 yields them unchanged."""
+    docstring. Changed records are copies; pct=100 yields them unchanged.
+    cost, when given, accumulates the summaries' checked counts in full and
+    kept."""
     rng = random.Random(rule.seed)
-    p = rule.pct / 100
-    # (pokemon_id, form, strong, hour) -> [minimum used by summaries,
-    # deviations kept by the minimum and not yet covered by a summary, as
-    # (ts, boosted, utc_offset, dimensions they disagree on)]
+    base_p = rule.pct / 100
+    strong_p = base_p if rule.strong_pct is None else rule.strong_pct / 100
+    # key -> [minimum used by summaries, deviations kept by the minimum and
+    # not yet covered by a summary, as (ts, boosted, utc_offset, dimensions
+    # they disagree on), latest UTC hour seen]
     quota: dict = {}
     newest = None
     for rec in records:
-        if rec["kind"] == "deviation":
-            hour = rec["ts"] // 3600
-        else:
-            hour = rec["bucket"] // 3600
-        if newest is None or hour > newest:
-            newest = hour
-            for k in [k for k in quota if k[3] < newest - 2]:
+        t = rec["ts"] if rec["kind"] == "deviation" else rec["bucket"]
+        utc_hour = t // 3600
+        if newest is None or utc_hour > newest:
+            newest = utc_hour
+            for k in [k for k, v in quota.items() if v[2] < newest - 2]:
                 del quota[k]
-        key = (rec["pokemon_id"], rec["form"], bool(rec["strong"]), hour)
-        q = quota.setdefault(key, [0, []])
+        strong = bool(rec["strong"])
+        p = strong_p if strong else base_p
+        if rule.key == "tz":
+            off = rec.get("utc_offset", 0)
+            key = (rec["pokemon_id"], rec["form"], strong, off,
+                   (t + off * 60) // 3600)
+        else:
+            key = (rec["pokemon_id"], rec["form"], strong, utc_hour)
+        q = quota.setdefault(key, [0, [], utc_hour])
+        q[2] = max(q[2], utc_hour)
 
         if rec["kind"] == "deviation":
             if q[0] + len(q[1]) < rule.min_per_hour:
@@ -755,6 +785,12 @@ def thin(records: Iterator[dict], rule: SamplingRule) -> Iterator[dict]:
         base = min(checked, remaining)
         out["checked"] = base + _binomial(rng, checked - base, p)
         q[0] += base
+        if cost is not None:
+            cost.checked += checked
+            cost.kept += out["checked"]
+            if strong:
+                cost.strong_checked += checked
+                cost.strong_kept += out["checked"]
         yield out
 
 
@@ -814,6 +850,16 @@ def compare_runs(full: list[Transition],
     return rows
 
 
+def _share(kept, total) -> str:
+    return f"{kept} of {total} ({100 * kept / total:.1f}%)" if total else "0 of 0"
+
+
+def _print_cost(cost: SamplingCost, out) -> None:
+    print(f"encounters kept: {_share(cost.kept, cost.checked)}; "
+          f"strong {_share(cost.strong_kept, cost.strong_checked)}",
+          file=out)
+
+
 def _delay_text(v) -> str:
     if v is None:
         return "-"
@@ -846,18 +892,23 @@ def _parse_time(s: str) -> int:
 
 
 def _parse_rule(s: str) -> SamplingRule:
-    fields = {"pct": float, "min_per_hour": int, "seed": int}
+    fields = {"pct": float, "min_per_hour": int, "seed": int,
+              "strong_pct": float, "key": str}
     got = {}
     for part in s.split(","):
         k, sep, v = part.partition("=")
         k = k.strip()
         if not sep or k not in fields:
             raise argparse.ArgumentTypeError(
-                f"unknown key {k!r} in {s!r} (keys: pct, min_per_hour, seed)")
+                f"unknown key {k!r} in {s!r} (keys: pct, min_per_hour, "
+                f"seed, strong_pct, key)")
         try:
             got[k] = fields[k](v)
         except ValueError:
             raise argparse.ArgumentTypeError(f"bad value for {k}: {v!r}")
+    if got.get("key", "tz") not in ("tz", "global"):
+        raise argparse.ArgumentTypeError(
+            f"key must be tz or global, not {got['key']!r}")
     missing = [k for k in ("pct", "min_per_hour") if k not in got]
     if missing:
         raise argparse.ArgumentTypeError(f"missing {', '.join(missing)}")
@@ -914,10 +965,12 @@ def main(argv: list[str]) -> int:
 
     if args.simulate_sampling:
         det, full, last = _replay(read_records(args.files), params, args.at)
+        cost = SamplingCost()
         _, sampled, _ = _replay(
-            thin(read_records(args.files), args.simulate_sampling),
+            thin(read_records(args.files), args.simulate_sampling, cost),
             params, args.at)
         _print_comparison(compare_runs(full, sampled), sys.stdout)
+        _print_cost(cost, sys.stdout)
     else:
         det, _, last = _replay(
             read_records(args.files), params, args.at,
