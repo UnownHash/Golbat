@@ -155,7 +155,8 @@ evidence and confirms faster; narrow when some members contradict.
 
 **Lifecycle:** `candidate` (a few consistent deviations, no contradicting
 agreements in the window) → `confirmed` → `ended` (agreements on that
-dimension return for the scope). Each transition printed with timestamp (UTC
+dimension return for the scope), or when the scope goes unseen (no check for
+an hour; ended at the time it was last seen). Each transition printed with timestamp (UTC
 and local), scope, evidence counts. Thresholds are parameters, tuned on live
 data.
 
@@ -219,5 +220,15 @@ recommended fixed Dragonite encounter rule.
 - **Scopes have no location:** a regional event (e.g. a Safari at one
   venue) is diluted by agreements for the same scope everywhere else.
 - **size_cutoffs end needs a near-cut roll:** it ends only on a roll in the
-  disputed region, so a rare species' size modifier may stay active long
-  after the event.
+  disputed region, or when the species goes unseen for an hour, so a size
+  modifier on a species seen now and then may stay active long after the
+  event.
+- **Event-only forms vanish instead of reverting (first live run,
+  2026-11-15):** charged pins on strong 635/2297 (→367) and strong
+  959/3272 (→494) held for every check (0 of ~4,900 agreed) until 18:00 UTC,
+  then the strong forms stopped spawning. No agreements could ever end the
+  pins, which is why the unseen end was added. The unseen rule cannot tell
+  "event over" from "scope rarely seen"; the timeout is a parameter.
+- **Which encounters to sample:** every effect observed so far except the
+  Rattata size change applied to strong Pokemon only. Strong Pokemon may
+  warrant full encounters with a lower rate elsewhere.

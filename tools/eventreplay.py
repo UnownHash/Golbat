@@ -74,6 +74,14 @@ Lifecycle, with the thresholds as Params:
   a cut moved down (hi < base cut), a class at or below it with its max roll
   in [hi, base cut). One such roll suffices: the derivation is
   deterministic, so the base cut must be back.
+- Every type also ends when its scope goes unseen: no check of the scope
+  (a deviation row, or a summary with an agreement on the dimension) for
+  `unseen` seconds. The transition time is when the scope was last seen,
+  so it prints late and out of time order. Event-only forms (strong
+  Pokemon that spawn only during the event) vanish when it ends and never
+  produce the agreements the rules above wait for. A sparsely seen scope
+  can also end this way mid-event; a later deviation starts a new cycle.
+  Ended lines carry by=agreement, by=contrary or by=unseen.
 
 Outputs:
 
@@ -199,6 +207,7 @@ class Params:
     confirm: int = 10   # matching deviations, no contradiction → confirmed
     end: int = 20       # agreements after the last deviation → ended
     window: int = 1800  # seconds the `start` deviations must fall within
+    unseen: int = 3600  # seconds with no check of the scope → ended
 
 
 @dataclass
@@ -209,6 +218,7 @@ class Modifier:
     status: str         # candidate | confirmed | ended
     start: int | None = None  # first matching deviation of this cycle
     end: int | None = None    # the ended transition's time
+    end_reason: str | None = None  # agreement | contrary | unseen
     observations: int = 0
     contradictions: int = 0
 
@@ -236,6 +246,8 @@ class _Track:
     species: Counter = field(default_factory=Counter)  # over pending
     mod: Modifier | None = None
     last_match: int = 0
+    last_seen: int = 0  # latest check of the scope while active
+    last_off: int = 0   # utc_offset of the record that set last_seen
     end_ok: int = 0
     rolls: dict = field(default_factory=dict)  # size class -> [min, max]
 
@@ -304,6 +316,7 @@ class Detector:
         self._tracks: dict = {}    # (type, scope key, effect key) -> _Track
         self._by_scope: dict = {}  # scope key -> [_Track]
         self._mods: list[Modifier] = []
+        self._active: list = []    # tracks with a modifier
 
     def active(self) -> list[Modifier]:
         return [m for m in self._mods if m.status in ACTIVE]
@@ -312,11 +325,32 @@ class Detector:
         return list(self._mods)
 
     def feed(self, rec: dict) -> list[Transition]:
-        if rec.get("kind") == "deviation":
-            return self._deviation(rec)
-        if rec.get("kind") == "summary":
-            return self._summary(rec)
-        return []
+        kind = rec.get("kind")
+        if kind not in ("deviation", "summary"):
+            return []
+        out = self._sweep_unseen(order_key(rec)[0])
+        if kind == "deviation":
+            return out + self._deviation(rec)
+        return out + self._summary(rec)
+
+    def _sweep_unseen(self, now):
+        """End the active modifiers whose scope has had no check for
+        `unseen` seconds, at the time it was last seen."""
+        out = []
+        for t in [t for t in self._active
+                  if now - t.last_seen > self.p.unseen]:
+            out.append(self._end(t, t.last_seen, t.last_off, "unseen"))
+        return out
+
+    def _seen(self, rec, ts, off):
+        """Note a check of rec's scopes at ts for their active tracks."""
+        scopes = [_species_scope(rec)]
+        if rec["strong"]:
+            scopes.append({"strong": True})
+        for sc in scopes:
+            for t in self._by_scope.get(_scope_key(sc), ()):
+                if t.mod is not None and ts > t.last_seen:
+                    t.last_seen, t.last_off = ts, off
 
     # tracks
 
@@ -341,6 +375,7 @@ class Detector:
         ts, off = rec["ts"], rec.get("utc_offset", 0)
         scope = _species_scope(rec)
         out = []
+        self._seen(rec, ts, off)
 
         if agree.get("ivs") == "disagree":
             t = self._track("unexplained", scope, {"type": "unexplained"},
@@ -411,7 +446,9 @@ class Detector:
                 mod.effect = _size_effect(t.rolls, t.scope["strong"])
             _clear_pending(t)
             t.mod, t.last_match, t.end_ok = mod, ts, 0
+            t.last_seen, t.last_off = ts, off
             self._mods.append(mod)
+            self._active.append(t)
             out = [Transition(ts, off, "candidate", mod)]
             if mod.observations >= p.confirm:
                 mod.status = "confirmed"
@@ -454,6 +491,10 @@ class Detector:
         for sc in scopes:
             for t in self._by_scope.get(_scope_key(sc), ()):
                 ok = (rec.get(t.dim) or {}).get("ok", 0)
+                if t.mod is not None and ok > 0 and bucket_end > t.last_seen:
+                    # Agreements leave no row of their own: seen at some
+                    # point in the bucket, so at its end.
+                    t.last_seen, t.last_off = bucket_end, off
                 if t.mod is None:
                     if (t.gate and ok > 0 and t.pending
                             and bucket >= t.pending[0][0]):
@@ -463,7 +504,7 @@ class Detector:
                     rolls = _parse_rolls(rec.get("size_rolls"))
                     if (bucket > t.last_match
                             and _base_classified(t, rolls)):
-                        out.append(self._end(t, bucket_end, off))
+                        out.append(self._end(t, bucket_end, off, "contrary"))
                     elif bucket >= t.mod.start:
                         self._summary_rolls(t, rolls)
                     continue
@@ -471,14 +512,14 @@ class Detector:
                     continue
                 t.end_ok += ok
                 if t.end_ok >= self.p.end:
-                    out.append(self._end(t, bucket_end, off))
+                    out.append(self._end(t, bucket_end, off, "agreement"))
         return out
 
-    @staticmethod
-    def _end(t, ts, off):
+    def _end(self, t, ts, off, reason):
         mod = t.mod
-        mod.status, mod.end = "ended", ts
+        mod.status, mod.end, mod.end_reason = "ended", ts, reason
         t.mod, t.end_ok = None, 0
+        self._active.remove(t)
         return Transition(ts, off, "ended", mod)
 
     @staticmethod
@@ -567,6 +608,8 @@ def format_transition(t: Transition) -> str:
              t.state.upper(), m.type, _effect_text(m.effect),
              f"scope={_scope_text(m.scope)}",
              f"obs={m.observations} contra={m.contradictions}"]
+    if t.state == "ended" and m.end_reason:
+        parts.append(f"by={m.end_reason}")
     return " ".join(p for p in parts if p)
 
 
@@ -848,6 +891,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--window", type=int, default=d.window,
                     help=f"seconds the start deviations fall within "
                          f"({d.window})")
+    ap.add_argument("--unseen", type=int, default=d.unseen,
+                    help=f"seconds without a check of the scope to end "
+                         f"({d.unseen})")
     ap.add_argument("--emit-modifiers", metavar="PATH",
                     help="write the active modifiers as JSON")
     ap.add_argument("--at", type=_parse_time, metavar="ISO8601",
@@ -859,7 +905,7 @@ def main(argv: list[str]) -> int:
                          "above; size end detection is not thinned)")
     args = ap.parse_args(argv)
     params = Params(start=args.start, confirm=args.confirm, end=args.end,
-                    window=args.window)
+                    window=args.window, unseen=args.unseen)
 
     if args.simulate_sampling:
         det, full, last = _replay(read_records(args.files), params, args.at)
