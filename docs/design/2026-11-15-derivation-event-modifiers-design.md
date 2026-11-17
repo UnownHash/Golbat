@@ -21,7 +21,12 @@ game alters the result after that roll. Observed so far:
   walk, charged move observed 494 vs derived 268; 494 is not in the pool, so
   `checkDerivation` logs `move_out_of_pool` and counts it as "no opinion" —
   the derived 268 keeps being published.
-- **Size overrides:** the XXL boundary for Rattata moved.
+- **Size overrides:** Rattata's two lower size cuts moved up by 0.008: XXS
+  below ~0.012 instead of 0.004, XS below ~0.037 instead of 0.029, the XL and
+  XXL cuts unchanged. Every mismatch fell in one of the two shifted bands
+  (1,235 and 1,207 logged, as equal-width bands of a uniform roll predict).
+  So the effect is on class boundaries of the same raw roll, not on
+  height/weight scalars.
 
 These effects are time-bound (events), so they must be detected as they start
 and as they end. Today operators either encounter everything (Dragonite) or
@@ -210,7 +215,9 @@ recommended fixed Dragonite encounter rule.
   the effect if encountered after?
 - **Local vs UTC windows:** do effects start at local 10:00 per timezone?
   Needs data from several regions.
-- **Size overrides:** class boundaries, or height/weight scalars?
+- **Size overrides:** class boundaries (Rattata: yes, both lower cuts
+  +0.008). Is a shift always shared by several cuts, so one parameter would
+  describe it?
 - **Published values during detection:** keep base values, suppress, or flag
   with confidence? (Prototype publishes unchanged.)
 - **Late corrections:** should webhooks be re-sent once an effect is
