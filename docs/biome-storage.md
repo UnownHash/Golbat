@@ -6,6 +6,16 @@ per database. Golbat applies the schema migration at startup even when
 collection is disabled.
 
 Successful wild encounters provide the geography of their level-16 S2 cell.
+Golbat inserts a cell on discovery and writes it again when its reported
+geography changes. Identical encounters advance an in-memory confirmation
+timestamp. The stored `observed_at_ms` is the encounter time of the last
+saved profile. Existing rows keep their previous timestamp until a change.
+A bounded cache avoids reading or encoding frequently repeated profiles.
+After startup or cache turnover, existing profiles are read in batches.
+Corrections older than the discarded confirmation history are ignored until
+confirmed by a newer encounter. Previously unknown cells can still be discovered
+from older observations.
+
 For spawn estimates, the scan rule must process wild Pokémon and weather.
 A sighting counts once, after the cell's geography is known and a weather
 report is available for its level-10 parent. The weather report must be from

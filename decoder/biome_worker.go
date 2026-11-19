@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -49,11 +48,13 @@ func (event biomeEvent) coversSpawn(atMS int64) bool {
 }
 
 type biomeWorker struct {
-	db       *sqlx.DB
-	queue    chan biomeEvent
-	weather  map[uint64]biomeEvent
-	lastLoss atomic.Int64
-	drops    util.DropReporter
+	db        *sqlx.DB
+	queue     chan biomeEvent
+	weather   map[uint64]biomeEvent
+	lastLoss  atomic.Int64
+	cells     map[uint64]biomeCellProfile
+	cellFloor int64
+	drops     util.DropReporter
 }
 
 func (worker *biomeWorker) enqueue(event biomeEvent) {
@@ -159,37 +160,16 @@ func (worker *biomeWorker) run(ctx context.Context) {
 }
 
 func (worker *biomeWorker) persist(ctx context.Context, batch []biomeEvent) error {
-	cells := make([]map[string]any, 0, len(batch))
-	wild := make([]biomeEvent, 0, len(batch))
+	var cells, wild []biomeEvent
 	for _, event := range batch {
 		if event.kind == biomeSpawnEvent {
 			wild = append(wild, event)
-			continue
+		} else {
+			cells = append(cells, event)
 		}
-		fields, err := json.Marshal(event.geography)
-		if err != nil {
-			return err
-		}
-		cells = append(cells, map[string]any{
-			"cell": event.cellID, "geography": string(fields), "biome": event.geography.signature(),
-			"scope": biomeSpawnScope(s2.CellID(event.cellID)), "at": event.atMS,
-		})
 	}
-	if len(cells) != 0 {
-		_, err := worker.db.NamedExecContext(ctx, `
-			INSERT INTO biome_cell (cell_id, geography, biome_key, spawn_scope, observed_at_ms, geography_changed_at_ms)
-			VALUES (:cell, :geography, :biome, :scope, :at, :at)
-			ON DUPLICATE KEY UPDATE
-			 geography_changed_at_ms = IF(VALUES(observed_at_ms) > observed_at_ms AND
-			     (BINARY geography <> BINARY VALUES(geography) OR spawn_scope <> VALUES(spawn_scope)),
-			     VALUES(observed_at_ms), geography_changed_at_ms),
-			 geography = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(geography), geography),
-			 biome_key = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(biome_key), biome_key),
-			 spawn_scope = IF(VALUES(observed_at_ms) > observed_at_ms, VALUES(spawn_scope), spawn_scope),
-			 observed_at_ms = GREATEST(observed_at_ms, VALUES(observed_at_ms))`, cells)
-		if err != nil {
-			return err
-		}
+	if err := worker.persistCells(ctx, cells); err != nil {
+		return err
 	}
 	if len(wild) == 0 {
 		return nil

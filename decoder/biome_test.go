@@ -157,6 +157,51 @@ func TestBiomeSpawnSnapshotsMariaDB(t *testing.T) {
 		t.Fatal("reclassification changed the geography timestamp")
 	}
 
+	// A changed-cell audit counts writes even if an UPDATE assigns the old values.
+	_, err = conn.Exec("CREATE TABLE biome_cell_test_updates (cell_id BIGINT UNSIGNED)")
+	run(err)
+	_, err = conn.Exec(`CREATE TRIGGER biome_cell_test_audit AFTER UPDATE ON biome_cell
+		FOR EACH ROW INSERT INTO biome_cell_test_updates (cell_id) VALUES (NEW.cell_id)`)
+	run(err)
+	profile := biomeEvent{kind: biomeCellEvent, cellID: cells[0], atMS: at + 10,
+		geography: biomeGeography{Landform: 4, Landcover: 1, Temperature: 2, Features: []int32{5}}}
+	// Force a cold read of the existing profile, then confirm it from cache.
+	worker = &biomeWorker{db: conn, cellFloor: at + 1}
+	run(worker.persist(ctx, []biomeEvent{profile}))
+	profile.atMS++
+	run(worker.persist(ctx, []biomeEvent{profile}))
+	checkCell := func(writes int, savedAt int64) {
+		t.Helper()
+		var count int
+		var observed int64
+		run(conn.Get(&count, "SELECT COUNT(*) FROM biome_cell_test_updates"))
+		run(conn.Get(&observed, "SELECT observed_at_ms FROM biome_cell WHERE cell_id=?", cells[0]))
+		if count != writes || observed != savedAt {
+			t.Fatalf("cell updates/time = %d/%d, want %d/%d", count, observed, writes, savedAt)
+		}
+	}
+	checkCell(0, at)
+	// Moisture changes the full display profile while retaining the same habitat.
+	profile.geography.Moisture++
+	profile.atMS--
+	run(worker.persist(ctx, []biomeEvent{profile}))
+	checkCell(0, at)
+	profile.atMS = at + 20
+	repeat := profile
+	repeat.atMS++
+	run(worker.persist(ctx, []biomeEvent{profile, repeat, profile}))
+	checkCell(1, profile.atMS)
+	// A delayed conflicting packet after restart must not revert the saved cell.
+	worker = &biomeWorker{db: conn, cellFloor: at + 30}
+	repeat.geography.Moisture--
+	run(worker.persist(ctx, []biomeEvent{repeat}))
+	checkCell(1, profile.atMS)
+	var moisture int
+	run(conn.Get(&moisture, "SELECT JSON_VALUE(geography,'$.moisture') FROM biome_cell WHERE cell_id=?", cells[0]))
+	if moisture != int(profile.geography.Moisture) {
+		t.Fatalf("stored moisture = %d", moisture)
+	}
+
 	add := func(from, until int, at time.Time) {
 		t.Helper()
 		events := make([]biomeEvent, 0, until-from)

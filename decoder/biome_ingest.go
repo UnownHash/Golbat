@@ -35,9 +35,10 @@ func InitBiomeCollector(db *sqlx.DB) func(context.Context) {
 		return nil
 	}
 	biomeCollector = &biomeWorker{
-		db:      db,
-		queue:   make(chan biomeEvent, 32768),
-		weather: make(map[uint64]biomeEvent),
+		db:        db,
+		cellFloor: time.Now().UnixMilli(),
+		queue:     make(chan biomeEvent, 32768),
+		weather:   make(map[uint64]biomeEvent),
 	}
 	return biomeCollector.run
 }
