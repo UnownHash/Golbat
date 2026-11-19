@@ -7,8 +7,11 @@ import (
 	"golbat/config"
 	pb "golbat/grpc"
 
+	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // grpcRawServer implements the RawProto gRPC service (SubmitRawProto),
@@ -90,16 +93,7 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 		nebulaData = append(nebulaData, nd)
 	}
 
-	// Process each proto in a packet in sequence, but in a go-routine
-	go func() {
-		release, ok := acquireRawProcessingSlot()
-		if !ok {
-			// Parked queue over its cap during a stall — shed rather than
-			// pin yet another decoded payload in memory (already logged).
-			return
-		}
-		defer release()
-
+	if !submitRaw(proto.Size(in), func() {
 		timeout := 5 * time.Second
 		if config.Config.Tuning.ExtendedTimeout {
 			timeout = 30 * time.Second
@@ -123,7 +117,10 @@ func (s *grpcRawServer) SubmitRawProto(ctx context.Context, in *pb.RawProtoReque
 			decodePushGateway(ctx, v.MessageType, v.Payload)
 			cancel()
 		}
-	}()
+	}) {
+		statsCollector.IncRawRequests("error", "overload")
+		return nil, status.Error(codes.ResourceExhausted, "raw processing queue is full")
+	}
 
 	if latTarget != 0 && lonTarget != 0 && uuid != "" {
 		UpdateDeviceLocation(uuid, latTarget, lonTarget, scanContext)
