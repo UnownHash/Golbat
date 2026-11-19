@@ -83,12 +83,7 @@ func (configDefinition configDefinition) GetPrometheus() Prometheus {
 }
 
 type biomeConfig struct {
-	Enabled     bool     `koanf:"enabled"`
-	SharedAreas []string `koanf:"shared_areas"`
-}
-
-func (cfg configDefinition) BiomeAreaNames() []geo.AreaName {
-	return splitIntoAreaAndFenceName(cfg.Biomes.SharedAreas)
+	Enabled bool `koanf:"enabled"`
 }
 
 type koji struct {

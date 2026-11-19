@@ -4,17 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
-	"encoding/json"
 	"math"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"golbat/config"
-	"golbat/geo"
 	"golbat/pogo"
+	"golbat/tz"
 
 	"github.com/golang/geo/s2"
 	"github.com/jmoiron/sqlx"
@@ -37,16 +34,10 @@ func InitBiomeCollector(db *sqlx.DB) func(context.Context) {
 	if !config.Config.Biomes.Enabled {
 		return nil
 	}
-	names := slices.Clone(config.Config.Biomes.SharedAreas)
-	slices.Sort(names)
-	names = slices.Compact(names)
-	digest := sha256.Sum256([]byte(strings.Join(names, "\x00")))
 	biomeCollector = &biomeWorker{
-		db:          db,
-		queue:       make(chan biomeEvent, 32768),
-		areas:       config.Config.BiomeAreaNames(),
-		sharedScope: "shared:" + hex.EncodeToString(digest[:]),
-		weather:     make(map[uint64]biomeEvent),
+		db:      db,
+		queue:   make(chan biomeEvent, 32768),
+		weather: make(map[uint64]biomeEvent),
 	}
 	return biomeCollector.run
 }
@@ -91,27 +82,33 @@ func (fields biomeGeography) signature() []byte {
 	if fields.Landform <= 0 || fields.Landcover <= 0 || fields.Temperature <= 0 {
 		return nil
 	}
-	// Feature order is retained in geography JSON, but does not split a spawn group.
-	fields.Features = slices.Clone(fields.Features)
-	slices.Sort(fields.Features)
-	fields.Features = slices.Compact(fields.Features)
-	if len(fields.Features) == 0 {
-		fields.Features = []int32{}
+	// The first matching vista is the habitat. Cells without a named vista
+	// use land cover; keep the namespaces distinct even when enum IDs match.
+	kind, habitat := uint32(0), fields.Landcover
+	for _, vista := range [...]pogo.BackgroundVisualDetailProto_VistaFeature{
+		pogo.BackgroundVisualDetailProto_VISTA_BEACH, pogo.BackgroundVisualDetailProto_VISTA_OCEAN,
+		pogo.BackgroundVisualDetailProto_VISTA_RIVER, pogo.BackgroundVisualDetailProto_VISTA_LAKE,
+		pogo.BackgroundVisualDetailProto_VISTA_DESERT, pogo.BackgroundVisualDetailProto_VISTA_CITY,
+	} {
+		if slices.Contains(fields.Features, int32(vista)) {
+			kind, habitat = 1, int32(vista)
+			break
+		}
 	}
-	key, _ := json.Marshal(fields)
-	digest := sha256.Sum256(key)
+	var key [12]byte
+	binary.BigEndian.PutUint32(key[:4], uint32(fields.Temperature))
+	binary.BigEndian.PutUint32(key[4:8], kind)
+	binary.BigEndian.PutUint32(key[8:], uint32(habitat))
+	digest := sha256.Sum256(key[:])
 	return digest[:]
 }
 
-func (worker *biomeWorker) spawnScope(id s2.CellID) string {
-	if len(worker.areas) != 0 {
-		center := id.LatLng()
-		matches := MatchStatsGeofenceWithCell(center.Lat.Degrees(), center.Lng.Degrees(), uint64(id))
-		if geo.AreaMatchWithWildcards(matches, worker.areas) {
-			return worker.sharedScope
-		}
+func biomeSpawnScope(id s2.CellID) string {
+	center := id.LatLng()
+	if zone := tz.SearchTimezone(center.Lat.Degrees(), center.Lng.Degrees()); zone != "" {
+		return "tz:" + zone
 	}
-	return strconv.FormatUint(uint64(id.Parent(10)), 10)
+	return "cell:" + strconv.FormatUint(uint64(id), 10)
 }
 
 func ObserveBiomeEncounter(encounter *pogo.EncounterOutProto, receivedAtMS int64) {

@@ -67,9 +67,6 @@ derivation_log = false
 [biomes]
 # Record encounter geography and wild spawn rates. See docs/biome-storage.md.
 enabled = false
-# Combine identical biomes at the same weather across these Golbat geofences.
-# With no matching geofence, aggregate within the local S2 level-10 weather cell.
-shared_areas = []
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"

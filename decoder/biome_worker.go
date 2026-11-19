@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golbat/geo"
 	"golbat/util"
 
 	"github.com/golang/geo/s2"
@@ -49,13 +48,11 @@ func (event biomeEvent) coversSpawn(atMS int64) bool {
 }
 
 type biomeWorker struct {
-	db          *sqlx.DB
-	queue       chan biomeEvent
-	areas       []geo.AreaName
-	sharedScope string
-	weather     map[uint64]biomeEvent
-	lastLoss    atomic.Int64
-	drops       util.DropReporter
+	db       *sqlx.DB
+	queue    chan biomeEvent
+	weather  map[uint64]biomeEvent
+	lastLoss atomic.Int64
+	drops    util.DropReporter
 }
 
 func (worker *biomeWorker) enqueue(event biomeEvent) {
@@ -70,6 +67,12 @@ func (worker *biomeWorker) enqueue(event biomeEvent) {
 }
 
 func (worker *biomeWorker) run(ctx context.Context) {
+	backfilled := make(chan struct{})
+	go func() {
+		defer close(backfilled)
+		worker.backfillScopes(ctx)
+	}()
+	defer func() { <-backfilled }()
 	flushTimer := time.NewTicker(10 * time.Second)
 	refreshTimer := time.NewTicker(biomeRefresh)
 	defer flushTimer.Stop()
@@ -159,7 +162,7 @@ func (worker *biomeWorker) persist(ctx context.Context, batch []biomeEvent) erro
 		}
 		cells = append(cells, map[string]any{
 			"cell": event.cellID, "geography": string(fields), "biome": event.geography.signature(),
-			"scope": worker.spawnScope(s2.CellID(event.cellID)), "at": event.atMS,
+			"scope": biomeSpawnScope(s2.CellID(event.cellID)), "at": event.atMS,
 		})
 	}
 	if len(cells) != 0 {

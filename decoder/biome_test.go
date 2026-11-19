@@ -1,6 +1,7 @@
 package decoder
 
 import (
+	"bytes"
 	"context"
 	"os"
 	"testing"
@@ -13,18 +14,39 @@ import (
 )
 
 func TestBiomeGeographySignature(t *testing.T) {
-	a := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{5, 2, 2}}
-	b := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{2, 5}}
-	if string(a.signature()) != string(b.signature()) || a.Features[0] != 5 {
-		t.Fatal("the biome signature should ignore feature order and duplicates without changing the profile")
+	lake := biomeGeography{Landform: 4, Landcover: 1, Temperature: 2, Features: []int32{5}}
+	forestLake := lake
+	forestLake.Landcover = 3
+	forestLake.Features = []int32{1, 5}
+	if !bytes.Equal(lake.signature(), forestLake.signature()) {
+		t.Fatal("cool lake cells must share rates across land covers and secondary vistas")
 	}
-	b.Features[1] = 4
-	if string(a.signature()) == string(b.signature()) {
-		t.Fatal("different geography must produce different signatures")
+	for _, change := range []func(*biomeGeography){
+		func(f *biomeGeography) { f.Temperature = 3 },
+		func(f *biomeGeography) { f.Features = []int32{5, 2} },
+		func(f *biomeGeography) { f.Features = nil; f.Landcover = 5 },
+	} {
+		other := lake
+		change(&other)
+		if bytes.Equal(lake.signature(), other.signature()) {
+			t.Fatal("different habitat categories must have distinct keys")
+		}
 	}
-	b.Temperature = 0
-	if b.signature() != nil {
+	lake.Temperature = 0
+	if lake.signature() != nil {
 		t.Fatal("incomplete geography must not get a spawn group")
+	}
+}
+
+func TestBiomeSpawnTimeZone(t *testing.T) {
+	scope := func(lat, lng float64) string {
+		return biomeSpawnScope(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lng)).Parent(16))
+	}
+	if scope(52.51, 13.58) != "tz:Europe/Berlin" || scope(52.13, 11.62) != scope(52.51, 13.58) {
+		t.Fatal("Berlin and Magdeburg must share a time-zone scope")
+	}
+	if scope(48.86, 2.35) == scope(52.51, 13.58) {
+		t.Fatal("equal UTC offsets must not combine different named time zones")
 	}
 }
 
@@ -114,11 +136,25 @@ func TestBiomeSpawnSnapshotsMariaDB(t *testing.T) {
 	ctx := context.Background()
 	worker := &biomeWorker{db: conn}
 	now := time.Now().Truncate(time.Millisecond)
-	base := s2.CellIDFromLatLng(s2.LatLngFromDegrees(-33.86, 151.21)).Parent(16)
-	cells := [3]uint64{uint64(base), uint64(base.Next()), uint64(base.Next().Next())}
-	fields := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{1}}
-	for _, cell := range cells {
-		run(worker.persist(ctx, []biomeEvent{{kind: biomeCellEvent, cellID: cell, geography: fields, atMS: now.Add(-time.Minute).UnixMilli()}}))
+	cellAt := func(lat, lng float64) uint64 {
+		return uint64(s2.CellIDFromLatLng(s2.LatLngFromDegrees(lat, lng)).Parent(16))
+	}
+	cells := []uint64{cellAt(52.51, 13.58), cellAt(52.13, 11.62), cellAt(48.40, 9.99)}
+	at := now.Add(-time.Minute).UnixMilli()
+	for index, cell := range cells {
+		fields := biomeGeography{Landform: 4, Landcover: int32(index + 1), Temperature: 2, Features: []int32{5}}
+		run(worker.persist(ctx, []biomeEvent{{kind: biomeCellEvent, cellID: cell, geography: fields, atMS: at}}))
+	}
+	// A profile written by the earlier collector must join the same pool
+	// even if no new encounter for that cell has arrived.
+	_, err = conn.Exec("UPDATE biome_cell SET spawn_scope='12345', biome_key=NULL WHERE cell_id=?", cells[0])
+	run(err)
+	_, err = worker.backfillScopeBatch(ctx, 0)
+	run(err)
+	var preserved int64
+	run(conn.Get(&preserved, "SELECT geography_changed_at_ms FROM biome_cell WHERE cell_id=? AND spawn_scope='tz:Europe/Berlin'", cells[0]))
+	if preserved != at {
+		t.Fatal("reclassification changed the geography timestamp")
 	}
 
 	add := func(from, until int, at time.Time) {

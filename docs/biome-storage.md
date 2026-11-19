@@ -11,16 +11,21 @@ A sighting counts once, after the cell's geography is known and a weather
 report is available for its level-10 parent. The weather report must be from
 the same UTC hour and at most 15 minutes old.
 
-By default, samples are local to a level-10 weather cell. To pool observations
-across geofences, list their scan-rule area names in `[biomes].shared_areas`.
-Cells whose centres fall in those areas share estimates when both geography
-and weather match. Other cells keep their local scope.
+Samples are grouped by the IANA time zone of the cell centre, current
+gameplay weather, and habitat category. A category combines temperature with
+the first matching vista (beach, ocean, river, lake, desert, city), falling
+back to land cover when none applies. For example, cool lake cells in forest
+and cropland share rates. Their individual geography remains available for
+display. Where the time zone cannot be resolved, the sample stays local to
+the individual cell. On upgrade from local or geofence grouping, Golbat
+reclassifies stored cells in batches. Existing sightings keep their original
+scope until they expire; new estimates fill as fresh sightings arrive.
 
 ## Reading the tables
 
 | Table | Contents |
 | --- | --- |
-| `biome_cell` | Level-16 S2 cell ID, geography as JSON (game enum values), geography signature and aggregation scope |
+| `biome_cell` | Level-16 S2 cell ID, geography as JSON (game enum values), category key and time-zone scope |
 | `biome_spawn_group` | Sample size, distinct cell count, window bounds and expiry per scope, geography and weather |
 | `biome_spawn_rate` | Observed percentage per group, species and form. Form `-1` means the display data was missing. Form `0` is a separate value. |
 | `biome_spawn_observation` | Internal deduplication history, keyed by a hash of the encounter ID and retained for three hours |
