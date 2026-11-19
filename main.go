@@ -213,6 +213,13 @@ func main() {
 		}
 	}
 	decoder.LoadStatsGeofences()
+	if runBiomes := decoder.InitBiomeCollector(db); runBiomes != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			runBiomes(ctx)
+		}()
+	}
 	decoder.InitWriteBehindQueue(ctx, dbDetails)
 	initRawProcessingLimiter()
 	initSlowDbQueryLogging()

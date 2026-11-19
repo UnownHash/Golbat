@@ -65,6 +65,7 @@ type configDefinition struct {
 	Tuning         tuning         `koanf:"tuning"`
 	Weather        weather        `koanf:"weather"`
 	ScanRules      []scanRule     `koanf:"scan_rules"`
+	Biomes         biomeConfig    `koanf:"biomes"`
 	StatsIntervals statsIntervals `koanf:"stats_intervals"`
 }
 
@@ -79,6 +80,15 @@ func (configDefinition configDefinition) GetWebhooks() []Webhook {
 
 func (configDefinition configDefinition) GetPrometheus() Prometheus {
 	return configDefinition.Prometheus
+}
+
+type biomeConfig struct {
+	Enabled     bool     `koanf:"enabled"`
+	SharedAreas []string `koanf:"shared_areas"`
+}
+
+func (cfg configDefinition) BiomeAreaNames() []geo.AreaName {
+	return splitIntoAreaAndFenceName(cfg.Biomes.SharedAreas)
 }
 
 type koji struct {

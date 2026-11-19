@@ -1,0 +1,174 @@
+package decoder
+
+import (
+	"context"
+	"os"
+	"testing"
+	"time"
+
+	"golbat/pogo"
+
+	"github.com/golang/geo/s2"
+	"github.com/jmoiron/sqlx"
+)
+
+func TestBiomeGeographySignature(t *testing.T) {
+	a := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{5, 2, 2}}
+	b := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{2, 5}}
+	if string(a.signature()) != string(b.signature()) || a.Features[0] != 5 {
+		t.Fatal("the biome signature should ignore feature order and duplicates without changing the profile")
+	}
+	b.Features[1] = 4
+	if string(a.signature()) == string(b.signature()) {
+		t.Fatal("different geography must produce different signatures")
+	}
+	b.Temperature = 0
+	if b.signature() != nil {
+		t.Fatal("incomplete geography must not get a spawn group")
+	}
+}
+
+func TestBiomeWeatherWindow(t *testing.T) {
+	hour := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name           string
+		weather, spawn time.Duration
+		want           bool
+	}{
+		{"fresh", time.Minute, 2 * time.Minute, true},
+		{"age limit", time.Minute, 16 * time.Minute, true},
+		{"expired", time.Minute, 16*time.Minute + time.Millisecond, false},
+		{"previous hour", -time.Millisecond, 0, false},
+		{"future report", time.Minute, 0, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			report := biomeEvent{weather: 1, atMS: hour.Add(tt.weather).UnixMilli()}
+			if got := report.coversSpawn(hour.Add(tt.spawn).UnixMilli()); got != tt.want {
+				t.Fatalf("coversSpawn = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBiomeWildObservationsKeepForms(t *testing.T) {
+	previous := biomeCollector
+	biomeCollector = &biomeWorker{queue: make(chan biomeEvent, 3)}
+	t.Cleanup(func() { biomeCollector = previous })
+
+	var wild []RawWildPokemonData
+	for index, form := range []int32{0, 42, -1} {
+		pokemon := &pogo.PokemonProto{PokemonId: 133}
+		if form >= 0 {
+			pokemon.PokemonDisplay = &pogo.PokemonDisplayProto{Form: pogo.PokemonDisplayProto_Form(form)}
+		}
+		wild = append(wild, RawWildPokemonData{Data: &pogo.WildPokemonProto{
+			EncounterId: uint64(index + 1), Latitude: 52.52, Longitude: 13.40, Pokemon: pokemon,
+		}})
+	}
+
+	ObserveBiomeWildBatch(ScanParameters{ProcessWeather: true, ProcessPokemon: true, ProcessWild: true}, wild, nil, 1)
+	for _, want := range []int32{0, 42, -1} {
+		select {
+		case observation := <-biomeCollector.queue:
+			if observation.form != want || observation.pokemonID != 133 {
+				t.Fatalf("observation species/form = %d/%d, want 133/%d", observation.pokemonID, observation.form, want)
+			}
+		default:
+			t.Fatal("missing observation")
+		}
+	}
+}
+
+// GOLBAT_TEST_BIOME_DSN must point to a new, empty disposable MariaDB database.
+func TestBiomeSpawnSnapshotsMariaDB(t *testing.T) {
+	dsn := os.Getenv("GOLBAT_TEST_BIOME_DSN")
+	if dsn == "" {
+		t.Skip("requires a disposable MariaDB database")
+	}
+	conn, err := sqlx.Connect("mysql", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	run := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	schema, err := os.ReadFile("../sql/56_biome_observations.up.sql")
+	run(err)
+	_, err = conn.Exec(string(schema))
+	run(err)
+	_, err = conn.Exec("CREATE TABLE biome_rate_test_updates (form INT)")
+	run(err)
+	_, err = conn.Exec(`CREATE TRIGGER biome_rate_test_audit AFTER UPDATE ON biome_spawn_rate
+		FOR EACH ROW INSERT INTO biome_rate_test_updates (form) VALUES (NEW.form)`)
+	run(err)
+
+	ctx := context.Background()
+	worker := &biomeWorker{db: conn}
+	now := time.Now().Truncate(time.Millisecond)
+	base := s2.CellIDFromLatLng(s2.LatLngFromDegrees(-33.86, 151.21)).Parent(16)
+	cells := [3]uint64{uint64(base), uint64(base.Next()), uint64(base.Next().Next())}
+	fields := biomeGeography{Landform: 4, Landcover: 5, Temperature: 2, Features: []int32{1}}
+	for _, cell := range cells {
+		run(worker.persist(ctx, []biomeEvent{{kind: biomeCellEvent, cellID: cell, geography: fields, atMS: now.Add(-time.Minute).UnixMilli()}}))
+	}
+
+	add := func(from, until int, at time.Time) {
+		t.Helper()
+		events := make([]biomeEvent, 0, until-from)
+		for i := from; i < until; i++ {
+			events = append(events, biomeEvent{
+				kind: biomeSpawnEvent, cellID: cells[i%len(cells)], atMS: at.UnixMilli(),
+				weather: 1, pokemonID: 133, form: int32(10 + i%2),
+				encounterKey: [16]byte{byte(i >> 8), byte(i)},
+			})
+		}
+		run(worker.persist(ctx, events))
+	}
+	add(0, 120, now)
+	add(0, 120, now)
+	run(worker.refresh(ctx, now))
+	var sample int
+	run(conn.Get(&sample, "SELECT sample_count FROM biome_spawn_group"))
+	if sample != 120 {
+		t.Fatalf("sample count = %d, want 120 unique encounters", sample)
+	}
+	rates := []string{}
+	run(conn.Select(&rates, "SELECT percent FROM biome_spawn_rate ORDER BY form"))
+	if len(rates) != 2 || rates[0] != "50.000000000000" || rates[1] != rates[0] {
+		t.Fatalf("rates by form = %v, want 50%% for each", rates)
+	}
+
+	later := now.Add(5 * time.Minute)
+	add(120, 240, later)
+	run(worker.refresh(ctx, later))
+	run(conn.Get(&sample, "SELECT sample_count FROM biome_spawn_group"))
+	if sample != 240 {
+		t.Fatalf("sample count = %d, want 240", sample)
+	}
+	var writes int
+	run(conn.Get(&writes, "SELECT COUNT(*) FROM biome_rate_test_updates"))
+	if writes != 0 {
+		t.Fatalf("unchanged rates received %d updates", writes)
+	}
+	add(240, 241, later)
+	run(worker.refresh(ctx, later))
+	run(conn.Get(&writes, "SELECT COUNT(*) FROM biome_rate_test_updates"))
+	if writes != 2 {
+		t.Fatalf("changed rates received %d updates, want 2", writes)
+	}
+
+	run(worker.refresh(ctx, later.Add(time.Hour)))
+	run(conn.Get(&sample, "SELECT COUNT(*) FROM biome_spawn_rate"))
+	if sample != 0 {
+		t.Fatalf("expired window still has %d rates", sample)
+	}
+}
