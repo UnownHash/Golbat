@@ -153,7 +153,7 @@ profile_routes = false      # Turn on debugging endpoints
 profile_contention = false  # Collect data for contention (use with above) - has a perf impact
 s2_cell_lookup = false      # Pre-compute S2 cell lookup for faster geofence matching. Trades memory (~60x geofence file size) for ~7x faster lookups. (default: false)
 # raw_processing_concurrency = 0  # max concurrent raw-proto decoders; 0 = auto (4x CPUs, max 96), -1 = unlimited
-# raw_processing_queue_factor = 32  # parked decode queue cap (x concurrency limit); rides out brief DB stalls before shedding
+# raw_processing_queue_factor = 32  # pending requests per decoder; the queue also has a shared 64 MiB payload budget
 # slow_db_query_ms = 0         # log [DB_SLOW] (with pool stats) for entity queries and write-behind batch flushes slower than this many ms; 0 = default (1000), -1 = disabled
 # gogc_percent = 0             # runtime GC target (Go default 100). Higher = fewer GC cycles,
                                # more peak heap (~(1+n/100)x live). Large-RAM instances with big

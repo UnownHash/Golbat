@@ -7,101 +7,79 @@ import (
 	"testing"
 	"time"
 
+	"context"
+	"github.com/gin-gonic/gin"
 	"golbat/config"
+	pb "golbat/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	"net/http/httptest"
 
 	log "github.com/sirupsen/logrus"
 )
 
-func TestRawLimiterBoundsConcurrency(t *testing.T) {
-	old := config.Config.Tuning.RawProcessingConcurrency
+func TestRawAdmission(t *testing.T) {
+	old, bearer := rawProcessingQueue, config.Config.RawBearer
+	q := newRawQueue(1, 1)
+	rawProcessingQueue, config.Config.RawBearer = q, ""
+	defer func() { rawProcessingQueue, config.Config.RawBearer = old, bearer; close(q.jobs) }()
+	started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	defer func() {
-		config.Config.Tuning.RawProcessingConcurrency = old
-		rawProcessingSem = nil
-	}()
-
-	config.Config.Tuning.RawProcessingConcurrency = 2
-	initRawProcessingLimiter()
-
-	r1, ok1 := acquireRawProcessingSlot()
-	r2, ok2 := acquireRawProcessingSlot()
-	if !ok1 || !ok2 {
-		t.Fatal("slots within the limit must not be shed")
-	}
-
-	acquired := make(chan struct{})
-	go func() {
-		r3, ok := acquireRawProcessingSlot()
-		if !ok {
-			t.Error("third slot shed despite empty parked queue")
-			close(acquired)
-			return
+		select {
+		case <-release:
+		default:
+			close(release)
 		}
-		close(acquired)
-		r3()
 	}()
-
-	select {
-	case <-acquired:
-		t.Fatal("third slot acquired despite limit of 2")
-	case <-time.After(50 * time.Millisecond):
+	if !submitRaw(1, func() { close(started); <-release }) {
+		t.Fatal("first job rejected")
 	}
-
-	r1()
+	<-started
+	if submitRaw(rawQueueBytes+1, func() {}) {
+		t.Fatal("oversized queued payload accepted")
+	}
+	if !submitRaw(4, func() { close(done) }) {
+		t.Fatal("waiting job rejected")
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("POST", "/raw", strings.NewReader(`{"contents":[]}`))
+	Raw(c)
+	if w.Code != 429 {
+		t.Fatalf("full HTTP queue returned %d", w.Code)
+	}
+	server := grpcRawServer{}
+	_, err := server.SubmitRawProto(context.Background(), &pb.RawProtoRequest{})
+	if status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("full RPC queue returned %v", err)
+	}
+	if q.bytes.Load() != 4 {
+		t.Fatal("rejected jobs consumed budget")
+	}
+	close(release)
 	select {
-	case <-acquired:
+	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("third slot not acquired after release")
+		t.Fatal("queued job did not run")
 	}
-	r2()
+	if q.bytes.Load() != 0 {
+		t.Fatal("queue budget leaked")
+	}
+	resp, err := server.SubmitRawProto(context.Background(), &pb.RawProtoRequest{})
+	if err != nil || resp.Message != "Processed" {
+		t.Fatal("admission did not recover", err)
+	}
 }
 
-func TestRawLimiterUnlimited(t *testing.T) {
-	old := config.Config.Tuning.RawProcessingConcurrency
-	defer func() {
-		config.Config.Tuning.RawProcessingConcurrency = old
-		rawProcessingSem = nil
-	}()
-
-	config.Config.Tuning.RawProcessingConcurrency = -1
-	initRawProcessingLimiter()
-	if rawProcessingSem != nil {
-		t.Fatal("expected nil semaphore for unlimited config")
+func TestUnlimitedRawAdmission(t *testing.T) {
+	old := rawProcessingQueue
+	rawProcessingQueue = nil
+	defer func() { rawProcessingQueue = old }()
+	done := make(chan struct{})
+	if !submitRaw(1, func() { close(done) }) {
+		t.Fatal("unlimited mode rejected request")
 	}
-	release, ok := acquireRawProcessingSlot()
-	if !ok {
-		t.Fatal("unlimited mode must never shed")
-	}
-	release() // must not panic
-}
-
-func TestRawLimiterShedsWhenParkedQueueFull(t *testing.T) {
-	old := config.Config.Tuning.RawProcessingConcurrency
-	defer func() {
-		config.Config.Tuning.RawProcessingConcurrency = old
-		rawProcessingSem = nil
-		rawProcessingWaiting.Store(0)
-	}()
-
-	config.Config.Tuning.RawProcessingConcurrency = 1
-	initRawProcessingLimiter()
-
-	release, ok := acquireRawProcessingSlot()
-	if !ok {
-		t.Fatal("first slot must not be shed")
-	}
-
-	// Simulate a full parked queue (cap already waiting).
-	rawProcessingWaiting.Store(rawQueueCap)
-
-	if _, ok := acquireRawProcessingSlot(); ok {
-		t.Fatal("expected shed when parked queue exceeds cap")
-	}
-	if got := rawProcessingWaiting.Load(); got != rawQueueCap {
-		t.Errorf("shed must not leak the waiting counter: got %d, want %d", got, rawQueueCap)
-	}
-
-	rawProcessingWaiting.Store(0)
-	release()
+	<-done
 }
 
 // Slow slot waits are logged once per second with a count and the longest

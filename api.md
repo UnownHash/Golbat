@@ -2058,3 +2058,19 @@ every timezone, including 45-minute offsets.
 | `tuning.max_tappable_results` | Max tappables returned per `/api/tappable/scan` (default 9000; `limits.max_tappable_results` in `/api/status`) |
 | `tuning.max_pokemon_distance` | Max distance in km between the min/max points of `/api/pokemon/search` (default 100) |
 | `cleanup.device_hours` | How long a device stays in `/api/devices/all` after its last submission |
+
+
+### Raw ingest admission
+
+HTTP `POST /raw` returns 201 and gRPC `SubmitRawProto` returns its success
+response once the request has been admitted for asynchronous processing.
+When the pending queue is full, HTTP returns 429 with a one-second
+`Retry-After` hint and gRPC returns `RESOURCE_EXHAUSTED`. A rejected request
+has not been scheduled. Clients that need retries should retain it and use
+bounded backoff. Acceptance does not guarantee persistence across a crash.
+
+The bounded decoder pool limits waiting requests by count
+(`raw_processing_concurrency × raw_processing_queue_factor`, using the
+resolved defaults) and 64 MiB of aggregate queued payload size. The byte
+budget measures the HTTP body or serialized protobuf size, not total process
+memory. The explicit unlimited configuration bypasses these queue limits.

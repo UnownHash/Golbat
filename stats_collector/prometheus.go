@@ -400,14 +400,14 @@ var (
 		prometheus.GaugeOpts{
 			Namespace: ns,
 			Name:      "raw_processing_waiting",
-			Help:      "Goroutines parked waiting for a raw processing slot",
+			Help:      "Requests queued for a raw processing worker",
 		},
 	)
 	rawPacketsShed = prometheus.NewCounter(
 		prometheus.CounterOpts{
 			Namespace: ns,
 			Name:      "raw_packets_shed_total",
-			Help:      "Raw packets dropped because the parked decode queue exceeded its cap",
+			Help:      "Raw requests rejected because the decode queue reached its count or byte limit",
 		},
 	)
 	dbQueryDuration = prometheus.NewHistogramVec(

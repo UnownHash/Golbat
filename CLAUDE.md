@@ -25,7 +25,7 @@ routes_huma.go       — Huma (OpenAPI 3.1) /api operations; most of the HTTP AP
 huma_api.go          — Huma config, go-json serializer, api_secret security scheme
 routes_huma_logging.go — Optional request/response body logging for Huma routes
 routes_huma_draft.go — draftBadge for endpoints without stable consumers
-raw_limiter.go       — Bounded raw-processing concurrency (semaphore + shed)
+raw_limiter.go       — Bounded raw-processing concurrency (worker pool + bounded admission)
 raw_bufpool.go       — Pooled payload buffers for base64 decoding on /raw
 decode.go            — Proto method dispatcher, GMO decoder
 decode_nebula.go     — Nebula-context message dispatch (decodeNebula)
@@ -102,7 +102,7 @@ docs/design/         — Design records (see Docs)
 
 Messages arrive via two paths:
 
-1. **HTTP POST `/raw`** (`routes.go`): Accepts JSON with base64-encoded protobuf payloads. Supports both Pogodroid format (array of `{payload, type}`) and standard format (object with `contents[]`, `username`, `trainerlvl`, etc.). Returns 201 immediately; processing happens in a background goroutine with a 5s per-message timeout (30s with `tuning.extended_timeout`).
+1. **HTTP POST `/raw`** (`routes.go`): Accepts JSON with base64-encoded protobuf payloads. Supports both Pogodroid format (array of `{payload, type}`) and standard format (object with `contents[]`, `username`, `trainerlvl`, etc.). Returns 201 on admission; processing happens in a worker with a 5s per-message timeout (30s with `tuning.extended_timeout`).
 
 2. **gRPC `SubmitRawProto`** (`grpc_server_raw.go`, `grpc/raw_receiver.proto`): Accepts `RawProtoRequest` with binary proto payloads in `Contents[]`. Same async processing pattern.
 
@@ -111,12 +111,11 @@ Both paths normalize method-tagged payloads into `ProtoData` structs and call `d
 - **Nebula contents** (`nebula_contents`): endpoint-addressed payloads with a typed context (e.g. an invasion's fort and incident id), normalized into `NebulaData` and routed by `decodeNebula()` (`decode_nebula.go`).
 - **Push-gateway contents** (`push_contents`): marshalled `PushGatewayMessage`s with a `message_type`, routed by `decodePushGateway()` (`decode_push_gateway.go`); unknown types are skipped before unmarshalling.
 
-Processing concurrency is bounded (`raw_limiter.go`): a semaphore of
-`tuning.raw_processing_concurrency` slots (default min(4×CPU, 96)) with a
-bounded parked queue (`raw_processing_queue_factor` × slots, default 32×).
-When the queue is full, packets are shed with aggregated once-per-second
-logging and a `golbat_raw_packets_shed_total` counter — bounded loss under
-overload instead of unbounded goroutine pileup on internal locks.
+The shared HTTP/gRPC worker pool uses `tuning.raw_processing_concurrency`
+workers (default min(4×CPU, 96)). Waiting requests are bounded by count
+(`raw_processing_queue_factor` × workers) and 64 MiB of payloads.
+Saturation returns HTTP 429 or gRPC RESOURCE_EXHAUSTED before success is
+acknowledged and increments `golbat_raw_packets_shed_total`.
 
 ### gRPC API
 

@@ -45,7 +45,9 @@ WHERE c.cell_id = CAST(? AS UNSIGNED)
 ORDER BY r.percent DESC, r.pokemon_id, r.form;
 ```
 
-Golbat refreshes a rolling 60-minute window every five minutes. A group
+A single background task publishes each snapshot while the collector continues
+accepting observations. Group totals and form rates use the same materialized
+sample. Golbat refreshes a rolling 60-minute window every five minutes. A group
 needs at least 100 unique encounters from three distinct cells. A missing
 group means there is no eligible sample. Percentages have twelve decimal
 places. A refresh updates an existing rate only when its percentage changes,

@@ -202,9 +202,29 @@ func TestBiomeSpawnSnapshotsMariaDB(t *testing.T) {
 		t.Fatalf("changed rates received %d updates, want 2", writes)
 	}
 
+	// An in-flight sighting must not block the snapshot's read of the
+	// committed window, even when its row is locked by another connection.
+	writer, err := conn.BeginTxx(ctx, nil)
+	run(err)
+	defer func() { _ = writer.Rollback() }()
+	_, err = writer.ExecContext(ctx, "UPDATE biome_spawn_observation SET weather=2 WHERE encounter_key=?", make([]byte, 16))
+	run(err)
+	refreshCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	err = worker.refresh(refreshCtx, later)
+	cancel()
+	run(err)
+	run(writer.Rollback())
+
 	run(worker.refresh(ctx, later.Add(time.Hour)))
 	run(conn.Get(&sample, "SELECT COUNT(*) FROM biome_spawn_rate"))
 	if sample != 0 {
 		t.Fatalf("expired window still has %d rates", sample)
+	}
+
+	// Retention must remove only expired observations and preserve newer ones.
+	run(worker.refresh(ctx, now.Add(biomeRetention)))
+	run(conn.Get(&sample, "SELECT COUNT(*) FROM biome_spawn_observation"))
+	if sample != 121 {
+		t.Fatalf("retention kept %d observations, want the 121 newer sightings", sample)
 	}
 }

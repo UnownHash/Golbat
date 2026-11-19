@@ -2,7 +2,10 @@ package decoder
 
 import (
 	"context"
+	"database/sql"
 	"time"
+
+	"github.com/jmoiron/sqlx"
 )
 
 func (worker *biomeWorker) refresh(ctx context.Context, now time.Time) error {
@@ -10,17 +13,25 @@ func (worker *biomeWorker) refresh(ctx context.Context, now time.Time) error {
 	// deletes avoid holding a large range of locks in a single statement.
 	expiry := now.Add(-biomeRetention).UnixMilli()
 	for {
-		result, err := worker.db.ExecContext(ctx, `
-			DELETE FROM biome_spawn_observation
-			WHERE observed_at_ms <= ? ORDER BY observed_at_ms LIMIT 10000`, expiry)
+		const batchSize = 1000
+		var keys [][]byte
+		if err := worker.db.SelectContext(ctx, &keys, `
+			SELECT encounter_key FROM biome_spawn_observation
+			WHERE observed_at_ms <= ? ORDER BY observed_at_ms LIMIT ?`, expiry, batchSize); err != nil {
+			return err
+		}
+		if len(keys) == 0 {
+			break
+		}
+		query, args, err := sqlx.In(`DELETE FROM biome_spawn_observation
+			WHERE encounter_key IN (?) AND observed_at_ms <= ?`, keys, expiry)
 		if err != nil {
 			return err
 		}
-		removed, err := result.RowsAffected()
-		if err != nil {
+		if _, err := worker.db.ExecContext(ctx, query, args...); err != nil {
 			return err
 		}
-		if removed < 10000 {
+		if len(keys) < batchSize {
 			break
 		}
 	}
@@ -38,7 +49,7 @@ func (worker *biomeWorker) refresh(ctx context.Context, now time.Time) error {
 	}
 	defer func() { _ = connection.Close() }()
 
-	const dropStaging = "DROP TEMPORARY TABLE IF EXISTS biome_next_group, biome_next_rate"
+	const dropStaging = "DROP TEMPORARY TABLE IF EXISTS biome_next_group, biome_next_rate, biome_window"
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -48,20 +59,28 @@ func (worker *biomeWorker) refresh(ctx context.Context, now time.Time) error {
 		return err
 	}
 
-	tx, err := connection.BeginTxx(ctx, nil)
+	// A locking source read would stall concurrent inserts while the staging tables are built.
+	tx, err := connection.BeginTxx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Materialize the window once so concurrent ingest cannot change the
+	// denominator between the group and rate calculations.
+	if _, err = tx.ExecContext(ctx, `
+		CREATE TEMPORARY TABLE biome_window ENGINE=InnoDB AS
+		SELECT spawn_scope, biome_key, weather, cell_id, pokemon_id, form
+		FROM biome_spawn_observation WHERE observed_at_ms > ? AND observed_at_ms <= ?`, start, end); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `
 		CREATE TEMPORARY TABLE biome_next_group (PRIMARY KEY (spawn_scope, biome_key, weather))
 		ENGINE=InnoDB AS
 		SELECT spawn_scope, biome_key, weather, COUNT(*) AS sample_count, COUNT(DISTINCT cell_id) AS cell_count
-		FROM biome_spawn_observation
-		WHERE observed_at_ms > ? AND observed_at_ms <= ?
+		FROM biome_window
 		GROUP BY spawn_scope, biome_key, weather
-		HAVING COUNT(*) >= 100 AND COUNT(DISTINCT cell_id) >= 3`, start, end); err != nil {
+		HAVING COUNT(*) >= 100 AND COUNT(DISTINCT cell_id) >= 3`); err != nil {
 		return err
 	}
 	if _, err = tx.ExecContext(ctx, `
@@ -70,10 +89,9 @@ func (worker *biomeWorker) refresh(ctx context.Context, now time.Time) error {
 		ENGINE=InnoDB AS
 		SELECT o.spawn_scope, o.biome_key, o.weather, o.pokemon_id, o.form,
 		       CAST(CAST(COUNT(*) AS DECIMAL(32,15)) * 100 / g.sample_count AS DECIMAL(18,12)) AS percent
-		FROM biome_spawn_observation o
+		FROM biome_window o
 		JOIN biome_next_group g USING (spawn_scope, biome_key, weather)
-		WHERE o.observed_at_ms > ? AND o.observed_at_ms <= ?
-		GROUP BY o.spawn_scope, o.biome_key, o.weather, o.pokemon_id, o.form, g.sample_count`, start, end); err != nil {
+		GROUP BY o.spawn_scope, o.biome_key, o.weather, o.pokemon_id, o.form, g.sample_count`); err != nil {
 		return err
 	}
 	if worker.lastLoss.Load() >= start {

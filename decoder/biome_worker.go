@@ -3,6 +3,7 @@ package decoder
 import (
 	"context"
 	"encoding/json"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -79,6 +80,9 @@ func (worker *biomeWorker) run(ctx context.Context) {
 	defer refreshTimer.Stop()
 	batch := make([]biomeEvent, 0, biomeBatchSize)
 	invalidatedThrough := int64(0)
+	var publishing sync.Mutex
+	var snapshots sync.WaitGroup
+	defer snapshots.Wait()
 
 	flush := func() {
 		if len(batch) == 0 {
@@ -119,7 +123,7 @@ func (worker *biomeWorker) run(ctx context.Context) {
 			}
 		case <-flushTimer.C:
 			flush()
-			if lastLoss := worker.lastLoss.Load(); lastLoss > invalidatedThrough {
+			if lastLoss := worker.lastLoss.Load(); lastLoss > invalidatedThrough && publishing.TryLock() {
 				invalidCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				_, err := worker.db.ExecContext(invalidCtx,
 					"UPDATE biome_spawn_group SET valid_until_ms = ? WHERE valid_until_ms > ?", lastLoss, lastLoss)
@@ -129,6 +133,7 @@ func (worker *biomeWorker) run(ctx context.Context) {
 				} else {
 					invalidatedThrough = lastLoss
 				}
+				publishing.Unlock()
 			}
 		case <-refreshTimer.C:
 			flush()
@@ -138,11 +143,16 @@ func (worker *biomeWorker) run(ctx context.Context) {
 					delete(worker.weather, id)
 				}
 			}
-			refreshCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
-			err := worker.refresh(refreshCtx, now)
-			cancel()
-			if err != nil {
-				log.Warnf("[BIOMES] could not refresh spawn statistics: %v", err)
+			if publishing.TryLock() {
+				snapshots.Go(func() {
+					defer publishing.Unlock()
+					refreshCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
+					err := worker.refresh(refreshCtx, now)
+					cancel()
+					if err != nil {
+						log.Warnf("[BIOMES] could not refresh spawn statistics: %v", err)
+					}
+				})
 			}
 		}
 	}
