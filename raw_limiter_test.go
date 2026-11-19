@@ -2,35 +2,37 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"context"
-	"github.com/gin-gonic/gin"
 	"golbat/config"
 	pb "golbat/grpc"
+
+	"github.com/gin-gonic/gin"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"net/http/httptest"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func TestRawAdmission(t *testing.T) {
 	old, bearer := rawProcessingQueue, config.Config.RawBearer
-	q := newRawQueue(1, 1)
+	q := newRawQueue(1, 2)
 	rawProcessingQueue, config.Config.RawBearer = q, ""
-	defer func() { rawProcessingQueue, config.Config.RawBearer = old, bearer; close(q.jobs) }()
-	started, release, done := make(chan struct{}), make(chan struct{}), make(chan struct{})
 	defer func() {
-		select {
-		case <-release:
-		default:
-			close(release)
-		}
+		rawProcessingQueue, config.Config.RawBearer = old, bearer
+		close(q.jobs)
 	}()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	done := make(chan struct{})
+	unblock := sync.OnceFunc(func() { close(release) })
+	defer unblock()
 	if !submitRaw(1, func() { close(started); <-release }) {
 		t.Fatal("first job rejected")
 	}
@@ -38,25 +40,34 @@ func TestRawAdmission(t *testing.T) {
 	if submitRaw(rawQueueBytes+1, func() {}) {
 		t.Fatal("oversized queued payload accepted")
 	}
-	if !submitRaw(4, func() { close(done) }) {
+	if !submitRaw(4, func() {}) {
 		t.Fatal("waiting job rejected")
+	}
+	if submitRaw(rawQueueBytes-3, func() {}) {
+		t.Fatal("accepted a request over the remaining byte budget")
+	}
+	if !submitRaw(1, func() { close(done) }) {
+		t.Fatal("second waiting job rejected")
 	}
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Request = httptest.NewRequest("POST", "/raw", strings.NewReader(`{"contents":[]}`))
 	Raw(c)
-	if w.Code != 429 {
+	if w.Code != http.StatusTooManyRequests {
 		t.Fatalf("full HTTP queue returned %d", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After = %q, want 1", got)
 	}
 	server := grpcRawServer{}
 	_, err := server.SubmitRawProto(context.Background(), &pb.RawProtoRequest{})
 	if status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("full RPC queue returned %v", err)
 	}
-	if q.bytes.Load() != 4 {
+	if q.bytes.Load() != 5 {
 		t.Fatal("rejected jobs consumed budget")
 	}
-	close(release)
+	unblock()
 	select {
 	case <-done:
 	case <-time.After(time.Second):

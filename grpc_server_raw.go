@@ -2,16 +2,16 @@ package main
 
 import (
 	"context"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"time"
 
 	"golbat/config"
 	pb "golbat/grpc"
 
+	"google.golang.org/grpc/codes"
 	_ "google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 // grpcRawServer implements the RawProto gRPC service (SubmitRawProto),

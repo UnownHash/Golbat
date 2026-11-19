@@ -12,8 +12,7 @@ import (
 	"golbat/util"
 )
 
-// rawSlotWaitWarning is the parked-time threshold above which a raw
-// processing goroutine logs how long it waited for a semaphore slot.
+// Report queue delays above this threshold.
 const rawSlotWaitWarning = time.Second
 
 // Limit both the number of pending requests and their aggregate payload size.
@@ -116,7 +115,7 @@ func initRawProcessingLimiter() {
 	q := newRawQueue(n, factor*n)
 	rawProcessingQueue = q
 
-	// Publish the parked-queue depth every 10s so dashboards can see
+	// Publish queue depth every 10s so dashboards can see
 	// decode backpressure building before sheds start.
 	go func() {
 		ticker := time.NewTicker(10 * time.Second)
