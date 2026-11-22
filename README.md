@@ -12,7 +12,7 @@ At this time this is likely to be mostly development discussion.
 
 # Requirements
 
-[Go 1.26](https://go.dev/doc/install) and MariaDB (MySQL may work but is not tested).
+[Go 1.27](https://go.dev/doc/install) and MariaDB (MySQL may work but is not tested).
 
 # Instructions
 
