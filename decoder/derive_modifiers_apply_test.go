@@ -80,7 +80,7 @@ func adjRecord(species int16, lat, lon float64, strong bool) *Pokemon {
 func TestDerivationAdjustLevelOffset(t *testing.T) {
 	withDeriveIv(t, true)
 	withDeriveStrong(t, true)
-	withModifierIndex(t, levelMod(allStrongScope, 5, adjZoneA, zoneWideIn()))
+	withModifierIndex(t, levelMod(modifierScope{PokemonID: 1, Strong: true}, 5, adjZoneA, zoneWideIn()))
 	base := encounter.Derive(adjEid, false, true, 0)
 
 	in := adjRecord(1, adjLatA, adjLonA, true)
@@ -99,13 +99,25 @@ func TestDerivationAdjustLevelOffset(t *testing.T) {
 	}
 }
 
-func TestDerivationAdjustLevelClamped(t *testing.T) {
+// A confirmed all-strong +5 is detected and listed but never applied: a
+// strong species at base levels kept getting +5 (design §7). It still gates
+// sightings of strong scopes.
+func TestDerivationAdjustAllStrongNotApplied(t *testing.T) {
 	withDeriveIv(t, true)
-	withModifierIndex(t, levelMod(modifierScope{PokemonID: 1}, -60, "", cellSet(adjCellA)))
-	p := adjRecord(1, adjLatA, adjLonA, false)
+	withDeriveStrong(t, true)
+	idx := withModifierIndex(t, levelMod(allStrongScope, 5, adjZoneA, zoneWideIn()))
+	base := encounter.Derive(adjEid, false, true, 0)
+
+	p := adjRecord(1, adjLatA, adjLonA, true)
 	p.deriveIvIfAbsent()
-	if got := p.Level.ValueOrZero(); got != 1 {
-		t.Errorf("level = %d, want clamped to 1", got)
+	if got := int32(p.Level.ValueOrZero()); !p.Level.Valid || got != base.Level {
+		t.Errorf("strong record level = %v, want base %d (all-strong not applied)", p.Level, base.Level)
+	}
+	if adj := idx.lookup(1, 0, true, adjCellA, modifierZoneOf); adj.LevelDelta != 0 || adj.Suppress {
+		t.Errorf("lookup = %+v, want zero", adj)
+	}
+	if !idx.wantsSighting(1, 0, true) {
+		t.Error("all-strong confirmed: strong sighting not wanted")
 	}
 }
 
@@ -120,7 +132,95 @@ func TestDerivationAdjustSpeciesWinsOverAllStrong(t *testing.T) {
 	p := adjRecord(1, adjLatA, adjLonA, true)
 	p.deriveIvIfAbsent()
 	if got := int32(p.Level.ValueOrZero()); got != base.Level+5 {
-		t.Errorf("level = %d, want base %d + 5 (species wins, never summed)", got, base.Level)
+		t.Errorf("level = %d, want base %d + 5 (species applies, all-strong never)", got, base.Level)
+	}
+}
+
+// pinMoveData is a masterfile in which species 1 has a quick and charged
+// pool.
+func pinMoveData(t *testing.T) {
+	t.Helper()
+	withMasterFileData(t, MasterFileData{
+		Initialized: true,
+		Pokemon: map[int]MasterFilePokemon{
+			1: {QuickMoves: []int{214, 215}, ChargedMoves: []int{90, 91, 92}},
+		},
+	})
+}
+
+func pinMod(zone string, slot string, move int32) *derivationModifier {
+	return &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
+		Effect: modifierEffect{Slot: slot, Move: move}, Zone: zone, Status: modConfirmed,
+		InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}}
+}
+
+// Two confirmed charged pins covering one cell: neither applies and the
+// slot is left absent, not derived (base is likely wrong too); the quick
+// slot and the IVs are derived as usual.
+func TestDerivationAdjustConflictingPinsWithheld(t *testing.T) {
+	withDeriveIv(t, true)
+	pinMoveData(t)
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300))
+	draw := encounter.Derive(adjEid, false, false, 0)
+	want := derivedMoves(&draw, 1, 0)
+
+	p := adjRecord(1, adjLatA, adjLonA, false)
+	p.deriveIvIfAbsent()
+	if p.Move2.Valid {
+		t.Errorf("Move2 = %v, want absent (disputed pin)", p.Move2)
+	}
+	if int32(p.Move1.ValueOrZero()) != want.Move1 || !p.AtkIv.Valid {
+		t.Errorf("Move1 = %v atk = %v, want derived %d and IVs", p.Move1, p.AtkIv, want.Move1)
+	}
+
+	settled := adjRecord(1, adjLatA, adjLonA, false)
+	settled.calculateIv(1, 2, 3)
+	settled.deriveSizeAndMovesIfAbsent()
+	if settled.Move2.Valid || !settled.Move1.Valid {
+		t.Errorf("settled IVs: moves %v/%v, want derived quick, absent charged", settled.Move1, settled.Move2)
+	}
+
+	// Pins in different slots do not conflict.
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotQuick, 300))
+	both := adjRecord(1, adjLatA, adjLonA, false)
+	both.deriveIvIfAbsent()
+	if both.Move1.ValueOrZero() != 300 || both.Move2.ValueOrZero() != 494 {
+		t.Errorf("moves %v/%v, want pinned 300/494", both.Move1, both.Move2)
+	}
+}
+
+// Two confirmed level deltas covering one record: no derived IVs or level
+// (as unexplained).
+func TestDerivationAdjustConflictingLevelsSuppress(t *testing.T) {
+	withDeriveIv(t, true)
+	idx := withModifierIndex(t,
+		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
+		levelMod(modifierScope{PokemonID: 1}, 3, "", cellSet(adjCellA)))
+	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.Suppress {
+		t.Errorf("lookup = %+v, want suppress", adj)
+	}
+	p := adjRecord(1, adjLatA, adjLonA, false)
+	p.deriveIvIfAbsent()
+	if p.AtkIv.Valid || p.Level.Valid {
+		t.Errorf("disputed level: atk=%v level=%v, want absent", p.AtkIv, p.Level)
+	}
+}
+
+// Two confirmed size modifiers covering one record (possible only across
+// scopes or zones): size absent, not base.
+func TestDerivationAdjustConflictingSizeWithheld(t *testing.T) {
+	withDeriveIv(t, true)
+	a := sizeMod(map[string]sizeBoundary{"1/2": {Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}})
+	b := sizeMod(map[string]sizeBoundary{"1/2": {Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}})
+	b.Zone = adjZoneA
+	idx := withModifierIndex(t, a, b)
+	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.WithholdSize || adj.Size != nil {
+		t.Errorf("lookup = %+v, want size withheld", adj)
+	}
+	p := adjRecord(1, adjLatA, adjLonA, false)
+	p.deriveIvIfAbsent()
+	if p.Size.Valid || !p.AtkIv.Valid {
+		t.Errorf("disputed size: size=%v atk=%v, want absent size, derived IVs", p.Size, p.AtkIv)
 	}
 }
 
@@ -338,6 +438,25 @@ func TestDerivationAdjustNoAllocs(t *testing.T) {
 	withModifierIndex(t, levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)))
 	if n := testing.AllocsPerRun(100, func() { _ = p.modifierAdjust() }); n != 0 {
 		t.Errorf("non-matching index: %v allocs, want 0", n)
+	}
+	// Withholding disputed values allocates nothing either.
+	q := adjRecord(1, adjLatA, adjLonA, false)
+	withModifierIndex(t,
+		pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300),
+		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
+		levelMod(modifierScope{PokemonID: 1}, 3, "", cellSet(adjCellA)))
+	if q.modifierAdjust().Suppress != true {
+		t.Fatal("conflicting index: want suppress")
+	}
+	if n := testing.AllocsPerRun(100, func() { _ = q.modifierAdjust() }); n != 0 {
+		t.Errorf("conflicting index: %v allocs, want 0", n)
+	}
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300))
+	if !q.modifierAdjust().WithholdCharged {
+		t.Fatal("conflicting pins: want charged withheld")
+	}
+	if n := testing.AllocsPerRun(100, func() { _ = q.modifierAdjust() }); n != 0 {
+		t.Errorf("conflicting pins: %v allocs, want 0", n)
 	}
 }
 

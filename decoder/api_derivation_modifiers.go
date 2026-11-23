@@ -24,6 +24,7 @@ type ApiDerivationModifier struct {
 	Window   ApiModifierWindow   `json:"window"`
 	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
+	Applied  bool                `json:"applied" doc:"The derive path applies it: confirmed and not an all-strong scope (all-strong level offsets are listed but never applied)"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
 }
@@ -123,11 +124,12 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 	}
 	for _, m := range activeDerivationModifiers() {
 		am := ApiDerivationModifier{
-			ID:     apiModifierID(m),
-			Scope:  ApiModifierScope{Strong: m.Scope.Strong},
-			Window: ApiModifierWindow{Start: m.Start.UTC().Format(apiModifierTimeFormat), TimeBasis: "utc"},
-			Effect: apiModifierEffect(m),
-			Status: m.Status.String(),
+			ID:      apiModifierID(m),
+			Scope:   ApiModifierScope{Strong: m.Scope.Strong},
+			Window:  ApiModifierWindow{Start: m.Start.UTC().Format(apiModifierTimeFormat), TimeBasis: "utc"},
+			Effect:  apiModifierEffect(m),
+			Status:  m.Status.String(),
+			Applied: modifierApplied(m),
 			Evidence: ApiModifierEvidence{Observations: m.Observations,
 				Contradictions: m.Contradictions},
 			Region: ApiModifierRegion{Zone: m.Zone},

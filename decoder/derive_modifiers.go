@@ -170,6 +170,11 @@ type derivationModifier struct {
 	// outsideUnknown: agreements before the candidate overflowed its track's
 	// cell list, so an outside cell may be missing from Outside.
 	outsideUnknown bool
+	// version counts the changes the learner reports through changed (and
+	// the confirm), so the runtime re-clones only a modifier that changed
+	// since its last publish. LastSeen and the ring are not versioned:
+	// neither is published.
+	version uint64
 }
 
 // modZoneWideSpreadLevel: a zone-wide modifier needs in-cells under at
@@ -214,6 +219,19 @@ func (m *derivationModifier) clone() *derivationModifier {
 	c.Boundaries = maps.Clone(m.Boundaries)
 	c.InCells = maps.Clone(m.InCells)
 	c.Outside = maps.Clone(m.Outside)
+	return &c
+}
+
+// publishedClone is the immutable copy the runtime publishes to the index
+// and the API. It leaves Outside nil, folding a non-empty one into
+// outsideUnknown, so ZoneWide answers as on m without copying a set that
+// grows with every agreeing cell (nothing published reads its members).
+func (m *derivationModifier) publishedClone() *derivationModifier {
+	c := *m
+	c.Boundaries = maps.Clone(m.Boundaries)
+	c.InCells = maps.Clone(m.InCells)
+	c.Outside = nil
+	c.outsideUnknown = m.outsideUnknown || len(m.Outside) > 0
 	return &c
 }
 
@@ -356,7 +374,7 @@ type modTrack struct {
 	// located counts the modifier's matches with a cell, the observations
 	// Confirm is judged on (a cell-0 match is in no ring).
 	located int
-	size       *sizeEvidence // size_cutoffs tracks only
+	size    *sizeEvidence // size_cutoffs tracks only
 }
 
 // modPruneInterval is how often, in seconds of event time, feed prunes idle
@@ -370,10 +388,31 @@ type modifierLearner struct {
 	byScope      map[modScopeKey][]*modTrack
 	activeTracks []*modTrack // tracks with a modifier
 	nextPrune    int64
-	// dirty: an active modifier's evidence or region changed without a
-	// transition since the last takeDirty; regionDirty: such a change on a
-	// confirmed modifier changed what the index's lookup returns.
-	dirty, regionDirty bool
+	// dirty records the non-transition changes since the last takeDirty.
+	dirty modDirty
+}
+
+// modChange is what a non-transition change does to a modifier's index
+// lookup (only a confirmed modifier is looked up).
+type modChange uint8
+
+const (
+	// modEvidence changes no lookup: observations, contradictions, an
+	// outside cell of a local modifier, an in-cell of a zone-wide one.
+	modEvidence modChange = iota
+	// modGrowth makes the lookup cover more: a new in-cell of a local
+	// modifier, or zone-wide gained.
+	modGrowth
+	// modShrink makes it cover less or differently: zone-wide lost, or size
+	// boundaries moved (a record's class can change).
+	modShrink
+)
+
+// modDirty is what changed without a transition since the last takeDirty:
+// changed for any change; growth and shrink when a confirmed modifier's
+// lookup coverage grew or shrank.
+type modDirty struct {
+	changed, growth, shrink bool
 }
 
 func newModifierLearner(p modifierParams) *modifierLearner {
@@ -424,35 +463,45 @@ func (l *modifierLearner) active() []*derivationModifier {
 
 func (l *modifierLearner) trackCount() int { return len(l.tracks) }
 
-// changed records a change to active modifier m that is not a transition;
-// coverage when it changes what m's index entry matches (its in-cells, its
-// zone-wide flag or its size boundaries).
-func (l *modifierLearner) changed(m *derivationModifier, coverage bool) {
-	l.dirty = true
-	if coverage && m.Status == modConfirmed {
-		l.regionDirty = true
+// changed records a change to active modifier m that is not a transition,
+// and what it does to m's lookup coverage (growth and shrink count only for
+// a confirmed modifier). It bumps m's version.
+func (l *modifierLearner) changed(m *derivationModifier, c modChange) {
+	m.version++
+	l.dirty.changed = true
+	if m.Status != modConfirmed {
+		return
+	}
+	switch c {
+	case modGrowth:
+		l.dirty.growth = true
+	case modShrink:
+		l.dirty.shrink = true
 	}
 }
 
-// takeDirty reports and clears the changes recorded since the last call:
-// dirty when an active modifier changed without a transition, regionChanged
-// when that changed a confirmed modifier's coverage (the published index is
-// stale, not just the snapshot's evidence).
-func (l *modifierLearner) takeDirty() (dirty, regionChanged bool) {
-	dirty, regionChanged = l.dirty, l.regionDirty
-	l.dirty, l.regionDirty = false, false
-	return dirty, regionChanged
+// takeDirty reports and clears the changes recorded since the last call.
+// The runtime publishes a shrink at once (the published index would apply
+// a value where it no longer should) and growth and evidence at most once
+// per deriveModifiersEvidenceInterval.
+func (l *modifierLearner) takeDirty() modDirty {
+	d := l.dirty
+	l.dirty = modDirty{}
+	return d
 }
 
 // markOutside makes cell an outside cell of m. Adding one ends zone-wide
-// coverage, so the change is a coverage change exactly when m was zone-wide.
+// coverage, so the change shrinks coverage exactly when m was zone-wide.
 func (l *modifierLearner) markOutside(m *derivationModifier, cell s2.CellID) {
 	if _, ok := m.Outside[cell]; ok {
 		return
 	}
-	wasZoneWide := m.ZoneWide(l.p.ZoneWideCells)
+	c := modEvidence
+	if m.ZoneWide(l.p.ZoneWideCells) {
+		c = modShrink
+	}
 	m.Outside[cell] = struct{}{}
-	l.changed(m, wasZoneWide)
+	l.changed(m, c)
 }
 
 // observe applies a check or sighting to the existing tracks of one scope:
@@ -526,6 +575,7 @@ func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTrans
 	if mod.Status == modCandidate && t.located >= l.p.Confirm && contra == 0 &&
 		(t.size != nil || 2*match >= filled) {
 		mod.Status = modConfirmed
+		mod.version++
 		out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: mod.clone()})
 	}
 	return out
@@ -610,7 +660,7 @@ func (l *modifierLearner) contradict(o *modTrack, cell s2.CellID, now time.Time,
 	}
 	o.mod.Contradictions++
 	o.ring.push(modOutContra)
-	l.changed(o.mod, false)
+	l.changed(o.mod, modEvidence)
 	return l.settle(o, now, out)
 }
 
@@ -631,18 +681,22 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 
 	mod := t.mod
 	mod.Observations++
-	coverage := false
+	c := modEvidence
 	if ev.Cell != 0 {
+		// In-cells and removing an outside cell only ever grow coverage; a
+		// zone-wide modifier already covers every cell of its zone.
 		wasZoneWide := mod.ZoneWide(p.ZoneWideCells)
 		_, wasIn := mod.InCells[ev.Cell]
 		mod.addInCell(ev.Cell)
 		delete(mod.Outside, ev.Cell)
-		coverage = !wasIn || wasZoneWide != mod.ZoneWide(p.ZoneWideCells)
+		if !wasZoneWide && (!wasIn || mod.ZoneWide(p.ZoneWideCells)) {
+			c = modGrowth
+		}
 		t.ring.push(modOutMatch)
 		t.located++
 		t.endOK = 0
 	}
-	l.changed(mod, coverage)
+	l.changed(mod, c)
 	if now.After(mod.LastSeen) {
 		mod.LastSeen = now
 	}

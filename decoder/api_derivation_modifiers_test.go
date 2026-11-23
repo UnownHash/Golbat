@@ -142,3 +142,43 @@ func TestApiStatusDerivationModifiersFeature(t *testing.T) {
 		t.Fatal("features.derivation_modifiers should be false when the learner is off")
 	}
 }
+
+// applied is true only for a confirmed modifier the derive path applies:
+// candidates and all-strong level offsets are listed but not applied.
+func TestApiDerivationModifiersApplied(t *testing.T) {
+	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
+	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	species := levelMod(modifierScope{PokemonID: 1}, 5, "Europe/London", cellSet(adjCellA))
+	all := levelMod(allStrongScope, 5, "Europe/London", cellSet(adjCellA))
+	cand := levelMod(modifierScope{PokemonID: 2}, 5, "Europe/London", cellSet(adjCellA))
+	cand.Status = modCandidate
+	for _, m := range []*derivationModifier{species, all, cand} {
+		m.Start = start
+	}
+	mods := []*derivationModifier{species, all, cand}
+	derivationModifierSnapshot.Store(&mods)
+	got := map[string]bool{}
+	for _, m := range GetApiDerivationModifiers(start).Modifiers {
+		got[m.ID] = m.Applied
+	}
+	want := map[string]bool{
+		"2026-11-15-level_offset-1-0-delta+5":        true,
+		"2026-11-15-level_offset-all-strong-delta+5": false,
+		"2026-11-15-level_offset-2-0-delta+5":        false,
+	}
+	for id, w := range want {
+		if a, ok := got[id]; !ok || a != w {
+			t.Errorf("%s applied = %v (listed %v), want %v", id, a, ok, w)
+		}
+	}
+	b, _ := json.Marshal(GetApiDerivationModifiers(start))
+	var back struct {
+		Modifiers []map[string]any `json:"modifiers"`
+	}
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := back.Modifiers[0]["applied"]; !ok {
+		t.Errorf("applied missing from JSON: %s", b)
+	}
+}

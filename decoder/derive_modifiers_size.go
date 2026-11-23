@@ -218,7 +218,7 @@ func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope,
 		if changed && ev.Cell != 0 {
 			*t.size = next
 			if t.size.fill(mod.Boundaries, cuts) {
-				l.changed(mod, true)
+				l.changed(mod, modShrink) // moved cuts can reclassify a record
 			}
 		}
 	}
@@ -254,7 +254,7 @@ func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.
 	if changed {
 		*t.size = next
 		if t.size.fill(mod.Boundaries, cuts) {
-			l.changed(mod, true)
+			l.changed(mod, modShrink) // moved cuts can reclassify a record
 		}
 	}
 	return out

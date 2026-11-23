@@ -373,15 +373,22 @@ func TestDerivationModifiersRuntimeRepublishesDemotion(t *testing.T) {
 	if len(snap) != 1 {
 		t.Fatalf("snapshot %d modifiers, want 1", len(snap))
 	}
-	if _, ok := snap[0].Outside[cellD]; !ok || len(snap[0].Outside) != 1 {
-		t.Errorf("snapshot outside %v, want cellD", snap[0].Outside)
+	if snap[0].ZoneWide(r.zoneWideCells) || snap[0].Outside != nil {
+		t.Errorf("snapshot zone-wide %v outside %v, want local with no outside set copied",
+			snap[0].ZoneWide(r.zoneWideCells), snap[0].Outside)
+	}
+	if _, ok := r.learner.activeTracks[0].mod.Outside[cellD]; !ok {
+		t.Errorf("learner outside %v, want cellD", r.learner.activeTracks[0].mod.Outside)
 	}
 }
 
 // TestDerivationModifiersRuntimeRepublishesNewInCell: a deviation in a new
-// cell extends a local confirmed pin's index coverage at once.
+// cell grows a local confirmed pin's coverage; growth is published with
+// evidence, at most once per deriveModifiersEvidenceInterval.
 func TestDerivationModifiersRuntimeRepublishesNewInCell(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
 	withModifierRuntime(t, r)
 	for i := range 10 {
 		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
@@ -390,8 +397,95 @@ func TestDerivationModifiersRuntimeRepublishesNewInCell(t *testing.T) {
 		t.Fatalf("local pin: cellB adjust %+v, want none", adj)
 	}
 	r.handle(modCheck(modT0.Add(10*time.Second), cellB, withCharged(494)))
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 0 {
+		t.Fatalf("growth right after the confirm: cellB adjust %+v, want none yet (rate-limited)", adj)
+	}
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	r.handle(modCheck(modT0.Add(11*time.Second), cellA)) // changes nothing itself
 	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 494 {
-		t.Fatalf("after a deviation in cellB: adjust %+v, want charged 494", adj)
+		t.Fatalf("after the interval: cellB adjust %+v, want charged 494", adj)
+	}
+}
+
+// TestDerivationModifiersRuntimeZoneWideInCellNoRebuild: a new in-cell of a
+// zone-wide modifier changes no lookup, so it does not rebuild the index
+// before the evidence interval.
+func TestDerivationModifiersRuntimeZoneWideInCellNoRebuild(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	cells := []s2.CellID{cellA, cellB, cellC}
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cells[i%3], withCharged(494)))
+	}
+	idx := derivationModifierIndex.Load()
+	if adj := idx.lookup(959, 3272, true, cellD, modZoneOf); adj.Charged != 494 {
+		t.Fatalf("zone-wide pin: cellD adjust %+v, want charged 494", adj)
+	}
+	r.handle(modCheck(modT0.Add(10*time.Second), cellE, withCharged(494)))
+	if derivationModifierIndex.Load() != idx {
+		t.Fatal("a new in-cell of a zone-wide modifier rebuilt the index at once")
+	}
+}
+
+// TestDerivationModifiersRuntimeClonesChangedOnly: a publish clones only the
+// modifiers changed since the last one, each at most once, and the published
+// copies carry no outside-cell set.
+func TestDerivationModifiersRuntimeClonesChangedOnly(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	cells := []s2.CellID{cellA, cellB, cellC}
+	ts := modT0
+	const n = 30
+	for sp := range n {
+		for i := range 10 {
+			r.handle(modCheck(ts, cells[i%3], withCharged(494), withSpecies(int32(1000+sp), 0)))
+			ts = ts.Add(time.Second)
+		}
+	}
+	before := activeDerivationModifiers()
+	if len(before) != n {
+		t.Fatalf("%d active modifiers, want %d", len(before), n)
+	}
+	for _, m := range before {
+		if m.Status != modConfirmed || !m.ZoneWide(r.zoneWideCells) {
+			t.Fatalf("modifier %+v, want confirmed zone-wide", m)
+		}
+	}
+	idx, clones := derivationModifierIndex.Load(), r.clones
+
+	// New in-cells on the first ten modifiers: evidence only.
+	for sp := range 10 {
+		for _, c := range []s2.CellID{cellD, cellE, cellF, unseenCell} {
+			r.handle(modCheck(ts, c, withCharged(494), withSpecies(int32(1000+sp), 0)))
+		}
+	}
+	if derivationModifierIndex.Load() != idx || r.clones != clones {
+		t.Fatalf("published before the interval (clones %d → %d)", clones, r.clones)
+	}
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	r.handle(modCheck(ts, cellA, withSpecies(1000, 0))) // changes nothing itself
+	if derivationModifierIndex.Load() == idx {
+		t.Fatal("evidence not published after the interval")
+	}
+	if got := r.clones - clones; got != 10 {
+		t.Errorf("publish cloned %d modifiers, want the 10 changed ones", got)
+	}
+	after := map[int32]*derivationModifier{}
+	for _, m := range activeDerivationModifiers() {
+		after[m.Scope.PokemonID] = m
+		if m.Outside != nil {
+			t.Errorf("published modifier %d carries an outside set", m.Scope.PokemonID)
+		}
+	}
+	for _, m := range before {
+		changed := m.Scope.PokemonID < 1010
+		if reused := after[m.Scope.PokemonID] == m; reused == changed {
+			t.Errorf("modifier %d: reused %v, want %v", m.Scope.PokemonID, reused, !changed)
+		}
 	}
 }
 

@@ -17,14 +17,15 @@ import (
 	"golbat/util"
 )
 
-// The derivation modifier learner's runtime (design §6): one goroutine owns
-// the modifierLearner, fed by a channel from the encounter check and, while
-// a scope has an active modifier, its first sightings. It logs every
+// The derivation modifier learner's runtime (design §6–7): one goroutine
+// owns the modifierLearner, fed by a channel from the encounter check and,
+// while a scope has an active modifier, its first sightings. It logs every
 // transition and republishes derivationModifierIndex and the API snapshot
-// after a transition or a change to a confirmed modifier's coverage at
-// once, and after an evidence-only change (observations, contradictions,
-// a candidate's cells) at most once per deriveModifiersEvidenceInterval.
-// State is in memory only.
+// after a transition or a shrink of a confirmed modifier's coverage
+// (zone-wide lost, size boundaries moved) at once, and after growth (a new
+// in-cell, zone-wide gained) or an evidence-only change at most once per
+// deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
+// changed since the last one. State is in memory only.
 
 // deriveModifiersQueueSize is the learner's channel capacity: 16384
 // pointer-free events, ~1 MB, never scanned by the GC.
@@ -35,7 +36,8 @@ const deriveModifiersQueueSize = 16384
 const deriveModifiersSweepInterval = time.Minute
 
 // deriveModifiersEvidenceInterval is the least time between two
-// republishes for evidence-only changes, which can come with every event.
+// republishes for growth and evidence-only changes, which can come with
+// every event.
 const deriveModifiersEvidenceInterval = time.Second
 
 // modifierRuntime is the learner goroutine's state. Everything but the
@@ -48,10 +50,16 @@ type modifierRuntime struct {
 	sweepInterval time.Duration
 	// clock times evidence-only republishes (time.Now; tests replace it).
 	clock func() time.Time
-	// evidencePending: an evidence-only change is not yet published;
-	// lastPublish is when the index and snapshot were last rebuilt.
+	// evidencePending: a growth or evidence-only change is not yet
+	// published; lastPublish is when the index and snapshot were last
+	// rebuilt.
 	evidencePending bool
 	lastPublish     time.Time
+	// published maps each active modifier (the learner's own) to its last
+	// published copy and that copy's version: an unchanged modifier's copy
+	// is reused. clones counts the copies made (tests).
+	published map[*derivationModifier]publishedModifier
+	clones    int
 
 	events chan modifierEvent
 	// submitMu orders submit against shutdown, as in deriveEventsWriter.
@@ -79,6 +87,13 @@ func newModifierRuntime(p modifierParams, queueSize int) *modifierRuntime {
 		zoneNames:     []string{""},
 		zoneIndex:     map[string]uint16{"": 0},
 	}
+}
+
+// publishedModifier is a published, immutable copy of a modifier as of
+// version.
+type publishedModifier struct {
+	version uint64
+	mod     *derivationModifier
 }
 
 // derivationModifierLearnerOn reports whether the learner runs. It is set
@@ -241,28 +256,50 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 
 // publish logs trs and republishes the index and the snapshot from the
 // learner's active modifiers: at once after a transition or a coverage
-// change, else, for an evidence-only change (now or earlier, unpublished),
-// once deriveModifiersEvidenceInterval has passed since the last publish.
-// With nothing changed it returns without reading the clock.
+// shrink, else, for growth or an evidence-only change (now or earlier,
+// unpublished), once deriveModifiersEvidenceInterval has passed since the
+// last publish. With nothing changed it returns without reading the clock.
 func (r *modifierRuntime) publish(trs []modifierTransition) {
 	for _, tr := range trs {
 		log.Info(formatModifierTransition(tr, r.zoneWideCells))
 	}
-	dirty, regionChanged := r.learner.takeDirty()
-	if len(trs) == 0 && !regionChanged {
-		r.evidencePending = r.evidencePending || dirty
+	d := r.learner.takeDirty()
+	if len(trs) == 0 && !d.shrink {
+		r.evidencePending = r.evidencePending || d.changed
 		if !r.evidencePending || r.clock().Sub(r.lastPublish) < deriveModifiersEvidenceInterval {
 			return
 		}
 	}
 	r.evidencePending, r.lastPublish = false, r.clock()
-	active := r.learner.active()
+	active := r.activeCopies()
 	derivationModifierIndex.Store(buildModifierIndex(active, r.zoneWideCells))
 	if len(active) == 0 {
 		derivationModifierSnapshot.Store(nil)
 	} else {
 		derivationModifierSnapshot.Store(&active)
 	}
+}
+
+// activeCopies returns published copies of the learner's active modifiers,
+// reusing the previous copy of each modifier whose version is unchanged
+// (copies are immutable once published; the index and the snapshot share
+// them) and forgetting the modifiers no longer active.
+func (r *modifierRuntime) activeCopies() []*derivationModifier {
+	tracks := r.learner.activeTracks
+	out := make([]*derivationModifier, 0, len(tracks))
+	next := make(map[*derivationModifier]publishedModifier, len(tracks))
+	for _, t := range tracks {
+		m := t.mod
+		p, ok := r.published[m]
+		if !ok || p.version != m.version {
+			p = publishedModifier{version: m.version, mod: m.publishedClone()}
+			r.clones++
+		}
+		next[m] = p
+		out = append(out, p.mod)
+	}
+	r.published = next
+	return out
 }
 
 // formatModifierTransition is the [DERIVE_MODIFIER] log line for tr.

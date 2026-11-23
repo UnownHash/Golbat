@@ -465,35 +465,81 @@ func TestModifierDeviationResetsEndCount(t *testing.T) {
 	}
 }
 
+// TestModifierLearnerDirty: the learner reports a change that shrinks a
+// confirmed modifier's lookup coverage (published at once) apart from one
+// that grows it or is evidence only (both rate-limited), and an event that
+// changes nothing reports nothing.
 func TestModifierLearnerDirty(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	confirmPin(t, l, modZone, modT0, cellA)
 	l.takeDirty()
-	check := func(what string, wantDirty, wantRegion bool) {
+	check := func(what string, want modDirty) {
 		t.Helper()
-		dirty, region := l.takeDirty()
-		if dirty != wantDirty || region != wantRegion {
-			t.Fatalf("%s: dirty=%v region=%v, want %v %v", what, dirty, region, wantDirty, wantRegion)
+		if got := l.takeDirty(); got != want {
+			t.Fatalf("%s: %+v, want %+v", what, got, want)
 		}
 	}
+	evidence := modDirty{changed: true}
+	growth := modDirty{changed: true, growth: true}
+	shrink := modDirty{changed: true, shrink: true}
 	l.feed(modCheck(modT0.Add(time.Second), cellA), modZone)
-	check("in-cell agreement", false, false)
+	check("in-cell agreement", modDirty{})
 	l.feed(modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)), modZone)
-	check("deviation in an in-cell", true, false)
+	check("deviation in an in-cell", evidence)
 	l.feed(modCheck(modT0.Add(3*time.Second), cellB, withCharged(494)), modZone)
-	check("deviation in a new cell", true, true)
+	check("deviation in a new cell", growth)
 	l.feed(modCheck(modT0.Add(4*time.Second), cellD), modZone)
-	check("outside agreement of a local modifier", true, false)
+	check("outside agreement of a local modifier", evidence)
 	l.feed(modCheck(modT0.Add(5*time.Second), cellD), modZone)
-	check("repeated outside agreement", false, false)
+	check("repeated outside agreement", modDirty{})
 	l.feed(modCheck(modT0.Add(6*time.Second), cellA, withCharged(300)), modZone)
-	check("contradiction", true, false)
+	check("contradiction", evidence)
 
 	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	confirmPin(t, l, modZone, modT0, cellA, cellB)
 	l.takeDirty()
-	l.feed(modCheck(modT0.Add(time.Second), cellD, withCharged(300)), modZone)
-	check("contradiction outside a zone-wide modifier", true, true)
+	l.feed(modCheck(modT0.Add(time.Second), cellC, withCharged(494)), modZone)
+	if !onlyActive(t, l).ZoneWide(l.p.ZoneWideCells) {
+		t.Fatal("third cell: want zone-wide")
+	}
+	check("zone-wide gained", growth)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellE, withCharged(494)), modZone)
+	check("new in-cell of a zone-wide modifier", evidence)
+	l.feed(modCheck(modT0.Add(3*time.Second), cellD, withCharged(300)), modZone)
+	check("contradiction outside a zone-wide modifier", shrink)
+
+	// A candidate's changes are evidence only: the index's lookup holds
+	// confirmed modifiers alone.
+	l = newModifierLearner(defaultModifierParams())
+	feedAll(l, modZone,
+		modCheck(modT0, cellA, withCharged(494)),
+		modCheck(modT0.Add(time.Second), cellA, withCharged(494)),
+		modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)))
+	l.takeDirty()
+	l.feed(modCheck(modT0.Add(3*time.Second), cellB, withCharged(494)), modZone)
+	check("candidate's new cell", evidence)
+}
+
+// Every non-transition change bumps the modifier's version; an event that
+// changes nothing leaves it.
+func TestModifierLearnerVersion(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA)
+	m := l.activeTracks[0].mod
+	v := m.version
+	l.feed(modCheck(modT0.Add(time.Second), cellA), modZone)
+	if m.version != v {
+		t.Fatalf("in-cell agreement bumped the version %d → %d", v, m.version)
+	}
+	l.feed(modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)), modZone)
+	if m.version == v {
+		t.Fatal("an observation left the version unchanged")
+	}
+	v = m.version
+	l.feed(modCheck(modT0.Add(3*time.Second), cellD), modZone)
+	if m.version == v {
+		t.Fatal("an outside cell left the version unchanged")
+	}
 }
 
 func modifierWith(t *testing.T, l *modifierLearner, move int32) *derivationModifier {

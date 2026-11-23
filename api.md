@@ -213,6 +213,7 @@ a region. State is in memory only. When the learner is off
       "window": {"start": "2026-11-15T09:00:00Z", "end": null, "time_basis": "utc"},
       "effect": {"type": "move_pin", "slot": "charged", "move": 494},
       "status": "confirmed",
+      "applied": true,
       "evidence": {"observations": 14, "contradictions": 0},
       "region": {"zone": "Europe/London", "cells": null}
     }
@@ -231,6 +232,12 @@ a region. State is in memory only. When the learner is off
   unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
   scope is suppressed; its id has no effect part).
 - `status` is `candidate` or `confirmed`; `window.end` is always null.
+- `applied` is true when derivation applies the modifier: confirmed and not
+  `all-strong` (an all-strong level offset is detected and listed but never
+  applied). Where two applied modifiers of one type and slot both cover a
+  record they dispute the value and neither applies: two level offsets leave
+  the IVs and level underived, two pins of one slot leave that move absent,
+  two size modifiers leave size absent.
 - `region.cells` is the sorted level-14 S2 cell tokens the modifier covers, or
   null when it covers its whole `zone`.
 

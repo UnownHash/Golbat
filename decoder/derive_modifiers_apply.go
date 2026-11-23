@@ -11,17 +11,19 @@ import (
 	"golbat/tz"
 )
 
-// Applying confirmed derivation modifiers (design §5–6). The learner
+// Applying confirmed derivation modifiers (design §5–7). The learner
 // publishes an immutable modifierIndex behind derivationModifierIndex; the
 // derive path loads it once per derivation and, only when the record's
-// (species, form, strong) or the all-strong key has a confirmed modifier,
-// resolves the record's level-14 cell — and its zone only for a zone-wide
-// modifier. With no modifier (nil index) a derivation costs one atomic load.
+// (species, form, strong) has a confirmed modifier, resolves the record's
+// level-14 cell — and its zone only for a zone-wide modifier. With no
+// modifier (nil index) a derivation costs one atomic load.
 
 // derivationModifierIndex holds the active modifiers; nil = none.
 var derivationModifierIndex atomic.Pointer[modifierIndex]
 
-// modifierEntry is one confirmed modifier as the derive path matches it.
+// modifierEntry is one confirmed modifier as the derive path matches it:
+// whether it covers its zone, else its in-cells. It never holds the
+// modifier's outside cells.
 type modifierEntry struct {
 	typ      modifierType
 	effect   modifierEffect
@@ -33,18 +35,26 @@ type modifierEntry struct {
 
 // modifierIndex is an immutable snapshot of the learner's active modifiers.
 type modifierIndex struct {
-	// confirmed is keyed by species scope (PokemonID, Form, Strong).
+	// confirmed is keyed by species scope (PokemonID, Form, Strong): the
+	// confirmed modifiers the derive path applies. All-strong modifiers are
+	// never applied (design §7) and have no entry.
 	confirmed map[modifierScope][]modifierEntry
-	allStrong []modifierEntry // confirmed all-strong modifiers
 	// active holds the species scopes with a candidate or confirmed
 	// modifier; anyAllStrong whether an all-strong one is active.
 	active       map[modifierScope]struct{}
 	anyAllStrong bool
 }
 
+// modifierApplied reports whether the derive path applies m: confirmed and
+// not all-strong. An all-strong level offset is detected and listed only: a
+// strong species at base levels kept getting it.
+func modifierApplied(m *derivationModifier) bool {
+	return m.Status == modConfirmed && !m.Scope.AllStrong
+}
+
 // buildModifierIndex builds the index from the learner's active modifiers
-// (copies it may keep: the index shares their maps). It returns nil when no
-// modifier is active.
+// (published copies, never modified: the index shares their maps). It
+// returns nil when no modifier is active.
 func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifierIndex {
 	idx := &modifierIndex{
 		confirmed: make(map[modifierScope][]modifierEntry),
@@ -61,16 +71,15 @@ func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifier
 		} else {
 			idx.active[m.Scope] = struct{}{}
 		}
-		if m.Status != modConfirmed {
+		if !modifierApplied(m) {
 			continue
 		}
-		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone,
-			zoneWide: m.ZoneWide(zoneWideCells), inCells: m.InCells}
-		if m.Scope.AllStrong {
-			idx.allStrong = append(idx.allStrong, e)
-		} else {
-			idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
+		zoneWide := m.ZoneWide(zoneWideCells)
+		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone, zoneWide: zoneWide}
+		if !zoneWide {
+			e.inCells = m.InCells
 		}
+		idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
 	}
 	if n == 0 {
 		return nil
@@ -95,76 +104,90 @@ func (idx *modifierIndex) wantsSighting(pokemonID, form int32, strong bool) bool
 // derivationAdjust is what confirmed modifiers change in one derivation. The
 // zero value changes nothing.
 type derivationAdjust struct {
-	Suppress       bool // unexplained: derive nothing
+	Suppress       bool // unexplained or a disputed level: derive nothing
 	LevelDelta     int32
 	Quick, Charged int32                   // 0 = no pin
 	Size           map[string]sizeBoundary // nil = base cuts
+	// WithholdQuick, WithholdCharged and WithholdSize leave that value
+	// absent, neither pinned nor derived: two confirmed modifiers dispute
+	// it, and the base value is likely wrong too.
+	WithholdQuick, WithholdCharged, WithholdSize bool
 	// strong is the walk the adjustment was looked up for, the cut list
 	// Size is read against.
 	strong bool
 }
 
-// has reports whether the scope or (strong) the all-strong key has a
-// confirmed modifier: the only work done before a key matches.
+// has reports whether the scope has a confirmed modifier: the only work
+// done before a key matches.
 func (idx *modifierIndex) has(pokemonID, form int32, strong bool) bool {
-	if strong && len(idx.allStrong) > 0 {
-		return true
-	}
 	return len(idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]) > 0
 }
 
 // lookup combines the confirmed modifiers covering a record of the scope in
 // cell. A local modifier matches by in-cell membership alone (never cell 0);
-// a zone-wide one calls zoneOf(cell), at most once per lookup. The species
-// scope wins over the all-strong key for each effect; unexplained in either
-// suppresses everything.
+// a zone-wide one calls zoneOf(cell), at most once per lookup. Unexplained
+// suppresses everything. Two covering modifiers that dispute a value
+// withhold it rather than pick one (design §7): two level deltas suppress
+// (no IVs or level, as unexplained), two pins of one slot with different
+// moves withhold that slot, two size modifiers withhold size. It does not
+// allocate.
 func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.CellID,
 	zoneOf func(s2.CellID) string) derivationAdjust {
-	species := idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]
-	var all []modifierEntry
-	if strong {
-		all = idx.allStrong
-	}
-	if len(species) == 0 && len(all) == 0 {
+	entries := idx.confirmed[modifierScope{PokemonID: pokemonID, Form: form, Strong: strong}]
+	if len(entries) == 0 {
 		return derivationAdjust{}
 	}
 	adj := derivationAdjust{strong: strong}
 	var zone string
-	zoneKnown, levelSet := false, false
-	for _, entries := range [2][]modifierEntry{species, all} {
-		for i := range entries {
-			e := &entries[i]
-			if e.zoneWide {
-				if !zoneKnown {
-					zone, zoneKnown = zoneOf(cell), true
-				}
-				if zone != e.zone {
-					continue
-				}
-			} else if _, in := e.inCells[cell]; !in || cell == 0 {
+	zoneKnown, levelSet, sizeSet := false, false, false
+	for i := range entries {
+		e := &entries[i]
+		if e.zoneWide {
+			if !zoneKnown {
+				zone, zoneKnown = zoneOf(cell), true
+			}
+			if zone != e.zone {
 				continue
 			}
-			switch e.typ {
-			case modUnexplained:
+		} else if _, in := e.inCells[cell]; !in || cell == 0 {
+			continue
+		}
+		switch e.typ {
+		case modUnexplained:
+			return derivationAdjust{Suppress: true, strong: strong}
+		case modLevelOffset:
+			if levelSet && adj.LevelDelta != e.effect.Delta {
 				return derivationAdjust{Suppress: true, strong: strong}
-			case modLevelOffset:
-				if !levelSet {
-					adj.LevelDelta, levelSet = e.effect.Delta, true
-				}
-			case modMovePin:
-				if e.effect.Slot == modSlotQuick && adj.Quick == 0 {
-					adj.Quick = e.effect.Move
-				} else if e.effect.Slot == modSlotCharged && adj.Charged == 0 {
-					adj.Charged = e.effect.Move
-				}
-			case modSizeCutoffs:
-				if adj.Size == nil && len(e.size) > 0 {
-					adj.Size = e.size
-				}
+			}
+			adj.LevelDelta, levelSet = e.effect.Delta, true
+		case modMovePin:
+			switch e.effect.Slot {
+			case modSlotQuick:
+				adj.Quick, adj.WithholdQuick = pinSlot(adj.Quick, adj.WithholdQuick, e.effect.Move)
+			case modSlotCharged:
+				adj.Charged, adj.WithholdCharged = pinSlot(adj.Charged, adj.WithholdCharged, e.effect.Move)
+			}
+		case modSizeCutoffs:
+			if sizeSet {
+				adj.Size, adj.WithholdSize = nil, true
+			} else if sizeSet = true; len(e.size) > 0 {
+				adj.Size = e.size
 			}
 		}
 	}
 	return adj
+}
+
+// pinSlot folds one more covering pin of move into a slot holding pinned
+// (0 = none) and withheld: a different move disputes the slot.
+func pinSlot(pinned int32, withheld bool, move int32) (int32, bool) {
+	switch {
+	case withheld:
+		return 0, true
+	case pinned != 0 && pinned != move:
+		return 0, true
+	}
+	return move, false
 }
 
 // modifierZoneCache is the decode path's cell → zone cache, filled only by
