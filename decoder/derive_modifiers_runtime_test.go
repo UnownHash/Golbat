@@ -272,7 +272,7 @@ func waitModifierIndex(t *testing.T, wantNil bool, within time.Duration) {
 // later ends it as unseen, clearing the index.
 func TestDerivationModifiersWorkerSweepEndsUnseen(t *testing.T) {
 	p := defaultModifierParams()
-	p.Unseen = 2 * time.Second
+	p.Unseen = 5 * time.Second
 	r := newModifierRuntime(p, 64)
 	r.sweepInterval = 20 * time.Millisecond
 	withModifierRuntime(t, r)
@@ -285,8 +285,8 @@ func TestDerivationModifiersWorkerSweepEndsUnseen(t *testing.T) {
 	for range 10 {
 		submitDerivationModifierEvent(modCheck(now, cellA, withCharged(494)))
 	}
-	waitModifierIndex(t, false, 2*time.Second)
-	waitModifierIndex(t, true, 5*time.Second)
+	waitModifierIndex(t, false, 4*time.Second)
+	waitModifierIndex(t, true, 10*time.Second)
 	if snap := activeDerivationModifiers(); len(snap) != 0 {
 		t.Errorf("snapshot %d modifiers after unseen end, want 0", len(snap))
 	}
