@@ -36,6 +36,9 @@ const deriveModifiersSweepInterval = time.Minute
 type modifierRuntime struct {
 	learner       *modifierLearner
 	zoneWideCells int
+	// sweepInterval is run's sweep period (deriveModifiersSweepInterval;
+	// tests shorten it before start).
+	sweepInterval time.Duration
 
 	events chan modifierEvent
 	// submitMu orders submit against shutdown, as in deriveEventsWriter.
@@ -54,6 +57,7 @@ func newModifierRuntime(p modifierParams, queueSize int) *modifierRuntime {
 	return &modifierRuntime{
 		learner:       newModifierLearner(p),
 		zoneWideCells: p.ZoneWideCells,
+		sweepInterval: deriveModifiersSweepInterval,
 		events:        make(chan modifierEvent, queueSize),
 		zoneOf:        make(map[s2.CellID]uint16),
 		zoneNames:     []string{""},
@@ -144,7 +148,8 @@ func submitDerivationModifierEvent(ev modifierEvent) {
 // submitDerivationModifierSighting sends a new record's first sighting to
 // the learner, only when its scope has an active modifier (it feeds that
 // modifier's last-seen time). With no active modifier it costs one atomic
-// load and sends nothing.
+// load and sends nothing. The save path calls it only when
+// derivationModifierLearnerOn, so a learner that is off costs a branch.
 func submitDerivationModifierSighting(p *Pokemon, now int64) {
 	if !derivationModifierLearnerOn {
 		return
@@ -167,9 +172,10 @@ func (r *modifierRuntime) start() {
 	}()
 }
 
-// run feeds events until the channel is closed, sweeping once a minute.
+// run feeds events until the channel is closed, sweeping every
+// sweepInterval.
 func (r *modifierRuntime) run() {
-	ticker := time.NewTicker(deriveModifiersSweepInterval)
+	ticker := time.NewTicker(r.sweepInterval)
 	defer ticker.Stop()
 	for {
 		select {

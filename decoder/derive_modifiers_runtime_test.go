@@ -253,3 +253,59 @@ func TestDerivationModifierSightingGated(t *testing.T) {
 		t.Errorf("sighting %+v, want strong 959/3272 in cellA at modT0", ev)
 	}
 }
+
+// waitModifierIndex polls until the published index is (non-)nil, failing
+// after a bound.
+func waitModifierIndex(t *testing.T, wantNil bool, within time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(within)
+	for (derivationModifierIndex.Load() == nil) != wantNil {
+		if time.Now().After(deadline) {
+			t.Fatalf("index nil=%v after %s, want nil=%v", !wantNil, within, wantNil)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// TestDerivationModifiersWorkerSweepEndsUnseen drives run itself: submitted
+// deviations confirm a pin on the worker goroutine, and its ticker sweep
+// later ends it as unseen, clearing the index.
+func TestDerivationModifiersWorkerSweepEndsUnseen(t *testing.T) {
+	p := defaultModifierParams()
+	p.Unseen = 2 * time.Second
+	r := newModifierRuntime(p, 64)
+	r.sweepInterval = 20 * time.Millisecond
+	withModifierRuntime(t, r)
+	r.start()
+	t.Cleanup(r.shutdown)
+
+	// One timestamp for all ten, so no feed ends the pin as unseen; it lives
+	// at least Unseen minus under a second of wall time before a sweep can.
+	now := time.Now()
+	for range 10 {
+		submitDerivationModifierEvent(modCheck(now, cellA, withCharged(494)))
+	}
+	waitModifierIndex(t, false, 2*time.Second)
+	waitModifierIndex(t, true, 5*time.Second)
+	if snap := activeDerivationModifiers(); len(snap) != 0 {
+		t.Errorf("snapshot %d modifiers after unseen end, want 0", len(snap))
+	}
+}
+
+// TestDerivationModifiersFlushDrainsQueue: events still queued when Flush is
+// called are fed before it returns.
+func TestDerivationModifiersFlushDrainsQueue(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	withModifierRuntime(t, r)
+	for i := range 10 {
+		submitDerivationModifierEvent(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+	}
+	r.start() // started after queueing, so Flush finds the events still queued or in flight
+	FlushDerivationModifiers()
+	if derivationModifierIndex.Load() == nil {
+		t.Fatal("Flush returned before the queued deviations were fed")
+	}
+	if len(r.events) != 0 {
+		t.Errorf("%d events left queued after Flush", len(r.events))
+	}
+}

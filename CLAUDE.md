@@ -326,7 +326,9 @@ drop and count (`util.DropReporter` aggregates to one log line/second;
 stats drops and cache eviction-event drops have Prometheus counters —
 the latter is the one loss with no self-heal, leaking lookup entries
 until restart; tree-delete and fort-tracker drops are log-only because
-scans/rescans self-heal them). The stats worker drains in
+scans/rescans self-heal them, and derivation-modifier learner drops are
+log-only because a dropped check only delays learning — later checks
+supply the evidence). The stats worker drains in
 batches of 512 and takes `pokemonStatsLock` once per batch; geofence
 reloads clear the stats maps via an in-band barrier event so queued
 events with pre-reload area names drain into the old maps.

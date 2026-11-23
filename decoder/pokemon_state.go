@@ -154,7 +154,9 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 		if derivationEventsWriter != nil {
 			submitDerivationEvent(newDeriveEventSighting(pokemon, time.Unix(now, 0)))
 		}
-		submitDerivationModifierSighting(pokemon, now)
+		if derivationModifierLearnerOn {
+			submitDerivationModifierSighting(pokemon, now)
+		}
 	}
 
 	pokemon.SetUpdated(null.IntFrom(now))
