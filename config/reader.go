@@ -62,6 +62,14 @@ func ReadConfig(configPath string) (configDefinition, error) {
 			BucketMinutes: 15,
 			RetainDays:    14,
 		},
+		DerivationModifiers: derivationModifiers{
+			Start:         3,
+			Confirm:       10,
+			End:           20,
+			ZoneWideCells: 3,
+			WindowSeconds: 1800,
+			UnseenSeconds: 3600,
+		},
 		Cleanup: cleanup{
 			Pokemon:        true,
 			Quests:         true,

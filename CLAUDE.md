@@ -67,6 +67,10 @@ decoder/
   derive_validation.go — Checks in-process encounter derivation against real encounters
   derive_events.go   — Builds one per-encounter derivation check record (per-dimension agreement)
   derive_events_writer.go — Opt-in derivation events log (`derivation_events` config): deviation rows + per-bucket summaries, async writer
+  derive_modifiers.go — Derivation modifier learner: pure state machine detecting event modifiers per zone/cell
+  derive_modifiers_size.go — Size-cutoff modifiers in the learner
+  derive_modifiers_apply.go — Immutable active-modifier index; applies confirmed modifiers to derived values
+  derive_modifiers_runtime.go — Opt-in learner worker (`derivation_modifiers` config): channel, zone lookup, transition logging, index publish
   spawnpoint_repair.go — Startup repair of spawnpoints stored at 0,0
   db_timing.go       — timedDbQuery alias for under-lock DB loads
   tracked_mutex.go   — Lock contention instrumentation
@@ -312,6 +316,7 @@ lock runs on dedicated single-worker pipelines fed by channels:
 | Tree writers (`rtree_evictor.go`) | 262144 pokemon, 65536 fort/tappable | Savers: blocking send (bounded by the raw limiter). Eviction callbacks: `TryEnqueue`, drop + log (a dropped delete leaves a ghost point that scans tolerate) |
 | Stats aggregation (`stats.go`) | 262144 | **Drop + count** (stats are loss-tolerant) |
 | Fort tracker (`fort_tracker.go`) | 8192 | **Drop + count** (staleness needs an hour of absence) |
+| Derivation modifier learner (`derive_modifiers_runtime.go`) | 16384 | **Drop + count** (learning is loss-tolerant; channel carries pointer-free `modifierEvent`) |
 
 **Invariant: never add a blocking send from the decode path to a worker
 whose throughput can fall below the event rate.** A saturated worker with

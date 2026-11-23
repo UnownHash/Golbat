@@ -2226,9 +2226,14 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	// against observedScan — captured before detectDitto ran — not the
 	// (possibly Ditto-rewritten) pokemon record.
 	chk := pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
-	if derivationEventsWriter != nil {
+	// The same check feeds the events log and the modifier learner (as a
+	// compact modifierEvent, never the full record).
+	if derivationEventsWriter != nil || derivationModifierLearnerOn {
 		if ev, ok := newDeriveEventCheck(pokemon, &observedScan, chk, username, time.Now()); ok {
 			submitDerivationEvent(ev)
+			if derivationModifierLearnerOn {
+				submitDerivationModifierEvent(newModifierEvent(ev))
+			}
 		}
 	}
 

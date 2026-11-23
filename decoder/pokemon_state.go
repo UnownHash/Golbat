@@ -150,8 +150,11 @@ func savePokemonRecordAsAtTime(ctx context.Context, db db.DbDetails, pokemon *Po
 	if pokemon.FirstSeenTimestamp == 0 {
 		pokemon.FirstSeenTimestamp = uint32(now)
 	}
-	if derivationEventsWriter != nil && pokemon.isNewRecord() && pokemon.PokemonId != 0 {
-		submitDerivationEvent(newDeriveEventSighting(pokemon, time.Unix(now, 0)))
+	if pokemon.isNewRecord() && pokemon.PokemonId != 0 {
+		if derivationEventsWriter != nil {
+			submitDerivationEvent(newDeriveEventSighting(pokemon, time.Unix(now, 0)))
+		}
+		submitDerivationModifierSighting(pokemon, now)
 	}
 
 	pokemon.SetUpdated(null.IntFrom(now))

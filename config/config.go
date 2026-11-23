@@ -58,16 +58,20 @@ type configDefinition struct {
 	// DerivationEvents: opt-in on-disk log of derivation deviations and
 	// per-bucket agreement summaries, separate from DerivationLog.
 	DerivationEvents derivationEvents `koanf:"derivation_events"`
-	Cleanup          cleanup          `koanf:"cleanup"`
-	RawBearer        string           `koanf:"raw_bearer"`
-	ApiSecret        string           `koanf:"api_secret"`
-	ApiDocs          bool             `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
-	Pvp              pvp              `koanf:"pvp"`
-	Koji             koji             `koanf:"koji"`
-	Tuning           tuning           `koanf:"tuning"`
-	Weather          weather          `koanf:"weather"`
-	ScanRules        []scanRule       `koanf:"scan_rules"`
-	StatsIntervals   statsIntervals   `koanf:"stats_intervals"`
+	// DerivationModifiers: opt-in live learner that detects event modifiers
+	// (level offset, forced move, moved size cuts) from encounter checks and
+	// applies confirmed ones to derived values. Inert unless DeriveIv is on.
+	DerivationModifiers derivationModifiers `koanf:"derivation_modifiers"`
+	Cleanup             cleanup             `koanf:"cleanup"`
+	RawBearer           string              `koanf:"raw_bearer"`
+	ApiSecret           string              `koanf:"api_secret"`
+	ApiDocs             bool                `koanf:"api_docs"` // Serve /docs, /openapi.json and /schemas (no secret required)
+	Pvp                 pvp                 `koanf:"pvp"`
+	Koji                koji                `koanf:"koji"`
+	Tuning              tuning              `koanf:"tuning"`
+	Weather             weather             `koanf:"weather"`
+	ScanRules           []scanRule          `koanf:"scan_rules"`
+	StatsIntervals      statsIntervals      `koanf:"stats_intervals"`
 }
 
 func (configDefinition configDefinition) GetWebhookInterval() time.Duration {
@@ -95,6 +99,24 @@ type derivationEvents struct {
 	Dir           string `koanf:"dir"`            // output directory, default "logs"
 	BucketMinutes int    `koanf:"bucket_minutes"` // summary bucket width, default 15
 	RetainDays    int    `koanf:"retain_days"`    // days of files kept, default 14
+}
+
+// derivationModifiers configures the derivation modifier learner
+// (docs/design/2026-11-17-derivation-modifiers-live-design.md).
+type derivationModifiers struct {
+	Enabled bool `koanf:"enabled"`
+	// Start deviations open a candidate, Confirm confirm it, End agreements
+	// in its region end it.
+	Start   int `koanf:"start"`   // default 3
+	Confirm int `koanf:"confirm"` // default 10
+	End     int `koanf:"end"`     // default 20
+	// ZoneWideCells in-cells and no outside cell make a modifier cover its
+	// whole timezone.
+	ZoneWideCells int `koanf:"zone_wide_cells"` // default 3
+	// WindowSeconds bounds how far apart pending deviations may be;
+	// UnseenSeconds ends a modifier whose scope was not seen in its region.
+	WindowSeconds int `koanf:"window_seconds"` // default 1800
+	UnseenSeconds int `koanf:"unseen_seconds"` // default 3600
 }
 
 type cleanup struct {
