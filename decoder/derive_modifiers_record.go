@@ -185,29 +185,29 @@ func (v modVerdict) lost() string {
 // judge evaluates effect id against the record's fresh entries, those at or
 // after cut: older ones do not count. For a move pin an agreement whose
 // observed move is the pinned one is neutral for that pin (the base walk
-// and the pin give the same move): it is left out of the share. Judged for
+// and the pin give the same move): it is not counted at all, neither in the
+// share nor towards the entries a verdict needs. Judged for
 // another pin of the slot it is an agreement like any other, from either
 // ring.
 func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdict {
 	var (
-		v                     modVerdict
-		cells                 [modRecordSize]s2.CellID
-		nCells                int
-		fresh, match, neutral int
-		saidUnix              int64 // the latest fresh entry that says anything
+		v            modVerdict
+		cells        [modRecordSize]s2.CellID
+		nCells       int
+		fresh, match int   // fresh: the fresh entries that say anything
+		saidUnix     int64 // the latest of them
 	)
 	for i := 1; i <= int(r.n); i++ { // newest first
 		e := r.at(i)
 		if e.unix < cut {
 			continue
 		}
-		fresh++
 		if e.agree && pin && e.id == id {
-			neutral++
-			continue
+			continue // neutral, as in the pin-equal ring: it says nothing
 		}
+		fresh++
 		mine := !e.agree && e.id == id
-		if fresh-neutral == 1 {
+		if fresh == 1 {
 			v.byEffect, saidUnix = !e.agree && !mine, e.unix
 		}
 		if mine {
@@ -231,10 +231,9 @@ func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdi
 		}
 	}
 	v.thin = fresh < need.entries
-	said := fresh - neutral
-	share := 4*match >= 3*said
+	share := 4*match >= 3*fresh
 	if need.stay {
-		share = 2*match > said
+		share = 2*match > fresh
 	}
 	v.on = !v.thin && match > 0 && share && nCells >= need.cells && modCellsSpread(cells[:nCells])
 	return v

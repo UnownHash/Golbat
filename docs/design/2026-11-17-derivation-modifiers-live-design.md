@@ -392,6 +392,40 @@ paths. Decisions with the project owner:
   carries its bucket start as the writer computed it, and shutdown
   summaries their flush time, so replay never infers alignment.
 
+### 10.1 As implemented (amended after implementation review)
+
+- **Second pin ring.** A move agreement on the move of a pin that has a
+  modifier is kept in a second 16-entry ring of the zone record, not the
+  main one: in the main ring it pushed the pin's matches out, and a live
+  pin whose base walk gives the pinned move half the time ended 6 times in
+  6 simulated hours at 1800 checks an hour. Both rings are read for every
+  verdict and for exclusion seeding, so the agreement is neutral for its
+  own pin (in either ring it does not count as an entry) and an agreement
+  for the others. Entries of one second in different rings are ordered
+  agreement last (the cell is excluded).
+- **Unexplained never pauses.** It already withholds everything; a pause
+  would change nothing applied and make `applied` false while it still
+  suppresses.
+- **The pause counts agreements only.** Another effect seen (another delta
+  or move, a refused size roll) and checks without a cell neither count
+  towards the pause nor reset it. A paused size boundary withholds the
+  whole size where it covers.
+- **Cut order.** The index withholds size in a cell only when an applied
+  interval passes a neighbouring cut; one ending exactly at the next cut is
+  accepted (a single roll can be the upper end of one boundary and the
+  lower end of the next).
+- **The scaled cap still overflows under heavy noise.** The cells whose
+  latest check disproved a live event settle at about the noise share of
+  the cells seen, so 1% holds only for noise under about 1% and changes
+  nothing below 25,600 cells seen: a 30,000-cell zone with 5% base results
+  at 6000 checks an hour still ends on overflow about once an hour (and
+  re-confirms within some ten checks).
+- **Flapping residual.** With a 45-minute drain at 6000 checks an hour,
+  about 19 base spawns a run are still given the event value after its
+  share falls under half (121 before), and the modifier confirms 11 to 18
+  times as an event starts (36 to 40 before). The 16-entry record's
+  sampling noise (about ±12.5 points) is half the 25-point band.
+
 ## 11. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the

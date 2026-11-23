@@ -66,10 +66,11 @@ func TestModifierRecordOneVerdictOn(t *testing.T) {
 }
 
 // TestModifierLearnerOneAppliedPerSlot: over a randomized feed (dominant
-// effects that change, noise, neutral pin agreements, gaps that age the
-// record, two zones), no published index and no index built from the
-// learner's state after any event holds two modifiers of one scope, type
-// and slot in one zone.
+// effects that change, noise, neutral pin agreements, size rolls across two
+// moved cuts with contrary ones, gaps that age the record, two zones), no
+// published index and no index built from the learner's state after any
+// event holds two modifiers of one scope, type and slot (or size boundary)
+// in one zone.
 func TestModifierLearnerOneAppliedPerSlot(t *testing.T) {
 	cells := append(modWideCells(12), modSpreadCells(10)...) // London and Paris
 	for seed := range uint64(4) {
@@ -107,6 +108,22 @@ func TestModifierLearnerOneAppliedPerSlot(t *testing.T) {
 			}
 			ev := modCheck(ts, cells[rng.IntN(len(cells))], opts...)
 			r.handle(ev)
+			// A Rattata size roll: the 1/2 and 2/3 cuts are moved up by 0.008.
+			// Most rolls fall in a moved band (a deviation across that cut),
+			// some there keep the base class (contrary), the rest are far away.
+			band := []float64{0.004, 0.029}[rng.IntN(2)]
+			roll, base := band+0.008*rng.Float64(), uint8(2)
+			if band > 0.004 {
+				base = 3
+			}
+			switch x := rng.IntN(10); {
+			case x < 8:
+				r.handle(modCheck(ts, cells[rng.IntN(len(cells))], withSize(roll, base-1)))
+			case x < 9:
+				r.handle(modCheck(ts, cells[rng.IntN(len(cells))], withSize(roll, base)))
+			default:
+				r.handle(modCheck(ts, cells[rng.IntN(len(cells))], withSize(0.5, 3)))
+			}
 			checkOneAppliedPerSlot(t, seed, i, derivationModifierIndex.Load())
 			idx := buildModifierIndex(r.activeCopies())
 			checkOneAppliedPerSlot(t, seed, i, idx)
@@ -121,6 +138,11 @@ func TestModifierLearnerOneAppliedPerSlot(t *testing.T) {
 		// Pins and level offsets taking over from one another.
 		if len(applied) < 4 {
 			t.Fatalf("seed %d: applied effects %v, want at least 4: the invariant was not exercised", seed, applied)
+		}
+		for _, cut := range []string{"1/2", "2/3"} {
+			if !applied[modifierEffect{Cut: cut}] {
+				t.Fatalf("seed %d: size boundary %s never applied (%v): the cut key was not exercised", seed, cut, applied)
+			}
 		}
 	}
 }
