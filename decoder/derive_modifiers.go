@@ -353,6 +353,9 @@ type modTrack struct {
 	mod        *derivationModifier
 	ring       modRing
 	endOK      int
+	// located counts the modifier's matches with a cell, the observations
+	// Confirm is judged on (a cell-0 match is in no ring).
+	located int
 	size       *sizeEvidence // size_cutoffs tracks only
 }
 
@@ -512,7 +515,7 @@ func (t *modTrack) pinHeld(ev modifierEvent) bool {
 
 // settle applies t's outcome ring to its modifier (design §7): it ends by
 // contradiction with at least Start contradictions and no fewer than
-// matches, and a candidate confirms with Confirm observations, no
+// matches, and a candidate confirms with Confirm located observations, no
 // contradiction and matches at least half the ring (size: no majority).
 func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTransition) []modifierTransition {
 	mod := t.mod
@@ -520,7 +523,7 @@ func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTrans
 	if contra >= l.p.Start && contra >= match {
 		return append(out, l.end(t, now, "contradicted"))
 	}
-	if mod.Status == modCandidate && mod.Observations >= l.p.Confirm && contra == 0 &&
+	if mod.Status == modCandidate && t.located >= l.p.Confirm && contra == 0 &&
 		(t.size != nil || 2*match >= filled) {
 		mod.Status = modConfirmed
 		out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: mod.clone()})
@@ -636,6 +639,7 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 		delete(mod.Outside, ev.Cell)
 		coverage = !wasIn || wasZoneWide != mod.ZoneWide(p.ZoneWideCells)
 		t.ring.push(modOutMatch)
+		t.located++
 		t.endOK = 0
 	}
 	l.changed(mod, coverage)
@@ -659,7 +663,7 @@ func (l *modifierLearner) open(t *modTrack, cut int64, now time.Time,
 		InCells:  make(map[s2.CellID]struct{}),
 		Outside:  make(map[s2.CellID]struct{}),
 	}
-	t.ring = modRing{}
+	t.ring, t.located = modRing{}, 0
 	var cuts []sizeCut
 	if t.size != nil {
 		cuts = sizeCuts(t.key.Scope.Strong)
@@ -677,8 +681,11 @@ func (l *modifierLearner) open(t *modTrack, cut int64, now time.Time,
 		if pd.Cell != 0 {
 			mod.addInCell(pd.Cell)
 			t.ring.push(modOutMatch)
+			t.located++
 		}
 	}
+	// Refused rolls are pushed after every seeded match, whatever their
+	// order: the contradictions stay in the ring longest (conservative).
 	for _, c := range refused {
 		if _, in := mod.InCells[c]; in {
 			mod.Contradictions++
@@ -770,7 +777,7 @@ func (t *modTrack) clearCell(cell s2.CellID, unix int64) {
 func (l *modifierLearner) end(t *modTrack, at time.Time, reason string) modifierTransition {
 	mod := t.mod
 	mod.Status, mod.End, mod.EndReason = modEnded, at, reason
-	t.mod, t.endOK, t.ring = nil, 0, modRing{}
+	t.mod, t.endOK, t.ring, t.located = nil, 0, modRing{}, 0
 	for i, a := range l.activeTracks {
 		if a == t {
 			l.activeTracks = append(l.activeTracks[:i], l.activeTracks[i+1:]...)

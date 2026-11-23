@@ -488,6 +488,12 @@ func TestModifierLearnerDirty(t *testing.T) {
 	check("repeated outside agreement", false, false)
 	l.feed(modCheck(modT0.Add(6*time.Second), cellA, withCharged(300)), modZone)
 	check("contradiction", true, false)
+
+	l = newModifierLearner(defaultModifierParams())
+	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	l.takeDirty()
+	l.feed(modCheck(modT0.Add(time.Second), cellD, withCharged(300)), modZone)
+	check("contradiction outside a zone-wide modifier", true, true)
 }
 
 func modifierWith(t *testing.T, l *modifierLearner, move int32) *derivationModifier {
@@ -707,5 +713,117 @@ func TestModifierPinEqualAgreementNeutral(t *testing.T) {
 	}
 	if m := onlyActive(t, l); len(m.Outside) != 0 || !m.ZoneWide(3) {
 		t.Fatalf("outside %v, want none and still zone-wide", m.Outside)
+	}
+}
+
+// TestModifierMinorityMatchesNeverConfirm: matches that keep resetting the
+// end count but stay a ring minority never confirm.
+func TestModifierMinorityMatchesNeverConfirm(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(time.Second); return ts }
+	trs := feedAll(l, modZone,
+		modCheck(next(), cellA, withCharged(494)),
+		modCheck(next(), cellA, withCharged(494)),
+		modCheck(next(), cellA, withCharged(494)))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want a candidate", states(trs))
+	}
+	for range 10 {
+		trs = append(trs[:0], l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
+		for range 7 {
+			trs = append(trs, l.feed(modCheck(next(), cellA), modZone)...)
+		}
+		if len(trs) != 0 {
+			t.Fatalf("transitions %v, want none", states(trs))
+		}
+	}
+	if m := onlyActive(t, l); m.Status != modCandidate || m.Observations != 13 {
+		t.Fatalf("status %v observations %d, want a candidate with 13", m.Status, m.Observations)
+	}
+}
+
+// TestModifierCellZeroMatchesDoNotConfirm: only matches with a cell count
+// toward confirm.
+func TestModifierCellZeroMatchesDoNotConfirm(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(time.Second); return ts }
+	var trs []modifierTransition
+	for range 3 {
+		trs = append(trs, l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
+	}
+	for range 7 {
+		trs = append(trs, l.feed(modCheck(next(), 0, withCharged(494)), modZone)...)
+	}
+	if len(trs) != 1 {
+		t.Fatalf("transitions %v, want only the candidate", states(trs))
+	}
+	if m := onlyActive(t, l); m.Status != modCandidate || m.Observations != 10 {
+		t.Fatalf("status %v observations %d, want a candidate with 10", m.Status, m.Observations)
+	}
+	for i := range 7 {
+		trs = l.feed(modCheck(next(), cellA, withCharged(494)), modZone)
+		if want := i == 6; want != (len(trs) == 1 && trs[0].State == modConfirmed) {
+			t.Fatalf("located match %d: %v", 4+i, states(trs))
+		}
+	}
+}
+
+// TestModifierAgreedOverflowBlocksZoneWide: past 64 agreeing cells the
+// unlisted ones still count as outside evidence.
+func TestModifierAgreedOverflowBlocksZoneWide(t *testing.T) {
+	p := defaultModifierParams()
+	p.Start, p.Confirm = modAgreedCap+2, modAgreedCap+2
+	l := newModifierLearner(p)
+	cells := make([]s2.CellID, modAgreedCap+1)
+	for i := range cells {
+		cells[i] = modTestCell(50.0+0.01*float64(i), 1.0)
+	}
+	ts := modT0
+	next := func() time.Time { ts = ts.Add(time.Second); return ts }
+	var trs []modifierTransition
+	trs = append(trs, l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
+	for _, c := range cells {
+		trs = append(trs, l.feed(modCheck(next(), c), modZone)...)
+	}
+	// The listed cells deviate after agreeing and become in-cells; the
+	// 65th, left out of the list, is never named.
+	for _, c := range cells[:modAgreedCap] {
+		trs = append(trs, l.feed(modCheck(next(), c, withCharged(494)), modZone)...)
+	}
+	trs = append(trs, l.feed(modCheck(next(), cellB, withCharged(494)), modZone)...)
+	if len(trs) != 2 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want candidate then confirmed", states(trs))
+	}
+	m := onlyActive(t, l)
+	if len(m.Outside) != 0 || m.ZoneWide(3) {
+		t.Fatalf("outside %d zone-wide %v, want none listed but not zone-wide", len(m.Outside), m.ZoneWide(3))
+	}
+}
+
+// TestModifierAgreedCellsOutliveGatedPending: a track whose pending
+// deviations were all gated away keeps its agreeing cells through a prune.
+func TestModifierAgreedCellsOutliveGatedPending(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	feedAll(l, modZone,
+		modCheck(modT0, cellA, withCharged(494)),
+		modCheck(modT0.Add(time.Second), cellD),
+		modCheck(modT0.Add(2*time.Second), cellA))
+	l.sweep(modT0.Add(2 * time.Minute))
+	if n := l.trackCount(); n != 1 {
+		t.Fatalf("tracks %d after the prune, want 1", n)
+	}
+	ts := modT0.Add(3 * time.Minute)
+	trs := feedAll(l, modZone,
+		modCheck(ts, cellA, withCharged(494)),
+		modCheck(ts.Add(time.Second), cellB, withCharged(494)),
+		modCheck(ts.Add(2*time.Second), cellC, withCharged(494)))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want a candidate", states(trs))
+	}
+	m := trs[0].Mod
+	if _, ok := m.Outside[cellD]; !ok || len(m.Outside) != 1 || m.ZoneWide(3) {
+		t.Fatalf("outside %v, want only cellD (cellA deviated after agreeing)", m.Outside)
 	}
 }
