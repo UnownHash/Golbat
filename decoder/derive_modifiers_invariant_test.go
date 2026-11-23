@@ -4,7 +4,6 @@ import (
 	"math/rand/v2"
 	"testing"
 	"time"
-
 )
 
 // The index applies at most one modifier per scope, type and slot in a
@@ -142,4 +141,3 @@ func checkOneAppliedPerSlot(t *testing.T, seed uint64, i int, idx *modifierIndex
 		}
 	}
 }
-
