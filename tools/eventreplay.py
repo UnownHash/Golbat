@@ -34,7 +34,7 @@ Two record kinds are read; anything else is skipped:
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
   deviations' too, except that size_rolls come only from checks whose IVs
-  agreed (when the walk did not match, its roll is noise). Ordered by bucket end (`bucket` + `bucket_seconds`): a
+  agreed (when the walk did not match, its roll is noise). Ordered by bucket end (`bucket` + `bucket_seconds`; `summary_end`): a
   summary means "this bucket is complete", and one for a bucket straddling
   UTC midnight can sit in the next day's file. `bucket` is the writer's
   bucket start. A summary written at shutdown with its bucket still open
@@ -131,7 +131,9 @@ Outputs:
   not either. key=tz (default) keys the minimum by (pokemon_id, form,
   strong, utc_offset) per local hour; key=global by (pokemon_id, form,
   strong) per UTC hour. A last line gives the encounters the rule keeps, of
-  those the files hold, overall and for strong pokemon. A scanner keying
+  those the files hold, overall and for strong pokemon. A summary whose
+  bucket straddles a quota hour (e.g. 7-minute buckets) is rejected with an
+  error: its counts cannot be split between hours. A scanner keying
   its minimum per area would keep more; the files carry no area.
 
 Thinning is an approximation from the logged counts, not a resample of
@@ -175,13 +177,20 @@ ACTIVE = ("candidate", "confirmed")
 
 # --- reader -----------------------------------------------------------------
 
+def summary_end(rec: dict) -> int:
+    """A summary's effective end: its shutdown flush time (`flushed_at`)
+    when its bucket was cut short, else the bucket's end. Used for
+    ordering, transitions and last_seen alike."""
+    return rec.get("flushed_at") or rec["bucket"] + rec["bucket_seconds"]
+
+
 def order_key(rec: dict) -> tuple:
     """When a record happened, for merging: a deviation at `ts`, a summary
     at its bucket's end. A summary sorts before a deviation at the same
     second, which belongs to the next bucket. A summary cut short by a
     shutdown (`flushed_at`) sorts at that time."""
     if rec.get("kind") == "summary":
-        return (rec.get("flushed_at") or rec["bucket"] + rec["bucket_seconds"], 0)
+        return (summary_end(rec), 0)
     return (rec["ts"], 1)
 
 
@@ -570,7 +579,7 @@ class Detector:
 
     def _summary(self, rec):
         bucket = rec["bucket"]
-        bucket_end = bucket + rec["bucket_seconds"]
+        bucket_end = summary_end(rec)  # the flush time for a cut-short bucket
         off = rec.get("utc_offset", 0)
         scopes = [_species_scope(rec)]
         if rec["strong"]:
@@ -817,6 +826,17 @@ def thin(records: Iterator[dict], rule: SamplingRule,
                 del quota[k]
         strong = bool(rec["strong"])
         p = strong_p if strong else base_p
+        if rec["kind"] == "summary":
+            # The quota is per hour and a summary's counts cannot be split
+            # between hours, so a bucket spanning an hour boundary (the
+            # key's own: local for key=tz) has no correct charge: reject it.
+            off = rec.get("utc_offset", 0) * 60 if rule.key == "tz" else 0
+            last = max(rec["bucket"], summary_end(rec) - 1)
+            if (rec["bucket"] + off) // 3600 != (last + off) // 3600:
+                raise ValueError(
+                    f"summary bucket {rec['bucket']} (+{summary_end(rec) - rec['bucket']}s)"
+                    " straddles a quota hour; --simulate-sampling needs"
+                    " bucket_minutes that divide 60 and align to the hour")
         if rule.key == "tz":
             off = rec.get("utc_offset", 0)
             key = (rec["pokemon_id"], rec["form"], strong, off,
@@ -841,7 +861,7 @@ def thin(records: Iterator[dict], rule: SamplingRule,
         # A summary covers its bucket's deviations with its own boosted and
         # utc_offset: they count as its first checks, inside its share of
         # the minimum, not on top of it.
-        lo, hi = rec["bucket"], rec["bucket"] + rec["bucket_seconds"]
+        lo, hi = rec["bucket"], summary_end(rec)
         own = (bool(rec.get("boosted")), rec.get("utc_offset", 0))
         covered = [d for d in q[1]
                    if lo <= d[0] < hi and (d[1], d[2]) == own]
@@ -1045,9 +1065,12 @@ def main(argv: list[str]) -> int:
     if args.simulate_sampling:
         det, full, last = _replay(read_records(args.files), params, args.at)
         cost = SamplingCost()
-        _, sampled, _ = _replay(
-            thin(read_records(args.files), args.simulate_sampling, cost),
-            params, args.at)
+        try:
+            _, sampled, _ = _replay(
+                thin(read_records(args.files), args.simulate_sampling, cost),
+                params, args.at)
+        except ValueError as e:
+            ap.error(str(e))
         _print_comparison(compare_runs(full, sampled), sys.stdout)
         _print_cost(cost, sys.stdout)
     else:

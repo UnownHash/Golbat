@@ -652,6 +652,66 @@ class SamplingTest(unittest.TestCase):
         self.assertGreater(pin["confirm"], 0)
 
 
+class FlushedSummaryTest(unittest.TestCase):
+    def test_flushed_long_bucket_ends_modifier_at_flush_time(self):
+        # A 60-minute bucket flushed 10 minutes in (60 -> 5 minute restart):
+        # its agreements end the modifier at the flush, not at T0 + 3600.
+        recs = [level_dev(T0 - 600 + i * 60) for i in range(10)]
+        long_sum = summ(T0, ok=30, n=30)
+        long_sum["bucket_seconds"] = long_sum["bucket_s"] = 3600
+        long_sum["flushed_at"] = T0 + 600
+        recs.append(long_sum)
+        trs, det = replay(recs)
+        self.assertEqual([t.state for t in trs],
+                         ["candidate", "confirmed", "ended"])
+        self.assertEqual(trs[-1].ts, T0 + 600)
+        self.assertEqual(trs[-1].modifier.end, T0 + 600)
+
+    def test_flushed_summary_last_seen_is_flush_time(self):
+        recs = [level_dev(T0 + i * 60) for i in range(10)]
+        long_sum = summ(T0, ok=5, n=5)
+        long_sum["bucket_seconds"] = long_sum["bucket_s"] = 3600
+        long_sum["flushed_at"] = T0 + 600
+        recs.append(long_sum)
+        _, det = replay(recs)
+        (t,) = [t for t in det._active]
+        self.assertEqual(t.last_seen, T0 + 600)
+
+
+class SamplingHourTest(unittest.TestCase):
+    def test_bucket_straddling_quota_hour_is_rejected(self):
+        # Codex: a 7-minute bucket over 11:00 would charge its counts to
+        # the 10:00 hour and undercount the retained encounters.
+        start = T0 + 3600 - 180
+        s = summ(start, n=10, ok=10)
+        s["bucket_seconds"] = s["bucket_s"] = 420
+        with self.assertRaisesRegex(ValueError, "straddles"):
+            list(thin(iter([s]), SamplingRule(pct=0, min_per_hour=1)))
+
+    def test_flushed_bucket_inside_one_hour_is_accepted(self):
+        s = summ(T0, n=10, ok=10)
+        s["bucket_seconds"] = s["bucket_s"] = 3600
+        s["flushed_at"] = T0 + 600
+        got = list(thin(iter([s]), SamplingRule(pct=0, min_per_hour=1)))
+        self.assertEqual(got[0]["checked"], 1)
+
+    def test_main_reports_straddle_as_error(self):
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "e.jsonl")
+            s = summ(T0 + 3600 - 180, n=10, ok=10)
+            s["bucket_seconds"] = s["bucket_s"] = 420
+            with open(f, "w") as fh:
+                fh.write(json.dumps(s) + "\n")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), \
+                    contextlib.redirect_stdout(io.StringIO()):
+                with self.assertRaises(SystemExit) as cm:
+                    eventreplay.main([f, "--simulate-sampling",
+                                      "pct=0,min_per_hour=1"])
+            self.assertNotEqual(cm.exception.code, 0)
+            self.assertIn("straddles", err.getvalue())
+
+
 class MainTest(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.TemporaryDirectory()
