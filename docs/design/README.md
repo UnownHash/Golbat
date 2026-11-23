@@ -23,3 +23,4 @@ decisions that replaced parts of it.
 | 2026-10-28 | [Tappable scan API](2026-10-28-tappable-scan-api-design.md) | Tappable R-tree, DNF scan endpoint and per-entry cache TTL. | Implemented (#430) |
 | 2026-10-28 | [Tappable webhook](2026-10-28-tappable-webhook-design.md) | `tappable` webhook for reward tappables. | Implemented (#431) |
 | 2026-11-15 | [Derivation event modifiers](2026-11-15-derivation-event-modifiers-design.md) | Opt-in event-analysis log (deviations + summarised agreements) and a replay script that detects event modifiers to derivation. | Prototype |
+| 2026-11-17 | [Derivation modifiers live](2026-11-17-derivation-modifiers-live-design.md) | Learn derivation modifiers in process, apply them to derived values and list them at `/api/derivation/modifiers`. | In progress |

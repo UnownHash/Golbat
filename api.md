@@ -148,7 +148,8 @@ instead of probing gated endpoints.
 {
   "features": {
     "fort_in_memory": true,
-    "tappable_scan": true
+    "tappable_scan": true,
+    "derivation_modifiers": false
   },
   "limits": {
     "max_pokemon_results": 3000,
@@ -173,6 +174,7 @@ older Golbat that predates the key reports.
 |-----|---------|
 | `features.fort_in_memory` | The in-memory fort index is on (`fort_in_memory` config). Without it the [fort scans](#fort-scans) and [fort availability](#fort-availability) endpoints return 503, and pokestop by-id reads carry no `invasions`. |
 | `features.tappable_scan` | `/api/tappable/scan` and `/api/tappable/available` exist. Always true on builds that have the key. |
+| `features.derivation_modifiers` | The derivation modifier learner is running, so `/api/derivation/modifiers` lists modifiers (it returns an empty list otherwise). |
 | `limits.max_pokemon_results` | `tuning.max_pokemon_results`: the cap on pokemon scan/search results per request. |
 | `limits.max_fort_results` | `tuning.max_fort_results`: the cap on fort scan results per request (and per type group on `/api/fort/scan`). |
 | `limits.max_tappable_results` | `tuning.max_tappable_results`: the cap on tappable scan results per request. |
@@ -183,6 +185,51 @@ older Golbat that predates the key reports.
 
 New optional capabilities get a new `filters` (or `features`) flag here rather
 than a flag on the endpoint they affect.
+
+**Status Codes:**
+- 200: OK
+
+---
+
+### GET /api/derivation/modifiers
+
+The encounter-derivation modifiers the learner currently holds (candidate and
+confirmed; ended ones are not listed), in the shareable modifiers format with
+a region. State is in memory only. When the learner is off
+(`features.derivation_modifiers` false) it returns version 1 with an empty
+`modifiers` array.
+
+**Authentication:** Required.
+
+**Response:**
+```json
+{
+  "version": 1,
+  "generated_at": "2026-11-17T12:00:00Z",
+  "modifiers": [
+    {
+      "id": "2026-11-15-move_pin-strong-959-3272-charged-494",
+      "scope": {"strong": true, "pokemon": [{"id": 959, "form": 3272}]},
+      "window": {"start": "2026-11-15T09:00:00Z", "end": null, "time_basis": "utc"},
+      "effect": {"type": "move_pin", "slot": "charged", "move": 494},
+      "status": "confirmed",
+      "evidence": {"observations": 14, "contradictions": 0},
+      "region": {"zone": "Europe/London", "cells": null}
+    }
+  ]
+}
+```
+
+- `id` is `<start date>-<type>-<scope>-<effect>`, sorted ascending in the list.
+  Scope is `<id>-<form>`, prefixed `strong-` for strong pokemon; `all` /
+  `all-strong` cover every pokemon (no `scope.pokemon`).
+- `effect` is `{"type":"level_offset","delta":n}`,
+  `{"type":"move_pin","slot":"quick|charged","move":id}` or
+  `{"type":"size_cutoffs","boundaries":{"1/2":[lo,hi]}}`, where a null end is
+  unbounded.
+- `status` is `candidate` or `confirmed`; `window.end` is always null.
+- `region.cells` is the sorted level-14 S2 cell tokens the modifier covers, or
+  null when it covers its whole `zone`.
 
 **Status Codes:**
 - 200: OK

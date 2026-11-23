@@ -62,6 +62,9 @@ func registerHumaRoutes(api huma.API) {
 }
 
 type statusOutput struct{ Body *decoder.ApiStatusResult }
+type derivationModifiersOutput struct {
+	Body *decoder.ApiDerivationModifiers
+}
 
 // registerStatusRoutes registers the server status/capability report. Unlike
 // the fort routes it is NOT gated on fort_in_memory — it exists to report it.
@@ -77,6 +80,19 @@ func registerStatusRoutes(api huma.API) {
 		DefaultStatus: http.StatusOK,
 	}, func(ctx context.Context, _ *struct{}) (*statusOutput, error) {
 		return &statusOutput{Body: decoder.GetApiStatus()}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID:   "get-derivation-modifiers",
+		Method:        http.MethodGet,
+		Path:          "/api/derivation/modifiers",
+		Summary:       "List the active derivation modifiers",
+		Description:   "Lists the encounter-derivation modifiers the learner currently holds (candidate and confirmed), in the shareable modifiers format with a region. Returns version 1 and an empty modifiers array when the learner is off (see features.derivation_modifiers on /api/status).",
+		Tags:          []string{"Status"},
+		Security:      []map[string][]string{{securitySchemeName: {}}},
+		DefaultStatus: http.StatusOK,
+	}, func(ctx context.Context, _ *struct{}) (*derivationModifiersOutput, error) {
+		return &derivationModifiersOutput{Body: decoder.GetApiDerivationModifiers(time.Now())}, nil
 	})
 }
 
