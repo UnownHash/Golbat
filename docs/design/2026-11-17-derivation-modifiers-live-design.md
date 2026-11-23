@@ -304,10 +304,10 @@ most 256 excluded cells; past that, zone-wide turns off. For size, exclusion
 is per boundary: a cell is readmitted only when every boundary disproved
 there has a fresh match there.
 
-**Forms are independent.** A record's display form can change after its
-values were derived (the same spawn shown as another form). Values derived
-under the old form's scope, including any modifier, are re-derived for the
-new form; encounter-reported values are kept.
+**Form changes are not handled.** A spawn's form does not change after it is
+seen; the only display-form change is Minior's core colour, a post-catch
+form, which derivation modifiers do not concern. (A review finding premised
+on a form change was ruled not applicable.)
 
 **Repeated encounters.** No learner-side id map: the decode site's
 first-encounter gate (record state and seen type) is the only dedupe. A

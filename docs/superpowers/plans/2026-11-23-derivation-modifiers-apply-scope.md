@@ -16,7 +16,7 @@
 - Decode-path invariant (CLAUDE.md): no blocking send, no new allocation or map on the decode path; nil-index derive = one atomic load, zero allocations.
 - `modifierEvent` pointer-free, ≤ 64 bytes.
 - Pinned moves: server override after the normal walk; never skip or shift a draw.
-- A wrongly applied value is worse than an absent one: when in doubt, withhold. Forms are independent scopes.
+- A wrongly applied value is worse than an absent one: when in doubt, withhold.
 - Constants: zone-wide spread = matches from ≥ 8 distinct level-14 cells spanning ≥ 10 km; excluded cells cap 256 (overflow → zone-wide off); candidate deadline 2 × `unseen`; cell→zone caches cleared above 200,000 entries.
 - Learner per-event work O(1) amortised; every learner map bounded.
 - Build/test: `go test -tags go_json ./...`, `make lint` (Docker `golang:1.27`, `golangci/golangci-lint:latest`); Python `python3 -m unittest discover -s tools -p 'test_eventreplay.py'`.
@@ -40,15 +40,14 @@ Commit: `fix(decoder): apply only spread zone-wide modifiers; disproof lasts`.
 
 ### Task 2: Index, API and decode-path fixes
 
-**Files:** `decoder/derive_modifiers_apply.go`, `decoder/api_derivation_modifiers.go`, `decoder/pokemon_decode.go` (display form change), `decoder/derive_modifiers_runtime.go` and `decoder/derive_events_writer.go` (zone cache caps), `api.md`, `config.toml.example`; tests.
+**Files:** `decoder/derive_modifiers_apply.go`, `decoder/api_derivation_modifiers.go`, `decoder/derive_modifiers_runtime.go` and `decoder/derive_events_writer.go` (zone cache caps), `api.md`, `config.toml.example`; tests.
 
 - Index: entries only for applied modifiers (confirmed, zone-wide, not all-strong); lookup covers zone-wide minus excluded cells (map or sorted slice, alloc-free). No venue entries.
 - API: `applied` false for venue-only; region unchanged in shape.
-- Display form change: when an unencountered record's display form (scope) changes, re-derive the values derived under the old scope (level, CP, moves, size, IVs as applicable) for the new scope; encounter-reported values kept. Find where the display/form changes (e.g. `setPokemonDisplay`) and every derive path it should trigger; test Codex case (strong record derived at 42 under form 0's +5, display changes to form 1 with base 37 → 37).
 - Zone caches (learner map, `modifierZoneOf` xsync map, events writer `zones`): cleared when above 200,000 entries.
 - Docs: api.md and config.toml.example describe §9 (venue detection-only, spread rule, ageing, lasting disproof).
 
-Commit: `fix(decoder): index applies zone-wide only; forms re-derive; capped caches`.
+Commit: `fix(decoder): index applies zone-wide only; capped caches`.
 
 ### Task 3: Replay bucket metadata
 
