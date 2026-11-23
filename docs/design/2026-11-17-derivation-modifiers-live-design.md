@@ -1,6 +1,6 @@
 # Derivation Modifiers — Live Learner Design
 
-> **Status:** Agreed 2026-11-17; building on branch
+> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7); building on branch
 > t3/encounter-override-heuristics (PR #441).
 
 - **Date:** 2026-11-17
@@ -123,7 +123,77 @@ retroactive correction, no webhook re-send).
   prototype's shareable JSON plus `region` (`zone`, `cells` or null for
   zone-wide); `/api/status` gains `features.derivation_modifiers`.
 
-## 7. Not included
+## 7. Revision after independent review (2026-11-23)
+
+Two independent reviews (Fable, Codex) and the Dragonite sampled mode
+(Dragonite PR #681) found rules above that publish wrong values. These
+rules replace the ones they contradict; §2–§6 stand otherwise.
+
+**Evidence.**
+- Each spawn counts once: the decode site feeds the learner only the first
+  encounter of a record (from the record's own state, no new map), whatever
+  the scanner. Repeated encounters of one spawn are not independent evidence.
+- Learner events carry the server's clock at submit, never a client or map
+  timestamp: one future-stamped sighting ended every modifier.
+- A wild update derives with the cell it is placed in, not the previous
+  sighting's.
+
+**Outcomes per modifier.** Each active modifier keeps a ring of the last 16
+in-cell outcomes on its dimension: match (its effect), agree (base value) or
+contra (another effect of the same type, scope and slot).
+- *Confirm:* `confirm` observations, no contra in the ring, and matches at
+  least half the ring. Noise (a few scattered IV mismatches among many
+  agreements) never confirms.
+- *End by agreement:* `end` consecutive in-cell agreements; only an in-cell
+  match resets the count. Default `end` = **8**, at most Dragonite's hourly
+  minimum (12), so an event that ends on the local hour while its species
+  keeps spawning ends with the next hour's first sampled encounters. Every
+  effect seen applies to the whole scope, so 8 straight agreements in its
+  cells is decisive.
+- *End by contradiction (new, reason `contradicted`):* at least `start`
+  contras in the ring and no fewer contras than matches. A superseded pin
+  ends instead of masking its replacement.
+- A contra outside the in-cells marks that cell **outside** (it is evidence
+  the effect does not apply there), as an agreement does.
+- A move agreement whose observed move equals the pinned move is neutral
+  (consistent with both): it neither ends nor marks outside.
+- A candidate's contradictions age out with the ring, so one odd record
+  delays a real event rather than blocking it for its whole run.
+
+**Regions.**
+- Agreements seen before a candidate forms are kept per cell (within
+  `window`, at most 64 cells per track); at candidate creation those cells
+  start as outside unless they also deviated.
+- Zone-wide additionally needs in-cells under at least two level-10 cells
+  (~10 km). A ticketed venue is a few contiguous level-14 cells and stays
+  local until evidence from elsewhere exists; a real global event spans
+  more. Zone "" (unknown) is never zone-wide.
+
+**Applying.**
+- `all-strong` level offsets are detected and listed but **not applied**:
+  a strong species at base levels kept getting +5. Per-species offsets apply
+  (with sampling, each strong species has its own hourly minimum).
+- When two confirmed modifiers of the same type and slot cover one record,
+  neither applies and the dimension is left absent (level: no derived IVs or
+  level, as unexplained; move: slot absent; size: absent). A disputed value
+  is withheld, not guessed.
+- Pinned moves are a server override after the normal walk: draw both slots
+  as usual and replace the pinned one. No draw is skipped (the
+  derive/encounter comment saying otherwise is corrected).
+
+**Publishing.** Coverage that shrinks (zone-wide lost, a modifier ended) is
+published at once; coverage that grows (a new in-cell) and evidence are
+published at most once a second. Unchanged modifiers are not re-cloned, and
+the index never copies outside-cell sets (it needs only zone-wide or not).
+
+**Size.** Only rolls the interval fit accepts count as observations; a
+refused in-cell roll is a contra.
+
+**Events log.** Records stamped in the future are clamped to the writer's
+clock; replay orders records within a bucket by time before merging (a
+restart inside a bucket appends earlier deviations after its summary).
+
+## 8. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the
 offline script by cell (the events log carries no per-cell agreements; the
