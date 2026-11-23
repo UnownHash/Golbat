@@ -90,3 +90,73 @@ func TestModifierScaleSampledEventEnds(t *testing.T) {
 		}
 	}
 }
+
+// TestModifierScaleVenueNeverApplies (design §9): a two-cell venue giving
+// half of a zone's checks at 1800 an hour for six hours, lying across a
+// level-10 cell edge or inside one, never goes zone-wide and never confirms:
+// no cell is ever covered.
+func TestModifierScaleVenueNeverApplies(t *testing.T) {
+	grid := modScaleCells(t)
+	straddle := modStraddleVenue(t)
+	for name, venue := range map[string][]s2.CellID{"straddle": straddle[:], "inside": {cellA, cellA2}} {
+		rng := rand.New(rand.NewPCG(7, 7))
+		l := newModifierLearner(defaultModifierParams())
+		for i := range 6 * 1800 {
+			ts := modT0.Add(time.Duration(i) * 2 * time.Second)
+			ev := modCheck(ts, grid[rng.IntN(len(grid))])
+			if rng.IntN(2) == 0 {
+				ev = modCheck(ts, venue[rng.IntN(len(venue))], withLevelDelta(5))
+			}
+			for _, tr := range l.feed(ev, modZone) {
+				if tr.State == modConfirmed {
+					t.Fatalf("%s: venue confirmed after %s", name, ts.Sub(modT0))
+				}
+			}
+			for _, tk := range l.activeTracks {
+				if tk.mod.ZoneWide {
+					t.Fatalf("%s: venue zone-wide after %s", name, ts.Sub(modT0))
+				}
+			}
+		}
+		if m := onlyActive(t, l); len(m.Cells) != 2 {
+			t.Fatalf("%s: cells %v, want the two venue cells listed", name, m.Cells)
+		}
+	}
+}
+
+// TestModifierScaleEventEndStopsApplying (design §9): a zone-wide +5 at 6000
+// checks an hour over 3000 cells leaves no cell covered once its event has
+// ended and eight base checks have come in, however slowly (30 an hour
+// here); the venue cells it listed meanwhile cover nothing and are bounded.
+func TestModifierScaleEventEndStopsApplying(t *testing.T) {
+	grid := modScaleCells(t)
+	rng := rand.New(rand.NewPCG(3, 3))
+	l := newModifierLearner(defaultModifierParams())
+	ts := modT0
+	for range 6000 {
+		ts = ts.Add(time.Hour / 6000)
+		for _, tr := range l.feed(modCheck(ts, grid[rng.IntN(len(grid))], withLevelDelta(5)), modZone) {
+			if tr.State == modEnded {
+				t.Fatalf("ended (%s) during the event, after %s", tr.Mod.EndReason, ts.Sub(modT0))
+			}
+		}
+	}
+	tk := l.activeTracks[0]
+	if m := tk.mod; m.Status != modConfirmed || !m.ZoneWide || len(m.Cells) == 0 || len(tk.venue) != modVenueMax {
+		t.Fatalf("at the event's end: status %v zone-wide %v cells %d venue %d, want confirmed zone-wide with venue cells, %d tracked",
+			m.Status, m.ZoneWide, len(m.Cells), len(tk.venue), modVenueMax)
+	}
+	for i := range 60 {
+		ts = ts.Add(2 * time.Minute)
+		cell := grid[rng.IntN(len(grid))]
+		if i >= 8 {
+			for _, m := range l.active() {
+				if m.Status == modConfirmed || m.Covers(modZone, cell) {
+					t.Fatalf("base check %d: a modifier still applies: status %v zone-wide %v", i+1, m.Status, m.ZoneWide)
+				}
+			}
+		}
+		l.feed(modCheck(ts, cell), modZone)
+		l.sweep(ts)
+	}
+}

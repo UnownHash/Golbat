@@ -43,7 +43,7 @@ func TestModifierSizeRattataShift(t *testing.T) {
 	// upper cuts unchanged; uniform rolls, every one checked.
 	game := [4]float64{0.012, 0.037, 0.971, 0.996}
 	rng := rand.New(rand.NewPCG(7, 7))
-	cells := []s2.CellID{cellA, cellB, cellC}
+	cells := modScaleCells(t)
 	l := newModifierLearner(defaultModifierParams())
 	var trs []modifierTransition
 	const bucket = 15 * time.Minute
@@ -51,7 +51,7 @@ func TestModifierSizeRattataShift(t *testing.T) {
 		for i := range 1500 {
 			ts := modT0.Add(time.Duration(b)*bucket + time.Duration(i)*bucket/1500)
 			r := rng.Float64()
-			trs = append(trs, l.feed(modCheck(ts, cells[i%3], withSize(r, sizeClassByCuts(r, game))), modZone)...)
+			trs = append(trs, l.feed(modCheck(ts, cells[rng.IntN(len(cells))], withSize(r, sizeClassByCuts(r, game))), modZone)...)
 		}
 	}
 	for _, tr := range trs {
@@ -99,14 +99,15 @@ func sizeEvent(t *testing.T) *modifierLearner {
 	return l
 }
 
-// sizeConfirmed is sizeEvent after seven more deviations across "1/2": ten
-// matches in the zone record, so zone-wide and confirmed.
+// sizeConfirmed is sizeEvent after seven more deviations across "1/2" over
+// the zone: ten matches from ten cells in the zone record, so zone-wide and
+// confirmed.
 func sizeConfirmed(t *testing.T) *modifierLearner {
 	t.Helper()
 	l := sizeEvent(t)
 	var trs []modifierTransition
-	for i := range 7 {
-		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(10+i)*time.Second), cellB, withSize(0.009, 1)), modZone)...)
+	for i, c := range modWideCells(7) {
+		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(10+i)*time.Second), c, withSize(0.009, 1)), modZone)...)
 	}
 	if len(trs) != 1 || trs[0].State != modConfirmed {
 		t.Fatalf("transitions %v, want confirmed at the tenth deviation", states(trs))
@@ -160,8 +161,8 @@ func TestModifierSizeAgreementsNeverEnd(t *testing.T) {
 	}
 }
 
-// A size modifier is zone-wide only: matches in one level-10 cell never
-// cover a venue cell, so it stays a candidate.
+// A size modifier has no venue cells: matches in one cell list none, and it
+// stays a candidate.
 func TestModifierSizeNoVenueCells(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	var trs []modifierTransition
@@ -229,8 +230,8 @@ func TestModifierSizeConfirmedNeedsStartRollsForNewBoundary(t *testing.T) {
 		t.Fatal("candidate: 2/3 not listed after a roll across it")
 	}
 	var trs []modifierTransition
-	for i := range 6 {
-		trs = append(trs, l.feed(modCheck(modT0.Add(2*time.Minute+time.Duration(i)*time.Second), cellB, withSize(0.009, 1)), modZone)...)
+	for i, c := range modWideCells(6) {
+		trs = append(trs, l.feed(modCheck(modT0.Add(2*time.Minute+time.Duration(i)*time.Second), c, withSize(0.009, 1)), modZone)...)
 	}
 	if len(trs) != 1 || trs[0].State != modConfirmed {
 		t.Fatalf("transitions %v, want confirmed", states(trs))
@@ -305,8 +306,12 @@ func TestModifierSizeNeverInverted(t *testing.T) {
 		t.Fatalf("contradictions %d observations %d boundaries %v, want 2, 2 and unchanged", m.Contradictions, m.Observations, m.Boundaries)
 	}
 	rec := l.scopes[modScopeKey{m.Scope, modZone}].rec[modDimSize]
-	if v := rec.judge(modIDSizeMatch, false, 4); rec.n != 4 || v.on || !v.byEffect {
+	if v := rec.judge(modIDSizeMatch, false, 4, 0); rec.n != 4 || v.on || !v.byEffect {
 		t.Fatalf("record holds %d, verdict %+v: want 2 matches and 2 refused rolls, no majority", rec.n, v)
+	}
+	// Each refused roll disproved "1/2" in its cell.
+	if m.Excluded[cellA] != 1 || m.Excluded[cellB] != 1 || len(m.Excluded) != 2 {
+		t.Fatalf("excluded %v, want cells A and B for boundary 1/2", m.Excluded)
 	}
 }
 

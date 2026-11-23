@@ -21,12 +21,12 @@ import (
 // The derivation modifier learner's runtime (design §6–7): one goroutine
 // owns the modifierLearner, fed by a channel from the encounter check and,
 // while a scope has an active modifier, its first sightings. It logs every
-// transition and republishes derivationModifierIndex and the API snapshot
+// transition (a candidate's coming and its unconfirmed end at Debug, the
+// rest at Info) and republishes derivationModifierIndex and the API snapshot
 // after a transition or a shrink of a confirmed modifier's coverage
-// (zone-wide lost, a cell excluded or no longer covered, size boundaries
-// moved) at once, and after growth (a venue cell covered, zone-wide gained)
-// or an evidence-only change at most once per
-// deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
+// (zone-wide lost, a cell excluded, size boundaries moved) at once, and
+// after growth (zone-wide gained, a cell readmitted) or an evidence-only
+// change at most once per deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
 // changed since the last one. State is in memory only.
 
 // deriveModifiersQueueSize is the learner's channel capacity: 16384
@@ -140,7 +140,7 @@ func storeModifierSnapshot(active []*derivationModifier) {
 // offset (design §8): detection only, never in the index, never applied.
 // It is confirmed when at least two of its species are, else a candidate;
 // it starts at its earliest species' start, sums their evidence, and covers
-// what they cover together (zone-wide if one of them is, their covered
+// what they cover together (zone-wide if one of them is, their venue
 // cells; no excluded cells). Sorted by zone, then delta.
 func allStrongSummaries(active []*derivationModifier) []*derivationModifier {
 	type key struct {
@@ -263,8 +263,7 @@ func submitDerivationModifierEvent(ev modifierEvent) {
 }
 
 // submitDerivationModifierSighting sends a new record's first sighting to
-// the learner, only when its scope has an active modifier that covers
-// something (it feeds that modifier's last-seen time). With none it costs one
+// the learner, only when its scope has an active zone-wide modifier (it feeds that modifier's last-seen time). With none it costs one
 // atomic load and sends nothing. The save path calls it only when
 // derivationModifierLearnerOn, so a learner that is off costs a branch.
 func submitDerivationModifierSighting(p *Pokemon, now int64) {
@@ -341,6 +340,12 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 // last publish. With nothing changed it returns without reading the clock.
 func (r *modifierRuntime) publish(trs []modifierTransition) {
 	for _, tr := range trs {
+		if modifierTransitionQuiet(tr) {
+			if log.IsLevelEnabled(log.DebugLevel) {
+				log.Debug(formatModifierTransition(tr))
+			}
+			continue
+		}
 		log.Info(formatModifierTransition(tr))
 	}
 	d := r.learner.takeDirty()
@@ -379,9 +384,17 @@ func (r *modifierRuntime) activeCopies() []*derivationModifier {
 	return out
 }
 
+// modifierTransitionQuiet reports whether tr is logged at Debug: a
+// candidate forming or ending unconfirmed, which scattered noise does all
+// day.
+func modifierTransitionQuiet(tr modifierTransition) bool {
+	return tr.State == modCandidate || (tr.State == modEnded && tr.Mod.EndReason == "unconfirmed")
+}
+
 // formatModifierTransition is the [DERIVE_MODIFIER] log line for tr.
-// region is the number of covered venue cells, or zone-wide with the
-// excluded and the venue cells it has: "zone-wide less 1 plus 3 cells".
+// region is the number of venue cells (listed, not coverage), or zone-wide
+// with the excluded and the venue cells it has: "zone-wide less 1 plus 3
+// cells".
 func formatModifierTransition(tr modifierTransition) string {
 	m := tr.Mod
 	region := strconv.Itoa(len(m.Cells)) + " cells"

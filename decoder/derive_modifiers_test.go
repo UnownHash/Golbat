@@ -1,7 +1,6 @@
 package decoder
 
 import (
-	"slices"
 	"testing"
 	"time"
 	"unsafe"
@@ -35,7 +34,7 @@ var (
 // modVenueCell14 is the n-th level-14 cell after c under c's level-10 cell
 // (wrapping inside it), so it is never c for 0 < n < 256.
 func modVenueCell14(c s2.CellID, n int) s2.CellID {
-	p := c.Parent(modZoneWideSpreadLevel)
+	p := c.Parent(10)
 	for range n {
 		if c = c.Next(); c == p.ChildEndAtLevel(deriveEventsCellLevel) {
 			c = p.ChildBeginAtLevel(deriveEventsCellLevel)
@@ -44,7 +43,7 @@ func modVenueCell14(c s2.CellID, n int) s2.CellID {
 	return c
 }
 
-// modSpreadCells returns n cells under n different level-10 cells.
+// modSpreadCells returns n cells ~55 km apart: eight or more are spread.
 func modSpreadCells(n int) []s2.CellID {
 	out := make([]s2.CellID, n)
 	for i := range out {
@@ -53,8 +52,14 @@ func modSpreadCells(n int) []s2.CellID {
 	return out
 }
 
-func withID(id uint64) func(*modifierEvent) {
-	return func(ev *modifierEvent) { ev.EncounterID = id }
+// modWideCells returns n cells of modZone ~5 km apart on a line east of the
+// named cells and distinct from them: eight or more are spread.
+func modWideCells(n int) []s2.CellID {
+	out := make([]s2.CellID, n)
+	for i := range out {
+		out[i] = modTestCell(51.30+0.045*float64(i), -0.02)
+	}
+	return out
 }
 
 var modT0 = time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC)
@@ -157,22 +162,32 @@ func TestModifierMovePinLifecycle(t *testing.T) {
 	if !m.Start.Equal(modT0) || m.Zone != modZone {
 		t.Fatalf("start %v zone %q", m.Start, m.Zone)
 	}
+	if m.ZoneWide || m.Covers(modZone, cellA) {
+		t.Fatal("a candidate from one cell covers something")
+	}
 
+	// Seven more across the zone: ten matches from eight cells, spread.
 	trs = nil
+	wide := modWideCells(7)
 	for i := range 7 {
-		trs = append(trs, l.feed(modCheck(modT0.Add(time.Minute+time.Duration(i)*time.Second), cellA, withCharged(494)), modZone)...)
+		trs = append(trs, l.feed(modCheck(modT0.Add(time.Minute+time.Duration(i)*time.Second), wide[i], withCharged(494)), modZone)...)
 	}
 	if len(trs) != 1 || trs[0].State != modConfirmed || trs[0].Mod.Observations != 10 {
 		t.Fatalf("after 10 deviations: %v, want confirmed with 10 observations", states(trs))
 	}
-	if m := trs[0].Mod; m.ZoneWide || !m.Covers(modZone, cellA) || len(m.Cells) != 1 {
-		t.Fatalf("zone-wide %v cells %v, want the venue cell A only", m.ZoneWide, m.Cells)
+	if m := trs[0].Mod; !m.ZoneWide || !m.Covers(modZone, cellA) || !m.Covers(modZone, unseenCell) {
+		t.Fatalf("zone-wide %v, want the zone covered", m.ZoneWide)
 	}
 
-	// One base result in its only cell disproves it.
-	trs = l.feed(modCheck(modT0.Add(2*time.Minute), cellA), modZone)
+	// The base move in half of the record ends it.
+	for i := range 8 {
+		trs = l.feed(modCheck(modT0.Add(2*time.Minute+time.Duration(i)*time.Second), modVenueCell14(cellD, i)), modZone)
+		if i < 7 && len(trs) != 0 {
+			t.Fatalf("agreement %d: %v, want no transition", i+1, states(trs))
+		}
+	}
 	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
-		t.Fatalf("after an agreement in cell A: %v, want ended by agreement", states(trs))
+		t.Fatalf("after 8 agreements: %v, want ended by agreement", states(trs))
 	}
 	if len(l.active()) != 0 {
 		t.Fatal("ended modifier still active")
@@ -205,8 +220,8 @@ func TestModifierAgreementOtherCellDoesNotGate(t *testing.T) {
 	}
 }
 
-// A ticketed venue: its cells deviate while the rest of the zone agrees, so
-// the zone record never has a majority and the pin covers its cells only.
+// A ticketed venue: its cells deviate while the rest of the zone agrees. It
+// is listed with its cells, and covers nothing: a candidate.
 func TestModifierVenueStaysLocal(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	var trs []modifierTransition
@@ -217,24 +232,26 @@ func TestModifierVenueStaysLocal(t *testing.T) {
 		trs = append(trs, l.feed(modCheck(ts.Add(time.Second), cellD), modZone)...)
 		trs = append(trs, l.feed(modCheck(ts.Add(2*time.Second), cellE), modZone)...)
 	}
-	if len(trs) != 2 || trs[1].State != modConfirmed {
-		t.Fatalf("transitions %v, want candidate then confirmed", states(trs))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want only the candidate", states(trs))
 	}
 	m := onlyActive(t, l)
 	if m.ZoneWide {
 		t.Fatal("venue modifier went zone-wide")
 	}
-	if !m.Covers(modZone, cellA) || !m.Covers(modZone, cellB) || !m.Covers(modZone, cellC) || len(m.Cells) != 3 {
-		t.Fatalf("cells %v, want the venue cells A, B and C", m.Cells)
+	if len(m.Cells) != 3 {
+		t.Fatalf("cells %v, want the venue cells A, B and C listed", m.Cells)
 	}
-	if m.Covers(modZone, cellD) || m.Covers(modZone, unseenCell) || m.Covers(modZone, 0) {
-		t.Fatal("venue modifier covers a cell outside the venue")
+	for _, c := range []s2.CellID{cellA, cellB, cellC, cellD, unseenCell, 0} {
+		if m.Covers(modZone, c) {
+			t.Fatalf("venue modifier covers cell %v", c)
+		}
 	}
 }
 
 func TestModifierGlobalGoesZoneWide(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	m := onlyActive(t, l)
 	if !m.ZoneWide {
 		t.Fatalf("not zone-wide: cells %d", len(m.Cells))
@@ -247,27 +264,52 @@ func TestModifierGlobalGoesZoneWide(t *testing.T) {
 	}
 }
 
-// Zone-wide coverage needs the effect in more than half of the zone record
-// and a record of at least confirm checks (so at least 6 of 10).
+// Zone-wide coverage needs the effect in more than half of the zone
+// record's fresh entries and at least confirm of them.
 func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	spread := modSpreadCells(16)
-	rec := func(matches, agreements int) modVerdict {
+	rec := func(matches, agreements int) *modRecord {
 		var r modRecord
 		for i := range matches {
-			r.push(spread[i], 494, false, 1)
+			r.push(spread[i], 494, false, 100)
 		}
 		for i := range agreements {
-			r.push(spread[matches+i], 268, true, 1)
+			r.push(spread[matches+i], 268, true, 100)
 		}
-		return r.judge(494, true, 10)
+		return &r
 	}
 	for _, c := range []struct {
 		matches, agreements int
 		on                  bool
-	}{{9, 0, false}, {10, 0, true}, {6, 4, true}, {5, 5, false}, {9, 7, true}, {8, 8, false}, {16, 0, true}} {
-		if got := rec(c.matches, c.agreements).on; got != c.on {
+	}{{9, 0, false}, {10, 0, true}, {8, 2, true}, {5, 5, false}, {9, 7, true}, {8, 8, false}, {16, 0, true}} {
+		if got := rec(c.matches, c.agreements).judge(494, true, 10, 100).on; got != c.on {
 			t.Errorf("%d matches, %d agreements: zone-wide %v, want %v", c.matches, c.agreements, got, c.on)
 		}
+	}
+	// Entries before the cut do not count: six aged matches leave ten fresh
+	// entries, four of them matches.
+	r := rec(10, 0)
+	for i := range 4 {
+		r.buf[i].unix = 99
+	}
+	if v := r.judge(494, true, 10, 100); v.on || !v.thin {
+		t.Errorf("six fresh matches of ten entries: %+v, want off and thin", v)
+	}
+	r = rec(6, 0)
+	for i := range 6 {
+		r.buf[i].unix = 99
+	}
+	for i := range 4 {
+		r.push(spread[6+i], 494, false, 100)
+	}
+	for i := range 6 {
+		r.push(spread[10+i], 268, true, 100)
+	}
+	if v := r.judge(494, true, 10, 100); v.on || v.thin || v.lost() != "agreement" {
+		t.Errorf("four fresh matches and six fresh agreements: %+v, want off by agreement", v)
+	}
+	if v := r.judge(494, true, 10, 101); !v.thin || v.lost() != "unseen" {
+		t.Errorf("every entry aged: %+v, want thin", v)
 	}
 }
 
@@ -276,7 +318,7 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 // from a zone-wide modifier, and readmitted by a match there.
 func TestModifierZoneWideExcludesDisprovenCell(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	trs := feedAll(l, modZone,
 		modCheck(modT0.Add(time.Second), cellD),
 		modCheck(modT0.Add(2*time.Second), cellE, withCharged(300)))
@@ -284,9 +326,7 @@ func TestModifierZoneWideExcludesDisprovenCell(t *testing.T) {
 		t.Fatalf("an agreement in cell D, a 300 in cell E: %v, want no transition", states(trs))
 	}
 	m := modifierWith(t, l, 494)
-	want := []s2.CellID{cellD, cellE}
-	slices.Sort(want)
-	if !m.ZoneWide || !slices.Equal(m.Excluded, want) {
+	if _, d := m.Excluded[cellD]; !m.ZoneWide || len(m.Excluded) != 2 || !d {
 		t.Fatalf("zone-wide %v excluded %v, want zone-wide less cells D and E", m.ZoneWide, m.Excluded)
 	}
 	if m.Covers(modZone, cellD) || m.Covers(modZone, cellE) || !m.Covers(modZone, cellA) || !m.Covers(modZone, unseenCell) {
@@ -394,7 +434,7 @@ func TestModifierUnexplainedOnIVDisagree(t *testing.T) {
 
 func TestModifierUnseenEndsAtLastSeen(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	if trs := l.sweep(modT0.Add(59 * time.Minute)); len(trs) != 0 {
 		t.Fatalf("sweep at +59m: %v, want nothing", states(trs))
 	}
@@ -402,13 +442,12 @@ func TestModifierUnseenEndsAtLastSeen(t *testing.T) {
 	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unseen" || !trs[0].At.Equal(modT0) {
 		t.Fatalf("sweep at +61m: %+v, want ended unseen at t", trs)
 	}
-
 }
 
 // TestModifierZoneWideAgesWithoutChecks: sightings show the species still
 // spawns, not that the effect still holds. A zone-wide +5 whose zone record
-// gets no check for unseen stops being zone-wide and, with no venue cell,
-// ends; zone-wide then needs fresh checks.
+// gets no check for unseen stops being zone-wide and ends; a new one needs
+// fresh checks.
 func TestModifierZoneWideAgesWithoutChecks(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	cells := modSpreadCells(12)
@@ -420,95 +459,58 @@ func TestModifierZoneWideAgesWithoutChecks(t *testing.T) {
 		t.Fatalf("transitions %v, want a confirmed zone-wide +5 with no venue cell", states(trs))
 	}
 	trs = nil
-	for i := range 60 { // a sighting a minute, where it covers
+	for i := range 59 { // a sighting a minute, where it covers
 		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(i+1)*time.Minute), cells[10], asSighting), modZone)...)
 	}
 	if len(trs) != 0 || !onlyActive(t, l).ZoneWide {
-		t.Fatalf("60 minutes of sightings: %v, want still zone-wide", states(trs))
+		t.Fatalf("59 minutes of sightings: %v, want still zone-wide", states(trs))
 	}
 	trs = l.feed(modCheck(modT0.Add(61*time.Minute), cells[10], asSighting), modZone)
 	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unseen" || trs[0].Mod.ZoneWide {
 		t.Fatalf("61 minutes without a check: %v, want ended unseen, no longer zone-wide", states(trs))
 	}
-
-	// With a venue cell still matched, only the zone-wide coverage goes; the
-	// old record does not count toward a new majority.
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
-	st := l.scopes[modScopeKey{modifierScope{PokemonID: 959, Form: 3272, Strong: true}, modZone}]
-	st.rec[modDimCharged].last = modT0.Add(-2 * time.Hour).Unix() // as if its checks were two hours old
-	if trs := l.sweep(modT0.Add(time.Minute)); len(trs) != 0 {
-		t.Fatalf("sweep: %v, want no transition (venue cells keep the pin)", states(trs))
+	// The aged record does not count toward a new majority.
+	for i := range 3 {
+		l.feed(modCheck(modT0.Add(62*time.Minute+time.Duration(i)*time.Second), cells[i], withLevelDelta(5)), modZone)
 	}
-	if m := onlyActive(t, l); m.ZoneWide || len(m.Cells) != 3 || m.Covers(modZone, unseenCell) {
-		t.Fatalf("zone-wide %v cells %d, want the three venue cells only", m.ZoneWide, len(m.Cells))
-	}
-	l.feed(modCheck(modT0.Add(2*time.Minute), cellD, withCharged(494)), modZone)
-	if onlyActive(t, l).ZoneWide {
-		t.Fatal("one fresh match brought zone-wide back from the stale record")
-	}
-}
-
-// A candidate that has not confirmed within unseen of its start ends
-// unconfirmed, with its matches and venue counts; a new one forms from fresh
-// deviations. Scattered noise cannot bank matches indefinitely.
-func TestModifierCandidateEndsUnconfirmed(t *testing.T) {
-	l := newModifierLearner(defaultModifierParams())
-	var trs []modifierTransition
-	for i := range 13 { // a mismatch every five minutes, each in another cell
-		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(i)*5*time.Minute), modVenueCell14(cellA, i), withIVsDisagree), modZone)...)
-	}
-	if len(trs) != 1 || trs[0].State != modCandidate {
-		t.Fatalf("first hour: %v, want only the candidate", states(trs))
-	}
-	trs = l.feed(modCheck(modT0.Add(65*time.Minute), modVenueCell14(cellA, 13), withIVsDisagree), modZone)
-	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unconfirmed" || trs[0].Mod.Observations != 13 {
-		t.Fatalf("after unseen: %v, want the candidate ended unconfirmed with 13 observations", states(trs))
-	}
-	if len(l.active()) != 0 {
-		t.Fatal("the mismatch that found the candidate ended must start a new cycle as pending")
-	}
-	trs = feedAll(l, modZone,
-		modCheck(modT0.Add(70*time.Minute), modVenueCell14(cellA, 14), withIVsDisagree),
-		modCheck(modT0.Add(75*time.Minute), modVenueCell14(cellA, 15), withIVsDisagree))
-	if len(trs) != 1 || trs[0].State != modCandidate || trs[0].Mod.Observations != 3 {
-		t.Fatalf("fresh deviations: %v, want a new candidate with 3 observations", states(trs))
+	if m := onlyActive(t, l); m.Status != modCandidate || m.ZoneWide {
+		t.Fatalf("three fresh matches: status %v zone-wide %v, want a candidate, not zone-wide", m.Status, m.ZoneWide)
 	}
 }
 
 // TestModifierVenueCellExpires: a venue cell with no match for unseen is
-// forgotten, whatever is sighted there (under sampled encounters a covered
-// cell may never be checked again); a confirmed modifier left with no
-// coverage ends.
+// forgotten, and a venue-only candidate with no match for unseen ends.
 func TestModifierVenueCellExpires(t *testing.T) {
+	// A lone match older than unseen does not count toward listing a cell.
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
-	l.feed(modCheck(modT0.Add(30*time.Minute), cellA, asSighting), modZone)
-	if trs := l.sweep(modT0.Add(59 * time.Minute)); len(trs) != 0 {
-		t.Fatalf("sweep at +59m: %v, want nothing", states(trs))
+	for i := range 3 {
+		l.feed(modCheck(modT0.Add(time.Duration(i-2)*time.Second), cellA, withCharged(494)), modZone)
 	}
-	trs := l.sweep(modT0.Add(61 * time.Minute))
-	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unseen" {
-		t.Fatalf("sweep at +61m: %v, want ended unseen", states(trs))
-	}
-
-	// A lone match older than unseen does not count toward covering a cell.
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
 	l.feed(modCheck(modT0.Add(time.Second), cellA2, withCharged(494)), modZone)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellA3, withCharged(494)), modZone)
+	l.feed(modCheck(modT0.Add(3*time.Second), cellA3, withCharged(494)), modZone)
+	if m := onlyActive(t, l); len(m.Cells) != 2 {
+		t.Fatalf("cells %v, want cells A and A3 listed", m.Cells)
+	}
 	for i := range 7 { // keep cell A matched: one match every 10 minutes
 		l.feed(modCheck(modT0.Add(time.Duration(i+1)*10*time.Minute), cellA, withCharged(494)), modZone)
 	}
 	l.feed(modCheck(modT0.Add(71*time.Minute), cellA2, withCharged(494)), modZone)
-	if m := onlyActive(t, l); m.Covers(modZone, cellA2) || !m.Covers(modZone, cellA) {
-		t.Fatalf("cells %v, want cell A only: the two matches in the other cell are 71 minutes apart", m.Cells)
+	m := onlyActive(t, l)
+	if _, a := m.Cells[cellA]; !a || len(m.Cells) != 1 {
+		t.Fatalf("cells %v, want cell A only: cell A3 had no match for unseen, cell A2's two are 71 minutes apart", m.Cells)
+	}
+
+	trs := l.sweep(modT0.Add(132 * time.Minute))
+	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unseen" {
+		t.Fatalf("sweep 61 minutes after the last match: %v, want the candidate ended unseen", states(trs))
 	}
 }
 
 func TestModifierSweepPrunesNoise(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	for i := range 5000 {
-		ev := modCheck(modT0, cellA, withCharged(int32(1000+i%50)), withSpecies(int32(1+i/50), 0), withID(uint64(1+i)))
+		ev := modCheck(modT0, cellA, withCharged(int32(1000+i%50)), withSpecies(int32(1+i/50), 0))
 		if trs := l.feed(ev, modZone); len(trs) != 0 {
 			t.Fatalf("noise made a transition: %v", states(trs))
 		}
@@ -516,19 +518,12 @@ func TestModifierSweepPrunesNoise(t *testing.T) {
 	if n := l.trackCount(); n != 5000 {
 		t.Fatalf("tracks %d before sweep, want 5000", n)
 	}
-	if len(l.scopes) != 100 || len(l.checked) != 5000 {
-		t.Fatalf("scopes %d ids %d before sweep, want 100 and 5000", len(l.scopes), len(l.checked))
+	if len(l.scopes) != 100 {
+		t.Fatalf("scopes %d before sweep, want 100", len(l.scopes))
 	}
 	l.sweep(modT0.Add(31 * time.Minute))
 	if n := l.trackCount(); n != 0 || len(l.scopes) != 0 {
 		t.Fatalf("tracks %d scopes %d after sweep, want 0 (zone records pruned with them)", n, len(l.scopes))
-	}
-	if len(l.checked) != 5000 {
-		t.Fatalf("ids %d after 31 minutes, want 5000 kept for unseen", len(l.checked))
-	}
-	l.sweep(modT0.Add(61 * time.Minute))
-	if len(l.checked) != 0 {
-		t.Fatalf("ids %d after unseen, want 0", len(l.checked))
 	}
 }
 
@@ -539,7 +534,7 @@ func TestModifierEventCompact(t *testing.T) {
 	l15 := s2.CellIDFromLatLng(s2.LatLngFromDegrees(51.5, -0.12)).Parent(15)
 	ev := deriveEventCheck{
 		Time:        modT0,
-		EncounterID: 0xfeedface,
+		EncounterID: 0xfeedface, // not the learner's business
 		PokemonID:   959, Form: 3272, Strong: true,
 		CellID: int64(l15),
 		Check: derivationCheck{
@@ -555,13 +550,13 @@ func TestModifierEventCompact(t *testing.T) {
 		t.Fatalf("cell %v, want the level-14 parent %v", got.Cell, l15.Parent(14))
 	}
 	if got.Unix != modT0.Unix() || got.LevelDelta != 5 || got.ObsCharged != 494 || got.ObsSize != 4 ||
-		got.SizeRoll != 0.97 || got.Agree != ev.Agree || !got.Strong || got.EncounterID != 0xfeedface {
+		got.SizeRoll != 0.97 || got.Agree != ev.Agree || !got.Strong || got.Sighting {
 		t.Fatalf("event %+v", got)
 	}
 	sighting := ev
 	sighting.Sighting = true
-	if id := newModifierEvent(sighting).EncounterID; id != 0 {
-		t.Fatalf("sighting encounter id %d, want 0", id)
+	if !newModifierEvent(sighting).Sighting {
+		t.Fatal("sighting not marked")
 	}
 
 	noCell := ev
@@ -581,45 +576,13 @@ func TestModifierEventCompact(t *testing.T) {
 	_ = sink
 }
 
-// TestModifierRepeatedEncounterCountsOnce: the learner drops a check whose
-// encounter id it has already checked, for unseen.
-func TestModifierRepeatedEncounterCountsOnce(t *testing.T) {
-	l := newModifierLearner(defaultModifierParams())
-	var trs []modifierTransition
-	for i := range 10 {
-		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494), withID(77)), modZone)...)
-	}
-	if len(trs) != 0 || len(l.active()) != 0 {
-		t.Fatalf("one spawn checked ten times: %v, want no candidate", states(trs))
-	}
-	trs = feedAll(l, modZone,
-		modCheck(modT0.Add(10*time.Second), cellA, withCharged(494), withID(78)),
-		modCheck(modT0.Add(11*time.Second), cellA, withCharged(494), withID(79)))
-	if len(trs) != 1 || trs[0].State != modCandidate || trs[0].Mod.Observations != 3 {
-		t.Fatalf("three spawns: %v, want a candidate with 3 observations", states(trs))
-	}
-	// Agreements repeat too: the repeated one does not disprove the cell.
-	l.feed(modCheck(modT0.Add(12*time.Second), cellA, withID(77)), modZone)
-	if m := onlyActive(t, l); !m.Covers(modZone, cellA) {
-		t.Fatal("a repeated encounter's agreement removed the cell")
-	}
-	// Forgotten unseen after its first check (at t): the id counts again (as
-	// a pending deviation: the candidate has ended unconfirmed by then).
-	l.feed(modCheck(modT0.Add(time.Hour+5*time.Second), cellA, withCharged(494), withID(77)), modZone)
-	for _, tr := range l.tracks {
-		if len(tr.pending) != 1 {
-			t.Fatalf("pending %d, want 1: id 77 counts again after unseen", len(tr.pending))
-		}
-	}
-}
-
 // TestModifierLearnerDirty: the learner reports a change that shrinks a
 // confirmed modifier's lookup coverage (published at once) apart from one
 // that grows it or is evidence only (both rate-limited), and an event that
 // changes nothing reports nothing.
 func TestModifierLearnerDirty(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	l.takeDirty()
 	ts := modT0
 	feed := func(cell s2.CellID, opts ...func(*modifierEvent)) {
@@ -635,40 +598,25 @@ func TestModifierLearnerDirty(t *testing.T) {
 	evidence := modDirty{changed: true}
 	growth := modDirty{changed: true, growth: true}
 	shrink := modDirty{changed: true, shrink: true}
-	feed(cellA3)
-	check("agreement outside the venue", modDirty{})
 	feed(cellA, withCharged(494))
-	check("match in a covered cell", evidence)
-	feed(cellA2, withCharged(494))
-	check("first match in a new cell", evidence)
-	feed(cellA2, withCharged(494))
-	check("second match in a new cell", growth)
-	feed(cellA3, withCharged(300))
-	check("another effect outside the venue", modDirty{})
-	feed(cellA2, withCharged(300))
-	check("another effect in a covered cell", shrink)
-	feed(cellA2)
-	check("agreement in a cell no longer covered", modDirty{})
-
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellA2)
-	l.takeDirty()
-	ts = modT0
-	feed(cellB, withCharged(494))
-	if !onlyActive(t, l).ZoneWide {
-		t.Fatal("a match under a second level-10 cell: want zone-wide")
-	}
-	check("zone-wide gained", growth)
-	feed(cellE, withCharged(494))
-	check("match in a new cell of a zone-wide modifier", evidence)
+	check("match in a new cell", evidence)
+	feed(cellA, withCharged(494))
+	check("second match: a venue cell listed", evidence)
 	feed(cellD)
-	check("cell excluded from a zone-wide modifier", shrink)
+	check("cell excluded", shrink)
 	feed(cellD)
 	check("repeated agreement in an excluded cell", modDirty{})
+	feed(cellD, withCharged(300))
+	check("another effect in an excluded cell", modDirty{})
 	feed(cellD, withCharged(494))
 	check("excluded cell readmitted", growth)
+	feed(cellE, withCharged(300))
+	check("another effect in a covered cell", shrink)
 	feed(cellA)
-	check("covered cell removed", shrink)
+	check("agreement in a listed venue cell", shrink)
+	if m := modifierWith(t, l, 494); len(m.Cells) != 0 || len(m.Excluded) != 2 {
+		t.Fatalf("cells %v excluded %v, want no venue cell and cells A and E excluded", m.Cells, m.Excluded)
+	}
 
 	// A candidate's changes are evidence only: the index's lookup holds
 	// confirmed modifiers alone.
@@ -683,27 +631,29 @@ func TestModifierLearnerDirty(t *testing.T) {
 	check("candidate's new cell", evidence)
 	feed(cellA2)
 	check("candidate's cell removed", evidence)
+	feed(cellA3)
+	check("candidate's excluded cell", modDirty{})
 }
 
 // Every non-transition change bumps the modifier's version; an event that
 // changes nothing leaves it.
 func TestModifierLearnerVersion(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellA2)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	m := l.activeTracks[0].mod
 	v := m.version
-	l.feed(modCheck(modT0.Add(time.Second), cellA3), modZone)
-	if m.version != v {
-		t.Fatalf("an agreement outside the venue bumped the version %d → %d", v, m.version)
-	}
-	l.feed(modCheck(modT0.Add(2*time.Second), cellA, withCharged(494)), modZone)
+	l.feed(modCheck(modT0.Add(time.Second), cellD), modZone)
 	if m.version == v {
-		t.Fatal("an observation left the version unchanged")
+		t.Fatal("an excluded cell left the version unchanged")
 	}
 	v = m.version
-	l.feed(modCheck(modT0.Add(3*time.Second), cellA2), modZone)
+	l.feed(modCheck(modT0.Add(2*time.Second), cellD), modZone)
+	if m.version != v {
+		t.Fatalf("a repeated agreement in an excluded cell bumped the version %d → %d", v, m.version)
+	}
+	l.feed(modCheck(modT0.Add(3*time.Second), cellA, withCharged(494)), modZone)
 	if m.version == v {
-		t.Fatal("a removed cell left the version unchanged")
+		t.Fatal("an observation left the version unchanged")
 	}
 }
 
@@ -718,17 +668,17 @@ func modifierWith(t *testing.T, l *modifierLearner, move int32) *derivationModif
 	return nil
 }
 
-// TestModifierSupersededPinEnds: a confirmed pin whose cells start deviating
+// TestModifierSupersededPinEnds: a confirmed pin whose zone starts deviating
 // to another move loses each cell at that cell's first such check, and ends
 // as contradicted once the other move is half of the zone record, instead of
 // masking it.
 func TestModifierSupersededPinEnds(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	cells := []s2.CellID{cellA, cellB, cellC}
+	cells := modWideCells(10)
 	confirmPin(t, l, modZone, modT0, cells...)
 	var ended, confirmed int
 	for i := range 10 {
-		trs := l.feed(modCheck(modT0.Add(time.Duration(1+i)*time.Second), cells[i%3], withCharged(300)), modZone)
+		trs := l.feed(modCheck(modT0.Add(time.Duration(1+i)*time.Second), cells[i], withCharged(300)), modZone)
 		for _, tr := range trs {
 			switch {
 			case tr.State == modEnded && tr.Mod.Effect.Move == 494:
@@ -741,9 +691,10 @@ func TestModifierSupersededPinEnds(t *testing.T) {
 			}
 		}
 		if i == 2 {
-			if m := modifierWith(t, l, 494); len(m.Cells) != 0 || !m.ZoneWide || m.Contradictions != 3 {
-				t.Fatalf("494 after a 300 in each cell: cells %v zone-wide %v contradictions %d, want no venue cell, still zone-wide, 3",
-					m.Cells, m.ZoneWide, m.Contradictions)
+			m := modifierWith(t, l, 494)
+			if !m.ZoneWide || m.Contradictions != 3 || len(m.Excluded) != 3 || m.Covers(modZone, cells[0]) || !m.Covers(modZone, cells[3]) {
+				t.Fatalf("494 after a 300 in three cells: zone-wide %v contradictions %d excluded %v, want still zone-wide, 3, those three cells",
+					m.ZoneWide, m.Contradictions, m.Excluded)
 			}
 		}
 	}
@@ -753,14 +704,6 @@ func TestModifierSupersededPinEnds(t *testing.T) {
 	}
 	if m := onlyActive(t, l); m.Effect.Move != 300 || m.Status != modConfirmed {
 		t.Fatalf("active %+v, want only the confirmed 300 pin", m.Effect)
-	}
-
-	// In one venue cell the first 300 takes the cell from the 494 pin at once.
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
-	trs := l.feed(modCheck(modT0.Add(time.Second), cellA, withCharged(300)), modZone)
-	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "contradicted" {
-		t.Fatalf("a 300 in the 494 pin's only cell: %v, want ended contradicted", states(trs))
 	}
 }
 
@@ -782,47 +725,12 @@ func TestModifierOtherEffectVoidsPendingCell(t *testing.T) {
 	}
 }
 
-// TestModifierDisjointVenuesEvenRates: two venues pinning different moves,
-// checked at exactly the same rate, each hold half of the zone record (an
-// 8/8 tie), which is not more than half: neither goes zone-wide and each
-// covers only its own cells. It pins the tie, not venues in general; see
-// TestModifierDisjointVenuesUnevenRates.
-func TestModifierDisjointVenuesEvenRates(t *testing.T) {
-	l := newModifierLearner(defaultModifierParams())
-	venue1 := []s2.CellID{cellA, cellB, cellC}
-	venue2 := []s2.CellID{cellD, cellE, cellF}
-	for i := range 12 {
-		ts := modT0.Add(time.Duration(i) * 10 * time.Second)
-		l.feed(modCheck(ts, venue1[i%3], withCharged(494)), modZone)
-		l.feed(modCheck(ts.Add(time.Second), venue2[i%3], withCharged(777)), modZone)
-	}
-	p494, p777 := modifierWith(t, l, 494), modifierWith(t, l, 777)
-	if p494.Status != modConfirmed || p777.Status != modConfirmed {
-		t.Fatalf("statuses %v %v, want both confirmed", p494.Status, p777.Status)
-	}
-	if p494.ZoneWide || p777.ZoneWide {
-		t.Fatalf("zone-wide 494=%v 777=%v, want both local", p494.ZoneWide, p777.ZoneWide)
-	}
-	for i := range 3 {
-		if p494.Covers(modZone, venue2[i]) || p777.Covers(modZone, venue1[i]) {
-			t.Fatal("a venue's pin covers the other venue's cell")
-		}
-		if !p494.Covers(modZone, venue1[i]) || !p777.Covers(modZone, venue2[i]) {
-			t.Fatal("a venue's pin does not cover its own cell")
-		}
-	}
-	if p494.Covers(modZone, unseenCell) || p777.Covers(modZone, unseenCell) {
-		t.Fatal("a venue's pin covers a cell of neither venue")
-	}
-}
-
-// TestModifierDisjointVenuesUnevenRates: when one venue is checked twice as
-// often as the other and nothing else in the zone is checked, its pin is
-// more than half of the zone record under two level-10 cells, so it goes
-// zone-wide: the learner cannot tell it from a global event. It still never
-// covers the other venue's cells (their latest checks show the other pin,
-// so they are excluded), and the minority pin stays in its own cells.
-func TestModifierDisjointVenuesUnevenRates(t *testing.T) {
+// TestModifierDisjointVenues: two venues pinning different moves, one
+// checked twice as often as the other and nothing else in the zone checked.
+// The busier pin is more than half of the zone record, but from three
+// cells: neither is spread, so neither goes zone-wide or covers anything.
+// Each lists its own cells.
+func TestModifierDisjointVenues(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	venue1 := []s2.CellID{cellA, cellB, cellC}
 	venue2 := []s2.CellID{cellD, cellE, cellF}
@@ -833,111 +741,88 @@ func TestModifierDisjointVenuesUnevenRates(t *testing.T) {
 		l.feed(modCheck(ts.Add(2*time.Second), venue2[i%3], withCharged(777)), modZone)
 	}
 	p494, p777 := modifierWith(t, l, 494), modifierWith(t, l, 777)
-	if p494.Status != modConfirmed || p777.Status != modConfirmed {
-		t.Fatalf("statuses %v %v, want both confirmed", p494.Status, p777.Status)
+	if p494.Status != modCandidate || p777.Status != modCandidate {
+		t.Fatalf("statuses %v %v, want both candidates", p494.Status, p777.Status)
 	}
-	if !p494.ZoneWide || p777.ZoneWide {
-		t.Fatalf("zone-wide 494=%v 777=%v, want the majority pin zone-wide, the other local", p494.ZoneWide, p777.ZoneWide)
+	if p494.ZoneWide || p777.ZoneWide {
+		t.Fatalf("zone-wide 494=%v 777=%v, want neither", p494.ZoneWide, p777.ZoneWide)
 	}
 	for i := range 3 {
-		if p494.Covers(modZone, venue2[i]) || p777.Covers(modZone, venue1[i]) {
-			t.Fatal("a venue's pin covers the other venue's cell")
+		_, in1 := p494.Cells[venue1[i]]
+		_, in2 := p777.Cells[venue2[i]]
+		if !in1 || !in2 || len(p494.Cells) != 3 || len(p777.Cells) != 3 {
+			t.Fatalf("cells %v and %v, want each venue's own three", p494.Cells, p777.Cells)
 		}
-		if !p494.Covers(modZone, venue1[i]) || !p777.Covers(modZone, venue2[i]) {
-			t.Fatal("a venue's pin does not cover its own cell")
+		if p494.Covers(modZone, venue1[i]) || p777.Covers(modZone, venue2[i]) {
+			t.Fatal("a venue's pin covers a cell")
 		}
-	}
-	if !p494.Covers(modZone, unseenCell) || p777.Covers(modZone, unseenCell) {
-		t.Fatal("want the zone-wide pin alone to cover a cell of neither venue")
 	}
 }
 
-// TestModifierAgreementBeforeDeviationsNotCovered: a cell that agreed before
-// any deviation is not covered by the venue pin that then forms beside it
-// (ten matches in three cells of one level-10 cell).
+// TestModifierAgreementBeforeDeviationsNotCovered: a cell that agreed
+// before any deviation is excluded from the zone-wide pin that then forms.
 func TestModifierAgreementBeforeDeviationsNotCovered(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	if trs := l.feed(modCheck(modT0.Add(-time.Minute), cellD), modZone); len(trs) != 0 {
 		t.Fatalf("agreement: %v", states(trs))
 	}
-	confirmPin(t, l, modZone, modT0, cellA, cellA2, cellA3)
-	m := onlyActive(t, l)
-	if m.ZoneWide || m.Covers(modZone, cellD) || m.Covers(modZone, unseenCell) {
-		t.Fatalf("zone-wide %v, covers D %v: want cells A only", m.ZoneWide, m.Covers(modZone, cellD))
-	}
-	if len(m.Cells) != 3 || !m.Covers(modZone, cellA) {
-		t.Fatalf("cells %v, want the three venue cells", m.Cells)
-	}
-	// The same before a global event: the modifier goes zone-wide, less the
-	// cell whose latest check agreed.
-	l = newModifierLearner(defaultModifierParams())
-	l.feed(modCheck(modT0.Add(-time.Minute), cellD), modZone)
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	if m := onlyActive(t, l); !m.ZoneWide || m.Covers(modZone, cellD) || !m.Covers(modZone, unseenCell) {
 		t.Fatalf("zone-wide %v excluded %v, want zone-wide less cellD", m.ZoneWide, m.Excluded)
 	}
 }
 
-// TestModifierVenueCellEndsAlone: a base result in one covered cell removes
-// that cell at once and leaves the others; matches elsewhere do not keep it.
+// TestModifierVenueCellEndsAlone: a base result in one listed venue cell
+// removes that cell at once and leaves the others; matches elsewhere do not
+// bring it back.
 func TestModifierVenueCellEndsAlone(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellA2)
+	for i := range 6 {
+		l.feed(modCheck(modT0.Add(time.Duration(i-5)*time.Second), []s2.CellID{cellA, cellA2}[i%2], withCharged(494)), modZone)
+	}
+	listed := func(c s2.CellID) bool {
+		_, ok := onlyActive(t, l).Cells[c]
+		return ok
+	}
+	if !listed(cellA) || !listed(cellA2) {
+		t.Fatalf("cells %v, want cells A and A2 listed", onlyActive(t, l).Cells)
+	}
 	if trs := l.feed(modCheck(modT0.Add(time.Second), cellA), modZone); len(trs) != 0 {
 		t.Fatalf("agreement in cell A: %v, want no transition", states(trs))
 	}
-	if m := onlyActive(t, l); m.Covers(modZone, cellA) || !m.Covers(modZone, cellA2) || m.Status != modConfirmed {
-		t.Fatalf("cells %v status %v, want the other cell only, still confirmed", m.Cells, m.Status)
+	if listed(cellA) || !listed(cellA2) {
+		t.Fatalf("cells %v, want the other cell only", onlyActive(t, l).Cells)
 	}
 	// Matches in the other cell do not bring cell A back; it needs two of
 	// its own.
 	for i := range 5 {
 		l.feed(modCheck(modT0.Add(time.Duration(2+i)*time.Second), cellA2, withCharged(494)), modZone)
 	}
-	if onlyActive(t, l).Covers(modZone, cellA) {
-		t.Fatal("matches in another cell covered the disproven cell A")
+	if listed(cellA) {
+		t.Fatal("matches in another cell listed the disproven cell A")
 	}
 	l.feed(modCheck(modT0.Add(10*time.Second), cellA, withCharged(494)), modZone)
-	if onlyActive(t, l).Covers(modZone, cellA) {
-		t.Fatal("one match covered the disproven cell A")
+	if listed(cellA) {
+		t.Fatal("one match listed the disproven cell A")
 	}
 	l.feed(modCheck(modT0.Add(11*time.Second), cellA, withCharged(494)), modZone)
-	if !onlyActive(t, l).Covers(modZone, cellA) {
-		t.Fatal("two fresh matches did not cover cell A again")
-	}
-	trs := feedAll(l, modZone, modCheck(modT0.Add(12*time.Second), cellA), modCheck(modT0.Add(13*time.Second), cellA2))
-	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "agreement" {
-		t.Fatalf("agreements in both cells: %v, want ended by agreement", states(trs))
-	}
-}
-
-func TestModifierZoneWideNeedsTwoLevel10Parents(t *testing.T) {
-	for _, c := range []s2.CellID{cellA2, cellA3} {
-		if c.Parent(10) != cellA.Parent(10) || c == cellA {
-			t.Fatal("test cells must be distinct and share a level-10 parent")
-		}
-	}
-	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellA2, cellA3)
-	if m := onlyActive(t, l); m.ZoneWide || m.Covers(modZone, unseenCell) {
-		t.Fatal("three cells under one level-10 cell went zone-wide")
-	}
-
-	if cellA.Parent(10) == cellB.Parent(10) {
-		t.Fatal("cellA and cellB must lie under different level-10 cells")
-	}
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellA2, cellB)
-	if m := onlyActive(t, l); !m.ZoneWide {
-		t.Fatal("matches under two level-10 cells and nothing else in the record: not zone-wide")
+	if !listed(cellA) {
+		t.Fatal("two fresh matches did not list cell A again")
 	}
 }
 
 func TestModifierZoneUnknownNeverZoneWide(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, "", modT0, cellA, cellB, cellC, cellD, cellE)
-	if m := onlyActive(t, l); m.ZoneWide || m.Covers("", unseenCell) || !m.Covers("", cellA) {
-		t.Fatal("a modifier in the unknown zone must cover its venue cells only")
+	cells := modWideCells(10)
+	var trs []modifierTransition
+	for i := range 16 {
+		trs = append(trs, l.feed(modCheck(modT0.Add(time.Duration(i)*time.Second), cells[i%10], withCharged(494)), "")...)
+	}
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want only the candidate", states(trs))
+	}
+	if m := onlyActive(t, l); m.ZoneWide || m.Covers("", unseenCell) || m.Covers("", cells[0]) {
+		t.Fatal("a modifier in the unknown zone must cover nothing")
 	}
 }
 
@@ -968,12 +853,11 @@ func TestModifierNoiseNeverConfirmsUnexplained(t *testing.T) {
 }
 
 // TestModifierNoiseDoubleHitDoesNotConfirm: scattered mismatches that happen
-// to hit one cell twice cover that cell but do not confirm: confirming on
-// venue cells needs confirm matches inside covered cells.
+// to hit one cell twice list that cell but do not confirm.
 func TestModifierNoiseDoubleHitDoesNotConfirm(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
 	var trs []modifierTransition
-	for i := range 12 { // twelve cells of one level-10 cell: never zone-wide
+	for i := range 12 { // twelve neighbouring cells: never spread
 		ts := modT0.Add(time.Duration(i) * time.Minute)
 		trs = append(trs, l.feed(modCheck(ts, modVenueCell14(cellA, i), withIVsDisagree), modZone)...)
 	}
@@ -982,17 +866,17 @@ func TestModifierNoiseDoubleHitDoesNotConfirm(t *testing.T) {
 		t.Fatalf("transitions %v, want only the candidate", states(trs))
 	}
 	if m := onlyActive(t, l); m.Status != modCandidate || m.Observations != 13 || len(m.Cells) != 1 {
-		t.Fatalf("status %v observations %d cells %v, want a candidate with 13 and one covered cell",
+		t.Fatalf("status %v observations %d cells %v, want a candidate with 13 and one listed cell",
 			m.Status, m.Observations, m.Cells)
 	}
 }
 
 // TestModifierPinEqualAgreementNeutral: a check whose derived move is the
-// pinned move agrees with both: it neither removes a cell, excludes one, nor
-// counts against the pin in the zone record.
+// pinned move agrees with both: it neither excludes its cell nor counts
+// against the pin in the zone record.
 func TestModifierPinEqualAgreementNeutral(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA, cellB, cellC)
+	confirmPin(t, l, modZone, modT0, modWideCells(10)...)
 	pinEqual := func(ev *modifierEvent) { ev.ObsCharged = 494 }
 	var trs []modifierTransition
 	trs = append(trs, l.feed(modCheck(modT0.Add(time.Second), cellD, pinEqual), modZone)...)
@@ -1002,8 +886,8 @@ func TestModifierPinEqualAgreementNeutral(t *testing.T) {
 	if len(trs) != 0 {
 		t.Fatalf("transitions %v, want none", states(trs))
 	}
-	if m := onlyActive(t, l); len(m.Excluded) != 0 || !m.ZoneWide || len(m.Cells) != 3 {
-		t.Fatalf("excluded %v zone-wide %v cells %d, want none excluded, zone-wide, 3 cells", m.Excluded, m.ZoneWide, len(m.Cells))
+	if m := onlyActive(t, l); len(m.Excluded) != 0 || !m.ZoneWide {
+		t.Fatalf("excluded %v zone-wide %v, want none excluded, zone-wide", m.Excluded, m.ZoneWide)
 	}
 }
 
@@ -1038,11 +922,12 @@ func TestModifierMinorityMatchesNeverConfirm(t *testing.T) {
 // toward confirm.
 func TestModifierCellZeroMatchesDoNotConfirm(t *testing.T) {
 	l := newModifierLearner(defaultModifierParams())
+	cells := modWideCells(10)
 	ts := modT0
 	next := func() time.Time { ts = ts.Add(time.Second); return ts }
 	var trs []modifierTransition
-	for range 3 {
-		trs = append(trs, l.feed(modCheck(next(), cellA, withCharged(494)), modZone)...)
+	for i := range 3 {
+		trs = append(trs, l.feed(modCheck(next(), cells[i], withCharged(494)), modZone)...)
 	}
 	for range 7 {
 		trs = append(trs, l.feed(modCheck(next(), 0, withCharged(494)), modZone)...)
@@ -1054,7 +939,7 @@ func TestModifierCellZeroMatchesDoNotConfirm(t *testing.T) {
 		t.Fatalf("status %v observations %d, want a candidate with 10", m.Status, m.Observations)
 	}
 	for i := range 7 {
-		trs = l.feed(modCheck(next(), cellA, withCharged(494)), modZone)
+		trs = l.feed(modCheck(next(), cells[3+i], withCharged(494)), modZone)
 		if want := i == 6; want != (len(trs) == 1 && trs[0].State == modConfirmed) {
 			t.Fatalf("located match %d: %v", 4+i, states(trs))
 		}
@@ -1062,36 +947,23 @@ func TestModifierCellZeroMatchesDoNotConfirm(t *testing.T) {
 }
 
 // Growth that can reduce what is applied is reported as shrink: an
-// unexplained modifier's, and a pin's newly covered cell while another
-// confirmed pin of its slot exists in its scope and zone.
+// unexplained modifier's (wider suppression).
 func TestModifierLearnerDirtyGrowthAsShrink(t *testing.T) {
 	shrink := modDirty{changed: true, shrink: true}
 	l := newModifierLearner(defaultModifierParams())
+	cells := modWideCells(10)
 	for i := range 10 {
-		l.feed(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withIVsDisagree), modZone)
+		l.feed(modCheck(modT0.Add(time.Duration(i)*time.Second), cells[i], withIVsDisagree), modZone)
 	}
-	if m := onlyActive(t, l); m.Status != modConfirmed || m.Type != modUnexplained {
-		t.Fatalf("modifier %+v, want confirmed unexplained", m)
+	if m := onlyActive(t, l); m.Status != modConfirmed || m.Type != modUnexplained || !m.ZoneWide {
+		t.Fatalf("modifier %+v, want confirmed zone-wide unexplained", m)
 	}
-	l.takeDirty()
-	l.feed(modCheck(modT0.Add(10*time.Second), cellA2, withIVsDisagree), modZone)
-	l.feed(modCheck(modT0.Add(11*time.Second), cellA2, withIVsDisagree), modZone)
-	if got := l.takeDirty(); got != shrink {
-		t.Fatalf("unexplained newly covered cell: %+v, want %+v", got, shrink)
+	l.feed(modCheck(modT0.Add(10*time.Second), cellD), modZone)
+	if got := l.takeDirty(); got != shrink || onlyActive(t, l).Covers(modZone, cellD) {
+		t.Fatalf("agreement in cell D: %+v, want %+v and the cell excluded", got, shrink)
 	}
-
-	l = newModifierLearner(defaultModifierParams())
-	confirmPin(t, l, modZone, modT0, cellA)
-	for i := range 10 {
-		l.feed(modCheck(modT0.Add(time.Duration(10+i)*time.Second), cellA2, withCharged(300)), modZone)
-	}
-	if modifierWith(t, l, 300).Status != modConfirmed || modifierWith(t, l, 494).Status != modConfirmed {
-		t.Fatal("want both pins confirmed")
-	}
-	l.takeDirty()
-	l.feed(modCheck(modT0.Add(30*time.Second), cellA3, withCharged(494)), modZone)
-	l.feed(modCheck(modT0.Add(31*time.Second), cellA3, withCharged(494)), modZone)
-	if got := l.takeDirty(); got != shrink {
-		t.Fatalf("pin newly covered cell with a confirmed peer: %+v, want %+v", got, shrink)
+	l.feed(modCheck(modT0.Add(11*time.Second), cellD, withIVsDisagree), modZone)
+	if got := l.takeDirty(); got != shrink || !onlyActive(t, l).Covers(modZone, cellD) {
+		t.Fatalf("unexplained readmitted cell: %+v, want %+v and the cell covered", got, shrink)
 	}
 }

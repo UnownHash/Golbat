@@ -18,11 +18,17 @@ import (
 // deviations across that cut. Only deviations the interval fit accepts are
 // observations.
 //
-// A size modifier is zone-wide only. Most rolls say nothing about a moved
+// A size modifier has no venue cells. Most rolls say nothing about a moved
 // cut, so its zone record takes only the informative ones: a deviation
 // across a listed boundary (a match), a contrary roll (one in a listed
 // boundary's disputed region that the base cut classifies: an agreement),
-// and a roll the fit refuses (another effect).
+// and a roll the fit refuses (another effect). Every other located roll
+// still re-judges the record, so its entries age while the scope is seen.
+//
+// A cell is excluded per boundary (design §9): a contrary or refused roll
+// disproves the boundaries it concerns there, and the cell is readmitted
+// once each of them has had a match there since. A match across one moved
+// cut says nothing about another.
 
 // sizeCut is one size class boundary: classes <= below lie under it.
 type sizeCut struct {
@@ -189,34 +195,51 @@ func (s *sizeState) dropUnsupported(dst map[string]sizeBoundary, cuts []sizeCut,
 	}
 }
 
-// crossesListed reports whether a roll of class cls deviates across a
-// listed boundary: it supports that moved cut.
-func crossesListed(listed map[string]sizeBoundary, cuts []sizeCut, cls uint8, roll float64) bool {
-	for _, c := range cuts {
+// crossesListed returns the listed boundaries a roll of class cls deviates
+// across (bit i = cuts[i]): it supports those moved cuts. 0 = none.
+func crossesListed(listed map[string]sizeBoundary, cuts []sizeCut, cls uint8, roll float64) uint8 {
+	var bits uint8
+	for i, c := range cuts {
 		if _, ok := listed[c.name]; ok && c.crosses(cls, roll) {
-			return true
+			bits |= 1 << i
 		}
 	}
-	return false
+	return bits
 }
 
-// contrary reports whether a roll of class cls lies in a listed boundary's
-// disputed region (between its base cut and its interval) on the side the
-// base cut classifies it: the moved cut is gone.
-func contraryRoll(listed map[string]sizeBoundary, cuts []sizeCut, cls uint8, roll float64) bool {
-	for _, c := range cuts {
+// contraryRoll returns the listed boundaries (bit i = cuts[i]) in whose
+// disputed region (between the base cut and the interval) a roll of class
+// cls lies on the side the base cut classifies it: that moved cut is gone.
+// 0 = none.
+func contraryRoll(listed map[string]sizeBoundary, cuts []sizeCut, cls uint8, roll float64) uint8 {
+	var bits uint8
+	for i, c := range cuts {
 		b, ok := listed[c.name]
 		if !ok {
 			continue
 		}
 		if cls > c.below && b.HasLo && b.Lo >= c.at && c.at <= roll && roll < b.Lo {
-			return true // cut moved up, a roll under it seen above
+			bits |= 1 << i // cut moved up, a roll under it seen above
 		}
 		if cls <= c.below && b.HasHi && b.Hi < c.at && b.Hi <= roll && roll < c.at {
-			return true // cut moved down, a roll over it seen below
+			bits |= 1 << i // cut moved down, a roll over it seen below
 		}
 	}
-	return false
+	return bits
+}
+
+// refusedBits returns the boundaries (bit i = cuts[i]) whose interval a
+// roll of class cls would empty: what a refused roll disproves. Evidence
+// only narrows the intervals, so a roll once refused stays refused.
+func (e *sizeEvidence) refusedBits(cls uint8, roll float64, cuts []sizeCut) uint8 {
+	next, _ := e.with(cls, roll)
+	var bits uint8
+	for i, c := range cuts {
+		if next.boundary(c).empty() {
+			bits |= 1 << i
+		}
+	}
+	return bits
 }
 
 // sizeOpinion reports whether ev says anything about the size roll. The
@@ -262,7 +285,8 @@ func (l *modifierLearner) sizeCheck(st *modScopeState, sk modScopeKey, ev modifi
 // sizeOpen makes t's pending deviations a candidate. Each roll the interval
 // fit accepts is an observation, and with a cell evidence and a match in the
 // record; a refused one is a contradiction, in the record after the matches
-// whatever their order (it stays there longest: conservative).
+// whatever their order (it stays there longest, and its cell starts
+// excluded: conservative).
 func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	cuts := sizeCuts(t.key.Scope.Strong)
@@ -290,13 +314,14 @@ func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time
 	rec := st.record(modDimSize)
 	*rec = modRecord{}
 	for _, pd := range t.pending {
-		if pd.Cell != 0 && !pd.Void && crossesListed(mod.Boundaries, cuts, pd.Class, pd.Roll) {
+		if pd.Cell != 0 && !pd.Void && crossesListed(mod.Boundaries, cuts, pd.Class, pd.Roll) != 0 {
 			rec.push(pd.Cell, modIDSizeMatch, false, pd.Unix)
 		}
 	}
 	for _, pd := range t.pending {
 		if pd.Cell != 0 && pd.Void {
 			rec.push(pd.Cell, modIDSizeOther, false, pd.Unix)
+			l.exclude(t, pd.Cell, t.size.ev.refusedBits(pd.Class, pd.Roll, cuts))
 		}
 	}
 	return l.opened(t, rec, now, out)
@@ -304,15 +329,18 @@ func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time
 
 // sizeRoll applies an IV-agreeing roll (dev: a size deviation) to t's
 // modifier. Without a cell a deviation is an observation and nothing else. A
-// contrary roll is an agreement in the record; one the fit refuses a
-// contradiction; any other is evidence, and a deviation across a listed
-// boundary a match.
+// contrary roll is an agreement in the record and disproves its boundaries
+// in the cell; one the fit refuses is a contradiction and does the same; any
+// other is evidence, and a deviation across a listed boundary a match, which
+// readmits the cell for the boundaries it crosses. A roll that enters
+// nothing still marks the record checked.
 func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent, dev bool, now time.Time) {
 	m := t.mod
 	cuts := sizeCuts(t.key.Scope.Strong)
 	if ev.Cell != 0 {
-		if contraryRoll(m.Boundaries, cuts, ev.ObsSize, ev.SizeRoll) {
+		if bits := contraryRoll(m.Boundaries, cuts, ev.ObsSize, ev.SizeRoll); bits != 0 {
 			rec.push(ev.Cell, 0, true, ev.Unix)
+			l.exclude(t, ev.Cell, bits)
 			return
 		}
 		next, changed, refused := t.size.ev.try(ev.ObsSize, ev.SizeRoll, cuts)
@@ -320,6 +348,7 @@ func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent
 			m.Contradictions++
 			rec.push(ev.Cell, modIDSizeOther, false, ev.Unix)
 			l.changed(m, modEvidence)
+			l.exclude(t, ev.Cell, t.size.ev.refusedBits(ev.ObsSize, ev.SizeRoll, cuts))
 			return
 		}
 		if changed {
@@ -336,8 +365,15 @@ func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent
 		if (changed || dev) && t.size.fill(m.Boundaries, cuts, need) {
 			l.changed(m, modShrink) // moved cuts can reclassify a record
 		}
-		if dev && crossesListed(m.Boundaries, cuts, ev.ObsSize, ev.SizeRoll) {
+		bits := uint8(0)
+		if dev {
+			bits = crossesListed(m.Boundaries, cuts, ev.ObsSize, ev.SizeRoll)
+		}
+		if bits != 0 {
 			rec.push(ev.Cell, modIDSizeMatch, false, ev.Unix)
+			l.readmit(t, ev.Cell, bits)
+		} else {
+			rec.touch(ev.Unix)
 		}
 	}
 	if !dev {

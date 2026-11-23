@@ -146,8 +146,15 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 			Evidence: ApiModifierEvidence{Observations: m.Observations,
 				Contradictions: m.Contradictions},
 			Region: ApiModifierRegion{Zone: m.Zone, ZoneWide: m.ZoneWide,
-				Cells: cellTokens(slices.Collect(maps.Keys(m.Cells))), Excluded: cellTokens(m.Excluded)},
+				Cells: cellTokens(slices.Collect(maps.Keys(m.Cells)))},
 		}
+		// The excluded cells are kept while not zone-wide but mean nothing
+		// to a reader then.
+		var excluded []s2.CellID
+		if m.ZoneWide {
+			excluded = slices.Collect(maps.Keys(m.Excluded))
+		}
+		am.Region.Excluded = cellTokens(excluded)
 		if !m.Scope.AllStrong {
 			am.Scope.Pokemon = []ApiModifierPokemon{{ID: m.Scope.PokemonID, Form: m.Scope.Form}}
 		}

@@ -160,7 +160,8 @@ func TestApiDerivationModifiersRegion(t *testing.T) {
 	wide := wideLevelMod(5, []s2.CellID{adjCellA, adjCellA.Next()}, adjCellFar.Next(), adjCellFar)
 	wide.Start = start
 	venue := levelMod(modifierScope{PokemonID: 2}, 3, adjZoneA, cellSet(adjCellA))
-	venue.Start = start
+	venue.Start, venue.ZoneWide = start, false
+	venue.Excluded = excludedSet(adjCellFar) // kept, not listed while not zone-wide
 	storeModifierSnapshot([]*derivationModifier{wide, venue})
 	b, err := json.Marshal(GetApiDerivationModifiers(start))
 	if err != nil {

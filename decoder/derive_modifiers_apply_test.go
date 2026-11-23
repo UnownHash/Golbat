@@ -45,17 +45,26 @@ func cellSet(cells ...s2.CellID) map[s2.CellID]struct{} {
 	return m
 }
 
-// zoneWideIn is the venue cells of a fixture that withSpread makes
-// zone-wide.
+// zoneWideIn is some venue cells for a fixture: listed, never coverage.
 func zoneWideIn() map[s2.CellID]struct{} {
 	return cellSet(adjCellA, adjCellA.Next(), adjCellFar)
 }
 
-// withSpread makes m zone-wide when its zone is known and its cells are
-// zoneWideIn's (the learner judges zone-wide coverage itself, on the zone
-// record; a fixture states it).
+// withSpread makes m zone-wide when its zone is known (the learner judges
+// zone-wide coverage itself, on the zone record; a fixture states it). Venue
+// cells are never applied (design §9), so a fixture that applies is
+// zone-wide whatever cells it lists.
 func withSpread(m *derivationModifier) *derivationModifier {
-	m.ZoneWide = m.Zone != "" && len(m.Cells) == len(zoneWideIn())
+	m.ZoneWide = m.Zone != ""
+	return m
+}
+
+// excludedSet is a modifier's excluded cells.
+func excludedSet(cells ...s2.CellID) map[s2.CellID]uint8 {
+	m := make(map[s2.CellID]uint8, len(cells))
+	for _, c := range cells {
+		m[c] = 1
+	}
 	return m
 }
 
@@ -147,7 +156,7 @@ func pinMoveData(t *testing.T) {
 func pinMod(zone string, slot string, move int32) *derivationModifier {
 	return &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Slot: slot, Move: move}, Zone: zone, Status: modConfirmed,
-		Cells: cellSet(adjCellA)}
+		ZoneWide: zone != "", Cells: cellSet(adjCellA)}
 }
 
 // Two confirmed charged pins covering one cell: neither applies and the
@@ -156,7 +165,7 @@ func pinMod(zone string, slot string, move int32) *derivationModifier {
 func TestDerivationAdjustConflictingPinsWithheld(t *testing.T) {
 	withDeriveIv(t, true)
 	pinMoveData(t)
-	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300))
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod(adjZoneA, modSlotCharged, 300))
 	draw := encounter.Derive(adjEid, false, false, 0)
 	want := derivedMoves(&draw, 1, 0)
 
@@ -177,7 +186,7 @@ func TestDerivationAdjustConflictingPinsWithheld(t *testing.T) {
 	}
 
 	// Pins in different slots do not conflict.
-	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotQuick, 300))
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod(adjZoneA, modSlotQuick, 300))
 	both := adjRecord(1, adjLatA, adjLonA, false)
 	both.deriveIvIfAbsent()
 	if both.Move1.ValueOrZero() != 300 || both.Move2.ValueOrZero() != 494 {
@@ -191,7 +200,7 @@ func TestDerivationAdjustConflictingLevelsSuppress(t *testing.T) {
 	withDeriveIv(t, true)
 	idx := withModifierIndex(t,
 		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
-		levelMod(modifierScope{PokemonID: 1}, 3, "", cellSet(adjCellA)))
+		levelMod(modifierScope{PokemonID: 1}, 3, adjZoneA, cellSet(adjCellA)))
 	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.Suppress {
 		t.Errorf("lookup = %+v, want suppress", adj)
 	}
@@ -208,7 +217,6 @@ func TestDerivationAdjustConflictingSizeWithheld(t *testing.T) {
 	withDeriveIv(t, true)
 	a := sizeMod(map[string]sizeBoundary{"1/2": {Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}})
 	b := sizeMod(map[string]sizeBoundary{"1/2": {Lo: 0.01, Hi: 0.02, HasLo: true, HasHi: true}})
-	b.Zone = adjZoneA
 	idx := withModifierIndex(t, a, b)
 	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.WithholdSize || adj.Size != nil {
 		t.Errorf("lookup = %+v, want size withheld", adj)
@@ -229,8 +237,8 @@ func TestDerivationAdjustMovePin(t *testing.T) {
 		},
 	})
 	withModifierIndex(t, &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
-		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Status: modConfirmed,
-		Cells: cellSet(adjCellA)})
+		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: adjZoneA, Status: modConfirmed,
+		ZoneWide: true})
 	draw := encounter.Derive(adjEid, false, false, 0)
 	want := derivedMoves(&draw, 1, 0)
 
@@ -302,7 +310,7 @@ func TestDerivationAdjustUnexplainedSuppresses(t *testing.T) {
 		},
 	})
 	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-		Status: modConfirmed, Cells: cellSet(adjCellA)})
+		Zone: adjZoneA, Status: modConfirmed, ZoneWide: true})
 
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	p.deriveIvIfAbsent()
@@ -321,7 +329,7 @@ func TestDerivationAdjustUnexplainedSuppresses(t *testing.T) {
 
 func TestDerivationAdjustCandidateIgnored(t *testing.T) {
 	withDeriveIv(t, true)
-	m := levelMod(modifierScope{PokemonID: 1}, 5, "", cellSet(adjCellA))
+	m := levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))
 	m.Status = modCandidate
 	idx := withModifierIndex(t, m)
 	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); adj.LevelDelta != 0 {
@@ -400,14 +408,13 @@ func TestDerivationAdjustLazyZone(t *testing.T) {
 	calls := 0
 	zoneOf := func(s2.CellID) string { calls++; return adjZoneA }
 
-	local := buildModifierIndex([]*derivationModifier{
-		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))})
-	if adj := local.lookup(1, 0, false, adjCellA, zoneOf); adj.LevelDelta != 5 {
-		t.Errorf("local in-cell delta = %d, want 5", adj.LevelDelta)
+	one := buildModifierIndex([]*derivationModifier{wideLevelMod(5, []s2.CellID{adjCellA})})
+	one.lookup(2, 0, false, adjCellA, zoneOf)
+	if adj := one.lookup(1, 0, false, adjCellA, zoneOf); adj.LevelDelta != 0 {
+		t.Errorf("excluded cell delta = %d, want 0", adj.LevelDelta)
 	}
-	local.lookup(2, 0, false, adjCellA, zoneOf)
 	if calls != 0 {
-		t.Errorf("zoneOf called %d times for local/non-matching lookups, want 0", calls)
+		t.Errorf("zoneOf called %d times for non-matching and excluded lookups, want 0", calls)
 	}
 
 	wide := buildModifierIndex([]*derivationModifier{
@@ -438,16 +445,16 @@ func TestDerivationAdjustNoAllocs(t *testing.T) {
 	// Withholding disputed values allocates nothing either.
 	q := adjRecord(1, adjLatA, adjLonA, false)
 	withModifierIndex(t,
-		pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300),
+		pinMod(adjZoneA, modSlotCharged, 494), pinMod(adjZoneA, modSlotCharged, 300),
 		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
-		levelMod(modifierScope{PokemonID: 1}, 3, "", cellSet(adjCellA)))
+		levelMod(modifierScope{PokemonID: 1}, 3, adjZoneA, cellSet(adjCellA)))
 	if q.modifierAdjust().Suppress != true {
 		t.Fatal("conflicting index: want suppress")
 	}
 	if n := testing.AllocsPerRun(100, func() { _ = q.modifierAdjust() }); n != 0 {
 		t.Errorf("conflicting index: %v allocs, want 0", n)
 	}
-	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod("", modSlotCharged, 300))
+	withModifierIndex(t, pinMod(adjZoneA, modSlotCharged, 494), pinMod(adjZoneA, modSlotCharged, 300))
 	if !q.modifierAdjust().WithholdCharged {
 		t.Fatal("conflicting pins: want charged withheld")
 	}
@@ -462,8 +469,8 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 		t.Error("nil index wants a sighting")
 	}
 	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
-		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Status: modCandidate,
-		Cells: cellSet(adjCellA)}
+		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: adjZoneA, Status: modCandidate,
+		ZoneWide: true, Cells: cellSet(adjCellA)}
 	idx := buildModifierIndex([]*derivationModifier{pin})
 	if !idx.wantsSighting(959, 3272, true) {
 		t.Error("candidate scope not wanted")
@@ -471,10 +478,10 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 	if idx.wantsSighting(959, 3272, false) || idx.wantsSighting(635, 0, true) || idx.wantsSighting(635, 0, false) {
 		t.Error("unrelated scope wanted")
 	}
-	// A candidate that covers nothing (scattered noise) is seen only by its
-	// own matches: no sighting traffic for it.
+	// A candidate that covers nothing (scattered noise, a venue) is seen
+	// only by its own matches: no sighting traffic for it.
 	bare := *pin
-	bare.Cells = nil
+	bare.ZoneWide = false
 	if buildModifierIndex([]*derivationModifier{&bare}).wantsSighting(959, 3272, true) {
 		t.Error("a candidate with no coverage wants sightings")
 	}
@@ -489,10 +496,11 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 	}
 }
 
-// sizeMod is a confirmed size_cutoffs modifier for species 1 local to cellA.
+// sizeMod is a confirmed zone-wide size_cutoffs modifier for species 1 in
+// adjZoneA.
 func sizeMod(b map[string]sizeBoundary) *derivationModifier {
 	return &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1}, Boundaries: b,
-		Status: modConfirmed, Cells: cellSet(adjCellA)}
+		Zone: adjZoneA, Status: modConfirmed, ZoneWide: true}
 }
 
 // Size through deriveIvIfAbsent: adjEid's unboosted roll is ~0.733 (base
@@ -566,7 +574,7 @@ func TestDerivationAdjustRepopulateIv(t *testing.T) {
 func TestDerivationAdjustRepopulateIvUnexplained(t *testing.T) {
 	withDeriveIv(t, true)
 	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-		Status: modConfirmed, Cells: cellSet(adjCellA)})
+		Zone: adjZoneA, Status: modConfirmed, ZoneWide: true})
 
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	p.calculateIv(6, 0, 11)
@@ -587,10 +595,10 @@ func TestRepopulateIvSuppressedNeverEstimates(t *testing.T) {
 	for name, mods := range map[string][]*derivationModifier{
 		"disputed level": {
 			levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
-			levelMod(modifierScope{PokemonID: 1}, 10, "", cellSet(adjCellA)),
+			levelMod(modifierScope{PokemonID: 1}, 10, adjZoneA, cellSet(adjCellA)),
 		},
 		"unexplained": {{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-			Status: modConfirmed, Cells: cellSet(adjCellA)}},
+			Zone: adjZoneA, Status: modConfirmed, ZoneWide: true}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			withModifierIndex(t, mods...)
@@ -622,7 +630,7 @@ func TestRepopulateIvSuppressedNeverEstimates(t *testing.T) {
 func TestRepopulateIvSuppressedUsesAMatchingScan(t *testing.T) {
 	withDeriveIv(t, true)
 	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-		Status: modConfirmed, Cells: cellSet(adjCellA)})
+		Zone: adjZoneA, Status: modConfirmed, ZoneWide: true})
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	p.scanHistory = []*pokemonScan{
 		{Weather: int32(pogo.GameplayWeatherProto_NONE), Level: 20, Attack: 3, Defense: 4, Stamina: 5},
@@ -679,15 +687,15 @@ func TestUpdateFromWildDerivesWithThePlacedCell(t *testing.T) {
 }
 
 // wideLevelMod is a confirmed zone-wide level offset for species 1 in
-// adjZoneA, less excluded, plus the covered venue cells.
+// adjZoneA, less excluded, listing the venue cells.
 func wideLevelMod(delta int32, excluded []s2.CellID, cells ...s2.CellID) *derivationModifier {
 	return &derivationModifier{Type: modLevelOffset, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Delta: delta}, Zone: adjZoneA, Status: modConfirmed,
-		ZoneWide: true, Excluded: excluded, Cells: cellSet(cells...)}
+		ZoneWide: true, Excluded: excludedSet(excluded...), Cells: cellSet(cells...)}
 }
 
-// A zone-wide modifier covers its zone less its excluded cells; a covered
-// venue cell is covered even when excluded.
+// A zone-wide modifier covers its zone less its excluded cells, a listed
+// venue cell among them or not.
 func TestDerivationAdjustZoneWideExcludedCell(t *testing.T) {
 	excl := adjCellA.Next()
 	idx := buildModifierIndex([]*derivationModifier{wideLevelMod(5, []s2.CellID{adjCellA, excl}, adjCellA)})
@@ -698,7 +706,7 @@ func TestDerivationAdjustZoneWideExcludedCell(t *testing.T) {
 	}{
 		{"zone cell", adjCellFar, 5},
 		{"excluded cell", excl, 0},
-		{"excluded but covered venue cell", adjCellA, 5},
+		{"excluded venue cell", adjCellA, 0},
 		{"other zone", adjCellB, 0},
 		{"unknown cell", 0, 0},
 	} {
@@ -708,38 +716,42 @@ func TestDerivationAdjustZoneWideExcludedCell(t *testing.T) {
 	}
 }
 
-// A venue-only modifier covers its covered cells and nothing else in its
-// zone; the lookup never resolves the zone for it.
-func TestDerivationAdjustVenueCoveredOnly(t *testing.T) {
+// Venue cells are never applied (design §9): a modifier that is not
+// zone-wide covers nothing, its venue cells included, and the lookup never
+// resolves the zone for it.
+func TestDerivationAdjustVenueNeverApplied(t *testing.T) {
 	m := levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))
+	m.ZoneWide = false
 	idx := buildModifierIndex([]*derivationModifier{m})
 	zoneOf := func(s2.CellID) string { t.Error("zoneOf called for a venue-only modifier"); return adjZoneA }
-	if adj := idx.lookup(1, 0, false, adjCellA, zoneOf); adj.LevelDelta != 5 {
-		t.Errorf("covered cell: delta %d, want 5", adj.LevelDelta)
+	for _, cell := range []s2.CellID{adjCellA, adjCellA.Next()} {
+		if adj := idx.lookup(1, 0, false, cell, zoneOf); adj.LevelDelta != 0 {
+			t.Errorf("cell %v: delta %d, want 0", cell, adj.LevelDelta)
+		}
 	}
-	if adj := idx.lookup(1, 0, false, adjCellA.Next(), zoneOf); adj.LevelDelta != 0 {
-		t.Errorf("uncovered cell: delta %d, want 0", adj.LevelDelta)
+	if idx.wantsSighting(1, 0, false) {
+		t.Error("a venue-only modifier wants sightings")
 	}
 }
 
-// Two pins disputing a cell are withheld; a cell excluded from the zone-wide
-// one is the venue pin's alone.
+// Two pins disputing a cell are withheld; a cell excluded from one is the
+// other's alone.
 func TestDerivationAdjustZoneWideConflictHonoursExcluded(t *testing.T) {
-	wide := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
+	a := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: adjZoneA, Status: modConfirmed,
-		ZoneWide: true, Excluded: []s2.CellID{adjCellA.Next()}, Cells: cellSet()}
-	venue := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
+		ZoneWide: true, Excluded: excludedSet(adjCellA.Next())}
+	b := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 300}, Zone: adjZoneA, Status: modConfirmed,
-		Cells: cellSet(adjCellA, adjCellA.Next())}
-	idx := buildModifierIndex([]*derivationModifier{wide, venue})
+		ZoneWide: true, Excluded: excludedSet(adjCellFar)}
+	idx := buildModifierIndex([]*derivationModifier{a, b})
 	if adj := idx.lookup(1, 0, false, adjCellA, modifierZoneOf); !adj.WithholdCharged || adj.Charged != 0 {
 		t.Errorf("disputed cell: %+v, want charged withheld", adj)
 	}
 	if adj := idx.lookup(1, 0, false, adjCellA.Next(), modifierZoneOf); adj.WithholdCharged || adj.Charged != 300 {
-		t.Errorf("excluded from the zone-wide pin: %+v, want the venue pin 300", adj)
+		t.Errorf("excluded from the 494 pin: %+v, want the 300 pin", adj)
 	}
-	if adj := idx.lookup(1, 0, false, adjCellFar, modifierZoneOf); adj.Charged != 494 {
-		t.Errorf("zone cell: %+v, want the zone-wide pin 494", adj)
+	if adj := idx.lookup(1, 0, false, adjCellFar, modifierZoneOf); adj.WithholdCharged || adj.Charged != 494 {
+		t.Errorf("excluded from the 300 pin: %+v, want the 494 pin", adj)
 	}
 }
 

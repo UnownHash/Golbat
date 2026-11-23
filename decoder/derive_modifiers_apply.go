@@ -2,7 +2,6 @@ package decoder
 
 import (
 	"math"
-	"slices"
 	"sync/atomic"
 
 	"github.com/golang/geo/s2"
@@ -16,24 +15,23 @@ import (
 // publishes an immutable modifierIndex behind derivationModifierIndex; the
 // derive path loads it once per derivation and, only when the record's
 // (species, form, strong) has a confirmed modifier, resolves the record's
-// level-14 cell — and its zone only for a zone-wide modifier that does not
-// cover the cell as a venue and has not excluded it (design §8). With no
+// level-14 cell — and its zone only for a zone-wide modifier that has not
+// excluded the cell (design §8–§9; venue cells are never applied). With no
 // modifier (nil index) a derivation costs one atomic load.
 
 // derivationModifierIndex holds the active modifiers; nil = none.
 var derivationModifierIndex atomic.Pointer[modifierIndex]
 
 // modifierEntry is one confirmed modifier as the derive path matches it: a
-// record is covered in one of its venue cells, or anywhere in its zone when
-// zone-wide and the cell is not excluded.
+// record is covered anywhere in its zone when zone-wide and the cell is not
+// excluded.
 type modifierEntry struct {
 	typ      modifierType
 	effect   modifierEffect
 	size     map[string]sizeBoundary // size_cutoffs; shared, never modified
 	zone     string
 	zoneWide bool
-	excluded []s2.CellID            // sorted, ≤ 16; shared, never modified
-	cells    map[s2.CellID]struct{} // covered venue cells; shared, never modified
+	excluded map[s2.CellID]uint8 // ≤ modExcludedMax; shared, never modified
 }
 
 // covers reports whether e covers a record in cell, resolving the cell's
@@ -41,13 +39,10 @@ type modifierEntry struct {
 // entries of one lookup.
 func (e *modifierEntry) covers(cell s2.CellID, zone *string, zoneKnown *bool,
 	zoneOf func(s2.CellID) string) bool {
-	if _, in := e.cells[cell]; in && cell != 0 {
-		return true
-	}
 	if !e.zoneWide {
 		return false
 	}
-	if _, found := slices.BinarySearch(e.excluded, cell); found {
+	if _, found := e.excluded[cell]; found {
 		return false
 	}
 	if !*zoneKnown {
@@ -90,18 +85,15 @@ func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 		}
 		n++
 		// A sighting only marks a modifier seen where it covers: one with no
-		// coverage (a candidate from scattered noise) wants none.
-		if m.ZoneWide || len(m.Cells) > 0 {
+		// coverage (a candidate from scattered noise, a venue) wants none.
+		if m.ZoneWide {
 			idx.active[m.Scope] = struct{}{}
 		}
 		if !modifierApplied(m) {
 			continue
 		}
 		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone,
-			zoneWide: m.ZoneWide, cells: m.Cells}
-		if m.ZoneWide {
-			e.excluded = m.Excluded
-		}
+			zoneWide: m.ZoneWide, excluded: m.Excluded}
 		idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
 	}
 	if n == 0 {
@@ -143,10 +135,9 @@ func (idx *modifierIndex) has(pokemonID, form int32, strong bool) bool {
 }
 
 // lookup combines the confirmed modifiers covering a record of the scope in
-// cell. A covered venue cell matches by membership alone (never cell 0); a
-// zone-wide modifier also matches a cell it has not excluded in its zone,
-// calling zoneOf(cell) at most once per lookup. Unexplained
-// suppresses everything. Two covering modifiers that dispute a value
+// cell: a zone-wide modifier matches a cell it has not excluded in its
+// zone, calling zoneOf(cell) at most once per lookup; venue cells never
+// match (design §9). Unexplained suppresses everything. Two covering modifiers that dispute a value
 // withhold it rather than pick one (design §7): two level deltas suppress
 // (no IVs or level, as unexplained), two pins of one slot with different
 // moves withhold that slot, two size modifiers withhold size. It does not

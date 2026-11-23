@@ -3,7 +3,6 @@ package decoder
 import (
 	"maps"
 	"math"
-	"slices"
 	"time"
 
 	"github.com/golang/geo/s2"
@@ -12,20 +11,20 @@ import (
 // The derivation modifier learner (docs/design/2026-11-17-derivation-
 // modifiers-live-design.md) detects event modifiers — a level offset, a
 // forced move, moved size cuts, or an unexplained walk mismatch — from live
-// encounter checks, per timezone. It judges each event at its own scale
-// (design §8): a global event on a zone-level record of the last 16 checks
-// (derive_modifiers_record.go), a ticketed venue cell by cell (level-14). A
-// modifier covers its zone, its venue cells, or both. The learner is a pure
-// state machine owned by one goroutine.
+// encounter checks, per timezone. It judges a global event on a zone-level
+// record of the last 16 checks (derive_modifiers_record.go, design §8–§9):
+// a modifier covers its zone, less the cells that disproved it, while its
+// effect is the fresh majority of that record and its matches are spread.
+// A ticketed venue is tracked cell by cell (level-14) and listed, but never
+// coverage: a venue-only modifier stays a candidate. The learner is a pure
+// state machine owned by one goroutine; it does not dedupe encounters (the
+// decode site feeds it each spawn's first encounter only).
 
 // modifierEvent is the learner's input: one encounter check or first
 // sighting. It is pointer-free (the GC never scans a channel of them) and
 // at most 64 bytes; building one on the decode path does not allocate.
 type modifierEvent struct {
-	Unix int64 // seconds
-	// EncounterID is the checked pokemon's id, 0 for a sighting: the learner
-	// counts each id once.
-	EncounterID          uint64
+	Unix                 int64     // seconds
 	Cell                 s2.CellID // level-14; 0 = unknown
 	SizeRoll             float64
 	PokemonID, Form      int32
@@ -46,24 +45,19 @@ func newModifierEvent(ev deriveEventCheck) modifierEvent {
 		obsSize = uint8(s)
 	}
 	delta := ev.Check.Observed.Level - ev.Check.Derived.Level
-	id := ev.EncounterID
-	if ev.Sighting {
-		id = 0
-	}
 	return modifierEvent{
-		Unix:        ev.Time.Unix(),
-		EncounterID: id,
-		Cell:        modifierCell(ev.CellID, ev.Lat, ev.Lon),
-		SizeRoll:    ev.Check.SizeRoll,
-		PokemonID:   ev.PokemonID,
-		Form:        ev.Form,
-		ObsQuick:    ev.Check.Move1,
-		ObsCharged:  ev.Check.Move2,
-		LevelDelta:  int8(min(max(delta, math.MinInt8), math.MaxInt8)),
-		ObsSize:     obsSize,
-		Agree:       ev.Agree,
-		Strong:      ev.Strong,
-		Sighting:    ev.Sighting,
+		Unix:       ev.Time.Unix(),
+		Cell:       modifierCell(ev.CellID, ev.Lat, ev.Lon),
+		SizeRoll:   ev.Check.SizeRoll,
+		PokemonID:  ev.PokemonID,
+		Form:       ev.Form,
+		ObsQuick:   ev.Check.Move1,
+		ObsCharged: ev.Check.Move2,
+		LevelDelta: int8(min(max(delta, math.MinInt8), math.MaxInt8)),
+		ObsSize:    obsSize,
+		Agree:      ev.Agree,
+		Strong:     ev.Strong,
+		Sighting:   ev.Sighting,
 	}
 }
 
@@ -171,44 +165,46 @@ type derivationModifier struct {
 	// a match (for size, the rolls its intervals refuse).
 	Observations   int
 	Contradictions int
-	// ZoneWide: the modifier covers its zone, less the Excluded cells (those
-	// whose latest check in the zone record agreed or showed another effect;
-	// sorted, at most 16, nil when not zone-wide). Excluded is replaced, never modified in place, so
-	// copies may share it.
+	// ZoneWide: the modifier covers its zone, less the Excluded cells. It is
+	// a modifier's only coverage (design §9).
 	ZoneWide bool
-	Excluded []s2.CellID
-	// Cells holds the covered venue cells: two matches and no agreement or
-	// other effect there since. A modifier can have both coverages.
+	// Excluded holds the cells that disproved the modifier: their latest
+	// located check of its dimension was not its effect. A cell stays until
+	// a matching check there, whatever ZoneWide is meanwhile; at most
+	// modExcludedMax cells, nil until the first. The value is 1, or for
+	// size_cutoffs the boundaries disproved there (bit i = cut i of the
+	// scope's cut list); any bit excludes the cell.
+	Excluded map[s2.CellID]uint8
+	// Cells lists the venue cells: two matches and no agreement or other
+	// effect there since. They are evidence, listed and never coverage.
 	Cells map[s2.CellID]struct{}
 	// version counts the changes the learner reports through changed (and
 	// the confirm), so the runtime re-clones only a modifier that changed
 	// since its last publish. LastSeen is not versioned: it is not published.
-	// cellsVersion counts the changes to Cells alone, so a republished copy
-	// whose cells did not change shares the previous copy's set.
-	version, cellsVersion uint64
+	// cellsVersion and excludedVersion count the changes to Cells and to
+	// Excluded alone, so a republished copy shares the previous copy's set
+	// when it did not change.
+	version, cellsVersion, excludedVersion uint64
 }
 
-// Covers reports whether a record in zone and cell is covered by m: one of
-// its venue cells, or its zone when zone-wide and the cell is not excluded.
-// Cell 0 (unknown) is only ever covered zone-wide.
+// Covers reports whether a record in zone and cell is covered by m: its
+// zone when zone-wide, unless the cell is excluded.
 func (m *derivationModifier) Covers(zone string, cell s2.CellID) bool {
-	if zone != m.Zone {
+	if zone != m.Zone || !m.ZoneWide {
 		return false
 	}
-	if _, ok := m.Cells[cell]; ok && cell != 0 {
-		return true
-	}
-	return m.ZoneWide && !slices.Contains(m.Excluded, cell)
+	_, excluded := m.Excluded[cell]
+	return !excluded
 }
 
-// clone is an independent copy of m (sharing Excluded, which is immutable).
+// clone is an independent copy of m.
 func (m *derivationModifier) clone() *derivationModifier {
 	return m.cloneSharing(nil)
 }
 
-// cloneSharing is clone, sharing prev's Cells when prev (an earlier,
-// immutable copy of m) has m's cellsVersion: a publish never copies a cell
-// set that did not change.
+// cloneSharing is clone, sharing prev's Cells and Excluded when prev (an
+// earlier, immutable copy of m) has m's version of them: a publish never
+// copies a cell set that did not change.
 func (m *derivationModifier) cloneSharing(prev *derivationModifier) *derivationModifier {
 	c := *m
 	c.Boundaries = maps.Clone(m.Boundaries)
@@ -217,8 +213,17 @@ func (m *derivationModifier) cloneSharing(prev *derivationModifier) *derivationM
 	} else {
 		c.Cells = maps.Clone(m.Cells)
 	}
+	if prev != nil && prev.excludedVersion == m.excludedVersion {
+		c.Excluded = prev.Excluded
+	} else {
+		c.Excluded = maps.Clone(m.Excluded)
+	}
 	return &c
 }
+
+// modExcludedMax bounds a modifier's excluded cells; one more and it is no
+// longer zone-wide.
+const modExcludedMax = 256
 
 // modifierParams are the learner's thresholds (design §3, §8).
 type modifierParams struct {
@@ -301,8 +306,13 @@ type modVenueCell struct {
 	n    uint8
 }
 
-// modVenueCovered: a venue cell is covered at this many matches.
+// modVenueCovered: a venue cell is listed at this many matches.
 const modVenueCovered = 2
+
+// modVenueMax bounds the cells a modifier counts venue matches in. A venue
+// is a few cells; a global event's matches fall in thousands, which are not
+// worth listing.
+const modVenueMax = 1024
 
 // modTrack is one (type, scope, effect, zone): its recent deviations while
 // it has no modifier, else the modifier and its venue cells.
@@ -315,15 +325,17 @@ type modTrack struct {
 	mod     *derivationModifier
 	// venue holds a count for every cell with a match of the modifier and no
 	// agreement or other effect since, pruned after Unseen without a match
-	// (never used by size, which is zone-wide only).
+	// (never used by size, which has no venue cells).
 	venue map[s2.CellID]modVenueCell
-	// located counts the modifier's matches with a cell; coveredMatches those
-	// in its covered venue cells.
-	located, coveredMatches int
-	// lostToEffect: the modifier's latest loss of coverage was to another
-	// effect, not an agreement.
-	lostToEffect bool
-	size         *sizeState // size_cutoffs tracks only
+	// located counts the modifier's matches with a cell.
+	located int
+	// overflow: a disproving cell did not fit in the modifier's excluded
+	// cells, so it is not zone-wide for the rest of its life.
+	overflow bool
+	// lost is why the modifier was last found not zone-wide: the end reason
+	// of a confirmed one.
+	lost string
+	size *sizeState // size_cutoffs tracks only
 }
 
 // modPruneInterval is how often, in seconds of event time, feed prunes.
@@ -335,10 +347,7 @@ type modifierLearner struct {
 	tracks       map[modTrackKey]*modTrack
 	scopes       map[modScopeKey]*modScopeState
 	activeTracks []*modTrack // tracks with a modifier
-	// checked maps an encounter id to when it may be forgotten (Unseen after
-	// its check): a repeated check of one spawn is not independent evidence.
-	checked   map[uint64]int64
-	nextPrune int64
+	nextPrune    int64
 	// dirty records the non-transition changes since the last takeDirty.
 	dirty modDirty
 }
@@ -349,14 +358,13 @@ type modChange uint8
 
 const (
 	// modEvidence changes no lookup: observations, contradictions, a venue
-	// cell's first match.
+	// cell listed or removed.
 	modEvidence modChange = iota
-	// modGrowth makes the lookup cover more: zone-wide gained, a venue cell
-	// covered, an excluded cell readmitted.
+	// modGrowth makes the lookup cover more: zone-wide gained, an excluded
+	// cell readmitted.
 	modGrowth
 	// modShrink makes it cover less or differently: zone-wide lost, a cell
-	// excluded, a covered cell removed, or size boundaries moved (a record's
-	// class can change).
+	// excluded, or size boundaries moved (a record's class can change).
 	modShrink
 )
 
@@ -369,17 +377,16 @@ type modDirty struct {
 
 func newModifierLearner(p modifierParams) *modifierLearner {
 	return &modifierLearner{
-		p:       p,
-		tracks:  make(map[modTrackKey]*modTrack),
-		scopes:  make(map[modScopeKey]*modScopeState),
-		checked: make(map[uint64]int64),
+		p:      p,
+		tracks: make(map[modTrackKey]*modTrack),
+		scopes: make(map[modScopeKey]*modScopeState),
 	}
 }
 
 // feed processes one encounter check or first sighting (ev.Sighting) in
 // zone and returns the transitions it causes. It ends unseen modifiers
-// first, and prunes at most once per modPruneInterval of event time. A check
-// whose encounter id was already checked is dropped.
+// first, and prunes at most once per modPruneInterval of event time. Every
+// check counts: the decode site sends each spawn's first encounter only.
 func (l *modifierLearner) feed(ev modifierEvent, zone string) []modifierTransition {
 	now := time.Unix(ev.Unix, 0).UTC()
 	out := l.endUnseen(now, nil)
@@ -395,7 +402,7 @@ func (l *modifierLearner) feed(ev modifierEvent, zone string) []modifierTransiti
 		return out
 	}
 	ivs := ev.Agree.IVs
-	if (ivs != dimAgree && ivs != dimDisagree) || l.repeated(ev) {
+	if ivs != dimAgree && ivs != dimDisagree {
 		return out
 	}
 	if st == nil {
@@ -422,19 +429,6 @@ func (l *modifierLearner) feed(ev modifierEvent, zone string) []modifierTransiti
 		out = l.check(st, sk, modDimCharged, s == dimAgree, ev.ObsCharged, ev, now, out)
 	}
 	return l.sizeCheck(st, sk, ev, now, out)
-}
-
-// repeated reports whether ev's encounter was already checked within Unseen,
-// noting it otherwise.
-func (l *modifierLearner) repeated(ev modifierEvent) bool {
-	if ev.EncounterID == 0 {
-		return false
-	}
-	if until, ok := l.checked[ev.EncounterID]; ok && ev.Unix < until {
-		return true
-	}
-	l.checked[ev.EncounterID] = ev.Unix + int64(l.p.Unseen/time.Second)
-	return false
 }
 
 // sweep ends the active modifiers unseen for longer than Unseen, at the
@@ -513,21 +507,26 @@ func (l *modifierLearner) takeDirty() modDirty {
 // check applies one check's outcome on dimension d: an agreement with the
 // base value, or effect id seen instead. With a cell it enters the zone
 // record. It disproves the cell for every other effect's modifier (and for
-// every modifier, when it agrees), gates or voids the pending deviations of
-// tracks without one, counts the match for its own track, and re-judges the
-// dimension's modifiers. A move agreeing with a pinned move says nothing
-// about that pin.
+// every modifier, when it agrees): the cell is excluded from it until a
+// match there. It gates or voids the pending deviations of tracks without
+// one, counts the match for its own track, and re-judges the dimension's
+// modifiers. A move agreeing with a pinned move says nothing about that
+// pin.
 func (l *modifierLearner) check(st *modScopeState, sk modScopeKey, d modDim, agree bool, id int32,
 	ev modifierEvent, now time.Time, out []modifierTransition) []modifierTransition {
 	located := ev.Cell != 0
-	if located {
+	pin := d == modDimQuick || d == modDimCharged
+	// An agreement on the move an active pin forces says nothing about that
+	// pin, and its record is that pin's evidence: left out, it does not push
+	// a match out of the 16 (a species whose base walk often gives the pinned
+	// move would otherwise never show eight matching cells).
+	if neutral := agree && pin && st.hasModifier(d, id); located && !neutral {
 		st.record(d).push(ev.Cell, id, agree, ev.Unix)
 	}
 	var own *modTrack
 	if !agree {
 		own = l.track(st, sk, d, id)
 	}
-	pin := d == modDimQuick || d == modDimCharged
 	for _, t := range st.tracks {
 		if t.dim != d || t == own || (agree && pin && t.id == id) {
 			continue
@@ -565,7 +564,8 @@ func (l *modifierLearner) track(st *modScopeState, sk modScopeKey, d modDim, id 
 }
 
 // disprove applies an agreement or (byEffect) another effect seen in cell
-// to t's modifier: the cell is no longer one of its venue cells.
+// to t's modifier: the cell is excluded from it and no longer one of its
+// venue cells.
 func (l *modifierLearner) disprove(t *modTrack, cell s2.CellID, byEffect bool) {
 	m := t.mod
 	if byEffect {
@@ -574,11 +574,84 @@ func (l *modifierLearner) disprove(t *modTrack, cell s2.CellID, byEffect bool) {
 			l.changed(m, modEvidence)
 		}
 	}
-	l.venueDrop(t, cell, byEffect)
+	l.venueDrop(t, cell)
+	l.exclude(t, cell, 1)
 }
 
-// venueDrop forgets cell's matches; a covered cell is no longer covered.
-func (l *modifierLearner) venueDrop(t *modTrack, cell s2.CellID, byEffect bool) {
+// exclude records that cell disproved t's modifier (for size, the
+// boundaries in bits): the cell stays excluded until readmit. A cell that
+// does not fit in modExcludedMax marks the track overflowed instead, which
+// the next judgeZone turns into zone-wide off.
+func (l *modifierLearner) exclude(t *modTrack, cell s2.CellID, bits uint8) {
+	m := t.mod
+	old, had := m.Excluded[cell]
+	if had && old|bits == old {
+		return
+	}
+	if !had && len(m.Excluded) >= modExcludedMax {
+		t.overflow = true
+		return
+	}
+	if m.Excluded == nil {
+		m.Excluded = make(map[s2.CellID]uint8)
+	}
+	m.Excluded[cell] = old | bits
+	m.excludedVersion++
+	switch {
+	case !m.ZoneWide: // not looked up, nor listed, until zone-wide
+	case had:
+		l.changed(m, modEvidence)
+	default:
+		l.changed(m, modShrink)
+	}
+}
+
+// readmit applies a match in cell to t's modifier's excluded cells: the
+// cell is covered again (for size, once each boundary disproved there has
+// had a match there: bits are the boundaries this one crossed).
+func (l *modifierLearner) readmit(t *modTrack, cell s2.CellID, bits uint8) {
+	m := t.mod
+	old, had := m.Excluded[cell]
+	if !had || old&^bits == old {
+		return
+	}
+	m.excludedVersion++
+	if left := old &^ bits; left != 0 {
+		m.Excluded[cell] = left
+		if m.ZoneWide {
+			l.changed(m, modEvidence)
+		}
+		return
+	}
+	delete(m.Excluded, cell)
+	if m.ZoneWide {
+		l.changed(m, modGrowth)
+	}
+}
+
+// seedExcluded excludes from t's new modifier the cells whose latest fresh
+// entry in rec is not its effect: what the zone showed before the candidate
+// formed.
+func (l *modifierLearner) seedExcluded(t *modTrack, rec *modRecord, unix int64) {
+	if rec == nil {
+		return
+	}
+	cut := unix - int64(l.p.Unseen/time.Second)
+	pin := t.key.Type == modMovePin
+	for i := int(rec.n); i >= 1; i-- { // oldest first
+		e := rec.at(i)
+		switch {
+		case e.unix < cut || (e.agree && pin && e.id == t.id):
+		case !e.agree && e.id == t.id:
+			l.readmit(t, e.cell, 1)
+		default:
+			l.exclude(t, e.cell, 1)
+		}
+	}
+}
+
+// venueDrop forgets cell's matches; a listed cell is no longer listed.
+func (l *modifierLearner) venueDrop(t *modTrack, cell s2.CellID) {
 	v, ok := t.venue[cell]
 	if !ok {
 		return
@@ -589,48 +662,41 @@ func (l *modifierLearner) venueDrop(t *modTrack, cell s2.CellID, byEffect bool) 
 	}
 	delete(t.mod.Cells, cell)
 	t.mod.cellsVersion++
-	t.coveredMatches -= int(v.n)
-	t.lostToEffect = byEffect
-	l.changed(t.mod, modShrink)
+	l.changed(t.mod, modEvidence)
 }
 
-// venueMatch counts a match in cell at unix and reports whether that covers
-// the cell. A count older than Unseen is forgotten first.
-func (l *modifierLearner) venueMatch(t *modTrack, cell s2.CellID, unix int64) bool {
-	v := t.venue[cell]
+// venueMatch counts a match in cell at unix, listing the cell at
+// modVenueCovered matches. A count older than Unseen is forgotten first; a
+// new cell past modVenueMax is not counted.
+func (l *modifierLearner) venueMatch(t *modTrack, cell s2.CellID, unix int64) {
+	v, tracked := t.venue[cell]
+	if !tracked && len(t.venue) >= modVenueMax {
+		return
+	}
 	if v.n > 0 && unix-v.last > int64(l.p.Unseen/time.Second) {
-		l.venueDrop(t, cell, false)
+		l.venueDrop(t, cell)
 		v = modVenueCell{}
 	}
 	if v.n < math.MaxUint8 {
 		v.n++
-		switch {
-		case v.n == modVenueCovered:
-			t.coveredMatches += modVenueCovered
-		case v.n > modVenueCovered:
-			t.coveredMatches++
-		}
 	}
 	v.last = max(v.last, unix)
 	t.venue[cell] = v
-	if v.n != modVenueCovered {
-		return false
+	if v.n == modVenueCovered {
+		t.mod.Cells[cell] = struct{}{}
+		t.mod.cellsVersion++
 	}
-	t.mod.Cells[cell] = struct{}{}
-	t.mod.cellsVersion++
-	return true
 }
 
-// settle applies the lifecycle to t's modifier (design §8). A candidate
-// confirms with Confirm located matches while zone-wide, or with Confirm
-// matches in its covered venue cells: scattered noise that hits one cell
-// twice covers it but never confirms. A confirmed modifier with neither
-// coverage ends, contradicted when another effect took the last of it.
+// settle applies the lifecycle to t's modifier (design §8–§9). A candidate
+// confirms with Confirm located matches while zone-wide; venue cells never
+// confirm. A confirmed modifier no longer zone-wide ends, for the reason
+// zone-wide was lost.
 func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTransition) []modifierTransition {
 	m := t.mod
 	switch {
 	case m.Status == modCandidate:
-		if (m.ZoneWide && t.located >= l.p.Confirm) || t.coveredMatches >= l.p.Confirm {
+		if m.ZoneWide && t.located >= l.p.Confirm {
 			if t.size != nil {
 				t.size.dropUnsupported(m.Boundaries, sizeCuts(m.Scope.Strong), l.p.Start)
 			}
@@ -638,12 +704,8 @@ func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTrans
 			m.version++
 			out = append(out, modifierTransition{At: now, State: modConfirmed, Mod: m.clone()})
 		}
-	case !m.ZoneWide && len(m.Cells) == 0:
-		reason := "agreement"
-		if t.lostToEffect {
-			reason = "contradicted"
-		}
-		out = append(out, l.end(t, now, reason))
+	case !m.ZoneWide:
+		out = append(out, l.end(t, now, t.lost))
 	}
 	return out
 }
@@ -666,18 +728,17 @@ func (l *modifierLearner) match(t *modTrack, rec *modRecord, ev modifierEvent, n
 				l.venueMatch(t, pd.Cell, pd.Unix)
 			}
 		}
+		l.seedExcluded(t, rec, ev.Unix)
 		return l.opened(t, rec, now, out)
 	}
 	m := t.mod
 	m.Observations++
-	c := modEvidence
 	if ev.Cell != 0 {
 		t.located++
-		if l.venueMatch(t, ev.Cell, ev.Unix) {
-			c = modGrowth
-		}
+		l.venueMatch(t, ev.Cell, ev.Unix)
+		l.readmit(t, ev.Cell, 1)
 	}
-	l.changed(m, c)
+	l.changed(m, modEvidence)
 	if now.After(m.LastSeen) {
 		m.LastSeen = now
 	}
@@ -703,7 +764,7 @@ func (l *modifierLearner) open(t *modTrack, now time.Time) *derivationModifier {
 		LastSeen: now,
 		Cells:    make(map[s2.CellID]struct{}),
 	}
-	t.mod, t.located, t.coveredMatches, t.lostToEffect = mod, 0, 0, false
+	t.mod, t.located, t.overflow, t.lost = mod, 0, false, modLostAgreement
 	if t.size == nil {
 		t.venue = make(map[s2.CellID]modVenueCell)
 	}
@@ -716,9 +777,7 @@ func (l *modifierLearner) opened(t *modTrack, rec *modRecord, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	t.pending = nil
 	l.activeTracks = append(l.activeTracks, t)
-	if rec != nil {
-		l.judgeZone(t, rec)
-	}
+	l.judgeZone(t, rec, now.Unix())
 	return append(out, modifierTransition{At: now, State: modCandidate, Mod: t.mod.clone()})
 }
 
@@ -758,7 +817,7 @@ func (t *modTrack) voidCell(cell s2.CellID) {
 func (l *modifierLearner) end(t *modTrack, at time.Time, reason string) modifierTransition {
 	mod := t.mod
 	mod.Status, mod.End, mod.EndReason = modEnded, at, reason
-	t.mod, t.venue, t.located, t.coveredMatches, t.lostToEffect = nil, nil, 0, 0, false
+	t.mod, t.venue, t.located, t.overflow, t.lost = nil, nil, 0, false, ""
 	if t.size != nil {
 		// The size record's entries are relative to the ended boundaries.
 		if st := l.scopes[modScopeKey{t.key.Scope, t.key.Zone}]; st != nil {
@@ -784,49 +843,36 @@ func (l *modifierLearner) endUnseen(now time.Time, out []modifierTransition) []m
 	return out
 }
 
-// prune ages what no check has refreshed and bounds the learner's maps.
-// Encounter ids past their expiry go. A venue cell with no match for Unseen
-// is forgotten, and a modifier whose zone record has had no located check
-// for Unseen is no longer zone-wide (sightings show the species, not the
-// effect); the record is emptied, so zone-wide needs fresh checks. A
-// confirmed modifier left with no coverage ends unseen, and a candidate not
-// confirmed within Unseen of its start ends unconfirmed (a new one can form
-// from fresh deviations). Then pending deviations older than Window, tracks
-// with no modifier and no deviation within Window, zone records idle for
-// Window with no modifier judged on them, and scopes left with nothing.
+// prune ages what no check has refreshed and bounds the learner's maps. A
+// venue cell with no match for Unseen is forgotten. Each modifier is judged
+// again on its zone record as of now: entries older than Unseen no longer
+// count, so a modifier whose matches have aged is no longer zone-wide
+// (sightings show the species, not the effect) and, confirmed, ends. A
+// candidate not confirmed within 2 × Unseen of its start ends unconfirmed (a
+// new one can form from fresh deviations). Then pending deviations older
+// than Window, tracks with no modifier and no deviation within Window, zone
+// records idle for Window with no modifier judged on them, and scopes left
+// with nothing.
 func (l *modifierLearner) prune(now time.Time, out []modifierTransition) []modifierTransition {
 	unix := now.Unix()
 	l.nextPrune = unix + modPruneInterval
-	for id, until := range l.checked {
-		if until <= unix {
-			delete(l.checked, id)
-		}
-	}
 	stale := unix - int64(l.p.Unseen/time.Second)
 	for i := len(l.activeTracks) - 1; i >= 0; i-- {
 		t := l.activeTracks[i]
 		for cell, v := range t.venue {
 			if v.last < stale {
-				l.venueDrop(t, cell, false)
+				l.venueDrop(t, cell)
 			}
 		}
 		m := t.mod
+		var rec *modRecord
 		if st := l.scopes[modScopeKey{t.key.Scope, t.key.Zone}]; st != nil {
-			if rec := st.rec[t.dim]; rec != nil && rec.last < stale {
-				*rec = modRecord{}
-				if m.ZoneWide {
-					m.ZoneWide, m.Excluded = false, nil
-					l.changed(m, modShrink)
-				}
-			}
+			rec = st.rec[t.dim]
 		}
-		switch {
-		case m.Status == modCandidate:
-			if now.Sub(m.Start) > l.p.Unseen {
-				out = append(out, l.end(t, now, "unconfirmed"))
-			}
-		case !m.ZoneWide && len(m.Cells) == 0:
-			out = append(out, l.end(t, now, "unseen"))
+		l.judgeZone(t, rec, unix)
+		out = l.settle(t, now, out)
+		if t.mod == m && m.Status == modCandidate && now.Sub(m.Start) > 2*l.p.Unseen {
+			out = append(out, l.end(t, now, "unconfirmed"))
 		}
 	}
 	cut := unix - int64(l.p.Window/time.Second)
