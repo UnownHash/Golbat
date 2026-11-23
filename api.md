@@ -220,7 +220,9 @@ a region. State is in memory only. When the learner is off
 }
 ```
 
-- `id` is `<start date>-<type>-<scope>-<effect>`, sorted ascending in the list.
+- `id` is `<start date>-<type>-<scope>-<effect>`. It names the effect, not the
+  zone, so it appears once per timezone where the modifier is active;
+  `region.zone` tells them apart. The list is sorted by `id`, then `region.zone`.
   Scope is `<id>-<form>`, prefixed `strong-` for strong pokemon; `all` /
   `all-strong` cover every pokemon (no `scope.pokemon`).
 - `effect` is `{"type":"level_offset","delta":n}`,

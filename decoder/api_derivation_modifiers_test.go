@@ -83,3 +83,62 @@ func TestApiDerivationModifiersLearnerOff(t *testing.T) {
 		t.Fatalf("got %+v", res)
 	}
 }
+
+func TestApiDerivationModifiersSortByZoneWithinID(t *testing.T) {
+	t.Cleanup(func() { derivationModifierSnapshot.Store(nil) })
+	start := time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	mk := func(zone string) *derivationModifier {
+		return &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
+			Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: zone, Status: modConfirmed,
+			Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}
+	}
+	mods := []*derivationModifier{mk("Europe/Paris"), mk("America/New_York"), mk("Europe/London")}
+	derivationModifierSnapshot.Store(&mods)
+	res := GetApiDerivationModifiers(start)
+	want := []string{"America/New_York", "Europe/London", "Europe/Paris"}
+	if len(res.Modifiers) != 3 {
+		t.Fatalf("got %+v", res.Modifiers)
+	}
+	for i, z := range want {
+		if res.Modifiers[i].Region.Zone != z || res.Modifiers[i].ID != res.Modifiers[0].ID {
+			t.Fatalf("modifier %d = %s %s, want zone %s", i, res.Modifiers[i].ID, res.Modifiers[i].Region.Zone, z)
+		}
+	}
+}
+
+func TestApiDerivationModifiersRuntimeZoneWideCells(t *testing.T) {
+	prevCfg := config.Config.DerivationModifiers.ZoneWideCells
+	prevRt, prevOn := derivationModifierRuntime, derivationModifierLearnerOn
+	t.Cleanup(func() {
+		config.Config.DerivationModifiers.ZoneWideCells = prevCfg
+		derivationModifierRuntime, derivationModifierLearnerOn = prevRt, prevOn
+		derivationModifierSnapshot.Store(nil)
+	})
+	config.Config.DerivationModifiers.ZoneWideCells = 3
+	derivationModifierRuntime, derivationModifierLearnerOn = &modifierRuntime{zoneWideCells: 2}, true
+	m := levelMod(modifierScope{PokemonID: 1}, 5, "Europe/London", cellSet(adjCellA, adjCellA.Next()))
+	m.Start = time.Date(2026, 11, 15, 9, 0, 0, 0, time.UTC)
+	mods := []*derivationModifier{m}
+	derivationModifierSnapshot.Store(&mods)
+
+	if got := GetApiDerivationModifiers(m.Start).Modifiers[0].Region.Cells; got != nil {
+		t.Fatalf("2 in-cells with runtime zoneWideCells 2 should be zone-wide, got cells %v", got)
+	}
+	derivationModifierRuntime = nil
+	if got := GetApiDerivationModifiers(m.Start).Modifiers[0].Region.Cells; len(got) != 2 {
+		t.Fatalf("config fallback (3) should list the 2 cells, got %v", got)
+	}
+}
+
+func TestApiStatusDerivationModifiersFeature(t *testing.T) {
+	prev := derivationModifierLearnerOn
+	t.Cleanup(func() { derivationModifierLearnerOn = prev })
+	derivationModifierLearnerOn = true
+	if !GetApiStatus().Features.DerivationModifiers {
+		t.Fatal("features.derivation_modifiers should be true when the learner runs")
+	}
+	derivationModifierLearnerOn = false
+	if GetApiStatus().Features.DerivationModifiers {
+		t.Fatal("features.derivation_modifiers should be false when the learner is off")
+	}
+}
