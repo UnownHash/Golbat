@@ -34,7 +34,7 @@ Two record kinds are read; anything else is skipped:
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
   deviations' too, except that size_rolls come only from checks whose IVs
-  agreed (when the walk did not match, its roll is noise). Ordered by bucket end (`bucket` + `bucket_seconds`; `summary_end`): a
+  agreed (when the walk did not match, its roll is noise). Ordered by `summary_end`: a
   summary means "this bucket is complete", and one for a bucket straddling
   UTC midnight can sit in the next day's file. `bucket` is the writer's
   bucket start. A summary written at shutdown with its bucket still open
@@ -803,6 +803,10 @@ def _hypergeom(rng, ok, n, k):
     return got
 
 
+class SamplingStraddleError(ValueError):
+    """A summary bucket spans a quota-hour boundary."""
+
+
 def thin(records: Iterator[dict], rule: SamplingRule,
          cost: SamplingCost | None = None) -> Iterator[dict]:
     """records as a sampling scanner would have logged them; see the module
@@ -833,10 +837,14 @@ def thin(records: Iterator[dict], rule: SamplingRule,
             off = rec.get("utc_offset", 0) * 60 if rule.key == "tz" else 0
             last = max(rec["bucket"], summary_end(rec) - 1)
             if (rec["bucket"] + off) // 3600 != (last + off) // 3600:
-                raise ValueError(
-                    f"summary bucket {rec['bucket']} (+{summary_end(rec) - rec['bucket']}s)"
-                    " straddles a quota hour; --simulate-sampling needs"
-                    " bucket_minutes that divide 60 and align to the hour")
+                raise SamplingStraddleError(
+                    f"summary bucket {rec['bucket']} "
+                    f"(+{summary_end(rec) - rec['bucket']}s) straddles a "
+                    "quota hour; --simulate-sampling needs bucket_minutes "
+                    "that divide 60 and align to the hour. With key=tz, "
+                    "half-hour/45-minute UTC offsets make even hour-aligned "
+                    "buckets straddle the local hour: use key=global or "
+                    "smaller buckets")
         if rule.key == "tz":
             off = rec.get("utc_offset", 0)
             key = (rec["pokemon_id"], rec["form"], strong, off,
@@ -1069,7 +1077,7 @@ def main(argv: list[str]) -> int:
             _, sampled, _ = _replay(
                 thin(read_records(args.files), args.simulate_sampling, cost),
                 params, args.at)
-        except ValueError as e:
+        except SamplingStraddleError as e:
             ap.error(str(e))
         _print_comparison(compare_runs(full, sampled), sys.stdout)
         _print_cost(cost, sys.stdout)

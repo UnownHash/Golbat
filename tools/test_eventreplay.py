@@ -685,7 +685,7 @@ class SamplingHourTest(unittest.TestCase):
         start = T0 + 3600 - 180
         s = summ(start, n=10, ok=10)
         s["bucket_seconds"] = s["bucket_s"] = 420
-        with self.assertRaisesRegex(ValueError, "straddles"):
+        with self.assertRaisesRegex(eventreplay.SamplingStraddleError, "straddles"):
             list(thin(iter([s]), SamplingRule(pct=0, min_per_hour=1)))
 
     def test_flushed_bucket_inside_one_hour_is_accepted(self):
