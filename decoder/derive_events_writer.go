@@ -373,14 +373,10 @@ func deriveEventsInPool(moves derivedMoveResult, pool []int, move int32) bool {
 // is the parent of the server's level-15 map cell; lat/lon is used only when
 // there is no valid cell id. With neither, the answer is ("", 0).
 func (w *deriveEventsWriter) locate(ev deriveEventCheck) (string, int32) {
-	cell := s2.CellID(uint64(ev.CellID))
-	if ev.CellID == 0 || !cell.IsValid() || cell.Level() < deriveEventsCellLevel {
-		if ev.Lat == 0 && ev.Lon == 0 {
-			return "", 0
-		}
-		cell = s2.CellIDFromLatLng(s2.LatLngFromDegrees(ev.Lat, ev.Lon))
+	cell := modifierCell(ev.CellID, ev.Lat, ev.Lon)
+	if cell == 0 {
+		return "", 0
 	}
-	cell = cell.Parent(deriveEventsCellLevel)
 	loc, ok := w.zones[cell]
 	if !ok {
 		centre := s2.LatLngFromPoint(cell.Point())
