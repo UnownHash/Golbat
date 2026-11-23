@@ -88,7 +88,7 @@ pogo/                — Generated game protos (vbase); never lint or hand-edit
 jsonenc/             — JSON codec switch (go-json with the go_json tag)
 stats_collector/     — Prometheus metrics (no-op collector when disabled)
 encounter_cache/     — Short-lived cache of encounter stats by encounter id
-external/            — Pyroscope and Sentry integration
+external/            — Pyroscope integration
 tz/                  — Timezone lookup from coordinates
 sql/                 — Numbered golang-migrate migrations, applied at startup
 tools/               — Offline helpers (derivecheck.py summarizes [DERIVE] logs)

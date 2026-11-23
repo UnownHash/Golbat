@@ -12,7 +12,6 @@ type configDefinition struct {
 	Webhooks                []Webhook  `koanf:"webhooks"`
 	Database                database   `koanf:"database"`
 	Logging                 logging    `koanf:"logging"`
-	Sentry                  sentry     `koanf:"sentry"`
 	Pyroscope               pyroscope  `koanf:"pyroscope"`
 	Prometheus              Prometheus `koanf:"prometheus"`
 	PokemonMemoryOnly       bool       `koanf:"pokemon_memory_only"`
@@ -115,13 +114,6 @@ type pvp struct {
 	IncludeHundosUnderCap bool   `koanf:"include_hundos_under_cap"`
 	LevelCaps             []int  `koanf:"level_caps"`
 	RankingComparator     string `koanf:"ranking_comparator"`
-}
-
-type sentry struct {
-	DSN              string  `koanf:"dsn"`
-	SampleRate       float64 `koanf:"sample_rate"`
-	EnableTracing    bool    `koanf:"enable_tracing"`
-	TracesSampleRate float64 `koanf:"traces_sample_rate"`
 }
 
 type pyroscope struct {

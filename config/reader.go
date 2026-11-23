@@ -39,10 +39,6 @@ func ReadConfig(configPath string) (configDefinition, error) {
 		DeriveStrong:    true,
 		DeriveDespawn:   true,
 		DittoDerivation: true,
-		Sentry: sentry{
-			SampleRate:       1.0,
-			TracesSampleRate: 1.0,
-		},
 		Pyroscope: pyroscope{
 			ApplicationName:      "golbat",
 			MutexProfileFraction: 5,

@@ -93,10 +93,8 @@ func main() {
 
 	log.Infof("Golbat starting: revision=%s modified=%v built=%s", gitRevision, gitModified, buildTime)
 
-	// Both Sentry & Pyroscope are optional and off by default. Read more:
-	// https://docs.sentry.io/platforms/go
+	// Pyroscope is optional and off by default. Read more:
 	// https://pyroscope.io/docs/golang
-	external.InitSentry()
 	external.InitPyroscope()
 
 	webhooksSender, err := webhooks.NewWebhooksSender(cfg)

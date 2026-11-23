@@ -3,7 +3,7 @@ package tz
 import (
 	_ "time/tzdata"
 
-	"github.com/ringsaturn/tzf"
+	tzf "github.com/ringsaturn/tzf/v2"
 )
 
 var finder tzf.F
