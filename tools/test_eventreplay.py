@@ -736,6 +736,39 @@ class ReaderTest(unittest.TestCase):
             self.assertEqual(list(read_records([p])), [])
         self.assertEqual(len(err.getvalue().strip().splitlines()), 1)
 
+    def test_bucket_length_change_mid_file(self):
+        # A restart in the same day changed bucket_minutes from 60 to 5: the
+        # shutdown wrote the 60-minute bucket's summary early, then 5-minute
+        # rows follow. Rows order by their own bucket, never back in time.
+        def tag(r, n):
+            r["bucket_s"] = n
+            return r
+        old_sum = tag(summ(0, n=1, ok=1), 3600)
+        old_sum["bucket_seconds"] = 3600
+        new_sum = tag(summ(1200, n=1, ok=1), 300)
+        new_sum["bucket_seconds"] = 300
+        recs = [tag(dev(100, level="disagree"), 3600), old_sum,
+                tag(dev(1210, level="disagree"), 300), new_sum]
+        p = self.write("mid.jsonl", recs)
+        keys = [eventreplay.order_key(r) for r in read_records([p])]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(keys), 4)
+
+    def test_first_bucket_long_does_not_rewrite_times(self):
+        # A file starting with a 60-minute bucket: a deviation at 899 after
+        # one at 1000 is valid (same bucket) and keeps its time.
+        recs = [dev(1000, level="disagree"), dev(899, level="disagree")]
+        for r in recs:
+            r["bucket_s"] = 3600
+        got = list(read_records([self.write("long.jsonl", recs)]))
+        self.assertEqual(sorted(r["ts"] for r in got), [899, 1000])
+        self.assertTrue(all("event_ts" not in r for r in got))
+
+    def test_legacy_rows_without_bucket_s_clamp(self):
+        recs = [dev(1000), dev(899)]
+        got = list(read_records([self.write("old.jsonl", recs)]))
+        self.assertEqual([r["ts"] for r in got], [900, 1000])
+
     def test_merge_order(self):
         # Day file 2 holds a summary for a bucket that straddled midnight;
         # its bucket end, not its file, decides where it goes.
@@ -850,6 +883,7 @@ class GoldenTest(unittest.TestCase):
         self.assertEqual(len(d["spawn_id"]), 12)
         # The summary fields it reads.
         self.assertEqual(s["bucket_seconds"], 900)
+        self.assertEqual((d["bucket_s"], s["bucket_s"]), (900, 900))
         self.assertEqual(s["seen"], 1)
         self.assertEqual(eventreplay.order_key(s)[0],
                          s["bucket"] + s["bucket_seconds"])

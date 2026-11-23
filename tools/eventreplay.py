@@ -21,6 +21,11 @@ Two record kinds are read; anything else is skipped:
   check's own time. Files from before `event_ts` carry the check's own time
   in `ts`; the reader clamps a row stamped before the bucket it was written
   in to that bucket's start, so replay never steps back across a summary.
+  Every row carries `bucket_s`, the bucket length in seconds it was written
+  under; the reader groups and orders each row by its own bucket, so a
+  `bucket_minutes` change between restarts replays in order. Files without
+  `bucket_s` (older writers) infer the length from the summaries seen, 15
+  minutes until the first.
 - `summary`: per bucket (15 min by default) and (pokemon_id, form, strong,
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
@@ -180,8 +185,10 @@ def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
     bucket's summary and a restart inside the same bucket appends earlier
     deviations after it, so file order is not time order there. Records are
     held until one from a later bucket appears, then the held bucket is
-    sorted and emitted: memory is one bucket's records. The bucket length
-    comes from the summaries seen (default 15 minutes before the first).
+    sorted and emitted: memory is one bucket's records. A row's bucket length
+    is its `bucket_s`; without it, the last summary's (default 15 minutes
+    before the first). Buckets that overlap (a restart with a different
+    length) form one group.
 
     A deviation stamped before the held bucket (a delayed check, which the
     writer counted in the open bucket) is moved to that bucket's start, with
@@ -190,22 +197,32 @@ def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
     sort before a summary already emitted."""
     bs = DEFAULT_BUCKET_SECONDS
     held: list[dict] = []
-    cur = None
+    cur = end = None  # the held group's span [cur, end)
     for rec in records:
+        n = rec.get("bucket_s")
+        if n:
+            bs = n  # the row's own bucket length
         if rec["kind"] == "summary":
-            bs = rec["bucket_seconds"] or bs
+            bs = n or rec["bucket_seconds"] or bs
             b = rec["bucket"]
         else:
             b = rec["ts"] // bs * bs
-            if cur is not None and b < cur:
-                rec.setdefault("event_ts", rec["ts"])
-                rec["ts"] = b = cur
-        if cur is not None and b > cur:
+        e = b + bs
+        if cur is not None and e <= cur and rec["kind"] != "summary":
+            # A delayed row entirely before the held bucket: move it to the
+            # bucket's start (a row inside the held span is left alone).
+            rec.setdefault("event_ts", rec["ts"])
+            rec["ts"] = b = cur
+            e = b + bs
+        if cur is not None and b >= end:
             held.sort(key=order_key)
             yield from held
             held = []
-        if cur is None or b > cur:
-            cur = b
+            cur = None
+        if cur is None:
+            cur, end = b, e
+        else:
+            cur, end = min(cur, b), max(end, e)
         held.append(rec)
     held.sort(key=order_key)
     yield from held
@@ -241,9 +258,11 @@ def _file_records(path: str) -> Iterator[dict]:
                 kind = rec.get("kind")
                 if kind == "deviation" and "ts" in rec:
                     yield rec
-                elif (kind == "summary" and "bucket" in rec
-                      and "bucket_seconds" in rec):
-                    yield rec
+                elif kind == "summary" and "bucket" in rec:
+                    if "bucket_seconds" not in rec and rec.get("bucket_s"):
+                        rec["bucket_seconds"] = rec["bucket_s"]
+                    if "bucket_seconds" in rec:
+                        yield rec
         except (EOFError, OSError, zlib.error) as e:  # truncated/corrupt gzip
             warn(f"stream ends early ({e})")
 

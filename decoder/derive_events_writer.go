@@ -120,15 +120,18 @@ func (c *deriveEventsDimCount) add(s dimState) {
 }
 
 type deriveEventsSummary struct {
-	Kind          string `json:"kind"`
-	Bucket        int64  `json:"bucket"`
-	BucketSeconds int64  `json:"bucket_seconds"`
-	PokemonID     int32  `json:"pokemon_id"`
-	Form          int32  `json:"form"`
-	Strong        bool   `json:"strong"`
-	Boosted       bool   `json:"boosted"`
-	UTCOffset     int32  `json:"utc_offset"`
-	Checked       int    `json:"checked"`
+	Kind   string `json:"kind"`
+	Bucket int64  `json:"bucket"`
+	// BucketSeconds and BucketS are the same bucket length in seconds;
+	// BucketS is the field every row carries (see deriveEventsDeviation).
+	BucketSeconds int64 `json:"bucket_seconds"`
+	BucketS       int64 `json:"bucket_s"`
+	PokemonID     int32 `json:"pokemon_id"`
+	Form          int32 `json:"form"`
+	Strong        bool  `json:"strong"`
+	Boosted       bool  `json:"boosted"`
+	UTCOffset     int32 `json:"utc_offset"`
+	Checked       int   `json:"checked"`
 	// Seen counts first sightings (new pokemon records) in the bucket,
 	// encountered or not.
 	Seen int `json:"seen"`
@@ -156,7 +159,11 @@ type deriveEventsDeviation struct {
 	// bucket than its own.
 	Ts int64 `json:"ts"`
 	// EventTs is the check's own time.
-	EventTs       int64         `json:"event_ts"`
+	EventTs int64 `json:"event_ts"`
+	// BucketS is the bucket length in seconds the row was written under
+	// (summaries carry it too), so replay orders each row by its own bucket
+	// when bucket_minutes changes between restarts. Absent in older files.
+	BucketS       int64         `json:"bucket_s"`
 	UTCOffset     int32         `json:"utc_offset"`
 	EncounterID   uint64        `json:"encounter_id,string"` // exceeds 2^53; see derivationLogPayload
 	PokemonID     int32         `json:"pokemon_id"`
@@ -371,7 +378,7 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 func (w *deriveEventsWriter) deviationRow(ev deriveEventCheck, ts int64, cell string, offset int32) *deriveEventsDeviation {
 	c := ev.Check
 	d := &deriveEventsDeviation{
-		Kind: "deviation", Ts: ts, EventTs: ev.Time.Unix(), UTCOffset: offset, EncounterID: ev.EncounterID,
+		Kind: "deviation", Ts: ts, EventTs: ev.Time.Unix(), BucketS: int64(w.bucket / time.Second), UTCOffset: offset, EncounterID: ev.EncounterID,
 		PokemonID: ev.PokemonID, Form: ev.Form, Costume: ev.Costume,
 		Strong: ev.Strong, Boosted: ev.Boosted, Weather: ev.Weather, Cell: cell,
 		SpawnID: w.spawnHash(ev.SpawnID), FirstSeen: ev.FirstSeen, Account: w.accountHash(ev.Account),
@@ -454,6 +461,7 @@ func (w *deriveEventsWriter) flushBucket() {
 	for _, k := range keys {
 		s := w.summaries[k]
 		s.Bucket, s.BucketSeconds = w.bucketStart.Unix(), int64(w.bucket/time.Second)
+		s.BucketS = s.BucketSeconds
 		w.writeLine(s)
 	}
 	clear(w.summaries)

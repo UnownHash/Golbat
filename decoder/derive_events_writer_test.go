@@ -184,6 +184,9 @@ func TestDeriveEventsWriterSummaryCounts(t *testing.T) {
 	if s["bucket"] != float64(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC).Unix()) || s["bucket_seconds"] != 900.0 {
 		t.Errorf("bucket = %v/%v", s["bucket"], s["bucket_seconds"])
 	}
+	if s["bucket_s"] != 900.0 {
+		t.Errorf("summary bucket_s = %v, want 900", s["bucket_s"])
+	}
 	if s["checked"] != 4.0 {
 		t.Errorf("checked = %v, want 4", s["checked"])
 	}
