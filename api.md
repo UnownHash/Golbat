@@ -225,8 +225,9 @@ a region. State is in memory only. When the learner is off
   `all-strong` cover every pokemon (no `scope.pokemon`).
 - `effect` is `{"type":"level_offset","delta":n}`,
   `{"type":"move_pin","slot":"quick|charged","move":id}` or
-  `{"type":"size_cutoffs","boundaries":{"1/2":[lo,hi]}}`, where a null end is
-  unbounded.
+  `{"type":"size_cutoffs","boundaries":{"1/2":[lo,hi]}}` (a null end is
+  unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
+  scope is suppressed; its id has no effect part).
 - `status` is `candidate` or `confirmed`; `window.end` is always null.
 - `region.cells` is the sorted level-14 S2 cell tokens the modifier covers, or
   null when it covers its whole `zone`.

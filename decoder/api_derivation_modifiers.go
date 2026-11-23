@@ -21,7 +21,7 @@ type ApiDerivationModifier struct {
 	ID       string              `json:"id" doc:"<start date>-<type>-<scope>-<effect>"`
 	Scope    ApiModifierScope    `json:"scope"`
 	Window   ApiModifierWindow   `json:"window"`
-	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end"`
+	Effect   map[string]any      `json:"effect" doc:"level_offset {type, delta}, move_pin {type, slot, move} or size_cutoffs {type, boundaries: {cut: [lo, hi]}} with null for an unbounded end, or unexplained {type}"`
 	Status   string              `json:"status" doc:"candidate or confirmed"`
 	Evidence ApiModifierEvidence `json:"evidence"`
 	Region   ApiModifierRegion   `json:"region"`
@@ -121,9 +121,6 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 		zoneWide = r.zoneWideCells
 	}
 	for _, m := range activeDerivationModifiers() {
-		if m.Type == modUnexplained {
-			continue
-		}
 		am := ApiDerivationModifier{
 			ID:     apiModifierID(m),
 			Scope:  ApiModifierScope{Strong: m.Scope.Strong},

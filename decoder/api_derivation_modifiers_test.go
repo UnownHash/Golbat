@@ -26,14 +26,19 @@ func TestApiDerivationModifiersShape(t *testing.T) {
 		Boundaries: map[string]sizeBoundary{"1/2": {Lo: 0.5, HasLo: true}},
 		Zone:       "Europe/London", Status: modCandidate, Start: start.Add(time.Hour),
 		InCells: cellSet(adjCellA.Next(), adjCellA), Outside: cellSet(adjCellA.Prev())}
-	mods := []*derivationModifier{size, pin}
+	unexp := &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 2, Form: 5, Strong: true},
+		Zone: "Europe/London", Status: modCandidate, Start: start, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}
+	mods := []*derivationModifier{size, pin, unexp}
 	derivationModifierSnapshot.Store(&mods)
 
 	res := GetApiDerivationModifiers(time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC))
-	if res.Version != 1 || res.GeneratedAt != "2026-11-17T12:00:00Z" || len(res.Modifiers) != 2 {
+	if res.Version != 1 || res.GeneratedAt != "2026-11-17T12:00:00Z" || len(res.Modifiers) != 3 {
 		t.Fatalf("got %+v", res)
 	}
-	p, s := res.Modifiers[0], res.Modifiers[1]
+	p, s, u := res.Modifiers[0], res.Modifiers[1], res.Modifiers[2]
+	if u.ID != "2026-11-15-unexplained-strong-2-5" || len(u.Effect) != 1 || u.Effect["type"] != "unexplained" {
+		t.Fatalf("unexplained %+v", u)
+	}
 	if p.ID != "2026-11-15-move_pin-strong-959-3272-charged-494" || p.Region.Cells != nil || p.Status != "confirmed" {
 		t.Fatalf("pin %+v", p)
 	}
