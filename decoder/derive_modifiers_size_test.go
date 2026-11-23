@@ -3,28 +3,31 @@ package decoder
 import (
 	"maps"
 	"math/rand/v2"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/golang/geo/s2"
+
+	"golbat/derive/encounter"
 )
 
 // withSize makes ev a check of a non-strong Rattata (19/0) with size roll
 // roll, observed class obs, and the size dimension agreeing when the base
-// cuts classify roll as obs.
+// cuts (encounter's own classifier) classify roll as obs.
 func withSize(roll float64, obs uint8) func(*modifierEvent) {
 	return func(ev *modifierEvent) {
 		ev.PokemonID, ev.Form, ev.Strong = 19, 0, false
 		ev.SizeRoll, ev.ObsSize = roll, obs
 		ev.Agree.Size = dimAgree
-		if sizeClassByCuts(roll, baseCutsList) != obs {
+		if encounter.ClassifySize(roll, false) != int32(obs) {
 			ev.Agree.Size = dimDisagree
 		}
 	}
 }
 
-var baseCutsList = [4]float64{0.004, 0.029, 0.971, 0.996}
-
+// sizeClassByCuts classifies roll with an event's cuts, independent of the
+// production base cuts.
 func sizeClassByCuts(roll float64, cuts [4]float64) uint8 {
 	c := uint8(1)
 	for _, cut := range cuts {
@@ -152,12 +155,67 @@ func TestModifierSizeIgnoresIVDisagree(t *testing.T) {
 	t.Fatal("size modifier no longer active")
 }
 
-func TestModifierSizeBaseCuts(t *testing.T) {
-	want := map[string]float64{"1/2": 0.004, "2/3": 0.029, "3/4": 0.971, "4/5": 0.996}
-	if got := baseSizeCuts(false); !maps.Equal(got, want) {
-		t.Fatalf("base cuts %v, want %v", got, want)
+// TestModifierSizeCutsMatchEncounter fails when the learner's cuts drift
+// from the ones encounter classifies a roll with.
+func TestModifierSizeCutsMatchEncounter(t *testing.T) {
+	for _, strong := range []bool{false, true} {
+		cuts := baseSizeCuts(strong)
+		if want := map[bool]int{false: 4, true: 1}[strong]; len(cuts) != want {
+			t.Fatalf("strong=%v: %d cuts, want %d", strong, len(cuts), want)
+		}
+		for name, cut := range cuts {
+			below, err := strconv.Atoi(name[:1])
+			if err != nil || name != name[:1]+"/"+strconv.Itoa(below+1) {
+				t.Fatalf("strong=%v: bad boundary name %q", strong, name)
+			}
+			if got := encounter.ClassifySize(cut-1e-9, strong); got != int32(below) {
+				t.Errorf("strong=%v %s: class just under %v = %d, want %d", strong, name, cut, got, below)
+			}
+			if got := encounter.ClassifySize(cut+1e-9, strong); got != int32(below+1) {
+				t.Errorf("strong=%v %s: class just over %v = %d, want %d", strong, name, cut, got, below+1)
+			}
+		}
 	}
-	if got := baseSizeCuts(true); !maps.Equal(got, map[string]float64{"4/5": 0.8}) {
-		t.Fatalf("strong cuts %v, want 4/5 at 0.8", got)
+}
+
+func TestModifierSizeNeverInverted(t *testing.T) {
+	// The second pending deviation, XS at 0.003 under an XXS at 0.010, would
+	// empty "1/2": the candidate leaves it out instead of listing [0.010,
+	// 0.003], and a later such roll in an in-cell is a contradiction.
+	l := newModifierLearner(defaultModifierParams())
+	trs := feedAll(l, modZone,
+		modCheck(modT0, cellA, withSize(0.010, 1)),
+		modCheck(modT0.Add(time.Second), cellB, withSize(0.003, 2)),
+		modCheck(modT0.Add(2*time.Second), cellC, withSize(0.009, 1)))
+	if len(trs) != 1 || trs[0].State != modCandidate {
+		t.Fatalf("transitions %v, want one candidate", states(trs))
+	}
+	want := map[string]sizeBoundary{"1/2": {Lo: 0.010, HasLo: true}}
+	if b := trs[0].Mod.Boundaries; !maps.Equal(b, want) {
+		t.Fatalf("seeded boundaries %v, want %v", b, want)
+	}
+	l.feed(modCheck(modT0.Add(3*time.Second), cellA, withSize(0.002, 2)), modZone)
+	m := onlyActive(t, l)
+	if m.Contradictions != 1 || !maps.Equal(m.Boundaries, want) {
+		t.Fatalf("contradictions %d boundaries %v, want 1 and unchanged", m.Contradictions, m.Boundaries)
+	}
+}
+
+func TestModifierSizeCellZeroNotEvidence(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	trs := feedAll(l, modZone,
+		modCheck(modT0, cellA, withSize(0.008, 1)),
+		modCheck(modT0.Add(time.Second), 0, withSize(0.012, 1)),
+		modCheck(modT0.Add(2*time.Second), cellB, withSize(0.009, 1)))
+	want := map[string]sizeBoundary{"1/2": {Lo: 0.009, HasLo: true}}
+	if len(trs) != 1 || !maps.Equal(trs[0].Mod.Boundaries, want) {
+		t.Fatalf("transitions %v, want a candidate seeded %v without the cell-0 roll", states(trs), want)
+	}
+
+	l = sizeEvent(t)
+	before := onlyActive(t, l).Boundaries
+	l.feed(modCheck(modT0.Add(time.Minute), 0, withSize(0.013, 1)), modZone)
+	if m := onlyActive(t, l); !maps.Equal(m.Boundaries, before) || m.Observations != 4 {
+		t.Fatalf("boundaries %v observations %d, want unchanged %v and the deviation counted", m.Boundaries, m.Observations, before)
 	}
 }

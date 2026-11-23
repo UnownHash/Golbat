@@ -65,7 +65,9 @@ type sizeClassRolls struct {
 	seen   bool
 }
 
-// sizeEvidence is a size track's rolls, by observed class 1..5.
+// sizeEvidence is a size track's rolls, by observed class 1..5. It never
+// holds an empty interval (try refuses the roll that would make one), so
+// every boundary it gives has Lo < Hi.
 type sizeEvidence [5]sizeClassRolls
 
 // with returns e with roll added to class cls, and whether that changed it.
@@ -104,35 +106,43 @@ func (e *sizeEvidence) boundary(c sizeCut) sizeBoundary {
 	return b
 }
 
-// emptyIntervals counts the boundaries whose interval is empty: a roll of a
-// class under the cut at or above one of a class over it.
-func (e *sizeEvidence) emptyIntervals(cuts []sizeCut) int {
-	n := 0
+func (b sizeBoundary) empty() bool { return b.HasLo && b.HasHi && b.Lo >= b.Hi }
+
+// try returns e with roll added to class cls and whether that changed it,
+// or refused when the roll would empty an interval: a roll of a class under
+// a cut at or above one of a class over it.
+func (e *sizeEvidence) try(cls uint8, roll float64, cuts []sizeCut) (next sizeEvidence, changed, refused bool) {
+	next, changed = e.with(cls, roll)
+	if !changed {
+		return next, false, false
+	}
 	for _, c := range cuts {
-		if b := e.boundary(c); b.HasLo && b.HasHi && b.Lo >= b.Hi {
-			n++
+		if next.boundary(c).empty() {
+			return *e, false, true
 		}
 	}
-	return n
+	return next, true, false
 }
 
 // fill sets dst to the boundaries whose interval excludes their base cut.
 func (e *sizeEvidence) fill(dst map[string]sizeBoundary, cuts []sizeCut) {
 	clear(dst)
 	for _, c := range cuts {
-		if b := e.boundary(c); (b.HasLo && b.Lo >= c.at) || (b.HasHi && b.Hi < c.at) {
+		b := e.boundary(c)
+		if !b.empty() && ((b.HasLo && b.Lo >= c.at) || (b.HasHi && b.Hi < c.at)) {
 			dst[c.name] = b
 		}
 	}
 }
 
-// seed resets e to the pending deviations' rolls and returns the listed
-// boundaries.
+// seed resets e to the rolls of the pending deviations with a cell, in
+// time order, leaving out one that would empty an interval, and returns the
+// listed boundaries.
 func (e *sizeEvidence) seed(pending []modPending, cuts []sizeCut) map[string]sizeBoundary {
 	*e = sizeEvidence{}
 	for _, pd := range pending {
-		if pd.Class >= 1 && pd.Class <= 5 {
-			*e, _ = e.with(pd.Class, pd.Roll)
+		if pd.Cell != 0 && pd.Class >= 1 && pd.Class <= 5 {
+			*e, _, _ = e.try(pd.Class, pd.Roll, cuts)
 		}
 	}
 	out := make(map[string]sizeBoundary, len(cuts))
@@ -175,8 +185,8 @@ func (l *modifierLearner) sizeTrack(scope modifierScope, zone string) *modTrack 
 
 // sizeDeviation counts an IV-agreeing size deviation for its species'
 // track. With a modifier active, a roll that would empty an interval is a
-// contradiction (in an in-cell) and otherwise left out; any other roll is
-// evidence.
+// contradiction (in an in-cell) and otherwise left out, unmatched; any other
+// roll with a cell is evidence (its cell becomes an in-cell).
 func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope, zone string,
 	now time.Time, out []modifierTransition) []modifierTransition {
 	if !sizeOpinion(ev) {
@@ -185,15 +195,15 @@ func (l *modifierLearner) sizeDeviation(ev modifierEvent, species modifierScope,
 	t := l.sizeTrack(species, zone)
 	if mod := t.mod; mod != nil {
 		cuts := sizeCuts(t.key.Scope.Strong)
-		trial, changed := t.size.with(ev.ObsSize, ev.SizeRoll)
-		if changed {
-			if trial.emptyIntervals(cuts) > t.size.emptyIntervals(cuts) {
-				if _, in := mod.InCells[ev.Cell]; in && ev.Cell != 0 {
-					mod.Contradictions++
-				}
-				return out
+		next, changed, refused := t.size.try(ev.ObsSize, ev.SizeRoll, cuts)
+		if refused {
+			if _, in := mod.InCells[ev.Cell]; in && ev.Cell != 0 {
+				mod.Contradictions++
 			}
-			*t.size = trial
+			return out
+		}
+		if changed && ev.Cell != 0 {
+			*t.size = next
 			t.size.fill(mod.Boundaries, cuts)
 		}
 	}
@@ -221,9 +231,8 @@ func (l *modifierLearner) sizeAgreement(t *modTrack, ev modifierEvent, now time.
 	if !in {
 		return out
 	}
-	trial, changed := t.size.with(ev.ObsSize, ev.SizeRoll)
-	if changed && trial.emptyIntervals(cuts) <= t.size.emptyIntervals(cuts) {
-		*t.size = trial
+	if next, changed, _ := t.size.try(ev.ObsSize, ev.SizeRoll, cuts); changed {
+		*t.size = next
 		t.size.fill(mod.Boundaries, cuts)
 	}
 	return out

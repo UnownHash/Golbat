@@ -169,10 +169,7 @@ const strongSizeCut = 0.8
 func strongSize(r *javarandom.Random, form int32) (int32, float64) {
 	r.Gaussian()
 	roll := r.Double()
-	rolled := SizeXXL
-	if roll < strongSizeCut {
-		rolled = SizeXL
-	}
+	rolled := ClassifySize(roll, true)
 	if override, ok := formSizes[form]; ok {
 		return override, roll
 	}
@@ -247,6 +244,19 @@ func (d *Draw) MoveIndices(quickPoolSize, chargedPoolSize int32) (quickIndex, ch
 	}
 	d.moveIndicesDrawn = true
 	return d.gen.Int(quickPoolSize), d.gen.Int(chargedPoolSize)
+}
+
+// ClassifySize is the size class the game's cuts give roll, for a strong
+// encounter (XL or XXL, cut at strongSizeCut) or an ordinary one. It
+// ignores any form-fixed size.
+func ClassifySize(roll float64, strong bool) int32 {
+	if !strong {
+		return classifySize(roll)
+	}
+	if roll < strongSizeCut {
+		return SizeXL
+	}
+	return SizeXXL
 }
 
 // classifySize maps a roll in [0,1) to a size class. Separate from size so
