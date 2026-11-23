@@ -562,7 +562,7 @@ func TestApplyDerivedValuesIsGatedAtTheWrite(t *testing.T) {
 
 	p := &Pokemon{}
 	p.Id = Uint64Str(8429844873227918432)
-	p.applyDerivedValues(encounter.For(8429844873227918432, false, 0))
+	p.applyDerivedValues(encounter.For(8429844873227918432, false, 0), derivationAdjust{})
 
 	if p.AtkIv.Valid || p.Level.Valid || p.Size.Valid {
 		t.Errorf("applyDerivedValues wrote with derive_iv off: atk=%v level=%v size=%v",

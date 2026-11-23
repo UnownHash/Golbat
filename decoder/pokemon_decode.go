@@ -490,6 +490,10 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // v is taken by value because MoveIndices advances its embedded generator
 // state; the caller's copy is unaffected.
 //
+// adj is the confirmed derivation modifiers' adjustment (modifierAdjust),
+// read once by the caller: the level delta, the pinned moves and moved size
+// cuts. A suppressing adj is the caller's to honour — it must not call this.
+//
 // Moves are derived for pokemon.PokemonId/Form as they stand, which at every
 // call site is the species/form being derived for, except that a Ditto's are
 // derived for its disguise (see applyDerivedMoves).
@@ -501,7 +505,7 @@ func (pokemon *Pokemon) calculateIv(a int64, d int64, s int64) {
 // Pool resolution is derivedMoves (derive_validation.go), shared with
 // checkDerivation so the two cannot resolve different pools for the same
 // species/form.
-func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
+func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw, adj derivationAdjust) {
 	// The gate lives here rather than at the three call sites because this is
 	// the only place derived IVs, level, size or moves are written. A caller
 	// that forgets the check cannot write them anyway.
@@ -510,7 +514,7 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 	}
 
 	pokemon.calculateIv(int64(v.Attack), int64(v.Defense), int64(v.Stamina))
-	pokemon.SetLevel(null.IntFrom(int64(v.Level)))
+	pokemon.SetLevel(null.IntFrom(int64(adj.level(v.Level))))
 
 	// Size and moves are filled only when absent, unlike the IVs and level
 	// above. clearIv drops the IVs on a weather flip it cannot match but
@@ -522,18 +526,34 @@ func (pokemon *Pokemon) applyDerivedValues(v encounter.Draw) {
 	// is known to be wrong — checkDerivation refuses to even score it, via
 	// moveOutOfPool. A derived value is indistinguishable from an observed one
 	// once written, so the observation must win.
-	if !pokemon.Size.Valid {
-		pokemon.SetSize(null.IntFrom(int64(v.Size)))
-	}
+	pokemon.applyDerivedSize(v, adj)
+	pokemon.applyDerivedMoves(v, adj)
+}
 
-	pokemon.applyDerivedMoves(v)
+// applyDerivedSize fills an absent size from the draw, reclassified with
+// adj's moved cuts when it has any; a roll inside a moved cut's interval
+// leaves size absent.
+func (pokemon *Pokemon) applyDerivedSize(v encounter.Draw, adj derivationAdjust) {
+	if pokemon.Size.Valid {
+		return
+	}
+	size := v.Size
+	if adj.Size != nil {
+		var ok bool
+		if size, ok = adj.sizeClass(v.SizeRoll, adj.strong, int32(int64OrZero(pokemon.Form)), v.Size); !ok {
+			return
+		}
+	}
+	pokemon.SetSize(null.IntFrom(int64(size)))
 }
 
 // applyDerivedMoves fills whichever move slots are absent from the draw. It is
 // the moves half of applyDerivedValues, on its own so that a record whose
 // identity has just changed can have its moves re-derived without its IVs
-// and level being touched — see resetDittoAttributes.
-func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
+// and level being touched — see resetDittoAttributes. A move pinned by adj
+// fills its slot when absent, as a derived one does, even when the pools do
+// not resolve.
+func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw, adj derivationAdjust) {
 	if !config.Config.DeriveIv || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
@@ -547,14 +567,19 @@ func (pokemon *Pokemon) applyDerivedMoves(v encounter.Draw) {
 		species, form = int16(pokemon.DisplayPokemonId.ValueOrZero()), int16(pokemon.DisplayPokemonForm.ValueOrZero())
 	}
 	moves := derivedMoves(&v, species, form)
-	if !moves.Resolved {
-		return
+	move1, move2 := moves.Move1, moves.Move2
+	ok1, ok2 := moves.Resolved, moves.Resolved
+	if adj.Quick != 0 {
+		move1, ok1 = adj.Quick, true
 	}
-	if !pokemon.Move1.Valid {
-		pokemon.SetMove1(null.IntFrom(int64(moves.Move1)))
+	if adj.Charged != 0 {
+		move2, ok2 = adj.Charged, true
 	}
-	if !pokemon.Move2.Valid {
-		pokemon.SetMove2(null.IntFrom(int64(moves.Move2)))
+	if ok1 && !pokemon.Move1.Valid {
+		pokemon.SetMove1(null.IntFrom(int64(move1)))
+	}
+	if ok2 && !pokemon.Move2.Valid {
+		pokemon.SetMove2(null.IntFrom(int64(move2)))
 	}
 }
 
@@ -569,11 +594,18 @@ func (pokemon *Pokemon) deriveSizeAndMovesIfAbsent() {
 	if !config.Config.DeriveIv || !deriveStrongAllowed(strong) || hasPlayerSpecificStats(pokemon.PokemonId) {
 		return
 	}
-	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
-	if !pokemon.Size.Valid {
-		pokemon.SetSize(null.IntFrom(int64(v.Size)))
+	pokemon.deriveSizeAndMoves(pokemon.modifierAdjust())
+}
+
+// deriveSizeAndMoves is deriveSizeAndMovesIfAbsent past its exclusions, with
+// the caller's modifier adjustment; a suppressing one writes nothing.
+func (pokemon *Pokemon) deriveSizeAndMoves(adj derivationAdjust) {
+	if adj.Suppress {
+		return
 	}
-	pokemon.applyDerivedMoves(v)
+	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), pokemon.IsStrong.ValueOrZero(), int32(int64OrZero(pokemon.Form)))
+	pokemon.applyDerivedSize(v, adj)
+	pokemon.applyDerivedMoves(v, adj)
 }
 
 // gmoCellLevel is the S2 level of the cells a GetMapObjects response is
@@ -1343,7 +1375,8 @@ func (pokemon *Pokemon) maybeMarkDittoFromRoll() {
 	// above set it, and encounter.For reads form only for the Pumpkaboo/
 	// Gourgeist size override, which cannot apply to a Ditto.
 	v := encounter.For(uint64(pokemon.Id), dittoCaughtBoosted(int64OrZero(pokemon.Weather)), 0)
-	pokemon.applyDerivedValues(v)
+	// A Ditto takes no modifier: zero adjustment.
+	pokemon.applyDerivedValues(v, derivationAdjust{})
 }
 
 // rollWouldMark reports whether maybeMarkDittoFromRoll would mark this record
@@ -1875,15 +1908,23 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	// size and moves but not the IVs, so those are filled on their own:
 	// without this a Pokemon that changed display would carry its IVs with no
 	// size or moves until a weather change or a real encounter.
+	if pokemon.AtkIv.Valid && pokemon.Size.Valid && pokemon.Move1.Valid && pokemon.Move2.Valid {
+		return
+	}
+	// Confirmed derivation modifiers, read once for this derivation (zero for
+	// a Ditto, including the known-Ditto branch below). Unexplained
+	// suppresses every derived value, as derive_iv off would.
+	adj := pokemon.modifierAdjust()
+	if adj.Suppress {
+		return
+	}
 	if pokemon.AtkIv.Valid {
-		if !pokemon.Size.Valid || !pokemon.Move1.Valid || !pokemon.Move2.Valid {
-			pokemon.deriveSizeAndMovesIfAbsent()
-		}
+		pokemon.deriveSizeAndMoves(adj)
 		return
 	}
 
 	v := encounter.Derive(uint64(pokemon.Id), pokemon.statsBoosted(), strong, int32(int64OrZero(pokemon.Form)))
-	pokemon.applyDerivedValues(v)
+	pokemon.applyDerivedValues(v, adj)
 }
 
 // deriveStrongAllowed reports whether a record may be derived given whether
@@ -2426,7 +2467,15 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 	// not move with weather, so the other state's scan IS its scan.
 	usableScan := matchingScan != nil && (isBoostedMatches || isStrong)
 	var oldAtk, oldDef, oldSta int64
-	if !usableScan && config.Config.DeriveIv && deriveStrongAllowed(isStrong) {
+	// Confirmed derivation modifiers for the walk being derived; an
+	// unexplained one takes the derivation-off branches below.
+	derive := !usableScan && config.Config.DeriveIv && deriveStrongAllowed(isStrong)
+	var adj derivationAdjust
+	if derive {
+		adj = pokemon.modifierAdjustAs(isStrong)
+		derive = !adj.Suppress
+	}
+	if derive {
 		// Derive for the state actually being asked about — the encounter id
 		// is unchanged and isBoosted above already accounts for Ditto.
 		//
@@ -2444,7 +2493,7 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		// The encounter's stats no longer stand, so an encounter record goes
 		// back to wild, as it does when the stats are cleared.
 		v := encounter.Derive(uint64(pokemon.Id), isBoosted, isStrong, int32(int64OrZero(pokemon.Form)))
-		pokemon.applyDerivedValues(v)
+		pokemon.applyDerivedValues(v, adj)
 		pokemon.downgradeEncounterSeenType()
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
