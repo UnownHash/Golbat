@@ -247,11 +247,15 @@ type modScopeKey struct {
 	Zone  string
 }
 
-// modPending is a matching deviation of a track with no modifier.
+// modPending is a matching deviation of a track with no modifier. Roll and
+// Class are its size roll and observed class, the evidence a size_cutoffs
+// candidate starts from.
 type modPending struct {
 	Unix            int64
 	Cell            s2.CellID
+	Roll            float64
 	PokemonID, Form int32
+	Class           uint8
 }
 
 // modTrack is one (type, scope, effect, zone): its recent deviations while
@@ -267,6 +271,7 @@ type modTrack struct {
 	pending    []modPending // time order, oldest first
 	mod        *derivationModifier
 	endOK      int
+	size       *sizeEvidence // size_cutoffs tracks only
 }
 
 // modPruneInterval is how often, in seconds of event time, feed prunes idle
@@ -342,6 +347,10 @@ func (l *modifierLearner) observe(sk modScopeKey, ev modifierEvent, now time.Tim
 		if ev.Sighting || !modAgrees(ev.Agree, t.dim) {
 			continue
 		}
+		if t.size != nil {
+			out = l.sizeAgreement(t, ev, now, out)
+			continue
+		}
 		if t.mod == nil {
 			if t.gate {
 				t.clearCell(ev.Cell, ev.Unix)
@@ -372,7 +381,7 @@ func modAgrees(a dimAgreement, d modDim) bool {
 
 // deviations classifies a check's disagreements as Detector._deviation:
 // IVs disagreeing are unexplained and say nothing else; with IVs agreeing,
-// the level, quick and charged deviations each feed their track.
+// the level, quick, charged and size deviations each feed their track.
 func (l *modifierLearner) deviations(ev modifierEvent, species modifierScope, zone string,
 	now time.Time, out []modifierTransition) []modifierTransition {
 	switch ev.Agree.IVs {
@@ -398,7 +407,9 @@ func (l *modifierLearner) deviations(ev modifierEvent, species modifierScope, zo
 		eff := modifierEffect{Slot: modSlotCharged, Move: ev.ObsCharged}
 		out = l.matchContradicting(l.track(modTrackKey{modMovePin, species, eff, zone}, modDimCharged, false), ev, now, out)
 	}
-	// Size deviations: size_cutoffs (derive_modifiers_size.go).
+	if ev.Agree.Size == dimDisagree {
+		out = l.sizeDeviation(ev, species, zone, now, out)
+	}
 	return out
 }
 
@@ -437,7 +448,8 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 	out []modifierTransition) []modifierTransition {
 	p := l.p
 	if t.mod == nil {
-		t.pending = append(t.pending, modPending{Unix: ev.Unix, Cell: ev.Cell, PokemonID: ev.PokemonID, Form: ev.Form})
+		t.pending = append(t.pending, modPending{Unix: ev.Unix, Cell: ev.Cell, Roll: ev.SizeRoll,
+			PokemonID: ev.PokemonID, Form: ev.Form, Class: ev.ObsSize})
 		cut := ev.Unix - int64(p.Window/time.Second)
 		i := 0
 		for i < len(t.pending) && t.pending[i].Unix < cut {
@@ -460,6 +472,9 @@ func (l *modifierLearner) match(t *modTrack, ev modifierEvent, now time.Time,
 			if pd.Cell != 0 {
 				mod.InCells[pd.Cell] = struct{}{}
 			}
+		}
+		if t.size != nil {
+			mod.Boundaries = t.size.seed(t.pending, sizeCuts(t.key.Scope.Strong))
 		}
 		t.pending, t.mod, t.endOK = nil, mod, 0
 		l.activeTracks = append(l.activeTracks, t)
