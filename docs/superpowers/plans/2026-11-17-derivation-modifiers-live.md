@@ -4,7 +4,7 @@
 
 **Goal:** Golbat detects event modifiers from live encounters, per timezone and level-14 cell, and applies confirmed ones to derived values.
 
-**Architecture:** A pure, single-goroutine state machine (`modifierLearner`) consumes the `deriveEventCheck` records the events log already builds (encounter checks and first sightings), each tagged with its zone and level-14 cell. Confirmed modifiers are published as an immutable index behind an `atomic.Pointer`; the derive path looks a record up lock-free and adjusts the draw. A Huma endpoint lists active modifiers.
+**Architecture:** A pure, single-goroutine state machine (`modifierLearner`) consumes a compact, pointer-free `modifierEvent` (~56 bytes) built from the `deriveEventCheck` the events log already builds (encounter checks and, only for scopes with an active modifier, first sightings), each tagged with its zone and level-14 cell. Active modifiers are published as an immutable index behind an `atomic.Pointer`; the derive path looks a record up lock-free (species key first, cell and zone only on a hit) and adjusts the draw. A Huma endpoint lists active modifiers.
 
 **Tech Stack:** Go 1.26 (`-tags go_json`), `github.com/golang/geo/s2`, `golbat/tz`, `xsync`, Huma.
 
@@ -19,6 +19,12 @@
 - Never a blocking send from the decode path: non-blocking send, drop and count with `util.DropReporter` (CLAUDE.md decode-path invariant).
 - Only confirmed modifiers apply; never to a Ditto (`IsDitto`); derived values only fill absent fields, as today.
 - Log prefix `[DERIVE_MODIFIER]`.
+- Performance (Golbat is tuned for throughput and memory):
+  - Learner off, or on with no active modifier: the derive path costs one atomic load (nil index), no allocation, no cell or zone work; no sighting is sent.
+  - The learner's channel carries `modifierEvent` (no pointers, so the GC never scans the buffer), capacity 16384 (~1 MB). Never send the 288-byte `deriveEventCheck`.
+  - A first sighting is sent only when its scope (species/form/strong, or any strong when an all-strong modifier is active) is in the index's active-scope set.
+  - The derive path resolves a zone (`tz.SearchTimezone`) only when a matching confirmed modifier is zone-wide; local modifiers are matched by cell alone.
+  - The learner keeps its own plain `map[s2.CellID]uint16` (index into a zone-name table); it shares no cache with the decode path.
 - Build/test: `go test -tags go_json ./...`; lint `make lint` (via Docker `golangci/golangci-lint:latest` and `golang:1.26` if not installed).
 
 ## Review Focus
@@ -38,9 +44,24 @@
 - Test: `decoder/derive_modifiers_test.go`
 
 **Interfaces:**
-- Consumes: `deriveEventCheck` (`decoder/derive_events.go`; `Sighting`, `Agree dimAgreement`, `Check derivationCheck` with `Observed`, `Derived` `encounter.Values`, `Move1`, `Move2`, `SizeRoll`), `dimState` (`dimAgree`/`dimDisagree`/`dimNoOpinion`).
+- Consumes: `deriveEventCheck` (`decoder/derive_events.go`; `Sighting`, `Agree dimAgreement`, `Check derivationCheck` with `Observed`, `Derived` `encounter.Values`, `Move1`, `Move2`, `SizeRoll`) — only to build a `modifierEvent`; `dimState` (`dimAgree`/`dimDisagree`/`dimNoOpinion`).
 - Produces:
   ```go
+  // modifierEvent is the learner's input: pointer-free, ~56 bytes (assert
+  // unsafe.Sizeof <= 64 in a test). Built on the decode path, so building it
+  // must not allocate.
+  type modifierEvent struct {
+      Unix        int64     // seconds
+      Cell        s2.CellID // level-14; 0 = unknown
+      SizeRoll    float64
+      PokemonID, Form int32
+      ObsQuick, ObsCharged int32 // observed moves; 0 = none
+      LevelDelta  int8      // observed − derived level (only meaningful when Agree.Level == dimDisagree)
+      ObsSize     uint8     // observed size class 1..5; 0 = none
+      Agree       dimAgreement // per-dimension dimState (5 bytes)
+      Strong, Sighting bool
+  }
+  func newModifierEvent(ev deriveEventCheck) modifierEvent // cell = level-14 parent of ev.CellID (bit op), lat/lon fallback, else 0
   type modifierType uint8 // modLevelOffset, modMovePin, modSizeCutoffs, modUnexplained; String(): "level_offset","move_pin","size_cutoffs","unexplained"
   type modifierStatus uint8 // modCandidate, modConfirmed, modEnded; String(): "candidate","confirmed","ended"
   type modifierScope struct{ PokemonID, Form int32; Strong, AllStrong bool } // AllStrong: PokemonID/Form 0
@@ -62,7 +83,7 @@
   type modifierTransition struct{ At time.Time; State modifierStatus; Mod *derivationModifier } // Mod is a clone at that moment
   type modifierLearner struct{ /* unexported */ }
   func newModifierLearner(p modifierParams) *modifierLearner
-  func (l *modifierLearner) feed(ev deriveEventCheck, zone string, cell s2.CellID) []modifierTransition // check or sighting (ev.Sighting)
+  func (l *modifierLearner) feed(ev modifierEvent, zone string) []modifierTransition // check or sighting (ev.Sighting); cell is ev.Cell
   func (l *modifierLearner) sweep(now time.Time) []modifierTransition // unseen ends + prune
   func (l *modifierLearner) active() []*derivationModifier // clones of candidate+confirmed
   func (l *modifierLearner) trackCount() int // for the prune test
@@ -70,7 +91,7 @@
 
 Rules (port of `tools/eventreplay.py` `Detector`, changed per spec §2–3): a track is keyed (type, scope, effect, zone). Deviation classification as `Detector._deviation` (IVs disagree → `unexplained` only; IVs agree → level/quick/charged; all-strong level track needs ≥2 species among pending). Gate: an agreement on the track's dimension in cell c removes pending deviations from cell c with time ≤ the agreement. Candidate/confirm/contradiction as spec §3 (contradiction only from in-cells). While active: a matching deviation adds its cell to `InCells` (and removes it from `Outside`); an agreement in an in-cell adds to the end count (reset by any matching deviation); an agreement in a non-in-cell adds the cell to `Outside`. `LastSeen` updates on any check or sighting of the scope in the region (`Covers`). `sweep(now)` ends active modifiers with `now - LastSeen > Unseen` at `LastSeen` (reason "unseen") and deletes tracks with no modifier and no pending deviation newer than `now - Window`. `feed` calls `sweep(ev.Time)` first.
 
-- [ ] **Step 1: Write the failing tests** in `decoder/derive_modifiers_test.go`, with a helper `modCheck(ts time.Time, opts ...func(*deriveEventCheck)) deriveEventCheck` (strong 959/3272, everything agreeing, Move2 268 derived) and cells `cellA, cellB, cellC, cellD` (distinct level-14 cells), zone `"Europe/London"`:
+- [ ] **Step 1: Write the failing tests** in `decoder/derive_modifiers_test.go`, with a helper `modCheck(ts time.Time, cell s2.CellID, opts ...func(*modifierEvent)) modifierEvent` (strong 959/3272, everything agreeing, Move2 268 derived) and cells `cellA, cellB, cellC, cellD` (distinct level-14 cells), zone `"Europe/London"`:
   - `TestModifierMovePinLifecycle`: 3 charged deviations (observed 494) in cellA within a minute → one `candidate` transition, effect `{Slot:"charged", Move:494}`; 7 more → `confirmed`, `Observations == 10`; then 20 charged agreements in cellA → `ended`, `EndReason == "agreement"`.
   - `TestModifierAgreementOtherCellDoesNotGate`: interleave agreements in cellB with 3 deviations in cellA → candidate still forms; agreements in cellA between them → no candidate.
   - `TestModifierVenueStaysLocal`: confirmed pin from cellA+cellB+cellC deviations while cellD agrees → `ZoneWide(3) == false`, `Covers(zone, cellA) == true`, `Covers(zone, cellD) == false`, `Covers(zone, unseenCell) == false`.
@@ -81,6 +102,7 @@ Rules (port of `tools/eventreplay.py` `Detector`, changed per spec §2–3): a t
   - `TestModifierUnexplainedOnIVDisagree`: IV-disagreeing deviations → `unexplained` track only (no level/move tracks).
   - `TestModifierUnseenEndsAtLastSeen`: confirmed pin, last check at t; `sweep(t+59m)` → nothing; `sweep(t+61m)` → `ended` with `At == t`, `EndReason == "unseen"`; a sighting (`Sighting: true`) of the scope in an in-cell at t+30m moves it to t+30m.
   - `TestModifierSweepPrunesNoise`: 5000 deviations, each a different (species, move) once, then `sweep(t+31m)` → `trackCount() == 0`.
+  - `TestModifierEventCompact`: `unsafe.Sizeof(modifierEvent{}) <= 64`; `newModifierEvent` of a level-15 `CellId` gives its level-14 parent; `testing.AllocsPerRun(100, ...) == 0` for `newModifierEvent`.
 - [ ] **Step 2: Run** `go test -tags go_json -run 'TestModifier' ./decoder/` — expect FAIL (undefined).
 - [ ] **Step 3: Implement** the interfaces above in `decoder/derive_modifiers.go`.
 - [ ] **Step 4: Run** the same command — expect PASS; then `go test -tags go_json ./decoder/`.
@@ -120,8 +142,9 @@ Rules (port of `eventreplay` size handling, per cell): the size track is per spe
 - Consumes: Task 1–2 `derivationModifier`, `Covers`, `baseSizeCuts`.
 - Produces:
   ```go
-  type modifierIndex struct{ /* by (PokemonID, Form, Strong) plus all-strong; zoneWideCells */ }
-  func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifierIndex // confirmed only
+  type modifierIndex struct{ /* confirmed: by (PokemonID, Form, Strong) plus all-strong, each entry with its zone, ZoneWide flag and in-cell set; active scopes (candidate+confirmed) for sighting gating */ }
+  func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifierIndex // nil when mods is empty
+  func (idx *modifierIndex) wantsSighting(pokemonID, form int32, strong bool) bool // scope active (or strong && an all-strong modifier active); false on nil idx
   var derivationModifierIndex atomic.Pointer[modifierIndex] // nil = no modifiers
   type derivationAdjust struct {
       Suppress   bool  // unexplained: derive nothing
@@ -129,14 +152,16 @@ Rules (port of `eventreplay` size handling, per cell): the size track is per spe
       Quick, Charged int32 // 0 = no pin
       Size       map[string]sizeBoundary // nil = base cuts
   }
-  func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, zone string, cell s2.CellID) derivationAdjust
-  func modifierZoneOf(cell s2.CellID) string // shared cache (xsync.Map[s2.CellID]string) over tz.SearchTimezone at the cell centre
+  // lookup: probe the species key and the all-strong key first (no match → zero value, no cell/zone work);
+  // a local entry matches when cell is in its in-cells; a zone-wide entry calls zoneOf(cell) once and compares.
+  func (idx *modifierIndex) lookup(pokemonID, form int32, strong bool, cell s2.CellID, zoneOf func(s2.CellID) string) derivationAdjust
+  func modifierZoneOf(cell s2.CellID) string // decode-path cache (xsync.Map[s2.CellID]string) over tz.SearchTimezone at the cell centre; filled only by zone-wide matches
   func pokemonModifierCell(p *Pokemon) s2.CellID // level-14 parent of CellId (level-15 map cell), else of lat/lon, else 0
   func (p *Pokemon) modifierAdjust() derivationAdjust // zero value when the index is nil, p.IsDitto, or no match
   func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base int32) (int32, bool) // false = leave size absent
   ```
 
-Rules (spec §5): species scope level delta wins over all-strong; level = derived + delta, clamped to [1, 50]; move pin sets the slot only when it is absent (as derived moves do); size: for a form with `encounter.FormFixesSize(form)` return (base, true); otherwise classify `roll` by the cuts, replacing each listed boundary's cut with its interval: roll < Lo → below, roll ≥ Hi → above, else return false. `Suppress` makes `deriveIvIfAbsent` and `deriveSizeAndMovesIfAbsent` return without writing.
+Rules (spec §5): `modifierAdjust` loads the index first and returns the zero value on nil before touching `p` further; the cell is computed only after a key matches, the zone only for a zone-wide match. Species scope level delta wins over all-strong; level = derived + delta, clamped to [1, 50]; move pin sets the slot only when it is absent (as derived moves do); size: for a form with `encounter.FormFixesSize(form)` return (base, true); otherwise classify `roll` by the cuts, replacing each listed boundary's cut with its interval: roll < Lo → below, roll ≥ Hi → above, else return false. `Suppress` makes `deriveIvIfAbsent` and `deriveSizeAndMovesIfAbsent` return without writing.
 
 - [ ] **Step 1: Write the failing tests** (set the index with `derivationModifierIndex.Store(buildModifierIndex(...))`, `t.Cleanup` stores nil; config `DeriveIv`/`DeriveStrong` on as `derive_iv_test.go` does):
   - `TestDerivationAdjustLevelOffset`: confirmed zone-wide all-strong +5 → a strong record in the zone derives level base+5 (compare with `encounter.Derive` for the same id); a record in another zone gets base.
@@ -147,6 +172,9 @@ Rules (spec §5): species scope level delta wins over all-strong; level = derive
   - `TestDerivationAdjustCandidateIgnored`: a candidate modifier is not in the index.
   - `TestDerivationAdjustLocalRegion`: local modifier with InCells {cellA}: record in cellA adjusted, in cellB not; record with CellId 0 and lat/lon 0,0 (zone "", cell 0) not adjusted and no panic.
   - `TestDerivationAdjustSkipsDitto`: `IsDitto` record in region → base values.
+  - `TestDerivationAdjustLazyZone`: index with only a local modifier for species X → `lookup` for X in an in-cell and for species Y never calls `zoneOf` (counting stub); a zone-wide modifier calls it once per lookup.
+  - `TestDerivationAdjustNoAllocs`: `testing.AllocsPerRun` of `p.modifierAdjust()` is 0 with a nil index and with a non-matching index.
+  - `TestModifierIndexWantsSighting`: candidate pin for 959/3272 strong → wants that scope, not 959/3272 non-strong nor 635; an all-strong candidate → wants any strong scope; nil index → false.
 - [ ] **Step 2: Run** `go test -tags go_json -run 'TestDerivationAdjust' ./decoder/` — FAIL.
 - [ ] **Step 3: Implement** `decoder/derive_modifiers_apply.go` and the four hooks in `decoder/pokemon_decode.go` (read `p.modifierAdjust()` once per derive call).
 - [ ] **Step 4: Run** — PASS; then `go test -tags go_json ./...`.
@@ -171,17 +199,18 @@ Rules (spec §5): species scope level delta wins over all-strong; level = derive
   // decoder
   func InitDerivationModifiers() error // no-op unless Enabled && DeriveIv; warns and stays off if DeriveIv is false
   func FlushDerivationModifiers()      // idempotent shutdown
-  func submitDerivationModifierEvent(ev deriveEventCheck) // non-blocking, DropReporter
+  func submitDerivationModifierEvent(ev modifierEvent) // non-blocking, DropReporter
   func activeDerivationModifiers() []*derivationModifier // snapshot for Task 5 (copy taken by the worker after each transition, behind a mutex or atomic)
   var derivationModifierLearnerOn bool // set by Init; read by the submit sites
   ```
 
-Worker: channel capacity 65536; one goroutine owns the learner; resolves `cell = parent(level 14)` of `ev.CellID` (lat/lon fallback, as `deriveEventsWriter.locate`) and `zone = modifierZoneOf(cell)`; feeds; a 1-minute ticker calls `sweep(time.Now())`; after any transitions it logs each (`[DERIVE_MODIFIER] <state> <type> <effect> scope=<...> zone=<zone> region=zone-wide|<n> cells obs=<n> contra=<n>`), rebuilds the index (`derivationModifierIndex.Store(buildModifierIndex(active confirmed, ZoneWideCells))`) and refreshes the snapshot. Submit sites: build the event when `derivationEventsWriter != nil || derivationModifierLearnerOn` and send to each enabled consumer. `main.go`: Init after `InitDerivationEvents` (log the error, continue), Flush next to `FlushDerivationEvents`; include `DerivationModifiers.Enabled` in the masterfile condition.
+Worker: channel `chan modifierEvent`, capacity 16384; one goroutine owns the learner; resolves `zone` from its own `map[s2.CellID]uint16` plus name table (tz lookup at the cell centre on a miss; zone "" for cell 0); feeds; a 1-minute ticker calls `sweep(time.Now())`; after any transitions it logs each (`[DERIVE_MODIFIER] <state> <type> <effect> scope=<...> zone=<zone> region=zone-wide|<n> cells obs=<n> contra=<n>`), rebuilds the index (`derivationModifierIndex.Store(buildModifierIndex(active, ZoneWideCells))`; nil when none) and refreshes the snapshot. Submit sites: encounter check — build the `deriveEventCheck` when `derivationEventsWriter != nil || derivationModifierLearnerOn`, send it to the events writer if on and `newModifierEvent(ev)` to the learner if on; first sighting — send to the learner only when `derivationModifierIndex.Load().wantsSighting(...)`. `main.go`: Init after `InitDerivationEvents` (log the error, continue), Flush next to `FlushDerivationEvents`; include `DerivationModifiers.Enabled` in the masterfile condition.
 
 - [ ] **Step 1: Write the failing tests:**
   - `TestDerivationModifiersRuntimeConfirmAndEnd`: start a runtime with defaults over a test channel; submit 10 charged-494 deviations then 20 agreements in one cell; drain; the index after the 10th has the pin for that cell, after the 20 agreements is empty (records derive base values again).
   - `TestDerivationModifiersInitDisabledWithoutDeriveIv`: `Enabled` true, `DeriveIv` false → no worker, `derivationModifierLearnerOn == false`.
   - `TestSubmitDerivationModifierEventDropsWhenFull`: tiny channel, full → returns without blocking, drop counted.
+  - `TestDerivationModifierSightingGated`: learner on, nil index → saving a new pokemon record sends nothing; with an active scope for it → one sighting sent.
   - `TestDerivationModifiersConfigDefaults` in `config/` (or the existing reader test file): defaults 3/10/20/1800/3600/3.
 - [ ] **Step 2: Run** `go test -tags go_json -run 'TestDerivationModifiers|TestSubmitDerivationModifier' ./decoder/ ./config/` — FAIL.
 - [ ] **Step 3: Implement** config, runtime, wiring, `config.toml.example` section (commented like `[derivation_events]`), CLAUDE.md layout lines for the four new `derive_modifiers*.go` files.

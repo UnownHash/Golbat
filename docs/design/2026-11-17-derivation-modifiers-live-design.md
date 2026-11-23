@@ -99,11 +99,18 @@ retroactive correction, no webhook re-send).
   Thresholds configurable.
 - One learner goroutine fed by a channel from the encounter check and the
   first-sighting hook already used by the events log; drop and count on a
-  full channel (decode-path invariant).
-- Confirmed modifiers are published as an immutable index behind an atomic
-  pointer; the derive path does a lock-free lookup by (species, form, strong)
-  plus the all-strong key, then checks region by zone and cell. Zone of a
-  cell is cached (shared map; polygon lookup once per cell).
+  full channel (decode-path invariant). The channel carries a compact,
+  pointer-free event (~56 bytes, capacity 16384, ~1 MB), not the events
+  log's 288-byte record (65536 of those would be ~19 MB allocated up front
+  and scanned by the GC). A first sighting is sent only when its scope has
+  an active modifier: outside events there is no sighting traffic at all.
+- Active modifiers are published as an immutable index behind an atomic
+  pointer (nil when none, so the normal derive costs one atomic load); the
+  derive path does a lock-free lookup by (species, form, strong) plus the
+  all-strong key, and only on a hit computes the level-14 cell (local:
+  in-cell membership) or, for a zone-wide modifier, the zone. The decode
+  path's zone cache therefore holds only cells where an affected species was
+  derived; the learner keeps its own cell → zone-number map.
 - Transitions logged as `[DERIVE_MODIFIER]`. State is in memory only; a
   restart relearns.
 - `GET /api/derivation/modifiers` returns the active modifiers in the
