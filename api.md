@@ -232,9 +232,19 @@ a region. State is in memory only. When the learner is off
   unbounded) or `{"type":"unexplained"}` (IVs disagree, so derivation for the
   scope is suppressed; its id has no effect part).
 - `status` is `candidate` or `confirmed`; `window.end` is always null.
+- Lifecycle: `start` matching deviations (default 3) within `window_seconds`
+  open a candidate. It is confirmed once it has `confirm` matches (default 10)
+  located in S2 cells, no contradiction among its last 16 in-cell outcomes, and
+  matches in at least half of them. It ends, and drops out of this list, on
+  `end` consecutive in-cell agreements with the base value (default 8), on
+  contradiction (`contradicted`: at least `start` contradictions in the ring and
+  no fewer than its matches, as when another effect of the same type and scope
+  replaces it), or when its scope is not seen for `unseen_seconds`. Size-cutoff
+  modifiers also end when their cuts move. Ended modifiers appear only in the
+  `[DERIVE_MODIFIER]` log, with the end reason.
 - `applied` is true when derivation applies the modifier: confirmed and not
   `all-strong` (an all-strong level offset is detected and listed but never
-  applied). Where two applied modifiers of one type and slot both cover a
+  applied). Where two confirmed modifiers of one type and slot both cover a
   record they dispute the value and neither applies: two level offsets leave
   the IVs and level underived, two pins of one slot leave that move absent,
   two size modifiers leave size absent.

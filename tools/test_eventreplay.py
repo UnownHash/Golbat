@@ -752,6 +752,27 @@ class ReaderTest(unittest.TestCase):
                          [T0 + 1, T0 + 50, T0 + 100, T0, T0 + 950,
                           T0 + BUCKET, T0 + 2000, T0 + 3000])
 
+    def test_restart_inside_bucket_orders_by_time(self):
+        # Shutdown wrote the open bucket's summary (ordered at the bucket
+        # end); the restart appended earlier-timestamped deviations of the
+        # same bucket after it.
+        p = self.write("a.jsonl", [dev(T0 + 10), summ(T0), dev(T0 + 500),
+                                   dev(T0 + 600), dev(T0 + BUCKET + 5),
+                                   summ(T0 + BUCKET)])
+        got = list(read_records([p]))
+        keys = [eventreplay.order_key(r) for r in got]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual([r.get("ts", r.get("bucket")) for r in got],
+                         [T0 + 10, T0 + 500, T0 + 600, T0,
+                          T0 + BUCKET + 5, T0 + BUCKET])
+        # --at inside the bucket sees every deviation up to the cutoff.
+        seen = []
+        for r in read_records([p]):
+            if eventreplay.order_key(r)[0] > T0 + 550:
+                break
+            seen.append(r)
+        self.assertEqual([r["ts"] for r in seen], [T0 + 10, T0 + 500])
+
     def test_reads_truncated_gzip_and_partial_line(self):
         recs = [dev(T0 + i * 10) for i in range(200)]
         full = self.path("full.gz")

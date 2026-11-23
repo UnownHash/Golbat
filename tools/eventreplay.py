@@ -166,6 +166,37 @@ def order_key(rec: dict) -> tuple:
     return (rec["ts"], 1)
 
 
+DEFAULT_BUCKET_SECONDS = 900
+
+
+def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
+    """Sorts a file's records by order_key within each bucket. The writer
+    puts a bucket's summary at its end, but a shutdown writes the open
+    bucket's summary and a restart inside the same bucket appends earlier
+    deviations after it, so file order is not time order there. Records are
+    held until one from a later bucket appears, then the held bucket is
+    sorted and emitted: memory is one bucket's records. The bucket length
+    comes from the summaries seen (default 15 minutes before the first)."""
+    bs = DEFAULT_BUCKET_SECONDS
+    held: list[dict] = []
+    cur = None
+    for rec in records:
+        if rec["kind"] == "summary":
+            bs = rec["bucket_seconds"] or bs
+            b = rec["bucket"]
+        else:
+            b = rec["ts"] // bs * bs
+        if cur is not None and b > cur:
+            held.sort(key=order_key)
+            yield from held
+            held = []
+        if cur is None or b > cur:
+            cur = b
+        held.append(rec)
+    held.sort(key=order_key)
+    yield from held
+
+
 def _file_records(path: str) -> Iterator[dict]:
     """The usable records of one file in file order. A truncated gzip
     stream or an undecodable line warns once for the file."""
@@ -204,8 +235,10 @@ def _file_records(path: str) -> Iterator[dict]:
 
 
 def read_records(paths: list[str]) -> Iterator[dict]:
-    """Records from every file, merged by order_key."""
-    return heapq.merge(*(_file_records(p) for p in paths), key=order_key)
+    """Records from every file, merged by order_key (each file first
+    ordered within its buckets)."""
+    return heapq.merge(*(_bucket_ordered(_file_records(p)) for p in paths),
+                       key=order_key)
 
 
 # --- detector ---------------------------------------------------------------

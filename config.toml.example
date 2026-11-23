@@ -83,9 +83,11 @@ retain_days = 14
 # limit), no contradiction among its last 16 outcomes in its cells, and matches in at least half of
 # them. end consecutive agreements in its cells end it (8: at most Dragonite's sampled hourly
 # minimum, so an event that ends on the hour stops applying within the next hour), as do start
-# contradictions outnumbering its matches among the last 16, or not seeing its species there for
-# unseen_seconds. A modifier seen in zone_wide_cells cells spread over ~10 km with no agreeing cell
-# covers its whole timezone. Transitions are logged as [DERIVE_MODIFIER]; state is in memory only
+# contradictions at least matching its matches among the last 16, or not seeing its species there for
+# unseen_seconds. A modifier seen in zone_wide_cells cells that lie under at least two ~10 km
+# (level-10) cells, with no agreeing cell, covers its whole timezone. An all-strong level offset is
+# detected and listed but never applied; where two confirmed modifiers of one type and slot cover a
+# record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is in memory only
 # (a restart relearns). Enabling it reserves ~1 MB for the event queue.
 [derivation_modifiers]
 enabled = false
