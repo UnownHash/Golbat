@@ -1,6 +1,6 @@
 # Derivation Modifiers — Live Learner Design
 
-> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7, §8, §9); building on branch
+> **Status:** Agreed 2026-11-17, revised 2026-11-23 (§7–§10); building on branch
 > t3/encounter-override-heuristics (PR #441).
 
 - **Date:** 2026-11-17
@@ -359,7 +359,40 @@ decisions above:
   arise. The three cell → zone caches are cleared before an insert would
   take them past 200,000 entries.
 
-## 10. Not included
+## 10. Fourth revision: share hysteresis, pause, per-boundary size (2026-11-23)
+
+A fourth review round confirmed §9's fixes and found narrower wrong-value
+paths. Decisions with the project owner:
+
+- **Share hysteresis.** Zone-wide turns on only when the effect is at least
+  75% of the record's fresh non-neutral entries (with the §9 entry, cell
+  and 10 km rules); it stays on while it is more than half. A bare 9-of-16
+  majority flapped on and off as an event's pre-end spawns drained (about
+  112 wrong +5 spawns per simulated run).
+- **Pause on agreement.** Two consecutive non-neutral agreements in the
+  modifier's zone record, with no match between, pause application (the
+  dimension is withheld, not reverted to base) until the next match. Every
+  event seen applies to its whole scope (4,900 of 4,900 forced moves), so a
+  live event never pauses; an ended one stops applying within two sampled
+  checks instead of about half an hour.
+- **Size boundaries are independent.** Each moved cut point is its own
+  tracked modifier with its own record, spread, ageing, exclusions and
+  lifecycle; the index combines a scope's applied boundaries. A boundary
+  seen only at a venue never rides on another boundary's coverage.
+- **Size readmission needs a resolving roll.** A cell excluded from a
+  boundary keeps its disproving roll; it is readmitted only by a roll there
+  that contradicts that disproof (on the far side of the disproving roll),
+  not by any match.
+- **Neutral is per pin.** A move agreement equal to a pin's move is neutral
+  for that pin only; it still counts as an agreement for competing pins'
+  verdicts and exclusions.
+- **Smaller:** the stay-on cell count is `min(start, 8)`; the excluded-cell
+  cap scales with the zone (256 or 1% of the cells the learner has seen in
+  that zone, whichever is larger, at most 4096); every events-log row
+  carries its bucket start as the writer computed it, and shutdown
+  summaries their flush time, so replay never infers alignment.
+
+## 11. Not included
 
 Loading a shared modifier file; retroactive correction; detection in the
 offline script by cell (the events log carries no per-cell agreements; the
