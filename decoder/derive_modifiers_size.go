@@ -228,14 +228,16 @@ func contraryRoll(listed map[string]sizeBoundary, cuts []sizeCut, cls uint8, rol
 	return bits
 }
 
-// refusedBits returns the boundaries (bit i = cuts[i]) whose interval a
-// roll of class cls would empty: what a refused roll disproves. Evidence
+// refusedBits returns the listed boundaries (bit i = cuts[i]) whose
+// interval a roll of class cls would empty: what a refused roll disproves.
+// A boundary that is not listed is not applied, so there is nothing to
+// disprove (and no match across it could ever readmit the cell). Evidence
 // only narrows the intervals, so a roll once refused stays refused.
-func (e *sizeEvidence) refusedBits(cls uint8, roll float64, cuts []sizeCut) uint8 {
+func (e *sizeEvidence) refusedBits(listed map[string]sizeBoundary, cls uint8, roll float64, cuts []sizeCut) uint8 {
 	next, _ := e.with(cls, roll)
 	var bits uint8
 	for i, c := range cuts {
-		if next.boundary(c).empty() {
+		if _, ok := listed[c.name]; ok && next.boundary(c).empty() {
 			bits |= 1 << i
 		}
 	}
@@ -321,7 +323,7 @@ func (l *modifierLearner) sizeOpen(t *modTrack, st *modScopeState, now time.Time
 	for _, pd := range t.pending {
 		if pd.Cell != 0 && pd.Void {
 			rec.push(pd.Cell, modIDSizeOther, false, pd.Unix)
-			l.exclude(t, pd.Cell, t.size.ev.refusedBits(pd.Class, pd.Roll, cuts))
+			l.exclude(t, pd.Cell, t.size.ev.refusedBits(mod.Boundaries, pd.Class, pd.Roll, cuts))
 		}
 	}
 	return l.opened(t, rec, now, out)
@@ -348,7 +350,7 @@ func (l *modifierLearner) sizeRoll(t *modTrack, rec *modRecord, ev modifierEvent
 			m.Contradictions++
 			rec.push(ev.Cell, modIDSizeOther, false, ev.Unix)
 			l.changed(m, modEvidence)
-			l.exclude(t, ev.Cell, t.size.ev.refusedBits(ev.ObsSize, ev.SizeRoll, cuts))
+			l.exclude(t, ev.Cell, t.size.ev.refusedBits(m.Boundaries, ev.ObsSize, ev.SizeRoll, cuts))
 			return
 		}
 		if changed {

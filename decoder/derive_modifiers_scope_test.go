@@ -301,3 +301,110 @@ func TestModifierLearnerHasNoIDMap(t *testing.T) {
 		t.Error("modifierLearner keeps a checked-id map")
 	}
 }
+
+// A confirmed zone-wide modifier stays on with fewer fresh entries than it
+// needed to turn on (start of them, from start cells still 10 km apart); a
+// candidate gets no such allowance.
+func TestModifierZoneWideHysteresis(t *testing.T) {
+	far := modSpreadCells(13)
+	sparse := func(l *modifierLearner) {
+		for i := range 3 {
+			l.feed(modCheck(modT0.Add(time.Duration(30+10*i)*time.Minute), far[10+i], withCharged(494)), modZone)
+		}
+	}
+	l := newModifierLearner(defaultModifierParams())
+	spreadPin(t, l, modT0)
+	sparse(l)
+	if trs := l.sweep(modT0.Add(62 * time.Minute)); len(trs) != 0 || !onlyActive(t, l).ZoneWide {
+		t.Fatalf("three fresh matches from three spread cells: %v, want the confirmed pin still zone-wide", states(trs))
+	}
+	trs := l.sweep(modT0.Add(92 * time.Minute)) // two fresh matches left
+	if len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unseen" {
+		t.Fatalf("two fresh matches: %v, want ended unseen", states(trs))
+	}
+
+	// Three fresh matches in neighbouring cells are not spread.
+	l = newModifierLearner(defaultModifierParams())
+	spreadPin(t, l, modT0)
+	for i := range 3 {
+		l.feed(modCheck(modT0.Add(time.Duration(30+10*i)*time.Minute), modVenueCell14(cellA, i), withCharged(494)), modZone)
+	}
+	if trs := l.sweep(modT0.Add(62 * time.Minute)); len(trs) != 1 || trs[0].State != modEnded {
+		t.Fatalf("three fresh matches within a venue: %v, want ended", states(trs))
+	}
+
+	// A candidate gets no such allowance (here the same state, made a
+	// candidate by hand: one that is zone-wide and has its matches confirms).
+	l = newModifierLearner(defaultModifierParams())
+	spreadPin(t, l, modT0)
+	sparse(l)
+	l.activeTracks[0].mod.Status = modCandidate
+	if trs := l.sweep(modT0.Add(62 * time.Minute)); len(trs) != 0 || onlyActive(t, l).ZoneWide {
+		t.Fatalf("a candidate with three fresh matches: %v, want it no longer zone-wide", states(trs))
+	}
+}
+
+// A candidate whose excluded cells overflow ends unconfirmed at once, and
+// the next matches start a new one: it does not sit out its deadline.
+func TestModifierOverflowedCandidateRestarts(t *testing.T) {
+	l := newModifierLearner(defaultModifierParams())
+	ts := modT0
+	feed := func(cell s2.CellID, opts ...func(*modifierEvent)) []modifierTransition {
+		ts = ts.Add(time.Second)
+		return l.feed(modCheck(ts, cell, opts...), modZone)
+	}
+	for range 3 {
+		feed(cellA, withLevelDelta(5))
+	}
+	var trs []modifierTransition
+	n := 0
+	for len(trs) == 0 && n < 300 {
+		trs = feed(modTestCell(40.0+0.02*float64(n), -3.0))
+		n++
+	}
+	if n != 257 || len(trs) != 1 || trs[0].State != modEnded || trs[0].Mod.EndReason != "unconfirmed" {
+		t.Fatalf("after %d disproving cells: %v, want ended unconfirmed at the 257th", n, states(trs))
+	}
+	trs = nil
+	for _, c := range modSpreadCells(10) {
+		trs = append(trs, feed(c, withLevelDelta(5))...)
+	}
+	if len(trs) != 2 || trs[0].State != modCandidate || trs[1].State != modConfirmed {
+		t.Fatalf("fresh matches: %v, want a new candidate, then confirmed", states(trs))
+	}
+	if n := len(trs[0].Mod.Excluded); n == 0 || n > modRecordSize {
+		t.Fatalf("new candidate starts with %d excluded cells, want those of the record only", n)
+	}
+}
+
+// The end reason comes from the latest fresh entry that says anything: a
+// pin-equal agreement after another effect leaves it contradicted.
+func TestModifierVerdictByEffectSkipsNeutral(t *testing.T) {
+	var r modRecord
+	cells := modSpreadCells(12)
+	for i := range 4 {
+		r.push(cells[i], 494, false, 100)
+	}
+	for i := range 6 {
+		r.push(cells[4+i], 300, false, 100)
+	}
+	r.push(cells[10], 494, true, 100) // the base walk gave the pinned move
+	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || !v.byEffect || v.lost() != "contradicted" {
+		t.Fatalf("verdict %+v, want off by another effect", v)
+	}
+}
+
+// A refused size roll disproves only listed boundaries: one that is not
+// applied could never be matched across to readmit the cell.
+func TestModifierSizeRefusedBitsListedOnly(t *testing.T) {
+	var ev sizeEvidence
+	ev, _ = ev.with(1, 0.010)
+	cuts := sizeCuts(false)
+	listed := map[string]sizeBoundary{"1/2": {Lo: 0.010, HasLo: true}}
+	if got := ev.refusedBits(listed, 2, 0.003, cuts); got != 1 {
+		t.Fatalf("bits %04b, want boundary 1/2", got)
+	}
+	if got := ev.refusedBits(map[string]sizeBoundary{"3/4": {}}, 2, 0.003, cuts); got != 0 {
+		t.Fatalf("bits %04b for an unlisted boundary, want none", got)
+	}
+}

@@ -330,7 +330,7 @@ type modTrack struct {
 	// located counts the modifier's matches with a cell.
 	located int
 	// overflow: a disproving cell did not fit in the modifier's excluded
-	// cells, so it is not zone-wide for the rest of its life.
+	// cells, so it is not zone-wide and ends at the next settle.
 	overflow bool
 	// lost is why the modifier was last found not zone-wide: the end reason
 	// of a confirmed one.
@@ -453,15 +453,16 @@ func (l *modifierLearner) trackCount() int { return len(l.tracks) }
 // and what it does to m's lookup coverage (growth and shrink count only for
 // a confirmed modifier). It bumps m's version. Growth that can reduce what
 // is applied counts as shrink, published at once: an unexplained modifier's
-// (wider suppression), or one whose scope and zone hold another confirmed
-// modifier it can dispute a value with (a new overlap withholds it).
+// (wider suppression). Two modifiers of one type and slot are never both
+// confirmed in a zone outside one feed (each needs the record's majority),
+// and that feed's transition publishes at once.
 func (l *modifierLearner) changed(m *derivationModifier, c modChange) {
 	m.version++
 	l.dirty.changed = true
 	if m.Status != modConfirmed {
 		return
 	}
-	if c == modGrowth && (m.Type == modUnexplained || l.hasDisputingPeer(m)) {
+	if c == modGrowth && m.Type == modUnexplained {
 		c = modShrink
 	}
 	switch c {
@@ -470,28 +471,6 @@ func (l *modifierLearner) changed(m *derivationModifier, c modChange) {
 	case modShrink:
 		l.dirty.shrink = true
 	}
-}
-
-// hasDisputingPeer reports whether m's scope and zone hold another confirmed
-// modifier of m's type (for a pin, of its slot): where both cover a record
-// the value is disputed and withheld. Size has one track per scope and zone.
-func (l *modifierLearner) hasDisputingPeer(m *derivationModifier) bool {
-	if m.Type != modLevelOffset && m.Type != modMovePin {
-		return false
-	}
-	st := l.scopes[modScopeKey{m.Scope, m.Zone}]
-	if st == nil {
-		return false
-	}
-	for _, o := range st.tracks {
-		if o.mod == nil || o.mod == m || o.mod.Status != modConfirmed || o.key.Type != m.Type {
-			continue
-		}
-		if m.Type == modLevelOffset || o.key.Effect.Slot == m.Effect.Slot {
-			return true
-		}
-	}
-	return false
 }
 
 // takeDirty reports and clears the changes recorded since the last call.
@@ -519,7 +498,10 @@ func (l *modifierLearner) check(st *modScopeState, sk modScopeKey, d modDim, agr
 	// An agreement on the move an active pin forces says nothing about that
 	// pin, and its record is that pin's evidence: left out, it does not push
 	// a match out of the 16 (a species whose base walk often gives the pinned
-	// move would otherwise never show eight matching cells).
+	// move would otherwise never show eight matching cells). It is thereby
+	// also missing from the majority of any other pin on the slot, which so
+	// counts fewer agreements against itself; it still disproves that pin in
+	// its cell, below.
 	if neutral := agree && pin && st.hasModifier(d, id); located && !neutral {
 		st.record(d).push(ev.Cell, id, agree, ev.Unix)
 	}
@@ -579,13 +561,14 @@ func (l *modifierLearner) disprove(t *modTrack, cell s2.CellID, byEffect bool) {
 }
 
 // exclude records that cell disproved t's modifier (for size, the
-// boundaries in bits): the cell stays excluded until readmit. A cell that
-// does not fit in modExcludedMax marks the track overflowed instead, which
-// the next judgeZone turns into zone-wide off.
+// boundaries in bits; none, nothing): the cell stays excluded until
+// readmit. A cell that does not fit in modExcludedMax marks the track
+// overflowed instead: the next judgeZone turns zone-wide off, and settle
+// ends the modifier.
 func (l *modifierLearner) exclude(t *modTrack, cell s2.CellID, bits uint8) {
 	m := t.mod
 	old, had := m.Excluded[cell]
-	if had && old|bits == old {
+	if old|bits == old {
 		return
 	}
 	if !had && len(m.Excluded) >= modExcludedMax {
@@ -690,12 +673,19 @@ func (l *modifierLearner) venueMatch(t *modTrack, cell s2.CellID, unix int64) {
 
 // settle applies the lifecycle to t's modifier (design §8–§9). A candidate
 // confirms with Confirm located matches while zone-wide; venue cells never
-// confirm. A confirmed modifier no longer zone-wide ends, for the reason
-// zone-wide was lost.
+// confirm. One whose excluded cells overflowed ends unconfirmed at once: it
+// could never go zone-wide, and at a global event's start (the spawns from
+// before it still agree, in hundreds of cells) it would block the event
+// until its deadline. A new candidate forms from the next Start matches. A
+// confirmed modifier no longer zone-wide ends, for the reason zone-wide was
+// lost.
 func (l *modifierLearner) settle(t *modTrack, now time.Time, out []modifierTransition) []modifierTransition {
 	m := t.mod
 	switch {
 	case m.Status == modCandidate:
+		if t.overflow {
+			return append(out, l.end(t, now, "unconfirmed"))
+		}
 		if m.ZoneWide && t.located >= l.p.Confirm {
 			if t.size != nil {
 				t.size.dropUnsupported(m.Boundaries, sizeCuts(m.Scope.Strong), l.p.Start)

@@ -17,10 +17,11 @@ import (
 
 const modRecordSize = 16
 
-// A zone-wide modifier needs matches from at least modSpreadMinCells
+// A modifier goes zone-wide with matches from at least modSpreadMinCells
 // distinct level-14 cells, two of them at least modSpreadMinKm apart
 // (centre to centre): a venue stays local, however it lies on the cell
-// grid, and so does a scan area smaller than that.
+// grid, and so does a scan area smaller than that. A confirmed one stays
+// zone-wide on less (modJudgeStay).
 const (
 	modSpreadMinCells = 8
 	modSpreadMinKm    = 10.0
@@ -81,15 +82,31 @@ func (r *modRecord) at(i int) modRecEntry {
 	return r.buf[(int(r.head)-i+modRecordSize)%modRecordSize]
 }
 
+// modJudge is what a record must hold for a verdict to be on: entries
+// fresh entries, and matches from cells distinct cells.
+type modJudge struct{ entries, cells int }
+
+// modJudgeOn is what turns zone-wide on; modJudgeStay what keeps a confirmed
+// modifier zone-wide (hysteresis): Start fresh entries and matching cells
+// instead of Confirm and modSpreadMinCells, still a majority and still two
+// matching cells modSpreadMinKm apart. Sampled encounters arrive at random,
+// and an hour with fewer than Confirm of them is common at 12 an hour; it
+// must not end an event that every one of them still shows. An event that
+// ended is still out within Unseen (its matches age) or at the first base
+// majority.
+func modJudgeOn(p modifierParams) modJudge { return modJudge{p.Confirm, modSpreadMinCells} }
+
+func modJudgeStay(p modifierParams) modJudge { return modJudge{p.Start, p.Start} }
+
 // modVerdict is a record's judgement of one effect.
 type modVerdict struct {
-	// on: the record holds at least confirm fresh entries, the effect is
-	// more than half of them, and its matches are spread.
+	// on: the record holds enough fresh entries, the effect is more than
+	// half of them, and its matches are spread.
 	on bool
-	// thin: fewer than confirm fresh entries.
+	// thin: too few fresh entries.
 	thin bool
-	// byEffect: the latest fresh entry is another effect (what displaced
-	// this one when on turns false).
+	// byEffect: the latest fresh entry that says anything is another effect
+	// (what displaced this one when on turns false).
 	byEffect bool
 }
 
@@ -108,7 +125,7 @@ func (v modVerdict) lost() string {
 // after cut: older ones do not count. For a move pin an agreement whose
 // observed move is the pinned one is neutral (the base walk and the pin
 // give the same move): it is left out of the majority.
-func (r *modRecord) judge(id int32, pin bool, confirm int, cut int64) modVerdict {
+func (r *modRecord) judge(id int32, pin bool, need modJudge, cut int64) modVerdict {
 	var (
 		v                     modVerdict
 		cells                 [modRecordSize]s2.CellID
@@ -126,7 +143,7 @@ func (r *modRecord) judge(id int32, pin bool, confirm int, cut int64) modVerdict
 			continue
 		}
 		mine := !e.agree && e.id == id
-		if fresh == 1 {
+		if fresh-neutral == 1 {
 			v.byEffect = !e.agree && !mine
 		}
 		if mine {
@@ -137,8 +154,8 @@ func (r *modRecord) judge(id int32, pin bool, confirm int, cut int64) modVerdict
 			}
 		}
 	}
-	v.thin = fresh < confirm
-	v.on = !v.thin && 2*match > fresh-neutral && nCells >= modSpreadMinCells && modCellsSpread(cells[:nCells])
+	v.thin = fresh < need.entries
+	v.on = !v.thin && 2*match > fresh-neutral && nCells >= need.cells && modCellsSpread(cells[:nCells])
 	return v
 }
 
@@ -203,13 +220,18 @@ func (st *modScopeState) markSeen(zone string, cell s2.CellID, now time.Time) {
 }
 
 // judgeZone applies rec's verdict as of unix to t's modifier: zone-wide
-// coverage on or off. It is never on in the unknown zone, without a record,
-// or once the modifier's excluded cells overflowed.
+// coverage on or off, with hysteresis for a confirmed modifier that is on.
+// It is never on in the unknown zone, without a record, or once the
+// modifier's excluded cells overflowed.
 func (l *modifierLearner) judgeZone(t *modTrack, rec *modRecord, unix int64) {
 	m := t.mod
 	v := modVerdict{thin: true}
 	if rec != nil {
-		v = rec.judge(t.id, t.key.Type == modMovePin, l.p.Confirm, unix-int64(l.p.Unseen/time.Second))
+		need := modJudgeOn(l.p)
+		if m.ZoneWide && m.Status == modConfirmed {
+			need = modJudgeStay(l.p)
+		}
+		v = rec.judge(t.id, t.key.Type == modMovePin, need, unix-int64(l.p.Unseen/time.Second))
 	}
 	on := v.on && m.Zone != "" && !t.overflow
 	if !on {

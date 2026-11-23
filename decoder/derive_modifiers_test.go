@@ -282,7 +282,7 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 		matches, agreements int
 		on                  bool
 	}{{9, 0, false}, {10, 0, true}, {8, 2, true}, {5, 5, false}, {9, 7, true}, {8, 8, false}, {16, 0, true}} {
-		if got := rec(c.matches, c.agreements).judge(494, true, 10, 100).on; got != c.on {
+		if got := rec(c.matches, c.agreements).judge(494, true, modJudge{10, 8}, 100).on; got != c.on {
 			t.Errorf("%d matches, %d agreements: zone-wide %v, want %v", c.matches, c.agreements, got, c.on)
 		}
 	}
@@ -292,7 +292,7 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	for i := range 4 {
 		r.buf[i].unix = 99
 	}
-	if v := r.judge(494, true, 10, 100); v.on || !v.thin {
+	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || !v.thin {
 		t.Errorf("six fresh matches of ten entries: %+v, want off and thin", v)
 	}
 	r = rec(6, 0)
@@ -305,10 +305,10 @@ func TestModifierZoneWideNeedsRecordMajority(t *testing.T) {
 	for i := range 6 {
 		r.push(spread[10+i], 268, true, 100)
 	}
-	if v := r.judge(494, true, 10, 100); v.on || v.thin || v.lost() != "agreement" {
+	if v := r.judge(494, true, modJudge{10, 8}, 100); v.on || v.thin || v.lost() != "agreement" {
 		t.Errorf("four fresh matches and six fresh agreements: %+v, want off by agreement", v)
 	}
-	if v := r.judge(494, true, 10, 101); !v.thin || v.lost() != "unseen" {
+	if v := r.judge(494, true, modJudge{10, 8}, 101); !v.thin || v.lost() != "unseen" {
 		t.Errorf("every entry aged: %+v, want thin", v)
 	}
 }

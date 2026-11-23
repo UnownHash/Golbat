@@ -306,7 +306,7 @@ func TestModifierSizeNeverInverted(t *testing.T) {
 		t.Fatalf("contradictions %d observations %d boundaries %v, want 2, 2 and unchanged", m.Contradictions, m.Observations, m.Boundaries)
 	}
 	rec := l.scopes[modScopeKey{m.Scope, modZone}].rec[modDimSize]
-	if v := rec.judge(modIDSizeMatch, false, 4, 0); rec.n != 4 || v.on || !v.byEffect {
+	if v := rec.judge(modIDSizeMatch, false, modJudge{4, 8}, 0); rec.n != 4 || v.on || !v.byEffect {
 		t.Fatalf("record holds %d, verdict %+v: want 2 matches and 2 refused rolls, no majority", rec.n, v)
 	}
 	// Each refused roll disproved "1/2" in its cell.

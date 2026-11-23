@@ -160,3 +160,92 @@ func TestModifierScaleEventEndStopsApplying(t *testing.T) {
 		l.sweep(ts)
 	}
 }
+
+// TestModifierScaleEventStartWithPreEventSpawns (design §9): at a global
+// event's start the spawns from before it are still encountered and agree,
+// across many cells, for most of an hour. At 6000 checks an hour, with the
+// base share draining over the first 45 minutes, the +5 is confirmed
+// zone-wide within 30 minutes of the drain and stays: an early candidate
+// that ran out of excluded cells does not block it.
+func TestModifierScaleEventStartWithPreEventSpawns(t *testing.T) {
+	grid := modScaleCells(t)
+	for seed := range uint64(3) {
+		rng := rand.New(rand.NewPCG(seed, 9))
+		l := newModifierLearner(defaultModifierParams())
+		const perHour, drain = 6000, 45 * time.Minute
+		applies := func() bool {
+			for _, m := range l.active() {
+				if m.Status == modConfirmed && m.ZoneWide {
+					return true
+				}
+			}
+			return false
+		}
+		for i := range 3 * perHour {
+			at := time.Duration(i) * time.Hour / perHour
+			ev := modCheck(modT0.Add(at), grid[rng.IntN(len(grid))])
+			if at >= drain || rng.Float64() < float64(at)/float64(drain) {
+				withLevelDelta(5)(&ev)
+			}
+			trs := l.feed(ev, modZone)
+			if at < drain+30*time.Minute {
+				continue
+			}
+			for _, tr := range trs {
+				if tr.State == modEnded {
+					t.Fatalf("seed %d: ended (%s) at +%s, after the pre-event spawns drained", seed, tr.Mod.EndReason, at)
+				}
+			}
+			if !applies() {
+				t.Fatalf("seed %d: not applied at +%s, 30 minutes after the pre-event spawns drained", seed, at)
+			}
+		}
+	}
+}
+
+// TestModifierScaleSampledPoissonStaysOn (design §9): a zone-wide +5 seen
+// through sampled encounters arriving at random, 12 an hour on average, for
+// eight hours. Hours with fewer than confirm checks are common; once
+// confirmed the modifier stays on through them, and it still ends within
+// about an hour of the event's end.
+func TestModifierScaleSampledPoissonStaysOn(t *testing.T) {
+	grid := modScaleCells(t)
+	for seed := range uint64(6) {
+		rng := rand.New(rand.NewPCG(seed, 12))
+		l := newModifierLearner(defaultModifierParams())
+		eventEnd := modT0.Add(8 * time.Hour)
+		var confirmed, ended time.Time
+		on := false
+		next := modT0
+		for ts := modT0; ts.Before(eventEnd.Add(3 * time.Hour)); ts = ts.Add(time.Minute) {
+			var trs []modifierTransition
+			for ; !next.After(ts); next = next.Add(time.Duration(rng.ExpFloat64() * float64(time.Hour) / 12)) {
+				ev := modCheck(next, grid[rng.IntN(len(grid))])
+				if next.Before(eventEnd) {
+					withLevelDelta(5)(&ev)
+				}
+				trs = append(trs, l.feed(ev, modZone)...)
+			}
+			trs = append(trs, l.sweep(ts)...)
+			for _, tr := range trs {
+				switch {
+				case tr.State == modConfirmed:
+					if on = true; confirmed.IsZero() {
+						confirmed = ts
+					}
+				case tr.State == modEnded && on:
+					if ts.Before(eventEnd) {
+						t.Fatalf("seed %d: confirmed modifier ended (%s) at +%s, during the event", seed, tr.Mod.EndReason, ts.Sub(modT0))
+					}
+					on, ended = false, ts
+				}
+			}
+		}
+		if confirmed.IsZero() || confirmed.After(modT0.Add(4*time.Hour)) {
+			t.Fatalf("seed %d: confirmed at %v, want within the event's first half", seed, confirmed)
+		}
+		if on || ended.After(eventEnd.Add(65*time.Minute)) {
+			t.Fatalf("seed %d: ended at %v, want within about an hour of the event's end %v", seed, ended, eventEnd)
+		}
+	}
+}
