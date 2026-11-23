@@ -22,8 +22,9 @@ import (
 // while a scope has an active modifier, its first sightings. It logs every
 // transition and republishes derivationModifierIndex and the API snapshot
 // after a transition or a shrink of a confirmed modifier's coverage
-// (zone-wide lost, size boundaries moved) at once, and after growth (a new
-// in-cell, zone-wide gained) or an evidence-only change at most once per
+// (zone-wide lost, a cell excluded or no longer covered, size boundaries
+// moved) at once, and after growth (a venue cell covered, zone-wide gained)
+// or an evidence-only change at most once per
 // deriveModifiersEvidenceInterval. A publish re-clones only the modifiers
 // changed since the last one. State is in memory only.
 
@@ -43,8 +44,7 @@ const deriveModifiersEvidenceInterval = time.Second
 // modifierRuntime is the learner goroutine's state. Everything but the
 // channel and the submit guard is owned by run (or a test calling handle).
 type modifierRuntime struct {
-	learner       *modifierLearner
-	zoneWideCells int
+	learner *modifierLearner
 	// sweepInterval is run's sweep period (deriveModifiersSweepInterval;
 	// tests shorten it before start).
 	sweepInterval time.Duration
@@ -79,7 +79,6 @@ type modifierRuntime struct {
 func newModifierRuntime(p modifierParams, queueSize int) *modifierRuntime {
 	return &modifierRuntime{
 		learner:       newModifierLearner(p),
-		zoneWideCells: p.ZoneWideCells,
 		sweepInterval: deriveModifiersSweepInterval,
 		clock:         time.Now,
 		events:        make(chan modifierEvent, queueSize),
@@ -124,12 +123,13 @@ func activeDerivationModifiers() []*derivationModifier {
 // values the learner cannot work with.
 func modifierParamsFromConfig() (modifierParams, error) {
 	c := config.Config.DerivationModifiers
-	p := modifierParams{Start: c.Start, Confirm: c.Confirm, End: c.End, ZoneWideCells: c.ZoneWideCells,
+	p := modifierParams{Start: c.Start, Confirm: c.Confirm,
 		Window: time.Duration(c.WindowSeconds) * time.Second, Unseen: time.Duration(c.UnseenSeconds) * time.Second}
-	if p.Start < 1 || p.Confirm < p.Start || p.End < 1 || p.ZoneWideCells < 1 || p.Window <= 0 || p.Unseen <= 0 {
-		return p, fmt.Errorf("invalid thresholds start=%d confirm=%d end=%d zone_wide_cells=%d "+
-			"window_seconds=%d unseen_seconds=%d (want start ≥ 1, confirm ≥ start, the rest > 0)",
-			c.Start, c.Confirm, c.End, c.ZoneWideCells, c.WindowSeconds, c.UnseenSeconds)
+	// Confirm is judged on the zone record, which holds modRecordSize checks.
+	if p.Start < 1 || p.Confirm < p.Start || p.Confirm > modRecordSize || p.Window <= 0 || p.Unseen <= 0 {
+		return p, fmt.Errorf("invalid thresholds start=%d confirm=%d window_seconds=%d unseen_seconds=%d "+
+			"(want 1 ≤ start ≤ confirm ≤ %d, the rest > 0)",
+			c.Start, c.Confirm, c.WindowSeconds, c.UnseenSeconds, modRecordSize)
 	}
 	return p, nil
 }
@@ -154,8 +154,8 @@ func InitDerivationModifiers() error {
 	r.start()
 	derivationModifierRuntime = r
 	derivationModifierLearnerOn = true
-	log.Infof("[DERIVE_MODIFIER] learner started (start=%d confirm=%d end=%d zone_wide_cells=%d window=%s unseen=%s)",
-		p.Start, p.Confirm, p.End, p.ZoneWideCells, p.Window, p.Unseen)
+	log.Infof("[DERIVE_MODIFIER] learner started (start=%d confirm=%d window=%s unseen=%s)",
+		p.Start, p.Confirm, p.Window, p.Unseen)
 	return nil
 }
 
@@ -183,9 +183,9 @@ func submitDerivationModifierEvent(ev modifierEvent) {
 }
 
 // submitDerivationModifierSighting sends a new record's first sighting to
-// the learner, only when its scope has an active modifier (it feeds that
-// modifier's last-seen time). With no active modifier it costs one atomic
-// load and sends nothing. The save path calls it only when
+// the learner, only when its scope has an active modifier that covers
+// something (it feeds that modifier's last-seen time). With none it costs one
+// atomic load and sends nothing. The save path calls it only when
 // derivationModifierLearnerOn, so a learner that is off costs a branch.
 func submitDerivationModifierSighting(p *Pokemon, now int64) {
 	if !derivationModifierLearnerOn {
@@ -261,7 +261,7 @@ func (r *modifierRuntime) zone(cell s2.CellID) string {
 // last publish. With nothing changed it returns without reading the clock.
 func (r *modifierRuntime) publish(trs []modifierTransition) {
 	for _, tr := range trs {
-		log.Info(formatModifierTransition(tr, r.zoneWideCells))
+		log.Info(formatModifierTransition(tr))
 	}
 	d := r.learner.takeDirty()
 	if len(trs) == 0 && !d.shrink {
@@ -272,7 +272,7 @@ func (r *modifierRuntime) publish(trs []modifierTransition) {
 	}
 	r.evidencePending, r.lastPublish = false, r.clock()
 	active := r.activeCopies()
-	derivationModifierIndex.Store(buildModifierIndex(active, r.zoneWideCells))
+	derivationModifierIndex.Store(buildModifierIndex(active))
 	if len(active) == 0 {
 		derivationModifierSnapshot.Store(nil)
 	} else {
@@ -292,7 +292,7 @@ func (r *modifierRuntime) activeCopies() []*derivationModifier {
 		m := t.mod
 		p, ok := r.published[m]
 		if !ok || p.version != m.version {
-			p = publishedModifier{version: m.version, mod: m.publishedClone()}
+			p = publishedModifier{version: m.version, mod: m.clone()}
 			r.clones++
 		}
 		next[m] = p
@@ -303,11 +303,19 @@ func (r *modifierRuntime) activeCopies() []*derivationModifier {
 }
 
 // formatModifierTransition is the [DERIVE_MODIFIER] log line for tr.
-func formatModifierTransition(tr modifierTransition, zoneWideCells int) string {
+// region is the number of covered venue cells, or zone-wide with the
+// excluded and the venue cells it has: "zone-wide less 1 plus 3 cells".
+func formatModifierTransition(tr modifierTransition) string {
 	m := tr.Mod
-	region := "zone-wide"
-	if !m.ZoneWide(zoneWideCells) {
-		region = strconv.Itoa(len(m.InCells)) + " cells"
+	region := strconv.Itoa(len(m.Cells)) + " cells"
+	if m.ZoneWide {
+		region = "zone-wide"
+		if n := len(m.Excluded); n > 0 {
+			region += " less " + strconv.Itoa(n)
+		}
+		if n := len(m.Cells); n > 0 {
+			region += " plus " + strconv.Itoa(n) + " cells"
+		}
 	}
 	line := fmt.Sprintf("[DERIVE_MODIFIER] %s %s %s scope=%s zone=%s region=%s obs=%d contra=%d",
 		tr.State, m.Type, formatModifierEffect(m), formatModifierScope(m.Scope), m.Zone, region,

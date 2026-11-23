@@ -22,8 +22,8 @@ import (
 var derivationModifierIndex atomic.Pointer[modifierIndex]
 
 // modifierEntry is one confirmed modifier as the derive path matches it:
-// whether it covers its zone, else its in-cells. It never holds the
-// modifier's outside cells.
+// whether it covers its zone, else its covered venue cells. (It does not yet
+// honour a zone-wide modifier's excluded cells.)
 type modifierEntry struct {
 	typ      modifierType
 	effect   modifierEffect
@@ -40,7 +40,8 @@ type modifierIndex struct {
 	// never applied (design §7) and have no entry.
 	confirmed map[modifierScope][]modifierEntry
 	// active holds the species scopes with a candidate or confirmed
-	// modifier; anyAllStrong whether an all-strong one is active.
+	// modifier that covers something; anyAllStrong whether an all-strong one
+	// is active.
 	active       map[modifierScope]struct{}
 	anyAllStrong bool
 }
@@ -55,7 +56,7 @@ func modifierApplied(m *derivationModifier) bool {
 // buildModifierIndex builds the index from the learner's active modifiers
 // (published copies, never modified: the index shares their maps). It
 // returns nil when no modifier is active.
-func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifierIndex {
+func buildModifierIndex(mods []*derivationModifier) *modifierIndex {
 	idx := &modifierIndex{
 		confirmed: make(map[modifierScope][]modifierEntry),
 		active:    make(map[modifierScope]struct{}),
@@ -66,18 +67,20 @@ func buildModifierIndex(mods []*derivationModifier, zoneWideCells int) *modifier
 			continue
 		}
 		n++
-		if m.Scope.AllStrong {
+		// A sighting only marks a modifier seen where it covers: one with no
+		// coverage (a candidate from scattered noise) wants none.
+		switch {
+		case m.Scope.AllStrong:
 			idx.anyAllStrong = true
-		} else {
+		case m.ZoneWide || len(m.Cells) > 0:
 			idx.active[m.Scope] = struct{}{}
 		}
 		if !modifierApplied(m) {
 			continue
 		}
-		zoneWide := m.ZoneWide(zoneWideCells)
-		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone, zoneWide: zoneWide}
-		if !zoneWide {
-			e.inCells = m.InCells
+		e := modifierEntry{typ: m.Type, effect: m.Effect, size: m.Boundaries, zone: m.Zone, zoneWide: m.ZoneWide}
+		if !m.ZoneWide {
+			e.inCells = m.Cells
 		}
 		idx.confirmed[m.Scope] = append(idx.confirmed[m.Scope], e)
 	}

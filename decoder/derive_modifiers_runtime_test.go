@@ -2,6 +2,7 @@ package decoder
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -94,6 +95,14 @@ func TestDerivationModifiersRuntimeLogsTransitions(t *testing.T) {
 	if len(lines) != 2 || lines[1] != want {
 		t.Fatalf("log lines %q, want candidate then %q", lines, want)
 	}
+	wide := modifierTransition{State: modConfirmed, Mod: &derivationModifier{Type: modLevelOffset,
+		Scope: modifierScope{PokemonID: 1}, Effect: modifierEffect{Delta: 5}, Zone: modZone, ZoneWide: true,
+		Excluded: []s2.CellID{cellD}, Cells: cellSet(cellA, cellB), Observations: 12}}
+	want = "[DERIVE_MODIFIER] confirmed level_offset delta=+5 scope=1/0 zone=Europe/London " +
+		"region=zone-wide less 1 plus 2 cells obs=12 contra=0"
+	if got := formatModifierTransition(wide); got != want {
+		t.Fatalf("zone-wide line %q, want %q", got, want)
+	}
 }
 
 func TestDerivationModifiersZoneCellZero(t *testing.T) {
@@ -113,7 +122,7 @@ func TestDerivationModifiersZoneCellZero(t *testing.T) {
 func setModifierConfig() {
 	m := &config.Config.DerivationModifiers
 	m.Enabled = true
-	m.Start, m.Confirm, m.End, m.ZoneWideCells = 3, 10, 8, 3
+	m.Start, m.Confirm = 3, 10
 	m.WindowSeconds, m.UnseenSeconds = 1800, 3600
 }
 
@@ -146,28 +155,41 @@ func TestDerivationModifiersInitStartsAndFlushes(t *testing.T) {
 	if derivationModifierRuntime == nil || !derivationModifierLearnerOn {
 		t.Fatal("learner not started")
 	}
-	if got := derivationModifierRuntime.zoneWideCells; got != 3 {
-		t.Errorf("zoneWideCells = %d, want 3", got)
-	}
 	submitDerivationModifierEvent(modCheck(modT0, cellA, withCharged(494)))
 	FlushDerivationModifiers()
 	submitDerivationModifierEvent(modCheck(modT0, cellA)) // after shutdown: must not panic
 	FlushDerivationModifiers()                            // idempotent
 }
 
+// Confirm is judged on the 16-entry zone record, so start and confirm above
+// 16 could never be met.
 func TestDerivationModifiersInitRejectsBadThresholds(t *testing.T) {
 	prevCfg := config.Config
 	t.Cleanup(func() { config.Config = prevCfg })
 	withModifierRuntime(t, nil)
-	setModifierConfig()
-	config.Config.DerivationModifiers.Confirm = 2 // below start
 	config.Config.DeriveIv = true
-
-	if err := InitDerivationModifiers(); err == nil {
-		t.Fatal("Init accepted confirm < start")
+	m := &config.Config.DerivationModifiers
+	for name, set := range map[string]func(){
+		"confirm below start": func() { m.Confirm = 2 },
+		"start 0":             func() { m.Start = 0 },
+		"start 17":            func() { m.Start, m.Confirm = 17, 17 },
+		"confirm 17":          func() { m.Confirm = 17 },
+		"window 0":            func() { m.WindowSeconds = 0 },
+		"unseen 0":            func() { m.UnseenSeconds = 0 },
+	} {
+		setModifierConfig()
+		set()
+		if err := InitDerivationModifiers(); err == nil {
+			t.Errorf("%s: Init accepted it", name)
+		}
+		if derivationModifierRuntime != nil || derivationModifierLearnerOn {
+			t.Fatalf("%s: learner started with bad thresholds", name)
+		}
 	}
-	if derivationModifierRuntime != nil || derivationModifierLearnerOn {
-		t.Fatal("learner started with bad thresholds")
+	setModifierConfig()
+	m.Start, m.Confirm = 16, 16
+	if _, err := modifierParamsFromConfig(); err != nil {
+		t.Errorf("start 16 confirm 16 rejected: %v", err)
 	}
 }
 
@@ -248,8 +270,8 @@ func TestDerivationModifierSightingGated(t *testing.T) {
 
 	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: modZone, Status: modCandidate,
-		InCells: cellSet(cellA), Outside: cellSet()}
-	derivationModifierIndex.Store(buildModifierIndex([]*derivationModifier{pin}, 3))
+		Cells: cellSet(cellA)}
+	derivationModifierIndex.Store(buildModifierIndex([]*derivationModifier{pin}))
 
 	saveNewModifierTestPokemon(t, 990002)
 	if n := len(r.events); n != 1 {
@@ -273,8 +295,8 @@ func TestDerivationModifierSightingUsesServerClock(t *testing.T) {
 	withModifierRuntime(t, r)
 	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Zone: modZone, Status: modCandidate,
-		InCells: cellSet(cellA), Outside: cellSet()}
-	derivationModifierIndex.Store(buildModifierIndex([]*derivationModifier{pin}, 3))
+		Cells: cellSet(cellA)}
+	derivationModifierIndex.Store(buildModifierIndex([]*derivationModifier{pin}))
 
 	saveNewModifierTestPokemonAt(t, 990003, time.Now().Add(3*time.Hour).Unix())
 	if n := len(r.events); n != 1 {
@@ -344,11 +366,14 @@ func TestDerivationModifiersFlushDrainsQueue(t *testing.T) {
 
 func modZoneOf(s2.CellID) string { return modZone }
 
-// TestDerivationModifiersRuntimeRepublishesDemotion: a pin confirmed
-// zone-wide that turns local without a transition (an agreement in another
-// cell) is republished at once: the index stops covering the zone.
-func TestDerivationModifiersRuntimeRepublishesDemotion(t *testing.T) {
+// TestDerivationModifiersRuntimeRepublishesExclusion: an agreement in a
+// cell of a zone-wide pin excludes that cell without a transition; the
+// shrink is republished at once. (The index honours excluded cells from the
+// next change on; here the published copy is checked.)
+func TestDerivationModifiersRuntimeRepublishesExclusion(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
 	withModifierRuntime(t, r)
 	cells := []s2.CellID{cellA, cellB, cellC}
 	for i := range 10 {
@@ -359,58 +384,80 @@ func TestDerivationModifiersRuntimeRepublishesDemotion(t *testing.T) {
 	}
 
 	r.handle(modCheck(modT0.Add(10*time.Second), cellD))
-	idx := derivationModifierIndex.Load()
-	if adj := idx.lookup(959, 3272, true, cellD, modZoneOf); adj.Charged != 0 {
-		t.Errorf("after the outside agreement: cellD adjust %+v, want none", adj)
-	}
-	if adj := idx.lookup(959, 3272, true, unseenCell, modZoneOf); adj.Charged != 0 {
-		t.Errorf("after the outside agreement: unseen cell adjust %+v, want none", adj)
-	}
-	if adj := idx.lookup(959, 3272, true, cellA, modZoneOf); adj.Charged != 494 {
-		t.Errorf("after the outside agreement: cellA adjust %+v, want charged 494", adj)
-	}
 	snap := activeDerivationModifiers()
 	if len(snap) != 1 {
 		t.Fatalf("snapshot %d modifiers, want 1", len(snap))
 	}
-	if snap[0].ZoneWide(r.zoneWideCells) || snap[0].Outside != nil {
-		t.Errorf("snapshot zone-wide %v outside %v, want local with no outside set copied",
-			snap[0].ZoneWide(r.zoneWideCells), snap[0].Outside)
+	m := snap[0]
+	if !m.ZoneWide || !slices.Equal(m.Excluded, []s2.CellID{cellD}) {
+		t.Fatalf("snapshot zone-wide %v excluded %v, want zone-wide less cellD at once", m.ZoneWide, m.Excluded)
 	}
-	if _, ok := r.learner.activeTracks[0].mod.Outside[cellD]; !ok {
-		t.Errorf("learner outside %v, want cellD", r.learner.activeTracks[0].mod.Outside)
+	if m.Covers(modZone, cellD) || !m.Covers(modZone, unseenCell) || !m.Covers(modZone, cellA) {
+		t.Error("published pin must cover the zone but not the agreeing cellD")
 	}
 }
 
-// TestDerivationModifiersRuntimeRepublishesNewInCell: a deviation in a new
-// cell grows a local confirmed pin's coverage; growth is published with
-// evidence, at most once per deriveModifiersEvidenceInterval.
-func TestDerivationModifiersRuntimeRepublishesNewInCell(t *testing.T) {
+// TestDerivationModifiersRuntimeRepublishesZoneWideLost: agreements that
+// take the majority of the zone record turn zone-wide off without a
+// transition (the venue cells keep the pin alive); the index stops covering
+// the zone at once.
+func TestDerivationModifiersRuntimeRepublishesZoneWideLost(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
 	r.clock = func() time.Time { return clock }
 	withModifierRuntime(t, r)
+	cells := []s2.CellID{cellA, cellB, cellC}
 	for i := range 10 {
-		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cells[i%3], withCharged(494)))
 	}
-	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 0 {
-		t.Fatalf("local pin: cellB adjust %+v, want none", adj)
+	for i := range 7 {
+		r.handle(modCheck(modT0.Add(time.Duration(10+i)*time.Second), cellD))
+		if adj := derivationModifierIndex.Load().lookup(959, 3272, true, unseenCell, modZoneOf); adj.Charged != 494 {
+			t.Fatalf("agreement %d: unseen cell adjust %+v, want charged 494 (still the majority)", i+1, adj)
+		}
 	}
-	r.handle(modCheck(modT0.Add(10*time.Second), cellB, withCharged(494)))
-	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 0 {
-		t.Fatalf("growth right after the confirm: cellB adjust %+v, want none yet (rate-limited)", adj)
+	r.handle(modCheck(modT0.Add(19*time.Second), cellD))
+	idx := derivationModifierIndex.Load()
+	if adj := idx.lookup(959, 3272, true, unseenCell, modZoneOf); adj.Charged != 0 {
+		t.Errorf("after 8 agreements: unseen cell adjust %+v, want none", adj)
 	}
-	clock = clock.Add(deriveModifiersEvidenceInterval)
-	r.handle(modCheck(modT0.Add(11*time.Second), cellA)) // changes nothing itself
-	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 494 {
-		t.Fatalf("after the interval: cellB adjust %+v, want charged 494", adj)
+	if adj := idx.lookup(959, 3272, true, cellA, modZoneOf); adj.Charged != 494 {
+		t.Errorf("after 8 agreements: venue cellA adjust %+v, want charged 494", adj)
 	}
 }
 
-// TestDerivationModifiersRuntimeZoneWideInCellNoRebuild: a new in-cell of a
-// zone-wide modifier changes no lookup, so it does not rebuild the index
-// before the evidence interval.
-func TestDerivationModifiersRuntimeZoneWideInCellNoRebuild(t *testing.T) {
+// TestDerivationModifiersRuntimeRepublishesNewCell: a second match in a new
+// cell covers it; growth is published with evidence, at most once per
+// deriveModifiersEvidenceInterval.
+func TestDerivationModifiersRuntimeRepublishesNewCell(t *testing.T) {
+	r := newModifierRuntime(defaultModifierParams(), 64)
+	clock := modT0
+	r.clock = func() time.Time { return clock }
+	withModifierRuntime(t, r)
+	// cellA.Next() shares cellA's level-10 cell: the pin stays a venue.
+	near := cellA.Next()
+	for i := range 10 {
+		r.handle(modCheck(modT0.Add(time.Duration(i)*time.Second), cellA, withCharged(494)))
+	}
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, near, modZoneOf); adj.Charged != 0 {
+		t.Fatalf("venue pin: next cell adjust %+v, want none", adj)
+	}
+	r.handle(modCheck(modT0.Add(10*time.Second), near, withCharged(494)))
+	r.handle(modCheck(modT0.Add(11*time.Second), near, withCharged(494)))
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, near, modZoneOf); adj.Charged != 0 {
+		t.Fatalf("growth right after the confirm: next cell adjust %+v, want none yet (rate-limited)", adj)
+	}
+	clock = clock.Add(deriveModifiersEvidenceInterval)
+	r.handle(modCheck(modT0.Add(12*time.Second), cellA, withSpecies(1, 0))) // changes nothing itself
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, near, modZoneOf); adj.Charged != 494 {
+		t.Fatalf("after the interval: next cell adjust %+v, want charged 494", adj)
+	}
+}
+
+// TestDerivationModifiersRuntimeZoneWideMatchNoRebuild: a match in a new
+// cell of a zone-wide modifier changes no lookup, so it does not rebuild the
+// index before the evidence interval.
+func TestDerivationModifiersRuntimeZoneWideMatchNoRebuild(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
 	r.clock = func() time.Time { return clock }
@@ -425,13 +472,12 @@ func TestDerivationModifiersRuntimeZoneWideInCellNoRebuild(t *testing.T) {
 	}
 	r.handle(modCheck(modT0.Add(10*time.Second), cellE, withCharged(494)))
 	if derivationModifierIndex.Load() != idx {
-		t.Fatal("a new in-cell of a zone-wide modifier rebuilt the index at once")
+		t.Fatal("a match in a new cell of a zone-wide modifier rebuilt the index at once")
 	}
 }
 
 // TestDerivationModifiersRuntimeClonesChangedOnly: a publish clones only the
-// modifiers changed since the last one, each at most once, and the published
-// copies carry no outside-cell set.
+// modifiers changed since the last one, each at most once.
 func TestDerivationModifiersRuntimeClonesChangedOnly(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
@@ -451,13 +497,13 @@ func TestDerivationModifiersRuntimeClonesChangedOnly(t *testing.T) {
 		t.Fatalf("%d active modifiers, want %d", len(before), n)
 	}
 	for _, m := range before {
-		if m.Status != modConfirmed || !m.ZoneWide(r.zoneWideCells) {
+		if m.Status != modConfirmed || !m.ZoneWide {
 			t.Fatalf("modifier %+v, want confirmed zone-wide", m)
 		}
 	}
 	idx, clones := derivationModifierIndex.Load(), r.clones
 
-	// New in-cells on the first ten modifiers: evidence only.
+	// Matches in new cells on the first ten modifiers: evidence only.
 	for sp := range 10 {
 		for _, c := range []s2.CellID{cellD, cellE, cellF, unseenCell} {
 			r.handle(modCheck(ts, c, withCharged(494), withSpecies(int32(1000+sp), 0)))
@@ -467,7 +513,7 @@ func TestDerivationModifiersRuntimeClonesChangedOnly(t *testing.T) {
 		t.Fatalf("published before the interval (clones %d → %d)", clones, r.clones)
 	}
 	clock = clock.Add(deriveModifiersEvidenceInterval)
-	r.handle(modCheck(ts, cellA, withSpecies(1000, 0))) // changes nothing itself
+	r.handle(modCheck(ts, cellA, withSpecies(1, 0))) // changes nothing itself
 	if derivationModifierIndex.Load() == idx {
 		t.Fatal("evidence not published after the interval")
 	}
@@ -477,9 +523,6 @@ func TestDerivationModifiersRuntimeClonesChangedOnly(t *testing.T) {
 	after := map[int32]*derivationModifier{}
 	for _, m := range activeDerivationModifiers() {
 		after[m.Scope.PokemonID] = m
-		if m.Outside != nil {
-			t.Errorf("published modifier %d carries an outside set", m.Scope.PokemonID)
-		}
 	}
 	for _, m := range before {
 		changed := m.Scope.PokemonID < 1010
@@ -536,7 +579,7 @@ func TestDerivationModifiersRuntimeEvidenceRateLimited(t *testing.T) {
 		t.Fatalf("observations %d right after the confirm, want 10 (rate-limited)", obs)
 	}
 	clock = clock.Add(deriveModifiersEvidenceInterval)
-	r.handle(modCheck(modT0.Add(11*time.Second), cellA)) // changes nothing itself
+	r.handle(modCheck(modT0.Add(11*time.Second), cellA, withSpecies(1, 0))) // changes nothing itself
 	if obs := activeDerivationModifiers()[0].Observations; obs != 11 {
 		t.Fatalf("observations %d after the interval, want 11", obs)
 	}
@@ -659,8 +702,9 @@ func TestAddEncounterPokemonFeedsLearnerWithRollMarkOnlyInternal(t *testing.T) {
 }
 
 // TestDerivationModifiersRuntimeUnexplainedGrowthAtOnce: a confirmed
-// unexplained modifier's new in-cell widens suppression, so it is published
-// at once, not with evidence.
+// unexplained modifier's growth (here to its zone: a match under a second
+// level-10 cell) widens suppression, so it is published at once, not with
+// evidence.
 func TestDerivationModifiersRuntimeUnexplainedGrowthAtOnce(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
@@ -684,20 +728,24 @@ func TestDerivationModifiersRuntimeUnexplainedGrowthAtOnce(t *testing.T) {
 
 // TestDerivationModifiersRuntimeConflictGrowthAtOnce: growth of a confirmed
 // pin whose scope and zone hold another confirmed pin of the same slot can
-// create a dispute, so it is published at once and the slot withheld.
+// create a dispute, so it is published at once.
 func TestDerivationModifiersRuntimeConflictGrowthAtOnce(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
 	r.clock = func() time.Time { return clock }
 	withModifierRuntime(t, r)
+	// Three cells under one level-10 cell: neither pin goes zone-wide.
+	c1, c2, c3 := cellA, cellA.Next(), cellA.Prev()
 	ts := modT0
-	for range 10 {
-		r.handle(modCheck(ts, cellA, withCharged(494)))
+	feed := func(cell s2.CellID, move int32) {
+		r.handle(modCheck(ts, cell, withCharged(move)))
 		ts = ts.Add(time.Second)
 	}
 	for range 10 {
-		r.handle(modCheck(ts, cellB, withCharged(300)))
-		ts = ts.Add(time.Second)
+		feed(c1, 494)
+	}
+	for range 10 {
+		feed(c2, 300)
 	}
 	n := 0
 	for _, m := range activeDerivationModifiers() {
@@ -708,37 +756,41 @@ func TestDerivationModifiersRuntimeConflictGrowthAtOnce(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("%d confirmed pins, want 2", n)
 	}
-	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf); adj.Charged != 300 {
-		t.Fatalf("cellB adjust %+v, want charged 300", adj)
+	feed(c3, 494)
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, c3, modZoneOf); adj.Charged != 0 {
+		t.Fatalf("one match in a new cell: adjust %+v, want none", adj)
 	}
-	r.handle(modCheck(ts, cellB, withCharged(494)))
-	adj := derivationModifierIndex.Load().lookup(959, 3272, true, cellB, modZoneOf)
-	if !adj.WithholdCharged || adj.Charged != 0 {
-		t.Errorf("after 494 grows into cellB: adjust %+v, want charged withheld at once", adj)
+	feed(c3, 494)
+	if adj := derivationModifierIndex.Load().lookup(959, 3272, true, c3, modZoneOf); adj.Charged != 494 {
+		t.Errorf("494 covering a new cell beside a confirmed 300: adjust %+v, want charged 494 at once", adj)
 	}
 }
 
 // TestDerivationModifiersRuntimeLevelConflictGrowthAtOnce: the same for two
-// level deltas: the dispute suppresses at once.
+// level deltas.
 func TestDerivationModifiersRuntimeLevelConflictGrowthAtOnce(t *testing.T) {
 	r := newModifierRuntime(defaultModifierParams(), 64)
 	clock := modT0
 	r.clock = func() time.Time { return clock }
 	withModifierRuntime(t, r)
+	c1, c2, c3 := cellA, cellA.Next(), cellA.Prev()
 	ts := modT0
-	for range 10 {
-		r.handle(modCheck(ts, cellA, withLevelDelta(5), withSpecies(1, 0)))
+	feed := func(cell s2.CellID, delta int8) {
+		r.handle(modCheck(ts, cell, withLevelDelta(delta), withSpecies(1, 0)))
 		ts = ts.Add(time.Second)
 	}
 	for range 10 {
-		r.handle(modCheck(ts, cellB, withLevelDelta(3), withSpecies(1, 0)))
-		ts = ts.Add(time.Second)
+		feed(c1, 5)
 	}
-	if adj := derivationModifierIndex.Load().lookup(1, 0, true, cellB, modZoneOf); adj.LevelDelta != 3 || adj.Suppress {
-		t.Fatalf("cellB adjust %+v, want delta 3", adj)
+	for range 10 {
+		feed(c2, 3)
 	}
-	r.handle(modCheck(ts, cellB, withLevelDelta(5), withSpecies(1, 0)))
-	if adj := derivationModifierIndex.Load().lookup(1, 0, true, cellB, modZoneOf); !adj.Suppress {
-		t.Errorf("after +5 grows into cellB: adjust %+v, want suppressed at once", adj)
+	if adj := derivationModifierIndex.Load().lookup(1, 0, true, c2, modZoneOf); adj.LevelDelta != 3 || adj.Suppress {
+		t.Fatalf("second cell adjust %+v, want delta 3", adj)
+	}
+	feed(c3, 5)
+	feed(c3, 5)
+	if adj := derivationModifierIndex.Load().lookup(1, 0, true, c3, modZoneOf); adj.LevelDelta != 5 {
+		t.Errorf("+5 covering a new cell beside a confirmed +3: adjust %+v, want delta 5 at once", adj)
 	}
 }

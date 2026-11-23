@@ -68,8 +68,24 @@ func TestDerivationModifiersConfigDefaults(t *testing.T) {
 		t.Fatalf("ReadConfig(%s): %v", path, err)
 	}
 	m := cfg.DerivationModifiers
-	if m.Enabled || m.Start != 3 || m.Confirm != 10 || m.End != 8 ||
-		m.WindowSeconds != 1800 || m.UnseenSeconds != 3600 || m.ZoneWideCells != 3 {
-		t.Errorf("DerivationModifiers = %+v, want disabled, 3/10/8/1800/3600/3", m)
+	if m.Enabled || m.Start != 3 || m.Confirm != 10 || m.WindowSeconds != 1800 || m.UnseenSeconds != 3600 {
+		t.Errorf("DerivationModifiers = %+v, want disabled, 3/10/1800/3600", m)
+	}
+}
+
+// The removed end and zone_wide_cells keys are ignored (with a warning), not
+// an error: a config written for the earlier learner still loads.
+func TestDerivationModifiersConfigIgnoresRemovedKeys(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.toml")
+	old := "[derivation_modifiers]\nenabled = true\nstart = 4\nend = 8\nzone_wide_cells = 3\n"
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := ReadConfig(path)
+	if err != nil {
+		t.Fatalf("ReadConfig(%s): %v", path, err)
+	}
+	if m := cfg.DerivationModifiers; !m.Enabled || m.Start != 4 || m.Confirm != 10 {
+		t.Errorf("DerivationModifiers = %+v, want enabled with start 4, confirm 10", m)
 	}
 }

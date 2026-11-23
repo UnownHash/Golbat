@@ -6,8 +6,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"golbat/config"
 )
 
 // ApiDerivationModifiers is the shareable snapshot of the active derivation
@@ -118,10 +116,6 @@ func apiModifierEffect(m *derivationModifier) map[string]any {
 func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 	out := &ApiDerivationModifiers{Version: 1, GeneratedAt: now.UTC().Format(apiModifierTimeFormat),
 		Modifiers: []ApiDerivationModifier{}}
-	zoneWide := config.Config.DerivationModifiers.ZoneWideCells
-	if r := derivationModifierRuntime; r != nil {
-		zoneWide = r.zoneWideCells
-	}
 	for _, m := range activeDerivationModifiers() {
 		am := ApiDerivationModifier{
 			ID:      apiModifierID(m),
@@ -137,9 +131,9 @@ func GetApiDerivationModifiers(now time.Time) *ApiDerivationModifiers {
 		if !m.Scope.AllStrong {
 			am.Scope.Pokemon = []ApiModifierPokemon{{ID: m.Scope.PokemonID, Form: m.Scope.Form}}
 		}
-		if !m.ZoneWide(zoneWide) {
-			am.Region.Cells = make([]string, 0, len(m.InCells))
-			for c := range m.InCells {
+		if !m.ZoneWide {
+			am.Region.Cells = make([]string, 0, len(m.Cells))
+			for c := range m.Cells {
 				am.Region.Cells = append(am.Region.Cells, c.ToToken())
 			}
 			slices.Sort(am.Region.Cells)

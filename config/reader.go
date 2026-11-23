@@ -65,8 +65,6 @@ func ReadConfig(configPath string) (configDefinition, error) {
 		DerivationModifiers: derivationModifiers{
 			Start:         3,
 			Confirm:       10,
-			End:           8,
-			ZoneWideCells: 3,
 			WindowSeconds: 1800,
 			UnseenSeconds: 3600,
 		},
@@ -142,6 +140,12 @@ func ReadConfig(configPath string) (configDefinition, error) {
 
 	if envLoadingErr != nil {
 		fmt.Println(fmt.Errorf("%w", envLoadingErr))
+	}
+
+	for _, key := range []string{"derivation_modifiers.end", "derivation_modifiers.zone_wide_cells"} {
+		if k.Exists(key) {
+			fmt.Printf("config: %s is no longer used and is ignored; remove it\n", key)
+		}
 	}
 
 	unmarshalError := k.Unmarshal("", &Config)

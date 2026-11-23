@@ -18,7 +18,6 @@ const (
 	adjLatA, adjLonA = 51.5007, -0.1246
 	adjLatB, adjLonB = 40.7128, -74.0060
 	adjZoneA         = "Europe/London"
-	adjZoneWide      = 3
 )
 
 var (
@@ -31,7 +30,7 @@ var (
 // withModifierIndex publishes an index built from mods for one test.
 func withModifierIndex(t *testing.T, mods ...*derivationModifier) *modifierIndex {
 	t.Helper()
-	idx := buildModifierIndex(mods, adjZoneWide)
+	idx := buildModifierIndex(mods)
 	derivationModifierIndex.Store(idx)
 	t.Cleanup(func() { derivationModifierIndex.Store(nil) })
 	return idx
@@ -45,24 +44,23 @@ func cellSet(cells ...s2.CellID) map[s2.CellID]struct{} {
 	return m
 }
 
-// zoneWideIn is a set of in-cells large enough, and spread under two
-// level-10 cells, to make a modifier zone-wide (with withSpread).
+// zoneWideIn is the venue cells of a fixture that withSpread makes
+// zone-wide.
 func zoneWideIn() map[s2.CellID]struct{} {
 	return cellSet(adjCellA, adjCellA.Next(), adjCellFar)
 }
 
-// withSpread sets m's level-10 spread from its in-cells, as the learner's
-// addInCell keeps it.
+// withSpread makes m zone-wide when its zone is known and its cells are
+// zoneWideIn's (the learner judges zone-wide coverage itself, on the zone
+// record; a fixture states it).
 func withSpread(m *derivationModifier) *derivationModifier {
-	for c := range m.InCells {
-		m.addInCell(c)
-	}
+	m.ZoneWide = m.Zone != "" && len(m.Cells) == len(zoneWideIn())
 	return m
 }
 
 func levelMod(scope modifierScope, delta int32, zone string, in map[s2.CellID]struct{}) *derivationModifier {
 	return withSpread(&derivationModifier{Type: modLevelOffset, Scope: scope, Effect: modifierEffect{Delta: delta},
-		Zone: zone, Status: modConfirmed, InCells: in, Outside: map[s2.CellID]struct{}{}})
+		Zone: zone, Status: modConfirmed, Cells: in})
 }
 
 // adjRecord is a wild record of species 1 at lat/lon, strong or not.
@@ -151,7 +149,7 @@ func pinMoveData(t *testing.T) {
 func pinMod(zone string, slot string, move int32) *derivationModifier {
 	return &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Slot: slot, Move: move}, Zone: zone, Status: modConfirmed,
-		InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}}
+		Cells: cellSet(adjCellA)}
 }
 
 // Two confirmed charged pins covering one cell: neither applies and the
@@ -234,7 +232,7 @@ func TestDerivationAdjustMovePin(t *testing.T) {
 	})
 	withModifierIndex(t, &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Status: modConfirmed,
-		InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}})
+		Cells: cellSet(adjCellA)})
 	draw := encounter.Derive(adjEid, false, false, 0)
 	want := derivedMoves(&draw, 1, 0)
 
@@ -306,7 +304,7 @@ func TestDerivationAdjustUnexplainedSuppresses(t *testing.T) {
 		},
 	})
 	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-		Status: modConfirmed, InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}})
+		Status: modConfirmed, Cells: cellSet(adjCellA)})
 
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	p.deriveIvIfAbsent()
@@ -377,7 +375,7 @@ func TestDerivationAdjustLocalRegion(t *testing.T) {
 // zone "" is never zone-wide (design §7), so it covers neither cell 0 nor a
 // cell outside its in-cells.
 func TestDerivationAdjustZoneUnknownNotZoneWide(t *testing.T) {
-	idx := buildModifierIndex([]*derivationModifier{levelMod(modifierScope{PokemonID: 1}, 5, "", zoneWideIn())}, adjZoneWide)
+	idx := buildModifierIndex([]*derivationModifier{levelMod(modifierScope{PokemonID: 1}, 5, "", zoneWideIn())})
 	if adj := idx.lookup(1, 0, false, 0, modifierZoneOf); adj.LevelDelta != 0 {
 		t.Errorf("zone \"\" modifier for cell 0: delta %d, want 0", adj.LevelDelta)
 	}
@@ -405,7 +403,7 @@ func TestDerivationAdjustLazyZone(t *testing.T) {
 	zoneOf := func(s2.CellID) string { calls++; return adjZoneA }
 
 	local := buildModifierIndex([]*derivationModifier{
-		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))}, adjZoneWide)
+		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA))})
 	if adj := local.lookup(1, 0, false, adjCellA, zoneOf); adj.LevelDelta != 5 {
 		t.Errorf("local in-cell delta = %d, want 5", adj.LevelDelta)
 	}
@@ -417,8 +415,8 @@ func TestDerivationAdjustLazyZone(t *testing.T) {
 	wide := buildModifierIndex([]*derivationModifier{
 		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, zoneWideIn()),
 		withSpread(&derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 1}, Effect: modifierEffect{Slot: modSlotQuick, Move: 7},
-			Zone: adjZoneA, Status: modConfirmed, InCells: zoneWideIn(), Outside: map[s2.CellID]struct{}{}}),
-	}, adjZoneWide)
+			Zone: adjZoneA, Status: modConfirmed, Cells: zoneWideIn()}),
+	})
 	adj := wide.lookup(1, 0, false, adjCellB, zoneOf)
 	if calls != 1 || adj.LevelDelta != 5 || adj.Quick != 7 {
 		t.Errorf("zone-wide lookup: calls %d, adj %+v; want 1 call, delta 5, quick 7", calls, adj)
@@ -467,21 +465,28 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 	}
 	pin := &derivationModifier{Type: modMovePin, Scope: modifierScope{PokemonID: 959, Form: 3272, Strong: true},
 		Effect: modifierEffect{Slot: modSlotCharged, Move: 494}, Status: modCandidate,
-		InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}}
-	idx := buildModifierIndex([]*derivationModifier{pin}, adjZoneWide)
+		Cells: cellSet(adjCellA)}
+	idx := buildModifierIndex([]*derivationModifier{pin})
 	if !idx.wantsSighting(959, 3272, true) {
 		t.Error("candidate scope not wanted")
 	}
 	if idx.wantsSighting(959, 3272, false) || idx.wantsSighting(635, 0, true) || idx.wantsSighting(635, 0, false) {
 		t.Error("unrelated scope wanted")
 	}
+	// A candidate that covers nothing (scattered noise) is seen only by its
+	// own matches: no sighting traffic for it.
+	bare := *pin
+	bare.Cells = nil
+	if buildModifierIndex([]*derivationModifier{&bare}).wantsSighting(959, 3272, true) {
+		t.Error("a candidate with no coverage wants sightings")
+	}
 	all := levelMod(allStrongScope, 5, adjZoneA, cellSet(adjCellA))
 	all.Status = modCandidate
-	idx = buildModifierIndex([]*derivationModifier{all}, adjZoneWide)
+	idx = buildModifierIndex([]*derivationModifier{all})
 	if !idx.wantsSighting(635, 0, true) || idx.wantsSighting(635, 0, false) {
 		t.Error("all-strong candidate: want any strong scope, no ordinary one")
 	}
-	if buildModifierIndex(nil, adjZoneWide) != nil {
+	if buildModifierIndex(nil) != nil {
 		t.Error("empty mods built a non-nil index")
 	}
 }
@@ -489,7 +494,7 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 // sizeMod is a confirmed size_cutoffs modifier for species 1 local to cellA.
 func sizeMod(b map[string]sizeBoundary) *derivationModifier {
 	return &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1}, Boundaries: b,
-		Status: modConfirmed, InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}}
+		Status: modConfirmed, Cells: cellSet(adjCellA)}
 }
 
 // Size through deriveIvIfAbsent: adjEid's unboosted roll is ~0.733 (base
@@ -563,7 +568,7 @@ func TestDerivationAdjustRepopulateIv(t *testing.T) {
 func TestDerivationAdjustRepopulateIvUnexplained(t *testing.T) {
 	withDeriveIv(t, true)
 	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
-		Status: modConfirmed, InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}})
+		Status: modConfirmed, Cells: cellSet(adjCellA)})
 
 	p := adjRecord(1, adjLatA, adjLonA, false)
 	p.calculateIv(6, 0, 11)

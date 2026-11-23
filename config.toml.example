@@ -77,26 +77,24 @@ bucket_minutes = 15
 retain_days = 14
 
 # derivation_modifiers: opt-in, needs derive_iv. Learns event modifiers (a level offset, a forced
-# move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone and
-# ~1 km (level-14 S2) cell, and applies confirmed ones to derived values. start deviations within
-# window_seconds open a candidate; it is confirmed once it has confirm deviations in all (no time
-# limit), no contradiction among its last 16 outcomes in its cells, and matches in at least half of
-# them. end consecutive agreements in its cells end it (8: at most Dragonite's sampled hourly
-# minimum, so an event that ends on the hour stops applying within the next hour), as do start
-# contradictions at least matching its matches among the last 16, or not seeing its species there for
-# unseen_seconds. A modifier seen in zone_wide_cells cells that lie under at least two ~10 km
-# (level-10) cells, with no agreeing cell, covers its whole timezone. An all-strong level offset is
-# detected and listed but never applied; where two confirmed modifiers of one type and slot cover a
-# record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is in memory only
-# (a restart relearns). Enabling it reserves ~1 MB for the event queue.
+# move, moved size cuts, or an unexplained mismatch) from live encounter checks, per timezone, and
+# applies confirmed ones to derived values. start deviations within window_seconds open a candidate.
+# It covers its whole timezone while its effect is more than half of the zone's last 16 checks (at
+# least confirm of them, with matches under two ~10 km level-10 cells), less the cells that last
+# agreed; and it covers a ~1 km (level-14 S2) venue cell after two matches there, until one check
+# there agrees or shows another effect. It is confirmed with confirm deviations once it covers
+# something, and ends when it covers nothing, or when its species is not seen where it covers for
+# unseen_seconds. Under sampled encounters (Dragonite's hourly minimum of 12) a zone-wide event that
+# ends on the hour stops applying within the next hour. start and confirm are at most 16. An
+# all-strong level offset is never applied; where two confirmed modifiers of one type and slot cover
+# a record, that value is withheld. Transitions are logged as [DERIVE_MODIFIER]; state is in memory
+# only (a restart relearns). Enabling it reserves ~1 MB for the event queue.
 [derivation_modifiers]
 enabled = false
 start = 3
 confirm = 10
-end = 8
 window_seconds = 1800
 unseen_seconds = 3600
-zone_wide_cells = 3
 
 [koji]
 url = "http://{koji_url}/api/v1/geofence/feature-collection/{golbat_project}"
