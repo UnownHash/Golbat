@@ -6,7 +6,6 @@ require (
 	github.com/Depado/ginprom v1.8.3
 	github.com/UnownHash/gohbem v0.13.1
 	github.com/danielgtaylor/huma/v2 v2.41.0
-	github.com/getsentry/sentry-go v0.50.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-sql-driver/mysql v1.10.2
 	github.com/goccy/go-json v0.12.0
