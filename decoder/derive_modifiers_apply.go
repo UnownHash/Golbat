@@ -241,6 +241,8 @@ func (a derivationAdjust) sizeClass(roll float64, strong bool, form int32, base 
 				hi = b.Hi
 			}
 		}
+		// Learned boundaries always have Lo < Hi (sizeEvidence never holds an
+		// empty interval), so the two tests below cannot overlap.
 		if roll < lo {
 			return int32(c.below), true
 		}

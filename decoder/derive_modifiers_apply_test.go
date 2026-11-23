@@ -349,3 +349,91 @@ func TestModifierIndexWantsSighting(t *testing.T) {
 		t.Error("empty mods built a non-nil index")
 	}
 }
+
+// sizeMod is a confirmed size_cutoffs modifier for species 1 local to cellA.
+func sizeMod(b map[string]sizeBoundary) *derivationModifier {
+	return &derivationModifier{Type: modSizeCutoffs, Scope: modifierScope{PokemonID: 1}, Boundaries: b,
+		Status: modConfirmed, InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}}
+}
+
+// Size through deriveIvIfAbsent: adjEid's unboosted roll is ~0.733 (base
+// class 3). A "3/4" interval containing it leaves size absent; a "2/3" cut
+// moved above it gives class 2.
+func TestDerivationAdjustSizeThroughDerive(t *testing.T) {
+	withDeriveIv(t, true)
+	base := encounter.For(adjEid, false, 0)
+	r := base.SizeRoll
+	if base.Size != 3 || r <= 0.05 || r >= 0.95 {
+		t.Fatalf("adjEid roll %v class %d: test assumes a mid-range class-3 roll", r, base.Size)
+	}
+
+	withModifierIndex(t, sizeMod(map[string]sizeBoundary{
+		"3/4": {Lo: r - 0.01, Hi: r + 0.01, HasLo: true, HasHi: true}}))
+	inside := adjRecord(1, adjLatA, adjLonA, false)
+	inside.deriveIvIfAbsent()
+	if inside.Size.Valid {
+		t.Errorf("roll inside the moved interval: Size = %v, want absent", inside.Size)
+	}
+	if !inside.AtkIv.Valid {
+		t.Error("IVs not derived alongside an absent size")
+	}
+
+	withModifierIndex(t, sizeMod(map[string]sizeBoundary{
+		"2/3": {Lo: r + 0.01, Hi: r + 0.02, HasLo: true, HasHi: true}}))
+	below := adjRecord(1, adjLatA, adjLonA, false)
+	below.deriveIvIfAbsent()
+	if got := below.Size.ValueOrZero(); !below.Size.Valid || got != 2 {
+		t.Errorf("roll below the moved cut's lo: Size = %v, want 2", below.Size)
+	}
+
+	// The settled-IV path (deriveSizeAndMovesIfAbsent) reclassifies too.
+	settled := adjRecord(1, adjLatA, adjLonA, false)
+	settled.calculateIv(1, 2, 3)
+	settled.deriveIvIfAbsent()
+	if got := settled.Size.ValueOrZero(); got != 2 {
+		t.Errorf("settled IVs: Size = %v, want 2", settled.Size)
+	}
+}
+
+// repopulateIv's re-derive branch applies the adjustment for the walk being
+// derived (the sighting's strong flag, not the stored one).
+func TestDerivationAdjustRepopulateIv(t *testing.T) {
+	withDeriveIv(t, true)
+	withDeriveStrong(t, true)
+	withModifierIndex(t,
+		levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
+		levelMod(modifierScope{PokemonID: 1, Strong: true}, 3, adjZoneA, cellSet(adjCellA)))
+
+	flip := adjRecord(1, adjLatA, adjLonA, false)
+	flip.calculateIv(6, 0, 11)
+	flip.SetLevel(null.IntFrom(5))
+	flip.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), false)
+	if want := encounter.Derive(adjEid, true, false, 0).Level + 5; int32(flip.Level.ValueOrZero()) != want {
+		t.Errorf("boost flip level = %v, want %d (boosted base + 5)", flip.Level, want)
+	}
+
+	// Stored ordinary, sighted strong: the strong key's +3 applies.
+	turns := adjRecord(1, adjLatA, adjLonA, false)
+	turns.calculateIv(6, 0, 11)
+	turns.SetLevel(null.IntFrom(5))
+	turns.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), true)
+	if want := encounter.Derive(adjEid, true, true, 0).Level + 3; int32(turns.Level.ValueOrZero()) != want {
+		t.Errorf("turning strong level = %v, want %d (strong base + 3)", turns.Level, want)
+	}
+}
+
+// A confirmed unexplained modifier sends repopulateIv down the derive-off
+// branch: with no scan history the stale boost state's IVs are cleared.
+func TestDerivationAdjustRepopulateIvUnexplained(t *testing.T) {
+	withDeriveIv(t, true)
+	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
+		Status: modConfirmed, InCells: cellSet(adjCellA), Outside: map[s2.CellID]struct{}{}})
+
+	p := adjRecord(1, adjLatA, adjLonA, false)
+	p.calculateIv(6, 0, 11)
+	p.SetLevel(null.IntFrom(5))
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), false)
+	if p.AtkIv.Valid || p.Level.Valid {
+		t.Errorf("unexplained left atk=%v level=%v valid; want cleared as with derive_iv off", p.AtkIv, p.Level)
+	}
+}

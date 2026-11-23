@@ -1911,9 +1911,10 @@ func (pokemon *Pokemon) deriveIvIfAbsent() {
 	if pokemon.AtkIv.Valid && pokemon.Size.Valid && pokemon.Move1.Valid && pokemon.Move2.Valid {
 		return
 	}
-	// Confirmed derivation modifiers, read once for this derivation (zero for
-	// a Ditto, including the known-Ditto branch below). Unexplained
-	// suppresses every derived value, as derive_iv off would.
+	// Confirmed derivation modifiers, read once for this derivation. A Ditto
+	// gets the zero adjustment (modifierAdjustAs's IsDitto guard), so it is
+	// derived on base values. Unexplained suppresses every derived value, as
+	// derive_iv off would.
 	adj := pokemon.modifierAdjust()
 	if adj.Suppress {
 		return
