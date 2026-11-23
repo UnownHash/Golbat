@@ -145,8 +145,16 @@ type deriveEventsSummary struct {
 }
 
 type deriveEventsDeviation struct {
-	Kind          string        `json:"kind"`
-	Ts            int64         `json:"ts"`
+	Kind string `json:"kind"`
+	// Ts is the row's place in time order: EventTs clamped into the bucket
+	// the check was counted in. A delayed check counted in a later bucket
+	// gets that bucket's start, one stamped ahead of the writer's clock gets
+	// the clock. Replay orders deviations by Ts and a summary at its
+	// bucket's end, so a row never sorts before the summary of an earlier
+	// bucket than its own.
+	Ts int64 `json:"ts"`
+	// EventTs is the check's own time.
+	EventTs       int64         `json:"event_ts"`
 	UTCOffset     int32         `json:"utc_offset"`
 	EncounterID   uint64        `json:"encounter_id,string"` // exceeds 2^53; see derivationLogPayload
 	PokemonID     int32         `json:"pokemon_id"`
@@ -347,14 +355,21 @@ func (w *deriveEventsWriter) handle(ev deriveEventCheck) {
 	}
 
 	if ev.Agree.Deviates() {
-		w.writeLine(w.deviationRow(ev, cell, offset))
+		// at is ev.Time capped at the clock; a delayed check (b before the
+		// open bucket) is counted in the open bucket, so its row starts there.
+		if at.Before(w.bucketStart) {
+			at = w.bucketStart
+		}
+		w.writeLine(w.deviationRow(ev, at.Unix(), cell, offset))
 	}
 }
 
-func (w *deriveEventsWriter) deviationRow(ev deriveEventCheck, cell string, offset int32) *deriveEventsDeviation {
+// deviationRow builds ev's deviation row; ts is its ordering time, inside the
+// bucket ev was counted in (see deriveEventsDeviation.Ts).
+func (w *deriveEventsWriter) deviationRow(ev deriveEventCheck, ts int64, cell string, offset int32) *deriveEventsDeviation {
 	c := ev.Check
 	d := &deriveEventsDeviation{
-		Kind: "deviation", Ts: ev.Time.Unix(), UTCOffset: offset, EncounterID: ev.EncounterID,
+		Kind: "deviation", Ts: ts, EventTs: ev.Time.Unix(), UTCOffset: offset, EncounterID: ev.EncounterID,
 		PokemonID: ev.PokemonID, Form: ev.Form, Costume: ev.Costume,
 		Strong: ev.Strong, Boosted: ev.Boosted, Weather: ev.Weather, Cell: cell,
 		SpawnID: w.spawnHash(ev.SpawnID), FirstSeen: ev.FirstSeen, Account: w.accountHash(ev.Account),
@@ -688,6 +703,14 @@ func FlushDerivationEvents() {
 	if w := derivationEventsWriter; w != nil {
 		w.shutdown()
 	}
+}
+
+// wantsDeriveEventCheck reports whether an encounter's events check record
+// has a consumer: the events log takes every check, the modifier learner a
+// spawn's first encounter only (firstEncounter is false with the learner
+// off).
+func wantsDeriveEventCheck(firstEncounter bool) bool {
+	return derivationEventsWriter != nil || firstEncounter
 }
 
 // submitDerivationEvent hands ev to the writer without ever blocking the

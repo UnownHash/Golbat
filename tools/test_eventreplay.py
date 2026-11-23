@@ -752,6 +752,25 @@ class ReaderTest(unittest.TestCase):
                          [T0 + 1, T0 + 50, T0 + 100, T0, T0 + 950,
                           T0 + BUCKET, T0 + 2000, T0 + 3000])
 
+    def test_delayed_deviation_never_steps_back(self):
+        # The Codex sequence: a deviation at 899, the summary ending 900
+        # (written when 901 arrived), 901, then a delayed check stamped 898
+        # that the writer counted in the 900 bucket. The writer now puts its
+        # ts at that bucket's start (event_ts keeps 898); a file from before
+        # that carries ts 898, which the reader clamps the same way.
+        late = dev(T0 + 900)
+        late["event_ts"] = T0 + 898
+        for name, delayed in (("clamped", late), ("old", dev(T0 + 898))):
+            with self.subTest(name):
+                p = self.write(name + ".jsonl", [dev(T0 + 899), summ(T0),
+                                                 dev(T0 + 901), delayed])
+                got = list(read_records([p]))
+                keys = [eventreplay.order_key(r) for r in got]
+                self.assertEqual(keys, sorted(keys))
+                self.assertEqual([r.get("ts", r.get("bucket")) for r in got],
+                                 [T0 + 899, T0, T0 + 900, T0 + 901])
+                self.assertEqual(got[2]["event_ts"], T0 + 898)
+
     def test_restart_inside_bucket_orders_by_time(self):
         # Shutdown wrote the open bucket's summary (ordered at the bucket
         # end); the restart appended earlier-timestamped deviations of the
@@ -817,6 +836,7 @@ class GoldenTest(unittest.TestCase):
         d, s = recs
         # The deviation fields the detector reads.
         self.assertIsInstance(d["ts"], int)
+        self.assertEqual(d["event_ts"], d["ts"])  # not delayed: unclamped
         self.assertEqual((d["pokemon_id"], d["form"], d["strong"],
                           d["utc_offset"]), (959, 3272, True, 60))
         self.assertEqual(d["agree"], {"ivs": "agree", "level": "disagree",

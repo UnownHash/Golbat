@@ -15,7 +15,12 @@ Two record kinds are read; anything else is skipped:
 
 - `deviation`: one encounter whose derived IVs, level, size or moves
   disagreed with the game's (a move outside its pool included). Ordered by
-  `ts`.
+  `ts`, which the writer places inside the bucket the check was counted in:
+  a delayed check counted in a later bucket gets that bucket's start, one
+  stamped ahead of the writer's clock gets the clock. `event_ts` is the
+  check's own time. Files from before `event_ts` carry the check's own time
+  in `ts`; the reader clamps a row stamped before the bucket it was written
+  in to that bucket's start, so replay never steps back across a summary.
 - `summary`: per bucket (15 min by default) and (pokemon_id, form, strong,
   boosted, utc_offset), how many checks agreed on each dimension, plus the
   raw size-roll range per observed size class. Every check counts, the
@@ -176,7 +181,13 @@ def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
     deviations after it, so file order is not time order there. Records are
     held until one from a later bucket appears, then the held bucket is
     sorted and emitted: memory is one bucket's records. The bucket length
-    comes from the summaries seen (default 15 minutes before the first)."""
+    comes from the summaries seen (default 15 minutes before the first).
+
+    A deviation stamped before the held bucket (a delayed check, which the
+    writer counted in the open bucket) is moved to that bucket's start, with
+    its own time kept in `event_ts`. The current writer already does this;
+    files written before it did not, and their delayed rows would otherwise
+    sort before a summary already emitted."""
     bs = DEFAULT_BUCKET_SECONDS
     held: list[dict] = []
     cur = None
@@ -186,6 +197,9 @@ def _bucket_ordered(records: Iterator[dict]) -> Iterator[dict]:
             b = rec["bucket"]
         else:
             b = rec["ts"] // bs * bs
+            if cur is not None and b < cur:
+                rec.setdefault("event_ts", rec["ts"])
+                rec["ts"] = b = cur
         if cur is not None and b > cur:
             held.sort(key=order_key)
             yield from held

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -852,5 +853,64 @@ func TestDeriveEventsWriterClampsFutureEvent(t *testing.T) {
 	}
 	if s := sums[0]; s["bucket"] != float64(time.Date(2026, 11, 15, 10, 0, 0, 0, time.UTC).Unix()) || s["checked"] != 2.0 {
 		t.Errorf("summary bucket %v checked %v, want the 10:00 bucket with 2", s["bucket"], s["checked"])
+	}
+}
+
+// The encounter path builds the events check record only when something
+// consumes it: the events log, or the learner for a spawn's first encounter
+// (firstEncounter already implies the learner is on). With the learner on, a
+// repeat encounter and no events log builds nothing.
+func TestWantsDeriveEventCheck(t *testing.T) {
+	prev := derivationEventsWriter
+	t.Cleanup(func() { derivationEventsWriter = prev })
+
+	derivationEventsWriter = nil
+	if wantsDeriveEventCheck(false) {
+		t.Error("no events log, not a first encounter: built a record nothing uses")
+	}
+	if !wantsDeriveEventCheck(true) {
+		t.Error("first encounter: the learner needs the record")
+	}
+	derivationEventsWriter = &deriveEventsWriter{}
+	if !wantsDeriveEventCheck(false) {
+		t.Error("events log on: every check is logged")
+	}
+}
+
+// A deviation row's ts lies inside the bucket it is counted in, so replay,
+// which orders by ts and puts a summary at its bucket's end, never steps back
+// across a summary. event_ts keeps the check's own time. The Codex sequence:
+// a deviation at 10:14:59, the 10:00 bucket closed by one at 10:15:01, then a
+// delayed check stamped 10:14:58 (counted in the 10:15 bucket) and one from a
+// client clock running ahead (counted at the writer's clock).
+func TestDeriveEventsWriterDeviationTsInsideItsBucket(t *testing.T) {
+	dir := t.TempDir()
+	at := func(m, s int) time.Time { return time.Date(2026, 11, 15, 10, m, s, 0, time.UTC) }
+	clock := &testClock{at(14, 59)}
+	w := newTestDeriveEventsWriter(t, dir, clock)
+
+	w.handle(deviatingEventCheck(at(14, 59)))
+	clock.t = at(15, 1)
+	w.handle(deviatingEventCheck(at(15, 1)))
+	w.handle(deviatingEventCheck(at(14, 58)))
+	w.handle(deviatingEventCheck(at(15, 1).Add(time.Hour)))
+	if err := w.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	devs := rowsOfKind(readEventLines(t, eventsFile(dir, clock.t)), "deviation")
+	type row struct{ ts, eventTs int64 }
+	var got []row
+	for _, d := range devs {
+		got = append(got, row{int64(d["ts"].(float64)), int64(d["event_ts"].(float64))})
+	}
+	want := []row{
+		{at(14, 59).Unix(), at(14, 59).Unix()},
+		{at(15, 1).Unix(), at(15, 1).Unix()},
+		{at(15, 0).Unix(), at(14, 58).Unix()},               // delayed: the bucket's start
+		{at(15, 1).Unix(), at(15, 1).Add(time.Hour).Unix()}, // ahead: the writer's clock
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("deviation (ts, event_ts) = %v, want %v", got, want)
 	}
 }

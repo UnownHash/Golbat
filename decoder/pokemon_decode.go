@@ -2256,8 +2256,9 @@ func (pokemon *Pokemon) addEncounterPokemon(ctx context.Context, db db.DbDetails
 	chk := pokemon.checkDerivation(&observedScan, int32(proto.Size), int32(proto.Move1), int32(proto.Move2), pokemon.SeenType.Code.String(), wasRollMarked, hadDetectEvidence || (wasDitto && !pokemon.IsDitto))
 	// The same check feeds the events log and, for a spawn's first
 	// encounter, the modifier learner (as a compact modifierEvent, never
-	// the full record).
-	if derivationEventsWriter != nil || derivationModifierLearnerOn {
+	// the full record). The record is built only when one of them takes it;
+	// checkDerivation above (the [DERIVE] validation) runs regardless.
+	if wantsDeriveEventCheck(firstEncounter) {
 		if ev, ok := newDeriveEventCheck(pokemon, &observedScan, chk, username, time.Now()); ok {
 			submitDerivationEvent(ev)
 			if firstEncounter {
@@ -2532,9 +2533,13 @@ func (pokemon *Pokemon) repopulateIv(weather int64, isStrong bool) {
 		pokemon.downgradeEncounterSeenType()
 		pokemon.SetCp(null.NewInt(0, false))
 		pokemon.SetPvp(null.NewString("", false))
-	} else if matchingScan == nil {
+	} else if matchingScan == nil || adj.Suppress {
 		// Nothing stored and nothing derivable: clear, which is what
-		// derivation-off keeps.
+		// derivation-off keeps. A suppressed derivation clears too, even with
+		// the other boost state's scan on hand: the modifier says this
+		// record's values are not what the walk predicts, so the ±5 estimate
+		// below would be no better than the withheld derivation. A usable
+		// scan never reaches here — derive, and so Suppress, needs none.
 		pokemon.SetLevel(null.NewInt(0, false))
 		pokemon.clearIv(true)
 	} else {

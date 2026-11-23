@@ -577,6 +577,67 @@ func TestDerivationAdjustRepopulateIvUnexplained(t *testing.T) {
 	}
 }
 
+// Suppression never falls through to the legacy weather estimate. The Codex
+// case: +5 and +10 confirmed for one record (a disputed level), an old
+// unboosted level-20 scan and no boosted one; the flip to boosted must leave
+// level, IVs and CP absent, not write the stored level + 5. The same holds for
+// a confirmed unexplained modifier.
+func TestRepopulateIvSuppressedNeverEstimates(t *testing.T) {
+	withDeriveIv(t, true)
+	for name, mods := range map[string][]*derivationModifier{
+		"disputed level": {
+			levelMod(modifierScope{PokemonID: 1}, 5, adjZoneA, cellSet(adjCellA)),
+			levelMod(modifierScope{PokemonID: 1}, 10, "", cellSet(adjCellA)),
+		},
+		"unexplained": {{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
+			Status: modConfirmed, Cells: cellSet(adjCellA)}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			withModifierIndex(t, mods...)
+			p := adjRecord(1, adjLatA, adjLonA, false)
+			p.SetSeenType(SeenTypeCodeEncounter)
+			p.scanHistory = []*pokemonScan{{
+				Weather: int32(pogo.GameplayWeatherProto_NONE),
+				Level:   20, Attack: 3, Defense: 4, Stamina: 5,
+			}}
+			p.calculateIv(3, 4, 5)
+			p.SetLevel(null.IntFrom(20))
+			p.SetCp(null.IntFrom(300))
+
+			p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), false)
+
+			if p.Level.Valid || p.AtkIv.Valid || p.Cp.Valid {
+				t.Errorf("level=%v atk=%v cp=%v, want all absent: suppression must not estimate",
+					p.Level, p.AtkIv, p.Cp)
+			}
+			if p.SeenType.Code != SeenTypeCodeWild {
+				t.Errorf("seen_type = %v, want wild", p.SeenType.Code)
+			}
+		})
+	}
+}
+
+// A usable scan for the new state still applies under suppression: the
+// suppression withholds derived values, not observed ones.
+func TestRepopulateIvSuppressedUsesAMatchingScan(t *testing.T) {
+	withDeriveIv(t, true)
+	withModifierIndex(t, &derivationModifier{Type: modUnexplained, Scope: modifierScope{PokemonID: 1},
+		Status: modConfirmed, Cells: cellSet(adjCellA)})
+	p := adjRecord(1, adjLatA, adjLonA, false)
+	p.scanHistory = []*pokemonScan{
+		{Weather: int32(pogo.GameplayWeatherProto_NONE), Level: 20, Attack: 3, Defense: 4, Stamina: 5},
+		{Weather: int32(pogo.GameplayWeatherProto_RAINY), Level: 27, Attack: 7, Defense: 8, Stamina: 9},
+	}
+	p.calculateIv(3, 4, 5)
+	p.SetLevel(null.IntFrom(20))
+
+	p.repopulateIv(int64(pogo.GameplayWeatherProto_RAINY), false)
+
+	if p.Level.ValueOrZero() != 27 || p.AtkIv.ValueOrZero() != 7 {
+		t.Errorf("level=%v atk=%v, want the boosted scan's 27/7", p.Level, p.AtkIv)
+	}
+}
+
 // A wild update derives with the cell the record is being placed in, not the
 // previous sighting's: a record moving from cell A (local +5 level modifier)
 // to cell B gets B's values, both when the boost flip re-derives
